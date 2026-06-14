@@ -5,6 +5,7 @@ import { translate } from "../i18n/translate";
 import { hasPublicDemoTenant, isPublicDemoHost } from "../lib/runtimeHost";
 import { useCartStore } from "./cart";
 import { readCache, isFresh, writeCache } from "../lib/staleCache";
+import { setTenantContext } from "../lib/sentry";
 
 const META_CACHE = "meta";
 const META_TTL   = 5 * 60 * 1000; // 5 minutes
@@ -128,6 +129,8 @@ export const useTenantStore = defineStore("tenant", {
       if (cached && !isDemo) {
         this.meta = cached;
         this.syncCartEntitlements();
+        // OPS-5-A: tag Sentry with this tenant so SPA errors are attributable
+        setTenantContext(cached.slug ?? cached.profile?.slug ?? null, cached.id ?? null);
         this.loading = false;
         // Still fresh → no network call needed this visit
         if (isFresh(META_CACHE, META_TTL)) return;
@@ -144,6 +147,8 @@ export const useTenantStore = defineStore("tenant", {
         this.meta = res.data;
         if (!isDemo) writeCache(META_CACHE, res.data);
         this.syncCartEntitlements();
+        // OPS-5-A: update Sentry tenant context with fresh data
+        setTenantContext(res.data?.slug ?? res.data?.profile?.slug ?? null, res.data?.id ?? null);
       } catch (err) {
         if (!cached) {
           // First visit with no cache — surface the error so the user knows

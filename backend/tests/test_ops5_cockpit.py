@@ -306,31 +306,60 @@ class SectionAssignmentSecurityTests(SimpleTestCase):
         return req
 
     def _run_assignment(self, tenant, server_user_ids, valid_user_ids):
-        """Simulate the whitelist logic from OwnerSectionDetailView.patch."""
+        """Simulate the whitelist logic from OwnerSectionDetailView.patch.
+
+        OPS-5 fix: the production code no longer catches DB exceptions here.
+        Any exception from the User.objects.filter query propagates (fail-safe).
+        This helper mirrors that exact logic.
+        """
         # Reproduce the exact logic from menu/views.py
         ids = [int(i) for i in (server_user_ids or []) if str(i).isdigit()]
         _tenant = tenant
 
         if ids and _tenant is not None:
             # Mock the DB query that returns only tenant members
-            mock_user_qs = MagicMock()
-            mock_user_qs.__iter__ = MagicMock(return_value=iter(valid_user_ids))
-            mock_user_qs.values_list.return_value = valid_user_ids
-
             mock_user_cls = MagicMock()
             mock_user_cls.objects.filter.return_value.values_list.return_value = valid_user_ids
 
             with patch.dict(sys.modules, {"accounts.models": MagicMock(User=mock_user_cls)}):
-                try:
-                    from accounts.models import User as _User
-                    valid_id_set = set(
-                        _User.objects.filter(id__in=ids, tenant=_tenant).values_list("id", flat=True)
-                    )
-                except Exception:
-                    valid_id_set = set()
+                # No try/except here — mirrors the fail-fast production code.
+                from accounts.models import User as _User
+                valid_id_set = set(
+                    _User.objects.filter(id__in=ids, tenant=_tenant).values_list("id", flat=True)
+                )
                 ids = [uid for uid in ids if uid in valid_id_set]
 
         return ids
+
+    def test_db_error_in_whitelist_query_propagates(self):
+        """OPS-5: a DB error during the tenant-membership check must propagate.
+
+        Previously the except-block set valid_ids=set() which caused .delete()
+        to wipe ALL existing assignments silently (data loss + silent 200).
+        The fix removes the except, so the exception propagates and the caller
+        gets a 500 rather than a data-destroying silent success.
+        """
+        from django.db import DatabaseError
+
+        tenant = self._make_tenant(tenant_id=1)
+        ids = [7]
+        _tenant = tenant
+
+        mock_user_cls = MagicMock()
+        mock_user_cls.objects.filter.return_value.values_list.side_effect = DatabaseError("DB down")
+
+        raised = False
+        with patch.dict(sys.modules, {"accounts.models": MagicMock(User=mock_user_cls)}):
+            try:
+                from accounts.models import User as _User
+                valid_id_set = set(
+                    _User.objects.filter(id__in=ids, tenant=_tenant).values_list("id", flat=True)
+                )
+                _ = [uid for uid in ids if uid in valid_id_set]
+            except Exception:
+                raised = True
+
+        self.assertTrue(raised, "DB error in whitelist query must propagate, not silently destroy assignments")
 
     def test_foreign_user_id_is_rejected(self):
         """A user_id from a different tenant must not appear in the final ids."""

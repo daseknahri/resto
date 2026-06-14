@@ -2898,34 +2898,47 @@ class AdminTenantLiveOrdersView(APIView):
                 )
 
         # Cross-tenant read: switch into that tenant's schema to query orders.
-        with schema_context(tenant.schema_name):
-            from menu.models import Order as _Order
-            orders = list(
-                _Order.objects.filter(status__in=self._ACTIVE_STATUSES)
-                .select_related("customer")
-                .order_by("-created_at")[:200]
-            )
-            results = [
-                {
-                    "order_number": o.order_number,
-                    "status": o.status,
-                    "order_type": getattr(o, "order_type", ""),
-                    "total": str(o.total),
-                    "created_at": o.created_at.isoformat() if o.created_at else None,
-                    # PII: phone is already visible in the admin console customer list
-                    "customer_phone": getattr(o, "customer_phone", "") or "",
-                }
-                for o in orders
-            ]
+        # SECURITY (OPS-5): the audit log is a MANDATORY control for this
+        # cross-tenant read.  We wrap the read + audit write in a single
+        # atomic transaction so that if AdminAuditLog.objects.create() fails
+        # for any reason the transaction rolls back, the response is never
+        # returned, and a 500 propagates to the caller.  We do NOT swallow
+        # the audit exception here — log_admin_action's try/except is
+        # intentionally bypassed by calling AdminAuditLog.objects.create()
+        # directly inside the transaction.
+        with transaction.atomic():
+            with schema_context(tenant.schema_name):
+                from menu.models import Order as _Order
+                orders = list(
+                    _Order.objects.filter(status__in=self._ACTIVE_STATUSES)
+                    .select_related("customer")
+                    .order_by("-created_at")[:200]
+                )
+                results = [
+                    {
+                        "order_number": o.order_number,
+                        "status": o.status,
+                        "order_type": getattr(o, "order_type", ""),
+                        "total": str(o.total),
+                        "created_at": o.created_at.isoformat() if o.created_at else None,
+                        # PII: phone is already visible in the admin console customer list
+                        "customer_phone": getattr(o, "customer_phone", "") or "",
+                    }
+                    for o in orders
+                ]
 
-        log_admin_action(
-            action=AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED,
-            request=request,
-            actor=request.user,
-            tenant=tenant,
-            target_repr=f"tenant:{tenant.slug}",
-            metadata={"order_count": len(results)},
-        )
+            # Audit row written in the PUBLIC schema (AdminAuditLog is a shared
+            # model).  If this INSERT fails the whole atomic block rolls back —
+            # no cross-tenant data is returned without a corresponding audit row.
+            from sales.audit import get_request_ip
+            AdminAuditLog.objects.create(
+                action=AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED,
+                actor=request.user,
+                tenant=tenant,
+                target_repr=f"tenant:{tenant.slug}",
+                ip_address=get_request_ip(request),
+                metadata={"order_count": len(results)},
+            )
 
         return Response(
             {

@@ -283,7 +283,12 @@ class TestAdminLiveOrdersView(SimpleTestCase):
             self.assertEqual(resp.status_code, 403)
 
     def test_admin_access_writes_audit_row(self):
-        """Admin access logs action=tenant_live_orders_viewed to AdminAuditLog."""
+        """Admin access creates an AdminAuditLog row with action=tenant_live_orders_viewed.
+
+        OPS-5: the view now calls AdminAuditLog.objects.create() directly inside
+        transaction.atomic() instead of the best-effort log_admin_action() helper.
+        We mock at that level so the test verifies the mandatory audit path.
+        """
         from sales.views import AdminTenantLiveOrdersView
         from sales.models import AdminAuditLog
 
@@ -316,24 +321,91 @@ class TestAdminLiveOrdersView(SimpleTestCase):
 
             return _ctx()
 
+        mock_audit_log_create = MagicMock()
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_atomic():
+            yield
+
         with patch("django_tenants.utils.get_public_schema_name", return_value=public_schema), \
              patch("django_tenants.utils.schema_context", side_effect=fake_schema_context), \
              patch("sales.views.get_object_or_404", return_value=tenant), \
              patch("menu.models.Order.objects") as mock_order_qs, \
-             patch("sales.views.log_admin_action") as mock_log:
+             patch("django.db.transaction.atomic", return_value=fake_atomic()), \
+             patch("sales.views.AdminAuditLog") as mock_aal_cls, \
+             patch("sales.audit.get_request_ip", return_value="127.0.0.1"):
 
+            mock_aal_cls.objects.create = mock_audit_log_create
+            mock_aal_cls.Actions.TENANT_LIVE_ORDERS_VIEWED = AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED
             mock_order_qs.filter.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = [fake_order]
 
             resp = view.get(request, tenant_id=1)
 
         self.assertEqual(resp.status_code, 200)
 
-        # Audit log must have been called with the correct action
-        mock_log.assert_called_once()
-        call_kwargs = mock_log.call_args.kwargs
+        # Audit log MUST have been created directly (mandatory — not best-effort)
+        mock_audit_log_create.assert_called_once()
+        call_kwargs = mock_audit_log_create.call_args.kwargs
         self.assertEqual(call_kwargs["action"], AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED)
         self.assertEqual(call_kwargs["tenant"], tenant)
         self.assertIn("order_count", call_kwargs.get("metadata", {}))
+
+    def test_audit_failure_propagates_error(self):
+        """If AdminAuditLog.objects.create() raises, the view must NOT return data.
+
+        OPS-5: audit is mandatory; the atomic block ensures that a failed INSERT
+        rolls back and the exception propagates (no cross-tenant data served without
+        a corresponding audit row).
+        """
+        from sales.views import AdminTenantLiveOrdersView
+        from sales.models import AdminAuditLog
+
+        view = AdminTenantLiveOrdersView()
+
+        tenant = MagicMock()
+        tenant.id = 1
+        tenant.slug = "acme"
+        tenant.schema_name = "tenant_acme"
+
+        request = self._make_request(is_platform_admin=True)
+
+        public_schema = "public"
+
+        def fake_schema_context(schema):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _ctx():
+                yield
+
+            return _ctx()
+
+        from django.db import DatabaseError
+
+        # transaction.atomic() is a real context manager — simulate it raising
+        # on exit when the audit INSERT fails by making the create() raise.
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_atomic():
+            yield  # let the body run; exception from create() propagates out
+
+        with patch("django_tenants.utils.get_public_schema_name", return_value=public_schema), \
+             patch("django_tenants.utils.schema_context", side_effect=fake_schema_context), \
+             patch("sales.views.get_object_or_404", return_value=tenant), \
+             patch("menu.models.Order.objects") as mock_order_qs, \
+             patch("django.db.transaction.atomic", return_value=fake_atomic()), \
+             patch("sales.views.AdminAuditLog") as mock_aal_cls, \
+             patch("sales.audit.get_request_ip", return_value="127.0.0.1"):
+
+            mock_aal_cls.objects.create.side_effect = DatabaseError("DB saturated")
+            mock_aal_cls.Actions.TENANT_LIVE_ORDERS_VIEWED = AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED
+            mock_order_qs.filter.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = []
+
+            with self.assertRaises(Exception):
+                view.get(request, tenant_id=1)
 
     def test_returns_only_active_orders(self):
         """The response includes only active-status orders (not terminal ones)."""
@@ -371,12 +443,22 @@ class TestAdminLiveOrdersView(SimpleTestCase):
 
             return _ctx()
 
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_atomic():
+            yield
+
         with patch("django_tenants.utils.get_public_schema_name", return_value=public_schema), \
              patch("django_tenants.utils.schema_context", side_effect=fake_schema_context), \
              patch("sales.views.get_object_or_404", return_value=tenant), \
              patch("menu.models.Order.objects") as mock_order_qs, \
-             patch("sales.views.log_admin_action"):
+             patch("django.db.transaction.atomic", return_value=fake_atomic()), \
+             patch("sales.views.AdminAuditLog") as mock_aal_cls, \
+             patch("sales.audit.get_request_ip", return_value="127.0.0.1"):
 
+            mock_aal_cls.objects.create = MagicMock()
+            mock_aal_cls.Actions.TENANT_LIVE_ORDERS_VIEWED = "tenant_live_orders_viewed"
             mock_order_qs.filter.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = []
 
             resp = view.get(request, tenant_id=7)

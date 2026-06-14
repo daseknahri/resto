@@ -2175,6 +2175,20 @@ const persistDish = async (dish, allowedTranslationLocales) => {
   rememberSaved(dish);
 };
 
+// OPS-5: surface plan-limit errors with a clear "upgrade your plan" message.
+// dishApi.upsert wraps the axios error and keeps the original on `.raw`, so the
+// backend `code` ("dish_limit_reached") is reachable there.
+const isDishLimitError = (err) =>
+  err?.raw?.response?.data?.code === "dish_limit_reached";
+
+const showDishSaveError = (err) => {
+  if (isDishLimitError(err)) {
+    toast.show(t("stepDishes.dishLimitReached"), "error");
+    return true;
+  }
+  return false;
+};
+
 const load = async () => {
   try {
     categoryOptions.value = await categoryApi.list();
@@ -2244,9 +2258,14 @@ const saveDishNow = async () => {
     toast.show(t("stepDishes.savedToast"), "success");
     closeDishEditor();
   } catch (e) {
-    mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
-    if (e?.message) setRowError(dish.local_id, "options", e.message);
-    toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+    if (isDishLimitError(e)) {
+      setRowError(dish.local_id, "options", t("stepDishes.dishLimitReached"));
+      toast.show(t("stepDishes.dishLimitReached"), "error");
+    } else {
+      mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
+      if (e?.message) setRowError(dish.local_id, "options", e.message);
+      toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+    }
   } finally {
     savingDishNow.value = false;
   }
@@ -2371,8 +2390,12 @@ const quickAddDish = async () => {
     await persistDish(row, allowedTranslationLocales);
     toast.show(t("stepDishes.savedToast"), "success");
   } catch (e) {
-    mapServerErrorsToRow(row.local_id, e?.fieldErrors || {});
-    toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+    if (showDishSaveError(e)) {
+      setRowError(row.local_id, "options", t("stepDishes.dishLimitReached"));
+    } else {
+      mapServerErrorsToRow(row.local_id, e?.fieldErrors || {});
+      toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+    }
   }
 };
 
@@ -2589,9 +2612,13 @@ const saveAndNext = async () => {
       try {
         await persistDish(dish, allowedTranslationLocales);
       } catch (e) {
-        mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
-        if (e?.message) {
-          setRowError(dish.local_id, "options", e.message);
+        if (isDishLimitError(e)) {
+          setRowError(dish.local_id, "options", t("stepDishes.dishLimitReached"));
+        } else {
+          mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
+          if (e?.message) {
+            setRowError(dish.local_id, "options", e.message);
+          }
         }
         throw e;
       }
@@ -2614,7 +2641,7 @@ const saveAndNext = async () => {
     if (!props.standalone) emit("next");
   } catch (e) {
     status.value = t("common.saveFailed");
-    globalError.value = e?.message || t("stepDishes.saveFailed");
+    globalError.value = isDishLimitError(e) ? t("stepDishes.dishLimitReached") : (e?.message || t("stepDishes.saveFailed"));
     toast.show(globalError.value, "error");
   } finally {
     saving.value = false;

@@ -70,15 +70,51 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 ## Scout notes (SaaS-expert audit — every OPS batch appends; triage at ship)
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future
 OPS batch or a security pass. file:line in the scout output; verify before acting.
-- [ ] **Section assignment accepts any user_id (no tenant-membership check)** — PATCH
-      /api/owner/sections/<id>/ inserts arbitrary user_ids into SectionServer; a foreign
-      id taints _can_access_order routing. Fix = whitelist filter(id__in, tenant_id).
-      SECURITY. (menu/views.py ~6444). → OPS-5 / security pass. [scout OPS-1]
-- [ ] **CustomerOrderConsumer accepts any order_number (enumeration)** — ws/order/<n>/
-      joins the group with no ownership check; exposes live payment_status flips by
-      guessing order numbers. Low-sensitivity (status pings) but real. Mitigation:
-      require delivery_code / customer-session credential. (realtime/consumers.py:64).
-      SECURITY. → OPS-5 / security pass. [scout OPS-1]
+
+### OPS-5b — ADMIN SECURITY HARDENING (next batch; scout OPS-5 cluster)
+- [ ] **IsPlatformAdmin admits any Django is_staff user → money endpoints (PRIV-ESC, HIGH)**
+      — sales/permissions.py:11 returns True for is_staff, so any /admin/-capable Django
+      user can POST wallet bonus / fund-tenant / vouchers / ride-fare settings. Intended
+      gate is is_platform_admin (role PLATFORM_SUPERADMIN). Fix: drop is_staff from
+      IsPlatformAdmin (keep is_platform_admin + is_superuser). One line, but audit every
+      admin view that relied on it. [scout OPS-5]
+- [ ] **Admin auth pattern triplication** — 15+ admin views use 3 inconsistent gates
+      (IsPlatformAdmin class / inline is_platform_admin / inline that also admits is_staff).
+      Consolidate on IsPlatformAdmin (after the fix above) + add a test that every
+      /api/admin/ URL rejects a TENANT_OWNER. [scout OPS-5]
+- [ ] **AdminCustomerList/Detail: full PII directory, no throttle, no read-audit, is_staff
+      gate** — accounts/views.py:1687/1744. Add per-admin throttle + log_admin_action on
+      GET + IsPlatformAdmin. SECURITY/compliance. [scout OPS-5]
+- [ ] **Missing audit on admin writes** — is_driver toggle (accounts/views.py:1813), manual
+      delivery-job create (5858/5909) have no log_admin_action; tenant deletion request
+      (tenancy/api.py:437, GDPR) has no audit + no TENANT_DELETION_REQUESTED action. Add
+      actions + log calls. [scout OPS-5]
+- [ ] **plan_feature_flags_updated logged as raw string not in Actions enum** — invisible to
+      audit queries filtering Actions.choices. Add the enum member. (sales/views.py:1435).
+      [scout OPS-5]
+- [ ] **Audit-log IP spoofable** — get_request_ip takes XFF[0] (client-controlled), no
+      trusted-proxy config. Use rightmost-trusted / django-ipware. (sales/audit.py:10;
+      middleware.py:128). [scout OPS-5]
+- [ ] **AdminWalletBonus bulk-credit leaves balance_after=NULL** — breaks ledger
+      reconstruction; per-customer credit_wallet or a returning-UPDATE. (accounts/views.py
+      :1512). [scout OPS-5]
+- [ ] **Dish/staff plan-limit is a read-then-create RACE** — concurrent creates overshoot
+      the cap (no lock). select_for_update sentinel or DB constraint. (menu/views.py:587;
+      accounts/views.py:1014). [scout OPS-5]
+- [ ] **ensure_platform_admin password as CLI arg** — visible in /proc + shell history +
+      deploy logs. Read from env/stdin. (commands/ensure_platform_admin.py:9). [scout OPS-5]
+- [ ] **Health endpoint leaks MEDIA_ROOT absolute path** to unauthenticated callers — return
+      'ok' not str(path). (config/api.py:171). [review OPS-5 minor]
+- [ ] **Plan-limit returns HTTP 400 not 402** — contract said 402/403 for entitlement
+      boundary; clients may mis-classify. (menu/views.py:602; accounts/views.py:1019).
+      [review OPS-5 minor]
+
+### Earlier scout notes
+- [ ] **Section assignment accepts any user_id (no tenant-membership check)** — RESOLVED in
+      OPS-5 (menu/views.py:7432 whitelist filter(id__in, tenant)). [scout OPS-1 → fixed OPS-5]
+- [ ] **CustomerOrderConsumer accepts any order_number (enumeration)** — RESOLVED in OPS-5
+      (realtime/consumers.py _check_order_ownership: session/delivery_code gate; anonymous
+      residual risk documented). [scout OPS-1 → fixed OPS-5]
 - [ ] **Plan limits unenforced on write** — Plan.max_dishes / max_staff_accounts checked
       only by the periodic enforce_subscriptions sweep, not at DishViewSet.create /
       StaffCreateView. A tenant can exceed plan caps until the sweep runs. Monetization
@@ -212,6 +248,22 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5 "platform cockpit": Sentry tenant tags (backend middleware + SPA
+      setTenantContext); health checks (Celery/channel-layer/media, 503 on hard-fail);
+      admin read-only support live-orders (GET /api/admin/tenants/<id>/live-orders/,
+      IsPlatformAdmin + audit now ATOMIC with the read so a failed audit rolls back the
+      response — review major) + AdminConsole "view live orders" modal + renewal-date
+      (subscription_end_date) column; plan-limit enforcement on dish/staff create (0=unlimited
+      sentinel verified) + dish-limit upgrade toast; billing invoice_amount/currency on
+      approve; SECURITY: section-assignment tenant-membership whitelist (fail-CLOSED, review
+      major fixed the destructive fail-open) + CustomerOrderConsumer ownership/delivery-code
+      gate (anonymous residual risk documented); backups/restore/rollback runbook
+      (LAUNCH_CHECKLIST §9). migration sales/0019. **Brutal hardware ordeal: thermal
+      black-screens; ROOT CAUSE was a runaway test (unmocked .exists() spun the
+      username-dedup loop → MemoryError + CPU peg + heat) — fixed; once fixed the full suite
+      ran in 44s. Verified via branch + foreground after.** Backend 3414 green; frontend 90
+      tests/build green. Scout found a HIGH priv-esc (IsPlatformAdmin admits is_staff) + 9
+      more → OPS-5b admin-security-hardening above. — ops5 (branch ops5-platform-cockpit → main)
 - [x] OPS-4 "scale fences": OwnerOrderListView two-mode (active hot path = status-fenced,
       no full-table scan / no JOIN-COUNT; history = paginated {results,has_more,limit,offset}
       envelope, date-fenced) — date fence kept OFF the active path (review-major fixed);
