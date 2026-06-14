@@ -24,8 +24,9 @@ def _make_customer(customer_id=1, wallet_balance=Decimal("20.00")):
 
 
 def _make_voucher(code="GIFT1234AB", amount=Decimal("15.00"), is_used=False,
-                  expires_at=None, note="Gift"):
+                  expires_at=None, note="Gift", vid=7):
     v = MagicMock()
+    v.id = vid
     v.code = code
     v.amount = amount
     v.is_used = is_used
@@ -120,12 +121,16 @@ class CustomerWalletRedeemVoucherViewTests(SimpleTestCase):
 
     # ── Happy path ────────────────────────────────────────────────────────────
 
-    @patch("accounts.models.WalletTransaction.objects")
+    # OPS-5f: the credit now goes through wallet_service.credit_wallet (locks the
+    # customer row, idempotent) instead of a manual balance write + WalletTransaction.
+    @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.models.WalletVoucher.objects")
-    def test_valid_redemption_returns_200_with_new_balance(self, mock_voucher_objs, mock_tx_objs):
+    def test_valid_redemption_returns_200_with_new_balance(self, mock_voucher_objs, mock_credit):
+        from types import SimpleNamespace
         customer = _make_customer(wallet_balance=Decimal("20.00"))
         voucher = _make_voucher(amount=Decimal("15.00"), is_used=False, expires_at=None)
         mock_voucher_objs.select_for_update.return_value.get.return_value = voucher
+        mock_credit.return_value = SimpleNamespace(balance_after=Decimal("35.00"))
 
         req = self._post({"code": "GIFT1234AB"}, customer=customer)
         with patch("django.db.transaction.atomic"):
@@ -135,30 +140,39 @@ class CustomerWalletRedeemVoucherViewTests(SimpleTestCase):
         self.assertIn("credited", resp.data)
         self.assertIn("new_balance", resp.data)
         self.assertEqual(resp.data["credited"], "15.00")
-        # Balance should be credited
+        # Balance comes from the ledger row's balance_after, not a manual write.
+        self.assertEqual(resp.data["new_balance"], "35.00")
         self.assertTrue(voucher.is_used)
-        customer.save.assert_called()
         voucher.save.assert_called()
 
-    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.models.WalletVoucher.objects")
-    def test_valid_redemption_creates_wallet_transaction(self, mock_voucher_objs, mock_tx_objs):
+    def test_valid_redemption_creates_wallet_transaction(self, mock_voucher_objs, mock_credit):
+        from types import SimpleNamespace
         customer = _make_customer(wallet_balance=Decimal("0.00"))
-        voucher = _make_voucher(amount=Decimal("25.00"), is_used=False)
+        voucher = _make_voucher(amount=Decimal("25.00"), is_used=False, vid=42)
         mock_voucher_objs.select_for_update.return_value.get.return_value = voucher
+        mock_credit.return_value = SimpleNamespace(balance_after=Decimal("25.00"))
 
         req = self._post({"code": "GIFT1234AB"}, customer=customer)
         with patch("django.db.transaction.atomic"):
             self.view(req)
 
-        mock_tx_objs.create.assert_called_once()
+        # The ledger write is funnelled through credit_wallet with a stable key.
+        mock_credit.assert_called_once()
+        args, kwargs = mock_credit.call_args
+        self.assertEqual(args[0], customer.id)
+        self.assertEqual(args[1], Decimal("25.00"))
+        self.assertEqual(kwargs["idempotency_key"], "voucher:42")
 
-    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.models.WalletVoucher.objects")
-    def test_code_is_uppercased_before_lookup(self, mock_voucher_objs, mock_tx_objs):
+    def test_code_is_uppercased_before_lookup(self, mock_voucher_objs, mock_credit):
+        from types import SimpleNamespace
         customer = _make_customer()
         voucher = _make_voucher(code="GIFT1234AB", is_used=False)
         mock_voucher_objs.select_for_update.return_value.get.return_value = voucher
+        mock_credit.return_value = SimpleNamespace(balance_after=Decimal("35.00"))
 
         req = self._post({"code": "gift1234ab"}, customer=customer)
         with patch("django.db.transaction.atomic"):

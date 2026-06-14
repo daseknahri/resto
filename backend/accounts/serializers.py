@@ -122,4 +122,33 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user.set_password(password)
         user.save(update_fields=["password"])
         reset.mark_used()
+        # OPS-5f: invalidate the user's OTHER sessions on reset so a stolen/active
+        # session dies the moment the password is reset (account-recovery hardening).
+        # set_password rotates the password hash; Django's SessionAuthenticationMiddleware
+        # already invalidates sessions whose stored auth-hash no longer matches — but we
+        # ALSO delete the user's persisted sessions outright so nothing lingers in the
+        # store (defence in depth; covers backends that don't re-check on every request).
+        _invalidate_user_sessions(user)
         return user
+
+
+def _invalidate_user_sessions(user) -> None:
+    """Delete every active Django session that belongs to ``user``.
+
+    Best-effort: a failure here must never block the password reset itself."""
+    try:
+        from django.contrib.sessions.models import Session
+        from django.utils import timezone
+
+        uid = str(user.pk)
+        stale = []
+        for session in Session.objects.filter(expire_date__gte=timezone.now()):
+            try:
+                if session.get_decoded().get("_auth_user_id") == uid:
+                    stale.append(session.session_key)
+            except Exception:
+                continue
+        if stale:
+            Session.objects.filter(session_key__in=stale).delete()
+    except Exception:
+        pass

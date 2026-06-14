@@ -254,12 +254,27 @@ class DeliveryRatingViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_customer_role_valid_saves_rating(self):
+        # OPS-5f: the customer branch now requires the session customer to OWN the
+        # order — the order (tenant schema) must report a matching customer_id.
+        import menu.models as mm
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _noop_sc(*a, **k):
+            yield
+
         tenant = _make_tenant()
         job = _make_job(status_val="delivered")
+        order = SimpleNamespace(customer_id=42)
+        order_qs = MagicMock()
+        order_qs.only.return_value.first.return_value = order
         with patch("tenancy.models.Tenant") as mock_tenant:
             mock_tenant.objects.get.return_value = tenant
-            with patch("accounts.models.DeliveryJob") as mock_dj:
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("django_tenants.utils.schema_context", _noop_sc), \
+                 patch.object(mm.Order, "objects") as mock_order_objs:
                 mock_dj.objects.get.return_value = job
+                mock_order_objs.filter.return_value = order_qs
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "customer", "score": 5, "note": "Fast!"},
@@ -268,6 +283,36 @@ class DeliveryRatingViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["score"], 5)
         job.save.assert_called_once()
+
+    def test_customer_role_non_owner_returns_403(self):
+        """OPS-5f: a session customer who doesn't own the order cannot rate the driver."""
+        import menu.models as mm
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _noop_sc(*a, **k):
+            yield
+
+        tenant = _make_tenant()
+        job = _make_job(status_val="delivered")
+        order = SimpleNamespace(customer_id=999)  # owned by someone else
+        order_qs = MagicMock()
+        order_qs.only.return_value.first.return_value = order
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("django_tenants.utils.schema_context", _noop_sc), \
+                 patch.object(mm.Order, "objects") as mock_order_objs:
+                mock_dj.objects.get.return_value = job
+                mock_order_objs.filter.return_value = order_qs
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "customer", "score": 5, "note": "Fast!"},
+                    session=_session(customer_id=42),
+                )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_order_owner")
+        job.save.assert_not_called()
 
     def test_driver_role_wrong_session_returns_403(self):
         tenant = _make_tenant()

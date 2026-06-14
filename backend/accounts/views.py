@@ -34,6 +34,7 @@ from .throttles import (
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
     CustomerReservationsThrottle,
+    DeliveryRatingThrottle,
     DeliveryTrackingThrottle,
     DriverJobAcceptThrottle,
     DriverPositionThrottle,
@@ -113,6 +114,30 @@ def serialize_user_session(user):
     }
 
 
+def _canonical_brand_host() -> str:
+    """Server-authoritative host for tenant-less users (e.g. password-reset links).
+
+    NEVER derived from request headers (Host / X-Forwarded-Host are attacker-
+    controlled → host-header poisoning of the reset link). Prefer the configured
+    public menu base URL host, then the tenant domain suffix; final fallback is a
+    safe localhost for dev. Configure PUBLIC_MENU_BASE_URL / TENANT_DOMAIN_SUFFIX
+    (or DJANGO_BRAND_DOMAIN) in production so links point at the real frontend.
+    """
+    from urllib.parse import urlparse as _urlparse
+    brand = (getattr(settings, "BRAND_DOMAIN", "") or "").strip()
+    if brand:
+        return brand.split("://")[-1].split("/")[0].split(":")[0]
+    pub = (getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
+    if pub:
+        host = _urlparse(pub if "://" in pub else f"https://{pub}").hostname
+        if host:
+            return host
+    suffix = (getattr(settings, "TENANT_DOMAIN_SUFFIX", "") or "").strip()
+    if suffix:
+        return suffix
+    return "localhost"
+
+
 def build_frontend_base_url(request, user):
     domain = None
     tenant = getattr(user, "tenant", None)
@@ -121,9 +146,12 @@ def build_frontend_base_url(request, user):
         if primary:
             domain = primary.domain
 
+    # OPS-5f: do NOT fall back to request.get_host() — it honours the spoofable
+    # Host / X-Forwarded-Host header, so an attacker could poison the password-reset
+    # link to point at their own domain and capture the token. Use a configured,
+    # server-authoritative canonical host instead.
     if not domain:
-        host = request.get_host().split(":")[0]
-        domain = host
+        domain = _canonical_brand_host()
 
     if domain.endswith(".localhost") or domain == "localhost":
         return f"http://{domain}:5173"
@@ -2266,21 +2294,26 @@ class CustomerWalletRedeemVoucherView(APIView):
             voucher.used_at = now
             voucher.save(update_fields=["is_used", "used_by", "used_at"])
 
-            customer.wallet_balance = customer.wallet_balance + voucher.amount
-            customer.save(update_fields=["wallet_balance", "updated_at"])
-
-            WalletTransaction.objects.create(
-                customer=customer,
-                type=WalletTransaction.Type.TOPUP,
-                amount=voucher.amount,
-                note=voucher.note or f"Voucher {voucher.code}",
+            # OPS-5f: funnel the credit through wallet_service.credit_wallet instead of a
+            # manual read-modify-write of wallet_balance. credit_wallet re-fetches the
+            # Customer with select_for_update (the manual path did NOT lock the customer
+            # row → lost-update race vs concurrent wallet credits/debits), writes the
+            # ledger row with balance_after, and is idempotent on the key. The voucher row
+            # lock above still guarantees single-redeem; the stable key makes a lost-response
+            # retry a no-op rather than a double credit.
+            from accounts.wallet_service import credit_wallet as _credit_wallet
+            _tx = _credit_wallet(
+                customer.id, voucher.amount,
+                tx_type=WalletTransaction.Type.TOPUP,
+                idempotency_key=f"voucher:{voucher.id}",
                 reference=voucher.code,
-                balance_after=customer.wallet_balance,
+                note=voucher.note or f"Voucher {voucher.code}",
             )
+            _new_balance = _tx.balance_after
 
         return Response({
             "credited": str(voucher.amount),
-            "new_balance": str(customer.wallet_balance),
+            "new_balance": str(_new_balance),
             "note": voucher.note,
         })
 
@@ -3062,7 +3095,15 @@ class MarketplacePlaceOrderView(APIView):
                     return Response({"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing}, status=status.HTTP_400_BAD_REQUEST)
 
                 all_option_ids = [int(oid) for it in items_raw for oid in (it.get("option_ids") or []) if str(oid).isdigit()]
-                options_map = {o.id: o for o in _DO.objects.filter(id__in=all_option_ids)} if all_option_ids else {}
+                # OPS-5f: select_related("dish") so we can bind each option to its dish
+                # and reject foreign / cross-dish option ids (mirrors menu/views.py:1647).
+                # Without this, a customer could attach a foreign or negative-price_delta
+                # option to a cheap dish and drive the wallet-PREPAID total DOWN.
+                options_map = (
+                    {o.id: o for o in _DO.objects.filter(id__in=all_option_ids).select_related("dish")}
+                    if all_option_ids
+                    else {}
+                )
 
                 # Compute active happy-hour rules ONCE (placement-time price lock —
                 # for scheduled orders price is locked at submission, not scheduled_for;
@@ -3086,12 +3127,33 @@ class MarketplacePlaceOrderView(APIView):
                     currency = dish.currency or "USD"
                     # Apply happy-hour discount; option price_delta added below unchanged.
                     unit_price, _ = _eff_price(dish, _mkt_active_hh)
-                    option_snapshots = []
+                    # OPS-5f: validate each option is bound to THIS dish before pricing.
+                    # An option whose dish != this dish (foreign id, cross-dish id, or an
+                    # unknown id) is rejected — exactly like the other order paths
+                    # (menu/views.py:1647-1664) — so price_delta can't be smuggled in.
+                    _invalid_option_ids = []
+                    _bound_options = []
                     for oid in (it.get("option_ids") or []):
                         opt = options_map.get(int(oid)) if str(oid).isdigit() else None
-                        if opt:
-                            unit_price += Decimal(str(opt.price_delta))
-                            option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+                        opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
+                        if opt is None or opt_dish_slug != dish.slug:
+                            _invalid_option_ids.append(oid)
+                            continue
+                        _bound_options.append(opt)
+                    if _invalid_option_ids:
+                        return Response(
+                            {
+                                "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+                                "code": "stale_options",
+                                "dish_slug": dish.slug,
+                                "invalid_option_ids": _invalid_option_ids,
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    option_snapshots = []
+                    for opt in _bound_options:
+                        unit_price += Decimal(str(opt.price_delta))
+                        option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
                     qty = max(1, min(99, int(it.get("qty", 1))))
                     subtotal = unit_price * qty
                     food_subtotal += subtotal
@@ -4907,6 +4969,20 @@ class DriverJobStatusUpdateView(APIView):
                 )
 
             if new_status == DeliveryJob.Status.DELIVERED:
+                # OPS-5f: re-check driver approval at the money-emitting transition.
+                # is_driver gates the endpoint, but a driver who was APPROVED, accepted a
+                # job, then got driver_approved revoked must NOT still bank earnings on
+                # DELIVERED (_complete_delivered_order → _credit_driver_earnings). Re-read
+                # the flag from the DB (customer was fetched before the lock).
+                _still_approved = (
+                    Customer.objects.filter(pk=customer.pk, driver_approved=True).exists()
+                )
+                if not _still_approved:
+                    return Response(
+                        {"detail": "Your driver account is no longer approved. Contact support.",
+                         "code": "driver_not_approved"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 # Proof-of-delivery code, with a brute-force lockout.
                 if job.code_locked_until and job.code_locked_until > now:
                     return Response(
@@ -5119,6 +5195,7 @@ class DeliveryRatingView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [DeliveryRatingThrottle]
 
     def post(self, request, order_number, *args, **kwargs):
         from tenancy.models import Tenant
@@ -5158,6 +5235,21 @@ class DeliveryRatingView(APIView):
             customer_id = request.session.get("customer_id")
             if not customer_id:
                 return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+            # OPS-5f: ownership gate. Without this, any session holder who guesses a
+            # delivered order number could write the customer→driver rating (review
+            # fraud / driver-reputation tampering). The order's customer_id lives in the
+            # tenant schema (the DeliveryJob is public-schema), so resolve it there and
+            # require the session customer to OWN the order (mirrors CustomerOrderRate).
+            from django_tenants.utils import schema_context as _sc
+            from menu.models import Order as _O
+            with _sc(tenant.schema_name):
+                _order = _O.objects.filter(order_number=order_number).only("customer_id").first()
+            _order_cid = getattr(_order, "customer_id", None) if _order else None
+            if _order_cid is None or int(_order_cid) != int(customer_id):
+                return Response(
+                    {"detail": "You can only rate your own order.", "code": "not_order_owner"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             job.customer_driver_rating = score
             job.customer_driver_note = note
             update_fields = ["customer_driver_rating", "customer_driver_note"]

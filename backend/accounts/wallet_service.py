@@ -322,6 +322,14 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
 
     existing = _find_idempotent(idempotency_key)
     if existing is not None:
+        # Defense-in-depth (OPS-5f, mirrors OPS-5e on the other ledger helpers):
+        # idempotency_key is a GLOBAL namespace on the shared-schema ledger. A legit
+        # retry always replays the SAME sender's out-tx; a key that resolves to a
+        # DIFFERENT customer's tx is a collision/attack on a caller-supplied key, not a
+        # retry — refuse rather than hand back someone else's transaction. (Assert the
+        # sender IDENTITY only; never amount — partial charges store a different amount.)
+        if existing.customer_id != int(sender_id):
+            raise WalletError("idempotency key collision: belongs to another customer")
         in_tx = None
         if idempotency_key:
             in_tx = WalletTransaction.objects.filter(

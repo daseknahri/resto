@@ -9,7 +9,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from accounts.views import (
     _is_tenant_owner,
@@ -173,17 +173,31 @@ def _user_no_tenant():
 
 
 class BuildFrontendBaseUrlTests(SimpleTestCase):
-    def test_production_domain_uses_https(self):
-        result = build_frontend_base_url(_req("demo.example.com"), _user_no_tenant())
-        self.assertEqual(result, "https://demo.example.com")
+    # OPS-5f: the no-tenant fallback no longer honours request.get_host() (it is
+    # attacker-controlled → host-header poisoning of the password-reset link). It now
+    # uses a server-authoritative canonical host (BRAND_DOMAIN / PUBLIC_MENU_BASE_URL /
+    # TENANT_DOMAIN_SUFFIX, falling back to localhost in dev).
 
-    def test_localhost_uses_http_with_port_5173(self):
-        result = build_frontend_base_url(_req("localhost"), _user_no_tenant())
+    @override_settings(BRAND_DOMAIN="app.kepoli.com", PUBLIC_MENU_BASE_URL="", TENANT_DOMAIN_SUFFIX="")
+    def test_no_tenant_uses_brand_domain_not_request_host(self):
+        # The request claims a spoofed host; the link must NOT use it.
+        result = build_frontend_base_url(_req("evil.attacker.com"), _user_no_tenant())
+        self.assertEqual(result, "https://app.kepoli.com")
+
+    @override_settings(BRAND_DOMAIN="", PUBLIC_MENU_BASE_URL="https://menu.kepoli.com", TENANT_DOMAIN_SUFFIX="")
+    def test_no_tenant_falls_back_to_public_menu_base_url(self):
+        result = build_frontend_base_url(_req("evil.attacker.com"), _user_no_tenant())
+        self.assertEqual(result, "https://menu.kepoli.com")
+
+    @override_settings(BRAND_DOMAIN="", PUBLIC_MENU_BASE_URL="", TENANT_DOMAIN_SUFFIX="kepoli.app")
+    def test_no_tenant_falls_back_to_tenant_domain_suffix(self):
+        result = build_frontend_base_url(_req("evil.attacker.com"), _user_no_tenant())
+        self.assertEqual(result, "https://kepoli.app")
+
+    @override_settings(BRAND_DOMAIN="localhost", PUBLIC_MENU_BASE_URL="", TENANT_DOMAIN_SUFFIX="")
+    def test_localhost_brand_uses_http_with_port_5173(self):
+        result = build_frontend_base_url(_req("evil.attacker.com"), _user_no_tenant())
         self.assertEqual(result, "http://localhost:5173")
-
-    def test_subdomain_of_localhost_uses_http(self):
-        result = build_frontend_base_url(_req("demo.localhost"), _user_no_tenant())
-        self.assertEqual(result, "http://demo.localhost:5173")
 
     def test_tenant_primary_domain_overrides_request_host(self):
         result = build_frontend_base_url(
@@ -199,15 +213,12 @@ class BuildFrontendBaseUrlTests(SimpleTestCase):
         )
         self.assertEqual(result, "http://demo.localhost:5173")
 
-    def test_no_primary_domain_falls_back_to_request_host(self):
+    @override_settings(BRAND_DOMAIN="app.kepoli.com", PUBLIC_MENU_BASE_URL="", TENANT_DOMAIN_SUFFIX="")
+    def test_no_primary_domain_uses_canonical_not_request_host(self):
+        # Tenant exists but has no primary domain → still must NOT use the spoofable host.
         u = MagicMock()
         tenant = MagicMock()
         tenant.domains.filter.return_value.first.return_value = None
         u.tenant = tenant
-        result = build_frontend_base_url(_req("demo.bistro.com"), u)
-        self.assertEqual(result, "https://demo.bistro.com")
-
-    def test_host_with_port_port_stripped(self):
-        """get_host() may return 'localhost:8000' — port is stripped."""
-        result = build_frontend_base_url(_req("localhost:8000"), _user_no_tenant())
-        self.assertEqual(result, "http://localhost:5173")
+        result = build_frontend_base_url(_req("evil.attacker.com"), u)
+        self.assertEqual(result, "https://app.kepoli.com")

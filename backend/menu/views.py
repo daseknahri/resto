@@ -71,6 +71,7 @@ from accounts.throttles import (
     WaitlistJoinThrottle,
     DriverCashoutConfirmThrottle,
     CustomerOrderRateThrottle,
+    OwnerWalletChargeThrottle,
 )
 
 
@@ -9594,6 +9595,19 @@ class OwnerWalletChargeView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    # The pay-token (5-min QR) is the only consent for the instant sub-threshold path,
+    # so a compromised/abusive waiter session could fire many small debits against a
+    # present customer inside that window. This per-actor rate backstop caps the burst;
+    # the per-(customer, pay-token) instant-charge cap below is the absolute velocity gate.
+    throttle_classes = [OwnerWalletChargeThrottle]
+
+    # Absolute cap on the instant (sub-threshold, token-only-consent) charge path,
+    # scoped to a single (customer, pay-token) pair. Beyond either ceiling the charge
+    # is refused and must go through the normal above-threshold approval flow (which
+    # asks the customer for explicit per-amount consent). This bounds how much an
+    # abused session can extract on one scan even while under the per-charge threshold.
+    INSTANT_CHARGE_MAX_COUNT = 5          # at most N instant charges per scan
+    INSTANT_CHARGE_MAX_TOTAL = Decimal("100.00")  # …and at most this cumulative total
 
     def post(self, request, *args, **kwargs):
         # Waiter capability: charging a customer's wallet is taking payment for an order.
@@ -9687,6 +9701,32 @@ class OwnerWalletChargeView(APIView):
                 "expires_at": cr.expires_at.isoformat(),
             }, status=status.HTTP_202_ACCEPTED)
 
+        # ── Instant (sub-threshold) path: absolute velocity / amount cap ───────────
+        # The only consent here is the still-valid pay-token; a single scan must not be
+        # turned into an unbounded stream of small debits. Cap both the COUNT of instant
+        # charges and their CUMULATIVE total per (customer, pay-token). Past either
+        # ceiling the waiter must use the above-threshold approval flow (explicit
+        # per-amount customer consent). Keyed on a digest of the token so every charge
+        # under the same scan shares one bucket; TTL = the pay-token window so the cap
+        # resets naturally when the customer refreshes their QR.
+        import hashlib as _hashlib
+        from django.core.cache import cache as _cache
+        _tok_digest = _hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+        _cap_key = f"ownercharge_instant:{int(customer_id)}:{_tok_digest}"
+        _seen = _cache.get(_cap_key) or {"count": 0, "total": "0"}
+        try:
+            _prior_total = _Dec(str(_seen.get("total") or "0"))
+            _prior_count = int(_seen.get("count") or 0)
+        except (InvalidOperation, TypeError, ValueError):
+            _prior_total, _prior_count = _Dec("0"), 0
+        if (_prior_count + 1 > self.INSTANT_CHARGE_MAX_COUNT
+                or _prior_total + amount > self.INSTANT_CHARGE_MAX_TOTAL):
+            return Response(
+                {"detail": "Instant-charge limit reached for this pay code. Ask the customer "
+                           "to approve this charge.", "code": "instant_cap"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         try:
             tx = debit_wallet(
                 customer_id, amount,
@@ -9703,6 +9743,22 @@ class OwnerWalletChargeView(APIView):
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
         except WalletError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Record the completed instant charge against the per-(customer, pay-token) cap.
+        # Only successful debits count, so an InsufficientFunds 402 never burns a slot
+        # (and an idempotent retry of the SAME idem key re-counts harmlessly — the cap
+        # is a velocity ceiling, not an exact-charge ledger). TTL = pay-token window.
+        try:
+            _seen = _cache.get(_cap_key) or {"count": 0, "total": "0"}
+            _new_total = (_Dec(str(_seen.get("total") or "0")) + amount).quantize(_Dec("0.01"))
+            _new_count = int(_seen.get("count") or 0) + 1
+            _cache.set(
+                _cap_key,
+                {"count": _new_count, "total": str(_new_total)},
+                int(getattr(_settings, "WALLET_PAY_TTL", _WALLET_PAY_TTL) or _WALLET_PAY_TTL),
+            )
+        except Exception:
+            pass  # cap accounting is best-effort; never fail a completed charge over it
 
         # If this charge settles a specific order, reflect it on the order's bill.
         if order_number:

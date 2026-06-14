@@ -608,6 +608,11 @@ EMAIL_BACKEND = os.getenv(
 )
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "Kepoli <noreply@kepoli.app>")
 SERVER_EMAIL = os.getenv("DJANGO_SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# OPS-5f: server-authoritative canonical host for tenant-less links (e.g. the
+# password-reset link for an owner with no tenant). Used by build_frontend_base_url
+# INSTEAD of the spoofable request Host header. Falls back to PUBLIC_MENU_BASE_URL /
+# TENANT_DOMAIN_SUFFIX when unset; set this in production to the real frontend host.
+BRAND_DOMAIN = hostname_from_url(os.getenv("DJANGO_BRAND_DOMAIN", "")) or os.getenv("DJANGO_BRAND_DOMAIN", "").strip()
 EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", "localhost")
 EMAIL_PORT = parse_int_env("DJANGO_EMAIL_PORT", 25)
 EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_HOST_USER", "")

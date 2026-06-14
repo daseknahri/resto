@@ -152,7 +152,47 @@ Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; v
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5f — SECURITY (scout OPS-5e cluster; next security batch)
+### OPS-5g — SECURITY (scout OPS-5f cluster; likely the LAST money/IDOR batch)
+The OPS-5f scout CONFIRMED the previously-fixed dimensions are clean (WS auth, driver/ride state
+machines re-check approval, admin money caps, core wallet service, profile allowlist, IP throttles)
+and said the remaining gaps cluster on (1) tenant-schema-derived idempotency keys and (2) the two
+unthrottled redemption endpoints. Closing these should largely complete the money/IDOR hardening.
+- [ ] **Cross-tenant idempotency-key collision on customer/staff order-payment + refund keys (HIGH —
+      free order / unrecorded refund)** — WalletTransaction is shared-schema so idempotency_key is GLOBAL,
+      but three money calls derive keys from tenant-schema-local ids with NO tenant namespace:
+      CustomerOrderPayWalletView f"order-pay-{order_number}" (menu/views.py:9560; order_number is 24-bit,
+      per-schema-unique), the order-payment debit f"orderpay:{payment.id}" (menu/views.py:4823), and the
+      void refund f"voiditem:{item_id}" (menu/views.py:4366). A repeat cross-tenant customer hits a
+      colliding key → the OPS-5f guard (customer_id match) PASSES → silent replay → order marked PAID with
+      no money moved (free order). Fix: namespace every wallet idempotency_key derived from a tenant-schema
+      id with the tenant schema_name (mirror ownercharge:/ownertopup:). This is the SAME class fixed for
+      owner/admin in 5e/5f, missed for the customer/staff paths. [scout OPS-5f] **(HIGH — do first)**
+- [ ] **Loyalty-redeem replay trusts a client-supplied GLOBAL key with no customer filter (IDOR)** —
+      CustomerLoyaltyRedeemView (menu/views.py:8985) looks up the idempotency replay GLOBALLY
+      (_WTM.objects.filter(idempotency_key=_idem, type=LOYALTY).first(), menu/views.py:9028 + 9080-9082) with
+      NO customer filter, and returns _prior.amount (9037) → an attacker supplying another customer's key
+      gets that customer's redemption disclosed. It bypasses credit_wallet so it never inherits the OPS-5f
+      collision guard. Fix: add customer=_customer to both replay lookups (or route through credit_wallet) +
+      a throttle. [scout OPS-5f]
+- [ ] **Voucher redemption no throttle + no failed-attempt lockout (brute-force to money)** —
+      CustomerWalletRedeemVoucherView (accounts/views.py:2235) has no throttle_classes; a voucher code maps
+      directly to wallet credit. Fix: per-customer throttle (voucher_redeem ~10/hour) + exponential lockout
+      on consecutive invalid codes (mirror driver_cashout_confirm). [scout OPS-5f]
+- [ ] **Voucher codes use a non-CSPRNG (random.choices, Mersenne Twister) for a bearer money token** —
+      WalletVoucher.generate_code() (accounts/models.py:412-419). Fix: secrets.choice / secrets.token_urlsafe
+      (the rest of the codebase uses secrets for tokens). [scout OPS-5f]
+- [ ] **Wallet-paid rides take no hold/escrow at booking** — RideCreateView (ride_views.py:332-342) checks
+      balance at create but debits only at completion (ride_service.py:108-121), silently flipping to cash on
+      shortfall; the rider can spend the balance in between (or book multiple wallet rides they can't pay).
+      Fix: authorize/hold the fare at booking (debit to held, refund on cancel) OR re-verify+debit atomically
+      with a rider-visible "switched to cash" signal. [scout OPS-5f] (ops/escrow — medium)
+- [ ] **OG bot endpoint cache key trusts spoofable X-Forwarded-Host + raw ?path (cache fan-out/poisoning)** —
+      OGView (og_views.py:107-115) keys ogpage:{host}:{path} on get_host() + raw path; the OUTPUT is safe
+      (canonical re-derived from tenant domain, escaped, noindex) but the cache key isn't. Fix: key on the
+      RESOLVED tenant id + a length-bounded sanitized path; reject non-allowlisted hosts before caching.
+      [scout OPS-5f] (cache — medium)
+
+### OPS-5f — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5e scout surfaced these (file:line in scout output; verify first). Several are HIGH.
 - [ ] **MarketplacePlaceOrderView DishOption price manipulation (HIGH money/IDOR)** —
       accounts/views.py:3065 builds options_map = DishOption.objects.filter(id__in=all_option_ids) with
@@ -510,6 +550,25 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5f "money/IDOR security" (verified by me, backend 3609/0, migrations clean, no model
+      changes; reviewer found 0 issues — clean on first pass): (1) [HIGH] MarketplacePlaceOrderView
+      DishOption price manipulation — options query now select_related("dish") + per-item binding check
+      (opt.dish.slug==dish.slug), foreign/cross-dish/negative-delta option ids rejected with 400
+      stale_options (mirrors menu/views.py); closes the wallet-prepaid total-lowering hole. (2) [HIGH]
+      de-approved driver banking earnings — DriverJobStatusUpdateView re-checks
+      Customer.filter(pk,driver_approved=True).exists() at the DELIVERED money-emitting transition (403
+      driver_not_approved). (3) DeliveryRatingView customer branch now requires order ownership + a
+      DeliveryRatingThrottle (30/hr). (4) CustomerWalletRedeemVoucher now funnels through credit_wallet
+      (locks the customer row, idempotent voucher:{id}) — closes the lost-update race. (5) password-reset
+      no longer builds the link from the spoofable get_host() (server-authoritative _canonical_brand_host
+      via new BRAND_DOMAIN setting) + PasswordResetConfirm invalidates the user's other sessions. (6)
+      OwnerWalletCharge sub-threshold instant path capped (5 charges / 100.00 per pay-token, per-actor
+      OwnerWalletChargeThrottle 30/min). (7) transfer_between_customers (P2P) replay now has the
+      identity-only collision assertion (was the one money fn OPS-5e missed). New test_ops5f_accounts.py
+      + test_ops5f_money.py. Scout CONFIRMED clean dimensions (WS auth, driver/ride state machines, admin
+      money caps, core wallet service, profile allowlist, IP throttles) → OPS-5g cluster above is the
+      remaining money/IDOR tail (tenant-schema idempotency-key namespacing [HIGH], loyalty-redeem customer
+      filter, voucher throttle + CSPRNG, ride escrow, OG cache key). — ops5f commit.
 - [x] OPS-5e "money/IDOR security" (Phase A P0; verified by me in code, backend 3578/0, migrations
       clean, no model changes): (1) [HIGH] driver cash-out brute-force — per-actor failed-attempt
       cache lockout (CASHOUT_CONFIRM_MAX_FAILURES=5/15min, user→tenant key) shared by BOTH the confirm

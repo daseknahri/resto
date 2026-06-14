@@ -256,3 +256,31 @@ class TranslateThrottle(SimpleRateThrottle):
         else:
             ident = self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class DeliveryRatingThrottle(_CustomerThrottle):
+    """OPS-5f: cap delivery-rating submissions (AllowAny, session customer_id keyed).
+
+    DeliveryRatingView now requires the session customer to OWN the order before
+    writing the customer→driver rating, but a throttle is still needed so a session
+    holder can't bulk-probe order numbers. Keyed per session customer_id (falls back
+    to IP)."""
+    scope = "delivery_rating"
+
+
+class OwnerWalletChargeThrottle(SimpleRateThrottle):
+    """OPS-5f: per-actor throttle on the owner wallet-charge endpoint.
+
+    Money movement is abuse-sensitive, so cap how fast one owner/staff account can
+    fire wallet charges. Keyed on the authenticated user's pk so each account gets an
+    independent bucket (mirrors AdminPIIThrottle); falls back to IP for the
+    (unexpected) unauthenticated case so the class is safe regardless."""
+    scope = "owner_wallet_charge"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"owner:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
