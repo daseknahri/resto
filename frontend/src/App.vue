@@ -72,6 +72,28 @@ watch(
   }
 );
 
+// Keep the mobile URL bar / PWA theme-color in sync with the active surface:
+// the tenant brand color on customer routes, the platform default everywhere
+// else. Re-runs on navigation and once the tenant profile resolves.
+watch(
+  [
+    () => route.matched.map((record) => record.meta?.interface).join("|"),
+    () => tenant.resolvedMeta?.profile,
+  ],
+  () => {
+    const isCustomerRoute = route.matched.some(
+      (record) => record.meta?.interface === "customer"
+    );
+    const profile = tenant.resolvedMeta?.profile;
+    if (isCustomerRoute && profile) {
+      theme.apply(profile);
+    } else {
+      theme.resetThemeColor();
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(async () => {
   const isCustomerInterfaceRoute = route.matched.some(
     (record) => record.meta?.interface === "customer"

@@ -12,12 +12,18 @@
         ? 'border-[var(--color-secondary)]/40 shadow-[0_0_0_1px_rgba(245,158,11,0.07)_inset]'
         : 'border-slate-800/70',
     ]"
-    role="button"
-    tabindex="0"
-    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
     @click="handleOpen"
-    @keydown.enter.space.prevent="handleOpen"
   >
+    <!-- Proper "open dish" control: a real link/button gives the card an
+         accessible name without making the whole <article> a role=button that
+         (invalidly) nests the qty/add <button>s. It sits behind the controls. -->
+    <button
+      type="button"
+      class="absolute inset-0 z-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-secondary)]/60"
+      :aria-label="t('menu.viewDish', { name: dish.name }) + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
+      @click="handleOpen"
+    ><span class="sr-only">{{ t('menu.viewDish', { name: dish.name }) }}</span></button>
+
     <!-- In-cart top accent line -->
     <div
       v-if="qtyInCart > 0"
@@ -26,7 +32,7 @@
     />
 
     <!-- Left: text -->
-    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 ps-3.5 pe-2.5">
+    <div class="pointer-events-none relative z-10 flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 ps-3.5 pe-2.5">
       <div class="space-y-1">
         <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
         <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
@@ -74,8 +80,10 @@
       </p>
     </div>
 
-    <!-- Right: square image + add controls -->
-    <div class="relative h-[6.5rem] w-[6.5rem] shrink-0 sm:h-32 sm:w-32">
+    <!-- Right: square image + add controls.
+         pointer-events-none lets clicks on the image fall through to the
+         overlay open-dish button; the add/qty controls re-enable them. -->
+    <div class="pointer-events-none relative z-10 h-[6.5rem] w-[6.5rem] shrink-0 sm:h-32 sm:w-32">
       <img
         v-if="dish.image_url"
         :src="dish.image_url"
@@ -100,7 +108,7 @@
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/40 via-transparent to-transparent" />
 
       <!-- Add / qty controls overlaid at bottom-end -->
-      <div v-if="canOrder" class="absolute bottom-2 end-2 z-10" @click.stop>
+      <div v-if="canOrder" class="pointer-events-auto absolute bottom-2 end-2 z-10" @click.stop>
         <!-- qty stepper when already in cart -->
         <div
           v-if="qtyInCart > 0"
@@ -145,20 +153,25 @@
         ? 'border-[var(--color-secondary)]/40 shadow-[0_20px_50px_rgba(2,6,23,0.42),0_0_0_1px_rgba(245,158,11,0.06)_inset]'
         : 'border-slate-800/80 shadow-[0_20px_50px_rgba(2,6,23,0.36)] hover:border-slate-700/70 hover:shadow-[0_24px_60px_rgba(2,6,23,0.48)]',
     ]"
-    role="button"
-    tabindex="0"
-    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
     @click="handleOpen"
-    @keydown.enter.space.prevent="handleOpen"
   >
+    <!-- Proper "open dish" control behind the card content so the inner
+         add/qty <button>s are not nested inside a role=button. -->
+    <button
+      type="button"
+      class="absolute inset-0 z-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-secondary)]/60"
+      :aria-label="t('menu.viewDish', { name: dish.name }) + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
+      @click="handleOpen"
+    ><span class="sr-only">{{ t('menu.viewDish', { name: dish.name }) }}</span></button>
+
     <!-- In-cart top accent -->
     <div
       v-if="qtyInCart > 0"
       class="pointer-events-none absolute inset-x-0 top-0 h-[2px] z-10 rounded-t-[1.8rem]"
       style="background: linear-gradient(90deg, transparent, var(--color-secondary), transparent)"
     />
-    <!-- Image -->
-    <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
+    <!-- Image (pointer-events-none: clicks fall through to the open-dish button) -->
+    <div class="pointer-events-none relative z-10 aspect-[4/3] overflow-hidden bg-slate-900">
       <img
         v-if="dish.image_url"
         :src="dish.image_url"
@@ -204,7 +217,7 @@
     </div>
 
     <!-- Info + action -->
-    <div class="space-y-3 p-4" @click.stop>
+    <div class="pointer-events-none relative z-10 space-y-3 p-4">
       <div class="space-y-1">
         <h3 class="text-base font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
         <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
@@ -214,7 +227,7 @@
       <template v-if="canOrder">
         <div
           v-if="qtyInCart > 0"
-          class="flex items-center justify-between rounded-full border px-3 py-1.5"
+          class="pointer-events-auto flex items-center justify-between rounded-full border px-3 py-1.5"
           style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
@@ -226,7 +239,7 @@
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
-        <button v-else class="ui-btn-primary w-full justify-center gap-2 py-2 text-sm" @click.stop="handleAdd">
+        <button v-else class="ui-btn-primary pointer-events-auto w-full justify-center gap-2 py-2 text-sm" @click.stop="handleAdd">
           <AppIcon name="plus" class="h-4 w-4" />
           {{ t('dishPage.add') }}
         </button>
@@ -244,20 +257,26 @@
        COMPACT layout  —  single-line: name · price · add
        Great for drinks, sides, simple items
        ══════════════════════════════════════════════════════ -->
-  <button
+  <div
     v-else
-    type="button"
-    class="ui-reveal group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 text-start transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
+    class="ui-reveal group relative flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 text-start transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/60"
     :class="{ 'opacity-60': isSoldOut || isScheduleUnavailable }"
     @click="handleOpen"
   >
+    <!-- Proper "open dish" control: a real button gives an accessible name
+         without nesting the qty/add <button>s inside another <button>. -->
+    <button
+      type="button"
+      class="absolute inset-0 z-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-secondary)]/60"
+      :aria-label="t('menu.viewDish', { name: dish.name }) + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
+      @click="handleOpen"
+    ><span class="sr-only">{{ t('menu.viewDish', { name: dish.name }) }}</span></button>
     <!-- Tiny thumb -->
-    <div v-if="dish.image_url" class="h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+    <div v-if="dish.image_url" class="pointer-events-none relative z-10 h-9 w-9 shrink-0 overflow-hidden rounded-lg">
       <img :src="dish.image_url" :alt="dish.name" class="h-full w-full object-cover" loading="lazy" decoding="async" @error="onImgError" />
     </div>
     <!-- Text -->
-    <div class="min-w-0 flex-1">
+    <div class="pointer-events-none relative z-10 min-w-0 flex-1">
       <div class="flex items-baseline gap-2">
         <h3 class="truncate text-sm font-medium text-white" :title="dish.name">{{ dish.name }}</h3>
         <span v-if="isSoldOut" class="shrink-0 text-[10px] text-red-400">{{ t('menu.soldOut') }}</span>
@@ -270,7 +289,7 @@
       <span v-else class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.price) }}</span>
     </div>
     <!-- Compact qty controls -->
-    <div class="shrink-0" @click.stop>
+    <div class="relative z-10 shrink-0" @click.stop>
       <div v-if="canOrder && qtyInCart > 0" class="flex items-center gap-1">
         <button
           class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
@@ -292,7 +311,7 @@
         @click.stop="handleAdd"
       ><AppIcon name="plus" class="h-3.5 w-3.5 text-slate-950" /></button>
     </div>
-  </button>
+  </div>
 
   <!-- Quick-add sheet for items that need a required choice (skips the full detail page) -->
   <Teleport to="body">

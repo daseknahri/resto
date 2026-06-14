@@ -41,7 +41,7 @@
               <!-- PWA install -->
               <button
                 v-if="pwaCanInstall"
-                class="ui-press hidden items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 sm:inline-flex"
+                class="ui-press inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                 type="button"
                 :aria-label="t('customerLayout.installApp')"
                 @click="pwaInstall"
@@ -120,7 +120,7 @@
       </div>
     </div>
 
-    <main id="main-content" class="mx-auto w-full max-w-6xl pb-24 md:pb-8">
+    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-6xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">

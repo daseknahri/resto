@@ -5,9 +5,13 @@ from django.urls import path, re_path
 from django.views.static import serve as static_serve
 
 from config.shared_api_urls import shared_api_urlpatterns
+from config.sitemap import sitemap_view
 
 urlpatterns = [
     *shared_api_urlpatterns,
+    # Public SEO sitemap (public-schema host only). Lists the static SPA pages
+    # plus one /order/<slug> per discoverable tenant. See config/sitemap.py.
+    path("sitemap.xml", sitemap_view, name="sitemap"),
     path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]
 

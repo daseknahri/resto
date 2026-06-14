@@ -131,7 +131,7 @@
               <!-- PWA install button -->
               <button
                 v-if="canInstall"
-                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                 type="button"
                 :aria-label="t('ownerLayout.installApp')"
                 :title="t('ownerLayout.installApp')"
@@ -303,7 +303,7 @@
     <!-- Visually-hidden live region: announces pending-order count changes to screen readers -->
     <span class="sr-only" aria-live="polite" aria-atomic="true">{{ pendingOrdersCount > 0 ? t('ownerLayout.ordersBadgeLabel', { count: pendingOrdersCount }) : '' }}</span>
 
-    <main id="main-content" class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
+    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
       <RouterView v-slot="{ Component }">
         <Transition name="ui-route" mode="out-in">
           <KeepAlive :max="8" :exclude="KEEPALIVE_EXCLUDE">

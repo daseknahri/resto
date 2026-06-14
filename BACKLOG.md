@@ -594,6 +594,24 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
+### OPS-6c-FOLLOWUP — A11Y (scout B12 cluster; coupled, do as one careful batch)
+B12 shipped skip-links + focusable <main> (tabindex=-1) but two coupled gaps remain that undercut it.
+- [ ] **No focus management on SPA route change (WCAG 2.4.3 — the biggest remaining a11y gap)** — every
+      layout now has <main id="main-content" tabindex="-1"> + a skip-link, but nothing focuses it on
+      client-side navigation (router has scrollBehavior + beforeEach, no afterEach focus hook). So SR users
+      get no new-page announcement and keyboard users tab from the top of the chrome each route change. Add a
+      router.afterEach that (after nextTick) focuses #main-content, guarded so it doesn't steal focus from an
+      open dialog and doesn't fire on the very first load. (frontend/src/router/index.js:292-301). [scout B12]
+- [ ] **Duplicate <main> landmark + duplicate id="main-content"** — layouts own <main id="main-content">, but
+      several PAGES also render their own <main> (Home.vue:2 even REUSES id="main-content" → the skip-link
+      fragment target is non-unique; also Marketplace.vue:2, MarketplaceMenuPage.vue:240,
+      MarketplaceOrderStatus.vue:13, NotFound.vue:2, OwnerNotifications.vue:2, Wizard.vue:82, Activate/
+      ResetPassword/Unauthorized/Directory/DriverPage). Demote the page-level <main> to <div>/<section> since
+      the layout owns the landmark — do this BEFORE/with the route-focus hook so the target is unique. [scout B12]
+- [ ] **BreadcrumbList crumb URLs mislabeled** — the 'Home' crumb points at /menu (route customer-home) and
+      'Menu' at /browse; align crumb item URLs with their semantic labels. Low impact.
+      (useSeoMeta.js:405-407). [review B12 minor]
+
 ### EMAIL-PROGRAM HARDENING — REQUIRED BEFORE SENDING MARKETING EMAIL AT SCALE (scout B1 cluster)
 B1 added email to win-back + campaigns (reaches the email-having majority). Before this sends real
 marketing mail to real customers, the deliverability/compliance basics must be in place — the app is not
@@ -681,6 +699,22 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B12 / OPS-6c "SEO + a11y + PWA depth" (KEPOLI_NEXT.md Phase B; verified by me, backend 3719/0,
+      frontend i18n/lint/test/build green, migrations clean): (1) [PRIVACY] noindex personal/transactional
+      pages — useSeoMeta now uses an INDEXABLE_ROUTE_NAMES ALLOWLIST (public discovery only); cart/account/
+      order-status/find-my-order/checkout/reserve emit noindex,nofollow (was index,follow leaking order PII).
+      (2) sitemap.xml — new backend public-host view (config/sitemap.py, static pages + ACTIVE opted-in
+      tenant storefronts, resilient) + nginx /sitemap.xml proxy (reviewer caught it 404'd through nginx) +
+      robots.txt Sitemap directive. (3) hreflang en/fr/ar (+x-default) on indexable pages. (4) JSON-LD
+      depth — BreadcrumbList + MenuItem/Product offers + enriched business node. (5) DishCard no longer a
+      role=button wrapping <button> children (valid ARIA). (6) skip-link <main tabindex=-1> on Customer+Owner
+      layouts. (7) Wizard: dropped the broad aria-live, focus→step heading + terse status. (8) PWA install
+      shown on mobile (CustomerLayout + OwnerLayout — I mirrored the owner one the workflow missed). (9)
+      theme-color synced to tenant brand (theme.js/App.vue). (10) padded maskable manifest icons. Reviewer
+      2 major (sitemap unreachable via nginx; sitemap advertised noindex URLs) — fixed; I also removed
+      table-link from the indexable allowlist (per-table dup, review minor) + fixed owner mobile install.
+      New test_sitemap_view.py. Scout → OPS-6c-followup a11y cluster above (route-change focus hook +
+      duplicate <main>/id — coupled; breadcrumb labels). — b12 commit.
 - [x] B1 "email retention channel" (KEPOLI_NEXT.md Phase B; verified by me, backend 3714/0, migrations
       clean, reviewer found 0 critical/major): win-back nudges + owner campaigns were PUSH-ONLY (reached only
       push-granted users — tiny on iOS). Now dual-channel: send_winback_nudges audience broadened from

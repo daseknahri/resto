@@ -2524,8 +2524,13 @@ export const messages = {
       openCategory: "Open category",
       go: "Go"
     },
+    seo: {
+      breadcrumbHome: "Home",
+      breadcrumbMenu: "Menu"
+    },
     onboardingWizard: {
       kicker: "Onboarding",
+      stepAnnounce: "Step {n} of {total}: {title}",
       title: "Launch your menu",
       published: "Published",
       draft: "Draft",
@@ -2814,6 +2819,7 @@ export const messages = {
     },
     menu: {
       kicker: "Menu browsing",
+      viewDish: "View {name}",
       intro: "Explore categories and tap any dish to view details, options, and pricing.",
       mode: "Mode",
       searchPlaceholder: "Search category...",
@@ -7325,8 +7331,13 @@ export const messages = {
       openCategory: "Ouvrir la categorie",
       go: "Aller"
     },
+    seo: {
+      breadcrumbHome: "Accueil",
+      breadcrumbMenu: "Menu"
+    },
     onboardingWizard: {
       kicker: "Onboarding",
+      stepAnnounce: "Étape {n} sur {total} : {title}",
       title: "Lancer votre menu",
       published: "Publie",
       draft: "Brouillon",
@@ -7615,6 +7626,7 @@ export const messages = {
     },
     menu: {
       kicker: "Navigation menu",
+      viewDish: "Voir {name}",
       intro: "Explorez les categories et touchez un plat pour voir details, options et prix.",
       mode: "Mode",
       searchPlaceholder: "Rechercher une categorie...",

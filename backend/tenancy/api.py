@@ -545,9 +545,14 @@ class AppManifestView(APIView):
         primary_color = (getattr(profile, "primary_color", "") or "#0b1c1a").strip() or "#0b1c1a"
         secondary_color = (getattr(profile, "secondary_color", "") or "#F59E0B").strip() or "#F59E0B"
 
+        # "any" and "maskable" are kept as separate entries: reusing one edge-to-edge
+        # icon for the maskable purpose lets the launcher crop the artwork.  The
+        # /icon-maskable-* assets carry safe-zone padding so they survive any mask.
         icons = [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
             {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
         ]
         if logo_url:

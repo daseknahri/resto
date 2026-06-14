@@ -1137,6 +1137,7 @@ const arabicMessages = {
   },
   "menu": {
     "kicker": "تصفح القائمة",
+    "viewDish": "عرض {name}",
     "intro": "استعرض التصنيفات واضغط على أي طبق لرؤية التفاصيل والخيارات والسعر.",
     "mode": "الوضع",
     "searchPlaceholder": "ابحث في التصنيفات...",
@@ -1814,8 +1815,13 @@ const arabicMessages = {
     "nestingError": "لا يمكن أن يحتوي الكومبو على كومبو آخر.",
     "protectedDelete": "هذا العنصر جزء من كومبو — أزله من الكومبو أولاً."
   },
+  "seo": {
+    "breadcrumbHome": "الرئيسية",
+    "breadcrumbMenu": "القائمة"
+  },
   "onboardingWizard": {
     "kicker": "الإعداد",
+    "stepAnnounce": "الخطوة {n} من {total}: {title}",
     "title": "أطلق قائمتك",
     "published": "منشور",
     "draft": "مسودة",

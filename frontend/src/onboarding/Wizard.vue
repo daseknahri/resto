@@ -79,8 +79,11 @@
         </aside>
 
         <!-- Active step content -->
-        <main class="min-w-0 space-y-3" aria-live="polite">
-          <div class="ui-panel p-4">
+        <main class="min-w-0 space-y-3">
+          <!-- Terse SR announcement on step change; the broad aria-live was
+               removed so the whole step isn't re-read on every navigation. -->
+          <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ stepAnnouncement }}</span>
+          <div ref="stepPanelRef" tabindex="-1" class="ui-panel p-4 focus:outline-none">
             <KeepAlive>
               <component :is="currentComponent" @next="next" @back="back" @publish="publish" @can-publish="onCanPublish" />
             </KeepAlive>
@@ -96,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { steps } from "../onboarding/steps";
@@ -130,6 +133,16 @@ const mapping = {
 };
 const currentComponent = computed(() => mapping[current.value]);
 const progressPct = computed(() => Math.round((current.value / steps.length) * 100));
+
+// ── Step-change a11y: terse SR announcement + move focus to the new step ──────
+// Replaces the old broad aria-live on the step <main>, which re-read the entire
+// step (heading + every field) on each navigation.
+const stepPanelRef = ref(null);
+const stepAnnouncement = computed(() => {
+  const step = steps[current.value - 1];
+  if (!step) return "";
+  return t("onboardingWizard.stepAnnounce", { n: current.value, total: steps.length, title: t(step.titleKey) });
+});
 const stepStorageKey = computed(() => {
   const slug = tenant.meta?.slug || "tenant";
   return `resto:onboarding-step:v2:${slug}`;
@@ -201,6 +214,11 @@ onMounted(async () => {
 });
 
 watch(current, persistStep);
+// Move keyboard/SR focus to the new step's panel so navigation lands the user
+// at the start of the new content (WCAG 2.4.3) instead of leaving focus behind.
+watch(current, () => {
+  nextTick(() => stepPanelRef.value?.focus());
+});
 watch(stepStorageKey, () => {
   restoreStep();
   persistStep();

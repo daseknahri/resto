@@ -1,5 +1,11 @@
 User-agent: *
 
+# Sitemap of public storefront routes. Served per-host on the public schema
+# (see backend config/sitemap.py). Host-relative because this one static file is
+# served across the brand host and every tenant subdomain — the crawler resolves
+# it against the host it fetched robots.txt from.
+Sitemap: /sitemap.xml
+
 # Public customer and discovery pages
 Allow: /$
 Allow: /browse/
