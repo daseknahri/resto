@@ -2890,12 +2890,15 @@ class MarketplaceMenuView(APIView):
         try:
             with _sc(tenant.schema_name):
                 from menu.models import (
-                    Profile as _Profile,
                     SuperCategory as _SC,
                     Category as _Cat,
                     Dish as _Dish,
                     OptionGroup as _OG,
                 )
+                # Profile lives in tenancy.models, NOT menu.models — importing it from
+                # menu.models raised ImportError that the outer try/except swallowed into
+                # a 500 on every request hitting this path.
+                from tenancy.models import Profile as _Profile
 
                 profile = _Profile.objects.filter(tenant=tenant).first()
                 if not profile or not profile.is_menu_published:
@@ -3168,9 +3171,12 @@ class MarketplacePlaceOrderView(APIView):
                     DishOption as _DO,
                     Order as _Order,
                     OrderItem as _OI,
-                    Profile as _Profile,
                     Promotion as _Promo,
                 )
+                # Profile lives in tenancy.models, NOT menu.models — importing it from
+                # menu.models raised ImportError that the outer try/except swallowed into
+                # a 500 on every marketplace order placement.
+                from tenancy.models import Profile as _Profile
                 from django.db import transaction as _dbtx, IntegrityError as _IE
 
                 # OPS-3: idempotency pre-check inside the tenant schema.

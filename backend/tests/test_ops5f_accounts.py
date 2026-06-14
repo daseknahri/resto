@@ -132,16 +132,14 @@ class MarketplaceOptionBindingTests(SimpleTestCase):
 
         from tenancy.models import Tenant as _RealTenant
 
-        # NOTE: the production view imports `Profile` from menu.models, which does NOT
-        # define it (it lives in tenancy.models) — a pre-existing latent import bug in
-        # the order path, out of scope for OPS-5f. We inject a stand-in attribute so the
-        # import resolves and the test can exercise the OPS-5f option-binding gate.
+        # The production view imports Profile from tenancy.models (the import bug that
+        # used to point at menu.models is fixed). Patch it where the view reads it.
         _ProfileStub = MagicMock()
         _ProfileStub.objects.filter.return_value = prof_qs
 
         with patch("tenancy.models.Tenant") as MockTenant, \
              patch("django_tenants.utils.schema_context", _noop_sc()), \
-             patch.object(mm, "Profile", _ProfileStub, create=True), \
+             patch("tenancy.models.Profile", _ProfileStub), \
              patch.object(mm.Dish, "objects") as MockDishObjs, \
              patch.object(mm.DishOption, "objects") as MockDOObjs, \
              patch.object(mm.Order, "objects") as MockOrderObjs, \

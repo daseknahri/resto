@@ -407,6 +407,27 @@ class MarketplaceMenuViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "unavailable")
 
+    def test_menu_import_block_resolves_no_server_error(self):
+        """Regression: MarketplaceMenuView imported `Profile` from menu.models (which
+        defines no Profile) → ImportError swallowed by the broad try/except into a 500
+        `server_error` on every request. Profile now comes from tenancy.models. Drive the
+        view INTO the schema_context import block and assert it does NOT 500 server_error.
+        With Profile.objects...first()=None the view returns the 'unavailable' 404, which
+        proves the import block executed (pre-fix it never got past the import)."""
+        tenant = MagicMock()
+        tenant.schema_name = "bistro"
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()), \
+                    patch("tenancy.models.Profile") as mock_profile_cls:
+                mock_profile_cls.objects.filter.return_value.first.return_value = None
+                resp = self._get()
+        self.assertNotEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotEqual(resp.data.get("code"), "server_error")
+        self.assertEqual(resp.data.get("code"), "unavailable")
+
     def test_schema_error_returns_500(self):
         """If anything inside schema_context raises, the view returns 500."""
         tenant = MagicMock()
@@ -467,7 +488,9 @@ class MarketplaceMenuViewTests(SimpleTestCase):
             tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
             mock_tenant.objects.get.return_value = tenant
 
-            with patch("django_tenants.utils.schema_context", _sc_mock()):
+            # Profile is imported from tenancy.models (NOT menu.models), so patch it there.
+            with patch("django_tenants.utils.schema_context", _sc_mock()), \
+                    patch("tenancy.models.Profile", mock_profile_cls):
                 original_menu_models = sys.modules.get("menu.models")
                 sys.modules["menu.models"] = fake_menu_models
                 try:
@@ -556,6 +579,31 @@ class MarketplacePlaceOrderViewTests(SimpleTestCase):
             })
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "auth_required")
+
+    def test_order_placement_import_block_resolves_no_server_error(self):
+        """Regression: MarketplacePlaceOrderView imported `Profile` from menu.models (which
+        defines no Profile) → ImportError swallowed by the broad try/except into a 500
+        `server_error` on every marketplace order. Profile now comes from tenancy.models.
+        Drive a pickup order INTO the schema_context import block and assert it does NOT
+        500 server_error. With Profile.objects...first()=None the view returns the
+        'unavailable' 404 — proving the import block executed (pre-fix it 500'd at the import)."""
+        tenant = MagicMock()
+        tenant.schema_name = "bistro"
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()), \
+                    patch("tenancy.models.Profile") as mock_profile_cls:
+                mock_profile_cls.objects.filter.return_value.first.return_value = None
+                resp = self._post({
+                    "restaurant": "bistro",
+                    "items": [{"slug": "burger", "qty": 1}],
+                    "fulfillment_type": "pickup",
+                })
+        self.assertNotEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotEqual(resp.data.get("code"), "server_error")
+        self.assertEqual(resp.data.get("code"), "unavailable")
 
 
 # ── MarketplaceOrderStatusView ────────────────────────────────────────────────
