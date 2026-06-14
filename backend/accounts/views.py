@@ -3020,6 +3020,16 @@ class MarketplaceMenuView(APIView):
                     for r in _Rating.objects.filter(comment__gt="").order_by("-created_at")[:6]
                 ]
 
+                # Trusted-customer cash-on-handover eligibility for the marketplace cart —
+                # mirrors menu.views.OrderEligibilityView. The Order count lives in this
+                # tenant schema, so compute it inside schema_context. The customer id comes
+                # from the marketplace session (authentication_classes is empty, but the
+                # session cookie still resolves so request.session is available).
+                from menu.views import _cod_eligible as _mkt_menu_cod_eligible
+                _mkt_menu_cust_id = request.session.get("customer_id")
+                cod_enabled = bool(getattr(profile, "cod_enabled", False))
+                cod_eligible = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
+
         except Exception as exc:
             logger.exception("MarketplaceMenuView error for slug=%s: %s", slug, exc)
             return Response({"detail": "Could not load menu.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3071,6 +3081,8 @@ class MarketplaceMenuView(APIView):
             "tags": profile.tags or [],
             "is_open": is_open,
             "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+            "cod_enabled": cod_enabled,
+            "cod_eligible": cod_eligible,
             "loyalty": loyalty_cfg_data,
             "flash_sale": flash_sale_info,
             "rating_average": rating_average,
@@ -3462,6 +3474,13 @@ class MarketplacePlaceOrderView(APIView):
                 # Marketplace pickup & delivery are pay-now: the bill must be settled in
                 # full from the customer's wallet at checkout (mirrors the restaurant
                 # flow). There is no dine-in on the marketplace.
+                #
+                # Trusted-customer cash-on-handover (COD): a repeat customer (owner has
+                # COD enabled + the customer has enough completed/paid orders here) may
+                # choose to pay cash to the staff/driver instead of prepaying from the
+                # wallet — exactly like the direct PlaceOrderView path. Such orders are
+                # created UNPAID and settled at handover (driver collects for delivery).
+                _mkt_cod_order = False
                 _requires_prepay = fulfillment_type in ("pickup", "delivery")
                 if _requires_prepay and total > Decimal("0"):
                     if _linked_customer is None:
@@ -3470,15 +3489,27 @@ class MarketplacePlaceOrderView(APIView):
                              "code": "auth_required"},
                             status=status.HTTP_403_FORBIDDEN,
                         )
-                    _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
-                    if _wallet_avail < total:
-                        return Response(
-                            {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
-                             "code": "wallet_insufficient",
-                             "balance": str(_wallet_avail), "amount_due": str(total)},
-                            status=status.HTTP_402_PAYMENT_REQUIRED,
-                        )
-                    use_wallet = True  # pay-now: always settle from the wallet
+                    from menu.views import _cod_eligible as _mkt_cod_eligible
+                    _mkt_pay_method = str(request.data.get("payment_method") or "").strip().lower()
+                    # Advance/scheduled orders are prepaid at placement (no cash-on-handover)
+                    # so the slot is genuinely committed and no-shows can't tie up stock unpaid.
+                    if (
+                        _mkt_pay_method == "cash"
+                        and not _wants_schedule
+                        and _mkt_cod_eligible(profile, _linked_customer.id)
+                    ):
+                        _mkt_cod_order = True
+                        use_wallet = False  # cash on handover — do not require/deduct wallet
+                    else:
+                        _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
+                        if _wallet_avail < total:
+                            return Response(
+                                {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                                 "code": "wallet_insufficient",
+                                 "balance": str(_wallet_avail), "amount_due": str(total)},
+                                status=status.HTTP_402_PAYMENT_REQUIRED,
+                            )
+                        use_wallet = True  # pay-now: always settle from the wallet
 
                 _stock_updates = []
                 _pk_to_slug = {}
@@ -3687,8 +3718,15 @@ class MarketplacePlaceOrderView(APIView):
                             order.save(update_fields=["payment_status", "paid_at"])
 
                         # Pay-now safety net: roll back if a pickup/delivery order wasn't
-                        # fully settled (e.g. balance dropped under the lock).
-                        if _requires_prepay and order.payment_status != _Order.PaymentStatus.PAID:
+                        # fully settled (e.g. balance dropped under the lock). A trusted
+                        # cash-on-handover order is DELIBERATELY left unpaid (settled at
+                        # handover), so it must not trip this gate — use_wallet=False above
+                        # already prevents any wallet deduction for it.
+                        if (
+                            _requires_prepay
+                            and not _mkt_cod_order
+                            and order.payment_status != _Order.PaymentStatus.PAID
+                        ):
                             raise _PrepayUnpaid()
 
                         # Award loyalty points (parity with the direct checkout — the

@@ -596,6 +596,27 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Profile import bug (user-reported) — MarketplaceMenuView + MarketplacePlaceOrderView imported
+      `Profile` from menu.models (none there → it's in tenancy.models); the ImportError was swallowed by
+      the views' broad try/except into HTTP 500 server_error on EVERY marketplace menu fetch + order
+      placement. Split to `from tenancy.models import Profile`. CI was green because the only tests
+      reaching the import MASKED it (sys.modules fake menu.models w/ Profile; patch.object(...,create=True))
+      — repointed those 3 to patch tenancy.models.Profile + added 2 regression tests asserting no
+      server_error. Backend 3672/0. LESSON: broad try/except around a lazy import hides ImportError as a
+      500; patch(...,create=True) silently invents a missing attr and masks such bugs. — c13c06a.
+- [x] A4 "marketplace COD-on-handover" (KEPOLI_NEXT.md Phase A, pre-PSP GMV; verified by me, backend
+      3677/0, FE i18n/lint/test/build green, migrations clean; reviewer found 0 issues). Ported the direct
+      restaurant trusted-customer cash-on-handover to the marketplace: MarketplacePlaceOrderView gained
+      _mkt_cod_order — COD only when payment_method=='cash' AND not scheduled AND _cod_eligible(profile,
+      customer) (owner cod_enabled + customer has >= cod_min_paid_orders COMPLETED+PAID at THIS restaurant);
+      such orders are created UNPAID (use_wallet=False, no deduction) and settled at handover (driver
+      collects cash for delivery). Non-eligible / scheduled / wallet-chosen still prepay (402 when short).
+      Both _PrepayUnpaid safety nets verified to not fire for COD (one use_wallet-guarded, one exempted via
+      `not _mkt_cod_order`). MarketplaceMenuView now returns cod_enabled/cod_eligible so the cart knows.
+      Frontend MarketplaceMenuPage.vue shows a wallet-vs-cash chooser only when cod_eligible (sends
+      payment_method:'cash'); wallet-only flow unchanged otherwise. New test_a4_marketplace_cod.py (5) +
+      4 i18n keys EN/FR/AR. — a4 commit. **Phase-A non-decision-gated eng items A7+A4 DONE; remaining A2
+      (plan prices) + A5 (commission default) are decision-gated; A3 (PSP top-up seam dormant) buildable.**
 - [x] A7 "durable Redis/Celery boot assertion" (KEPOLI_NEXT.md Phase A; verified by me, backend
       3670/0). Prod silently degraded when REDIS_URL/CELERY_BROKER_URL were unset (cache→LocMemCache,
       channel layer→InMemoryChannelLayer, tasks→inline daemon thread) → cross-worker broadcasts (live

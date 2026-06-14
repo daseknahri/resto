@@ -740,19 +740,46 @@
             <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold tabular-nums text-amber-300">-{{ fmtPrice(loyaltyDiscount) }}</span>
           </label>
 
-          <!-- Pay now from wallet (marketplace orders are pay-now) -->
-          <div
-            v-if="customerStore.isAuthenticated && orderTotal > 0"
-            class="ui-panel rounded-xl border px-4 py-3"
-            :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
-          >
-            <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
-              {{ t('mktMenu.payFromWalletTitle') }}
-            </p>
-            <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
-            <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
-              {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
-            </p>
+          <!-- Pay now (marketplace orders are pay-now) -->
+          <div v-if="customerStore.isAuthenticated && orderTotal > 0" class="space-y-2">
+            <!-- Trusted customers: choose wallet or cash on handover -->
+            <div v-if="codEligible" class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                :class="paymentMethod === 'wallet' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                :aria-pressed="paymentMethod === 'wallet'"
+                @click="paymentMethod = 'wallet'"
+              >{{ t('mktMenu.payMethodWallet') }}</button>
+              <button
+                type="button"
+                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                :class="paymentMethod === 'cash' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                :aria-pressed="paymentMethod === 'cash'"
+                @click="paymentMethod = 'cash'"
+              >{{ t('mktMenu.payMethodCash') }}</button>
+            </div>
+
+            <!-- Cash on handover panel -->
+            <div v-if="codChosen" class="ui-panel rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3">
+              <p class="text-sm font-semibold text-emerald-300">{{ t('mktMenu.payCashOnHandoverTitle') }}</p>
+              <p class="mt-0.5 text-xs text-slate-400">{{ t('mktMenu.payCashOnHandoverNote') }}</p>
+            </div>
+
+            <!-- Pay now from wallet -->
+            <div
+              v-else
+              class="ui-panel rounded-xl border px-4 py-3"
+              :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
+            >
+              <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
+                {{ t('mktMenu.payFromWalletTitle') }}
+              </p>
+              <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
+              <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
+                {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
+              </p>
+            </div>
           </div>
 
           <!-- Totals -->
@@ -1490,8 +1517,19 @@ const walletBalanceNum = computed(() => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 });
 const walletCoversTotal = computed(() => walletBalanceNum.value >= orderTotal.value);
+// Trusted-customer cash-on-handover (COD): eligibility comes from the marketplace
+// menu payload (backend reports cod_eligible for the signed-in customer).
+const codEligible = computed(() => restaurant.value?.cod_eligible === true);
+const paymentMethod = ref('wallet'); // 'wallet' | 'cash' (cash only when codEligible)
+const codChosen = computed(
+  () => codEligible.value && paymentMethod.value === 'cash'
+);
+// If eligibility drops (e.g. a different restaurant), fall back to wallet.
+watch(codEligible, (ok) => {
+  if (!ok && paymentMethod.value === 'cash') paymentMethod.value = 'wallet';
+});
 const prepayShortfall = computed(
-  () => customerStore.isAuthenticated && orderTotal.value > 0 && !walletCoversTotal.value
+  () => customerStore.isAuthenticated && orderTotal.value > 0 && !walletCoversTotal.value && !codChosen.value
 );
 
 const fmtPrice = (amount) => {
@@ -1559,8 +1597,9 @@ const placeOrder = async () => {
       return;
     }
   }
-  // Pay-now: a signed-in customer's wallet must cover the full total.
-  if (customerStore.isAuthenticated && orderTotal.value > 0 && walletBalanceNum.value < orderTotal.value) {
+  // Pay-now: a signed-in customer's wallet must cover the full total
+  // (unless they chose trusted cash-on-handover).
+  if (customerStore.isAuthenticated && orderTotal.value > 0 && !codChosen.value && walletBalanceNum.value < orderTotal.value) {
     checkoutError.value = t('mktMenu.walletTopUpRequired', {
       balance: fmtPrice(walletBalanceNum.value),
       total: fmtPrice(orderTotal.value),
@@ -1621,8 +1660,12 @@ const placeOrder = async () => {
       delivery_address: form.delivery_address,
       delivery_lat: form.delivery_lat,
       delivery_lng: form.delivery_lng,
-      use_wallet: true,
     };
+    if (codChosen.value) {
+      payload.payment_method = 'cash';
+    } else {
+      payload.use_wallet = true;
+    }
     if (scheduleEnabled.value && scheduledFor.value) {
       const dt = new Date(scheduledFor.value);
       if (!Number.isNaN(dt.getTime())) payload.scheduled_for = dt.toISOString();
