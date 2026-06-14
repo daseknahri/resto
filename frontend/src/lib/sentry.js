@@ -15,6 +15,33 @@
 
 let _initialized = false
 
+/**
+ * OPS-5-A: Tag every Sentry event with the current tenant's slug + id so SPA
+ * errors are attributable to a specific restaurant.  Must be called from the
+ * tenant store once the tenant object is loaded (slug and id are required).
+ * No-op when Sentry is not initialised (DSN absent or SDK not yet loaded).
+ */
+export function setTenantContext(slug, id) {
+  // Dynamic: Sentry may not be imported yet (it is loaded lazily in initSentry).
+  // We use the global Sentry object if available, otherwise try a dynamic import.
+  // This intentionally does NOT crash if Sentry is absent.
+  try {
+    // Sentry attaches itself to the module scope after initSentry resolves.
+    // The safest cross-env approach is to call the module-level setTag if the
+    // module is already in the module cache (it will be after initSentry fires).
+    import('@sentry/vue').then((Sentry) => {
+      if (typeof Sentry.setTag === 'function') {
+        Sentry.setTag('tenant_slug', slug ?? null)
+        Sentry.setTag('tenant_id', id ?? null)
+      }
+    }).catch(() => {
+      // Sentry not installed / DSN absent — intentional no-op.
+    })
+  } catch {
+    // Catch any synchronous error (e.g. import() not supported in test env).
+  }
+}
+
 export function initSentry(app) {
   const dsn = (import.meta.env.VITE_SENTRY_DSN ?? '').trim()
   if (!dsn || _initialized) return

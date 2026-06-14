@@ -122,25 +122,30 @@ def _order_app(extra):
 
 @unittest.skipUnless(HAS_CHANNELS, "channels not installed")
 class CustomerOrderConsumerTests(SimpleTestCase):
-    """The DB existence check is patched (no DB in this sandbox); we verify the
-    connect/group/broadcast behavior around it."""
+    """The DB ownership check is patched (no DB in this sandbox); we verify the
+    connect/group/broadcast behavior around it.
+
+    OPS-5-D: _order_exists was replaced by _check_order_ownership which applies
+    the session-ownership gate.  Tests stub _check_order_ownership directly so
+    they control allow/deny without a real DB or session.
+    """
 
     def setUp(self):
-        self._orig = rt_consumers._order_exists
+        self._orig = rt_consumers._check_order_ownership
 
-        async def _exists_true(tenant, order_number):
+        async def _allow(tenant, order_number, session_customer_id, delivery_code_claim):
             return True
 
-        rt_consumers._order_exists = _exists_true
+        rt_consumers._check_order_ownership = _allow
 
     def tearDown(self):
-        rt_consumers._order_exists = self._orig
+        rt_consumers._check_order_ownership = self._orig
 
     def test_connects_and_receives_status_for_its_order(self):
         asyncio.run(self._ok())
 
     async def _ok(self):
-        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}}
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}, "session": {}, "query_string": b""}
         comm = WebsocketCommunicator(_order_app(extra), "/ws/order/ORD-1/")
         connected, _ = await comm.connect()
         self.assertTrue(connected)
@@ -157,7 +162,7 @@ class CustomerOrderConsumerTests(SimpleTestCase):
         asyncio.run(self._isolation())
 
     async def _isolation(self):
-        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}}
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}, "session": {}, "query_string": b""}
         comm = WebsocketCommunicator(_order_app(extra), "/ws/order/ORD-1/")
         connected, _ = await comm.connect()
         self.assertTrue(connected)
@@ -169,14 +174,14 @@ class CustomerOrderConsumerTests(SimpleTestCase):
         await comm.disconnect()
 
     def test_rejected_when_order_missing(self):
-        async def _exists_false(tenant, order_number):
+        async def _deny(tenant, order_number, session_customer_id, delivery_code_claim):
             return False
 
-        rt_consumers._order_exists = _exists_false
+        rt_consumers._check_order_ownership = _deny
         asyncio.run(self._rejected_missing())
 
     async def _rejected_missing(self):
-        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "NOPE"}}}
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "NOPE"}}, "session": {}, "query_string": b""}
         comm = WebsocketCommunicator(_order_app(extra), "/ws/order/NOPE/")
         connected, _ = await comm.connect()
         self.assertFalse(connected)

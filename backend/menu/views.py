@@ -7412,6 +7412,27 @@ class OwnerSectionDetailView(APIView):
         # Replace waiter assignments when provided (full set).
         if "server_user_ids" in request.data:
             ids = [int(i) for i in (request.data.get("server_user_ids") or []) if str(i).isdigit()]
+            # SECURITY (OPS-5-C): whitelist — only accept user_ids that are members
+            # of this tenant.  Foreign user_ids are silently dropped so an attacker
+            # cannot inject a cross-tenant user into SectionServer (which feeds
+            # _can_access_order routing, determining which waiter sees which order).
+            # "Member of this tenant" mirrors _resolve_staff_names: accounts.User
+            # filtered by tenant=request.tenant (public-schema User.tenant FK).
+            _tenant = getattr(request, "tenant", None)
+            if ids and _tenant is not None:
+                # SECURITY (OPS-5): if the tenant-membership DB query fails we
+                # must NOT silently clear valid_ids (which previously caused
+                # .exclude(user_id__in=[]).delete() to wipe ALL existing
+                # waiter-section assignments and return 200 with empty servers).
+                # Re-raise so the caller gets a 500 and the section state is
+                # left untouched.  The security invariant — no foreign user_id
+                # injected — still holds because we never reach the .delete()
+                # / .create() calls below.
+                from accounts.models import User as _User
+                valid_ids = set(
+                    _User.objects.filter(id__in=ids, tenant=_tenant).values_list("id", flat=True)
+                )
+                ids = [uid for uid in ids if uid in valid_ids]
             SectionServer.objects.filter(section_id=section.id).exclude(user_id__in=ids).delete()
             existing = set(SectionServer.objects.filter(section_id=section.id).values_list("user_id", flat=True))
             for uid in ids:

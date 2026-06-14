@@ -967,8 +967,12 @@ class AdminTenantListView(APIView):
         )
 
         with schema_context(get_public_schema_name()):
+            from .models import Subscription
             primary_domain_rows = Domain.objects.filter(tenant_id=OuterRef("pk"), is_primary=True).order_by("id")
             fallback_domain_rows = Domain.objects.filter(tenant_id=OuterRef("pk")).order_by("id")
+            active_sub_end_date = Subscription.objects.filter(
+                tenant_id=OuterRef("pk"), status="active"
+            ).order_by("-start_date").values("end_date")[:1]
             queryset = (
                 Tenant.objects.select_related("plan", "owner")
                 .annotate(
@@ -980,6 +984,7 @@ class AdminTenantListView(APIView):
                     owner_username_value=Coalesce(F("owner__username"), Value("")),
                     plan_code_value=Coalesce(F("plan__code"), Value("")),
                     plan_name_value=Coalesce(F("plan__name"), Value("")),
+                    subscription_end_date=Subquery(active_sub_end_date),
                 )
                 .order_by("slug")
             )
@@ -1017,6 +1022,7 @@ class AdminTenantListView(APIView):
                     "plan_name_value",
                     "primary_domain_value",
                     "float_balance",
+                    "subscription_end_date",
                 )
             )
             data = [
@@ -1035,6 +1041,12 @@ class AdminTenantListView(APIView):
                     "plan_name": plan_display_name(row["plan_code_value"] or "", fallback=row["plan_name_value"] or ""),
                     "primary_domain": row["primary_domain_value"] or "",
                     "float_balance": str(row["float_balance"]),
+                    # Renewal / period-end date: end_date of the tenant's active subscription.
+                    # None means the subscription has no fixed end (rolling / open-ended).
+                    "subscription_end_date": (
+                        row["subscription_end_date"].isoformat()
+                        if row.get("subscription_end_date") else None
+                    ),
                 }
                 for row in rows
             ]
@@ -2845,6 +2857,99 @@ class OwnerDashboardView(APIView):
         )
 
 
+class AdminTenantLiveOrdersView(APIView):
+    """GET /api/admin/tenants/<tenant_id>/live-orders/
+
+    Read-only support view: returns a tenant's active (non-terminal) order queue so
+    platform support staff can assist without a phone call.
+
+    Security contract (OPS-5 F):
+    - IsPlatformAdmin permission ONLY — no tenant-role user can reach this endpoint.
+    - Every access is audit-logged (action=tenant_live_orders_viewed) with the actor,
+      tenant, and IP, so cross-tenant reads are fully traceable.
+    - No stack traces or credentials in the response body.
+    - Returns only the same fields the existing OwnerOrderListView hot path uses
+      (order_number, status, order_type, total, created_at, customer_phone).
+
+    This is an intentional cross-tenant read; the permission gate + audit log are the
+    mandatory controls per the multi-tenant security rules.
+    """
+
+    permission_classes = [IsPlatformAdmin]
+
+    _ACTIVE_STATUSES = [
+        "scheduled",
+        "pending",
+        "confirmed",
+        "preparing",
+        "ready",
+        "out_for_delivery",
+    ]
+
+    def get(self, request, tenant_id):
+        with schema_context(get_public_schema_name()):
+            tenant = get_object_or_404(
+                Tenant.objects.only("id", "slug", "schema_name"), pk=tenant_id
+            )
+            if getattr(tenant, "schema_name", "") == get_public_schema_name():
+                return Response(
+                    {"detail": "Public tenant does not have a live order queue."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Cross-tenant read: switch into that tenant's schema to query orders.
+        # SECURITY (OPS-5): the audit log is a MANDATORY control for this
+        # cross-tenant read.  We wrap the read + audit write in a single
+        # atomic transaction so that if AdminAuditLog.objects.create() fails
+        # for any reason the transaction rolls back, the response is never
+        # returned, and a 500 propagates to the caller.  We do NOT swallow
+        # the audit exception here — log_admin_action's try/except is
+        # intentionally bypassed by calling AdminAuditLog.objects.create()
+        # directly inside the transaction.
+        with transaction.atomic():
+            with schema_context(tenant.schema_name):
+                from menu.models import Order as _Order
+                orders = list(
+                    _Order.objects.filter(status__in=self._ACTIVE_STATUSES)
+                    .select_related("customer")
+                    .order_by("-created_at")[:200]
+                )
+                results = [
+                    {
+                        "order_number": o.order_number,
+                        "status": o.status,
+                        "order_type": getattr(o, "order_type", ""),
+                        "total": str(o.total),
+                        "created_at": o.created_at.isoformat() if o.created_at else None,
+                        # PII: phone is already visible in the admin console customer list
+                        "customer_phone": getattr(o, "customer_phone", "") or "",
+                    }
+                    for o in orders
+                ]
+
+            # Audit row written in the PUBLIC schema (AdminAuditLog is a shared
+            # model).  If this INSERT fails the whole atomic block rolls back —
+            # no cross-tenant data is returned without a corresponding audit row.
+            from sales.audit import get_request_ip
+            AdminAuditLog.objects.create(
+                action=AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED,
+                actor=request.user,
+                tenant=tenant,
+                target_repr=f"tenant:{tenant.slug}",
+                ip_address=get_request_ip(request),
+                metadata={"order_count": len(results)},
+            )
+
+        return Response(
+            {
+                "tenant_id": tenant.id,
+                "tenant_slug": tenant.slug,
+                "active_order_count": len(results),
+                "results": results,
+            }
+        )
+
+
 class AdminTierUpgradeRequestListView(APIView):
     permission_classes = [IsPlatformAdmin]
 
@@ -2873,6 +2978,8 @@ class AdminTierUpgradeRequestDecisionView(APIView):
         decision = serializer.validated_data["decision"]
         admin_note = serializer.validated_data.get("admin_note", "")
         payment_reference = serializer.validated_data.get("payment_reference", "")
+        invoice_amount = serializer.validated_data.get("invoice_amount")
+        invoice_currency = serializer.validated_data.get("invoice_currency", "")
 
         try:
             result = decide_tier_upgrade_request(
@@ -2881,6 +2988,8 @@ class AdminTierUpgradeRequestDecisionView(APIView):
                 actor=request.user,
                 admin_note=admin_note,
                 payment_reference=payment_reference,
+                invoice_amount=invoice_amount,
+                invoice_currency=invoice_currency,
             )
         except TierUpgradeRequest.DoesNotExist:
             return Response({"detail": "Upgrade request not found."}, status=status.HTTP_404_NOT_FOUND)
