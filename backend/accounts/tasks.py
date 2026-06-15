@@ -105,6 +105,15 @@ def whatsapp_new_order(schema_name, order_id, tenant_name, whatsapp_phone, tenan
         )
 
 
+@shared_task(name="accounts.tasks.charge_request", **_RETRY)
+def charge_request(customer_id, restaurant_name, amount):
+    """Nudge a customer that they have a wallet charge to approve (money-adjacent,
+    request path). Wraps the existing synchronous sender so dispatch goes through the
+    bounded ``enqueue`` pool / Celery instead of a raw daemon thread."""
+    from accounts.push import _send_charge_request_sync
+    _send_charge_request_sync(customer_id, restaurant_name, amount)
+
+
 @shared_task(name="accounts.tasks.driver_dispatch", **_RETRY)
 def driver_dispatch(restaurant_name=None):
     from accounts.push import notify_online_drivers_new_job_sync

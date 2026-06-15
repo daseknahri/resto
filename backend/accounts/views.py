@@ -24,6 +24,7 @@ from sales.permissions import IsPlatformAdmin
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.openstate import schedule_open_now, tenant_local_now
 
 from .messaging import send_password_reset_email
@@ -2771,6 +2772,10 @@ def _public_list_get_or_build(cache_key, build_fn):
     """Return the cached list payload for *cache_key*, building it at most once under
     concurrency via a non-blocking per-key lock.
 
+    Thin wrapper over the generic single-flight helper (tenancy.cache_utils) shared with
+    the menu cache (R14b DRY). The wait/lock parameters are read from the module-level
+    constants AT CALL TIME so they remain monkeypatch-tunable in tests.
+
     - HIT: return the cached payload immediately (no lock, no build).
     - MISS + acquire lock: call *build_fn* (the expensive rebuild), cache.set() the result
       under *cache_key* (TTL), release the lock, return the freshly built payload.
@@ -2783,32 +2788,14 @@ def _public_list_get_or_build(cache_key, build_fn):
     exactly as the non-single-flight path did. This helper does NOT change the response
     contract; it only governs WHO rebuilds on a miss.
     """
-    hit = cache.get(cache_key)
-    if hit is not None:
-        return hit
-
-    lock_key = f"{cache_key}:lock"
-    # cache.add is atomic: it sets the key only if absent and returns True to the winner.
-    if cache.add(lock_key, "1", timeout=_PUBLIC_LIST_LOCK_TTL):
-        try:
-            payload = build_fn()
-            cache.set(cache_key, payload, _PUBLIC_LIST_TTL)
-            return payload
-        finally:
-            # Release early so the next TTL lapse isn't blocked for the full lock TTL.
-            cache.delete(lock_key)
-
-    # We lost the race: another request is building. Briefly poll for its result.
-    deadline = time.monotonic() + _PUBLIC_LIST_WAIT_TOTAL
-    while time.monotonic() < deadline:
-        time.sleep(_PUBLIC_LIST_WAIT_STEP)
-        hit = cache.get(cache_key)
-        if hit is not None:
-            return hit
-    # Holder too slow (or died): build it ourselves rather than returning nothing.
-    payload = build_fn()
-    cache.set(cache_key, payload, _PUBLIC_LIST_TTL)
-    return payload
+    return get_or_build_single_flight(
+        cache_key,
+        build_fn,
+        ttl=_PUBLIC_LIST_TTL,
+        lock_ttl=_PUBLIC_LIST_LOCK_TTL,
+        wait_total=_PUBLIC_LIST_WAIT_TOTAL,
+        wait_step=_PUBLIC_LIST_WAIT_STEP,
+    )
 
 
 class DirectoryView(APIView):
@@ -5610,22 +5597,20 @@ class DriverJobStatusUpdateView(APIView):
             _on_job_failed(job)
         elif new_status == DeliveryJob.Status.AT_RESTAURANT:
             try:
-                import threading as _threading
+                from accounts.tasks import enqueue, web_push_tenant
                 from tenancy.models import Tenant as _Tenant
-                from menu.push import _push_to_tenant as _push_restaurant
                 _tenant = _Tenant.objects.filter(pk=job.tenant_id).first()
                 if _tenant:
                     _driver_name = (customer.name or "Driver").strip()
-                    _threading.Thread(
-                        target=_push_restaurant,
-                        args=(
-                            _tenant.schema_name,
-                            f"Driver arrived \U0001f6f5",
-                            f"{_driver_name} is at your restaurant — order #{job.order_number}",
-                            "/owner/orders",
-                        ),
-                        daemon=True,
-                    ).start()
+                    # R14b: dispatch through the bounded enqueue pool (Celery when a
+                    # broker is set) instead of a raw daemon thread. Same notification.
+                    enqueue(
+                        web_push_tenant,
+                        _tenant.schema_name,
+                        f"Driver arrived \U0001f6f5",
+                        f"{_driver_name} is at your restaurant — order #{job.order_number}",
+                        "/owner/orders",
+                    )
             except Exception:
                 pass  # Never fail the driver status update due to push errors
 

@@ -4,7 +4,6 @@ import csv
 import hashlib
 from io import BytesIO, StringIO
 import re
-import threading
 from urllib.parse import quote_plus
 import zipfile
 
@@ -48,6 +47,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import qrcode
 
+from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
 
@@ -413,17 +413,37 @@ class PublishAccessMixin:
         if blocked is not None:
             return blocked
 
-        # Serve from cache when available (public requests only)
+        # Owner/staff or no-tenant requests bypass the cache entirely (live DB state).
         key = self._menu_list_cache_key()
-        if key is not None:
-            hit = cache.get(key)
-            if hit is not None:
-                return Response(hit)
+        if key is None:
+            return super().list(request, *args, **kwargs)
 
-        response = super().list(request, *args, **kwargs)
-        if key is not None and response.status_code == 200:
-            cache.set(key, response.data, timeout=_MENU_CACHE_TTL)
-        return response
+        # Cacheable public read. Single-flight the rebuild so concurrent misses on a
+        # popular tenant's menu (every QR scan at TTL lapse) collapse to ONE DRF
+        # queryset+serializer build instead of a thundering herd (R14b). The cached
+        # value is the exact response.data, so the response payload is unchanged.
+        captured = {}
+
+        def _build():
+            # Explicit (class, instance) super — the implicit zero-arg super() has no
+            # __class__ cell inside this nested function. Anchor on PublishAccessMixin so
+            # this resolves to ModelViewSet.list (the original super().list() target) and
+            # never re-enters this overridden list (which would recurse infinitely).
+            response = super(PublishAccessMixin, self).list(request, *args, **kwargs)
+            captured["status"] = response.status_code
+            return response.data
+
+        payload = get_or_build_single_flight(
+            key, _build, ttl=_MENU_CACHE_TTL
+        )
+        # Preserve the original "only cache 200s" guard: if our own build produced a
+        # non-200, evict the entry the helper just set so we never serve a stale error.
+        if captured.get("status", 200) != 200:
+            cache.delete(key)
+        # Re-emit the build's status so a non-200 build keeps its code (was returned
+        # verbatim pre-single-flight). Followers (lock losers) never set captured["status"]
+        # and only ever read a cached 200, so they correctly default to 200.
+        return Response(payload, status=captured.get("status", 200))
 
     def retrieve(self, request, *args, **kwargs):
         blocked = self._enforce_public_menu_policy()

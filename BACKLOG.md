@@ -71,12 +71,15 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       (max_workers=4) that closes the DB connection in finally (no per-thread conn leak); Celery-on path unchanged.
       accounts/views.py _public_list_get_or_build single-flights the marketplace/directory rebuild (per-cache-key
       cache.add lock, bounded 2s follower wait, 10s lock TTL, always returns a payload). Backend 3898/0. +17 tests.
-- [ ] **R14b (P2) Route the 2 remaining raw-thread dispatch sites through the bounded pool + menu/meta single-flight** —
-      scout found push_charge_request (accounts/push.py:58, money-adjacent, request path) + the "driver arrived"
-      AT_RESTAURANT push (accounts/views.py:5619) still spawn raw UNBOUNDED daemon threads (the lone outliers; every
-      other dispatch routes through enqueue) → route both through enqueue (web_push_tenant exists; add a charge task).
-      Also: per-tenant MENU list cache (menu/views.py:411) + /api/meta/ cache (tenancy/api.py:294) lack single-flight
-      (lower severity, per-tenant blast radius) — reuse the cache.add pattern. [scout prod-harden-load]
+- [x] **R14b (P2) Route last raw threads through the bounded pool + single-flight the menu cache — DONE (prod-harden-load-2)** —
+      push_charge_request + the AT_RESTAURANT "driver arrived" push now route through accounts.tasks.enqueue (new
+      charge_request shared_task; web_push_tenant reused) — no raw threads remain on those paths. Factored a generic
+      tenancy/cache_utils.get_or_build_single_flight (DRY: the marketplace/directory helper now delegates to it) and
+      applied it to the per-tenant MENU list cache (the hottest public path — every QR scan). Backend 3913/0; +15 tests;
+      fixed 2 review minors (dead import, non-200 status re-emit). [scout prod-harden-load]
+- [ ] **R14c (P3) Single-flight the /api/meta/ cache (low pri)** — tenancy/api.py:294 TenantMetaView.get rebuilds
+      (serializer + 1 ClosureDate query) with no single-flight; cheap per-tenant build so the stampede cost is far
+      below the menu/list rebuilds already fixed. Reuse tenancy/cache_utils.get_or_build_single_flight. [scout prod-harden-load-2]
 - [ ] **R15 (P2) Metrics/latency + payment-failure-rate alerting + request_id→Sentry tag** — observability is binary
       uptime + Sentry errors (traces_sample_rate 0). [non-gated, M]
 - [ ] **R16 (P2) Wallet currency-mismatch guard + route inline debits through wallet_service** — wallet is MAD scalar;

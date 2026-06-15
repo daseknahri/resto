@@ -1,11 +1,11 @@
 """accounts.push — Web Push to platform CUSTOMERS (public schema).
 
 Reuses menu.push._send_one for delivery. Customer push subscriptions live in the public
-schema, so we query under schema_context("public") to be correct inside a daemon thread
-(whose DB connection may otherwise carry a tenant search_path).
+schema, so we query under schema_context("public") to be correct off the request path —
+on a Celery worker or the inline pool thread, whose DB connection may otherwise carry a
+tenant search_path.
 """
 import logging
-import threading
 
 logger = logging.getLogger("app.push")
 
@@ -45,17 +45,13 @@ def _send_charge_request_sync(customer_id, restaurant_name, amount):
 
 
 def push_charge_request(customer_id, restaurant_name, amount) -> None:
-    """Fire-and-forget nudge telling a customer they have a wallet charge to approve.
+    """Nudge telling a customer they have a wallet charge to approve.
 
-    Spawns a daemon thread so it never blocks the HTTP response; never raises.
-    """
-    def _run():
-        try:
-            _send_charge_request_sync(customer_id, restaurant_name, amount)
-        except Exception as exc:  # pragma: no cover - best-effort
-            logger.warning("push_charge_request(%s) failed: %s", customer_id, exc)
-
-    threading.Thread(target=_run, daemon=True).start()
+    Enqueued on the Celery worker when a broker is configured, else run on the bounded
+    inline pool (R14b) — NOT a raw unbounded daemon thread. Never raises, never blocks
+    the HTTP response."""
+    from accounts.tasks import enqueue, charge_request
+    enqueue(charge_request, customer_id, restaurant_name, amount)
 
 
 # Post-order review nudge, sent ~30 min after an order completes. {r} = restaurant.

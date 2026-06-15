@@ -113,6 +113,13 @@ class CategoryViewSetListCacheTests(SimpleTestCase):
     """
     Test the cache-aside logic in PublishAccessMixin.list() as exercised
     through CategoryViewSet.
+
+    R14b: the actual list-cache GET/SET/lock now live in the shared single-flight helper
+    (tenancy.cache_utils.get_or_build_single_flight), while the version-counter lookup
+    stays in menu.views.cache (via _menu_list_cache_key). So the list-cache assertions
+    patch ``tenancy.cache_utils.cache`` and the version counter patches ``menu.views.cache``.
+    The response contract (hit → no DB; miss → DB + store; per-params distinct keys) is
+    unchanged.
     """
 
     def setUp(self):
@@ -121,8 +128,8 @@ class CategoryViewSetListCacheTests(SimpleTestCase):
     def _list_view(self):
         return CategoryViewSet.as_view({"get": "list"})
 
-    # Helper: wire up the minimum mocks for a 200 list response
-    def _wire_mocks(self, mock_profile, mock_cat, mock_cache, *, cache_hit=None):
+    # Helper: wire up the minimum mocks for a 200 list response.
+    def _wire_mocks(self, mock_profile, mock_cat, mock_ver_cache, mock_sf_cache, *, cache_hit=None):
         # Profile: published menu
         profile = MagicMock()
         profile.is_menu_published = True
@@ -140,44 +147,46 @@ class CategoryViewSetListCacheTests(SimpleTestCase):
         qs.count.return_value = 0
         mock_cat.select_related.return_value = qs
 
-        # Cache
-        mock_cache.get.return_value = cache_hit  # None → miss, list → hit
+        # Version-counter cache (menu.views.cache): return a fixed version int.
+        mock_ver_cache.get.return_value = 1
+        # Single-flight list cache (tenancy.cache_utils.cache): the hit/miss value, and
+        # cache.add returns True so the request wins the (uncontended) build lock.
+        mock_sf_cache.get.return_value = cache_hit  # None → miss, value → hit
+        mock_sf_cache.add.return_value = True
 
+    @patch("tenancy.cache_utils.cache")
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Category.objects")
     @patch("menu.views.cache")
     def test_cache_miss_calls_db_and_stores_result(
-        self, mock_cache, mock_cat, mock_profile
+        self, mock_cache, mock_cat, mock_profile, mock_sf_cache
     ):
-        """On a cache miss (cache.get returns None), DB is queried and result is stored."""
-        self._wire_mocks(mock_profile, mock_cat, mock_cache, cache_hit=None)
+        """On a cache miss (single-flight cache.get returns None), DB is queried and the
+        built payload is stored under the list-cache key."""
+        self._wire_mocks(mock_profile, mock_cat, mock_cache, mock_sf_cache, cache_hit=None)
 
         req = _public_list_request(self.factory)
         resp = self._list_view()(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # cache.get is called twice:
-        #   1st: version counter lookup  → cache.get("menu_ver:demo")
-        #   2nd: actual list-cache lookup → cache.get("menu:demo:…")
-        get_calls = mock_cache.get.call_args_list
-        self.assertEqual(len(get_calls), 2)
-        self.assertTrue(get_calls[0][0][0].startswith("menu_ver:"))
-        key_used = get_calls[1][0][0]
+        # Version counter looked up via menu.views.cache.
+        self.assertTrue(mock_cache.get.call_args_list[0][0][0].startswith("menu_ver:"))
+        # List-cache lookup + store happen via the single-flight helper's cache.
+        key_used = mock_sf_cache.get.call_args_list[0][0][0]
         self.assertTrue(key_used.startswith("menu:demo:"))
-        # cache.set was called to store the result under that same key
-        mock_cache.set.assert_called()
-        set_key = mock_cache.set.call_args[0][0]
-        self.assertEqual(set_key, key_used)
+        mock_sf_cache.set.assert_called()
+        self.assertEqual(mock_sf_cache.set.call_args[0][0], key_used)
 
+    @patch("tenancy.cache_utils.cache")
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Category.objects")
     @patch("menu.views.cache")
     def test_cache_hit_returns_cached_data_without_db(
-        self, mock_cache, mock_cat, mock_profile
+        self, mock_cache, mock_cat, mock_profile, mock_sf_cache
     ):
         """On a cache hit, the cached list is returned and DB is NOT queried."""
         cached_data = [{"id": 1, "name": "Starters"}]
-        self._wire_mocks(mock_profile, mock_cat, mock_cache, cache_hit=cached_data)
+        self._wire_mocks(mock_profile, mock_cat, mock_cache, mock_sf_cache, cache_hit=cached_data)
 
         req = _public_list_request(self.factory)
         resp = self._list_view()(req)
@@ -186,50 +195,54 @@ class CategoryViewSetListCacheTests(SimpleTestCase):
         self.assertEqual(resp.data, cached_data)
         # DB was not touched
         mock_cat.select_related.assert_not_called()
-        # cache.set was NOT called (no need to re-store a hit)
-        mock_cache.set.assert_not_called()
+        # No re-store on a hit (single-flight returns early before any set).
+        mock_sf_cache.set.assert_not_called()
 
+    @patch("tenancy.cache_utils.cache")
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Category.objects")
     @patch("menu.views.cache")
     def test_owner_request_bypasses_cache(
-        self, mock_cache, mock_cat, mock_profile
+        self, mock_cache, mock_cat, mock_profile, mock_sf_cache
     ):
         """Authenticated owner requests never touch the cache."""
-        self._wire_mocks(mock_profile, mock_cat, mock_cache, cache_hit=None)
+        self._wire_mocks(mock_profile, mock_cat, mock_cache, mock_sf_cache, cache_hit=None)
 
         req = _owner_list_request(self.factory)
         resp = self._list_view()(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # cache.get was NOT called (key is None for owner)
+        # key is None for owner → neither the version counter nor the list cache is read.
         mock_cache.get.assert_not_called()
-        mock_cache.set.assert_not_called()
+        mock_sf_cache.get.assert_not_called()
+        mock_sf_cache.set.assert_not_called()
 
+    @patch("tenancy.cache_utils.cache")
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Category.objects")
     @patch("menu.views.cache")
     def test_different_query_params_produce_different_keys(
-        self, mock_cache, mock_cat, mock_profile
+        self, mock_cache, mock_cat, mock_profile, mock_sf_cache
     ):
         """Requests with different ?super_category params must use distinct cache keys."""
-        self._wire_mocks(mock_profile, mock_cat, mock_cache, cache_hit=None)
+        self._wire_mocks(mock_profile, mock_cat, mock_cache, mock_sf_cache, cache_hit=None)
         view = self._list_view()
 
         req_a = self.factory.get("/api/categories/", {"super_category": "burgers"})
         req_a.tenant = _tenant()
         req_a.user = _anon()
         view(req_a)
-        # Index 1 is the actual list-cache key (index 0 is the version-counter lookup)
-        key_a = mock_cache.get.call_args_list[1][0][0]
+        key_a = mock_sf_cache.get.call_args_list[0][0][0]
 
-        mock_cache.reset_mock()
+        mock_sf_cache.reset_mock()
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True
 
         req_b = self.factory.get("/api/categories/", {"super_category": "salads"})
         req_b.tenant = _tenant()
         req_b.user = _anon()
         view(req_b)
-        key_b = mock_cache.get.call_args_list[1][0][0]
+        key_b = mock_sf_cache.get.call_args_list[0][0][0]
 
         self.assertNotEqual(key_a, key_b)
 

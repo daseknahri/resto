@@ -106,8 +106,40 @@ class TaskWrapperTests(SimpleTestCase):
         driver_dispatch.run("Acme")
         notify.assert_called_once_with("Acme")
 
+    @patch("accounts.push._send_charge_request_sync")
+    def test_charge_request_calls_sync(self, send):
+        # R14b FIX1: the charge_request task wraps the existing synchronous sender so the
+        # money-adjacent nudge dispatches via the bounded enqueue pool / Celery.
+        from accounts.tasks import charge_request
+        charge_request.run(42, "Acme Bistro", "150.00")
+        send.assert_called_once_with(42, "Acme Bistro", "150.00")
+
     @patch("django.core.management.call_command")
     def test_run_management_command(self, call_command):
         from accounts.tasks import run_management_command
         run_management_command.run("release_scheduled_orders")
         call_command.assert_called_once_with("release_scheduled_orders")
+
+
+class ChargeRequestDispatchTests(SimpleTestCase):
+    """R14b FIX1: push_charge_request now routes through accounts.tasks.enqueue (bounded
+    pool / .delay()) instead of spawning a raw threading.Thread."""
+
+    @patch("accounts.tasks.enqueue")
+    def test_push_charge_request_enqueues_task(self, enqueue):
+        from accounts.push import push_charge_request
+        from accounts.tasks import charge_request
+        push_charge_request(7, "Acme", "99.50")
+        enqueue.assert_called_once()
+        args = enqueue.call_args[0]
+        self.assertIs(args[0], charge_request)
+        self.assertEqual(args[1], 7)
+        self.assertEqual(args[2], "Acme")
+        self.assertEqual(args[3], "99.50")
+
+    @patch("accounts.tasks.enqueue")
+    @patch("threading.Thread")
+    def test_push_charge_request_does_not_spawn_raw_thread(self, thread, enqueue):
+        from accounts.push import push_charge_request
+        push_charge_request(7, "Acme", "99.50")
+        thread.assert_not_called()  # no raw unbounded daemon thread anymore
