@@ -312,3 +312,13 @@ class VoucherRedeemThrottle(_CustomerThrottle):
     endpoint can import it. Keyed on the session customer_id (falls back to IP), mirroring
     the other money-movement / probe-sensitive AllowAny endpoints."""
     scope = "voucher_redeem"
+
+
+class EmailUnsubscribeThrottle(_IPThrottle):
+    """B1-followup: rate-limit the public one-click email-unsubscribe endpoint.
+
+    The endpoint is AllowAny + auth-less (it must answer mailbox-provider one-click
+    POSTs with no credentials) and looks up a Customer by a signed token. The signed
+    token already resists forgery; this throttle blunts sequential scanning of the
+    endpoint. Keyed on the trusted-proxy-aware client IP (via _IPThrottle)."""
+    scope = "email_unsubscribe"

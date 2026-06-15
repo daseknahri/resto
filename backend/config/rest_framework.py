@@ -78,6 +78,9 @@ REST_FRAMEWORK = {
         "loyalty_redeem": "30/hour",
         # OPS-5g: voucher redemption — money movement; per-session-customer (accounts.views).
         "voucher_redeem": "10/hour",
+        # B1-followup: public one-click email-unsubscribe — auth-less, signed-token
+        # gated; throttle blunts sequential scanning. Keyed per client IP.
+        "email_unsubscribe": "60/hour",
         # OPS-5c item 7: driver doc uploads — 8 MB per submit + admin email each time
         "driver_doc_upload": "10/hour",
         # OPS-5c item 7: analytics ingestion keyed per (tenant, ip) — see AnalyticsEventThrottle

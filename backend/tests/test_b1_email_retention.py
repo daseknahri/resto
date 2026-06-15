@@ -190,7 +190,7 @@ class WinbackDualSendTests(SimpleTestCase):
             calls["push"].append(cid)
             return push_return
 
-        def fake_email(email, tname, slug, title, body):
+        def fake_email(email, tname, slug, title, body, cid):
             calls["email"].append(email)
             return email_return
 
@@ -279,31 +279,37 @@ class WinbackDualSendTests(SimpleTestCase):
 
 class MarketingEmailHelperTests(SimpleTestCase):
 
-    @patch("accounts.messaging.send_mail", return_value=1)
-    def test_calls_send_mail_and_returns_count(self, mock_send):
+    # B1-followup: send_marketing_email now builds an EmailMessage (so it can
+    # carry the List-Unsubscribe headers), then calls .send().  Tests patch the
+    # EmailMessage class and assert against the constructor kwargs + the send
+    # return value.
+    @patch("accounts.messaging.EmailMessage")
+    def test_builds_message_and_returns_count(self, mock_cls):
         from accounts.messaging import send_marketing_email
-        sent = send_marketing_email("x@y.com", "Subject", "Body", "Acme")
+        mock_cls.return_value.send.return_value = 1
+        sent = send_marketing_email("x@y.com", "Subject", "Body", "Acme", customer_id=5)
         self.assertEqual(sent, 1)
-        self.assertEqual(mock_send.call_count, 1)
-        args, kwargs = mock_send.call_args
-        # send_mail(subject, body, None, [email], ...) — positional like send_otp_email
-        self.assertEqual(args[0], "Subject")
-        self.assertIn("Body", args[1])
-        self.assertEqual(args[3], ["x@y.com"])
+        self.assertEqual(mock_cls.call_count, 1)
+        _, kwargs = mock_cls.call_args
+        self.assertEqual(kwargs["subject"], "Subject")
+        self.assertIn("Body", kwargs["body"])
+        self.assertEqual(kwargs["to"], ["x@y.com"])
 
-    @patch("accounts.messaging.send_mail", return_value=1)
-    def test_body_has_opt_out_line_naming_tenant(self, mock_send):
+    @patch("accounts.messaging.EmailMessage")
+    def test_body_has_opt_out_line_naming_tenant(self, mock_cls):
         from accounts.messaging import send_marketing_email
-        send_marketing_email("x@y.com", "Subj", "Come back!", "Mama's Kitchen")
-        body = mock_send.call_args[0][1]
+        mock_cls.return_value.send.return_value = 1
+        send_marketing_email("x@y.com", "Subj", "Come back!", "Mama's Kitchen", customer_id=5)
+        body = mock_cls.call_args[1]["body"]
         self.assertIn("opted into promotions", body)
         self.assertIn("Mama's Kitchen", body)
         self.assertIn("Kepoli account", body)
 
-    @patch("accounts.messaging.send_mail", return_value=0)
-    def test_returns_zero_when_send_fails(self, mock_send):
+    @patch("accounts.messaging.EmailMessage")
+    def test_returns_zero_when_send_fails(self, mock_cls):
         from accounts.messaging import send_marketing_email
-        self.assertEqual(send_marketing_email("x@y.com", "S", "B", "Acme"), 0)
+        mock_cls.return_value.send.return_value = 0
+        self.assertEqual(send_marketing_email("x@y.com", "S", "B", "Acme", customer_id=5), 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

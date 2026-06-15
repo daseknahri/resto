@@ -631,12 +631,10 @@ Residual (small, pre-existing, out of the shipped scope):
 B1 added email to win-back + campaigns (reaches the email-having majority). Before this sends real
 marketing mail to real customers, the deliverability/compliance basics must be in place — the app is not
 live yet so none of this is actively harming, but it gates turning the email program on for real.
-- [ ] **No real unsubscribe (List-Unsubscribe header + one-click) — CAN-SPAM + Gmail/Yahoo bulk-sender
-      requirement** — send_marketing_email is plain send_mail with only a text "manage in your account" line
-      (login-gated, useless to a lapsed customer). Since Feb 2024 Gmail/Yahoo bulk-junk senders lacking a
-      working List-Unsubscribe / List-Unsubscribe-Post (RFC 8058) one-click header. Add a tokenized
-      unsubscribe URL in the body + the headers (switch send_mail → EmailMessage/extra_headers).
-      (accounts/messaging.py send_marketing_email). [scout B1] **(compliance gate)**
+- [x] **One-click unsubscribe — DONE (B1-followup, see Done section)** — send_marketing_email now sends via
+      EmailMessage with RFC 8058 List-Unsubscribe (https + mailto) + List-Unsubscribe-Post one-click headers
+      + a visible body link; a public CSRF-exempt/no-auth tokenized endpoint (Django signing, no model field)
+      sets notify_promotions=False. The 406-in-prod content-negotiation trap was caught + fixed.
 - [ ] **Sending to UNVERIFIED emails (email_verified exists but is never checked)** — both audiences select
       .exclude(email='') and ignore Customer.email_verified, so mistyped/stale addresses get blasted → hard
       bounces → shared-domain blocklisting that also kills transactional mail (OTP/reset/order-status). Gate
@@ -714,6 +712,20 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B1-followup "email List-Unsubscribe + one-click unsubscribe" (compliance gate for the B1 email
+      feature; verified by me, backend 3762/0, migrations clean): send_marketing_email switched send_mail →
+      EmailMessage carrying RFC 8058 List-Unsubscribe (https one-click endpoint + mailto fallback) +
+      List-Unsubscribe-Post: One-Click headers + a visible unsubscribe link in the body; per-recipient token
+      via django.core.signing (accounts/unsubscribe.py — NO model field). New public EmailUnsubscribeView
+      (config/public_urls.py /api/unsubscribe/<token>/): AllowAny, GET confirmation + CSRF-exempt no-auth
+      POST one-click → notify_promotions=False, idempotent, invalid token doesn't 500/leak, throttled
+      (email_unsubscribe). Win-back + campaign senders pass customer_id so each mail gets a per-recipient
+      token. **Reviewer caught a MAJOR prod bug: the DRF view 406'd on Accept: text/html in prod (only
+      JSONRenderer; DEBUG's BrowsableAPIRenderer masked it in tests) → one-click POSTs from mailbox
+      providers would silently fail to unsubscribe. Fixed with StaticHTMLRenderer + a no-op content-
+      negotiation class + 3 regression tests pinning the PROD renderer set.** New test_b1followup_unsubscribe.py.
+      Scout → remaining email-program hardening (verified-only [owner reach tradeoff], bounce/complaint
+      suppression [needs ESP webhook], SPF/DKIM/DMARC [deploy DNS]) stays in the cluster above. — b1followup commit.
 - [x] B8 "marketplace cross-schema N+1 kill (rating denorm)" (KEPOLI_NEXT.md Phase B; verified by me,
       backend 3734/0, migrations clean, reviewer 0 critical/major): added Profile.rating_avg +
       rating_count (tenancy/0041); menu/ratings.py recompute_tenant_rating aggregates Rating in the tenant

@@ -14,7 +14,9 @@ from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
+from rest_framework.negotiation import BaseContentNegotiation
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
@@ -36,6 +38,7 @@ from .throttles import (
     CustomerReservationsThrottle,
     DeliveryRatingThrottle,
     DeliveryTrackingThrottle,
+    EmailUnsubscribeThrottle,
     DriverJobAcceptThrottle,
     DriverPositionThrottle,
     DriverStatusUpdateThrottle,
@@ -6446,3 +6449,101 @@ class AdminCreateDeliveryJobView(APIView):
         )
         _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
         return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_201_CREATED)
+
+
+# ── B1-followup: one-click email unsubscribe ────────────────────────────────────
+
+
+class _IgnoreClientNegotiation(BaseContentNegotiation):
+    """Disable Accept-header negotiation for the unsubscribe endpoint.
+
+    DRF runs perform_content_negotiation() in APIView.initial() BEFORE get()/post().
+    With the prod renderer set (JSONRenderer only — BrowsableAPIRenderer is added
+    just when DJANGO_DEBUG=True), a request with a JSON-less Accept (e.g. RFC 8058
+    one-click POSTs that send `Accept: text/html`) would raise NotAcceptable → HTTP
+    406 and the recipient would never be unsubscribed.  Always pick the view's own
+    renderer so the Accept header can never 406 a compliance-critical opt-out.
+    """
+
+    def select_parser(self, request, parsers):
+        return parsers[0] if parsers else None
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        return (renderers[0], renderers[0].media_type)
+
+
+class EmailUnsubscribeView(APIView):
+    """GET/POST /api/unsubscribe/<token>/  — public promotional-email opt-out.
+
+    Gmail/Yahoo bulk-sender rules + CAN-SPAM require a working one-click
+    unsubscribe.  Marketing mail carries an https link to this endpoint (visible
+    body link + RFC 8058 List-Unsubscribe header), with the recipient encoded in
+    a tamper-proof django.core.signing token (no DB field needed).
+
+      * GET  — a human clicking the body link → confirmation HTML page.
+      * POST — the mailbox provider's automated ONE-CLICK call (RFC 8058). It
+        carries NO credentials and NO meaningful body, so the view is AllowAny
+        with authentication_classes = [] — there is no SessionAuthentication to
+        enforce CSRF, so the POST is accepted without a CSRF token.
+
+    Both verbs have the SAME effect: flip the token's customer
+    notify_promotions=False (idempotent).  An unknown/invalid/forged token does
+    NOT 500 and returns the SAME generic confirmation as a valid one, so the
+    response never leaks whether a given id exists.  The signed token resists
+    forgery; EmailUnsubscribeThrottle blunts sequential scanning.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [EmailUnsubscribeThrottle]
+    # Renderer-agnostic: the view writes its own HttpResponse, but DRF still runs
+    # content negotiation in initial() before the handler.  Advertise an HTML
+    # renderer and ignore the client's Accept so a strict/JSON-less Accept (RFC
+    # 8058 one-click providers) can never 406 the opt-out before it runs.
+    renderer_classes = [StaticHTMLRenderer]
+    content_negotiation_class = _IgnoreClientNegotiation
+
+    _PAGE = (
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<title>Unsubscribed</title></head>"
+        "<body style=\"font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;"
+        "padding:0 1rem;text-align:center\">"
+        "<h1>You've been unsubscribed</h1>"
+        "<p>You will no longer receive promotional emails from Kepoli. "
+        "Order updates are unaffected.</p>"
+        "</body></html>"
+    )
+
+    def _unsubscribe(self, token):
+        """Flip notify_promotions=False for the token's customer (idempotent).
+
+        Never raises and never reveals whether the id exists — an invalid token
+        and an already-opted-out customer both fall through silently.
+        """
+        from .unsubscribe import load_unsubscribe_token
+
+        customer_id = load_unsubscribe_token(token)
+        if customer_id is None:
+            return
+        try:
+            customer = Customer.objects.filter(pk=customer_id).first()
+            if customer is not None and customer.notify_promotions:
+                customer.notify_promotions = False
+                customer.save(update_fields=["notify_promotions"])
+        except Exception:  # pragma: no cover - defensive: opt-out must never 500
+            logger.exception("Email unsubscribe failed for token customer %s", customer_id)
+
+    def _respond(self):
+        from django.http import HttpResponse
+
+        return HttpResponse(self._PAGE, content_type="text/html; charset=utf-8")
+
+    def get(self, request, token, *args, **kwargs):
+        self._unsubscribe(token)
+        return self._respond()
+
+    def post(self, request, token, *args, **kwargs):
+        # RFC 8058 one-click: same effect as GET, accepted without CSRF/auth/body.
+        self._unsubscribe(token)
+        return self._respond()

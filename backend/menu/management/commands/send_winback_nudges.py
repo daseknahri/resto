@@ -201,15 +201,17 @@ def _send_nudge(customer_id: int, tenant_name: str, slug: str, push_url: str, ti
         return 0
 
 
-def _send_nudge_email(email: str, tenant_name: str, slug: str, title: str, body: str) -> int:
+def _send_nudge_email(email: str, tenant_name: str, slug: str, title: str, body: str, customer_id: int) -> int:
     """Send one winback email synchronously (B1). Mirrors the marketing helper.
 
     Returns the number of emails delivered (0 means not sent). Never raises —
-    exceptions are logged and 0 is returned.
+    exceptions are logged and 0 is returned.  ``customer_id`` is passed through
+    so the marketing helper can mint the one-click List-Unsubscribe token
+    (B1-followup compliance).
     """
     from accounts.messaging import send_marketing_email
     try:
-        return send_marketing_email(email, title, body, tenant_name)
+        return send_marketing_email(email, title, body, tenant_name, customer_id=customer_id)
     except Exception:
         logger.exception("send_winback_nudges: email failed for %s at %s", email, slug)
         return 0
@@ -351,7 +353,7 @@ class Command(BaseCommand):
                     email_sent = 0
                     cust_email = email_by_id.get(cid)
                     if cust_email:
-                        email_sent = _send_nudge_email(cust_email, tenant_name, tenant.slug, title, body)
+                        email_sent = _send_nudge_email(cust_email, tenant_name, tenant.slug, title, body, cid)
 
                     if push_sent == 0 and email_sent == 0:
                         # Both channels suppressed/failed (e.g. opt-out re-check

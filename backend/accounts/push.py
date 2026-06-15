@@ -599,7 +599,7 @@ def send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id
         return 0
 
     try:
-        sent = send_marketing_email(email, title, message, tenant_name)
+        sent = send_marketing_email(email, title, message, tenant_name, customer_id=customer_id)
     except Exception:
         record_notification(
             channel="email", event="campaign", status="failed",

@@ -4,11 +4,16 @@ from django.contrib import admin
 from django.urls import path, re_path
 from django.views.static import serve as static_serve
 
+from accounts.views import EmailUnsubscribeView
 from config.shared_api_urls import shared_api_urlpatterns
 from config.sitemap import sitemap_view
 
 urlpatterns = [
     *shared_api_urlpatterns,
+    # B1-followup: public one-click email-unsubscribe (CAN-SPAM / Gmail-Yahoo
+    # bulk-sender compliance). Customer-facing + platform-level, so it lives on
+    # the PUBLIC urlconf. The recipient is encoded in a signed token — no auth.
+    path("api/unsubscribe/<str:token>/", EmailUnsubscribeView.as_view(), name="email-unsubscribe"),
     # Public SEO sitemap (public-schema host only). Lists the static SPA pages
     # plus one /order/<slug> per discoverable tenant. See config/sitemap.py.
     path("sitemap.xml", sitemap_view, name="sitemap"),
