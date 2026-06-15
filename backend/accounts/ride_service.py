@@ -14,7 +14,10 @@ platform-wide fare config from PlatformConfig.
 
 Module-level imports of the seams we mock in tests (so @patch("accounts.ride_service.X") works).
 """
+import logging
 from decimal import Decimal, ROUND_HALF_UP
+
+from django.db import connection
 
 from tenancy.delivery_pricing import valid_coord, MAX_PLAUSIBLE_KM
 from tenancy.routing import road_distance_km
@@ -22,6 +25,20 @@ from .models import PlatformConfig, WalletTransaction
 from .wallet_service import debit_wallet, credit_wallet, InsufficientFunds
 
 _CENT = Decimal("0.01")
+
+# R15b: ride settlement is a money mutation (debit rider → credit driver), so its
+# failures belong on the dedicated "payments" channel alongside the wallet_service
+# branches — alertable as their own rate. Messages carry the tenant schema + ride/
+# rider/driver ids only (no balances/PII), so a failure stays attributable.
+payments_logger = logging.getLogger("payments")
+
+
+def _schema() -> str:
+    """Best-effort current tenant schema for log attribution (never raises)."""
+    try:
+        return connection.schema_name
+    except Exception:
+        return "?"
 
 AVG_CITY_SPEED_KMH = 24  # used to estimate trip duration for the per-minute fare component
 
@@ -136,6 +153,13 @@ def _do_settle(ride) -> None:
         # reconciliation can account for it. Mutate in memory only; the outer atomic
         # transaction saves once (cash_fallback/cash_fallback_note are in-memory markers
         # surfaced via serialization — persisting them durably would need a migration).
+        # R15b: surface the cash fallback on the payments channel — no wallet money moved
+        # for a wallet ride is a money-path event the ops side should be able to rate-track.
+        payments_logger.warning(
+            "ride settle insufficient funds — cash fallback schema=%s ride_id=%s "
+            "rider_id=%s driver_id=%s",
+            _schema(), ride.id, getattr(ride, "rider_id", None), getattr(ride, "driver_id", None),
+        )
         ride.payment_method = "cash"
         ride.cash_fallback = True
         ride.cash_fallback_note = (
@@ -144,6 +168,13 @@ def _do_settle(ride) -> None:
         ride.paid_with_wallet = False
         return
     except Exception:
+        # R15b: an unexpected failure during the rider debit is a money-mutation failure —
+        # log it to the payments channel (with attributable ids, no balances/PII) BEFORE
+        # re-raising so the caller's atomic() still rolls the whole completion back.
+        payments_logger.exception(
+            "ride settle failed (rider debit) schema=%s ride_id=%s rider_id=%s driver_id=%s",
+            _schema(), ride.id, getattr(ride, "rider_id", None), getattr(ride, "driver_id", None),
+        )
         raise
 
     # Mutate in memory only; the outer atomic transaction saves once.

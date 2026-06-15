@@ -2173,11 +2173,11 @@ class PlaceOrderView(APIView):
         # Build order items and compute total
         order_items_data = []
         _food_subtotal = Decimal("0")
-        currency = "USD"
+        currency = "MAD"
 
         for item_input in items_input:
             dish = dishes_map[item_input["slug"]]
-            currency = dish.currency or "USD"
+            currency = dish.currency or "MAD"
             # Apply happy-hour discount (largest percent_off wins; option price_delta unchanged).
             unit_price, _ = effective_unit_price(dish, _active_happy_hours)
 
@@ -2533,6 +2533,16 @@ class PlaceOrderView(APIView):
             treat a 0-rows result as cap-reached inside the atomic transaction.
             """
 
+        class _CurrencyUnsupported(Exception):
+            """R16 guard: refuse to debit the MAD wallet against a non-MAD order.
+
+            The wallet balance is a single MAD scalar; this inline debit writes a
+            WalletTransaction at an implicit 1:1 MAD rate, so debiting a non-MAD order
+            would silently corrupt per-currency reconciliation. NO-OP today (every order
+            is MAD — currency derives from dish.currency), so this never fires in normal
+            operation — it is a future-proofing safety net handled below as a 400
+            currency_unsupported. Multi-currency wallet support is a deferred decision."""
+
         try:
             with transaction.atomic():
                 # --- Stock check + decrement (before creating the order so a failed
@@ -2713,6 +2723,14 @@ class PlaceOrderView(APIView):
                 # Deduct wallet balance (select_for_update prevents race conditions)
                 _paid_by_wallet = Decimal("0")
                 if _use_wallet and _wallet_deduction > Decimal("0"):
+                    # R16 guard (MAD-only safety net): the wallet balance is a single MAD
+                    # scalar and the WalletTransaction below is written at an implicit 1:1
+                    # MAD rate. Refuse to debit a non-MAD order so per-currency
+                    # reconciliation can never be silently corrupted. NO-OP today — every
+                    # order is MAD (currency derives from dish.currency above) — purely a
+                    # future-proofing guard; multi-currency wallet support is deferred.
+                    if (currency or "MAD").upper() != "MAD":
+                        raise _CurrencyUnsupported()
                     from accounts.models import Customer as _CustM, WalletTransaction as _WTM
                     _cust_locked = _CustM.objects.select_for_update().get(pk=_linked_customer.pk)
                     # Re-check available balance under lock
@@ -2765,6 +2783,15 @@ class PlaceOrderView(APIView):
         except _OutOfStock as _e:
             return Response(
                 {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _CurrencyUnsupported:
+            # R16 guard: non-MAD order reached the wallet-debit chokepoint. NO-OP today
+            # (every order is MAD); a clear, non-money-mutating 400 so the MAD ledger is
+            # never debited at an implicit 1:1 rate for a foreign-currency order.
+            return Response(
+                {"detail": "Wallet payment is only available for orders priced in MAD.",
+                 "code": "currency_unsupported"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except _PrepayUnpaid:

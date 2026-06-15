@@ -3595,13 +3595,13 @@ class MarketplacePlaceOrderView(APIView):
 
                 order_items_data = []
                 food_subtotal = Decimal("0")
-                currency = "USD"
+                currency = "MAD"
                 # combo component stock updates: (component_pk, total_qty, name)
                 _mkt_component_stock_updates = []
 
                 for it in items_raw:
                     dish = dishes_map[it["slug"]]
-                    currency = dish.currency or "USD"
+                    currency = dish.currency or "MAD"
                     # Apply happy-hour discount; option price_delta added below unchanged.
                     unit_price, _ = _eff_price(dish, _mkt_active_hh)
                     # OPS-5f: validate each option is bound to THIS dish before pricing.
@@ -3874,6 +3874,15 @@ class MarketplacePlaceOrderView(APIView):
                     later, raising _PromoCapped would propagate to the outer handler).
                     """
 
+                class _CurrencyUnsupported(Exception):
+                    """R16 guard: refuse to debit the MAD wallet against a non-MAD order.
+
+                    The wallet balance is a single MAD scalar; debiting a non-MAD order would
+                    silently mis-record currency on the ledger. NO-OP today (every order is
+                    MAD), so this never fires in normal operation — it is a future-proofing
+                    safety net, handled below as a 400 currency_unsupported.
+                    """
+
                 if fulfillment_type == "delivery" and _linked_customer:
                     customer_name = _linked_customer.name or customer_name
                     customer_phone = _linked_customer.phone or customer_phone
@@ -4009,23 +4018,52 @@ class MarketplacePlaceOrderView(APIView):
                         # Wallet deduction
                         _paid_by_wallet = Decimal("0")
                         if _wallet_deduction > Decimal("0") and _linked_customer:
-                            from .models import WalletTransaction as _WTM
-                            _cust_locked = Customer.objects.select_for_update().get(pk=_linked_customer.pk)
-                            _actual = min(Decimal(str(_cust_locked.wallet_balance or "0")), _wallet_deduction)
-                            if _actual > Decimal("0"):
-                                _cust_locked.wallet_balance = _cust_locked.wallet_balance - _actual
-                                _cust_locked.save(update_fields=["wallet_balance", "updated_at"])
-                                _WTM.objects.create(
-                                    customer=_cust_locked,
-                                    type=_WTM.Type.PAYMENT,
-                                    amount=_actual,
-                                    reference=order.order_number,
-                                    tenant_id=tenant.id,
-                                    balance_after=_cust_locked.wallet_balance,
+                            # R16 guard (MAD-only safety net): the wallet balance is a single
+                            # MAD scalar and this inline debit writes a WalletTransaction with
+                            # currency implicitly MAD at a 1:1 rate. Refuse to debit a non-MAD
+                            # order so per-currency reconciliation can never be silently
+                            # corrupted. Today every order is MAD (currency derives from
+                            # dish.currency), so this is a NO-OP — purely a future-proofing
+                            # guard. Multi-currency wallet support is a deferred product
+                            # decision (route-through-wallet_service refactor).
+                            if (currency or "MAD").upper() != "MAD":
+                                raise _CurrencyUnsupported()
+                            # R15b: the manual wallet mutation (lock + decrement + ledger row)
+                            # is a money mutation. Wrap it so its failure is emitted on the
+                            # dedicated "payments" channel with attributable ids (schema +
+                            # order/customer id, NO PII/secrets) BEFORE bubbling to the outer
+                            # app.customer handler, which keeps covering non-money errors.
+                            try:
+                                from .models import WalletTransaction as _WTM
+                                _cust_locked = Customer.objects.select_for_update().get(pk=_linked_customer.pk)
+                                _actual = min(Decimal(str(_cust_locked.wallet_balance or "0")), _wallet_deduction)
+                                if _actual > Decimal("0"):
+                                    _cust_locked.wallet_balance = _cust_locked.wallet_balance - _actual
+                                    _cust_locked.save(update_fields=["wallet_balance", "updated_at"])
+                                    _WTM.objects.create(
+                                        customer=_cust_locked,
+                                        type=_WTM.Type.PAYMENT,
+                                        amount=_actual,
+                                        reference=order.order_number,
+                                        tenant_id=tenant.id,
+                                        balance_after=_cust_locked.wallet_balance,
+                                    )
+                                    order.wallet_amount_paid = _actual
+                                    order.save(update_fields=["wallet_amount_paid"])
+                                    _paid_by_wallet = _actual
+                            except Exception:
+                                # Money-mutation failure: route to payments BEFORE re-raising so
+                                # the outer atomic still rolls back and the existing 500 response
+                                # path is unchanged. Log ids only (no balances/PII). order_number
+                                # is a non-secret reference; nothing kind:value is logged here so
+                                # _ref_kind isn't needed (the secret-bearing references live in
+                                # the wallet_service/cash-out paths that already use it).
+                                payments_logger.exception(
+                                    "marketplace wallet debit failed schema=%s order_number=%s customer_id=%s",
+                                    tenant.schema_name, getattr(order, "order_number", "?"),
+                                    getattr(_linked_customer, "pk", None),
                                 )
-                                order.wallet_amount_paid = _actual
-                                order.save(update_fields=["wallet_amount_paid"])
-                                _paid_by_wallet = _actual
+                                raise
 
                         # Settle payment state — PAID once wallet credits (or a
                         # zero total) fully cover it; otherwise UNPAID and the
@@ -4064,6 +4102,15 @@ class MarketplacePlaceOrderView(APIView):
                         except Exception:
                             pass  # never fail the order over loyalty accounting
 
+                except _CurrencyUnsupported:
+                    # R16 guard: non-MAD order reached the wallet-debit chokepoint. NO-OP
+                    # today (every order is MAD); a clear, non-money-mutating 400 so the
+                    # ledger is never debited at an implicit 1:1 MAD rate for a foreign currency.
+                    return Response(
+                        {"detail": "Wallet payment is only available for orders priced in MAD.",
+                         "code": "currency_unsupported"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 except _PrepayUnpaid:
                     return Response(
                         {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",

@@ -4,12 +4,28 @@ Drivers earn `driver_payout` on each delivered DeliveryJob. Earnings are therefo
 computed from delivered jobs; this module summarises them and records settlements
 (DriverPayout). Reuses the wallet service's money helpers and error type.
 """
+import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Sum
 
-from .wallet_service import _money, WalletError  # reuse quantize + error semantics
+from .wallet_service import _money, WalletError, _ref_kind  # reuse quantize + error semantics + safe ref kind
+
+# R15b: the cash-out confirm is a money mutation (debit driver wallet → credit tenant
+# float). The debit leg already logs via wallet_service; route the float-credit leg's
+# failures to the same dedicated "payments" channel so the whole settlement is
+# rate-trackable. Messages carry schema + driver/tenant/request ids and only the
+# NON-secret namespace of any reference (never the raw 6-digit cash-out code).
+payments_logger = logging.getLogger("payments")
+
+
+def _schema() -> str:
+    """Best-effort current tenant schema for log attribution (never raises)."""
+    try:
+        return connection.schema_name
+    except Exception:
+        return "?"
 
 
 def driver_earnings_summary(driver_id) -> dict:
@@ -205,13 +221,27 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             tenant_id=tenant_id,
             note="Driver cash-out",
         )
-        credit_tenant_float(
-            tenant_id, req.amount,
-            actor_user_id=actor_user_id,
-            idempotency_key=f"cashout:{req.id}:f",
-            reference=f"cashout:{code}",
-            note="Driver cash-out reimbursement",
-        )
+        try:
+            credit_tenant_float(
+                tenant_id, req.amount,
+                actor_user_id=actor_user_id,
+                idempotency_key=f"cashout:{req.id}:f",
+                reference=f"cashout:{code}",
+                note="Driver cash-out reimbursement",
+            )
+        except Exception:
+            # R15b: the driver wallet was already debited (wallet_service logged that leg);
+            # a failure crediting the tenant float here (e.g. InactiveTenant/WalletError)
+            # rolls back the whole atomic block but emitted NOTHING on the payments channel.
+            # Log the float-credit-leg failure with attributable ids — reuse _ref_kind so
+            # only the "cashout" namespace is recorded, NEVER the raw cash-out code — then
+            # re-raise so control flow / rollback is unchanged.
+            payments_logger.exception(
+                "cashout float-credit leg failed schema=%s driver_id=%s tenant_id=%s "
+                "request_id=%s ref_kind=%s",
+                _schema(), req.driver_id, tenant_id, req.id, _ref_kind(f"cashout:{code}"),
+            )
+            raise
         req.status = DriverCashoutRequest.Status.PAID
         req.tenant_id = tenant_id
         req.actor_user_id = actor_user_id

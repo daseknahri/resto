@@ -86,13 +86,18 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       caught + fixed a SECRET LEAK** (insufficient-funds log emitted the raw reference = the live cash-out 6-digit code
       → now logs only _ref_kind namespace). Docs note for the owner Sentry steps (traces rate + alert rules). 3925/0;
       +12 tests. [scout prod-readiness]
-- [ ] **R15b (P2) Extend the payments logger to 3 more money-failure paths** — scout: MarketplacePlaceOrderView paid
-      checkout (accounts/views.py:4149 → app.customer not payments; the manual debit at 4009), ride settlement
-      (ride_service.py _do_settle has NO logging on rider-debit/driver-credit failure), and the cash-out float-credit
-      leg (driver_service.py confirm_cashout — debit leg logs, credit_tenant_float failure doesn't). Route each to
-      payments_logger with _ref_kind redaction. [scout prod-harden-observability]
-- [ ] **R16 (P2) Wallet currency-mismatch guard + route inline debits through wallet_service** — wallet is MAD scalar;
-      inline debits hand-roll the ledger row w/o per-tx key. (MAD-only confirm is owner-gated; the guard is not.)
+- [x] **R15b (P2) Extend payments logger to 3 more money-failure paths — DONE (prod-harden-money)** —
+      MarketplacePlaceOrderView inline-debit failure, ride_service._do_settle (failure + InsufficientFunds cash-fallback),
+      and driver_service.confirm_cashout float-credit leg now log to the payments channel (driver_service reuses the
+      shared wallet_service._ref_kind so the raw cash-out code is never logged). Money behavior unchanged. Backend 3935/0.
+- [~] **R16 (P2) Wallet currency guard DONE; route-through-wallet_service refactor deferred (prod-harden-money)** —
+      GUARD shipped: PlaceOrderView + MarketplacePlaceOrderView refuse a wallet debit on a non-MAD order (400
+      currency_unsupported) before any debit; a no-op for MAD (every order today). Also corrected the order-currency
+      default from "USD" → "MAD" (a MAD-only app shouldn't default unspecified currency to USD; makes the guard a true
+      no-op for blank-currency dishes). **DEFERRED (R16b):** route the 2 inline hand-rolled wallet debits through
+      wallet_service.debit_wallet with a schema-namespaced per-tx key (placeorder:{schema}:{order.id}) so future
+      wallet_service invariants cover them — needs DB-test verification + careful money-path review. (MAD-only-for-launch
+      is the owner's confirm; the guard ships the safe default now.)
 - [ ] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM** — mutable base tags; Coolify rebuilds
       from source (non-reproducible). [non-gated, M]
 - [ ] **R18 (P2) PII erasure/export tooling + retention cron** — no data-subject erasure/export; no Customer/Order PII
