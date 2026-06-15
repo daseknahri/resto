@@ -200,6 +200,73 @@ def _bust_tenant_meta_cache(tenant_slug: str) -> None:
     cache.delete_many(keys)
 
 
+# ── Live (time-sensitive) is_open_now recompute for the cached meta payload ──────
+# The /api/meta/ response is cached whole (the EXPENSIVE TenantMetaSerializer work),
+# busted only on a Profile save — never on time passage. But profile.is_open_now is a
+# TIME-SENSITIVE verdict (it evaluates the weekly schedule in tenant-local time), so a
+# warm cache froze the open/closed verdict for up to the TTL and could disagree with the
+# now-live marketplace listing card (accounts.views._refresh_marketplace_live_fields,
+# used as the template here). Fix: the cached payload also carries the RAW INPUTS the
+# verdict derives from (under the internal "_isopen_raw" key), and this pass recomputes
+# is_open_now from CURRENT time on EVERY request — cache hit and fresh build alike — then
+# strips the internal key from the COPY returned to the client. The cached object keeps
+# its raw inputs so a later hit can recompute too. No DB access here: the schedule
+# recompute is pure in-memory, and closure_today is cached (day-stable). The only edge —
+# a ClosureDate that begins/ends across midnight — is at most TTL (5 min) stale, accepted.
+_META_ISOPEN_RAW_KEY = "_isopen_raw"
+
+
+def _refresh_meta_is_open_now(payload):
+    """Return a response COPY of *payload* with profile.is_open_now recomputed NOW.
+
+    Overwrites payload["profile"]["is_open_now"] from the cached raw inputs under
+    payload["_isopen_raw"] + the current time, reusing the SINGLE-source helpers
+    (openstate.schedule_open_now + a tenant-local now built from the raw timezone via
+    the same chain as openstate.tenant_local_now) — NO forked rule. The recompute mirrors
+    ProfileSerializer.get_is_open_now's guard order EXACTLY: manual is_open off → False;
+    menu temporarily disabled → False; today is a closure date → False; else delegate to
+    the window rule, falling back to the manual is_open when no schedule is configured
+    (result is None). Verdict is IDENTICAL to get_is_open_now at the same instant — this
+    is a freshness fix, not a logic change.
+
+    Operates on a deepcopy so the cached object keeps "_isopen_raw" intact for the next
+    hit. Then strips "_isopen_raw" from the copy so it never leaks to the client. Pure
+    in-memory — no DB access (closure_today is a cached day-stable bool).
+    """
+    import copy
+    from datetime import datetime as _dt, timezone as _utc
+
+    out = copy.deepcopy(payload) if payload else payload
+    if not isinstance(out, dict):
+        return out
+
+    raw = out.pop(_META_ISOPEN_RAW_KEY, None)
+    profile = out.get("profile")
+    if isinstance(raw, dict) and isinstance(profile, dict) and "is_open_now" in profile:
+        if not raw.get("is_open"):
+            verdict = False
+        elif raw.get("menu_disabled"):
+            verdict = False
+        elif raw.get("closure_today"):
+            verdict = False
+        else:
+            # Build a tenant-local now from the raw timezone via the SAME chain as
+            # openstate.tenant_local_now (timezone → settings.TIME_ZONE → UTC, safe UTC
+            # fallback on any error), then delegate to the SINGLE window rule.
+            from .openstate import schedule_open_now
+            try:
+                from zoneinfo import ZoneInfo
+                tz_name = (raw.get("timezone") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+                now_local = _dt.now(ZoneInfo(tz_name))
+            except Exception:
+                now_local = _dt.now(_utc.utc)
+            result = schedule_open_now(raw.get("schedule"), now_local)
+            verdict = bool(raw.get("is_open")) if result is None else result
+        profile["is_open_now"] = bool(verdict)
+
+    return out
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class TenantMetaView(APIView):
     permission_classes = [AllowAny]
@@ -227,13 +294,37 @@ class TenantMetaView(APIView):
         cache_key = _meta_cache_key(tenant_slug, locale_key)
         cached_data = cache.get(cache_key)
         if cached_data is not None:
-            return Response(cached_data)
+            # Recompute the time-sensitive open/closed verdict (profile.is_open_now) live
+            # at request time off the cached raw inputs (no DB), strip the internal key,
+            # then return the fresh copy.
+            return Response(_refresh_meta_is_open_now(cached_data))
 
         serializer = TenantMetaSerializer.from_tenant(tenant, request=request)
         data = serializer.data
-        # Pickle-safe: DRF ReturnDict/ReturnList are picklable by django-redis.
+        # Attach the RAW INPUTS needed to recompute is_open_now on later cache hits with
+        # NO DB query: the manual is_open + temp-disable toggles, the weekly schedule, the
+        # timezone, and whether TODAY is a closure date (computed ONCE here with the same
+        # ClosureDate query the serializer uses, so the cache-hit path needs no DB). These
+        # live under the internal "_isopen_raw" key and are stripped from the HTTP response.
+        profile = getattr(tenant, "profile", None)
+        if profile is not None and isinstance(data.get("profile"), dict):
+            try:
+                from menu.models import ClosureDate
+                from django.utils import timezone as _tz
+                closure_today = ClosureDate.objects.filter(date=_tz.localdate()).exists()
+            except Exception:
+                closure_today = False
+            data[_META_ISOPEN_RAW_KEY] = {
+                "is_open": bool(getattr(profile, "is_open", True)),
+                "menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                "schedule": getattr(profile, "business_hours_schedule", None),
+                "timezone": getattr(profile, "timezone", "") or "",
+                "closure_today": bool(closure_today),
+            }
+        # Pickle-safe: DRF ReturnDict/ReturnList are picklable by django-redis. Cache the
+        # payload WITH _isopen_raw; return the stripped, freshly-recomputed copy.
         cache.set(cache_key, data, timeout=_META_CACHE_TTL)
-        return Response(data)
+        return Response(_refresh_meta_is_open_now(data))
 
 
 # Profile fields the PUBLIC marketplace + directory listings depend on. Editing any

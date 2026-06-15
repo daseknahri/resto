@@ -7718,6 +7718,19 @@ def _is_tenant_owner(request) -> bool:
     return user.role == user.Roles.TENANT_OWNER
 
 
+def _bust_meta_cache_for_request(request) -> None:
+    """Evict the tenant's /api/meta/ cache (all locale variants). Best-effort + lazy
+    import so a menu→tenancy import cycle never forms and a bust failure never breaks
+    the caller. Used by closure-date writes: a closure flips is_open_now on the cached
+    meta payload, but the post-cache recompute reads a frozen closure_today, so the
+    closed state would otherwise lag the 300s TTL."""
+    try:
+        from tenancy.api import _bust_tenant_meta_cache
+        _bust_tenant_meta_cache(getattr(getattr(request, "tenant", None), "slug", ""))
+    except Exception:
+        pass
+
+
 class OwnerClosureDateListCreateView(APIView):
     """
     GET  /api/owner/closure-dates/  — list all closure dates (soonest first)
@@ -7751,6 +7764,13 @@ class OwnerClosureDateListCreateView(APIView):
             obj = ClosureDate.objects.create(date=parsed_date, label=label)
         except IntegrityError:
             return Response({"detail": "This date is already marked as closed."}, status=status.HTTP_400_BAD_REQUEST)
+        # A closure date flips is_open_now on the cached /api/meta/ payload (the
+        # menu page). The meta cache is busted only on Profile save + on time passage
+        # via the post-cache recompute, but the recompute reads a FROZEN closure_today
+        # bool — so a same-day closure would stay invisible for up to the 300s TTL.
+        # Bust the tenant meta cache so the closed state shows immediately. Best-effort,
+        # lazy import (avoids menu→tenancy import cycle at module load).
+        _bust_meta_cache_for_request(request)
         return Response(
             {"id": obj.id, "date": obj.date.isoformat(), "label": obj.label},
             status=status.HTTP_201_CREATED,
@@ -7773,6 +7793,9 @@ class OwnerClosureDateDeleteView(APIView):
         except ClosureDate.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         obj.delete()
+        # Removing a closure date re-opens the restaurant — bust the meta cache so
+        # /api/meta/ reflects it immediately (see _bust_meta_cache_for_request).
+        _bust_meta_cache_for_request(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

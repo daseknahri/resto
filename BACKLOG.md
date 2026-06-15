@@ -718,12 +718,32 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       top slot; the refresh pass now re-applies both on the fresh verdict** (open_only filter + open-first sort,
       threaded from the view; distance-sorted requests skip the re-sort). New RefreshLiveFieldsTests (7).
       Backend 3866/0. (accounts/views.py). [scout denorm-coherence + scout marketplace-live-fields]
-- [ ] **/api/meta/ bakes in is_open_now (300s) — same staleness, different surface (NEXT)** — TenantMetaView
-      (tenancy/api.py:228-236) returns the cached serializer payload verbatim; ProfileSerializer.is_open_now is
-      computed at fill time + frozen for _META_CACHE_TTL=300s, busted only on a Profile save (not on time passage).
-      So the customer menu/meta page can disagree with the marketplace card (now request-time-fresh) for up to 5
-      min. Fix = recompute is_open_now off raw inputs on the meta cache-hit path, or compute it post-cache.
-      (tenancy/api.py:228; tenancy/serializers.py:321). [scout marketplace-live-fields]
+- [x] **/api/meta/ is_open_now recomputed post-cache — DONE (meta-live-isopen batch)** — TenantMetaView now
+      caches the serializer payload WITH internal _isopen_raw inputs and recomputes profile.is_open_now on every
+      request (cache hit + fresh) via _refresh_meta_is_open_now (deepcopy → no cache mutation; no cache-hit DB —
+      closure_today cached day-stable; _isopen_raw stripped from the response). Mirrors the marketplace recompute +
+      reuses openstate.schedule_open_now (serializer get_is_open_now already delegates to it). So the menu/meta page
+      agrees with the marketplace card. **ALSO (scout-caught, fixed same batch): ClosureDate create/delete busted NO
+      cache + the recompute freezes closure_today → a same-day closure stayed invisible for ≤300s. Fixed:
+      OwnerClosureDateListCreateView.post + OwnerClosureDateDeleteView.delete now _bust_tenant_meta_cache (new
+      menu/views.py _bust_meta_cache_for_request helper).** New MetaIsOpenNowRecompute + integration tests + 2
+      closure-bust tests. Backend 3878/0. (tenancy/api.py; menu/views.py). [scout marketplace-live-fields]
+- [ ] **Marketplace/Directory listings ignore ClosureDate entirely (design gap)** — DirectoryView/MarketplaceView
+      never read ClosureDate (it lives in the tenant schema; the listing runs in the public schema), so a tenant
+      closed for a holiday still shows is_open=true on the marketplace card even though its menu page + order gate
+      honor the closure. Closing this needs denormalizing "closed today" into the public Profile (like ratings/promos)
+      — deferred; low frequency (whole-day holiday closures). (accounts/views.py). [scout meta-live-isopen]
+- [ ] **Menu list cache bakes in happy-hour effective_price + ends_at (60s TTL, same class)** — menu/views.py:425
+      caches the menu list 60s; DishSerializer.get_effective_price / get_happy_hour are clock-derived (from
+      get_active_happy_hours(now_local) at build) and the version key bumps only on CMS writes, so a happy hour that
+      opens/closes mid-window shows the wrong price for ≤60s. Same recompute-post-cache class as is_open; lower
+      severity (60s, pre-launch). Fix = recompute effective_price/happy_hour post-cache or document the 60s drift.
+      (menu/views.py:425; menu/serializers.py:330). [scout meta-live-isopen]
+- [ ] **Promo-badge fill-time tz fallback forks from the recompute fallback (nit, latent)** — MarketplaceView fill
+      loop resolves the promo clock as ZoneInfo(profile.timezone or "UTC") (skips settings.TIME_ZONE) while the
+      post-cache recompute uses the tenant_local_now chain (timezone → settings.TIME_ZONE → UTC). Harmless today
+      (recompute overwrites the fill-time promo_badge; TIME_ZONE="UTC" so they coincide) but align the fill clock if
+      TIME_ZONE ever changes. (accounts/views.py promo fill). [scout marketplace-live-fields] (nit)
 - [ ] **Promo-badge fill-time tz fallback forks from the recompute fallback (nit, latent)** — MarketplaceView fill
       loop resolves the promo clock as ZoneInfo(profile.timezone or "UTC") (skips settings.TIME_ZONE) while the
       post-cache recompute uses the tenant_local_now chain (timezone → settings.TIME_ZONE → UTC). Harmless today
@@ -827,6 +847,14 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] meta-live-isopen "recompute is_open_now POST-cache on /api/meta/ + bust meta cache on ClosureDate writes"
+      (verified by me, backend 3878/0, migrations clean, reviewer APPROVE — cache-integrity #1 risk verified: the
+      recompute deepcopies, cached object byte-for-byte unchanged, no cache-hit DB, no _isopen_raw leakage). The
+      last cached open-state surface: the menu/meta page now agrees with the marketplace card instead of freezing
+      is_open_now for 300s. Scout caught that ClosureDate create/delete busted NO cache while the recompute freezes
+      closure_today → fixed (bust meta cache on closure writes). New MetaIsOpenNowRecompute + integration + 2
+      closure-bust tests. Scout → menu-list happy-hour cache (60s, same class) + listings-ignore-ClosureDate (design
+      gap) triaged. — meta-live-isopen commit.
 - [x] marketplace-live-fields "recompute is_open/promo_badge/flash_sale_active POST-cache" (verified by me,
       backend 3866/0, migrations clean, reviewer PASS — verified the #1 risk, no cache-object mutation: the refresh
       deepcopies, so a 2nd cache hit recomputes off intact raw inputs). The directory/marketplace listings cache the

@@ -139,6 +139,18 @@ class OwnerClosureDateListCreateViewTests(SimpleTestCase):
             resp = self._post({"date": "2026-12-25"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_post_busts_meta_cache(self):
+        """A new closure date evicts the tenant /api/meta/ cache so is_open_now flips
+        immediately instead of after the 300s TTL (the recompute freezes closure_today)."""
+        obj = _make_closure(1, "2026-12-25", "Christmas")
+        tenant = SimpleNamespace(id=1, slug="demo")
+        with patch("menu.models.ClosureDate") as mock_cd, \
+             patch("tenancy.api._bust_tenant_meta_cache") as mock_bust:
+            mock_cd.objects.create.return_value = obj
+            resp = self._post({"date": "2026-12-25", "label": "Christmas"}, tenant=tenant)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_bust.assert_called_once_with("demo")
+
 
 # ── OwnerClosureDateDeleteView ────────────────────────────────────────────────
 
@@ -178,3 +190,14 @@ class OwnerClosureDateDeleteViewTests(SimpleTestCase):
             resp = self._delete(1)
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         obj.delete.assert_called_once()
+
+    def test_delete_busts_meta_cache(self):
+        """Removing a closure date re-opens the restaurant → evict the meta cache."""
+        obj = _make_closure(1)
+        tenant = SimpleNamespace(id=1, slug="demo")
+        with patch("menu.models.ClosureDate") as mock_cd, \
+             patch("tenancy.api._bust_tenant_meta_cache") as mock_bust:
+            mock_cd.objects.get.return_value = obj
+            resp = self._delete(1, tenant=tenant)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        mock_bust.assert_called_once_with("demo")

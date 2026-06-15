@@ -18,8 +18,10 @@ from tenancy.api import (
     ProfileView,
     TenantMetaView,
     _META_CACHE_LOCALE_VARIANTS,
+    _META_ISOPEN_RAW_KEY,
     _bust_tenant_meta_cache,
     _meta_cache_key,
+    _refresh_meta_is_open_now,
 )
 
 
@@ -433,3 +435,252 @@ class ListingRelevantFieldsContractTests(SimpleTestCase):
                   "sms_notifications_enabled", "winback_enabled",
                   "marketplace_commission_pct"):
             self.assertNotIn(f, LISTING_RELEVANT_FIELDS)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Live is_open_now recompute on the cached meta payload (freshness fix)
+# ══════════════════════════════════════════════════════════════════════════════
+
+import datetime as dt_module  # noqa: E402
+from datetime import timezone as dt_timezone  # noqa: E402
+
+from tenancy.serializers import ProfileSerializer  # noqa: E402
+
+
+def _tz_aware_mock_dt(fixed_utc):
+    """datetime stand-in whose .now(tz) converts a FIXED UTC instant into the asked
+    tz — mirrors the helper in test_profile_is_open_now so the recompute reads the
+    tenant wall-clock at a controllable instant. The recompute does
+    `from datetime import datetime as _dt; _dt.now(ZoneInfo(tz))`, which re-resolves
+    datetime.datetime at call time, so patching `datetime.datetime` is picked up."""
+    class _M(dt_module.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_utc.replace(tzinfo=None)
+            return fixed_utc.astimezone(tz)
+    return _M
+
+
+def _meta_payload_with_raw(*, is_open=True, menu_disabled=False, schedule=None,
+                           timezone="UTC", closure_today=False, baked_is_open_now=None):
+    """A cached meta payload carrying _isopen_raw, with profile.is_open_now baked in.
+
+    baked_is_open_now defaults to is_open so a freshly-built payload looks consistent;
+    a test can set it to a STALE value to prove the recompute overrides the baked one.
+    """
+    if baked_is_open_now is None:
+        baked_is_open_now = is_open
+    return {
+        "name": "Demo Restaurant",
+        "slug": "demo",
+        "plan": {},
+        "profile": {"is_open_now": baked_is_open_now, "name": "Demo"},
+        _META_ISOPEN_RAW_KEY: {
+            "is_open": is_open,
+            "menu_disabled": menu_disabled,
+            "schedule": schedule,
+            "timezone": timezone,
+            "closure_today": closure_today,
+        },
+    }
+
+
+def _profile_for_serializer(*, is_open=True, schedule=None, timezone="UTC",
+                            is_menu_temporarily_disabled=False):
+    return SimpleNamespace(
+        is_open=is_open,
+        business_hours_schedule=schedule,
+        timezone=timezone,
+        is_menu_temporarily_disabled=is_menu_temporarily_disabled,
+    )
+
+
+# 2024-06-03 is a Monday. Schedule open 09:00–22:00 in tenant-local time.
+_MON_SCHEDULE = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
+_MON_OPEN_INSTANT = dt_module.datetime(2024, 6, 3, 12, 0, 0, tzinfo=dt_timezone.utc)   # inside window
+_MON_CLOSED_INSTANT = dt_module.datetime(2024, 6, 3, 23, 0, 0, tzinfo=dt_timezone.utc)  # past close
+
+
+class MetaIsOpenNowRecomputeTests(SimpleTestCase):
+    """profile.is_open_now is recomputed from _isopen_raw + the current time on every
+    /api/meta/ read, so a cached payload never freezes the open/closed verdict."""
+
+    def test_recompute_flips_at_later_clock_cached_object_unchanged(self):
+        """(a) The SAME cached payload yields open at one instant and closed at a later
+        instant; the cached object itself is never mutated (deepcopy isolation)."""
+        payload = _meta_payload_with_raw(schedule=_MON_SCHEDULE, timezone="UTC")
+        snapshot = copy_deep(payload)
+
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_OPEN_INSTANT)):
+            open_copy = _refresh_meta_is_open_now(payload)
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_CLOSED_INSTANT)):
+            closed_copy = _refresh_meta_is_open_now(payload)
+
+        self.assertTrue(open_copy["profile"]["is_open_now"])
+        self.assertFalse(closed_copy["profile"]["is_open_now"])
+        # The cached object is byte-for-byte unchanged (raw inputs intact for next hit).
+        self.assertEqual(payload, snapshot)
+        self.assertIn(_META_ISOPEN_RAW_KEY, payload)
+
+    def test_recompute_overrides_stale_baked_verdict(self):
+        """A payload baked OPEN but evaluated past close now reports closed."""
+        payload = _meta_payload_with_raw(
+            schedule=_MON_SCHEDULE, timezone="UTC", baked_is_open_now=True
+        )
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_CLOSED_INSTANT)):
+            out = _refresh_meta_is_open_now(payload)
+        self.assertFalse(out["profile"]["is_open_now"])
+
+    def test_recompute_equals_serializer_at_same_instant(self):
+        """(b) At any instant the recompute equals ProfileSerializer.get_is_open_now for
+        the equivalent inputs — proving the SAME single-source rule, not a fork."""
+        ser = ProfileSerializer.__new__(ProfileSerializer)
+
+        def _no_closure():
+            qset = MagicMock()
+            qset.exists.return_value = False
+            cls = MagicMock()
+            cls.objects.filter.return_value = qset
+            return cls
+
+        for instant in (_MON_OPEN_INSTANT, _MON_CLOSED_INSTANT):
+            payload = _meta_payload_with_raw(schedule=_MON_SCHEDULE, timezone="UTC")
+            prof = _profile_for_serializer(is_open=True, schedule=_MON_SCHEDULE, timezone="UTC")
+            with patch("datetime.datetime", _tz_aware_mock_dt(instant)):
+                recomputed = _refresh_meta_is_open_now(payload)["profile"]["is_open_now"]
+                with patch("menu.models.ClosureDate", _no_closure()):
+                    serializer_value = ser.get_is_open_now(prof)
+            self.assertEqual(recomputed, serializer_value,
+                             f"mismatch at {instant}: recompute={recomputed} serializer={serializer_value}")
+
+    def test_closure_today_forces_closed_in_recompute(self):
+        """The cached closure_today bool short-circuits to closed (day-stable guard)."""
+        payload = _meta_payload_with_raw(
+            schedule=_MON_SCHEDULE, timezone="UTC", closure_today=True
+        )
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_OPEN_INSTANT)):
+            out = _refresh_meta_is_open_now(payload)
+        self.assertFalse(out["profile"]["is_open_now"])
+
+    def test_manual_closed_and_menu_disabled_force_closed(self):
+        """Guard order mirrors get_is_open_now: manual off → closed; temp-disable → closed."""
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_OPEN_INSTANT)):
+            manual_off = _refresh_meta_is_open_now(
+                _meta_payload_with_raw(is_open=False, schedule=_MON_SCHEDULE))
+            disabled = _refresh_meta_is_open_now(
+                _meta_payload_with_raw(menu_disabled=True, schedule=_MON_SCHEDULE))
+        self.assertFalse(manual_off["profile"]["is_open_now"])
+        self.assertFalse(disabled["profile"]["is_open_now"])
+
+    def test_isopen_raw_stripped_from_recomputed_copy(self):
+        """(d) The internal _isopen_raw key never appears in the returned (response) copy."""
+        payload = _meta_payload_with_raw(schedule=_MON_SCHEDULE)
+        with patch("datetime.datetime", _tz_aware_mock_dt(_MON_OPEN_INSTANT)):
+            out = _refresh_meta_is_open_now(payload)
+        self.assertNotIn(_META_ISOPEN_RAW_KEY, out)
+
+    def test_payload_without_raw_is_noop_safe(self):
+        """A payload with profile=None and no _isopen_raw (e.g. mocked tests) is returned
+        as a clean copy without error."""
+        payload = {"name": "X", "slug": "demo", "plan": {}, "profile": None}
+        out = _refresh_meta_is_open_now(payload)
+        self.assertEqual(out, payload)
+        self.assertIsNot(out, payload)
+
+
+def copy_deep(obj):
+    import copy
+    return copy.deepcopy(obj)
+
+
+class MetaViewLiveRecomputeIntegrationTests(SimpleTestCase):
+    """End-to-end through TenantMetaView: both return paths recompute is_open_now and
+    never leak _isopen_raw; the cache-hit path does NO DB query for the recompute."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch("tenancy.api.cache")
+    @patch("tenancy.api.TenantMetaSerializer")
+    def test_cache_hit_recompute_does_no_db_and_no_leak(self, mock_serializer_cls, mock_cache):
+        """(c)+(d) On a warm cache the view recomputes is_open_now WITHOUT a DB query and
+        without leaking _isopen_raw. We assert no ClosureDate query is issued on the hit
+        path (closure_today is cached) and the serializer is never invoked."""
+        mock_cache.get.return_value = _meta_payload_with_raw(
+            schedule=_MON_SCHEDULE, timezone="UTC", closure_today=False)
+
+        req = _anon_request(self.factory)
+        with patch("menu.models.ClosureDate") as mock_closure, \
+                patch("datetime.datetime", _tz_aware_mock_dt(_MON_CLOSED_INSTANT)):
+            response = TenantMetaView.as_view()(req)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # No DB query for the recompute on the cache-hit path.
+        mock_closure.objects.filter.assert_not_called()
+        # Serializer (the expensive build) is not invoked on a hit.
+        mock_serializer_cls.from_tenant.assert_not_called()
+        # Recomputed live: past close → closed.
+        self.assertFalse(response.data["profile"]["is_open_now"])
+        # Internal key never leaks to the client.
+        self.assertNotIn(_META_ISOPEN_RAW_KEY, response.data)
+
+    @patch("tenancy.api.cache")
+    @patch("tenancy.api.TenantMetaSerializer")
+    def test_cache_hit_recomputes_open_at_open_instant(self, mock_serializer_cls, mock_cache):
+        """Same warm payload, an in-window instant → open (proves it is live, not baked)."""
+        mock_cache.get.return_value = _meta_payload_with_raw(
+            schedule=_MON_SCHEDULE, timezone="UTC", baked_is_open_now=False)
+
+        req = _anon_request(self.factory)
+        with patch("menu.models.ClosureDate"), \
+                patch("datetime.datetime", _tz_aware_mock_dt(_MON_OPEN_INSTANT)):
+            response = TenantMetaView.as_view()(req)
+
+        self.assertTrue(response.data["profile"]["is_open_now"])
+
+    @patch("tenancy.api.cache")
+    @patch("tenancy.api.TenantMetaSerializer")
+    def test_fresh_build_attaches_raw_caches_with_it_and_strips_from_response(
+        self, mock_serializer_cls, mock_cache
+    ):
+        """Cache miss: the view attaches _isopen_raw from the profile, caches the payload
+        WITH it, computes closure_today ONCE, and returns a stripped recomputed copy."""
+        mock_cache.get.return_value = None
+        fresh = {"name": "Demo", "slug": "demo", "plan": {},
+                 "profile": {"is_open_now": True, "name": "Demo"}}
+        instance = MagicMock()
+        instance.data = fresh
+        mock_serializer_cls.from_tenant.return_value = instance
+
+        # Tenant WITH a profile model so _isopen_raw is attached.
+        tenant = SimpleNamespace(
+            id=1, name="Demo", slug="demo",
+            profile=SimpleNamespace(
+                is_open=True, is_menu_temporarily_disabled=False,
+                business_hours_schedule=_MON_SCHEDULE, timezone="UTC"),
+        )
+        req = self.factory.get("/api/meta/")
+        req.tenant = tenant
+
+        def _no_closure():
+            qset = MagicMock()
+            qset.exists.return_value = False
+            cls = MagicMock()
+            cls.objects.filter.return_value = qset
+            return cls
+
+        with patch("menu.models.ClosureDate", _no_closure()), \
+                patch("django.utils.timezone.localdate",
+                      return_value=dt_module.date(2024, 6, 3)), \
+                patch("datetime.datetime", _tz_aware_mock_dt(_MON_CLOSED_INSTANT)):
+            response = TenantMetaView.as_view()(req)
+
+        # The CACHED object carries _isopen_raw (so later hits can recompute).
+        cached_arg = mock_cache.set.call_args.args[1]
+        self.assertIn(_META_ISOPEN_RAW_KEY, cached_arg)
+        self.assertEqual(cached_arg[_META_ISOPEN_RAW_KEY]["timezone"], "UTC")
+        self.assertIs(cached_arg[_META_ISOPEN_RAW_KEY]["schedule"], _MON_SCHEDULE)
+        # The HTTP RESPONSE is the stripped, recomputed copy (past close → closed).
+        self.assertNotIn(_META_ISOPEN_RAW_KEY, response.data)
+        self.assertFalse(response.data["profile"]["is_open_now"])
