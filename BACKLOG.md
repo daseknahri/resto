@@ -80,8 +80,17 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 - [ ] **R14c (P3) Single-flight the /api/meta/ cache (low pri)** — tenancy/api.py:294 TenantMetaView.get rebuilds
       (serializer + 1 ClosureDate query) with no single-flight; cheap per-tenant build so the stampede cost is far
       below the menu/list rebuilds already fixed. Reuse tenancy/cache_utils.get_or_build_single_flight. [scout prod-harden-load-2]
-- [ ] **R15 (P2) Metrics/latency + payment-failure-rate alerting + request_id→Sentry tag** — observability is binary
-      uptime + Sentry errors (traces_sample_rate 0). [non-gated, M]
+- [x] **R15 (P2) payments logger + request_id→Sentry tag — DONE (prod-harden-observability)** — dedicated "payments"
+      logger at wallet_service credit/debit/transfer/float failures + the swallowed driver-payout failure (alertable,
+      still reaches Sentry); RequestLoggingMiddleware sets a guarded request_id Sentry tag (log↔error pivot). **Review
+      caught + fixed a SECRET LEAK** (insufficient-funds log emitted the raw reference = the live cash-out 6-digit code
+      → now logs only _ref_kind namespace). Docs note for the owner Sentry steps (traces rate + alert rules). 3925/0;
+      +12 tests. [scout prod-readiness]
+- [ ] **R15b (P2) Extend the payments logger to 3 more money-failure paths** — scout: MarketplacePlaceOrderView paid
+      checkout (accounts/views.py:4149 → app.customer not payments; the manual debit at 4009), ride settlement
+      (ride_service.py _do_settle has NO logging on rider-debit/driver-credit failure), and the cash-out float-credit
+      leg (driver_service.py confirm_cashout — debit leg logs, credit_tenant_float failure doesn't). Route each to
+      payments_logger with _ref_kind redaction. [scout prod-harden-observability]
 - [ ] **R16 (P2) Wallet currency-mismatch guard + route inline debits through wallet_service** — wallet is MAD scalar;
       inline debits hand-roll the ledger row w/o per-tx key. (MAD-only confirm is owner-gated; the guard is not.)
 - [ ] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM** — mutable base tags; Coolify rebuilds

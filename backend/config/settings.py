@@ -708,6 +708,12 @@ LOG_FORMAT = os.getenv("DJANGO_LOG_FORMAT", "text").strip().lower()
 REQUEST_LOG_LEVEL = os.getenv("DJANGO_REQUEST_LOG_LEVEL", "INFO").strip().upper()
 PROVISIONING_LOG_LEVEL = os.getenv("DJANGO_PROVISIONING_LOG_LEVEL", "INFO").strip().upper()
 EMAIL_LOG_LEVEL = os.getenv("DJANGO_EMAIL_LOG_LEVEL", "INFO").strip().upper()
+# R15: dedicated channel for money-mutation failures (wallet/charge/commission/
+# cash-out/float). Kept at INFO so error/warning money events always emit; it is a
+# named logger so a failure can be alerted on as its own rate, separate from the
+# general ERROR firehose. It still reaches Sentry (sentry-sdk's LoggingIntegration
+# captures via logging.Logger.callHandlers, which fires regardless of propagate).
+PAYMENT_LOG_LEVEL = os.getenv("DJANGO_PAYMENT_LOG_LEVEL", "INFO").strip().upper()
 ACTIVE_LOG_FORMATTER = "json" if LOG_FORMAT == "json" else "standard"
 
 LOGGING = {
@@ -748,6 +754,14 @@ LOGGING = {
             "level": EMAIL_LOG_LEVEL,
             "propagate": False,
         },
+        # R15: money-failure channel (wallet/charge/commission/cash-out/float).
+        # propagate=False mirrors the other named loggers; Sentry capture is via the
+        # SDK's callHandlers patch, not log propagation, so events still reach Sentry.
+        "payments": {
+            "handlers": ["console"],
+            "level": PAYMENT_LOG_LEVEL,
+            "propagate": False,
+        },
     },
 }
 
@@ -763,6 +777,7 @@ if SECURITY_LOG_FILE:
     LOGGING["loggers"]["app.request"]["handlers"].append("security_file")
     LOGGING["loggers"]["sales.provisioning"]["handlers"].append("security_file")
     LOGGING["loggers"]["app.email"]["handlers"].append("security_file")
+    LOGGING["loggers"]["payments"]["handlers"].append("security_file")
 
 # ── Sentry error tracking ──────────────────────────────────────────────────────
 # Activated when DJANGO_SENTRY_DSN is set in the environment.

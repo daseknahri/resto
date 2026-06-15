@@ -197,6 +197,26 @@ For audit-log retention, run periodically (for example daily via Coolify schedul
 
 Sentry remains disabled until DSN values are provided.
 
+#### Owner/ops follow-ups for money-incident triage (R15)
+
+The R15 observability batch makes payment failures alertable and lets a Sentry 5xx be
+pivoted to its structured log line (every request now carries a `request_id` Sentry tag and
+the resolved `tenant_slug`/`tenant_id`). To turn that into dashboards + alerts, the owner
+should do the following in the Sentry UI — these are quota/cost decisions, so the code
+defaults are intentionally left OFF and must NOT be flipped on by default:
+
+- **Turn on a small traces sample to get latency/error-rate dashboards.** Set
+  `DJANGO_SENTRY_TRACES_SAMPLE_RATE` and `VITE_SENTRY_TRACES_SAMPLE_RATE` to a small
+  non-zero value (e.g. `0.05`–`0.1`). This is a Sentry quota/cost trade-off; leave the
+  shipped default (`0`) as-is until the owner accepts the cost.
+- **Add Sentry alert rules** (dashboard config, not code):
+  - a **5xx spike** alert (server error event-rate threshold),
+  - a **p95 latency regression** alert (needs a non-zero traces sample rate above),
+  - a **payments error-rate** alert on the new dedicated `payments` logger — money-mutation
+    failures (wallet/charge/commission/cash-out/float) emit on this channel so they can be
+    alerted on as their own rate, separate from the general ERROR firehose. Filter Sentry
+    issues by `logger:payments` and alert when its event-rate spikes.
+
 ### Verify auth throttle security monitoring
 
 Run after each production deploy:

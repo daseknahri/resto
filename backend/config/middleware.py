@@ -187,6 +187,16 @@ class RequestLoggingMiddleware:
     def __call__(self, request):
         request_id = (request.META.get("HTTP_X_REQUEST_ID", "") or "").strip() or uuid.uuid4().hex
         request.request_id = request_id
+        # R15: stamp the per-request request_id onto the Sentry scope so a Sentry 5xx can
+        # be pivoted straight to its structured "http_request" log line (same request_id),
+        # cutting MTTR. Guarded: a no-op when sentry_sdk is absent / Sentry isn't
+        # initialised (DSN unset in dev/tests), so it never crashes the request. The tenant
+        # tag is already set in TenantAwareMainMiddleware (OPS-5-A) — not duplicated here.
+        try:
+            import sentry_sdk
+            sentry_sdk.set_tag("request_id", request_id)
+        except Exception:
+            pass
         started_at = time.perf_counter()
         response = None
         raised = False

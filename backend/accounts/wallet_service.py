@@ -13,13 +13,44 @@ operation is:
 across the platform (orders, top-ups, refunds, bonuses, loyalty) should funnel
 through here so the ledger stays consistent and reconcilable.
 """
+import logging
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from .models import Customer, TenantFloatTransaction, WalletTransaction
 
 _CENT = Decimal("0.01")
+
+# R15: dedicated money-failure channel. Every failure on a money mutation (insufficient
+# funds, idempotency-key collision, unexpected DB error) is emitted here so it can be
+# alerted on as its own rate. Messages carry the tenant schema + the relevant id only —
+# never balances/PII beyond ids — so a failure is attributable without leaking money data.
+payments_logger = logging.getLogger("payments")
+
+
+def _schema() -> str:
+    """Best-effort current tenant schema for log attribution (never raises)."""
+    try:
+        return connection.schema_name
+    except Exception:
+        return "?"
+
+
+def _ref_kind(reference) -> str:
+    """The non-secret category of a wallet reference, safe to put in logs/Sentry.
+
+    References are namespaced as ``kind:value`` (e.g. ``order_number``, ``ride:42``,
+    ``loyalty:30``, ``cashout:123456``). The value half can be a live secret — the
+    driver cash-out reference carries the 6-digit bearer cash-out code, which the
+    insufficient-funds branch could otherwise leak into the dedicated ``payments``
+    logger (and onward to Sentry) while the code is still PENDING/re-usable. Emit only
+    the namespace so the event stays attributable without exposing any code digits.
+    """
+    ref = (reference or "").strip()
+    if not ref:
+        return ""
+    return ref.split(":", 1)[0]
 
 
 class WalletError(Exception):
@@ -99,6 +130,10 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
         # key, not a retry — refuse rather than return someone else's transaction.
         # (Assert customer only: a partial debit legitimately stores a different amount.)
         if existing.customer_id != int(customer_id):
+            payments_logger.error(
+                "wallet credit idempotency-key collision schema=%s customer_id=%s key=%s",
+                _schema(), customer_id, idempotency_key,
+            )
             raise WalletError("idempotency key collision: belongs to another customer")
         return existing
 
@@ -145,6 +180,10 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
         # (Assert customer only: allow_partial legitimately stores a PARTIAL amount that
         # differs from the requested one, so an amount assertion would false-positive.)
         if existing.customer_id != int(customer_id):
+            payments_logger.error(
+                "wallet debit idempotency-key collision schema=%s customer_id=%s key=%s",
+                _schema(), customer_id, idempotency_key,
+            )
             raise WalletError("idempotency key collision: belongs to another customer")
         return existing
 
@@ -153,6 +192,14 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
 
     charge = min(amount, balance) if allow_partial else amount
     if charge > balance:
+        payments_logger.warning(
+            # NEVER log the raw reference here: the driver cash-out reference carries the
+            # 6-digit bearer cash-out code, which is still live (request stays PENDING on
+            # InsufficientFunds) and would otherwise leak into the payments logger / Sentry.
+            # customer_id + tenant_id already make this attributable; log only the ref kind.
+            "wallet debit insufficient funds schema=%s customer_id=%s tenant_id=%s ref_kind=%s",
+            _schema(), customer_id, tenant_id, _ref_kind(reference),
+        )
         raise InsufficientFunds("wallet balance is insufficient")
     if charge <= 0:
         return None
@@ -200,6 +247,10 @@ def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_ke
         # resolves to a DIFFERENT tenant's float tx is a collision/attack on a
         # caller-supplied key, not a retry — refuse rather than reuse it.
         if existing.tenant_id != int(tenant_id):
+            payments_logger.error(
+                "float funding idempotency-key collision schema=%s tenant_id=%s key=%s",
+                _schema(), tenant_id, idempotency_key,
+            )
             raise WalletError("idempotency key collision: belongs to another tenant")
         return existing
 
@@ -246,6 +297,11 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
         # leak the other tenant's balance. (Mirrors credit_tenant_float; do NOT
         # assert amount on replay.)
         if existing.tenant_id != int(tenant_id):
+            payments_logger.error(
+                "float transfer idempotency-key collision schema=%s tenant_id=%s "
+                "customer_id=%s key=%s",
+                _schema(), tenant_id, customer_id, idempotency_key,
+            )
             raise WalletError("idempotency key collision: belongs to another tenant")
         wallet_tx = None
         if idempotency_key:
@@ -262,6 +318,10 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
 
     float_balance = _money(tenant.float_balance)
     if amount > float_balance:
+        payments_logger.warning(
+            "float transfer insufficient float schema=%s tenant_id=%s customer_id=%s",
+            _schema(), tenant_id, customer_id,
+        )
         raise InsufficientFunds("restaurant float is insufficient")
 
     new_float = (float_balance - amount).quantize(_CENT)
@@ -329,6 +389,11 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
         # retry — refuse rather than hand back someone else's transaction. (Assert the
         # sender IDENTITY only; never amount — partial charges store a different amount.)
         if existing.customer_id != int(sender_id):
+            payments_logger.error(
+                "p2p transfer idempotency-key collision schema=%s sender_id=%s "
+                "recipient_id=%s key=%s",
+                _schema(), sender_id, recipient_id, idempotency_key,
+            )
             raise WalletError("idempotency key collision: belongs to another customer")
         in_tx = None
         if idempotency_key:
@@ -352,6 +417,10 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
 
     sender_balance = _money(sender.wallet_balance)
     if amount > sender_balance:
+        payments_logger.warning(
+            "p2p transfer insufficient funds schema=%s sender_id=%s recipient_id=%s",
+            _schema(), sender_id, recipient_id,
+        )
         raise InsufficientFunds("wallet balance is insufficient")
 
     new_sender = (sender_balance - amount).quantize(_CENT)

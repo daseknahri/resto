@@ -83,6 +83,9 @@ from .serializers import (
 )
 
 logger = logging.getLogger("app.customer")
+# R15: money-mutation failures go to the dedicated "payments" channel so they are
+# alertable as their own rate (separate from the general ERROR firehose).
+payments_logger = logging.getLogger("payments")
 
 
 def _parse_coord(value, lo: float, hi: float) -> float | None:
@@ -5383,7 +5386,14 @@ def _credit_driver_earnings(job) -> None:
             require_verified=False,
         )
     except Exception:
-        logger.exception("Failed to credit driver earning for job %s", getattr(job, "id", "?"))
+        # Money failure: a driver's delivery payout was not credited. Swallowed so the
+        # delivery still completes, but it MUST be alertable + reconcilable, so route it
+        # to the payments channel with the job/driver/tenant ids for triage.
+        payments_logger.exception(
+            "driver earning credit failed job_id=%s driver_id=%s tenant_id=%s order=%s",
+            getattr(job, "id", "?"), getattr(job, "driver_id", "?"),
+            getattr(job, "tenant_id", "?"), getattr(job, "order_number", "?"),
+        )
 
 
 def _complete_delivered_order(job, proof_photo_url="") -> None:
