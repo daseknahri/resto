@@ -169,6 +169,32 @@ class DirectoryViewTests(SimpleTestCase):
             resp = self._get(params={"cuisine": "Italian"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
+    def test_is_open_honors_schedule_like_marketplace(self):
+        """CHANGE 3a: DirectoryView now derives is_open via _compute_is_open_now, so a
+        profile toggled open=True but OUTSIDE its scheduled hours reports is_open=False —
+        identical to MarketplaceView (previously DirectoryView ignored the schedule)."""
+        profile = _make_profile()  # is_open=True
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([profile])
+            # Stand in for the schedule-aware, tenant-local evaluation: "currently closed".
+            with patch("accounts.views._compute_is_open_now", return_value=False) as mock_open:
+                resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["restaurants"][0]["is_open"])
+        mock_open.assert_called()  # the view delegates to the shared helper
+
+    def test_is_open_true_when_schedule_says_open(self):
+        """The same delegation reports is_open=True when the helper says open."""
+        profile = _make_profile()
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([profile])
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["restaurants"][0]["is_open"])
+
 
 # ── MarketplaceView ───────────────────────────────────────────────────────────
 

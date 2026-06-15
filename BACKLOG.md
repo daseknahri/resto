@@ -640,26 +640,39 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       bypass the signal → run the already-built backfill_profile_ratings command after any such change (note in
       a restore runbook). (menu/signals.py). [scout B8 — partially done]
 
-### LIST-CACHE / DENORM COHERENCE (scout denorm-coherence cluster; next batch candidate)
+### LIST-CACHE / DENORM COHERENCE (scout denorm-coherence cluster) — MOSTLY SHIPPED (list-cache-coherence batch)
 The public marketplace/directory response is cached 90s keyed by a GLOBAL version; only rating + promo +
 flash-sale writes currently bust it. Other writes change which rows/fields the listing shows but do NOT bust
 the cache, and two readers derive the same field differently:
-- [ ] **Profile listing-field edits don't bust the list cache** — ProfileView.perform_update
-      (tenancy/api.py:248) only calls _bust_tenant_meta_cache, never _bust_public_list_cache. An owner
-      toggling directory_opt_in OFF, or editing city/cuisine_type/delivery_enabled/price_tier/tags/
-      business_hours_schedule/logo_url/tagline, stays wrong in the marketplace + directory (and their facet
-      lists) for up to 90s — incl. a restaurant that OPTED OUT still showing as discoverable. Bust the public
-      list cache on perform_update. (tenancy/api.py:248). [scout denorm-coherence] **(real coherence bug)**
-- [ ] **Tenant lifecycle_status changes don't bust the list cache** — the listing membership filter is
-      tenant__lifecycle_status="active" (accounts/views.py:2646,2772), flipped by enforce_subscriptions.py
-      (:106 suspend, :134 reactivate) + the admin toggle (sales/views.py:1092/1099/1109), none of which bust
-      the list cache. A suspended-for-nonpayment tenant stays orderable in the public listing for up to 90s; a
-      reactivated one stays hidden. Bust on each lifecycle_status flip. [scout denorm-coherence]
-      **(real billing/compliance-visible bug)**
-- [ ] **Directory vs Marketplace disagree on is_open** — DirectoryView uses raw profile.is_open
-      (accounts/views.py:2673); MarketplaceView + the menu page use _compute_is_open_now(profile) (honors
-      business_hours_schedule). Same restaurant, same instant, different is_open across the two public
-      listings. Unify DirectoryView onto _compute_is_open_now. (accounts/views.py:2673). [scout denorm-coherence]
+- [x] **Profile listing-field edits don't bust the list cache — DONE (list-cache-coherence batch)** —
+      ProfileView.perform_update now bumps _bust_public_list_cache when set(validated_data) intersects a new
+      LISTING_RELEVANT_FIELDS frozenset (tenancy/api.py; lazy import, best-effort), so an owner toggling
+      directory_opt_in OFF or editing city/cuisine/delivery/tags/hours/business_type/logo/tagline refreshes
+      the marketplace + directory immediately. An unrelated settings save does NOT bust.
+- [x] **Tenant lifecycle_status changes don't bust the list cache — DONE (list-cache-coherence batch)** —
+      the sales admin lifecycle toggle (AdminTenantLifecycleView, all 3 branches after save) and
+      enforce_subscriptions (ONCE per --apply run if any suspend/reactivate) now bust the list cache, so a
+      suspended-for-nonpayment tenant drops out of the listing immediately and a reactivated one reappears.
+- [x] **Directory vs Marketplace disagree on is_open — DONE (list-cache-coherence batch)** — DirectoryView
+      now uses _compute_is_open_now(profile) (was raw profile.is_open), matching MarketplaceView + the menu
+      page; AND _compute_is_open_now's schedule eval was fixed from utcnow() to TENANT-LOCAL
+      (profile.timezone → settings.TIME_ZONE → UTC) — same two-clock bug class as the promo fix.
+- [x] **AdminTenantDeliveryView 500 + delivery-fee not busted — DONE (list-cache-coherence batch)** — scout
+      caught it: the view did update_fields.append("updated_at") but Profile has NO updated_at field →
+      save() raised ValueError → 500 on EVERY admin delivery edit (masked by a save=Mock() test). Removed the
+      bogus append + added the list-cache bust (delivery_fee/delivery_minimum_order are listing-serialized).
+- [x] **Menu template-apply business_type not busted — DONE (list-cache-coherence batch)** — ApplyTemplateView
+      writes profile.business_type (listing-relevant) but bypassed ProfileView's bust; now busts the list cache
+      after the profile save (menu/views.py). [scout list-cache-coherence]
+- [ ] **OPEN-STATE derivation NOT consolidated — get_is_open_now is a THIRD copy still on UTC** — there are
+      now THREE "is this place open now" derivations: _compute_is_open_now (accounts/views.py, listings —
+      now tenant-local), _is_restaurant_currently_open (menu/views.py order gate — tenant-local), and
+      **ProfileSerializer.get_is_open_now (tenancy/serializers.py:~345, menu/meta page — STILL datetime.utcnow()).**
+      So a non-UTC restaurant's menu page can report a different open/closed than its marketplace card. ALSO
+      is_menu_temporarily_disabled is honored by _compute_is_open_now but NOT by the serializer/order-gate
+      derivations. Fix = ONE shared open-state helper (like menu/promos.py promo_is_active) all three delegate
+      to, tenant-local + consistent temp-disable handling. (tenancy/serializers.py:345; menu/views.py:231;
+      accounts/views.py:2489). [scout list-cache-coherence] **(next batch — real menu-page tz divergence)**
 - [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
       computed at fill time then cached 90s (accounts/views.py:2868-2876,2902-2921), so the request-time
       windowing the promo-N+1 batch built buys nothing while the payload is cached: a promo/flash sale that
@@ -763,6 +776,19 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] list-cache-coherence "bust public list cache on profile-edit + lifecycle + delivery + template writes;
+      unify is_open (tenant-local)" (verified by me, backend 3834/0, migrations clean, reviewer SHIP-with-1-
+      followup which I then fixed). ProfileView.perform_update busts when validated_data hits a new
+      LISTING_RELEVANT_FIELDS set; sales admin lifecycle toggle + enforce_subscriptions (once/run) bust on
+      lifecycle_status flips; DirectoryView is_open unified onto _compute_is_open_now, whose schedule eval was
+      moved utcnow()→tenant-local (profile tz→settings.TIME_ZONE→UTC). Reviewer/scout caught TWO bonus bugs in
+      AdminTenantDeliveryView that I fixed in the same commit: (a) update_fields.append("updated_at") → 500 on
+      EVERY admin delivery edit (Profile has no updated_at; masked by a save=Mock() test — added a guard), (b)
+      delivery_fee/minimum not busted; PLUS the menu template-apply business_type write now busts too. New/edited
+      tests across test_tenant_meta_cache, test_admin_tenant_lifecycle, test_enforce_subscriptions_listcache
+      (new), test_directory_marketplace_views, test_accounts_open_and_promo, test_admin_tenant_delivery,
+      test_apply_template. Scout → OPEN-STATE consolidation (3rd is_open copy get_is_open_now still on UTC +
+      temp-disable inconsistency) triaged as next batch. — list-cache-coherence commit.
 - [x] denorm-coherence "one tenant-local promo rule + capped-promo exclusion + flash-sale cache bust"
       (verified by me, backend 3810/0, migrations clean, reviewer SHIP IT 0 critical/major, scout → LIST-CACHE
       COHERENCE cluster). New menu/promos.py = single source of truth promo_is_active(promo, *, now_local)

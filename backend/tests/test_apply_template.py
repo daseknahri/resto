@@ -168,6 +168,24 @@ class ApplyTemplateViewTests(SimpleTestCase):
             f"update_fields not on Profile: {set(update_fields) - concrete}",
         )
 
+    def test_post_busts_public_list_cache(self):
+        # business_type is listing-relevant, so applying a template must refresh the
+        # GLOBAL public-list cache — otherwise the marketplace/directory card shows the
+        # stale category for the 90s TTL. (This owner-reachable write bypasses the
+        # ProfileView bust, so the apply path must bust on its own.)
+        from django.core.cache import cache
+        from accounts.views import _PUBLIC_LIST_VER_KEY, _bust_public_list_cache
+        cache.delete(_PUBLIC_LIST_VER_KEY)
+        _bust_public_list_cache()  # seed a known baseline
+        before = cache.get(_PUBLIC_LIST_VER_KEY)
+        prof = MagicMock()
+        with patch("django.db.transaction.atomic", _noop_atomic), \
+             patch("menu.views.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value.first.return_value = prof
+            resp = self._post({"template": "cafe", "with_sample_content": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(cache.get(_PUBLIC_LIST_VER_KEY), before)
+
     def test_post_with_content_creates_sample_menu(self):
         prof = MagicMock()
         with patch("django.db.transaction.atomic", _noop_atomic), \

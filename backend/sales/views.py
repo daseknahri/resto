@@ -1115,6 +1115,17 @@ class AdminTenantLifecycleView(APIView):
                 audit_action = AdminAuditLog.Actions.TENANT_DEACTIVATED
 
             tenant.save(update_fields=update_fields)
+            # All three actions flip lifecycle_status across the active<->non-active
+            # line, which is the public marketplace/directory membership filter
+            # (tenant__lifecycle_status="active"). Bust the GLOBAL public-list cache so
+            # a just-suspended tenant stops being orderable (and a reactivated one
+            # reappears) immediately instead of after the 90s TTL. Best-effort + lazy
+            # import (sales is a shared/public app; avoids any import cycle).
+            try:
+                from accounts.views import _bust_public_list_cache
+                _bust_public_list_cache()
+            except Exception:
+                pass
             log_admin_action(
                 action=audit_action,
                 request=request,
@@ -1258,8 +1269,23 @@ class AdminTenantDeliveryView(APIView):
                 update_fields.append("delivery_zone_description")
 
             if update_fields:
-                update_fields.append("updated_at")
+                # Profile has NO updated_at field — appending it makes save() raise
+                # ValueError and 500 the whole PATCH (the exact trap documented in the
+                # menu template-apply path). Save only the real changed fields.
                 profile.save(update_fields=update_fields)
+                # delivery_fee / delivery_minimum_order (and platform_delivery_enabled)
+                # are listing-relevant fields serialized straight into the public
+                # marketplace card (accounts/views.py MarketplaceView). They are
+                # read-only on ProfileSerializer, so this admin PATCH is their ONLY
+                # writer — bust the GLOBAL public-list cache so the listing card stops
+                # showing the stale fee/minimum immediately instead of after the 90s
+                # TTL. Gated on update_fields so a no-op PATCH doesn't invalidate
+                # everyone's listing. Best-effort + lazy import (avoids import cycle).
+                try:
+                    from accounts.views import _bust_public_list_cache
+                    _bust_public_list_cache()
+                except Exception:
+                    pass
             data = self._serialize(profile)
 
         return Response({"detail": "Delivery settings updated.", "delivery": data})

@@ -236,6 +236,44 @@ class TenantMetaView(APIView):
         return Response(data)
 
 
+# Profile fields the PUBLIC marketplace + directory listings depend on. Editing any
+# of these changes what the cross-tenant listing shows (membership, a result's
+# serialized fields, the open/closed verdict, or a facet list), so a save touching one
+# must bust the GLOBAL public-list cache (accounts.views._bust_public_list_cache).
+# Derived from the two views in accounts/views.py:
+#   DirectoryView   — directory_opt_in/is_menu_published/tenant active (membership);
+#                     city, cuisine_type (filter + facet); tagline, logo_url,
+#                     business_type, delivery_enabled (serialized); is_open via
+#                     _compute_is_open_now (is_open / is_menu_temporarily_disabled /
+#                     business_hours_schedule / timezone).
+#   MarketplaceView — + delivery_enabled, price_tier (filter); tags (filter + facet);
+#                     address, delivery_fee, delivery_minimum_order, lat, lng,
+#                     business_hours_schedule (serialized); timezone (open + promo tz).
+# Excluded on purpose: rating_avg/rating_count + marketplace_promos (own denorm bust
+# paths) and unrelated config (notify_*/winback_*/commission/…).
+LISTING_RELEVANT_FIELDS = frozenset({
+    "directory_opt_in",
+    "is_menu_published",
+    "is_open",
+    "is_menu_temporarily_disabled",
+    "business_hours_schedule",
+    "timezone",
+    "city",
+    "cuisine_type",
+    "delivery_enabled",
+    "delivery_fee",
+    "delivery_minimum_order",
+    "price_tier",
+    "tags",
+    "business_type",
+    "logo_url",
+    "tagline",
+    "address",
+    "lat",
+    "lng",
+})
+
+
 class ProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -250,6 +288,17 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         # Evict every cached locale variant so the next /api/meta/ read is fresh.
         tenant = getattr(self.request, "tenant", None)
         _bust_tenant_meta_cache(getattr(tenant, "slug", ""))
+        # If the save touched a field the PUBLIC marketplace/directory listing depends
+        # on (e.g. directory_opt_in OFF, city, hours…), also bust the global public-list
+        # cache so the listing reflects it immediately instead of waiting out the 90s
+        # TTL. Skip when only unrelated settings changed (do not invalidate everyone's
+        # listing on an unrelated save). Lazy import avoids a tenancy->accounts cycle.
+        if set(getattr(serializer, "validated_data", None) or {}) & LISTING_RELEVANT_FIELDS:
+            try:
+                from accounts.views import _bust_public_list_cache
+                _bust_public_list_cache()
+            except Exception:
+                pass
 
 
 class ImageUploadView(APIView):

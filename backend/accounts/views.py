@@ -2502,8 +2502,18 @@ def _compute_is_open_now(profile) -> bool:
     if not any(isinstance(v, dict) and v.get("enabled", False) for v in schedule.values()):
         return bool(profile.is_open)
     from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
     _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-    now = _dt.utcnow()
+    # The schedule open/close strings are TENANT-LOCAL wall-clock, so evaluate the
+    # weekday + HH:MM in the restaurant's own timezone — not the server's. Mirrors the
+    # _profile_now fallback chain (profile tz → settings.TIME_ZONE → UTC) and the promo
+    # two-clock fix, so a blank profile.timezone follows the platform default.
+    from django.conf import settings as _settings
+    _tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(_settings, "TIME_ZONE", "") or "UTC"
+    try:
+        now = _dt.now(ZoneInfo(_tz_name))
+    except Exception:
+        now = _dt.now(ZoneInfo("UTC"))  # invalid/unknown tz → safe UTC fallback
     entry = schedule.get(_WDAY[now.weekday()])
     if not entry or not isinstance(entry, dict) or not entry.get("enabled", False):
         return False
@@ -2670,7 +2680,9 @@ class DirectoryView(APIView):
         # pure in-memory — no per-tenant schema_context switch for the rating.
         for profile in profiles_page:
             tenant = profile.tenant
-            is_currently_open = bool(profile.is_open) and not getattr(profile, "is_menu_temporarily_disabled", False)
+            # Derive is_open identically to MarketplaceView (schedule-aware, tenant-local)
+            # so the SAME restaurant reads the same open/closed state on both listings.
+            is_currently_open = _compute_is_open_now(profile)
 
             rating_average = float(profile.rating_avg) if profile.rating_avg is not None else None
             rating_count = profile.rating_count or 0

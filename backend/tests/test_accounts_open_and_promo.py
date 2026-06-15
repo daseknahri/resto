@@ -44,6 +44,13 @@ def _mock_dt(fixed_now: dt_module.datetime):
         @classmethod
         def utcnow(cls):
             return fixed_now
+
+        @classmethod
+        def now(cls, tz=None):
+            # _compute_is_open_now now reads datetime.now(ZoneInfo(profile.timezone)).
+            # The schedule fixtures below are anchored in UTC, and the profiles default
+            # to a "UTC" timezone, so return the fixed UTC instant for any tz arg.
+            return fixed_now
     return _M
 
 
@@ -52,11 +59,13 @@ def _profile(
     is_open=True,
     is_menu_temporarily_disabled=False,
     business_hours_schedule=None,
+    timezone="UTC",
 ):
     return SimpleNamespace(
         is_open=is_open,
         is_menu_temporarily_disabled=is_menu_temporarily_disabled,
         business_hours_schedule=business_hours_schedule,
+        timezone=timezone,
     )
 
 
@@ -131,6 +140,55 @@ class ComputeIsOpenNowTests(SimpleTestCase):
         schedule = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
         with patch("datetime.datetime", _mock_dt(_MON_22H)):  # 22:30
             self.assertFalse(_compute_is_open_now(_profile(business_hours_schedule=schedule)))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _compute_is_open_now — schedule is evaluated in TENANT-LOCAL time (CHANGE 3b)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _tz_aware_mock_dt(fixed_utc: dt_module.datetime):
+    """datetime stand-in whose .now(tz) converts a FIXED UTC instant into the asked
+    tz — so a test can prove the schedule is read in the tenant's wall-clock, not the
+    server's. (utcnow() returns the same instant naive, like the old buggy path.)"""
+    class _M(dt_module.datetime):
+        @classmethod
+        def utcnow(cls):
+            return fixed_utc.replace(tzinfo=None)
+
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_utc.replace(tzinfo=None)
+            return fixed_utc.astimezone(tz)
+    return _M
+
+
+class ComputeIsOpenNowTenantLocalTests(SimpleTestCase):
+    """A single fixed instant + a fixed schedule yields a DIFFERENT verdict per
+    timezone — proving the weekday/HH:MM are derived in the tenant's local clock."""
+
+    # 2024-06-03 23:30 UTC. UTC weekday = Monday; America/New_York (EDT, UTC-4) is
+    # Monday 19:30 local. Schedule: Monday open 09:00–22:00.
+    _SCHEDULE = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
+    _INSTANT = dt_module.datetime(2024, 6, 3, 23, 30, 0, tzinfo=timezone.utc)
+
+    def test_tenant_local_open_when_utc_would_say_closed(self):
+        """NY tenant: 19:30 local Monday is inside 09:00–22:00 → open."""
+        prof = _profile(business_hours_schedule=self._SCHEDULE, timezone="America/New_York")
+        with patch("datetime.datetime", _tz_aware_mock_dt(self._INSTANT)):
+            self.assertTrue(_compute_is_open_now(prof))
+
+    def test_utc_tenant_closed_at_same_instant(self):
+        """UTC tenant: 23:30 Monday is after 22:00 → closed (the old, server-clock verdict)."""
+        prof = _profile(business_hours_schedule=self._SCHEDULE, timezone="UTC")
+        with patch("datetime.datetime", _tz_aware_mock_dt(self._INSTANT)):
+            self.assertFalse(_compute_is_open_now(prof))
+
+    def test_invalid_timezone_falls_back_to_utc(self):
+        """A garbage tz string must not raise — it falls back to UTC (→ closed here)."""
+        prof = _profile(business_hours_schedule=self._SCHEDULE, timezone="Not/AZone")
+        with patch("datetime.datetime", _tz_aware_mock_dt(self._INSTANT)):
+            self.assertFalse(_compute_is_open_now(prof))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

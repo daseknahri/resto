@@ -9586,6 +9586,17 @@ class ApplyTemplateView(APIView):
                     "primary_color", "secondary_color", "menu_theme",
                     "menu_card_layout", "business_type",
                 ])
+                # business_type is listing-relevant (serialized in the public
+                # directory/marketplace + a member of LISTING_RELEVANT_FIELDS) and this
+                # owner-reachable write bypasses ProfileView's bust, so refresh the
+                # GLOBAL public-list cache — otherwise the listing card's category stays
+                # stale for the 90s TTL. Best-effort + lazy import (avoids menu->accounts
+                # import cycle at module load).
+                try:
+                    from accounts.views import _bust_public_list_cache
+                    _bust_public_list_cache()
+                except Exception:
+                    pass
 
             # 2. Optionally seed the sample menu (idempotent by name).
             if with_content:

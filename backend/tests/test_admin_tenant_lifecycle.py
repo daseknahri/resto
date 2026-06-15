@@ -156,6 +156,95 @@ class AdminTenantLifecycleTests(SimpleTestCase):
         tenant.save.assert_called_once()
         log_admin_action_mock.assert_called_once()
 
+    @patch("accounts.views._bust_public_list_cache")
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_suspend_busts_public_list_cache(
+        self, schema_context_mock, get_object_or_404_mock, log_admin_action_mock, bust_mock
+    ):
+        """CHANGE 2a: suspending a tenant drops it from the active-only listing filter,
+        so the admin toggle must bust the public marketplace/directory list cache."""
+        schema_context_mock.return_value = _passthrough_cm()
+        get_object_or_404_mock.return_value = _tenant_stub(lifecycle_status="active", is_active=True)
+
+        request = self.factory.put(
+            "/api/admin-tenants/1/lifecycle/",
+            {"action": "suspend", "reason": "invoice overdue"},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.lifecycle_view(request, tenant_id=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bust_mock.assert_called_once_with()
+
+    @patch("accounts.views._bust_public_list_cache")
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_reactivate_busts_public_list_cache(
+        self, schema_context_mock, get_object_or_404_mock, log_admin_action_mock, bust_mock
+    ):
+        """Reactivating returns a tenant to the active listing → must bust the cache."""
+        schema_context_mock.return_value = _passthrough_cm()
+        get_object_or_404_mock.return_value = _tenant_stub(lifecycle_status="suspended", is_active=False)
+
+        request = self.factory.put(
+            "/api/admin-tenants/1/lifecycle/",
+            {"action": "reactivate"},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.lifecycle_view(request, tenant_id=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bust_mock.assert_called_once_with()
+
+    @patch("accounts.views._bust_public_list_cache")
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_cancel_busts_public_list_cache(
+        self, schema_context_mock, get_object_or_404_mock, log_admin_action_mock, bust_mock
+    ):
+        """Canceling drops a tenant from the active listing → must bust the cache."""
+        schema_context_mock.return_value = _passthrough_cm()
+        get_object_or_404_mock.return_value = _tenant_stub(lifecycle_status="active", is_active=True)
+
+        request = self.factory.put(
+            "/api/admin-tenants/1/lifecycle/",
+            {"action": "cancel", "reason": "owner closed shop"},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.lifecycle_view(request, tenant_id=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bust_mock.assert_called_once_with()
+
+    @patch("accounts.views._bust_public_list_cache", side_effect=RuntimeError("cache down"))
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_lifecycle_bust_failure_is_swallowed(
+        self, schema_context_mock, get_object_or_404_mock, log_admin_action_mock, bust_mock
+    ):
+        """A failing list-cache bust must not break the admin toggle (best-effort)."""
+        schema_context_mock.return_value = _passthrough_cm()
+        get_object_or_404_mock.return_value = _tenant_stub(lifecycle_status="active", is_active=True)
+
+        request = self.factory.put(
+            "/api/admin-tenants/1/lifecycle/",
+            {"action": "suspend", "reason": "invoice overdue"},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.lifecycle_view(request, tenant_id=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["detail"], "Tenant suspended.")
+
     @patch("sales.views.get_object_or_404")
     @patch("sales.views.schema_context")
     def test_cancel_requires_reason(self, schema_context_mock, get_object_or_404_mock):

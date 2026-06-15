@@ -140,6 +140,18 @@ class Command(BaseCommand):
                         metadata={"reason": "subscription_renewed", "auto": True},
                     )
 
+        # Suspend/reactivate flip listing membership (tenant__lifecycle_status="active"
+        # is the public marketplace/directory filter), so bust the GLOBAL public-list
+        # cache once if this --apply run changed any tenant's active state. The version
+        # counter is global, so a single bump covers every affected tenant — do NOT
+        # bust per-tenant in the loops. Best-effort + lazy import (avoid import cycle).
+        if apply and (suspended or reactivated):
+            try:
+                from accounts.views import _bust_public_list_cache
+                _bust_public_list_cache()
+            except Exception:
+                pass
+
         prefix = "" if apply else "[dry-run] "
         self.stdout.write(
             f"{prefix}recovered={len(recovered)} flagged_overdue={len(flagged)} "

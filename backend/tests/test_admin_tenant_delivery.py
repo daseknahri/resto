@@ -126,6 +126,11 @@ class AdminTenantDeliveryViewTests(SimpleTestCase):
         self.assertTrue(prof.platform_delivery_enabled)
         self.assertEqual(prof.delivery_radius_km, 10.0)
         prof.save.assert_called_once()
+        # Guard the no-updated_at fix: Profile has no updated_at field, so a stray
+        # "updated_at" in update_fields would raise ValueError → 500 in production.
+        _saved = prof.save.call_args.kwargs.get("update_fields") or []
+        self.assertNotIn("updated_at", _saved)
+        self.assertIn("delivery_per_km", _saved)
 
     @patch("tenancy.models.Profile")
     @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())

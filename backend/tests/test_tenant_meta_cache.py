@@ -8,11 +8,13 @@ serializer are both mocked so the suite never touches Redis or Postgres.
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
-from django.test import SimpleTestCase
+from django.core.cache import cache
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
 from tenancy.api import (
+    LISTING_RELEVANT_FIELDS,
     ProfileView,
     TenantMetaView,
     _META_CACHE_LOCALE_VARIANTS,
@@ -295,3 +297,139 @@ class ProfileViewCacheInvalidationTests(SimpleTestCase):
             view.perform_update(mock_serializer)
 
         mock_bust.assert_called_once_with("bistro-paris")
+
+
+# ── CHANGE 1: ProfileView busts the PUBLIC LIST cache on listing-relevant edits ──
+
+def _run_profile_update(validated_data):
+    """Drive ProfileView.perform_update with a serializer whose validated_data is the
+    given dict, returning the patched accounts.views._bust_public_list_cache mock."""
+    factory = APIRequestFactory()
+    req = factory.patch("/api/profile/", {}, format="json")
+    req.tenant = _make_tenant("demo")
+    req.user = SimpleNamespace(is_authenticated=True, id=1)
+
+    view = ProfileView()
+    view.request = req
+    view.kwargs = {}
+    view.format_kwarg = None
+
+    serializer = MagicMock()
+    serializer.validated_data = validated_data
+
+    with patch("tenancy.api.Profile.objects") as mock_profile_objects, \
+            patch("tenancy.api._bust_tenant_meta_cache"), \
+            patch("accounts.views._bust_public_list_cache") as mock_list_bust:
+        mock_profile_objects.get_or_create.return_value = (MagicMock(), False)
+        view.perform_update(serializer)
+    return mock_list_bust
+
+
+class ProfileViewPublicListBustTests(SimpleTestCase):
+    """A Profile save that touches a listing field must bust the public list cache;
+    a save touching only unrelated config must NOT (it would needlessly invalidate
+    every restaurant's listing)."""
+
+    def test_listing_field_edit_busts_public_list_cache(self):
+        """directory_opt_in is a listing field → the public list cache is busted once."""
+        mock_list_bust = _run_profile_update({"directory_opt_in": False})
+        mock_list_bust.assert_called_once_with()
+
+    def test_other_listing_field_edit_busts(self):
+        """A city change (filter + facet + serialized) also busts."""
+        mock_list_bust = _run_profile_update({"city": "Marrakech", "cuisine_type": "Moroccan"})
+        mock_list_bust.assert_called_once_with()
+
+    def test_non_listing_field_edit_does_not_bust(self):
+        """A notification-only save must leave the public listing cache untouched."""
+        mock_list_bust = _run_profile_update({"sms_notifications_enabled": True})
+        mock_list_bust.assert_not_called()
+
+    def test_mixed_edit_busts_once(self):
+        """A save mixing a listing field with unrelated config still busts (exactly once)."""
+        mock_list_bust = _run_profile_update(
+            {"price_tier": 3, "sms_notifications_enabled": True}
+        )
+        mock_list_bust.assert_called_once_with()
+
+    def test_empty_validated_data_does_not_bust(self):
+        mock_list_bust = _run_profile_update({})
+        mock_list_bust.assert_not_called()
+
+    def test_bust_failure_is_swallowed(self):
+        """A list-cache bust that raises must not break the profile save (best-effort)."""
+        factory = APIRequestFactory()
+        req = factory.patch("/api/profile/", {}, format="json")
+        req.tenant = _make_tenant("demo")
+        req.user = SimpleNamespace(is_authenticated=True, id=1)
+
+        view = ProfileView()
+        view.request = req
+        view.kwargs = {}
+        view.format_kwarg = None
+
+        serializer = MagicMock()
+        serializer.validated_data = {"is_open": False}
+
+        with patch("tenancy.api.Profile.objects") as mock_profile_objects, \
+                patch("tenancy.api._bust_tenant_meta_cache"), \
+                patch("accounts.views._bust_public_list_cache",
+                      side_effect=RuntimeError("cache down")):
+            mock_profile_objects.get_or_create.return_value = (MagicMock(), False)
+            # Must not raise.
+            view.perform_update(serializer)
+
+    @override_settings(CACHES={"default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_listing_edit_bumps_real_version_counter(self):
+        """End-to-end: a listing-field save increments the REAL _PUBLIC_LIST_VER_KEY,
+        orphaning every cached directory/marketplace entry; an unrelated save does not."""
+        from accounts.views import _PUBLIC_LIST_VER_KEY
+
+        factory = APIRequestFactory()
+
+        def _do_update(validated):
+            req = factory.patch("/api/profile/", {}, format="json")
+            req.tenant = _make_tenant("demo")
+            req.user = SimpleNamespace(is_authenticated=True, id=1)
+            view = ProfileView()
+            view.request = req
+            view.kwargs = {}
+            view.format_kwarg = None
+            serializer = MagicMock()
+            serializer.validated_data = validated
+            with patch("tenancy.api.Profile.objects") as mpo, \
+                    patch("tenancy.api._bust_tenant_meta_cache"):
+                mpo.get_or_create.return_value = (MagicMock(), False)
+                view.perform_update(serializer)
+
+        cache.clear()
+        cache.set(_PUBLIC_LIST_VER_KEY, 4, timeout=None)
+
+        # Unrelated save: version unchanged.
+        _do_update({"sms_notifications_enabled": True})
+        self.assertEqual(cache.get(_PUBLIC_LIST_VER_KEY), 4)
+
+        # Listing save: version bumped.
+        _do_update({"directory_opt_in": False})
+        self.assertEqual(cache.get(_PUBLIC_LIST_VER_KEY), 5)
+
+
+class ListingRelevantFieldsContractTests(SimpleTestCase):
+    """The derived field set must cover the documented listing dependencies and must
+    NOT include fields with their own denorm bust paths / unrelated config."""
+
+    def test_includes_documented_listing_fields(self):
+        for f in (
+            "directory_opt_in", "is_menu_published", "is_open",
+            "is_menu_temporarily_disabled", "business_hours_schedule", "city",
+            "cuisine_type", "delivery_enabled", "price_tier", "tags",
+            "business_type", "logo_url", "tagline",
+        ):
+            self.assertIn(f, LISTING_RELEVANT_FIELDS)
+
+    def test_excludes_denorm_and_unrelated_fields(self):
+        for f in ("rating_avg", "rating_count", "marketplace_promos",
+                  "sms_notifications_enabled", "winback_enabled",
+                  "marketplace_commission_pct"):
+            self.assertNotIn(f, LISTING_RELEVANT_FIELDS)
