@@ -1,0 +1,40 @@
+# Dependabot config (R6 + R10): weekly dependency + CVE update PRs.
+# Patch/minor bumps are grouped into a single PR per ecosystem to cut review
+# noise; majors stay separate so breaking changes get individual scrutiny.
+version: 2
+updates:
+  # Backend Python deps (pinned in backend/requirements.txt).
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      pip-patch-minor:
+        update-types:
+          - patch
+          - minor
+
+  # Frontend npm deps (frontend/package.json + package-lock.json).
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-patch-minor:
+        update-types:
+          - patch
+          - minor
+
+  # GitHub Actions used by the CI/deploy workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      actions-patch-minor:
+        update-types:
+          - patch
+          - minor

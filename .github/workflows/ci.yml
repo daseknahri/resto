@@ -37,6 +37,16 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install -r requirements.txt
+      - name: CVE scan (pip-audit)
+        # R6: fail the build on any known CVE in the pinned dependencies.
+        # After the dep bumps this runs clean with no ignores. If a specific
+        # CVE ever has no in-range fix, add `--ignore-vuln <ID>` here with an
+        # inline comment naming the CVE + why it is deferred — never blanket-disable.
+        run: |
+          cd backend
+          . .venv/bin/activate
+          pip install pip-audit
+          pip-audit -r requirements.txt --progress-spinner off
       - name: Check migration drift
         run: |
           cd backend
@@ -89,10 +99,54 @@ jobs:
         run: |
           cd frontend
           npm ci
-      - name: Lint & Build
+      - name: CVE scan (npm audit — full tree, blocking)
+        # R6: fail on ANY moderate+ CVE across the FULL dependency tree (dev deps
+        # included). This used to be `npm audit --omit=dev --audit-level=high`,
+        # which silently buried six dev-dep advisories behind a prod-only filter —
+        # most importantly a CRITICAL vitest UI-server arbitrary-file-read/exec
+        # (GHSA-5xrq-8626-4rwp) that would never resurface in CI again.
+        #
+        # All of those are now fixed by upgrading the pinned dev tooling:
+        #   - vitest  ^2.1.8 -> 3.2.6   (fixes CRITICAL GHSA-5xrq-8626-4rwp)
+        #   - vite    5.4.8  -> 6.4.3   (fixes HIGH GHSA-fx2h-pf6j-xcff fs.deny
+        #                                bypass + GHSA-4w7w-66w2-5vf9 /
+        #                                GHSA-v6wh-96g9-6wx3; stays off the
+        #                                breaking vite 7/8 line)
+        #   - @vitejs/plugin-vue 5.1.2 -> 5.2.4  (peer-compat with vite 6)
+        #   - eslint  9.10.0 -> 9.39.4 (fixes @eslint/plugin-kit ReDoS
+        #                                GHSA-7q7g-4xm8-89cq / GHSA-xffm-g5w8-qvg7)
+        #   - postcss 8.4.47 -> 8.5.15 (fixes moderate XSS GHSA-qx2v-qp2m-jg93)
+        #   - esbuild pinned via `overrides` to ^0.28.1 (fixes moderate dev-server
+        #                                CORS GHSA-67mh-4wv8-2f99 AND clears the
+        #                                HIGH GHSA-gv7w-rqvm-qjhr, which is in fact
+        #                                a *Deno-module-only* binary-integrity bug
+        #                                that does not affect our Node/npm usage —
+        #                                bumping to 0.28.1 removes it from the audit
+        #                                rather than carrying an ignore for it)
+        #
+        # Result: `npm audit` reports 0 vulnerabilities at every severity, so the
+        # gate needs NO `--ignore`/ignore-list today. If a future dev-only CVE ever
+        # lacks an in-range fix, add a documented named-CVE deferral note right here
+        # (CVE id + 'dev-only, not shipped' reason, mirroring the pip-audit gate) —
+        # never re-add a blanket --omit=dev that hides critical advisories.
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate
+      - name: CVE scan (npm audit — informational, never blocks)
+        # Visibility net: prints the full audit (all severities incl. low) even
+        # when the blocking gate above passes, so newly-disclosed low/dev CVEs
+        # stay visible in CI logs instead of only surfacing on a bare local audit.
+        if: always()
+        continue-on-error: true
+        run: |
+          cd frontend
+          npm audit || true
+      - name: Verify, Lint, Test & Build
         env:
           VITE_API_BASE_URL: http://localhost:8000/api
         run: |
           cd frontend
+          npm run verify:i18n
           npm run lint
+          npm run test
           npm run build

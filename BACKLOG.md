@@ -38,15 +38,24 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       preserved; +locmem guard so a per-process-cache SKIP_DEPLOY_CHECK edge can't false-flag). Backend 3889/0.
 - [ ] **R5 (P1) AddIndexConcurrently on hot tables + rehearse migrate/rollback** — every index migration is plain
       AddIndex (ACCESS EXCLUSIVE lock per tenant schema at boot = write-outage scaling with tenant count).
-- [ ] **R6 (P1) Dependency CVE scanning + Dependabot** — no pip-audit/npm-audit/Trivy, no dependabot.yml. [non-gated]
+- [x] **R6 (P1) Dependency CVE patch + scanning + Dependabot — DONE (prod-harden-deps-ci)** — PATCHED the
+      vulnerable deps (not just added a scanner): Django 4.2.11→4.2.30 (~20 advisories incl. CVE-2024-45231 /
+      CVE-2025-59682 / CVE-2026-25673-4, stayed on 4.2 LTS), DRF 3.14→3.15.2, python-dotenv 1.0.1→1.2.2, Pillow
+      10.4→12.2.0 (image CVEs; _optimize_image verified, 11 image tests green), axios 1.7.7→1.18.0, + dev tooling
+      vitest 2→3.2.6 / vite 5→6.4.3 / eslint→9.39.4 / postcss + esbuild override (cleared the CRITICAL vitest +
+      HIGH esbuild/eslint dev advisories). Added BLOCKING ci.yml gates: pip-audit -r requirements.txt (backend) +
+      npm audit --audit-level=moderate full-tree (frontend) — both verified to FAIL on a planted CVE; + an
+      informational full npm audit step. Added .github/dependabot.yml (pip/npm/github-actions weekly). pip-audit &
+      npm audit both report 0 vulns; backend 3889/0/28, frontend 124 tests, all gates green. [scout prod-readiness]
 - [ ] **R7 (P1) MFA on cross-tenant admin/owner + per-account lockout** — /admin/ superuser is password-only; primary
       login throttle is IP-only (no per-account lockout). [non-gated, L]
 - [~] **R8 (P1) Fix frontend Sentry release tag** — sentry.js reads VITE_APP_VERSION; build injects VITE_SENTRY_RELEASE
       → frontend release always undefined. Inject git SHA at build. [non-gated, S]
 - [ ] **R9 (P1) Paginate Marketplace + Directory** — both hard-cap results[:100], no page param → tenants past ~100
       (name order) are undiscoverable; ?q= filters Python over [:200]. Caps GMV at the scale it's built for. [non-gated]
-- [ ] **R10 (P1) Run frontend vitest + verify:i18n in CI** — ci.yml frontend job runs only lint+build (75 tests +
-      i18n completeness never gate). [non-gated, S]
+- [x] **R10 (P1) Run frontend vitest + verify:i18n in CI — DONE (prod-harden-deps-ci)** — ci.yml frontend job now
+      runs verify:i18n + lint + test + build (was only lint+build); the 124 vitest tests + i18n key-completeness
+      now gate every push/PR. [non-gated]
 - [ ] **R11 (P1) Prove uptime/cert-expiry/disk alerting is wired (not just scripted)** — webhooks default empty;
       no cert-expiry or disk monitor. [owner-gated: VPS webhook activation]
 - [x] **R12 (P2) Namespace loyalty-redeem idempotency key by schema — DONE (prod-harden-1)** — loyalty key now
