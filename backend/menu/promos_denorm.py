@@ -66,13 +66,23 @@ def recompute_tenant_promos(tenant) -> None:
             return
 
         with schema_context(schema_name):
+            from django.db.models import F, Q
             from menu.models import Promotion
             # Same ordering the view selected on: highest discount first. The view
             # capped at [:5]; preserve that so selection is identical (the badge
             # only ever uses the first live entry).
+            #
+            # Also EXCLUDE promos that have hit their usage cap: a capped promo can no
+            # longer be redeemed, so it must not surface a badge. Cap semantics
+            # (menu/views.py:9324, :2604): max_uses IS NULL => unlimited (never
+            # capped); otherwise capped when use_count >= max_uses. The Q keeps
+            # unlimited (NULL max_uses) rows and drops only those that reached the cap.
             promos = [
                 _serialize_promo(p)
-                for p in Promotion.objects.filter(is_active=True).order_by("-discount_value")[:5]
+                for p in Promotion.objects
+                    .filter(is_active=True)
+                    .filter(Q(max_uses__isnull=True) | Q(use_count__lt=F("max_uses")))
+                    .order_by("-discount_value")[:5]
             ]
 
         with schema_context(get_public_schema_name()):

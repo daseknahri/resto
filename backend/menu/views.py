@@ -1860,26 +1860,26 @@ class CheckoutIntentView(OrderHandoffView):
 import secrets as _secrets
 
 
-def _is_promo_active_now(promo) -> bool:
-    """Return True if a Promotion is currently active (schedule + date boundaries)."""
-    from datetime import datetime as _dt, date as _date
-    _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-    today = _date.today()
-    if promo.active_from and today < promo.active_from:
-        return False
-    if promo.active_until and today > promo.active_until:
-        return False
-    allowed_days = promo.days or []
-    if allowed_days:
-        if _WDAY[_dt.utcnow().weekday()] not in allowed_days:
-            return False
-    ts = (promo.time_start or "").strip()
-    te = (promo.time_end or "").strip()
-    if ts and te:
-        now_hhmm = _dt.utcnow().strftime("%H:%M")
-        if not (ts <= now_hhmm < te):
-            return False
-    return True
+def _is_promo_active_now(promo, now_local=None) -> bool:
+    """Return True if a Promotion is currently active (schedule + date boundaries).
+
+    THIN WRAPPER over menu.promos.promo_is_active — the single source of truth for
+    the promo window (date bounds + day-of-week + HH:MM). This wrapper holds NO
+    date/time rules of its own; it only picks the clock and delegates.
+
+    ``now_local`` is the tenant-local tz-aware "now" the window is evaluated from;
+    production callers pass _profile_now(profile) so the discount is evaluated in the
+    tenant's wall-clock time (intentional, correct behavior change — pre-launch with
+    no live promos, so safe). When omitted it defaults to a SINGLE consistent UTC
+    clock, which already removes the old today()/utcnow() mismatch for callers that
+    don't supply a tenant now.
+    """
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    from menu.promos import promo_is_active
+    if now_local is None:
+        now_local = _dt.now(ZoneInfo("UTC"))
+    return promo_is_active(promo, now_local=now_local)
 
 
 def _compute_promo_discount(promo, food_subtotal, delivery_fee) -> "Decimal":
@@ -2357,7 +2357,10 @@ class PlaceOrderView(APIView):
                 )
             _delivery_fee = _pricing["fee"]
 
-        # Apply promotion — either by customer-supplied code or best auto-applied promo
+        # Apply promotion — either by customer-supplied code or best auto-applied promo.
+        # Evaluate the promo window in the TENANT's local wall-clock time (a promo
+        # "Tue 14:00–16:00" means tenant-local), not the server's — see menu.promos.
+        _promo_now_local = _profile_now(profile)
         _best_promo = None
         _promo_discount = Decimal("0")
         _promo_code_input = str(request.data.get("promo_code") or "").strip().upper()
@@ -2373,7 +2376,7 @@ class PlaceOrderView(APIView):
                     _code_valid = False
                 if Decimal(str(_code_promo.min_order_amount or "0")) > _food_subtotal:
                     _code_valid = False
-                if not _is_promo_active_now(_code_promo):
+                if not _is_promo_active_now(_code_promo, now_local=_promo_now_local):
                     _code_valid = False
                 if _code_valid:
                     _best_promo = _code_promo
@@ -2395,7 +2398,7 @@ class PlaceOrderView(APIView):
                     continue
                 if Decimal(str(_promo.min_order_amount or "0")) > _food_subtotal:
                     continue
-                if not _is_promo_active_now(_promo):
+                if not _is_promo_active_now(_promo, now_local=_promo_now_local):
                     continue
                 _d = _compute_promo_discount(_promo, _food_subtotal, _delivery_fee)
                 if _d > _promo_discount:
@@ -2607,6 +2610,27 @@ class PlaceOrderView(APIView):
                             pk=_best_promo.pk,
                             use_count__lt=_best_promo.max_uses,
                         ).update(use_count=models.F("use_count") + 1)
+                        if _promo_rows:
+                            # The increment succeeded; recompute the denorm ONLY when this
+                            # redemption JUST hit the cap. A capped promo can no longer be
+                            # redeemed and must drop out of the marketplace badge — but
+                            # .update() fires no signal, so the denorm won't refresh on its
+                            # own. Gate on the cap-crossing so the common below-cap
+                            # redemption does NOT do cross-schema work + a global list-cache
+                            # bust on the order hot path. Read the post-increment count from
+                            # the DB (read-your-writes inside this txn) rather than the
+                            # in-memory use_count, which can be stale-low under concurrent
+                            # checkouts and would then MISS the crossing. Best-effort —
+                            # never break checkout; lazy import avoids the menu→accounts
+                            # cycle at module load.
+                            try:
+                                _best_promo.refresh_from_db(fields=["use_count"])
+                                if _best_promo.use_count >= _best_promo.max_uses:
+                                    from django.db import connection as _cap_conn
+                                    from menu.promos_denorm import recompute_tenant_promos
+                                    recompute_tenant_promos(getattr(_cap_conn, "tenant", None))
+                            except Exception:
+                                pass
                         if not _promo_rows:
                             if _promo_code_input:
                                 # Explicit code: cap hit concurrently → reject
@@ -9324,8 +9348,19 @@ class PromoCodeCheckView(APIView):
         if promo.max_uses is not None and promo.use_count >= promo.max_uses:
             return Response({"valid": False, "detail": "Promo code has reached its usage limit."})
 
-        # Check schedule
-        if not _is_promo_active_now(promo):
+        # Check schedule — evaluate the window in the TENANT's local wall-clock time
+        # (a promo "Tue 14:00–16:00" means tenant-local), not the server's. If the
+        # tenant profile can't be resolved, fall back to the wrapper's consistent UTC
+        # clock (now_local=None) — still tz-consistent, just not tenant-local.
+        _now_local = None
+        try:
+            _tenant = getattr(request, "tenant", None)
+            _profile = Profile.objects.filter(tenant=_tenant).first() if _tenant else None
+            if _profile is not None:
+                _now_local = _profile_now(_profile)
+        except Exception:
+            _now_local = None
+        if not _is_promo_active_now(promo, now_local=_now_local):
             return Response({"valid": False, "detail": "Promo code is not active at this time."})
 
         return Response({

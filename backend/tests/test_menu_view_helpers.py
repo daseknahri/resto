@@ -8,12 +8,25 @@ Unit tests for private helper functions in menu/views.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
+
+
+def _utc_today():
+    """Today's date on the SAME clock _is_promo_active_now defaults to.
+
+    The promo window is now evaluated from ONE consistent clock (the wrapper
+    defaults to datetime.now(UTC)) instead of mixing date.today() (server-local)
+    with datetime.utcnow() — the historic timezone bug. The date-boundary tests
+    below anchor on UTC so an exact-today bound is deterministic regardless of the
+    server's local offset (e.g. this host runs UTC+1, where local midnight is the
+    previous day in UTC).
+    """
+    return datetime.now(timezone.utc).date()
 
 from menu.views import (
     _is_promo_active_now,
@@ -108,27 +121,27 @@ class IsPromoActiveNowTests(SimpleTestCase):
         self.assertTrue(_is_promo_active_now(_promo()))
 
     def test_future_active_from_returns_false(self):
-        tomorrow = date.today() + timedelta(days=1)
+        tomorrow = _utc_today() + timedelta(days=1)
         self.assertFalse(_is_promo_active_now(_promo(active_from=tomorrow)))
 
     def test_past_active_from_returns_true(self):
-        yesterday = date.today() - timedelta(days=1)
+        yesterday = _utc_today() - timedelta(days=1)
         self.assertTrue(_is_promo_active_now(_promo(active_from=yesterday)))
 
     def test_expired_active_until_returns_false(self):
-        yesterday = date.today() - timedelta(days=1)
+        yesterday = _utc_today() - timedelta(days=1)
         self.assertFalse(_is_promo_active_now(_promo(active_until=yesterday)))
 
     def test_future_active_until_returns_true(self):
-        tomorrow = date.today() + timedelta(days=1)
+        tomorrow = _utc_today() + timedelta(days=1)
         self.assertTrue(_is_promo_active_now(_promo(active_until=tomorrow)))
 
     def test_today_as_active_from_returns_true(self):
-        today = date.today()
+        today = _utc_today()
         self.assertTrue(_is_promo_active_now(_promo(active_from=today)))
 
     def test_today_as_active_until_returns_true(self):
-        today = date.today()
+        today = _utc_today()
         self.assertTrue(_is_promo_active_now(_promo(active_until=today)))
 
     def test_days_restriction_current_day_allowed(self):

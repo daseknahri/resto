@@ -2526,67 +2526,39 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def _promo_field(promo, name):
-    """Read `name` off a Promotion whether it's a model instance OR a denorm dict.
-
-    The marketplace promo badge is denormalized onto the public Profile as a list
-    of plain dicts (Profile.marketplace_promos); the windowing rule below must read
-    those identically to a real Promotion object so there is ONE source of truth for
-    "is this promo live now". Supports a mapping (dict) or an attribute object.
-    """
-    if isinstance(promo, dict):
-        return promo.get(name)
-    return getattr(promo, name, None)
+# The promo field reader / date coercer / windowing rule now live in menu.promos —
+# the SINGLE source of truth shared with the checkout discount path. These names are
+# re-exported here as thin aliases for any in-app reference; promo_is_active is the
+# one rule (it imports only stdlib, so this top-level import has no cross-app cycle).
+from menu.promos import (
+    promo_field as _promo_field,
+    coerce_date as _coerce_date,
+    promo_is_active as _promo_is_active,
+)
 
 
-def _coerce_date(value):
-    """Normalize active_from/active_until: pass through date objects, parse ISO strings.
-
-    Denormalized entries store dates as ISO strings (or null); model instances hold
-    real date objects. Returns a date or None.
-    """
-    if value is None or value == "":
-        return None
-    from datetime import date as _date
-    if isinstance(value, _date):
-        return value
-    try:
-        return _date.fromisoformat(str(value))
-    except (ValueError, TypeError):
-        return None
-
-
-def _is_promo_active_now(promo) -> bool:
+def _is_promo_active_now(promo, now_local=None) -> bool:
     """Return True if a promo is currently active (schedule + date range).
 
-    Accepts EITHER a Promotion model instance OR a denormalized dict (the entries
-    in Profile.marketplace_promos) — one windowing rule, no forked logic. Mirror of
-    menu.views._is_promo_active_now; duplicated here to avoid a cross-app import
-    while running in the public-schema context.
+    THIN WRAPPER over menu.promos.promo_is_active — the single source of truth for
+    the promo window. Accepts EITHER a Promotion model instance OR a denormalized
+    dict (the entries in Profile.marketplace_promos). Holds NO date/time rules of
+    its own; it only picks the clock and delegates.
+
+    ``now_local`` is the tenant-local tz-aware "now"; the badge callers pass a
+    per-tenant ZoneInfo(profile.timezone) now so the window is evaluated in the
+    tenant's wall-clock time (intentional, correct behavior change; safe pre-launch).
+    When omitted it defaults to a SINGLE consistent UTC clock, which already removes
+    the old today()/utcnow() mismatch for callers that don't supply a tenant now.
     """
-    from datetime import datetime as _dt, date as _date
-    _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-    today = _date.today()
-    active_from = _coerce_date(_promo_field(promo, "active_from"))
-    active_until = _coerce_date(_promo_field(promo, "active_until"))
-    if active_from and today < active_from:
-        return False
-    if active_until and today > active_until:
-        return False
-    allowed_days = _promo_field(promo, "days") or []
-    if allowed_days:
-        if _WDAY[_dt.utcnow().weekday()] not in allowed_days:
-            return False
-    ts = (_promo_field(promo, "time_start") or "").strip()
-    te = (_promo_field(promo, "time_end") or "").strip()
-    if ts and te:
-        now_hhmm = _dt.utcnow().strftime("%H:%M")
-        if not (ts <= now_hhmm < te):
-            return False
-    return True
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    if now_local is None:
+        now_local = _dt.now(ZoneInfo("UTC"))
+    return _promo_is_active(promo, now_local=now_local)
 
 
-def _promo_badge_from_denorm(promos):
+def _promo_badge_from_denorm(promos, now_local=None):
     """Build the marketplace promo badge from a tenant's denormalized promo list.
 
     `promos` is Profile.marketplace_promos — a list of dicts already ordered the SAME
@@ -2594,13 +2566,17 @@ def _promo_badge_from_denorm(promos):
     menu/promos_denorm.recompute_tenant_promos). We pick the FIRST entry that is live
     now (in-memory windowing via _is_promo_active_now) and emit the SAME badge string
     the old in-loop code did. Returns None if nothing is live (matching old default).
+
+    ``now_local`` is the tenant-local tz-aware "now" the window is evaluated from; the
+    listing loop passes a per-tenant ZoneInfo(profile.timezone) now so "live now" is
+    tenant wall-clock. When omitted the wrapper falls back to a consistent UTC clock.
     """
     if not promos or not isinstance(promos, (list, tuple)):
         return None
     for _p in promos:
         if not isinstance(_p, dict):
             continue
-        if not _is_promo_active_now(_p):
+        if not _is_promo_active_now(_p, now_local=now_local):
             continue
         promo_type = _p.get("promo_type")
         discount_value = _p.get("discount_value")
@@ -2880,7 +2856,18 @@ class MarketplaceView(APIView):
             # LAST per-tenant schema switch in the listing loop (rating already
             # denormalized in B8); the loop is now fully in-memory.
             try:
-                promo_badge = _promo_badge_from_denorm(getattr(profile, "marketplace_promos", None))
+                # Evaluate "live now" in the TENANT's local wall-clock time (a promo
+                # "Tue 14:00–16:00" is tenant-local), not the server's. Per-tenant and
+                # cheap (no DB) — just a ZoneInfo from the denormalized timezone.
+                from datetime import datetime as _dt
+                from zoneinfo import ZoneInfo
+                try:
+                    _badge_now = _dt.now(ZoneInfo((getattr(profile, "timezone", "") or "UTC")))
+                except Exception:
+                    _badge_now = _dt.now(ZoneInfo("UTC"))
+                promo_badge = _promo_badge_from_denorm(
+                    getattr(profile, "marketplace_promos", None), now_local=_badge_now
+                )
             except Exception:
                 promo_badge = None
 
@@ -3461,7 +3448,15 @@ class MarketplacePlaceOrderView(APIView):
                         )
                     _delivery_fee = _pricing["fee"]
 
-                # Best restaurant promo
+                # Best restaurant promo — evaluate the window in the TENANT's local
+                # wall-clock time (a promo "Tue 14:00–16:00" is tenant-local), not the
+                # server's. See menu.promos for the single windowing rule.
+                from datetime import datetime as _promo_dt
+                from zoneinfo import ZoneInfo as _PromoZI
+                try:
+                    _promo_now_local = _promo_dt.now(_PromoZI((getattr(profile, "timezone", "") or "UTC")))
+                except Exception:
+                    _promo_now_local = _promo_dt.now(_PromoZI("UTC"))
                 _best_promo = None
                 _promo_discount = Decimal("0")
                 for _p in _Promo.objects.filter(is_active=True).order_by("-discount_value"):
@@ -3469,7 +3464,7 @@ class MarketplacePlaceOrderView(APIView):
                         continue
                     if Decimal(str(_p.min_order_amount or "0")) > food_subtotal:
                         continue
-                    if not _is_promo_active_now(_p):
+                    if not _is_promo_active_now(_p, now_local=_promo_now_local):
                         continue
                     _d_amt = Decimal("0")
                     if _p.promo_type == "percentage":
@@ -4193,6 +4188,12 @@ class AdminFlashSaleListCreateView(APIView):
                 is_active=bool(data.get("is_active", True)),
                 max_redemptions=data.get("max_redemptions") or None,
             )
+        # A flash-sale write changes flash_sale_active in the public listing; bust the
+        # list cache so it shows immediately instead of waiting out the TTL. Best-effort.
+        try:
+            _bust_public_list_cache()
+        except Exception:
+            pass
         return Response(_serialize_flash_sale(fs), status=status.HTTP_201_CREATED)
 
 
@@ -4277,6 +4278,12 @@ class AdminFlashSaleDetailView(APIView):
             if update_fields:
                 fs.save(update_fields=update_fields)
 
+        # A flash-sale edit changes flash_sale_active in the public listing; bust the
+        # list cache so it shows immediately instead of waiting out the TTL. Best-effort.
+        try:
+            _bust_public_list_cache()
+        except Exception:
+            pass
         return Response(_serialize_flash_sale(fs))
 
     def delete(self, request, fs_id, *args, **kwargs):
@@ -4288,6 +4295,12 @@ class AdminFlashSaleDetailView(APIView):
                 PlatformFlashSale.objects.get(pk=fs_id).delete()
             except PlatformFlashSale.DoesNotExist:
                 return Response({"detail": "Not found."}, status=404)
+        # Ending a flash sale changes flash_sale_active in the public listing; bust the
+        # list cache so it disappears immediately instead of waiting out the TTL.
+        try:
+            _bust_public_list_cache()
+        except Exception:
+            pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -4359,6 +4372,14 @@ class OwnerFlashSaleOptInView(APIView):
                 tenant_id=tenant.id,
             )
 
+        if created:
+            # Opting in changes who shows the flash-sale badge in the public listing;
+            # bust the list cache so it shows immediately. Best-effort.
+            try:
+                _bust_public_list_cache()
+            except Exception:
+                pass
+
         return Response(
             {"detail": "Opted in." if created else "Already opted in.", "opted_in": True},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -4382,6 +4403,13 @@ class OwnerFlashSaleOptInView(APIView):
 
         if not deleted:
             return Response({"detail": "Not currently opted in."}, status=404)
+
+        # Opting out changes who shows the flash-sale badge in the public listing;
+        # bust the list cache so it disappears immediately. Best-effort.
+        try:
+            _bust_public_list_cache()
+        except Exception:
+            pass
 
         return Response({"detail": "Opted out.", "opted_in": False})
 

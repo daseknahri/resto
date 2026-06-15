@@ -115,10 +115,12 @@ class RecomputeTenantPromosTests(SimpleTestCase):
         tenant = _tenant(schema_name=schema_name)
 
         mock_promotion = MagicMock()
-        # filter(...).order_by(...)[:5] → iterable of promo models
+        # filter(is_active=True).filter(Q(...)).order_by(...)[:5] → iterable of promos.
+        # The cap exclusion adds a SECOND .filter() (Q max_uses NULL OR use_count<max),
+        # so mock the chain through both filters.
         ordered = MagicMock()
         ordered.__getitem__ = lambda s, k: promo_models
-        mock_promotion.objects.filter.return_value.order_by.return_value = ordered
+        mock_promotion.objects.filter.return_value.filter.return_value.order_by.return_value = ordered
 
         mock_profile = MagicMock()
 
@@ -200,6 +202,74 @@ class RecomputeTenantPromosTests(SimpleTestCase):
     def test_busts_public_list_cache(self):
         _, _, bust = self._run([self._promo_model()])
         bust.assert_called_once()
+
+    def test_cap_filter_keeps_unlimited_and_uncapped_drops_capped(self):
+        """End-to-end over a fake queryset: the cap filter keeps an unlimited and an
+        uncapped promo and drops a capped one (capped = use_count >= max_uses)."""
+        from django.db.models import Q, F
+        from menu import promos_denorm as mod
+        from contextlib import contextmanager
+        import sys
+
+        # Three promos: unlimited (max_uses=None), uncapped (1<5), capped (5>=5).
+        unlimited = self._promo_model(discount_value="30.00")
+        unlimited.max_uses = None
+        unlimited.use_count = 99
+        uncapped = self._promo_model(discount_value="20.00")
+        uncapped.max_uses = 5
+        uncapped.use_count = 1
+        capped = self._promo_model(discount_value="10.00")
+        capped.max_uses = 5
+        capped.use_count = 5
+        all_promos = [unlimited, uncapped, capped]
+
+        def _is_capped(p):
+            return p.max_uses is not None and p.use_count >= p.max_uses
+
+        class _FakeQS(list):
+            """Minimal queryset: .filter(is_active=True) returns all; .filter(Q(...))
+            applies the cap predicate in-Python so we exercise the REAL cap semantics."""
+            def filter(self, *args, **kwargs):
+                if "is_active" in kwargs:
+                    return _FakeQS([p for p in all_promos])
+                # Second call: the cap-exclusion Q → keep non-capped only.
+                return _FakeQS([p for p in self if not _is_capped(p)])
+            def order_by(self, *a, **k):
+                # highest discount first (already so in our fixture order)
+                return self
+            def __getitem__(self, k):
+                return list.__getitem__(self, k) if isinstance(k, int) else _FakeQS(list.__getitem__(self, k))
+
+        tenant = _tenant()
+        mock_promotion = MagicMock()
+        mock_promotion.objects = _FakeQS()
+        mock_profile = MagicMock()
+
+        @contextmanager
+        def _sc(*a, **k):
+            yield
+
+        fake_menu_models = MagicMock()
+        fake_menu_models.Promotion = mock_promotion
+        original = sys.modules.get("menu.models")
+        sys.modules["menu.models"] = fake_menu_models
+        try:
+            with patch("django_tenants.utils.schema_context", _sc), \
+                    patch("tenancy.models.Profile", mock_profile), \
+                    patch("accounts.views._bust_public_list_cache"):
+                mod.recompute_tenant_promos(tenant)
+        finally:
+            if original is None:
+                sys.modules.pop("menu.models", None)
+            else:
+                sys.modules["menu.models"] = original
+
+        promos = mock_profile.objects.filter.return_value.update.call_args.kwargs["marketplace_promos"]
+        discounts = [e["discount_value"] for e in promos]
+        # unlimited + uncapped serialized; capped dropped.
+        self.assertIn("30.00", discounts)
+        self.assertIn("20.00", discounts)
+        self.assertNotIn("10.00", discounts)
 
     def test_null_dates_serialize_to_none(self):
         promo = self._promo_model(active_from=None, active_until=None)
@@ -485,3 +555,81 @@ class MarketplacePromoBadgeTests(SimpleTestCase):
         ])
         resp, _, _ = self._run_with_one_profile(profile)
         self.assertEqual(resp.data["restaurants"][0]["promo_badge"], "-5.00 off")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# menu.promos.promo_is_active — the SINGLE source of truth (model == dict; tz window)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from datetime import timezone, timezone as _tz
+from types import SimpleNamespace
+
+
+def _model_promo(**kwargs):
+    """A Promotion-like object (attribute access) with the same fields a dict has."""
+    base = {
+        "promo_type": "percentage",
+        "discount_value": "20.00",
+        "days": [],
+        "time_start": "",
+        "time_end": "",
+        "active_from": None,
+        "active_until": None,
+    }
+    base.update(kwargs)
+    return SimpleNamespace(**base)
+
+
+class PromoIsActiveSingleSourceTests(SimpleTestCase):
+    """promo_is_active is the ONE rule the checkout discount and the badge share."""
+
+    def test_model_and_dict_give_identical_verdict(self):
+        """The SAME fixture as a model-like object AND as a denorm dict must yield an
+        IDENTICAL verdict at a fixed now_local — proving one rule, no forked logic."""
+        from menu.promos import promo_is_active
+        # Tuesday 2024-06-04 15:00 UTC; window Tue 14:00–16:00 → live.
+        now_local = datetime(2024, 6, 4, 15, 0, tzinfo=_tz.utc)
+        fields = dict(
+            days=["tue"], time_start="14:00", time_end="16:00",
+            active_from="2024-01-01", active_until="2024-12-31",
+        )
+        as_dict = _denorm_promo(**fields)
+        as_model = _model_promo(
+            **{**fields, "active_from": date(2024, 1, 1), "active_until": date(2024, 12, 31)}
+        )
+        self.assertEqual(
+            promo_is_active(as_dict, now_local=now_local),
+            promo_is_active(as_model, now_local=now_local),
+        )
+        self.assertTrue(promo_is_active(as_dict, now_local=now_local))
+
+        # And an out-of-window instant: identical False verdict for both shapes.
+        off = datetime(2024, 6, 4, 13, 30, tzinfo=_tz.utc)  # 13:30, before 14:00
+        self.assertEqual(
+            promo_is_active(as_dict, now_local=off),
+            promo_is_active(as_model, now_local=off),
+        )
+        self.assertFalse(promo_is_active(as_dict, now_local=off))
+
+    def test_tenant_local_time_boundary_1430_vs_1330(self):
+        """A '14:00–16:00' promo is live at 14:30 but NOT at 13:30 — the whole window
+        (date+day+HH:MM) is evaluated from a SINGLE now_local, so the verdict tracks
+        tenant-local wall-clock consistently."""
+        from menu.promos import promo_is_active
+        promo = _denorm_promo(time_start="14:00", time_end="16:00")
+        live = datetime(2024, 6, 4, 14, 30, tzinfo=_tz.utc)
+        early = datetime(2024, 6, 4, 13, 30, tzinfo=_tz.utc)
+        self.assertTrue(promo_is_active(promo, now_local=live))
+        self.assertFalse(promo_is_active(promo, now_local=early))
+
+    def test_window_follows_the_tenant_timezone(self):
+        """The SAME UTC instant gives DIFFERENT verdicts in two tenant timezones —
+        proving the rule is genuinely tenant-local, not UTC-fixed. At 13:30 UTC a
+        '14:00–16:00' promo is OFF in UTC but LIVE in UTC+1 (where it's 14:30)."""
+        from menu.promos import promo_is_active
+        instant = datetime(2024, 6, 4, 13, 30, tzinfo=_tz.utc)
+        promo = _denorm_promo(time_start="14:00", time_end="16:00")
+        now_utc = instant.astimezone(_tz.utc)
+        now_plus1 = instant.astimezone(timezone(timedelta(hours=1)))  # fixed UTC+1
+        self.assertFalse(promo_is_active(promo, now_local=now_utc))
+        self.assertTrue(promo_is_active(promo, now_local=now_plus1))

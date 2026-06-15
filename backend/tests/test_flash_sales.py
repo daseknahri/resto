@@ -185,6 +185,31 @@ class AdminFlashSaleListCreateViewTests(SimpleTestCase):
                 resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
+    def test_post_create_busts_public_list_cache_version(self):
+        """A flash-sale create changes flash_sale_active in the public listing, so it
+        must bust the list cache (bump the global version) — otherwise a new sale can
+        take up to the list TTL to surface."""
+        from django.core.cache import cache
+        from accounts.views import _PUBLIC_LIST_VER_KEY
+
+        cache.set(_PUBLIC_LIST_VER_KEY, 7, timeout=None)
+        fs = _make_fs(name="Cache Buster")
+        req = self._post({
+            "name": "Cache Buster",
+            "discount_value": "10.0",
+            "active_from": "2026-06-01T00:00:00Z",
+            "active_until": "2026-06-30T23:59:59Z",
+        })
+        with patch("accounts.models.PlatformFlashSale") as mock_fs:
+            mock_fs.objects.create.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        # Version was bumped → existing cache entries are orphaned.
+        self.assertEqual(cache.get(_PUBLIC_LIST_VER_KEY), 8)
+
 
 # ── AdminFlashSaleDetailView ──────────────────────────────────────────────────
 

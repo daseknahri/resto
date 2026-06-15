@@ -602,27 +602,26 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       list-cache bust; the marketplace loop evaluates the window IN-MEMORY at request time
       (_promo_badge_from_denorm). Both public listing loops are now fully query-free (scout-confirmed).
 
-### MARKETPLACE DENORM COHERENCE (scout promo-N+1 cluster; finer follow-ups)
-- [ ] **Capped-promo badge drift** — recompute_tenant_promos filters is_active=True but NOT use_count<max_uses,
-      and the checkout .update(use_count=F+1) (menu/views.py:2606-2633) bypasses the post_save signal, so a
-      promo that hit its max_uses cap (is_active still True) keeps showing its badge in the marketplace even
-      though checkout strips the discount. Fix: exclude capped promos in recompute_tenant_promos (filter
-      use_count<max_uses OR max_uses null) AND call recompute after the cap-strip .update(). (menu/promos_denorm.py:73;
-      menu/views.py:2606). [scout promo-N+1]
-- [ ] **Consolidate the duplicated _is_promo_active_now + fix the today/utcnow tz mismatch** — the rule is now
-      copied in menu/views.py (checkout discount, attr-only) AND accounts/views.py (marketplace badge,
-      dict-or-attr); they can diverge so the badge and the actual checkout discount disagree. Both share a
-      latent bug: today=date.today() (server-local) but day-of-week + HH:MM use datetime.utcnow() → near-midnight
-      windows judged on mismatched tz (latent if prod TZ=UTC). Collapse to ONE shared helper accepting both
-      shapes + add a parametrized test feeding the same fixture as model and serialized dict; decide the tz
-      (tenant-local like OPS-2, or document UTC). (menu/views.py:1863; accounts/views.py:2559). [scout promo-N+1]
-      **(real correctness — affects checkout discount, not just the badge)**
-- [ ] **Flash-sale cache coherence** — flash_sale_active is baked into the cached marketplace payload, but no
-      flash-sale mutation busts the list cache (admin create/patch/delete + opt-in/out) and is_live() is
-      time/cap-windowed, so the listing shows stale flash-sale state up to the 90s TTL (and across is_live
-      boundaries). Bust _bust_public_list_cache on flash-sale writes AND/OR evaluate flash_sale_active live
-      in-memory (like the promo badge now does) instead of baking it into the cached value.
-      (accounts/views.py flash-sale views + opt-in/out). [scout promo-N+1]
+### MARKETPLACE DENORM COHERENCE (scout promo-N+1 cluster) — MOSTLY SHIPPED (denorm-coherence batch)
+- [x] **Capped-promo badge drift — DONE (denorm-coherence batch)** — recompute_tenant_promos now excludes
+      capped promos (Q(max_uses__isnull=True) | Q(use_count__lt=F("max_uses")) — keeps unlimited+uncapped,
+      drops capped), AND the checkout cap-strip (menu/views.py:2606) refresh_from_db's the post-increment
+      use_count and calls recompute_tenant_promos ONLY when the redemption actually crosses the cap (gated so
+      the common below-cap order doesn't do cross-schema work + a global list-cache bust; concurrency-safe vs
+      the stale in-memory use_count). (menu/promos_denorm.py:73; menu/views.py:2606). [scout promo-N+1]
+- [x] **Consolidate the duplicated _is_promo_active_now + tz mismatch — DONE (denorm-coherence batch)** — ONE
+      shared rule now lives in menu/promos.py (promo_is_active(promo, *, now_local), stdlib-only, reads model
+      OR denorm-dict); both _is_promo_active_now copies are thin wrappers delegating to it. The
+      today=date.today()/utcnow() mismatch is fixed: the whole window (date bounds + weekday + HH:MM) derives
+      from ONE tenant-local now_local. Checkout (menu/views.py) + badge (accounts/views.py) pass
+      _profile_now(profile); promo windows now evaluate in TENANT-LOCAL time (correct for "Tue 14:00–16:00").
+      Parametrized model-vs-dict + tz tests. (menu/promos.py; menu/views.py:1863; accounts/views.py:2559). [scout promo-N+1]
+- [x] **Flash-sale cache coherence (bust-on-write half) — DONE (denorm-coherence batch)** —
+      _bust_public_list_cache() now fires on every flash-sale mutation (AdminFlashSaleListCreateView.post,
+      AdminFlashSaleDetailView.patch/.delete, OwnerFlashSaleOptInView.post[created]/.delete), best-effort, so
+      a new/edited/ended/opted flash sale shows in the listing immediately instead of after the 90s TTL.
+      (accounts/views.py). [scout promo-N+1] (the "live-eval vs baked-into-cache" half → LIST-CACHE COHERENCE
+      cluster below, note "time-windowed badge/flash baked into cache")
 - [ ] **Marketplace composite index for the full WHERE shape** — the hot query filters
       (directory_opt_in, is_menu_published, tenant__lifecycle_status) + optional city/cuisine/price_tier +
       order_by tenant__name; the existing indexes don't fully cover it. Consider an index matching the actual
@@ -640,6 +639,36 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       recompute). RESIDUAL: out-of-ORM writes (admin bulk-edit / .update(score=) / raw SQL / DB restore) still
       bypass the signal → run the already-built backfill_profile_ratings command after any such change (note in
       a restore runbook). (menu/signals.py). [scout B8 — partially done]
+
+### LIST-CACHE / DENORM COHERENCE (scout denorm-coherence cluster; next batch candidate)
+The public marketplace/directory response is cached 90s keyed by a GLOBAL version; only rating + promo +
+flash-sale writes currently bust it. Other writes change which rows/fields the listing shows but do NOT bust
+the cache, and two readers derive the same field differently:
+- [ ] **Profile listing-field edits don't bust the list cache** — ProfileView.perform_update
+      (tenancy/api.py:248) only calls _bust_tenant_meta_cache, never _bust_public_list_cache. An owner
+      toggling directory_opt_in OFF, or editing city/cuisine_type/delivery_enabled/price_tier/tags/
+      business_hours_schedule/logo_url/tagline, stays wrong in the marketplace + directory (and their facet
+      lists) for up to 90s — incl. a restaurant that OPTED OUT still showing as discoverable. Bust the public
+      list cache on perform_update. (tenancy/api.py:248). [scout denorm-coherence] **(real coherence bug)**
+- [ ] **Tenant lifecycle_status changes don't bust the list cache** — the listing membership filter is
+      tenant__lifecycle_status="active" (accounts/views.py:2646,2772), flipped by enforce_subscriptions.py
+      (:106 suspend, :134 reactivate) + the admin toggle (sales/views.py:1092/1099/1109), none of which bust
+      the list cache. A suspended-for-nonpayment tenant stays orderable in the public listing for up to 90s; a
+      reactivated one stays hidden. Bust on each lifecycle_status flip. [scout denorm-coherence]
+      **(real billing/compliance-visible bug)**
+- [ ] **Directory vs Marketplace disagree on is_open** — DirectoryView uses raw profile.is_open
+      (accounts/views.py:2673); MarketplaceView + the menu page use _compute_is_open_now(profile) (honors
+      business_hours_schedule). Same restaurant, same instant, different is_open across the two public
+      listings. Unify DirectoryView onto _compute_is_open_now. (accounts/views.py:2673). [scout denorm-coherence]
+- [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
+      computed at fill time then cached 90s (accounts/views.py:2868-2876,2902-2921), so the request-time
+      windowing the promo-N+1 batch built buys nothing while the payload is cached: a promo/flash sale that
+      goes live or expires mid-window only flips after the TTL. Bounded by 90s; fix = shorten TTL for
+      time-sensitive fields or compute badge/flash post-cache. (accounts/views.py). [scout denorm-coherence]
+- [x] **Recompute/bust on EVERY bounded-promo redemption — DONE (denorm-coherence batch)** — the checkout
+      cap-strip now refresh_from_db's the post-increment use_count and only recompute_tenant_promos (which
+      busts the GLOBAL list cache) when the redemption crosses the cap, not on every below-cap order.
+      (menu/views.py:2606). [scout denorm-coherence + reviewer minor]
 
 ### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb all DONE; see Done section)
 Residual (small, pre-existing, out of the shipped scope):
@@ -734,6 +763,16 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] denorm-coherence "one tenant-local promo rule + capped-promo exclusion + flash-sale cache bust"
+      (verified by me, backend 3810/0, migrations clean, reviewer SHIP IT 0 critical/major, scout → LIST-CACHE
+      COHERENCE cluster). New menu/promos.py = single source of truth promo_is_active(promo, *, now_local)
+      (stdlib-only, model-or-dict); both _is_promo_active_now copies are thin wrappers; the whole promo window
+      now evaluates from ONE tenant-local now_local (fixes the date.today()/utcnow() mismatch — promo windows
+      are tenant-local). recompute_tenant_promos excludes capped promos (Q max_uses NULL | use_count<max_uses);
+      the checkout cap-strip refresh_from_db's the count + recomputes ONLY at the cap-crossing (concurrency-safe
+      gate I added over the reviewer's in-memory suggestion). _bust_public_list_cache on all flash-sale writes
+      (create/patch/delete/opt-in/opt-out). New PromoIsActiveSingleSourceTests + cap-filter + flash-sale-bust
+      tests; existing promo-window tests repointed to the new clock. — denorm-coherence commit.
 - [x] promo-badge N+1 kill (promo denorm) — the LAST per-tenant query in the public marketplace listing
       loop. (verified by me, backend 3805/0, migrations clean, reviewer 0 findings, scout CONFIRMED both
       DirectoryView + MarketplaceView loops are now fully query-free.) Profile.marketplace_promos JSONField
