@@ -2753,6 +2753,64 @@ def _bust_public_list_cache() -> None:
         cache.set(_PUBLIC_LIST_VER_KEY, 2, timeout=None)
 
 
+# ── Single-flight rebuild (cache-stampede guard) ──────────────────────────────
+# On a cache MISS at peak (TTL just lapsed), EVERY concurrent request would otherwise
+# rebuild the whole O(N_tenants) payload simultaneously across the worker pool — a
+# thundering herd that spikes DB load exactly when the cache should be shielding it.
+# Single-flight collapses that: the first request to ACQUIRE a per-key lock rebuilds and
+# cache.set()s the payload; the others briefly poll the cache key and serve the freshly
+# built value, only building it themselves if the lock-holder is too slow (never block
+# indefinitely, never return nothing). The lock is per cache-key, so different filter
+# combinations do NOT serialize against each other.
+_PUBLIC_LIST_LOCK_TTL = 10          # seconds; lock auto-expires if a holder dies mid-build
+_PUBLIC_LIST_WAIT_TOTAL = 2.0       # seconds; max a follower waits for the holder's value
+_PUBLIC_LIST_WAIT_STEP = 0.05       # seconds; poll interval while waiting
+
+
+def _public_list_get_or_build(cache_key, build_fn):
+    """Return the cached list payload for *cache_key*, building it at most once under
+    concurrency via a non-blocking per-key lock.
+
+    - HIT: return the cached payload immediately (no lock, no build).
+    - MISS + acquire lock: call *build_fn* (the expensive rebuild), cache.set() the result
+      under *cache_key* (TTL), release the lock, return the freshly built payload.
+    - MISS + lock held by someone else: poll *cache_key* for up to ~_PUBLIC_LIST_WAIT_TOTAL
+      seconds; if the holder populates it, return that value. If the holder is too slow,
+      fall back to building it ourselves (never block forever, never return nothing).
+
+    NOTE: the returned payload still carries the internal "_raw_*" inputs — the caller
+    MUST run _refresh_marketplace_live_fields on it (hit or rebuilt) before responding,
+    exactly as the non-single-flight path did. This helper does NOT change the response
+    contract; it only governs WHO rebuilds on a miss.
+    """
+    hit = cache.get(cache_key)
+    if hit is not None:
+        return hit
+
+    lock_key = f"{cache_key}:lock"
+    # cache.add is atomic: it sets the key only if absent and returns True to the winner.
+    if cache.add(lock_key, "1", timeout=_PUBLIC_LIST_LOCK_TTL):
+        try:
+            payload = build_fn()
+            cache.set(cache_key, payload, _PUBLIC_LIST_TTL)
+            return payload
+        finally:
+            # Release early so the next TTL lapse isn't blocked for the full lock TTL.
+            cache.delete(lock_key)
+
+    # We lost the race: another request is building. Briefly poll for its result.
+    deadline = time.monotonic() + _PUBLIC_LIST_WAIT_TOTAL
+    while time.monotonic() < deadline:
+        time.sleep(_PUBLIC_LIST_WAIT_STEP)
+        hit = cache.get(cache_key)
+        if hit is not None:
+            return hit
+    # Holder too slow (or died): build it ourselves rather than returning nothing.
+    payload = build_fn()
+    cache.set(cache_key, payload, _PUBLIC_LIST_TTL)
+    return payload
+
+
 class DirectoryView(APIView):
     """GET /api/directory/ — public list of restaurants that opted in.
 
@@ -2785,66 +2843,69 @@ class DirectoryView(APIView):
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
 
         _ck = _public_list_cache_key("directory", request)
-        _hit = cache.get(_ck)
-        if _hit is not None:
-            # Recompute the time-sensitive verdict (is_open) live at request time off the
-            # cached raw inputs (no DB), strip internals, then return the fresh copy.
-            return Response(_refresh_marketplace_live_fields(_hit, include_promo_flash=False))
 
-        # Materialise the (up-to-100) profile rows once so we can build filter
-        # lists from the same data without a second full-table scan.
-        profiles_page = list(qs[:100])
+        def _build():
+            # The expensive O(N_tenants) rebuild — runs at most once per key under
+            # concurrency (single-flight; see _public_list_get_or_build). Returns the
+            # payload WITH internal "_raw_*" inputs; the post-cache live recompute
+            # (_refresh_marketplace_live_fields) strips them before the HTTP response.
+            # Materialise the (up-to-100) profile rows once so we can build filter
+            # lists from the same data without a second full-table scan.
+            profiles_page = list(qs[:100])
 
-        results = []
-        cities_set: set = set()
-        cuisines_set: set = set()
+            results = []
+            cities_set: set = set()
+            cuisines_set: set = set()
 
-        # B8: ratings are denormalized onto the public Profile (rating_avg /
-        # rating_count), kept in sync by the menu.Rating signals. This loop is now
-        # pure in-memory — no per-tenant schema_context switch for the rating.
-        for profile in profiles_page:
-            tenant = profile.tenant
-            # Derive is_open identically to MarketplaceView (schedule-aware, tenant-local)
-            # so the SAME restaurant reads the same open/closed state on both listings.
-            is_currently_open = _compute_is_open_now(profile)
+            # B8: ratings are denormalized onto the public Profile (rating_avg /
+            # rating_count), kept in sync by the menu.Rating signals. This loop is now
+            # pure in-memory — no per-tenant schema_context switch for the rating.
+            for profile in profiles_page:
+                tenant = profile.tenant
+                # Derive is_open identically to MarketplaceView (schedule-aware, tenant-local)
+                # so the SAME restaurant reads the same open/closed state on both listings.
+                is_currently_open = _compute_is_open_now(profile)
 
-            rating_average = float(profile.rating_avg) if profile.rating_avg is not None else None
-            rating_count = profile.rating_count or 0
+                rating_average = float(profile.rating_avg) if profile.rating_avg is not None else None
+                rating_count = profile.rating_count or 0
 
-            if profile.city:
-                cities_set.add(profile.city)
-            if profile.cuisine_type:
-                cuisines_set.add(profile.cuisine_type)
+                if profile.city:
+                    cities_set.add(profile.city)
+                if profile.cuisine_type:
+                    cuisines_set.add(profile.cuisine_type)
 
-            results.append({
-                "slug": tenant.slug,
-                "name": tenant.name,
-                "tagline": profile.tagline or "",
-                "logo_url": profile.logo_url or "",
-                "cuisine_type": profile.cuisine_type or "",
-                "business_type": getattr(profile, "business_type", "") or "restaurant",
-                "city": profile.city or "",
-                "is_open": is_currently_open,
-                "rating_average": rating_average,
-                "rating_count": rating_count,
-                "delivery_enabled": bool(profile.delivery_enabled),
-                # Raw inputs for the post-cache is_open recompute (see
-                # _refresh_marketplace_live_fields). All internal ("_raw_*") and stripped
-                # before the HTTP response — the directory payload does NOT expose business
-                # hours, so the schedule rides under _raw_schedule (not a public field).
-                "_raw_is_open": bool(profile.is_open),
-                "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
-                "_raw_timezone": (getattr(profile, "timezone", "") or ""),
-                "_raw_schedule": profile.business_hours_schedule or {},
-            })
+                results.append({
+                    "slug": tenant.slug,
+                    "name": tenant.name,
+                    "tagline": profile.tagline or "",
+                    "logo_url": profile.logo_url or "",
+                    "cuisine_type": profile.cuisine_type or "",
+                    "business_type": getattr(profile, "business_type", "") or "restaurant",
+                    "city": profile.city or "",
+                    "is_open": is_currently_open,
+                    "rating_average": rating_average,
+                    "rating_count": rating_count,
+                    "delivery_enabled": bool(profile.delivery_enabled),
+                    # Raw inputs for the post-cache is_open recompute (see
+                    # _refresh_marketplace_live_fields). All internal ("_raw_*") and stripped
+                    # before the HTTP response — the directory payload does NOT expose business
+                    # hours, so the schedule rides under _raw_schedule (not a public field).
+                    "_raw_is_open": bool(profile.is_open),
+                    "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                    "_raw_timezone": (getattr(profile, "timezone", "") or ""),
+                    "_raw_schedule": profile.business_hours_schedule or {},
+                })
 
-        cities = sorted(cities_set)
-        cuisines = sorted(cuisines_set)
+            cities = sorted(cities_set)
+            cuisines = sorted(cuisines_set)
 
-        _payload = {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
-        # Cache the payload WITH raw inputs (so a later hit can recompute); return a
-        # COPY with is_open recomputed live and the internal raw inputs stripped.
-        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+            return {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
+
+        # Single-flight: a HIT returns immediately; a MISS rebuilds at most once per key
+        # (concurrent missers wait for + serve the winner's value). Return a COPY with
+        # is_open recomputed live and the internal raw inputs stripped — the post-cache
+        # recompute runs on whatever payload comes back (hit or rebuilt), unchanged.
+        _payload = _public_list_get_or_build(_ck, _build)
         return Response(_refresh_marketplace_live_fields(_payload, include_promo_flash=False))
 
 
@@ -2891,218 +2952,219 @@ class MarketplaceView(APIView):
                 pass
 
         _ck = _public_list_cache_key("marketplace", request)
-        _hit = cache.get(_ck)
-        if _hit is not None:
-            # Recompute time-sensitive verdicts (is_open + promo_badge + flash_sale_active)
-            # live at request time off the cached raw inputs (no DB), re-apply the ?open=1
-            # filter + open-first sort on the fresh verdicts, strip internals, return.
-            return Response(_refresh_marketplace_live_fields(
-                _hit, include_promo_flash=True,
-                open_only=open_only, open_first_sort=(user_lat is None),
-            ))
 
-        min_rating_raw = (request.query_params.get("min_rating") or "").strip()
-        price_tier_raw = (request.query_params.get("price_tier") or "").strip()
-        tags_raw = (request.query_params.get("tags") or "").strip()
+        def _build():
+            # The expensive O(N_tenants) rebuild — runs at most once per key under
+            # concurrency (single-flight; see _public_list_get_or_build). Returns the
+            # payload WITH internal "_raw_*" inputs + _LIVE_PAYLOAD_INTERNAL_KEY; the
+            # post-cache live recompute (_refresh_marketplace_live_fields) strips them
+            # and re-applies the ?open=1 filter + open-first sort before the HTTP response.
+            min_rating_raw = (request.query_params.get("min_rating") or "").strip()
+            price_tier_raw = (request.query_params.get("price_tier") or "").strip()
+            tags_raw = (request.query_params.get("tags") or "").strip()
 
-        min_rating = None
-        if min_rating_raw:
+            min_rating = None
+            if min_rating_raw:
+                try:
+                    min_rating = float(min_rating_raw)
+                except ValueError:
+                    pass
+
+            price_tier_filter = None
+            if price_tier_raw:
+                try:
+                    price_tier_filter = int(price_tier_raw)
+                except ValueError:
+                    pass
+
+            required_tags = [t.strip().lower() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
+
+            qs = (
+                Profile.objects
+                # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
+                # restaurants drop out of the marketplace but keep serving their own subdomain.
+                .filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
+                .select_related("tenant")
+                .order_by("tenant__name")
+            )
+            if city_q:
+                qs = qs.filter(city__icontains=city_q)
+            if cuisine_q:
+                qs = qs.filter(cuisine_type__icontains=cuisine_q)
+            if fulfillment == "delivery":
+                qs = qs.filter(delivery_enabled=True)
+            if price_tier_filter:
+                qs = qs.filter(price_tier=price_tier_filter)
+            # B8: min_rating now filters in SQL on the denormalized Profile.rating_avg
+            # instead of a per-tenant post-filter. rating_avg__gte drops NULLs (unrated
+            # tenants), matching the OLD behaviour: the in-loop filter dropped a tenant
+            # when rating_avg was None or < min_rating.
+            if min_rating is not None:
+                qs = qs.filter(rating_avg__gte=min_rating)
+
+            # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
+            # Build a mapping: tenant_id → set of flash_sale_ids they opted into.
+            # Then fetch all currently-active+live flash sales once, as a set of ids.
+            opted_map: dict = {}   # tenant_id → set[flash_sale_id]
+            live_flash_sale_ids: set = set()
+            # Cache the raw is_live() inputs for each active flash sale so the post-cache
+            # recompute can re-evaluate "live now" at request time (mirrors is_live()).
+            flash_windows: list = []
             try:
-                min_rating = float(min_rating_raw)
-            except ValueError:
+                from .models import PlatformFlashSale, PlatformFlashSaleOptIn
+                for row in PlatformFlashSaleOptIn.objects.values("tenant_id", "flash_sale_id"):
+                    opted_map.setdefault(row["tenant_id"], set()).add(row["flash_sale_id"])
+                # Only keep flash sales that are is_active=True AND pass the is_live() check.
+                for _fs in PlatformFlashSale.objects.filter(is_active=True):
+                    # Carry exactly the fields PlatformFlashSale.is_live() reads, so the
+                    # request-time recompute re-derives "live now" without a DB hit.
+                    flash_windows.append({
+                        "id": _fs.id,
+                        "is_active": bool(_fs.is_active),
+                        "active_from": _fs.active_from,
+                        "active_until": _fs.active_until,
+                        "max_redemptions": _fs.max_redemptions,
+                        "redemption_count": _fs.redemption_count,
+                    })
+                    if _fs.is_live():
+                        live_flash_sale_ids.add(_fs.id)
+            except Exception:
                 pass
 
-        price_tier_filter = None
-        if price_tier_raw:
-            try:
-                price_tier_filter = int(price_tier_raw)
-            except ValueError:
-                pass
+            # Materialise the page so we can derive filter lists without an extra query.
+            profiles_page = list(qs[:200])
 
-        required_tags = [t.strip().lower() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
+            results = []
+            cities_set: set = set()
+            cuisines_set: set = set()
+            all_tags: set = set()
 
-        qs = (
-            Profile.objects
-            # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
-            # restaurants drop out of the marketplace but keep serving their own subdomain.
-            .filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-            .select_related("tenant")
-            .order_by("tenant__name")
-        )
-        if city_q:
-            qs = qs.filter(city__icontains=city_q)
-        if cuisine_q:
-            qs = qs.filter(cuisine_type__icontains=cuisine_q)
-        if fulfillment == "delivery":
-            qs = qs.filter(delivery_enabled=True)
-        if price_tier_filter:
-            qs = qs.filter(price_tier=price_tier_filter)
-        # B8: min_rating now filters in SQL on the denormalized Profile.rating_avg
-        # instead of a per-tenant post-filter. rating_avg__gte drops NULLs (unrated
-        # tenants), matching the OLD behaviour: the in-loop filter dropped a tenant
-        # when rating_avg was None or < min_rating.
-        if min_rating is not None:
-            qs = qs.filter(rating_avg__gte=min_rating)
+            for profile in profiles_page:
+                tenant = profile.tenant
 
-        # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
-        # Build a mapping: tenant_id → set of flash_sale_ids they opted into.
-        # Then fetch all currently-active+live flash sales once, as a set of ids.
-        opted_map: dict = {}   # tenant_id → set[flash_sale_id]
-        live_flash_sale_ids: set = set()
-        # Cache the raw is_live() inputs for each active flash sale so the post-cache
-        # recompute can re-evaluate "live now" at request time (mirrors is_live()).
-        flash_windows: list = []
-        try:
-            from .models import PlatformFlashSale, PlatformFlashSaleOptIn
-            for row in PlatformFlashSaleOptIn.objects.values("tenant_id", "flash_sale_id"):
-                opted_map.setdefault(row["tenant_id"], set()).add(row["flash_sale_id"])
-            # Only keep flash sales that are is_active=True AND pass the is_live() check.
-            for _fs in PlatformFlashSale.objects.filter(is_active=True):
-                # Carry exactly the fields PlatformFlashSale.is_live() reads, so the
-                # request-time recompute re-derives "live now" without a DB hit.
-                flash_windows.append({
-                    "id": _fs.id,
-                    "is_active": bool(_fs.is_active),
-                    "active_from": _fs.active_from,
-                    "active_until": _fs.active_until,
-                    "max_redemptions": _fs.max_redemptions,
-                    "redemption_count": _fs.redemption_count,
-                })
-                if _fs.is_live():
-                    live_flash_sale_ids.add(_fs.id)
-        except Exception:
-            pass
+                # Accumulate filter values from rows already in memory.
+                if profile.city:
+                    cities_set.add(profile.city)
+                if profile.cuisine_type:
+                    cuisines_set.add(profile.cuisine_type)
+                if isinstance(profile.tags, list):
+                    all_tags.update(str(t).lower() for t in profile.tags)
 
-        # Materialise the page so we can derive filter lists without an extra query.
-        profiles_page = list(qs[:200])
+                is_currently_open = _compute_is_open_now(profile)
 
-        results = []
-        cities_set: set = set()
-        cuisines_set: set = set()
-        all_tags: set = set()
-
-        for profile in profiles_page:
-            tenant = profile.tenant
-
-            # Accumulate filter values from rows already in memory.
-            if profile.city:
-                cities_set.add(profile.city)
-            if profile.cuisine_type:
-                cuisines_set.add(profile.cuisine_type)
-            if isinstance(profile.tags, list):
-                all_tags.update(str(t).lower() for t in profile.tags)
-
-            is_currently_open = _compute_is_open_now(profile)
-
-            if open_only and not is_currently_open:
-                continue
-
-            if q:
-                haystack = " ".join(filter(None, [
-                    (tenant.name or "").lower(),
-                    (profile.tagline or "").lower(),
-                    (profile.cuisine_type or "").lower(),
-                    (profile.city or "").lower(),
-                ])).lower()
-                if q not in haystack:
+                if open_only and not is_currently_open:
                     continue
 
-            profile_tags = [str(t).lower() for t in (profile.tags or [])]
-            if required_tags and not all(rt in profile_tags for rt in required_tags):
-                continue
+                if q:
+                    haystack = " ".join(filter(None, [
+                        (tenant.name or "").lower(),
+                        (profile.tagline or "").lower(),
+                        (profile.cuisine_type or "").lower(),
+                        (profile.city or "").lower(),
+                    ])).lower()
+                    if q not in haystack:
+                        continue
 
-            # B8: ratings are read from the denormalized public Profile (kept in
-            # sync by the menu.Rating signals) — NO per-tenant schema_context /
-            # Rating aggregate. min_rating is already applied in SQL above.
-            rating_avg = float(profile.rating_avg) if profile.rating_avg is not None else None
-            rating_count = profile.rating_count or 0
+                profile_tags = [str(t).lower() for t in (profile.tags or [])]
+                if required_tags and not all(rt in profile_tags for rt in required_tags):
+                    continue
 
-            # B8-followup: promo badge is read from the denormalized public
-            # Profile.marketplace_promos (kept in sync by the menu.Promotion
-            # signals) — NO per-tenant schema_context / Promotion query. The
-            # time-window ("live now") is evaluated in-memory at request time on
-            # the denormalized schedule, mirroring the flash-sale path. This was the
-            # LAST per-tenant schema switch in the listing loop (rating already
-            # denormalized in B8); the loop is now fully in-memory.
-            try:
-                # Evaluate "live now" in the TENANT's local wall-clock time (a promo
-                # "Tue 14:00–16:00" is tenant-local), not the server's. Per-tenant and
-                # cheap (no DB) — just a ZoneInfo from the denormalized timezone.
-                from datetime import datetime as _dt
-                from zoneinfo import ZoneInfo
+                # B8: ratings are read from the denormalized public Profile (kept in
+                # sync by the menu.Rating signals) — NO per-tenant schema_context /
+                # Rating aggregate. min_rating is already applied in SQL above.
+                rating_avg = float(profile.rating_avg) if profile.rating_avg is not None else None
+                rating_count = profile.rating_count or 0
+
+                # B8-followup: promo badge is read from the denormalized public
+                # Profile.marketplace_promos (kept in sync by the menu.Promotion
+                # signals) — NO per-tenant schema_context / Promotion query. The
+                # time-window ("live now") is evaluated in-memory at request time on
+                # the denormalized schedule, mirroring the flash-sale path. This was the
+                # LAST per-tenant schema switch in the listing loop (rating already
+                # denormalized in B8); the loop is now fully in-memory.
                 try:
-                    _badge_now = _dt.now(ZoneInfo((getattr(profile, "timezone", "") or "UTC")))
+                    # Evaluate "live now" in the TENANT's local wall-clock time (a promo
+                    # "Tue 14:00–16:00" is tenant-local), not the server's. Per-tenant and
+                    # cheap (no DB) — just a ZoneInfo from the denormalized timezone.
+                    from datetime import datetime as _dt
+                    from zoneinfo import ZoneInfo
+                    try:
+                        _badge_now = _dt.now(ZoneInfo((getattr(profile, "timezone", "") or "UTC")))
+                    except Exception:
+                        _badge_now = _dt.now(ZoneInfo("UTC"))
+                    promo_badge = _promo_badge_from_denorm(
+                        getattr(profile, "marketplace_promos", None), now_local=_badge_now
+                    )
                 except Exception:
-                    _badge_now = _dt.now(ZoneInfo("UTC"))
-                promo_badge = _promo_badge_from_denorm(
-                    getattr(profile, "marketplace_promos", None), now_local=_badge_now
-                )
-            except Exception:
-                promo_badge = None
+                    promo_badge = None
 
-            # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
-            tenant_opted_ids = opted_map.get(tenant.id, set())
-            flash_sale_active = bool(tenant_opted_ids & live_flash_sale_ids)
+                # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
+                tenant_opted_ids = opted_map.get(tenant.id, set())
+                flash_sale_active = bool(tenant_opted_ids & live_flash_sale_ids)
 
-            distance_km = None
-            if user_lat is not None and profile.lat and profile.lng:
-                distance_km = round(_haversine_km(user_lat, user_lng, profile.lat, profile.lng), 1)
+                distance_km = None
+                if user_lat is not None and profile.lat and profile.lng:
+                    distance_km = round(_haversine_km(user_lat, user_lng, profile.lat, profile.lng), 1)
 
-            results.append({
-                "slug": tenant.slug,
-                "name": tenant.name,
-                "tagline": profile.tagline or "",
-                "logo_url": profile.logo_url or "",
-                "cuisine_type": profile.cuisine_type or "",
-                "business_type": getattr(profile, "business_type", "") or "restaurant",
-                "city": profile.city or "",
-                "address": profile.address or "",
-                "is_open": is_currently_open,
-                "delivery_enabled": bool(profile.delivery_enabled),
-                "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
-                "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
-                "price_tier": profile.price_tier,
-                "tags": profile.tags or [],
-                "lat": profile.lat,
-                "lng": profile.lng,
-                "rating_average": rating_avg,
-                "rating_count": rating_count,
-                "distance_km": distance_km,
-                "promo_badge": promo_badge,
-                "flash_sale_active": flash_sale_active,
-                # Exposes schedule so the customer UI can compute "Opens at HH:MM"
-                "business_hours_schedule": profile.business_hours_schedule or {},
-                # Raw inputs for the post-cache live recompute (is_open + promo_badge +
-                # flash_sale_active). All internal ("_raw_*") and stripped before the
-                # HTTP response — do NOT leak marketplace_promos / menu-disabled / opted
-                # flash ids to the client.
-                "_raw_is_open": bool(profile.is_open),
-                "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
-                "_raw_timezone": (getattr(profile, "timezone", "") or ""),
-                "_raw_schedule": profile.business_hours_schedule or {},
-                "_raw_marketplace_promos": getattr(profile, "marketplace_promos", None),
-                "_raw_opted_flash_ids": sorted(tenant_opted_ids),
-            })
+                results.append({
+                    "slug": tenant.slug,
+                    "name": tenant.name,
+                    "tagline": profile.tagline or "",
+                    "logo_url": profile.logo_url or "",
+                    "cuisine_type": profile.cuisine_type or "",
+                    "business_type": getattr(profile, "business_type", "") or "restaurant",
+                    "city": profile.city or "",
+                    "address": profile.address or "",
+                    "is_open": is_currently_open,
+                    "delivery_enabled": bool(profile.delivery_enabled),
+                    "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
+                    "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
+                    "price_tier": profile.price_tier,
+                    "tags": profile.tags or [],
+                    "lat": profile.lat,
+                    "lng": profile.lng,
+                    "rating_average": rating_avg,
+                    "rating_count": rating_count,
+                    "distance_km": distance_km,
+                    "promo_badge": promo_badge,
+                    "flash_sale_active": flash_sale_active,
+                    # Exposes schedule so the customer UI can compute "Opens at HH:MM"
+                    "business_hours_schedule": profile.business_hours_schedule or {},
+                    # Raw inputs for the post-cache live recompute (is_open + promo_badge +
+                    # flash_sale_active). All internal ("_raw_*") and stripped before the
+                    # HTTP response — do NOT leak marketplace_promos / menu-disabled / opted
+                    # flash ids to the client.
+                    "_raw_is_open": bool(profile.is_open),
+                    "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                    "_raw_timezone": (getattr(profile, "timezone", "") or ""),
+                    "_raw_schedule": profile.business_hours_schedule or {},
+                    "_raw_marketplace_promos": getattr(profile, "marketplace_promos", None),
+                    "_raw_opted_flash_ids": sorted(tenant_opted_ids),
+                })
 
-        if user_lat is not None:
-            results.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 9999))
-        else:
-            results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
+            if user_lat is not None:
+                results.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 9999))
+            else:
+                results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
-        _payload = {
-            "restaurants": results[:100],
-            "filters": {
-                "cities": sorted(cities_set),
-                "cuisines": sorted(cuisines_set),
-                "tags": sorted(all_tags),
-            },
-            # Internal: active flash-sale windows for the request-time flash recompute.
-            # Stripped from the HTTP response by _refresh_marketplace_live_fields.
-            _LIVE_PAYLOAD_INTERNAL_KEY: flash_windows,
-        }
-        # Cache the payload WITH raw inputs (so a later hit can recompute); return a COPY
-        # with is_open/promo_badge/flash_sale_active recomputed live and internals stripped.
-        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+            return {
+                "restaurants": results[:100],
+                "filters": {
+                    "cities": sorted(cities_set),
+                    "cuisines": sorted(cuisines_set),
+                    "tags": sorted(all_tags),
+                },
+                # Internal: active flash-sale windows for the request-time flash recompute.
+                # Stripped from the HTTP response by _refresh_marketplace_live_fields.
+                _LIVE_PAYLOAD_INTERNAL_KEY: flash_windows,
+            }
+
+        # Single-flight: a HIT returns immediately; a MISS rebuilds at most once per key
+        # (concurrent missers wait for + serve the winner's value). Return a COPY with
+        # is_open/promo_badge/flash_sale_active recomputed live and internals stripped —
+        # the post-cache recompute runs on whatever payload comes back (hit or rebuilt),
+        # re-applying the ?open=1 filter + open-first sort, unchanged.
+        _payload = _public_list_get_or_build(_ck, _build)
         return Response(_refresh_marketplace_live_fields(
             _payload, include_promo_flash=True,
             open_only=open_only, open_first_sort=(user_lat is None),

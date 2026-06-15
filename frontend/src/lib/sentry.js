@@ -67,8 +67,15 @@ export function initSentry(app) {
         (import.meta.env.VITE_SENTRY_ENVIRONMENT || '').trim() ||
         import.meta.env.MODE ||
         'production'
+      // Read VITE_SENTRY_RELEASE first — that's the var the build actually injects
+      // (Dockerfile ARG/ENV VITE_SENTRY_RELEASE + docker-compose build args; set it to the
+      // git SHA, e.g. VITE_SENTRY_RELEASE=$SOURCE_COMMIT in Coolify). Fall back to
+      // VITE_APP_VERSION for older builds. Without this the SPA release tag was always
+      // undefined, so regression-by-release / "which deploy broke this" triage was impossible.
       const release =
-        (import.meta.env.VITE_APP_VERSION || '').trim() || undefined
+        (import.meta.env.VITE_SENTRY_RELEASE || '').trim() ||
+        (import.meta.env.VITE_APP_VERSION || '').trim() ||
+        undefined
 
       const integrations = [
         Sentry.browserTracingIntegration({ router }),

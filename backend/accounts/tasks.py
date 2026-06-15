@@ -15,7 +15,7 @@ functions — surfacing those for retry is a follow-up that needs the senders to
 from __future__ import annotations
 
 import logging
-import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from celery import shared_task
 from django.conf import settings
@@ -24,10 +24,30 @@ logger = logging.getLogger(__name__)
 
 _RETRY = dict(autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
 
+# ── Inline (no-broker) dispatch pool ────────────────────────────────────────────
+# Inline mode is a DEV / DEGRADED fallback only — the durable path is Celery (see R3):
+# with a broker configured, ``enqueue`` hands off to a worker and never touches this.
+#
+# When no broker is set, notifications were historically run by spawning ONE raw daemon
+# thread per call. Django opens a fresh DB connection per thread, so a mealtime burst
+# (hundreds of concurrent order/notification events) would spawn hundreds of threads +
+# Postgres connections at once with NO backpressure — exhausting the connection limit
+# and taking the DB down (a self-inflicted outage). A MODULE-LEVEL bounded pool caps
+# the concurrency: at most `max_workers` threads (→ connections) run at once, and excess
+# work waits in the executor's internal queue instead of fanning out unbounded.
+_INLINE_MAX_WORKERS = 4
+_inline_executor = ThreadPoolExecutor(
+    max_workers=_INLINE_MAX_WORKERS, thread_name_prefix="inline-notify"
+)
+
 
 def enqueue(task, *args, **kwargs) -> None:
-    """Dispatch *task* via Celery when a broker is configured, else run it inline in a
-    daemon thread. Never raises, never blocks the caller."""
+    """Dispatch *task* via Celery when a broker is configured, else run it inline on a
+    bounded thread pool. Never raises, never blocks the caller.
+
+    Inline mode is a dev/degraded fallback (no broker); the durable path is Celery.
+    The bounded pool + its internal queue provide backpressure so a burst cannot spawn
+    unbounded threads / DB connections."""
     if getattr(settings, "CELERY_BROKER_URL", ""):
         try:
             task.delay(*args, **kwargs)
@@ -35,7 +55,9 @@ def enqueue(task, *args, **kwargs) -> None:
         except Exception:  # broker unreachable → don't lose the notification
             logger.warning("Celery enqueue failed for %s; running inline",
                            getattr(task, "name", task), exc_info=True)
-    threading.Thread(target=_run_inline, args=(task, args, kwargs), daemon=True).start()
+    # Submit to the bounded pool (not a raw unbounded Thread): excess work queues
+    # instead of opening a connection-per-call all at once.
+    _inline_executor.submit(_run_inline, task, args, kwargs)
 
 
 def _run_inline(task, args, kwargs) -> None:
@@ -43,6 +65,16 @@ def _run_inline(task, args, kwargs) -> None:
         task.run(*args, **kwargs)  # execute the task body directly (no broker)
     except Exception:
         logger.warning("inline task %s failed", getattr(task, "name", task), exc_info=True)
+    finally:
+        # CRITICAL: pool threads are REUSED across submissions, so a connection opened
+        # for this task would otherwise stay open and accumulate (one idle Postgres
+        # connection per pool thread, held for the worker's lifetime). Close it so the
+        # next task on this thread opens a fresh one and we never leak idle connections.
+        try:
+            from django.db import connection
+            connection.close()
+        except Exception:
+            logger.debug("inline task connection.close() failed", exc_info=True)
 
 
 # ── Notification tasks ──────────────────────────────────────────────────────────

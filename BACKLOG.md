@@ -49,8 +49,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       npm audit both report 0 vulns; backend 3889/0/28, frontend 124 tests, all gates green. [scout prod-readiness]
 - [ ] **R7 (P1) MFA on cross-tenant admin/owner + per-account lockout** — /admin/ superuser is password-only; primary
       login throttle is IP-only (no per-account lockout). [non-gated, L]
-- [~] **R8 (P1) Fix frontend Sentry release tag** — sentry.js reads VITE_APP_VERSION; build injects VITE_SENTRY_RELEASE
-      → frontend release always undefined. Inject git SHA at build. [non-gated, S]
+- [x] **R8 (P1) Fix frontend Sentry release tag — DONE (with prod-harden-load)** — sentry.js now reads
+      VITE_SENTRY_RELEASE first (the var the Dockerfile/compose actually inject), fallback VITE_APP_VERSION.
+      Frontend lint+build green. **DEPLOY STEP (owner/ops):** set VITE_SENTRY_RELEASE=$SOURCE_COMMIT as the frontend
+      build arg in Coolify so the SPA release tag populates with the git SHA (enables regression-by-release triage).
 - [ ] **R9 (P1) Paginate Marketplace + Directory** — both hard-cap results[:100], no page param → tenants past ~100
       (name order) are undiscoverable; ?q= filters Python over [:200]. Caps GMV at the scale it's built for. [non-gated]
 - [x] **R10 (P1) Run frontend vitest + verify:i18n in CI — DONE (prod-harden-deps-ci)** — ci.yml frontend job now
@@ -64,8 +66,17 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       key off globally-unique public-schema PKs). New DB test (2-schema same-key) runs in CI. [scout prod-readiness]
 - [ ] **R13 (P2) Non-root containers + bounded ASGI request timeout** — Dockerfiles run uvicorn/nginx as root;
       uvicorn path has no request timeout (GUNICORN_TIMEOUT only the WSGI fallback). [non-gated, M]
-- [ ] **R14 (P2) Bound inline-notification threads + cache-stampede lock** — Celery-off default spawns unbounded raw
-      Threads/notification (Postgres-conn exhaustion); 90s list cache has no single-flight. [non-gated, M]
+- [x] **R14 (P2) Bound inline-notification threads + cache-stampede lock — DONE (prod-harden-load)** —
+      accounts/tasks.py enqueue() inline fallback now submits to a module-level bounded ThreadPoolExecutor
+      (max_workers=4) that closes the DB connection in finally (no per-thread conn leak); Celery-on path unchanged.
+      accounts/views.py _public_list_get_or_build single-flights the marketplace/directory rebuild (per-cache-key
+      cache.add lock, bounded 2s follower wait, 10s lock TTL, always returns a payload). Backend 3898/0. +17 tests.
+- [ ] **R14b (P2) Route the 2 remaining raw-thread dispatch sites through the bounded pool + menu/meta single-flight** —
+      scout found push_charge_request (accounts/push.py:58, money-adjacent, request path) + the "driver arrived"
+      AT_RESTAURANT push (accounts/views.py:5619) still spawn raw UNBOUNDED daemon threads (the lone outliers; every
+      other dispatch routes through enqueue) → route both through enqueue (web_push_tenant exists; add a charge task).
+      Also: per-tenant MENU list cache (menu/views.py:411) + /api/meta/ cache (tenancy/api.py:294) lack single-flight
+      (lower severity, per-tenant blast radius) — reuse the cache.add pattern. [scout prod-harden-load]
 - [ ] **R15 (P2) Metrics/latency + payment-failure-rate alerting + request_id→Sentry tag** — observability is binary
       uptime + Sentry errors (traces_sample_rate 0). [non-gated, M]
 - [ ] **R16 (P2) Wallet currency-mismatch guard + route inline debits through wallet_service** — wallet is MAD scalar;
