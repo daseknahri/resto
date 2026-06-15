@@ -24,6 +24,8 @@ from sales.permissions import IsPlatformAdmin
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from tenancy.openstate import schedule_open_now, tenant_local_now
+
 from .messaging import send_password_reset_email
 from .models import Customer
 from .throttles import (
@@ -2496,33 +2498,12 @@ def _compute_is_open_now(profile) -> bool:
         return False
     if getattr(profile, "is_menu_temporarily_disabled", False):
         return False
+    # The window rule (tenant-local weekday + [open, close) HH:MM) is the SINGLE source of
+    # truth in tenancy.openstate.schedule_open_now — shared with the menu-page serializer and
+    # the order-acceptance gate. None means "no schedule configured" → fall back to is_open.
     schedule = getattr(profile, "business_hours_schedule", None)
-    if not schedule or not isinstance(schedule, dict):
-        return bool(profile.is_open)
-    if not any(isinstance(v, dict) and v.get("enabled", False) for v in schedule.values()):
-        return bool(profile.is_open)
-    from datetime import datetime as _dt
-    from zoneinfo import ZoneInfo
-    _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-    # The schedule open/close strings are TENANT-LOCAL wall-clock, so evaluate the
-    # weekday + HH:MM in the restaurant's own timezone — not the server's. Mirrors the
-    # _profile_now fallback chain (profile tz → settings.TIME_ZONE → UTC) and the promo
-    # two-clock fix, so a blank profile.timezone follows the platform default.
-    from django.conf import settings as _settings
-    _tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(_settings, "TIME_ZONE", "") or "UTC"
-    try:
-        now = _dt.now(ZoneInfo(_tz_name))
-    except Exception:
-        now = _dt.now(ZoneInfo("UTC"))  # invalid/unknown tz → safe UTC fallback
-    entry = schedule.get(_WDAY[now.weekday()])
-    if not entry or not isinstance(entry, dict) or not entry.get("enabled", False):
-        return False
-    open_str = (entry.get("open") or "").strip()
-    close_str = (entry.get("close") or "").strip()
-    if not open_str or not close_str:
-        return False
-    current_hhmm = now.strftime("%H:%M")
-    return open_str <= current_hhmm < close_str
+    result = schedule_open_now(schedule, tenant_local_now(profile))
+    return bool(profile.is_open) if result is None else result
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

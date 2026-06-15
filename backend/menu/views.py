@@ -49,6 +49,7 @@ from rest_framework.views import APIView
 import qrcode
 
 from tenancy.models import Profile
+from tenancy.openstate import schedule_open_now
 
 from django_tenants.utils import schema_context
 
@@ -197,35 +198,13 @@ def _schedule_open(profile) -> bool | None:
       False — schedule exists and says the restaurant is currently closed.
       None  — no schedule configured (or no enabled days) — caller falls back
                to the manual ``profile.is_open`` boolean.
+
+    The window rule itself now lives in tenancy.openstate.schedule_open_now (the
+    SINGLE source of truth shared with the marketplace listing card and the customer
+    menu-page serializer). Only the tenant-local "now" resolution stays here, via
+    _profile_now (which menu uses everywhere).
     """
-    schedule = getattr(profile, "business_hours_schedule", None)
-    if not schedule or not isinstance(schedule, dict):
-        return None
-
-    # Check whether any day has been enabled; if none, treat as unconfigured.
-    if not any(
-        isinstance(v, dict) and v.get("enabled", False)
-        for v in schedule.values()
-    ):
-        return None
-
-    now_local = _profile_now(profile)
-    day_key = _WEEKDAY_TO_KEY.get(now_local.weekday())
-    entry = schedule.get(day_key)
-
-    if not entry or not isinstance(entry, dict):
-        return False  # today not represented → closed today
-
-    if not entry.get("enabled", False):
-        return False
-
-    open_str = (entry.get("open") or "").strip()
-    close_str = (entry.get("close") or "").strip()
-    if not open_str or not close_str:
-        return False
-
-    current_hhmm = now_local.strftime("%H:%M")
-    return open_str <= current_hhmm < close_str
+    return schedule_open_now(getattr(profile, "business_hours_schedule", None), _profile_now(profile))
 
 
 def _is_restaurant_currently_open(profile) -> bool:

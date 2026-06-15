@@ -319,8 +319,21 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         return obj.capabilities
 
     def get_is_open_now(self, obj) -> bool:
-        """Server-side open/closed evaluation: manual toggle + closure dates + schedule."""
+        """Server-side open/closed evaluation: manual toggle + temp-disable +
+        closure dates + schedule.
+
+        The schedule-window rule (tenant-local weekday + [open, close) HH:MM) is the
+        SINGLE source of truth in tenancy.openstate.schedule_open_now — shared with the
+        marketplace listing card and the order-acceptance gate. The three callers differ
+        ONLY in their extra guards: the listing card adds is_menu_temporarily_disabled;
+        this menu-page serializer additionally checks ClosureDate (legitimately
+        serializer-only — the public listing runs in the public schema and skips it).
+        """
         if obj.is_open is False:
+            return False
+        # Temporary "kitchen paused" toggle — match the listing card so the customer
+        # menu page agrees with the marketplace card on a temp-disabled restaurant.
+        if getattr(obj, "is_menu_temporarily_disabled", False):
             return False
         # Check if today is an explicit closure date (lazy import avoids circular dep).
         try:
@@ -330,28 +343,13 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
                 return False
         except Exception:
             pass
+        # Evaluate the schedule in the restaurant's OWN timezone (was UTC — the bug:
+        # schedule open/close strings are tenant-local wall-clock). None → no schedule
+        # configured → fall back to the manual is_open boolean.
+        from .openstate import schedule_open_now, tenant_local_now
         schedule = getattr(obj, "business_hours_schedule", None)
-        if not schedule or not isinstance(schedule, dict):
-            return bool(obj.is_open)
-        # Check whether any day is enabled; if none, schedule is unconfigured.
-        if not any(
-            isinstance(v, dict) and v.get("enabled", False)
-            for v in schedule.values()
-        ):
-            return bool(obj.is_open)
-        # Compare against current UTC time.
-        from datetime import datetime as _dt
-        _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-        now = _dt.utcnow()
-        entry = schedule.get(_WDAY[now.weekday()])
-        if not entry or not isinstance(entry, dict) or not entry.get("enabled", False):
-            return False
-        open_str = (entry.get("open") or "").strip()
-        close_str = (entry.get("close") or "").strip()
-        if not open_str or not close_str:
-            return False
-        current_hhmm = now.strftime("%H:%M")
-        return open_str <= current_hhmm < close_str
+        result = schedule_open_now(schedule, tenant_local_now(obj))
+        return bool(obj.is_open) if result is None else result
 
     def validate_phone(self, value):
         cleaned = (value or "").strip()

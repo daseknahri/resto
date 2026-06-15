@@ -664,15 +664,39 @@ the cache, and two readers derive the same field differently:
 - [x] **Menu template-apply business_type not busted — DONE (list-cache-coherence batch)** — ApplyTemplateView
       writes profile.business_type (listing-relevant) but bypassed ProfileView's bust; now busts the list cache
       after the profile save (menu/views.py). [scout list-cache-coherence]
-- [ ] **OPEN-STATE derivation NOT consolidated — get_is_open_now is a THIRD copy still on UTC** — there are
-      now THREE "is this place open now" derivations: _compute_is_open_now (accounts/views.py, listings —
-      now tenant-local), _is_restaurant_currently_open (menu/views.py order gate — tenant-local), and
-      **ProfileSerializer.get_is_open_now (tenancy/serializers.py:~345, menu/meta page — STILL datetime.utcnow()).**
-      So a non-UTC restaurant's menu page can report a different open/closed than its marketplace card. ALSO
-      is_menu_temporarily_disabled is honored by _compute_is_open_now but NOT by the serializer/order-gate
-      derivations. Fix = ONE shared open-state helper (like menu/promos.py promo_is_active) all three delegate
-      to, tenant-local + consistent temp-disable handling. (tenancy/serializers.py:345; menu/views.py:231;
-      accounts/views.py:2489). [scout list-cache-coherence] **(next batch — real menu-page tz divergence)**
+- [x] **OPEN-STATE derivation consolidated (backend) — DONE (open-state-consolidation batch)** — NEW
+      tenancy/openstate.py = the SINGLE window rule: schedule_open_now(schedule, now_local) (tri-state) +
+      tenant_local_now(profile) (profile tz→settings.TIME_ZONE→UTC). All THREE backend derivations now delegate:
+      menu/views.py _schedule_open, accounts/views.py _compute_is_open_now, tenancy/serializers.py
+      get_is_open_now. **get_is_open_now's utcnow() bug is FIXED (now tenant-local)** + it gained the
+      is_menu_temporarily_disabled guard so the menu page agrees with the listing card. Callers differ ONLY in
+      extra guards (listings=temp_disable; menu-page=temp_disable+ClosureDate; order-gate=neither, a 503 blocks).
+      Reviewer ran a 1071-case differential (0 mismatches vs the old rule). New test_openstate.py + rewritten
+      test_profile_is_open_now.py. [scout list-cache-coherence]
+
+### FRONTEND OPEN-STATE COHERENCE (scout open-state cluster; next batch — USER-VISIBLE)
+The backend open-state rule is now consolidated + tenant-local and the serializer ships an authoritative
+`is_open_now`, but the FRONTEND re-derives open/closed 4-5 different ways — several on the visitor's BROWSER
+clock and several ignoring `is_open_now` entirely. Cleanest fix: every storefront open-state reader consumes
+server `is_open_now`; reserve businessHours.js for label-only helpers (getNextOpenInfo / getTodayClosingTime).
+- [ ] **businessHours.js evaluates the schedule on the BROWSER clock, not the tenant tz** — getCurrentDayKey()
+      uses new Date().getDay() / currentHHMM() uses new Date() (frontend/src/lib/businessHours.js:152-169). A
+      visitor in a different tz than the restaurant gets a different open/closed than the server — the exact
+      cross-tz bug the backend batch just removed. [scout open-state] **(real cross-tz bug)**
+- [ ] **MenuSelect.vue ignores server is_open_now, re-derives client-side** — MenuSelect.vue:202-210 derives
+      from raw is_open + browser-clock schedule, while Menu.vue:636 correctly honors profile.is_open_now first.
+      A temp-disabled / closure-date restaurant shows closed on Menu.vue but open on MenuSelect.vue. [scout open-state]
+- [ ] **CategoryPage / Cart / DishPage order gates read ONLY raw is_open (ignore schedule + is_open_now)** —
+      CategoryPage.vue:266, Cart.vue:1299, DishPage.vue:435 all gate on `is_open !== false`, so a schedule-closed
+      restaurant still accepts add-to-cart and reaches checkout, where the backend 503 rejects it — a confusing
+      dead-end after the cart is filled. Gate these on is_open_now. [scout open-state] **(real UX dead-end)**
+- [ ] **CustomerLeadPage.vue open-state ignores is_open_now + temp_disable** — CustomerLeadPage.vue:406-424
+      uses is_open!==false only. Consume is_open_now. [scout open-state]
+- [ ] **useSeoMeta.js openingHoursSpecification is a 5th independent schedule parser** — useSeoMeta.js:222-240
+      emits JSON-LD opening hours verbatim with no shared contract with businessHours.js / openstate; lower
+      severity (publishes raw weekly hours, can't drift on the clock) but must be hand-synced if the schedule
+      shape evolves. [scout open-state] (marginal)
+- [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
 - [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
       computed at fill time then cached 90s (accounts/views.py:2868-2876,2902-2921), so the request-time
       windowing the promo-N+1 batch built buys nothing while the payload is cached: a promo/flash sale that
@@ -776,6 +800,16 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] open-state-consolidation "one shared tenant-local schedule-window helper; fix get_is_open_now UTC bug"
+      (verified by me, backend 3859/0, migrations clean, reviewer PASS/GREEN — ran a 1071-case differential
+      proving schedule_open_now matches the old _schedule_open exactly, 0 mismatches). NEW tenancy/openstate.py
+      (schedule_open_now tri-state + tenant_local_now, stdlib+settings only, no cycle). The 3 backend "is open
+      now" derivations (menu _schedule_open, accounts _compute_is_open_now, serializer get_is_open_now) now
+      delegate the window rule. get_is_open_now was on utcnow() → now tenant-local + gained the temp-disable
+      guard, so the customer menu page agrees with the marketplace card for non-UTC tenants. New test_openstate.py
+      + rewritten test_profile_is_open_now.py. Scout → FRONTEND OPEN-STATE cluster (businessHours.js on the
+      browser clock; MenuSelect/CategoryPage/Cart/DishPage ignore server is_open_now → add-to-cart dead-end)
+      triaged as the next (user-visible) batch. — open-state-consolidation commit.
 - [x] list-cache-coherence "bust public list cache on profile-edit + lifecycle + delivery + template writes;
       unify is_open (tenant-local)" (verified by me, backend 3834/0, migrations clean, reviewer SHIP-with-1-
       followup which I then fixed). ProfileView.perform_update busts when validated_data hits a new
