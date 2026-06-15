@@ -2526,30 +2526,91 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def _is_promo_active_now(promo) -> bool:
-    """Return True if a Promotion object is currently active (schedule + date range).
+def _promo_field(promo, name):
+    """Read `name` off a Promotion whether it's a model instance OR a denorm dict.
 
-    Mirror of menu.views._is_promo_active_now — duplicated here to avoid
-    cross-app import while running in the public-schema context.
+    The marketplace promo badge is denormalized onto the public Profile as a list
+    of plain dicts (Profile.marketplace_promos); the windowing rule below must read
+    those identically to a real Promotion object so there is ONE source of truth for
+    "is this promo live now". Supports a mapping (dict) or an attribute object.
+    """
+    if isinstance(promo, dict):
+        return promo.get(name)
+    return getattr(promo, name, None)
+
+
+def _coerce_date(value):
+    """Normalize active_from/active_until: pass through date objects, parse ISO strings.
+
+    Denormalized entries store dates as ISO strings (or null); model instances hold
+    real date objects. Returns a date or None.
+    """
+    if value is None or value == "":
+        return None
+    from datetime import date as _date
+    if isinstance(value, _date):
+        return value
+    try:
+        return _date.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_promo_active_now(promo) -> bool:
+    """Return True if a promo is currently active (schedule + date range).
+
+    Accepts EITHER a Promotion model instance OR a denormalized dict (the entries
+    in Profile.marketplace_promos) — one windowing rule, no forked logic. Mirror of
+    menu.views._is_promo_active_now; duplicated here to avoid a cross-app import
+    while running in the public-schema context.
     """
     from datetime import datetime as _dt, date as _date
     _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
     today = _date.today()
-    if promo.active_from and today < promo.active_from:
+    active_from = _coerce_date(_promo_field(promo, "active_from"))
+    active_until = _coerce_date(_promo_field(promo, "active_until"))
+    if active_from and today < active_from:
         return False
-    if promo.active_until and today > promo.active_until:
+    if active_until and today > active_until:
         return False
-    allowed_days = promo.days or []
+    allowed_days = _promo_field(promo, "days") or []
     if allowed_days:
         if _WDAY[_dt.utcnow().weekday()] not in allowed_days:
             return False
-    ts = (promo.time_start or "").strip()
-    te = (promo.time_end or "").strip()
+    ts = (_promo_field(promo, "time_start") or "").strip()
+    te = (_promo_field(promo, "time_end") or "").strip()
     if ts and te:
         now_hhmm = _dt.utcnow().strftime("%H:%M")
         if not (ts <= now_hhmm < te):
             return False
     return True
+
+
+def _promo_badge_from_denorm(promos):
+    """Build the marketplace promo badge from a tenant's denormalized promo list.
+
+    `promos` is Profile.marketplace_promos — a list of dicts already ordered the SAME
+    way the old per-tenant query selected (highest discount_value first; see
+    menu/promos_denorm.recompute_tenant_promos). We pick the FIRST entry that is live
+    now (in-memory windowing via _is_promo_active_now) and emit the SAME badge string
+    the old in-loop code did. Returns None if nothing is live (matching old default).
+    """
+    if not promos or not isinstance(promos, (list, tuple)):
+        return None
+    for _p in promos:
+        if not isinstance(_p, dict):
+            continue
+        if not _is_promo_active_now(_p):
+            continue
+        promo_type = _p.get("promo_type")
+        discount_value = _p.get("discount_value")
+        if promo_type == "percentage":
+            return f"{int(float(discount_value))}% off"
+        elif promo_type == "fixed":
+            return f"-{discount_value} off"
+        else:
+            return "Free delivery"
+    return None
 
 
 # ── Public listing response cache ─────────────────────────────────────────────
@@ -2811,22 +2872,17 @@ class MarketplaceView(APIView):
             rating_avg = float(profile.rating_avg) if profile.rating_avg is not None else None
             rating_count = profile.rating_count or 0
 
-            promo_badge = None
+            # B8-followup: promo badge is read from the denormalized public
+            # Profile.marketplace_promos (kept in sync by the menu.Promotion
+            # signals) — NO per-tenant schema_context / Promotion query. The
+            # time-window ("live now") is evaluated in-memory at request time on
+            # the denormalized schedule, mirroring the flash-sale path. This was the
+            # LAST per-tenant schema switch in the listing loop (rating already
+            # denormalized in B8); the loop is now fully in-memory.
             try:
-                from django_tenants.utils import schema_context as _sc
-                with _sc(tenant.schema_name):
-                    from menu.models import Promotion as _Promo
-                    for _p in _Promo.objects.filter(is_active=True).order_by("-discount_value")[:5]:
-                        if _is_promo_active_now(_p):
-                            if _p.promo_type == "percentage":
-                                promo_badge = f"{int(_p.discount_value)}% off"
-                            elif _p.promo_type == "fixed":
-                                promo_badge = f"-{_p.discount_value} off"
-                            else:
-                                promo_badge = "Free delivery"
-                            break
+                promo_badge = _promo_badge_from_denorm(getattr(profile, "marketplace_promos", None))
             except Exception:
-                pass
+                promo_badge = None
 
             # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
             tenant_opted_ids = opted_map.get(tenant.id, set())

@@ -597,11 +597,36 @@ Several are HIGH. file:line in scout output; verify before acting.
 ### B8-FOLLOWUP — MARKETPLACE SCALE + DENORM COHERENCE (scout B8 cluster)
 B8 killed the RATING cross-schema N+1, but the scout found the loop isn't fully query-free + the denorm has
 coherence gaps. None biting at current scale; do before many tenants / heavy marketplace traffic.
-- [ ] **MarketplaceView STILL does a per-tenant schema_context for the promo badge (the same N+1, for
-      promotions)** — accounts/views.py:2794-2808 opens a tenant schema per profile to read its active
-      Promotion. Batch it before the loop (like the flash-sale opted_map at 2736-2747) OR denormalize an
-      active-promo flag/badge onto the public Profile (like rating_avg). The DirectoryView loop is now pure
-      in-memory; MarketplaceView is not until this lands. [scout B8] **(the remaining N+1)**
+- [x] **Promo-badge N+1 — DONE (promo denorm)** — Profile.marketplace_promos (tenancy/0043) holds the
+      tenant's is_active promo SCHEDULES, refreshed by a menu.Promotion signal + backfill_profile_promos +
+      list-cache bust; the marketplace loop evaluates the window IN-MEMORY at request time
+      (_promo_badge_from_denorm). Both public listing loops are now fully query-free (scout-confirmed).
+
+### MARKETPLACE DENORM COHERENCE (scout promo-N+1 cluster; finer follow-ups)
+- [ ] **Capped-promo badge drift** — recompute_tenant_promos filters is_active=True but NOT use_count<max_uses,
+      and the checkout .update(use_count=F+1) (menu/views.py:2606-2633) bypasses the post_save signal, so a
+      promo that hit its max_uses cap (is_active still True) keeps showing its badge in the marketplace even
+      though checkout strips the discount. Fix: exclude capped promos in recompute_tenant_promos (filter
+      use_count<max_uses OR max_uses null) AND call recompute after the cap-strip .update(). (menu/promos_denorm.py:73;
+      menu/views.py:2606). [scout promo-N+1]
+- [ ] **Consolidate the duplicated _is_promo_active_now + fix the today/utcnow tz mismatch** — the rule is now
+      copied in menu/views.py (checkout discount, attr-only) AND accounts/views.py (marketplace badge,
+      dict-or-attr); they can diverge so the badge and the actual checkout discount disagree. Both share a
+      latent bug: today=date.today() (server-local) but day-of-week + HH:MM use datetime.utcnow() → near-midnight
+      windows judged on mismatched tz (latent if prod TZ=UTC). Collapse to ONE shared helper accepting both
+      shapes + add a parametrized test feeding the same fixture as model and serialized dict; decide the tz
+      (tenant-local like OPS-2, or document UTC). (menu/views.py:1863; accounts/views.py:2559). [scout promo-N+1]
+      **(real correctness — affects checkout discount, not just the badge)**
+- [ ] **Flash-sale cache coherence** — flash_sale_active is baked into the cached marketplace payload, but no
+      flash-sale mutation busts the list cache (admin create/patch/delete + opt-in/out) and is_live() is
+      time/cap-windowed, so the listing shows stale flash-sale state up to the 90s TTL (and across is_live
+      boundaries). Bust _bust_public_list_cache on flash-sale writes AND/OR evaluate flash_sale_active live
+      in-memory (like the promo badge now does) instead of baking it into the cached value.
+      (accounts/views.py flash-sale views + opt-in/out). [scout promo-N+1]
+- [ ] **Marketplace composite index for the full WHERE shape** — the hot query filters
+      (directory_opt_in, is_menu_published, tenant__lifecycle_status) + optional city/cuisine/price_tier +
+      order_by tenant__name; the existing indexes don't fully cover it. Consider an index matching the actual
+      shape. (tenancy/models.py Profile.Meta). [scout promo-N+1] (marginal at current scale)
 - [x] **90s list cache busted on rating change — DONE (B8-followup scale)** — _public_list_cache_key now
       embeds a GLOBAL version (public_list_ver); _bust_public_list_cache() (mirrors _bust_menu_cache) is
       called from recompute_tenant_rating after the Profile update, so a new rating refreshes the directory/
@@ -709,6 +734,18 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] promo-badge N+1 kill (promo denorm) — the LAST per-tenant query in the public marketplace listing
+      loop. (verified by me, backend 3805/0, migrations clean, reviewer 0 findings, scout CONFIRMED both
+      DirectoryView + MarketplaceView loops are now fully query-free.) Profile.marketplace_promos JSONField
+      (tenancy/0043) holds each tenant's is_active promo schedules (type/value/days/time_start/time_end/
+      active_from/active_until, ordered -discount_value[:5] = the old selection); recompute_tenant_promos
+      (menu/promos_denorm.py) refreshes it from the tenant schema + busts the public list cache, wired via
+      menu.Promotion post_save/post_delete signals + a backfill_profile_promos command; the marketplace loop
+      computes promo_badge IN-MEMORY at request time (_promo_badge_from_denorm) so the window stays correct
+      across boundaries — no per-tenant schema_context. New test_promo_denorm.py. Scout → "marketplace denorm
+      coherence" cluster above (capped-promo badge drift, consolidate the duplicated _is_promo_active_now +
+      today/utcnow tz bug [real — affects checkout discount], flash-sale cache coherence, composite index).
+      — promo-n1 commit.
 - [x] B8-followup scale "list-cache bust on rating + min_rating index" (verified by me, backend 3774/0,
       migrations clean, reviewer 0 findings): the public marketplace/directory list cache is now bustable —
       _public_list_cache_key embeds a GLOBAL version (public_list_ver) and _bust_public_list_cache()

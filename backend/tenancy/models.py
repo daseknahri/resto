@@ -330,6 +330,29 @@ class Profile(models.Model):
         help_text="Denormalized count of this tenant's menu.Rating rows.",
     )
 
+    # ── Denormalized promo badge schedule (B8-followup) ──────────────────────────
+    # Promotions (menu.Promotion) are per-tenant, but the marketplace listing over
+    # the PUBLIC Profile page used to switch into every tenant schema to fetch the
+    # active promos and derive a "promo_badge" — another O(N_tenants) cross-schema
+    # N+1 per request (the last one in the listing loop). This mirrors the SCHEDULE
+    # of this tenant's is_active promos onto the public row; the listing then
+    # evaluates "live now" in-memory at request time (same windowing rule as the
+    # checkout path) with no per-tenant schema switch — exactly like the flash-sale
+    # schedule denorm. Each entry holds ONLY the fields the badge needs, ordered the
+    # SAME way the view selected on (highest discount first). Kept in sync by the
+    # menu.Promotion post_save/post_delete signals (see menu/promos_denorm.py) and
+    # populated for existing data by `manage.py backfill_profile_promos`.
+    marketplace_promos = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Denormalized schedule of this tenant's is_active promos for the marketplace "
+            "promo badge. Each entry: {promo_type, discount_value (str), days, time_start, "
+            "time_end, active_from (ISO|null), active_until (ISO|null)}. Ordered by highest "
+            "discount first. 'Live now' is evaluated in-memory at request time."
+        ),
+    )
+
     # ── Business type & capabilities (Kepoli super-app generalization seam) ─────
     # The platform began restaurant-only; business_type lets the same tenant
     # infrastructure serve other verticals (retail shops, bakeries, groceries) by

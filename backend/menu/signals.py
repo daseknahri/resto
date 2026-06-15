@@ -100,3 +100,36 @@ def denormalize_rating_on_save(sender, instance, created=False, update_fields=No
 @receiver(post_delete, sender="menu.Rating")
 def denormalize_rating_on_delete(sender, instance, **kwargs):
     _denormalize_current_tenant_rating()
+
+
+def _denormalize_current_tenant_promos():
+    """Recompute the denormalized promo schedule for the CURRENT tenant (B8-followup).
+
+    Promotions live per-tenant; the public marketplace reads a denormalized copy
+    (the schedule) on the public Profile.marketplace_promos and evaluates "live now"
+    in-memory at request time. Whenever a Promotion is written or deleted we refresh
+    that copy for the tenant whose schema is currently active. No-op on the public
+    schema (Promotion isn't there) or when there's no real tenant on the connection.
+    Best-effort — never break the promo save/delete over the denormalization.
+    """
+    tenant = getattr(connection, "tenant", None)
+    if tenant is None or getattr(tenant, "schema_name", None) is None:
+        return  # not in a tenant context — nothing to denormalize
+    try:
+        from django_tenants.utils import get_public_schema_name
+        if tenant.schema_name == get_public_schema_name():
+            return  # public schema has no Promotion table
+        from .promos_denorm import recompute_tenant_promos
+        recompute_tenant_promos(tenant)
+    except Exception:
+        logger.exception("Failed to denormalize promos for current tenant")
+
+
+@receiver(post_save, sender="menu.Promotion")
+def denormalize_promos_on_save(sender, instance, **kwargs):
+    _denormalize_current_tenant_promos()
+
+
+@receiver(post_delete, sender="menu.Promotion")
+def denormalize_promos_on_delete(sender, instance, **kwargs):
+    _denormalize_current_tenant_promos()

@@ -154,6 +154,23 @@ rating in the marketplace (new ratings still populate live via the signals).
 
 ---
 
+## 5c — Backfill denormalized marketplace promos (run ONCE, after migrating)
+The marketplace listing reads each restaurant's promo badge from a denormalized
+copy of its promo SCHEDULE on the public `Profile` (`marketplace_promos`) and
+evaluates "live now" in-memory at request time, instead of switching into every
+tenant schema per request (B8-followup — kills the LAST cross-schema N+1 in the
+listing loop). The `menu.Promotion` post_save/post_delete signals keep it in sync
+from deploy onward, but **existing** promos predate the signals, so run this
+**once** after the `tenancy` migration that adds the column lands:
+```bash
+python manage.py backfill_profile_promos
+```
+Idempotent — safe to re-run. Until it runs, restaurants with existing promos show
+no promo badge in the marketplace (new/edited promos still populate live via the
+signals).
+
+---
+
 ## 6 — Verify security headers
 Test with https://securityheaders.com — paste your domain.
 Expected green ratings:
