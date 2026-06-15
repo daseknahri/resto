@@ -611,13 +611,11 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       but migration 0041 added rating_avg/rating_count with no index. Add a composite/partial index
       (directory_opt_in, is_menu_published, rating_avg) for scale. (tenancy/migrations/0041; models.py:470).
       [scout B8]
-- [ ] **Denorm drift: owner-reply save fires an unnecessary recompute + out-of-ORM writes bypass the
-      signal** — the Rating post_save handler doesn't inspect update_fields, so owner-reply saves
-      (update_fields=['owner_reply',...]) trigger a full cross-schema Avg/Count + Profile UPDATE despite an
-      unchanged score; and admin bulk-edits / .update(score=) / raw SQL / DB restore bypass the signal,
-      leaving rating_avg permanently wrong. Fix: early-return in the signal unless score changed / create /
-      delete; rely on the backfill command (already built) to repair drift after out-of-band changes (run it
-      post-restore). (menu/signals.py). [scout B8]
+- [~] **Denorm drift** — the owner-reply unnecessary-recompute half is FIXED (effd9f3+: the Rating post_save
+      handler now early-returns when update_fields excludes 'score', so owner-reply saves skip the cross-schema
+      recompute). RESIDUAL: out-of-ORM writes (admin bulk-edit / .update(score=) / raw SQL / DB restore) still
+      bypass the signal → run the already-built backfill_profile_ratings command after any such change (note in
+      a restore runbook). (menu/signals.py). [scout B8 — partially done]
 
 ### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb all DONE; see Done section)
 Residual (small, pre-existing, out of the shipped scope):

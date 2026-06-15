@@ -86,7 +86,14 @@ def _denormalize_current_tenant_rating():
 
 
 @receiver(post_save, sender="menu.Rating")
-def denormalize_rating_on_save(sender, instance, **kwargs):
+def denormalize_rating_on_save(sender, instance, created=False, update_fields=None, **kwargs):
+    # B8-followup: the denorm only depends on `score`. An owner-reply save
+    # (update_fields={"owner_reply", "owner_reply_at"}) leaves the average/count
+    # unchanged, so skip the cross-schema Avg/Count + Profile UPDATE for partial
+    # saves that don't touch score. Recompute on create, on a full save
+    # (update_fields is None), or when score is among the updated fields.
+    if not created and update_fields is not None and "score" not in set(update_fields):
+        return
     _denormalize_current_tenant_rating()
 
 
