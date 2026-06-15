@@ -16,6 +16,65 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 > Items below stay as the catch-net; several are absorbed by OPS batches
 > (revenue.py materialization → OPS-4; perform_update atomicity → OPS-3).
 
+## ⭐ PRODUCTION-READINESS ROADMAP (multi-agent audit, owner asked for "production-grade startup")
+**Verdict: ~85% production-grade on CODE (money/tenancy/idempotency core is strong + CI-tested vs real Postgres),
+NOT yet on OPERATIONS.** Full audit (architecture map + 7 dimension audits + synthesis) ran 2026-06; the deployed
+app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (manual Coolify redeploy) — the Node
+`platform/` stack is DEAD scaffold. `ci.yml` DOES run the Django suite vs Postgres + Vue lint/build on push+PR
+(my earlier "no CI" premise was wrong). Ranked, mostly NON-gated:
+- [~] **R1 (P0) Automate DB backups + rehearse restore** — no proven nightly backup (cron is a runbook line; no
+      install_backup_cron.sh though uptime has one); restore never drilled = unbounded ledger data-loss. I can
+      write install_backup_cron.sh + alert; the actual restore DRILL needs VPS access (owner/ops). [non-gated script]
+- [ ] **R2 (P1) Kill dead deploy.yml + gate redeploy on CI green** — deploy.yml builds/pushes the dead platform/
+      scaffold + fires the real Coolify webhook every push; CI green doesn't gate the manual redeploy. Replace with
+      a real-app workflow (needs ci.yml → build backend+frontend Dockerfiles → push ghcr → fire webhook). Branch
+      protection toggle is owner-gated; the workflow itself is not.
+- [~] **R3 (P1) Sweeps + Celery worker default-on** — sweep_delivery_jobs/enforce_subscriptions/expire_charge_requests
+      only run if an operator hand-wires them; CELERY_BROKER_URL not in required env → beat idle by default, silent.
+      (making it required is owner-gated; the heartbeat/alert half is in flight, see R4).
+- [x] **R4 (P1) Celery beat heartbeat → health detects dead worker — DONE (prod-harden-1)** — new
+      accounts.tasks.write_beat_heartbeat (beat every 60s, cache.set celery_beat_heartbeat ttl 300); _check_celery
+      now reports degraded on missing/stale heartbeat once the broker is set + past a 240s boot grace (dev/no-broker
+      preserved; +locmem guard so a per-process-cache SKIP_DEPLOY_CHECK edge can't false-flag). Backend 3889/0.
+- [ ] **R5 (P1) AddIndexConcurrently on hot tables + rehearse migrate/rollback** — every index migration is plain
+      AddIndex (ACCESS EXCLUSIVE lock per tenant schema at boot = write-outage scaling with tenant count).
+- [ ] **R6 (P1) Dependency CVE scanning + Dependabot** — no pip-audit/npm-audit/Trivy, no dependabot.yml. [non-gated]
+- [ ] **R7 (P1) MFA on cross-tenant admin/owner + per-account lockout** — /admin/ superuser is password-only; primary
+      login throttle is IP-only (no per-account lockout). [non-gated, L]
+- [~] **R8 (P1) Fix frontend Sentry release tag** — sentry.js reads VITE_APP_VERSION; build injects VITE_SENTRY_RELEASE
+      → frontend release always undefined. Inject git SHA at build. [non-gated, S]
+- [ ] **R9 (P1) Paginate Marketplace + Directory** — both hard-cap results[:100], no page param → tenants past ~100
+      (name order) are undiscoverable; ?q= filters Python over [:200]. Caps GMV at the scale it's built for. [non-gated]
+- [ ] **R10 (P1) Run frontend vitest + verify:i18n in CI** — ci.yml frontend job runs only lint+build (75 tests +
+      i18n completeness never gate). [non-gated, S]
+- [ ] **R11 (P1) Prove uptime/cert-expiry/disk alerting is wired (not just scripted)** — webhooks default empty;
+      no cert-expiry or disk monitor. [owner-gated: VPS webhook activation]
+- [x] **R12 (P2) Namespace loyalty-redeem idempotency key by schema — DONE (prod-harden-1)** — loyalty key now
+      f"loyalty:{schema}:{raw}" at all 3 sites (read/create/replay); within-schema dedup preserved, same client key
+      now succeeds independently across tenants. Scout CONFIRMED this was the LAST un-namespaced money key (others
+      key off globally-unique public-schema PKs). New DB test (2-schema same-key) runs in CI. [scout prod-readiness]
+- [ ] **R13 (P2) Non-root containers + bounded ASGI request timeout** — Dockerfiles run uvicorn/nginx as root;
+      uvicorn path has no request timeout (GUNICORN_TIMEOUT only the WSGI fallback). [non-gated, M]
+- [ ] **R14 (P2) Bound inline-notification threads + cache-stampede lock** — Celery-off default spawns unbounded raw
+      Threads/notification (Postgres-conn exhaustion); 90s list cache has no single-flight. [non-gated, M]
+- [ ] **R15 (P2) Metrics/latency + payment-failure-rate alerting + request_id→Sentry tag** — observability is binary
+      uptime + Sentry errors (traces_sample_rate 0). [non-gated, M]
+- [ ] **R16 (P2) Wallet currency-mismatch guard + route inline debits through wallet_service** — wallet is MAD scalar;
+      inline debits hand-roll the ledger row w/o per-tx key. (MAD-only confirm is owner-gated; the guard is not.)
+- [ ] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM** — mutable base tags; Coolify rebuilds
+      from source (non-reproducible). [non-gated, M]
+- [ ] **R18 (P2) PII erasure/export tooling + retention cron** — no data-subject erasure/export; no Customer/Order PII
+      retention. Tooling non-gated; jurisdiction + policy text owner-gated.
+- [ ] **R19 (P2) Police patch(create=True) + import-smoke / real-model money tests** — the masked-500 class (a
+      swallowed ImportError 500'd every marketplace order while CI stayed green via create=True mocks). [non-gated]
+- [ ] **R20 (P3) Provision staging env** — unblocks rehearsing R1/R5 off-prod. [owner-gated: cost/setup]
+- [ ] **R21 (P3) Dockerized dev Postgres** — so the ~25 DB money tests run locally (CI covers them today). [non-gated, S]
+- [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
+- [ ] **R23 (P3) Incident-response runbook + remove vestigial pytest.ini** — no SEV ladder; pytest.ini has no
+      pytest-django/conftest (real runner is manage.py test). [non-gated, S]
+- [ ] **R24 (P3) Code-split i18n locales + responsive image srcset** — 3 locales statically bundled into the 669kB
+      entry chunk; single full-size WebP to every viewport (LCP on the QR-menu path). [non-gated, M]
+
 ## Restaurant (current focus — candidates for post-v1.0)
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
       tenants are single-location today.

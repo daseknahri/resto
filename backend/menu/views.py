@@ -9242,7 +9242,18 @@ class CustomerLoyaltyRedeemView(APIView):
         # same key must not redeem a second time. Checked BEFORE the threshold guard,
         # because the first redemption already spent the points — re-validating would
         # wrongly reject the replay as "below threshold".
-        _idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        #
+        # OPS-5g/5h: WalletTransaction is PUBLIC-schema (accounts is a SHARED_APP), so
+        # idempotency_key is a GLOBAL namespace. The client key here is TENANT-SCHEMA-LOCAL,
+        # so server-namespace it with this tenant's schema — like the sibling money paths
+        # (order-pay-{schema}-…, orderpay:{schema}:…, voiditem:{schema}:…, ownercharge:…,
+        # ownertopup:…). Without this, the SAME customer reusing the SAME client key across
+        # tenant A then tenant B would get tenant-A's row back as a "duplicate" and the
+        # legitimate tenant-B redemption would be silently refused (credits nothing). Build
+        # the namespaced key ONCE; the pre-flight read, the create, and the IntegrityError
+        # refetch all use _idem.
+        _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        _idem = f"loyalty:{_dbc.schema_name}:{_raw_idem}" if _raw_idem else None
         if _idem:
             # OPS-5g IDOR: idempotency_key is a GLOBAL namespace on the shared-schema
             # WalletTransaction table and is CLIENT-supplied here. Scope the replay lookup

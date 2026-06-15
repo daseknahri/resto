@@ -35,12 +35,13 @@ Celery probe
   A real broker ping requires a live worker, which is not available in dev/CI.
   Instead we check:
     1. Whether CELERY_BROKER_URL is configured (Celery is opt-in; empty = off
-       by design, not a fault).
+       by design, not a fault — always ok).
     2. When configured, whether the cache-backed beat heartbeat key written by
-       the beat scheduler is fresh (within 5 minutes).
-  Limitation: this cannot detect a broker that is configured but unreachable
-  unless the beat heartbeat has already expired.  A missing heartbeat key on a
-  newly-started instance is not a fault.
+       accounts.tasks.write_beat_heartbeat (every ~60s) is fresh. A MISSING or
+       STALE heartbeat (older than ~180s) once the process is past its startup
+       grace means beat/worker is down -> ok=False (degraded, non-critical).
+  A missing heartbeat during the post-boot startup grace is tolerated (the first
+  beat may not have landed yet) so a fresh deploy never produces a false alarm.
 
 Channel-layer probe
   Issue a group_send to a throwaway group name and catch any exception.  When
@@ -59,6 +60,20 @@ from django.core.cache import cache
 from django.db import connection, OperationalError as DbOperationalError
 from django.http import JsonResponse
 from django.utils.timezone import now
+
+# Process start (monotonic). Used as the health "start_period" grace: right after a fresh
+# deploy the beat may not have written its first heartbeat yet, so a missing key during the
+# grace window is NOT a fault. Once the process has been up longer than the grace, a missing
+# or stale heartbeat means beat/worker is down -> degraded.
+_PROCESS_START_MONOTONIC = time.monotonic()
+
+# A heartbeat older than this (or absent past the grace window) means beat/worker is dead.
+# Beat writes every 60s, so 180s tolerates two missed beats before flagging.
+_CELERY_HEARTBEAT_STALE_SECONDS = 180
+# Grace after process boot before a missing/stale heartbeat is treated as a fault. Kept
+# above the staleness threshold so the first beat (within 60s) always lands before the
+# grace expires — a fresh deploy can never produce a false "degraded".
+_CELERY_HEARTBEAT_START_GRACE_SECONDS = 240
 
 
 def _check_db() -> dict:
@@ -87,19 +102,43 @@ def _check_cache() -> dict:
         return {"ok": False, "latency_ms": None}
 
 
+def _heartbeat_age_seconds(heartbeat) -> float | None:
+    """Seconds since *heartbeat* (an ISO-8601 string or epoch number), or None if unparseable.
+
+    The beat task writes ``now().isoformat()``; we also accept a bare epoch number for
+    forward-compatibility. A negative age (clock skew) is clamped to 0.
+    """
+    if heartbeat is None:
+        return None
+    try:
+        if isinstance(heartbeat, (int, float)):
+            ts = float(heartbeat)
+        else:
+            from datetime import datetime
+            ts = datetime.fromisoformat(str(heartbeat)).timestamp()
+    except (ValueError, TypeError, OverflowError):
+        return None
+    from django.utils.timezone import now as _now
+    age = _now().timestamp() - ts
+    return max(0.0, age)
+
+
 def _check_celery() -> dict:
     """
     Lightweight Celery/broker reachability check.
 
     Celery is OPT-IN (CELERY_BROKER_URL must be set).  When it is not set the
-    broker is intentionally absent — that is not a fault.
+    broker is intentionally absent — that is not a fault, and we return ok with a
+    ``celery_off`` detail (preserved verbatim so dev / no-broker prod-fallback never
+    flips to degraded).
 
-    When it IS set we check the cache-backed beat heartbeat key.  If the key
-    is missing on a freshly-started instance we treat it as ok (not yet
-    written) and note the limitation in the detail string.
-
-    Limitation: a broker that is configured but unreachable is only detectable
-    once the heartbeat key has expired (> 5 min of no beat activity).
+    When it IS set we check the cache-backed beat heartbeat key written by
+    accounts.tasks.write_beat_heartbeat (every ~60s):
+      * During the post-boot grace window a missing/stale key is tolerated (the first
+        beat may not have landed yet) -> ok.
+      * Once the process has been up past the grace, a MISSING or STALE heartbeat
+        (older than the staleness threshold) means beat/worker is dead -> ok=False
+        (the response treats celery as non-critical, so overall status is "degraded").
     """
     try:
         from django.conf import settings
@@ -107,13 +146,44 @@ def _check_celery() -> dict:
         if not broker_url:
             return {"ok": True, "detail": "celery_off: CELERY_BROKER_URL not set (by design)"}
 
-        # Beat writes a heartbeat key every minute.  Stale = worker / beat down.
+        # The heartbeat is a CROSS-PROCESS signal: beat writes it, this web process reads it.
+        # That only works through a SHARED cache (Redis). If the cache is a per-process
+        # LocMemCache (e.g. an emergency SKIP_DEPLOY_CHECK single-process deploy where
+        # CELERY_BROKER_URL is set but REDIS_URL is not, so CACHES fell back to locmem), the
+        # web process can NEVER see beat's heartbeat — absence is not evidence of a dead beat,
+        # so do not false-flag. (Normal prod can't hit this: kepoli.E001 hard-fails a
+        # DEBUG=False boot without REDIS_URL.)
+        cache_backend = str(
+            (getattr(settings, "CACHES", {}).get("default", {}) or {}).get("BACKEND", "")
+        ).lower()
+        if "locmem" in cache_backend:
+            return {"ok": True, "detail": "broker_configured: heartbeat unavailable (per-process cache; needs shared Redis)"}
+
+        # Beat writes a heartbeat key every minute.  Stale/absent = worker / beat down.
         HEARTBEAT_KEY = "celery_beat_heartbeat"
         heartbeat = cache.get(HEARTBEAT_KEY)
+        in_grace = (time.monotonic() - _PROCESS_START_MONOTONIC) < _CELERY_HEARTBEAT_START_GRACE_SECONDS
+
         if heartbeat is None:
+            # Within the boot grace, an absent key is just "not written yet" — not a fault.
+            if in_grace:
+                return {
+                    "ok": True,
+                    "detail": "broker_configured: heartbeat key absent (within startup grace)",
+                }
             return {
-                "ok": True,
-                "detail": "broker_configured: heartbeat key absent (freshly started or beat not running)",
+                "ok": False,
+                "detail": "beat_down: heartbeat key absent past startup grace (beat/worker not running)",
+            }
+
+        age = _heartbeat_age_seconds(heartbeat)
+        if age is None:
+            # Key exists but is unparseable — treat as present (don't flap on a bad value).
+            return {"ok": True, "detail": f"beat_ok: last_heartbeat={heartbeat}"}
+        if age > _CELERY_HEARTBEAT_STALE_SECONDS and not in_grace:
+            return {
+                "ok": False,
+                "detail": f"beat_stale: last_heartbeat={heartbeat} age={round(age)}s (beat/worker down?)",
             }
         return {"ok": True, "detail": f"beat_ok: last_heartbeat={heartbeat}"}
     except Exception as exc:

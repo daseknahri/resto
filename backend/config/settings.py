@@ -263,6 +263,12 @@ CELERY_ACCEPT_CONTENT = ["json"]
 # Beat schedule — only used if you run `celery -A config beat`. Lets Beat own the cron
 # jobs instead of Coolify Scheduled Tasks (either works; don't run both for the same job).
 CELERY_BEAT_SCHEDULE = {
+    # Observability: stamp the cache key /api/health/ reads so a dead beat/worker becomes
+    # visible. Runs every 60s; the probe flags STALE (> 180s) once a broker is configured.
+    "write-beat-heartbeat": {
+        "task": "accounts.tasks.write_beat_heartbeat",
+        "schedule": 60.0,
+    },
     "release-scheduled-orders": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 300.0,  # every 5 min

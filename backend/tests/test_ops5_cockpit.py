@@ -217,6 +217,121 @@ class CeleryCheckTests(SimpleTestCase):
         self.assertTrue(result["ok"])
         self.assertIn("heartbeat key absent", result["detail"])
 
+    def test_broker_configured_heartbeat_absent_past_grace_is_degraded(self):
+        """Once the process is past its startup grace, an ABSENT heartbeat = beat/worker
+        dead → ok=False (degraded). This is the observability fix: worker death is now
+        visible at /api/health/ instead of always reporting ok."""
+        import time as _t
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = None
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertFalse(result["ok"])
+        self.assertIn("beat_down", result["detail"])
+
+    def test_broker_configured_heartbeat_stale_past_grace_is_degraded(self):
+        """A STALE heartbeat (older than the threshold) past the startup grace = beat hung
+        → ok=False."""
+        import time as _t
+        from datetime import timedelta
+        from django.utils.timezone import now as _now
+        stale = (_now() - timedelta(seconds=600)).isoformat()
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = stale
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertFalse(result["ok"])
+        self.assertIn("beat_stale", result["detail"])
+
+    def test_broker_configured_fresh_heartbeat_past_grace_is_ok(self):
+        """A FRESH heartbeat past the grace = beat alive → ok=True."""
+        import time as _t
+        from django.utils.timezone import now as _now
+        fresh = _now().isoformat()
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = fresh
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertTrue(result["ok"])
+        self.assertIn("beat_ok", result["detail"])
+
+    def test_absent_heartbeat_within_grace_is_ok_even_when_broker_set(self):
+        """The grace window prevents a false degraded right after a fresh deploy before the
+        first heartbeat lands: absent key + within grace → ok=True."""
+        import time as _t
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic()):
+            mock_cache.get.return_value = None
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertTrue(result["ok"])
+        self.assertIn("startup grace", result["detail"])
+
+    def test_broker_set_but_locmem_cache_is_ok_not_degraded(self):
+        """A per-process LocMemCache can't carry the cross-process heartbeat (beat writes its
+        own process cache, the web process reads its own), so even with the broker set + key
+        absent past grace, do NOT false-flag beat_down — absence isn't evidence of a dead beat.
+        Guards the SKIP_DEPLOY_CHECK broker-set / Redis-unset emergency single-process edge."""
+        import time as _t
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = None  # would be beat_down with a SHARED cache
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                mock_settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertTrue(result["ok"])
+        self.assertIn("per-process cache", result["detail"])
+
+    def test_no_broker_never_degrades_even_past_grace(self):
+        """CRITICAL contract: dev / no-broker prod-fallback must stay ok regardless of the
+        heartbeat or how long the process has been up."""
+        import time as _t
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = None
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = ""
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertTrue(result["ok"])
+        self.assertIn("celery_off", result["detail"])
+
+
+class WriteBeatHeartbeatTaskTests(SimpleTestCase):
+    """accounts.tasks.write_beat_heartbeat writes the SAME cache key the health probe reads,
+    and the task is registered on the beat schedule every ~60s."""
+
+    def test_task_writes_the_heartbeat_key(self):
+        with patch("django.core.cache.cache") as mock_cache:
+            from accounts.tasks import write_beat_heartbeat
+            write_beat_heartbeat.run()
+        mock_cache.set.assert_called_once()
+        args, kwargs = mock_cache.set.call_args
+        self.assertEqual(args[0], "celery_beat_heartbeat")  # the key /api/health/ reads
+        # timeout well above both the 60s cadence and the 180s staleness threshold.
+        self.assertEqual(kwargs.get("timeout"), 300)
+        self.assertTrue(args[1])  # a non-empty timestamp value
+
+    def test_heartbeat_task_is_on_the_beat_schedule_every_minute(self):
+        from django.conf import settings
+        entry = settings.CELERY_BEAT_SCHEDULE.get("write-beat-heartbeat")
+        self.assertIsNotNone(entry, "write-beat-heartbeat must be in CELERY_BEAT_SCHEDULE")
+        self.assertEqual(entry["task"], "accounts.tasks.write_beat_heartbeat")
+        self.assertAlmostEqual(entry["schedule"], 60.0, delta=1)
+
 
 class ChannelLayerCheckTests(SimpleTestCase):
     """_check_channel_layer probe logic."""

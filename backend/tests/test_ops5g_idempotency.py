@@ -431,6 +431,112 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
         self.assertEqual(replay_kwargs.get("customer_id"), 1)
 
 
+class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
+    """OPS-5h: the client-supplied loyalty idempotency_key is server-namespaced with the
+    tenant schema — f"loyalty:{schema}:{raw}" — at ALL THREE sites (pre-flight read, create,
+    IntegrityError refetch). Without this, the same customer reusing the same client key
+    across two tenants gets the first tenant's row back as a bogus "duplicate" and the
+    second tenant's legitimate redemption is silently refused."""
+
+    RAW = "client-key-xyz"
+    EXPECT = f"loyalty:{SCHEMA}:{RAW}"
+
+    def setUp(self):
+        from menu.views import CustomerLoyaltyRedeemView
+        self.factory = APIRequestFactory()
+        self.view = CustomerLoyaltyRedeemView.as_view()
+
+    def _post(self, customer_id=1):
+        req = self.factory.post(
+            "/api/customer/loyalty/redeem/",
+            {"points": 100, "idempotency_key": self.RAW},
+            format="json",
+        )
+        req.user = MagicMock(is_authenticated=True)
+        req.user.customer_id = customer_id
+        req.user.pk = customer_id
+        return self.view(req)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_preflight_read_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
+        customer = MagicMock(phone_verified=True, loyalty_points=500,
+                             wallet_balance=Decimal("42.00"))
+        customer.id = 1
+        mock_cust.get.return_value = customer
+        mock_cfg.filter.return_value.first.return_value = MagicMock(
+            redeem_threshold=100, points_value=Decimal("0.10"))
+        mock_wt.filter.return_value.first.return_value = MagicMock(
+            amount=Decimal("10.00"), reference="loyalty:100pts")
+
+        resp = self._post(customer_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # The pre-flight replay lookup queries the SCHEMA-NAMESPACED key, not the raw one.
+        read_kwargs = mock_wt.filter.call_args.kwargs
+        self.assertEqual(read_kwargs.get("idempotency_key"), self.EXPECT)
+        self.assertIn(SCHEMA, read_kwargs["idempotency_key"])
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_create_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
+        customer = MagicMock(phone_verified=True, loyalty_points=500,
+                             wallet_balance=Decimal("0.00"))
+        customer.id = 1
+        mock_cust.get.return_value = customer
+        mock_cfg.filter.return_value.first.return_value = MagicMock(
+            redeem_threshold=100, points_value=Decimal("0.10"))
+        mock_wt.filter.return_value.first.return_value = None  # no prior → proceed to create
+
+        locked = MagicMock()
+        locked.loyalty_points = 500
+        locked.wallet_balance = Decimal("0.00")
+        mock_cust.select_for_update.return_value.get.return_value = locked
+
+        with patch("django.db.transaction.atomic"):
+            resp = self._post(customer_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_wt.create.assert_called_once()
+        create_kwargs = mock_wt.create.call_args.kwargs
+        self.assertEqual(create_kwargs.get("idempotency_key"), self.EXPECT)
+        self.assertIn(SCHEMA, create_kwargs["idempotency_key"])
+        # The non-idempotency `reference` field is NOT namespaced (left as the points marker).
+        self.assertEqual(create_kwargs.get("reference"), "loyalty:100pts")
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_integrity_replay_refetch_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
+        from django.db import IntegrityError
+        customer = MagicMock(phone_verified=True, loyalty_points=500,
+                             wallet_balance=Decimal("0.00"))
+        customer.id = 1
+        customer.refresh_from_db = MagicMock()
+        mock_cust.get.return_value = customer
+        mock_cfg.filter.return_value.first.return_value = MagicMock(
+            redeem_threshold=100, points_value=Decimal("0.10"))
+        mock_wt.filter.return_value.first.return_value = None  # pre-flight: no prior
+
+        locked = MagicMock()
+        locked.loyalty_points = 500
+        locked.wallet_balance = Decimal("0.00")
+        mock_cust.select_for_update.return_value.get.return_value = locked
+        mock_wt.create.side_effect = IntegrityError("dupe key")  # concurrent winner took it
+
+        with patch("django.db.transaction.atomic"):
+            resp = self._post(customer_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["duplicate"])
+        # The IntegrityError-handler refetch (the LAST .filter call) uses the namespaced key.
+        refetch_kwargs = mock_wt.filter.call_args.kwargs
+        self.assertEqual(refetch_kwargs.get("idempotency_key"), self.EXPECT)
+        self.assertIn(SCHEMA, refetch_kwargs["idempotency_key"])
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # C. Ride wallet-pay: explicit, recorded cash fallback (no silent flip)
 # ═════════════════════════════════════════════════════════════════════════════

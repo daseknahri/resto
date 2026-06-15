@@ -123,6 +123,22 @@ _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
 })
 
 
+@shared_task(name="accounts.tasks.write_beat_heartbeat", acks_late=True, ignore_result=True)
+def write_beat_heartbeat():
+    """Write a freshness heartbeat that /api/health/ reads to detect a dead beat/worker.
+
+    config.api._check_celery reads the cache key ``celery_beat_heartbeat``; nothing else
+    writes it. Scheduled every ~60s in CELERY_BEAT_SCHEDULE, this stamps the current UTC
+    time so a crashed/hung beat (no writes) lets the key go stale and the health probe flips
+    that subsystem to degraded. The 300s cache timeout is deliberately well above both the
+    60s beat cadence and the 180s staleness threshold the probe applies, so a single missed
+    beat never trips a false alarm. Uses the SAME Django cache the health check reads.
+    """
+    from django.core.cache import cache
+    from django.utils.timezone import now as _now
+    cache.set("celery_beat_heartbeat", _now().isoformat(), timeout=300)
+
+
 @shared_task(name="accounts.tasks.run_management_command", acks_late=True)
 def run_management_command(name, *args, **kwargs):
     """Run a Django management command from Beat (lets Beat own the cron jobs).
