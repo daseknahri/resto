@@ -2580,6 +2580,147 @@ def _promo_badge_from_denorm(promos, now_local=None):
     return None
 
 
+# ── Live (time-sensitive) verdict recompute for the cached listing payload ────
+# The directory/marketplace response is cached whole (see below). The EXPENSIVE
+# work (the SQL query + per-tenant row assembly) is what we want cached — but a
+# handful of CHEAP, time-sensitive verdicts (is_open, promo_badge, flash_sale_active)
+# would otherwise freeze for up to the TTL. To keep them fresh, each cached row also
+# carries the RAW INPUTS those verdicts derive from (under internal "_raw_*" keys),
+# and this pass recomputes the verdicts from CURRENT time on EVERY request — cache
+# hit and fresh build alike — then strips the internal keys from the COPY returned to
+# the client. The cached object keeps its raw inputs so a later hit can recompute too.
+# No DB access here: the recompute is pure in-memory off the cached raw inputs.
+
+# Internal raw-input keys stored on each cached row (stripped before the HTTP response).
+# NOTE: the schedule input is carried under "_raw_schedule" — NOT the public
+# "business_hours_schedule" field — so the recompute is uniform across both views and
+# DirectoryView's response shape stays unchanged (it does not expose business hours).
+# MarketplaceView keeps its own public "business_hours_schedule" field untouched.
+_LIVE_ROW_INTERNAL_KEYS = (
+    "_raw_is_open",
+    "_raw_menu_disabled",
+    "_raw_timezone",
+    "_raw_schedule",
+    "_raw_marketplace_promos",
+    "_raw_opted_flash_ids",
+)
+# Internal top-level key (the active flash-sale windows) stored on the cached payload.
+_LIVE_PAYLOAD_INTERNAL_KEY = "_flash_windows"
+
+
+def _row_local_now(row):
+    """Tenant-local aware ``now`` for a cached row, mirroring openstate.tenant_local_now.
+
+    Resolves the tz via the row's denormalized ``_raw_timezone`` → settings.TIME_ZONE →
+    UTC, with a safe UTC fallback on any error — identical chain to tenant_local_now().
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = (row.get("_raw_timezone") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+        return _dt.now(ZoneInfo(tz_name))
+    except Exception:
+        return _dt.now(_tz.utc)
+
+
+def _is_open_now_from_row(row) -> bool:
+    """DICT-friendly mirror of _compute_is_open_now for a cached row.
+
+    Same rule, same order: manual toggle off → False; menu temporarily disabled →
+    False; else delegate to the SINGLE window rule (openstate.schedule_open_now)
+    against a tenant-local now, falling back to the manual toggle when no schedule
+    is configured (result is None). Verdict is IDENTICAL to _compute_is_open_now for
+    the same instant — this is a freshness fix, not a logic change.
+    """
+    if not row.get("_raw_is_open"):
+        return False
+    if row.get("_raw_menu_disabled"):
+        return False
+    schedule = row.get("_raw_schedule") or None
+    result = schedule_open_now(schedule, _row_local_now(row))
+    return bool(row.get("_raw_is_open")) if result is None else result
+
+
+def _flash_window_is_live(win, now) -> bool:
+    """Mirror PlatformFlashSale.is_live() against a cached window dict + current time.
+
+    Window fields cached at fill time: is_active, active_from, active_until,
+    max_redemptions, redemption_count (exactly what is_live() reads). ``now`` is an
+    aware UTC datetime (timezone.now()-equivalent).
+    """
+    if not win.get("is_active"):
+        return False
+    active_from = win.get("active_from")
+    active_until = win.get("active_until")
+    if active_from is not None and now < active_from:
+        return False
+    if active_until is not None and now > active_until:
+        return False
+    max_redemptions = win.get("max_redemptions")
+    if max_redemptions is not None and (win.get("redemption_count") or 0) >= max_redemptions:
+        return False
+    return True
+
+
+def _refresh_marketplace_live_fields(payload, *, include_promo_flash: bool,
+                                     open_only: bool = False, open_first_sort: bool = False):
+    """Return a response COPY of *payload* with time-sensitive verdicts recomputed NOW.
+
+    Overwrites each row's ``is_open`` (and, when include_promo_flash, ``promo_badge`` +
+    ``flash_sale_active``) from the row's cached raw inputs + the current time, reusing
+    the single-source helpers (no forked rules). Then strips the internal "_raw_*" keys
+    from each row and the top-level "_flash_windows" so they never leak to the client.
+
+    Operates on a deepcopy so the cached object keeps its raw inputs intact for a later
+    cache hit. Pure in-memory — no DB access.
+    """
+    import copy
+    from django.utils import timezone as _dj_tz
+
+    out = copy.deepcopy(payload) if payload else payload
+    if not isinstance(out, dict):
+        return out
+
+    live_ids = set()
+    if include_promo_flash:
+        now_utc = _dj_tz.now()
+        for win in (out.get(_LIVE_PAYLOAD_INTERNAL_KEY) or []):
+            if isinstance(win, dict) and _flash_window_is_live(win, now_utc):
+                live_ids.add(win.get("id"))
+
+    for row in (out.get("restaurants") or []):
+        if not isinstance(row, dict):
+            continue
+        row["is_open"] = _is_open_now_from_row(row)
+        if include_promo_flash:
+            row["promo_badge"] = _promo_badge_from_denorm(
+                row.get("_raw_marketplace_promos"), now_local=_row_local_now(row)
+            )
+            opted = set(row.get("_raw_opted_flash_ids") or [])
+            row["flash_sale_active"] = bool(opted & live_ids)
+        # Strip internal raw inputs from the response copy.
+        for _k in _LIVE_ROW_INTERNAL_KEYS:
+            row.pop(_k, None)
+
+    # Re-apply the verdict-driven filter + sort on the FRESH is_open so the response stays
+    # internally consistent: a row that has CLOSED since cache-fill must drop out of an
+    # ?open=1 list and lose its open-first ranking. Without this the recompute would leave a
+    # now-closed row inside an "open only" response (self-contradictory) or atop the
+    # open-first sort for up to the cache TTL. (Distance-sorted requests pass
+    # open_first_sort=False — distance order is not time-sensitive.) Newly-OPENED rows
+    # cannot be re-added from a filtered cache entry; they appear on the next rebuild/bust.
+    _rows = out.get("restaurants")
+    if isinstance(_rows, list):
+        if open_only:
+            _rows = [r for r in _rows if isinstance(r, dict) and r.get("is_open")]
+        if open_first_sort:
+            _rows.sort(key=lambda r: (not r.get("is_open"), str(r.get("name") or "").lower()))
+        out["restaurants"] = _rows
+
+    out.pop(_LIVE_PAYLOAD_INTERNAL_KEY, None)
+    return out
+
+
 # ── Public listing response cache ─────────────────────────────────────────────
 # The marketplace + directory endpoints are public, param-only, cross-tenant reads
 # (no per-user/per-tenant data in the response), so the whole computed response can
@@ -2646,7 +2787,9 @@ class DirectoryView(APIView):
         _ck = _public_list_cache_key("directory", request)
         _hit = cache.get(_ck)
         if _hit is not None:
-            return Response(_hit)
+            # Recompute the time-sensitive verdict (is_open) live at request time off the
+            # cached raw inputs (no DB), strip internals, then return the fresh copy.
+            return Response(_refresh_marketplace_live_fields(_hit, include_promo_flash=False))
 
         # Materialise the (up-to-100) profile rows once so we can build filter
         # lists from the same data without a second full-table scan.
@@ -2685,14 +2828,24 @@ class DirectoryView(APIView):
                 "rating_average": rating_average,
                 "rating_count": rating_count,
                 "delivery_enabled": bool(profile.delivery_enabled),
+                # Raw inputs for the post-cache is_open recompute (see
+                # _refresh_marketplace_live_fields). All internal ("_raw_*") and stripped
+                # before the HTTP response — the directory payload does NOT expose business
+                # hours, so the schedule rides under _raw_schedule (not a public field).
+                "_raw_is_open": bool(profile.is_open),
+                "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                "_raw_timezone": (getattr(profile, "timezone", "") or ""),
+                "_raw_schedule": profile.business_hours_schedule or {},
             })
 
         cities = sorted(cities_set)
         cuisines = sorted(cuisines_set)
 
         _payload = {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
+        # Cache the payload WITH raw inputs (so a later hit can recompute); return a
+        # COPY with is_open recomputed live and the internal raw inputs stripped.
         cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
-        return Response(_payload)
+        return Response(_refresh_marketplace_live_fields(_payload, include_promo_flash=False))
 
 
 class MarketplaceView(APIView):
@@ -2722,16 +2875,35 @@ class MarketplaceView(APIView):
         cuisine_q = (request.query_params.get("cuisine") or "").strip()
         fulfillment = (request.query_params.get("fulfillment") or "any").strip().lower()
         open_only = request.query_params.get("open") == "1"
+        # lat/lng are parsed BEFORE the cache check so the post-cache recompute knows the
+        # sort mode (distance vs open-first) on a cache hit too — the open-first sort and
+        # the ?open=1 filter both depend on the FRESH is_open, so the refresh pass must
+        # re-apply them (see _refresh_marketplace_live_fields).
+        lat_raw = (request.query_params.get("lat") or "").strip()
+        lng_raw = (request.query_params.get("lng") or "").strip()
+        user_lat = None
+        user_lng = None
+        if lat_raw and lng_raw:
+            try:
+                user_lat = float(lat_raw)
+                user_lng = float(lng_raw)
+            except ValueError:
+                pass
+
         _ck = _public_list_cache_key("marketplace", request)
         _hit = cache.get(_ck)
         if _hit is not None:
-            return Response(_hit)
+            # Recompute time-sensitive verdicts (is_open + promo_badge + flash_sale_active)
+            # live at request time off the cached raw inputs (no DB), re-apply the ?open=1
+            # filter + open-first sort on the fresh verdicts, strip internals, return.
+            return Response(_refresh_marketplace_live_fields(
+                _hit, include_promo_flash=True,
+                open_only=open_only, open_first_sort=(user_lat is None),
+            ))
 
         min_rating_raw = (request.query_params.get("min_rating") or "").strip()
         price_tier_raw = (request.query_params.get("price_tier") or "").strip()
         tags_raw = (request.query_params.get("tags") or "").strip()
-        lat_raw = (request.query_params.get("lat") or "").strip()
-        lng_raw = (request.query_params.get("lng") or "").strip()
 
         min_rating = None
         if min_rating_raw:
@@ -2744,15 +2916,6 @@ class MarketplaceView(APIView):
         if price_tier_raw:
             try:
                 price_tier_filter = int(price_tier_raw)
-            except ValueError:
-                pass
-
-        user_lat = None
-        user_lng = None
-        if lat_raw and lng_raw:
-            try:
-                user_lat = float(lat_raw)
-                user_lng = float(lng_raw)
             except ValueError:
                 pass
 
@@ -2786,12 +2949,25 @@ class MarketplaceView(APIView):
         # Then fetch all currently-active+live flash sales once, as a set of ids.
         opted_map: dict = {}   # tenant_id → set[flash_sale_id]
         live_flash_sale_ids: set = set()
+        # Cache the raw is_live() inputs for each active flash sale so the post-cache
+        # recompute can re-evaluate "live now" at request time (mirrors is_live()).
+        flash_windows: list = []
         try:
             from .models import PlatformFlashSale, PlatformFlashSaleOptIn
             for row in PlatformFlashSaleOptIn.objects.values("tenant_id", "flash_sale_id"):
                 opted_map.setdefault(row["tenant_id"], set()).add(row["flash_sale_id"])
             # Only keep flash sales that are is_active=True AND pass the is_live() check.
             for _fs in PlatformFlashSale.objects.filter(is_active=True):
+                # Carry exactly the fields PlatformFlashSale.is_live() reads, so the
+                # request-time recompute re-derives "live now" without a DB hit.
+                flash_windows.append({
+                    "id": _fs.id,
+                    "is_active": bool(_fs.is_active),
+                    "active_from": _fs.active_from,
+                    "active_until": _fs.active_until,
+                    "max_redemptions": _fs.max_redemptions,
+                    "redemption_count": _fs.redemption_count,
+                })
                 if _fs.is_live():
                     live_flash_sale_ids.add(_fs.id)
         except Exception:
@@ -2896,6 +3072,16 @@ class MarketplaceView(APIView):
                 "flash_sale_active": flash_sale_active,
                 # Exposes schedule so the customer UI can compute "Opens at HH:MM"
                 "business_hours_schedule": profile.business_hours_schedule or {},
+                # Raw inputs for the post-cache live recompute (is_open + promo_badge +
+                # flash_sale_active). All internal ("_raw_*") and stripped before the
+                # HTTP response — do NOT leak marketplace_promos / menu-disabled / opted
+                # flash ids to the client.
+                "_raw_is_open": bool(profile.is_open),
+                "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                "_raw_timezone": (getattr(profile, "timezone", "") or ""),
+                "_raw_schedule": profile.business_hours_schedule or {},
+                "_raw_marketplace_promos": getattr(profile, "marketplace_promos", None),
+                "_raw_opted_flash_ids": sorted(tenant_opted_ids),
             })
 
         if user_lat is not None:
@@ -2910,9 +3096,17 @@ class MarketplaceView(APIView):
                 "cuisines": sorted(cuisines_set),
                 "tags": sorted(all_tags),
             },
+            # Internal: active flash-sale windows for the request-time flash recompute.
+            # Stripped from the HTTP response by _refresh_marketplace_live_fields.
+            _LIVE_PAYLOAD_INTERNAL_KEY: flash_windows,
         }
+        # Cache the payload WITH raw inputs (so a later hit can recompute); return a COPY
+        # with is_open/promo_badge/flash_sale_active recomputed live and internals stripped.
         cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
-        return Response(_payload)
+        return Response(_refresh_marketplace_live_fields(
+            _payload, include_promo_flash=True,
+            open_only=open_only, open_first_sort=(user_lat is None),
+        ))
 
 
 class MarketplaceMenuView(APIView):

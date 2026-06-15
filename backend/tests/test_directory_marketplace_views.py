@@ -45,6 +45,12 @@ def _make_profile(**kwargs):
     p.is_menu_published = True
     p.is_open = True
     p.is_menu_temporarily_disabled = False
+    # Time-sensitive raw inputs carried into the cached payload (must be real, picklable
+    # values — the list-cache pickles the payload). Default: no schedule configured (so
+    # is_open falls back to the manual toggle), UTC tz, no promos.
+    p.timezone = "UTC"
+    p.business_hours_schedule = {}
+    p.marketplace_promos = []
     p.tagline = "Great food"
     p.logo_url = "https://example.com/logo.png"
     p.cuisine_type = "Italian"
@@ -170,28 +176,26 @@ class DirectoryViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_is_open_honors_schedule_like_marketplace(self):
-        """CHANGE 3a: DirectoryView now derives is_open via _compute_is_open_now, so a
-        profile toggled open=True but OUTSIDE its scheduled hours reports is_open=False —
-        identical to MarketplaceView (previously DirectoryView ignored the schedule)."""
-        profile = _make_profile()  # is_open=True
+        """CHANGE 3a: DirectoryView derives is_open via the schedule-aware rule, so a
+        profile that is currently closed reports is_open=False — identical to
+        MarketplaceView. The verdict is recomputed LIVE at request time (post-cache) from
+        the row's raw inputs, so the manual toggle off → False is reflected in the response."""
+        profile = _make_profile(is_open=False)  # manual toggle off → closed
         with patch("tenancy.models.Profile") as mock_p:
             mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
                 _make_sliceable_qs([profile])
-            # Stand in for the schedule-aware, tenant-local evaluation: "currently closed".
-            with patch("accounts.views._compute_is_open_now", return_value=False) as mock_open:
-                resp = self._get()
+            resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(resp.data["restaurants"][0]["is_open"])
-        mock_open.assert_called()  # the view delegates to the shared helper
 
     def test_is_open_true_when_schedule_says_open(self):
-        """The same delegation reports is_open=True when the helper says open."""
-        profile = _make_profile()
+        """The same rule reports is_open=True when the restaurant is open (manual toggle on,
+        no schedule restriction → open). Recomputed live at request time from raw inputs."""
+        profile = _make_profile()  # is_open=True, empty schedule → open
         with patch("tenancy.models.Profile") as mock_p:
             mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
                 _make_sliceable_qs([profile])
-            with patch("accounts.views._compute_is_open_now", return_value=True):
-                resp = self._get()
+            resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["restaurants"][0]["is_open"])
 
@@ -322,10 +326,19 @@ class MarketplaceViewTests(SimpleTestCase):
                             optin_m.objects.values.return_value = [
                                 {"tenant_id": 42, "flash_sale_id": 7}
                             ]
-                            # Live flash sale with id=7
+                            # Live flash sale with id=7. Carry REAL is_live() inputs
+                            # (datetimes + ints) — the view caches these into the payload's
+                            # flash window for the request-time recompute, and they must be
+                            # picklable + comparable to now.
+                            from django.utils import timezone as _tz
+                            from datetime import timedelta as _td
                             live_fs = MagicMock()
                             live_fs.id = 7
                             live_fs.is_active = True
+                            live_fs.active_from = _tz.now() - _td(hours=1)
+                            live_fs.active_until = _tz.now() + _td(hours=1)
+                            live_fs.max_redemptions = None
+                            live_fs.redemption_count = 0
                             live_fs.is_live.return_value = True
                             fs_m = MagicMock()
                             fs_m.objects.filter.return_value = [live_fs]
@@ -404,6 +417,263 @@ class MarketplaceViewTests(SimpleTestCase):
             self._empty_qs_mock(mock_p)
             resp = self._with_flash_patches(self._get, params={"tags": "halal,vegetarian"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+# ── Post-cache live-verdict recompute (freshness fix) ─────────────────────────
+# The list-cache freezes the whole response for the TTL, but is_open / promo_badge /
+# flash_sale_active are time-sensitive. _refresh_marketplace_live_fields recomputes
+# those off the cached RAW inputs at request time (no DB), strips the internal raw
+# inputs, and never mutates the cached object. These tests prove: a cached payload
+# yields FLIPPED verdicts at a later "now" while matching at fill-time, and no internal
+# raw-input keys leak to the client.
+
+class RefreshLiveFieldsTests(SimpleTestCase):
+    """Unit tests for accounts.views._refresh_marketplace_live_fields."""
+
+    def _schedule_open_0900_1700(self):
+        # All days enabled 09:00–17:00 so the only variable is the clock.
+        day = {"enabled": True, "open": "09:00", "close": "17:00"}
+        return {k: dict(day) for k in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
+
+    def _cached_marketplace_payload(self):
+        """A cache-FILLED marketplace payload (rows carry raw inputs + top-level windows)."""
+        from django.utils import timezone as _tz
+        from datetime import timedelta as _td
+        return {
+            "restaurants": [{
+                "slug": "bistro", "name": "Bistro", "is_open": True,
+                "promo_badge": None, "flash_sale_active": False,
+                "business_hours_schedule": self._schedule_open_0900_1700(),
+                # internal raw inputs
+                "_raw_is_open": True,
+                "_raw_menu_disabled": False,
+                "_raw_timezone": "UTC",
+                "_raw_schedule": self._schedule_open_0900_1700(),
+                "_raw_marketplace_promos": [
+                    # No date/day/time restriction → live whenever (matches the promo
+                    # windowing rule in menu.promos: blank bounds = unbounded/all-day).
+                    {"promo_type": "percentage", "discount_value": 20,
+                     "active_from": None, "active_until": None,
+                     "days": [], "time_start": None, "time_end": None},
+                ],
+                "_raw_opted_flash_ids": [7],
+            }],
+            "filters": {"cities": [], "cuisines": [], "tags": []},
+            "_flash_windows": [{
+                "id": 7, "is_active": True,
+                "active_from": _tz.now() - _td(hours=1),
+                "active_until": _tz.now() + _td(hours=1),
+                "max_redemptions": None, "redemption_count": 0,
+            }],
+        }
+
+    def test_is_open_recompute_flips_with_clock_cache_unchanged(self):
+        """(a) Crossing the schedule boundary flips is_open; the cached object is unchanged."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from accounts import views
+
+        payload = self._cached_marketplace_payload()
+
+        # Inside hours → open.
+        with patch.object(views, "_row_local_now",
+                          return_value=datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("UTC"))):
+            open_resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertTrue(open_resp["restaurants"][0]["is_open"])
+
+        # Same cached payload, later clock (after close) → closed (FLIPPED).
+        with patch.object(views, "_row_local_now",
+                          return_value=datetime(2026, 6, 15, 18, 0, tzinfo=ZoneInfo("UTC"))):
+            closed_resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertFalse(closed_resp["restaurants"][0]["is_open"])
+
+        # The cached payload itself was NOT mutated: raw inputs intact, is_open untouched.
+        self.assertEqual(payload["restaurants"][0]["_raw_is_open"], True)
+        self.assertEqual(payload["restaurants"][0]["is_open"], True)  # original fill-time value
+        self.assertIn("_flash_windows", payload)  # top-level internal still on the cache
+
+    def test_promo_and_flash_recompute_at_request_time(self):
+        """(b) promo_badge + flash_sale_active recompute live and FLIP with the clock."""
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+        from django.utils import timezone as _tz
+        from accounts import views
+
+        payload = self._cached_marketplace_payload()
+
+        # Promo has no date/time restriction → active now → badge present.
+        with patch.object(views, "_row_local_now",
+                          return_value=datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("UTC"))):
+            resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertEqual(resp["restaurants"][0]["promo_badge"], "20% off")
+        self.assertTrue(resp["restaurants"][0]["flash_sale_active"])  # window live now, opted into 7
+
+        # Move "now" past the flash window's active_until → flash flips OFF.
+        future = _tz.now() + timedelta(days=2)
+        with patch.object(views, "_row_local_now",
+                          return_value=datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("UTC"))):
+            with patch("django.utils.timezone.now", return_value=future):
+                resp2 = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertFalse(resp2["restaurants"][0]["flash_sale_active"])
+
+    def test_open_filter_and_sort_reapplied_on_fresh_verdict(self):
+        """(e) After recompute, ?open=1 drops rows that have closed since cache-fill, and the
+        open-first sort reorders on the FRESH is_open — so an open-only response never
+        contains a closed row, and a now-closed row never keeps its top slot."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from accounts import views
+
+        def _row(name, schedule):
+            return {
+                "slug": name.lower(), "name": name, "is_open": True,
+                "_raw_is_open": True, "_raw_menu_disabled": False,
+                "_raw_timezone": "UTC", "_raw_schedule": schedule,
+            }
+
+        payload = {
+            "restaurants": [
+                _row("AClosed", self._schedule_open_0900_1700()),  # closed at 18:00
+                _row("BOpen", {}),                                  # no schedule → open via raw is_open
+            ],
+            "filters": {"cities": [], "cuisines": [], "tags": []},
+        }
+        at_1800 = datetime(2026, 6, 15, 18, 0, tzinfo=ZoneInfo("UTC"))
+
+        # open-first sort: the open row ranks above the now-closed one (which alphabetically
+        # would sort first), proving the sort keys off the RECOMPUTED verdict.
+        with patch.object(views, "_row_local_now", return_value=at_1800):
+            sorted_resp = views._refresh_marketplace_live_fields(
+                payload, include_promo_flash=False, open_first_sort=True)
+        self.assertEqual([r["name"] for r in sorted_resp["restaurants"]], ["BOpen", "AClosed"])
+
+        # ?open=1 filter: the now-closed row is dropped — never returned inside an open-only list.
+        with patch.object(views, "_row_local_now", return_value=at_1800):
+            open_only_resp = views._refresh_marketplace_live_fields(
+                payload, include_promo_flash=False, open_only=True)
+        self.assertEqual([r["name"] for r in open_only_resp["restaurants"]], ["BOpen"])
+        self.assertTrue(all(r["is_open"] for r in open_only_resp["restaurants"]))
+
+    def test_recompute_matches_fill_time_computation_same_instant(self):
+        """(c) At now == fill-time, the recompute verdict EQUALS the fill-time helpers."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from accounts import views
+
+        # Build a profile-shaped object the FILL-TIME helper consumes.
+        prof = SimpleNamespace(
+            is_open=True,
+            is_menu_temporarily_disabled=False,
+            timezone="UTC",
+            business_hours_schedule=self._schedule_open_0900_1700(),
+        )
+        instant = datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("UTC"))
+
+        # Fill-time verdict via the canonical helper at this instant.
+        with patch("accounts.views.tenant_local_now", return_value=instant):
+            fill_open = views._compute_is_open_now(prof)
+
+        # Recompute verdict on the cached row at the SAME instant.
+        payload = self._cached_marketplace_payload()
+        with patch.object(views, "_row_local_now", return_value=instant):
+            resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertEqual(resp["restaurants"][0]["is_open"], fill_open)
+
+        # And after close, both agree on closed.
+        after = datetime(2026, 6, 15, 20, 0, tzinfo=ZoneInfo("UTC"))
+        with patch("accounts.views.tenant_local_now", return_value=after):
+            fill_closed = views._compute_is_open_now(prof)
+        with patch.object(views, "_row_local_now", return_value=after):
+            resp2 = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        self.assertEqual(resp2["restaurants"][0]["is_open"], fill_closed)
+        self.assertFalse(fill_closed)
+
+    def test_no_internal_raw_inputs_leak_into_response(self):
+        """(d) The response rows + payload carry NO internal raw-input keys."""
+        from accounts import views
+        payload = self._cached_marketplace_payload()
+        resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=True)
+        row = resp["restaurants"][0]
+        for leak in ("_raw_is_open", "_raw_menu_disabled", "_raw_timezone", "_raw_schedule",
+                     "_raw_marketplace_promos", "_raw_opted_flash_ids"):
+            self.assertNotIn(leak, row)
+        self.assertNotIn("_flash_windows", resp)
+        # business_hours_schedule IS a public marketplace field → kept.
+        self.assertIn("business_hours_schedule", row)
+
+    def test_directory_recompute_only_touches_is_open_and_strips_internals(self):
+        """DirectoryView path (include_promo_flash=False): is_open recomputed, internals
+        stripped, no promo/flash keys introduced, schedule NOT leaked (directory shape)."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from accounts import views
+
+        payload = {
+            "restaurants": [{
+                "slug": "bistro", "name": "Bistro", "is_open": True,
+                "_raw_is_open": True, "_raw_menu_disabled": False,
+                "_raw_timezone": "UTC", "_raw_schedule": self._schedule_open_0900_1700(),
+            }],
+            "filters": {"cities": [], "cuisines": []},
+        }
+        with patch.object(views, "_row_local_now",
+                          return_value=datetime(2026, 6, 15, 18, 0, tzinfo=ZoneInfo("UTC"))):
+            resp = views._refresh_marketplace_live_fields(payload, include_promo_flash=False)
+        row = resp["restaurants"][0]
+        self.assertFalse(row["is_open"])  # after close → flipped to closed
+        self.assertNotIn("promo_badge", row)
+        self.assertNotIn("flash_sale_active", row)
+        for leak in ("_raw_is_open", "_raw_menu_disabled", "_raw_timezone", "_raw_schedule"):
+            self.assertNotIn(leak, row)
+        # DirectoryView does not expose business hours.
+        self.assertNotIn("business_hours_schedule", row)
+
+    def test_cache_hit_path_recomputes_without_db(self):
+        """End-to-end: a SECOND request (cache hit) recomputes is_open live from the cached
+        payload — proving the cache-hit return path runs the recompute pass, no DB needed."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        profile = _make_profile()
+        profile.is_open = True
+        profile.timezone = "UTC"
+        profile.business_hours_schedule = self._schedule_open_0900_1700()
+
+        factory = APIRequestFactory()
+        view = MarketplaceView.as_view()
+
+        def _do_get():
+            req = factory.get("/api/marketplace/", {})
+            req.user = _anon()
+            return view(req)
+
+        cache.clear()
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: [profile]
+            optin_m = MagicMock(); optin_m.objects.values.return_value = []
+            fs_m = MagicMock(); fs_m.objects.filter.return_value = []
+            with patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
+                    patch("accounts.models.PlatformFlashSale", fs_m):
+                # First request inside hours → fresh build + cache.set; is_open True.
+                with patch("accounts.views._row_local_now",
+                           return_value=datetime(2026, 6, 15, 12, 0, tzinfo=ZoneInfo("UTC"))):
+                    r1 = _do_get()
+                self.assertTrue(r1.data["restaurants"][0]["is_open"])
+
+                # Second request (CACHE HIT — Profile NOT re-queried): after close → False.
+                mock_p.objects.filter.reset_mock()
+                with patch("accounts.views._row_local_now",
+                           return_value=datetime(2026, 6, 15, 18, 0, tzinfo=ZoneInfo("UTC"))):
+                    r2 = _do_get()
+                self.assertFalse(r2.data["restaurants"][0]["is_open"])
+                # Cache hit did NO new Profile query.
+                self.assertFalse(mock_p.objects.filter.called)
+                # Response carries no internal raw inputs.
+                self.assertNotIn("_raw_is_open", r2.data["restaurants"][0])
+                self.assertNotIn("_flash_windows", r2.data)
 
 
 # ── MarketplaceMenuView ───────────────────────────────────────────────────────

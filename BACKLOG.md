@@ -707,11 +707,28 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       emits JSON-LD opening hours verbatim with no shared contract with businessHours.js / openstate; lower
       severity (publishes raw weekly hours, can't drift on the clock) but must be hand-synced if the schedule
       shape evolves. [scout open-state] (marginal)
-- [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
-      computed at fill time then cached 90s (accounts/views.py:2868-2876,2902-2921), so the request-time
-      windowing the promo-N+1 batch built buys nothing while the payload is cached: a promo/flash sale that
-      goes live or expires mid-window only flips after the TTL. Bounded by 90s; fix = shorten TTL for
-      time-sensitive fields or compute badge/flash post-cache. (accounts/views.py). [scout denorm-coherence]
+- [x] **Time-windowed is_open/promo_badge/flash baked into the 90s cache — DONE (marketplace-live-fields batch)** —
+      DirectoryView + MarketplaceView now cache the EXPENSIVE work (SQL + per-tenant assembly) but recompute the
+      time-sensitive verdicts (is_open, +promo_badge/flash_sale_active for marketplace) on EVERY request from raw
+      inputs carried in the cached payload, via _refresh_marketplace_live_fields (deepcopy → no cache mutation;
+      pure in-memory → no cache-hit DB; internal _raw_* keys stripped from the response). Reuses the single-source
+      helpers (openstate.schedule_open_now / _promo_badge_from_denorm / is_live mirror). **Scout caught two
+      follow-on bugs I fixed in the same batch: the recompute made is_open fresh but the ?open=1 FILTER + open-first
+      SORT were still frozen → a now-closed row could sit inside an "open only" list (self-contradictory) or keep a
+      top slot; the refresh pass now re-applies both on the fresh verdict** (open_only filter + open-first sort,
+      threaded from the view; distance-sorted requests skip the re-sort). New RefreshLiveFieldsTests (7).
+      Backend 3866/0. (accounts/views.py). [scout denorm-coherence + scout marketplace-live-fields]
+- [ ] **/api/meta/ bakes in is_open_now (300s) — same staleness, different surface (NEXT)** — TenantMetaView
+      (tenancy/api.py:228-236) returns the cached serializer payload verbatim; ProfileSerializer.is_open_now is
+      computed at fill time + frozen for _META_CACHE_TTL=300s, busted only on a Profile save (not on time passage).
+      So the customer menu/meta page can disagree with the marketplace card (now request-time-fresh) for up to 5
+      min. Fix = recompute is_open_now off raw inputs on the meta cache-hit path, or compute it post-cache.
+      (tenancy/api.py:228; tenancy/serializers.py:321). [scout marketplace-live-fields]
+- [ ] **Promo-badge fill-time tz fallback forks from the recompute fallback (nit, latent)** — MarketplaceView fill
+      loop resolves the promo clock as ZoneInfo(profile.timezone or "UTC") (skips settings.TIME_ZONE) while the
+      post-cache recompute uses the tenant_local_now chain (timezone → settings.TIME_ZONE → UTC). Harmless today
+      (recompute overwrites the fill-time promo_badge; TIME_ZONE="UTC" so they coincide) but align the fill clock if
+      TIME_ZONE ever changes. (accounts/views.py promo fill). [scout marketplace-live-fields] (nit)
 - [x] **Recompute/bust on EVERY bounded-promo redemption — DONE (denorm-coherence batch)** — the checkout
       cap-strip now refresh_from_db's the post-increment use_count and only recompute_tenant_promos (which
       busts the GLOBAL list cache) when the redemption crosses the cap, not on every below-cap order.
@@ -810,6 +827,15 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] marketplace-live-fields "recompute is_open/promo_badge/flash_sale_active POST-cache" (verified by me,
+      backend 3866/0, migrations clean, reviewer PASS — verified the #1 risk, no cache-object mutation: the refresh
+      deepcopies, so a 2nd cache hit recomputes off intact raw inputs). The directory/marketplace listings cache the
+      expensive SQL+assembly but recompute the time-sensitive verdicts on every request from cached raw inputs (no
+      cache-hit DB; _raw_* stripped from the response). **The scout caught two follow-on defects the reviewer missed
+      — the fresh is_open vs the FROZEN ?open=1 filter + open-first sort (a now-closed row could sit in an open-only
+      list or keep a top slot) — which I fixed in the same commit: the refresh pass re-applies the filter + sort on
+      the recomputed verdict (threaded open_only + open_first_sort from the view).** New RefreshLiveFieldsTests (7).
+      Scout → /api/meta/ is_open_now (300s) same-class staleness triaged as next. — marketplace-live-fields commit.
 - [x] frontend-open-state "one isRestaurantOpenNow(profile) verdict consuming server is_open_now" (verified by
       me, frontend gates all green: verify:i18n clean, lint clean, test 103/103, build OK; reviewer approve-with-
       1-major which the fix phase resolved). New businessHours.js isRestaurantOpenNow (is_open_now-first, graceful
