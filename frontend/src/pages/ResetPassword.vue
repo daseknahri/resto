@@ -22,7 +22,7 @@
         </div>
       </section>
 
-      <main>
+      <div>
         <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
           <div class="space-y-2 text-center">
             <p class="ui-kicker">{{ t("resetPassword.kicker") }}</p>
@@ -96,7 +96,7 @@
             >{{ t("resetPassword.signInLink") }}</RouterLink>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   </div>
 </template>

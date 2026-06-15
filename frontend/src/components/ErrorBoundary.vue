@@ -1,13 +1,17 @@
 <template>
   <slot v-if="!hasError" />
-  <div
+  <main
     v-else
-    class="flex min-h-screen flex-col items-center justify-center px-4 py-10"
-    role="alert"
-    aria-labelledby="eb-title"
+    id="main-content"
+    ref="errorMain"
+    tabindex="-1"
+    class="flex min-h-screen flex-col items-center justify-center px-4 py-10 focus:outline-none"
   >
-    <!-- Centered glass card -->
-    <div class="ui-glass ui-reveal w-full max-w-md p-8 text-center">
+    <!-- The <main> is the landmark + skip/focus target so the error state keeps the
+         same landmark contract as every routed page. focusGuard can't help here (an
+         error is not a route navigation), so we focus it programmatically on error.
+         role="alert" lives on the card below (the live message), not on the landmark. -->
+    <div class="ui-glass ui-reveal w-full max-w-md p-8 text-center" role="alert" aria-labelledby="eb-title">
       <!-- Icon -->
       <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
         <svg
@@ -55,17 +59,18 @@
         <pre class="mt-2 overflow-auto rounded-xl border border-red-500/20 bg-slate-950/70 p-3 text-start text-xs text-red-300">{{ errorMessage }}</pre>
       </details>
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>
-import { onErrorCaptured, ref } from "vue";
+import { onErrorCaptured, ref, nextTick } from "vue";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
 
 const hasError = ref(false);
 const errorMessage = ref("");
+const errorMain = ref(null);
 const isDev = import.meta.env.DEV;
 
 onErrorCaptured((err) => {
@@ -73,6 +78,10 @@ onErrorCaptured((err) => {
   errorMessage.value = err instanceof Error
     ? `${err.name}: ${err.message}\n\n${err.stack || ""}`
     : String(err);
+  // Move focus to the error landmark — an error is not a route navigation, so the
+  // router focus guard never fires here; without this a keyboard/SR user is left
+  // parked on the now-unmounted page with no landmark to navigate to.
+  nextTick(() => errorMain.value?.focus());
   // Do NOT return false — let Sentry's app.config.errorHandler also receive it.
 });
 

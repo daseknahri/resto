@@ -1,7 +1,6 @@
 <template>
-  <main
+  <div
     class="flex min-h-dvh items-center justify-center px-4 py-12"
-    aria-labelledby="not-found-heading"
   >
     <div class="flex w-full max-w-sm flex-col items-center gap-8 text-center">
 
@@ -40,7 +39,6 @@
       >
         <p class="ui-kicker">{{ t('notFound.kicker') }}</p>
         <h1
-          id="not-found-heading"
           class="ui-page-title"
         >
           {{ t('notFound.title') }}
@@ -96,7 +94,7 @@
       </p>
 
     </div>
-  </main>
+  </div>
 </template>
 
 <script setup>

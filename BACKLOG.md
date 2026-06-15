@@ -757,13 +757,28 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       busts the GLOBAL list cache) when the redemption crosses the cap, not on every below-cap order.
       (menu/views.py:2606). [scout denorm-coherence + reviewer minor]
 
-### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb all DONE; see Done section)
-Residual (small, pre-existing, out of the shipped scope):
-- [ ] **Standalone routes have no skip-link / focusable <main>** — /signin, /forgot-password, /activate,
-      /reset-password, /unauthorized, the 404, and /admin-* render no layout, so they have neither a
-      skip-link target nor a focusable #main-content (the route-focus guard correctly no-ops there). Extend
-      WCAG 2.4.3 to them via a minimal shared layout that carries #main-content + the skip-link, or add the
-      landmark to those templates. Pre-existing; low traffic. [scout OPS-6c-followup]
+### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb + standalone-routes all DONE)
+- [x] **Standalone routes skip-link / focusable <main> — DONE (a11y-standalone-routes batch)** — new
+      frontend/src/layouts/PlainLayout.vue (chrome-less layout = skip-link + <main id="main-content" tabindex="-1">,
+      reusing common.skipToMain) now wraps every no-layout route via the router parent-route mechanism: /signin,
+      /waiter/join, /forgot-password, /reset-password, /unauthorized, /activate, the 8 /admin-* pages, and the 404.
+      The 4 pages that shipped their own <main> (Activate/ResetPassword/Unauthorized/NotFound) had it demoted to
+      <div> so each rendered page has exactly ONE main (focusGuard now lands there). **Scout-caught + folded in:
+      ErrorBoundary's error fallback had NO main/skip target either (the one remaining instance) → wrapped it in
+      <main id="main-content" tabindex="-1"> + focus-on-error (an error isn't a route nav, so focusGuard can't fire).**
+      New PlainLayout.test.js (4) + ErrorBoundary.test.js; removed 2 now-orphaned heading ids (NotFound/Unauthorized).
+      Frontend gates green (lint, 124 tests, i18n, build). [scout OPS-6c-followup]
+
+### FRONTEND CACHE/DRY — DEFERRED (assessed, low value; documented rather than refactored)
+- [ ] **Menu list cache bakes happy-hour effective_price/ends_at (60s) — DEFER (cosmetic)** — same recompute-
+      post-cache class as is_open, BUT checkout is LIVE-priced (menu/pricing.py applies happy-hour at order time on
+      all 3 placement paths), so the 60s menu-list display lag never mis-charges — it's cosmetic. Recompute-post-cache
+      would touch the nested menu hot path for ~zero money impact; NOT worth the risk pre-launch. Accept the 60s drift
+      (or shorten the menu TTL) if it ever matters. (menu/views.py:425; menu/serializers.py:330). [scout meta-live-isopen]
+- [ ] **useSeoMeta.js openingHoursSpecification is a 5th schedule parser — DEFER (not a bug)** — emits correct RAW
+      weekly hours (no clock-drift), just doesn't share the openstate/businessHours contract. Pure DRY; refactoring
+      structured-data carries its own risk for zero user-facing gain. Consolidate only if the schedule shape evolves.
+      (useSeoMeta.js:222). [scout open-state] (marginal)
 
 ### EMAIL-PROGRAM HARDENING — REQUIRED BEFORE SENDING MARKETING EMAIL AT SCALE (scout B1 cluster)
 B1 added email to win-back + campaigns (reaches the email-having majority). Before this sends real
@@ -850,6 +865,14 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] a11y-standalone-routes "skip-link + focusable <main> on the no-layout routes + ErrorBoundary landmark"
+      (verified by me, frontend gates green: lint clean, 124 tests, i18n complete, build OK; reviewer SHIP, no
+      blocking). New PlainLayout.vue (chrome-less skip-link + <main id=main-content tabindex=-1>, reuses
+      common.skipToMain) wraps all standalone routes (signin/waiter-join/forgot/reset/unauthorized/activate/8×admin/
+      404) via the router parent-route mechanism; 4 pages' inner <main> demoted to <div> for single-main. Scout
+      caught the last landmark gap — ErrorBoundary's error fallback had no main/skip target → wrapped in <main
+      id=main-content tabindex=-1> + focus-on-error. New PlainLayout.test.js + ErrorBoundary.test.js; 2 orphaned
+      heading ids removed. — a11y-standalone-routes commit.
 - [x] frontend-closed-deadend "block dine-in add-to-cart when closed; steer pickup/delivery to order-ahead;
       preserve scheduling" (THE owner's chosen item; verified by me, frontend gates green: verify:i18n + lint clean,
       119 tests, build OK). New businessHours.js canAddToCartNow / canPlaceImmediateOrderNow /

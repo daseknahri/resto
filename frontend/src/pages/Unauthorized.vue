@@ -1,7 +1,6 @@
 <template>
-  <main
+  <div
     class="ui-auth-page flex items-center"
-    aria-labelledby="unauthorized-heading"
   >
     <div class="ui-auth-stage">
       <!-- ── Left spotlight column (desktop only) ───────────────── -->
@@ -51,7 +50,6 @@
           <div class="space-y-1">
             <p class="ui-kicker">{{ t("unauthorized.kicker") }}</p>
             <h1
-              id="unauthorized-heading"
               class="ui-display text-2xl font-semibold text-white"
             >
               {{ t("unauthorized.title") }}
@@ -103,7 +101,7 @@
         </nav>
       </div>
     </div>
-  </main>
+  </div>
 </template>
 
 <script setup>

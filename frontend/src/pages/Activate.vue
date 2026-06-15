@@ -1,6 +1,6 @@
 <template>
   <div class="ui-auth-page flex items-center">
-    <main class="ui-auth-stage">
+    <div class="ui-auth-stage">
       <section class="ui-auth-spotlight relative space-y-6" aria-labelledby="activate-spotlight-heading">
         <div class="relative space-y-3">
           <span class="ui-chip-strong w-fit">{{ t("activateAccount.kicker") }}</span>
@@ -93,7 +93,7 @@
           </form>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
