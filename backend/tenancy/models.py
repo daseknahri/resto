@@ -476,6 +476,12 @@ class Profile(models.Model):
                 fields=["directory_opt_in", "is_menu_published"],
                 name="profile_marketplace_idx",
             ),
+            # B8 pushes the min_rating filter to SQL as rating_avg__gte on top of the
+            # same two discoverability flags; this composite backs that filtered scan.
+            models.Index(
+                fields=["directory_opt_in", "is_menu_published", "rating_avg"],
+                name="profile_marketplace_rate_idx",
+            ),
         ]
 
     def __str__(self) -> str:

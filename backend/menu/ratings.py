@@ -49,6 +49,14 @@ def recompute_tenant_rating(tenant) -> None:
                 rating_avg=avg,
                 rating_count=cnt,
             )
+
+        # The public marketplace/directory listing caches its (cross-tenant) response
+        # keyed by a global version. Bump it so the new rating shows immediately
+        # instead of waiting out the list-cache TTL. Imported lazily to avoid an
+        # import cycle (menu must not import accounts at module load). Best-effort —
+        # a bust failure must never break the rating save.
+        from accounts.views import _bust_public_list_cache
+        _bust_public_list_cache()
     except Exception:
         # Denormalization is best-effort — never break a rating save/delete over it.
         logger.exception(

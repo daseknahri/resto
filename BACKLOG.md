@@ -602,15 +602,14 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       Promotion. Batch it before the loop (like the flash-sale opted_map at 2736-2747) OR denormalize an
       active-promo flag/badge onto the public Profile (like rating_avg). The DirectoryView loop is now pure
       in-memory; MarketplaceView is not until this lands. [scout B8] **(the remaining N+1)**
-- [ ] **90s marketplace/directory list cache never invalidated on a rating change** — recompute_tenant_rating
-      updates the public Profile but the list responses (directory:v1 / marketplace:v1, 90s TTL, key hashed
-      over all params) aren't busted, so a new rating shows only by TTL expiry. Reuse the versioned-bust
-      pattern (_bust_menu_cache, menu/views.py:90-99) — bump a list-cache version on rating change.
-      (accounts/views.py:2558-2563/2643/2857; menu/ratings.py). [scout B8]
-- [ ] **No index for the min_rating SQL filter** — B8 pushed min_rating to qs.filter(rating_avg__gte=...)
-      but migration 0041 added rating_avg/rating_count with no index. Add a composite/partial index
-      (directory_opt_in, is_menu_published, rating_avg) for scale. (tenancy/migrations/0041; models.py:470).
-      [scout B8]
+- [x] **90s list cache busted on rating change — DONE (B8-followup scale)** — _public_list_cache_key now
+      embeds a GLOBAL version (public_list_ver); _bust_public_list_cache() (mirrors _bust_menu_cache) is
+      called from recompute_tenant_rating after the Profile update, so a new rating refreshes the directory/
+      marketplace listing immediately. (accounts/views.py; menu/ratings.py). NOTE: opt-in/out + publish
+      toggles also change the listing and could bump the same version — small follow-up if wanted.
+- [x] **min_rating index — DONE (B8-followup scale)** — composite profile_marketplace_rate_idx
+      (directory_opt_in, is_menu_published, rating_avg) on Profile.Meta (tenancy/0042) backs the B8
+      min_rating SQL filter.
 - [~] **Denorm drift** — the owner-reply unnecessary-recompute half is FIXED (effd9f3+: the Rating post_save
       handler now early-returns when update_fields excludes 'score', so owner-reply saves skip the cross-schema
       recompute). RESIDUAL: out-of-ORM writes (admin bulk-edit / .update(score=) / raw SQL / DB restore) still
@@ -710,6 +709,14 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B8-followup scale "list-cache bust on rating + min_rating index" (verified by me, backend 3774/0,
+      migrations clean, reviewer 0 findings): the public marketplace/directory list cache is now bustable —
+      _public_list_cache_key embeds a GLOBAL version (public_list_ver) and _bust_public_list_cache()
+      (mirrors _bust_menu_cache: incr + ValueError-seed, best-effort) is called from recompute_tenant_rating
+      after the public Profile update (lazy import to avoid the menu→accounts cycle), so a new rating
+      refreshes the listing immediately instead of after the 90s TTL; + composite index
+      profile_marketplace_rate_idx (directory_opt_in, is_menu_published, rating_avg) (tenancy/0042) backing
+      the min_rating filter. New test_b8followup_scale.py. — b8followup-scale commit.
 - [x] B1-followup "email List-Unsubscribe + one-click unsubscribe" (compliance gate for the B1 email
       feature; verified by me, backend 3762/0, migrations clean): send_marketing_email switched send_mail →
       EmailMessage carrying RFC 8058 List-Unsubscribe (https one-click endpoint + mailto fallback) +

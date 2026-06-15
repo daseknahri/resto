@@ -2557,13 +2557,31 @@ def _is_promo_active_now(promo) -> bool:
 # (no per-user/per-tenant data in the response), so the whole computed response can
 # be cached by query-param hash — turning the O(N_tenants) per-request work into a
 # single cache GET for everyone with the same params. A short TTL keeps it fresh
-# without explicit invalidation (opt-in/out or a new rating shows within the window).
+# without explicit invalidation (opt-in/out or a new rating shows within the window),
+# but a GLOBAL version counter also lets writes bust it immediately: a denormalized
+# rating change (B8) bumps the version so the directory/marketplace listing refreshes
+# right away instead of waiting out the TTL. The listing is cross-tenant, so the
+# version is GLOBAL (one counter for all tenants), mirroring menu/views._bust_menu_cache.
 _PUBLIC_LIST_TTL = 90  # seconds
+_PUBLIC_LIST_VER_KEY = "public_list_ver"
 
 
 def _public_list_cache_key(prefix, request):
+    ver = cache.get(_PUBLIC_LIST_VER_KEY) or 1
     parts = sorted(request.query_params.urlencode().split("&"))
-    return f"{prefix}:v1:{hashlib.md5('&'.join(parts).encode()).hexdigest()}"
+    return f"{prefix}:v{ver}:{hashlib.md5('&'.join(parts).encode()).hexdigest()}"
+
+
+def _bust_public_list_cache() -> None:
+    """Increment the global version counter, orphaning all existing list-cache entries.
+
+    Best-effort: a bust failure must never break the caller (e.g. a rating save).
+    """
+    try:
+        cache.incr(_PUBLIC_LIST_VER_KEY)
+    except ValueError:
+        # Key missing (LocMemCache raises ValueError; Redis raises ResponseError).
+        cache.set(_PUBLIC_LIST_VER_KEY, 2, timeout=None)
 
 
 class DirectoryView(APIView):
