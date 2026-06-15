@@ -685,11 +685,11 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
 - [x] **Marketplace / Directory / MarketplaceMenuPage — NON-GAP (verified by scout)** — their raw-looking is_open
       is ALREADY the server-computed verdict (_compute_is_open_now, accounts/views.py:2666/2819/3088); do NOT waste
       a change "repointing" them to isRestaurantOpenNow (the list payload has no is_open_now field). [scout frontend-open-state]
-- [ ] **CustomerLayout storefront banner still on RAW is_open — the MOST VISIBLE miss (ROUND 2)** —
-      CustomerLayout.vue:221 tenantNotice closed branch tests `profile.is_open === false`, not isRestaurantOpenNow;
-      this strip renders on EVERY customer route (role=status) and is the de-facto closed indicator on CategoryPage
-      (which has no header). 1-line fix: import isRestaurantOpenNow + gate the closed branch on it.
-      (CustomerLayout.vue:221). [scout frontend-open-state] **(most-visible surface)**
+- [x] **CustomerLayout storefront banner — DONE (frontend-open-state-followup)** — CustomerLayout.vue tenantNotice
+      closed branch now tests `!isRestaurantOpenNow(profile)` (was raw `profile.is_open === false`), so the
+      storefront-wide closed banner (renders on EVERY customer route, role=status; the de-facto closed indicator on
+      CategoryPage which has no header) agrees with the Menu/MenuSelect/Cart headers. temp-disable still handled by
+      its own branch above. Frontend gates green. [scout frontend-open-state]
 - [ ] **Add-to-cart→checkout-409 DEAD-END — the real UX bug (ROUND 2)** — CategoryPage.vue:272 quickAddDisabled +
       DishPage.vue:514 orderingDisabled gate add on RAW is_open, but the backend gate (menu/views.py:2084
       _is_restaurant_currently_open) lets the SCHEDULE win → 409 restaurant_closed at Place Order. A schedule-closed

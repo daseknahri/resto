@@ -161,6 +161,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
+import { isRestaurantOpenNow } from "../lib/businessHours";
 import AppIcon from "../components/AppIcon.vue";
 import ChargeApprovalWatcher from "../components/ChargeApprovalWatcher.vue";
 import CurrencySelector from "../components/CurrencySelector.vue";
@@ -218,7 +219,11 @@ const tenantNotice = computed(() => {
       text: profile.menu_disabled_note || t("customerLayout.menuDisabledFallback"),
     };
   }
-  if (profile.is_open === false) {
+  // Server-authoritative verdict (tenant-local, schedule + closure aware) so this
+  // storefront-wide banner agrees with the Menu/MenuSelect/Cart headers — was raw
+  // is_open, which missed schedule-closed / closure-date restaurants. (temp-disable
+  // is handled by its own branch above.)
+  if (!isRestaurantOpenNow(profile)) {
     return {
       className: "border-amber-500/40 bg-amber-500/10 text-amber-200",
       text: t("customerLayout.closedNotice"),
