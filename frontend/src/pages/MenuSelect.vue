@@ -182,14 +182,14 @@ import { computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
-import { getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours';
+import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 
 const menu = useMenuStore();
 const tenant = useTenantStore();
 const router = useRouter();
-const { t } = useI18n();
+const { currentLocale, t } = useI18n();
 
 // ── Tenant data ──────────────────────────────────────────────────────────────
 const meta = computed(() => tenant.resolvedMeta || null);
@@ -204,12 +204,23 @@ const logoImage = computed(() => String(profile.value?.logo_url || '').trim());
 const isRestaurantOpen = computed(() => isRestaurantOpenNow(profile.value));
 
 const statusLabel = computed(() => {
+  const schedule = profile.value?.business_hours_schedule;
   // Keep the badge TEXT in lock-step with the verdict above.
-  if (!isRestaurantOpen.value) return t('customerLeadPage.closedNow');
+  if (!isRestaurantOpen.value) {
+    // Closed per the verdict; surface the next opening ("Opens at ...") when the
+    // schedule can name it, matching Menu.vue / CustomerLeadPage.
+    if (schedule && Object.keys(schedule).length) {
+      const next = getNextOpenInfo(schedule, currentLocale.value);
+      if (next) {
+        const dayPart = next.isTomorrow ? t('menu.tomorrow') : next.dayLabel;
+        return t('menu.opensAt', { day: dayPart, time: next.openTime });
+      }
+    }
+    return t('customerLeadPage.closedNow');
+  }
   // Verdict is OPEN; enrich with the closing time when the browser-clock schedule
   // also reads open (avoid contradicting the authoritative verdict when they
   // disagree across timezones).
-  const schedule = profile.value?.business_hours_schedule;
   if (schedule && Object.keys(schedule).length) {
     if (isCurrentlyOpenBySchedule(schedule) === true) {
       const closeTime = getTodayClosingTime(schedule);

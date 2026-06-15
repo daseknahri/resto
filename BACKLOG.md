@@ -701,9 +701,10 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       after the impl wrote the files; I reviewed the on-disk changes myself (scope guard held — only dine-in newly
       blocked, no over-blocking) + ran the gates: verify:i18n + lint clean, 119 tests, build OK.** Frontend gates green.
       [scout frontend-open-state]
-- [ ] **Menu / MenuSelect "opens at" label regression (ROUND 2)** — the display-verdict batch dropped the
-      getNextOpenInfo "Opens at X" enrichment from Menu/MenuSelect statusLabel (now bare "Closed"); CustomerLeadPage
-      kept it. Re-add the closed-branch enrichment mirroring CustomerLeadPage. (Menu.vue / MenuSelect.vue statusLabel).
+- [x] **Menu / MenuSelect "opens at" label regression — DONE (label-regression fix)** — re-added the
+      getNextOpenInfo "Opens at {day} {time}" enrichment to the closed branch of Menu.vue + MenuSelect.vue
+      statusLabel (MenuSelect also regained the currentLocale destructure), mirroring CustomerLeadPage. Reuses the
+      existing menu.opensAt / menu.tomorrow keys (no new i18n). Frontend gates green (lint, 119 tests, i18n, build).
       [reviewer minor]
 - [ ] **useSeoMeta.js openingHoursSpecification is a 5th independent schedule parser** — useSeoMeta.js:222-240
       emits JSON-LD opening hours verbatim with no shared contract with businessHours.js / openstate; lower

@@ -476,7 +476,7 @@ import DishCard  from '../components/DishCard.vue'
 import { useI18n } from '../composables/useI18n'
 import { withImageFallback } from '../lib/images'
 import { trackEvent } from '../lib/analytics'
-import { getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours'
+import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours'
 import api from '../lib/api'
 import { useCartStore }     from '../stores/cart'
 import { useCustomerStore } from '../stores/customer'
@@ -636,9 +636,20 @@ const dishGridClass = computed(() => {
 // aware). Centralized in lib/businessHours so every storefront surface agrees.
 const isRestaurantOpen = computed(() => isRestaurantOpenNow(profile.value))
 const statusLabel = computed(() => {
-  // Keep the badge TEXT in lock-step with the verdict above.
-  if (!isRestaurantOpen.value) return t('customerLeadPage.closedNow')
   const schedule = profile.value?.business_hours_schedule
+  // Keep the badge TEXT in lock-step with the verdict above.
+  if (!isRestaurantOpen.value) {
+    // Closed per the verdict; if the schedule can name the next opening, surface it
+    // ("Opens at ...") rather than a bare "Closed", matching CustomerLeadPage.
+    if (schedule && Object.keys(schedule).length) {
+      const next = getNextOpenInfo(schedule, currentLocale.value)
+      if (next) {
+        const dayPart = next.isTomorrow ? t('menu.tomorrow') : next.dayLabel
+        return t('menu.opensAt', { day: dayPart, time: next.openTime })
+      }
+    }
+    return t('customerLeadPage.closedNow')
+  }
   // Verdict is OPEN here; enrich the label with the schedule's closing time when
   // the browser-clock schedule also reads open. (If they disagree — e.g. server
   // says open but the visitor's tz reads closed — show a plain "open" rather than
