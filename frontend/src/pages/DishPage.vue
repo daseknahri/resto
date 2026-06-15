@@ -432,6 +432,11 @@ const showSimilarSkeletons  = computed(() => menu.loading && !similarVis.isVisib
 const visibleSimilarDishes  = computed(() => similarVis.isVisible.value ? similarDishes.value : []);
 
 const isBrowseOnlyPlan  = computed(() => tenant.isBrowseOnlyPlan === true);
+// Ordering GATE — stays on the RAW manual `is_open` toggle on purpose (orderingDisabled
+// + addToCart below). Whether a schedule-closed restaurant should hard-block add-to-cart
+// is a separate product decision (order-ahead may be valid) and is intentionally NOT
+// changed in this batch. The "closed" notice (template) reads this same flag so it stays
+// in lockstep with the gate it describes (notice text says ordering is disabled).
 const isRestaurantOpen  = computed(() => meta.value?.profile?.is_open !== false);
 
 // ── Option helpers ────────────────────────────────────────────────────────────

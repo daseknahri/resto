@@ -177,6 +177,31 @@ export const getTodayClosingTime = (schedule) => {
   return entry?.enabled && entry.close ? entry.close : null;
 };
 
+/**
+ * THE single source of truth for the binary OPEN/CLOSED display verdict.
+ *
+ * Prefers the server's authoritative, tenant-local boolean `profile.is_open_now`
+ * (it already honors is_open + is_menu_temporarily_disabled + ClosureDate + the
+ * weekly business_hours_schedule, in the restaurant's own timezone). Only when
+ * that field is absent (older payloads / safety) does it fall back to the legacy
+ * client-side derivation, which evaluates the schedule against the VISITOR's
+ * browser clock and is therefore wrong across timezones — hence last-resort only.
+ *
+ * Every storefront open/closed *display* surface should consume this so they all
+ * agree. Note: getNextOpenInfo / getTodayClosingTime / isCurrentlyOpenBySchedule
+ * remain LABEL helpers ("opens at X", "closes at Y"); only this binary verdict is
+ * centralized here.
+ */
+export const isRestaurantOpenNow = (profile) => {
+  if (typeof profile?.is_open_now === "boolean") return profile.is_open_now;
+  if (profile?.is_open === false) return false;
+  const schedule = profile?.business_hours_schedule;
+  if (schedule && Object.keys(schedule).length) {
+    if (isCurrentlyOpenBySchedule(schedule) === false) return false;
+  }
+  return true;
+};
+
 /** Returns the next opening day/time, or null if none found in the week. */
 export const getNextOpenInfo = (schedule, locale = "en") => {
   if (!schedule || !Object.keys(schedule).length) return null;

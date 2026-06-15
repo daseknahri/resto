@@ -476,7 +476,7 @@ import DishCard  from '../components/DishCard.vue'
 import { useI18n } from '../composables/useI18n'
 import { withImageFallback } from '../lib/images'
 import { trackEvent } from '../lib/analytics'
-import { getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule } from '../lib/businessHours'
+import { getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours'
 import api from '../lib/api'
 import { useCartStore }     from '../stores/cart'
 import { useCustomerStore } from '../stores/customer'
@@ -632,31 +632,21 @@ const dishGridClass = computed(() => {
 })
 
 // ── Open/status ──────────────────────────────────────────────────────────────
-const isRestaurantOpen = computed(() => {
-  if (typeof profile.value?.is_open_now === 'boolean') return profile.value.is_open_now
-  if (profile.value?.is_open === false) return false
-  const schedule = profile.value?.business_hours_schedule
-  if (schedule && Object.keys(schedule).length) {
-    const bySchedule = isCurrentlyOpenBySchedule(schedule)
-    if (bySchedule === false) return false
-  }
-  return true
-})
+// Server-authoritative open/closed verdict (tenant-local, temp-disable + closure
+// aware). Centralized in lib/businessHours so every storefront surface agrees.
+const isRestaurantOpen = computed(() => isRestaurantOpenNow(profile.value))
 const statusLabel = computed(() => {
-  if (profile.value?.is_open === false) return t('customerLeadPage.closedNow')
+  // Keep the badge TEXT in lock-step with the verdict above.
+  if (!isRestaurantOpen.value) return t('customerLeadPage.closedNow')
   const schedule = profile.value?.business_hours_schedule
+  // Verdict is OPEN here; enrich the label with the schedule's closing time when
+  // the browser-clock schedule also reads open. (If they disagree — e.g. server
+  // says open but the visitor's tz reads closed — show a plain "open" rather than
+  // contradict the authoritative verdict with an "opens at" string.)
   if (schedule && Object.keys(schedule).length) {
-    const openBySchedule = isCurrentlyOpenBySchedule(schedule)
-    if (openBySchedule === true) {
+    if (isCurrentlyOpenBySchedule(schedule) === true) {
       const closeTime = getTodayClosingTime(schedule)
       return closeTime ? t('menu.opensUntil', { time: closeTime }) : t('customerLeadPage.openNow')
-    }
-    if (openBySchedule === false) {
-      const next = getNextOpenInfo(schedule, currentLocale.value)
-      if (next) {
-        const dayPart = next.isTomorrow ? t('menu.tomorrow') : next.dayLabel
-        return t('menu.opensAt', { day: dayPart, time: next.openTime })
-      }
     }
   }
   return t('customerLeadPage.openNow')

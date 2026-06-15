@@ -956,6 +956,7 @@ import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
 import { safeExternalUrl } from '../lib/escape';
 import { addTileLayer } from '../lib/mapTiles';
+import { isRestaurantOpenNow } from '../lib/businessHours';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -1296,7 +1297,9 @@ const planLabel = computed(
   () => meta.value?.plan?.tier_name || meta.value?.plan?.name || 'Basic'
 );
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
-const isRestaurantOpen = computed(() => tenant.resolvedMeta?.profile?.is_open !== false);
+// Display-only "restaurant closed" notice (it does NOT gate checkout here), so it
+// uses the shared server-authoritative verdict to agree with Menu/MenuSelect.
+const isRestaurantOpen = computed(() => isRestaurantOpenNow(meta.value?.profile));
 const tableLabelModel = computed(() => cart.tableLabel || '');
 const isTableContextOrder = computed(() =>
   Boolean(cart.tableSlug || cart.tableLabel)

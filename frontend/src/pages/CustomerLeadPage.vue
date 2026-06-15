@@ -344,7 +344,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
-import { formatBusinessHoursRows, formatBusinessHoursSummary, getCurrentDayKey, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
+import { formatBusinessHoursRows, formatBusinessHoursSummary, getCurrentDayKey, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, isRestaurantOpenNow, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { safeExternalUrl } from "../lib/escape";
 import { useLeadStore } from "../stores/lead";
@@ -403,22 +403,27 @@ const errors = reactive({ name: "", phone: "", email: "" });
 
 const profile = computed(() => meta.value?.profile || {});
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
-const isOpen = computed(() => profile.value?.is_open !== false);
+// Display-only status pill / business-hours panel — server-authoritative verdict so
+// this landing page agrees with the Menu/MenuSelect headers. (No ordering gate here.)
+const isOpen = computed(() => isRestaurantOpenNow(profile.value));
 const statusLabel = computed(() => {
-  if (!isOpen.value) return t("customerLeadPage.closedNow");
   const schedule = profile.value?.business_hours_schedule;
-  if (schedule && Object.keys(schedule).length) {
-    const openBySchedule = isCurrentlyOpenBySchedule(schedule);
-    if (openBySchedule === true) {
-      const closeTime = getTodayClosingTime(schedule);
-      return closeTime ? t("menu.opensUntil", { time: closeTime }) : t("customerLeadPage.openNow");
-    }
-    if (openBySchedule === false) {
+  if (!isOpen.value) {
+    // Closed per the verdict; if the schedule can name the next opening, show it.
+    if (schedule && Object.keys(schedule).length) {
       const next = getNextOpenInfo(schedule, currentLocale.value);
       if (next) {
         const dayPart = next.isTomorrow ? t("menu.tomorrow") : next.dayLabel;
         return t("menu.opensAt", { day: dayPart, time: next.openTime });
       }
+    }
+    return t("customerLeadPage.closedNow");
+  }
+  // Open per the verdict; enrich with the closing time when the schedule also reads open.
+  if (schedule && Object.keys(schedule).length) {
+    if (isCurrentlyOpenBySchedule(schedule) === true) {
+      const closeTime = getTodayClosingTime(schedule);
+      return closeTime ? t("menu.opensUntil", { time: closeTime }) : t("customerLeadPage.openNow");
     }
   }
   return t("customerLeadPage.openNow");

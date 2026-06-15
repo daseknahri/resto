@@ -674,29 +674,39 @@ the cache, and two readers derive the same field differently:
       Reviewer ran a 1071-case differential (0 mismatches vs the old rule). New test_openstate.py + rewritten
       test_profile_is_open_now.py. [scout list-cache-coherence]
 
-### FRONTEND OPEN-STATE COHERENCE (scout open-state cluster; next batch — USER-VISIBLE)
-The backend open-state rule is now consolidated + tenant-local and the serializer ships an authoritative
-`is_open_now`, but the FRONTEND re-derives open/closed 4-5 different ways — several on the visitor's BROWSER
-clock and several ignoring `is_open_now` entirely. Cleanest fix: every storefront open-state reader consumes
-server `is_open_now`; reserve businessHours.js for label-only helpers (getNextOpenInfo / getTodayClosingTime).
-- [ ] **businessHours.js evaluates the schedule on the BROWSER clock, not the tenant tz** — getCurrentDayKey()
-      uses new Date().getDay() / currentHHMM() uses new Date() (frontend/src/lib/businessHours.js:152-169). A
-      visitor in a different tz than the restaurant gets a different open/closed than the server — the exact
-      cross-tz bug the backend batch just removed. [scout open-state] **(real cross-tz bug)**
-- [ ] **MenuSelect.vue ignores server is_open_now, re-derives client-side** — MenuSelect.vue:202-210 derives
-      from raw is_open + browser-clock schedule, while Menu.vue:636 correctly honors profile.is_open_now first.
-      A temp-disabled / closure-date restaurant shows closed on Menu.vue but open on MenuSelect.vue. [scout open-state]
-- [ ] **CategoryPage / Cart / DishPage order gates read ONLY raw is_open (ignore schedule + is_open_now)** —
-      CategoryPage.vue:266, Cart.vue:1299, DishPage.vue:435 all gate on `is_open !== false`, so a schedule-closed
-      restaurant still accepts add-to-cart and reaches checkout, where the backend 503 rejects it — a confusing
-      dead-end after the cart is filled. Gate these on is_open_now. [scout open-state] **(real UX dead-end)**
-- [ ] **CustomerLeadPage.vue open-state ignores is_open_now + temp_disable** — CustomerLeadPage.vue:406-424
-      uses is_open!==false only. Consume is_open_now. [scout open-state]
+### FRONTEND OPEN-STATE COHERENCE (scout open-state cluster) — DISPLAY VERDICT SHIPPED (frontend-open-state batch)
+The backend ships an authoritative `is_open_now`; the frontend re-derived open/closed 4-5 ways. SHIPPED: ONE
+shared isRestaurantOpenNow(profile) helper (businessHours.js) consuming is_open_now (graceful fallback to the
+old client logic when absent); the storefront DISPLAY verdicts now delegate to it. ROUND 2 remains below.
+- [x] **MenuSelect / Cart / CustomerLeadPage (+ Menu) display verdict — DONE (frontend-open-state batch)** — all
+      consume isRestaurantOpenNow (is_open_now-first); the cross-tz bug + the Menu-vs-MenuSelect disagreement are
+      fixed wherever is_open_now flows. New businessHours.test.js (9 cases). isCurrentlyOpenBySchedule kept as the
+      absent-is_open_now fallback + label helper only. [scout open-state]
+- [x] **Marketplace / Directory / MarketplaceMenuPage — NON-GAP (verified by scout)** — their raw-looking is_open
+      is ALREADY the server-computed verdict (_compute_is_open_now, accounts/views.py:2666/2819/3088); do NOT waste
+      a change "repointing" them to isRestaurantOpenNow (the list payload has no is_open_now field). [scout frontend-open-state]
+- [ ] **CustomerLayout storefront banner still on RAW is_open — the MOST VISIBLE miss (ROUND 2)** —
+      CustomerLayout.vue:221 tenantNotice closed branch tests `profile.is_open === false`, not isRestaurantOpenNow;
+      this strip renders on EVERY customer route (role=status) and is the de-facto closed indicator on CategoryPage
+      (which has no header). 1-line fix: import isRestaurantOpenNow + gate the closed branch on it.
+      (CustomerLayout.vue:221). [scout frontend-open-state] **(most-visible surface)**
+- [ ] **Add-to-cart→checkout-409 DEAD-END — the real UX bug (ROUND 2)** — CategoryPage.vue:272 quickAddDisabled +
+      DishPage.vue:514 orderingDisabled gate add on RAW is_open, but the backend gate (menu/views.py:2084
+      _is_restaurant_currently_open) lets the SCHEDULE win → 409 restaurant_closed at Place Order. A schedule-closed
+      (manually-open) shop lets you fill a cart then bounces at checkout. **UNRECOVERABLE for DINE-IN** (Cart.vue
+      canSchedule = pickup/delivery only — table QR has no order-ahead escape). FIX (proven pattern): gate
+      add-to-cart on the schedule-aware verdict for NON-scheduling fulfillment + show a Closed pill, EXACTLY like
+      MarketplaceMenuPage.vue:327/336 already does (PRESERVE the order-ahead exception so scheduled pickup/delivery
+      still works). Folds in DishPage display consistency (its notice was reverted to raw is_open to stay truthful).
+      [scout frontend-open-state] **(real UX dead-end)**
+- [ ] **Menu / MenuSelect "opens at" label regression (ROUND 2)** — the display-verdict batch dropped the
+      getNextOpenInfo "Opens at X" enrichment from Menu/MenuSelect statusLabel (now bare "Closed"); CustomerLeadPage
+      kept it. Re-add the closed-branch enrichment mirroring CustomerLeadPage. (Menu.vue / MenuSelect.vue statusLabel).
+      [reviewer minor]
 - [ ] **useSeoMeta.js openingHoursSpecification is a 5th independent schedule parser** — useSeoMeta.js:222-240
       emits JSON-LD opening hours verbatim with no shared contract with businessHours.js / openstate; lower
       severity (publishes raw weekly hours, can't drift on the clock) but must be hand-synced if the schedule
       shape evolves. [scout open-state] (marginal)
-- [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
 - [ ] **Time-windowed badge/flash baked into the 90s cached payload** — promo_badge + flash_sale_active are
       computed at fill time then cached 90s (accounts/views.py:2868-2876,2902-2921), so the request-time
       windowing the promo-N+1 batch built buys nothing while the payload is cached: a promo/flash sale that
@@ -800,6 +810,16 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] frontend-open-state "one isRestaurantOpenNow(profile) verdict consuming server is_open_now" (verified by
+      me, frontend gates all green: verify:i18n clean, lint clean, test 103/103, build OK; reviewer approve-with-
+      1-major which the fix phase resolved). New businessHours.js isRestaurantOpenNow (is_open_now-first, graceful
+      fallback) + businessHours.test.js (9 cases); Menu/MenuSelect/Cart/CustomerLeadPage display verdicts repointed;
+      ordering gates deliberately left on raw is_open (scope guard — protects order-ahead). Reviewer caught a
+      self-introduced contradiction on DishPage (schedule-aware notice + raw-is_open gate said "ordering disabled"
+      while Add stayed enabled) → fix reverted DishPage's notice to lockstep with its gate. Scout mapped ROUND 2
+      (CustomerLayout banner still raw is_open = most-visible miss; the add-to-cart→409 dead-end, unrecoverable for
+      dine-in, fix = MarketplaceMenuPage's gate-on-verdict+Closed-pill pattern; the opens-at label regression) →
+      triaged in BACKLOG. — frontend-open-state commit.
 - [x] open-state-consolidation "one shared tenant-local schedule-window helper; fix get_is_open_now UTC bug"
       (verified by me, backend 3859/0, migrations clean, reviewer PASS/GREEN — ran a 1071-case differential
       proving schedule_open_now matches the old _schedule_open exactly, 0 mismatches). NEW tenancy/openstate.py

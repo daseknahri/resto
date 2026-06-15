@@ -182,14 +182,14 @@ import { computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
-import { getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule } from '../lib/businessHours';
+import { getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 
 const menu = useMenuStore();
 const tenant = useTenantStore();
 const router = useRouter();
-const { currentLocale, t } = useI18n();
+const { t } = useI18n();
 
 // ── Tenant data ──────────────────────────────────────────────────────────────
 const meta = computed(() => tenant.resolvedMeta || null);
@@ -199,31 +199,21 @@ const tenantDescription = computed(() => String(profile.value?.description || pr
 const heroImage = computed(() => String(profile.value?.hero_url || '').trim());
 const logoImage = computed(() => String(profile.value?.logo_url || '').trim());
 
-const isRestaurantOpen = computed(() => {
-  if (profile.value?.is_open === false) return false;
-  const schedule = profile.value?.business_hours_schedule;
-  if (schedule && Object.keys(schedule).length) {
-    const by = isCurrentlyOpenBySchedule(schedule);
-    if (by === false) return false;
-  }
-  return true;
-});
+// Server-authoritative open/closed verdict (tenant-local, temp-disable + closure
+// aware), shared with Menu.vue and the rest of the storefront via lib/businessHours.
+const isRestaurantOpen = computed(() => isRestaurantOpenNow(profile.value));
 
 const statusLabel = computed(() => {
-  if (profile.value?.is_open === false) return t('customerLeadPage.closedNow');
+  // Keep the badge TEXT in lock-step with the verdict above.
+  if (!isRestaurantOpen.value) return t('customerLeadPage.closedNow');
+  // Verdict is OPEN; enrich with the closing time when the browser-clock schedule
+  // also reads open (avoid contradicting the authoritative verdict when they
+  // disagree across timezones).
   const schedule = profile.value?.business_hours_schedule;
   if (schedule && Object.keys(schedule).length) {
-    const open = isCurrentlyOpenBySchedule(schedule);
-    if (open === true) {
+    if (isCurrentlyOpenBySchedule(schedule) === true) {
       const closeTime = getTodayClosingTime(schedule);
       return closeTime ? t('menu.opensUntil', { time: closeTime }) : t('customerLeadPage.openNow');
-    }
-    if (open === false) {
-      const next = getNextOpenInfo(schedule, currentLocale.value);
-      if (next) {
-        const dayPart = next.isTomorrow ? t('menu.tomorrow') : next.dayLabel;
-        return t('menu.opensAt', { day: dayPart, time: next.openTime });
-      }
     }
   }
   return t('customerLeadPage.openNow');

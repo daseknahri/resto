@@ -263,6 +263,12 @@ const categoryDescription = computed(() => {
 });
 
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
+// NOTE (open/closed coherence batch): this stays on the RAW manual `is_open`
+// toggle on purpose — it is an ordering-PERMISSION (gates quick-add below), not a
+// display badge. There is no independent open/closed header on this page, so it is
+// not repointed to isRestaurantOpenNow(). Whether a schedule-closed (but manually
+// "open") restaurant should hard-block immediate quick-add is a separate product
+// decision (order-ahead / scheduled orders may still be valid) — deferred.
 const isRestaurantOpen = computed(() => tenant.resolvedMeta?.profile?.is_open !== false);
 const quickAddDisabled = computed(() => isBrowseOnlyPlan.value || !isRestaurantOpen.value);
 
