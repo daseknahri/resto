@@ -8,7 +8,13 @@
  * derivation when that field is absent.
  */
 import { describe, it, expect } from "vitest";
-import { WEEKDAY_KEYS, isRestaurantOpenNow } from "../businessHours";
+import {
+  WEEKDAY_KEYS,
+  isRestaurantOpenNow,
+  canAddToCartNow,
+  canPlaceImmediateOrderNow,
+  classifyClosedOrderState,
+} from "../businessHours";
 
 /** Build a schedule with the same enabled/open/close applied to every weekday. */
 const uniformSchedule = ({ enabled, open = "09:00", close = "18:00" }) =>
@@ -70,5 +76,101 @@ describe("isRestaurantOpenNow", () => {
       expect(isRestaurantOpenNow(null)).toBe(true);
       expect(isRestaurantOpenNow(undefined)).toBe(true);
     });
+  });
+});
+
+/**
+ * Closed-now ORDERING gates — mirror the backend order gate so the storefront
+ * never builds an un-checkout-able cart.
+ *
+ *  - IMMEDIATE order possible only when open-now.
+ *  - SCHEDULED (order-ahead) pickup/delivery bypasses the gate (handled at the
+ *    Cart level), so add-to-cart for non-table context stays enabled when closed.
+ *  - DINE-IN (table) has no scheduling, so closed-now blocks it entirely.
+ */
+describe("canAddToCartNow (dine-in closed gate)", () => {
+  const openProfile = { is_open_now: true };
+  const closedProfile = { is_open_now: false };
+
+  it("dine-in + closed-now → blocked (the unrecoverable case)", () => {
+    expect(canAddToCartNow({ profile: closedProfile, isTableContext: true })).toBe(false);
+  });
+
+  it("dine-in + open-now → allowed", () => {
+    expect(canAddToCartNow({ profile: openProfile, isTableContext: true })).toBe(true);
+  });
+
+  it("pickup/delivery (non-table) + closed-now → still allowed (order-ahead is valid)", () => {
+    expect(canAddToCartNow({ profile: closedProfile, isTableContext: false })).toBe(true);
+  });
+
+  it("pickup/delivery (non-table) + open-now → allowed", () => {
+    expect(canAddToCartNow({ profile: openProfile, isTableContext: false })).toBe(true);
+  });
+
+  it("open restaurant is unchanged for every context", () => {
+    expect(canAddToCartNow({ profile: openProfile, isTableContext: true })).toBe(true);
+    expect(canAddToCartNow({ profile: openProfile, isTableContext: false })).toBe(true);
+  });
+
+  it("honors a manual is_open=false closure for dine-in (falls through to the verdict)", () => {
+    expect(canAddToCartNow({ profile: { is_open: false }, isTableContext: true })).toBe(false);
+    // …but non-table can still order ahead.
+    expect(canAddToCartNow({ profile: { is_open: false }, isTableContext: false })).toBe(true);
+  });
+});
+
+describe("canPlaceImmediateOrderNow (immediate-order gate)", () => {
+  it("open-now → an immediate order is possible", () => {
+    expect(canPlaceImmediateOrderNow({ is_open_now: true })).toBe(true);
+  });
+
+  it("closed-now → an immediate order is NOT possible (scheduled handled separately)", () => {
+    expect(canPlaceImmediateOrderNow({ is_open_now: false })).toBe(false);
+  });
+
+  it("manual closure (is_open=false) blocks an immediate order", () => {
+    expect(canPlaceImmediateOrderNow({ is_open: false })).toBe(false);
+  });
+
+  it("missing profile defaults to open (no negative signal)", () => {
+    expect(canPlaceImmediateOrderNow(undefined)).toBe(true);
+  });
+});
+
+describe("classifyClosedOrderState (Cart Place Order gate)", () => {
+  const open = { is_open_now: true };
+  const closed = { is_open_now: false };
+
+  it("open-now → 'open' for every context (no new friction)", () => {
+    expect(classifyClosedOrderState({ profile: open, isTableContext: true, isScheduled: false })).toBe("open");
+    expect(classifyClosedOrderState({ profile: open, isTableContext: false, isScheduled: false })).toBe("open");
+    expect(classifyClosedOrderState({ profile: open, isTableContext: false, isScheduled: true })).toBe("open");
+  });
+
+  it("closed-now + dine-in + immediate → 'blocked' (no scheduling escape)", () => {
+    expect(classifyClosedOrderState({ profile: closed, isTableContext: true, isScheduled: false })).toBe("blocked");
+  });
+
+  it("closed-now + pickup/delivery + immediate → 'schedule' (steer to order-ahead)", () => {
+    expect(classifyClosedOrderState({ profile: closed, isTableContext: false, isScheduled: false })).toBe("schedule");
+  });
+
+  it("closed-now + pickup/delivery + SCHEDULED → 'open' (order-ahead preserved)", () => {
+    expect(classifyClosedOrderState({ profile: closed, isTableContext: false, isScheduled: true })).toBe("open");
+  });
+
+  it("a scheduled flag never rescues dine-in semantics, but dine-in is never scheduled in practice", () => {
+    // Cart only sets isScheduled for pickup/delivery (canSchedule excludes table),
+    // so a scheduled dine-in is not a real state — but the pure function still
+    // treats any scheduled order as allowed.
+    expect(classifyClosedOrderState({ profile: closed, isTableContext: true, isScheduled: true })).toBe("open");
+  });
+
+  it("manual is_open=false closure → immediate blocked/steered, scheduled still allowed", () => {
+    const manualClosed = { is_open: false };
+    expect(classifyClosedOrderState({ profile: manualClosed, isTableContext: true, isScheduled: false })).toBe("blocked");
+    expect(classifyClosedOrderState({ profile: manualClosed, isTableContext: false, isScheduled: false })).toBe("schedule");
+    expect(classifyClosedOrderState({ profile: manualClosed, isTableContext: false, isScheduled: true })).toBe("open");
   });
 });

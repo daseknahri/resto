@@ -816,13 +816,13 @@
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
-              :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0"
+              :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || closedBlocksOrder || closedNeedsSchedule"
               :aria-busy="placingOrder"
               @click="placeInAppOrder"
             >
               <svg v-if="placingOrder" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               <AppIcon v-else name="cart" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              {{ placingOrder ? t('cartPage_order.placing') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))) }}
+              {{ placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))))) }}
             </button>
             <button
               v-if="cart.canWhatsapp"
@@ -853,6 +853,33 @@
               aria-disabled="true"
             >{{ t('cartPage.orderingDisabledPlan') }}</button>
             <p v-if="isBrowseOnlyPlan" class="text-[11px] text-slate-500 text-center">{{ t('cartPage.orderingDisabledCurrentPlan') }}</p>
+
+            <!-- Closed-now: dine-in can't order (no scheduling) -->
+            <div
+              v-if="!isBrowseOnlyPlan && closedBlocksOrder"
+              class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+              role="status"
+            >
+              <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <p class="flex-1 text-[12px] leading-relaxed text-amber-200">{{ t('cartPage.closedDineInNotice') }}</p>
+            </div>
+
+            <!-- Closed-now: pickup/delivery can still order ahead — steer to schedule -->
+            <div
+              v-else-if="!isBrowseOnlyPlan && closedNeedsSchedule"
+              class="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+              role="status"
+            >
+              <p class="flex items-start gap-2 text-[12px] leading-relaxed text-amber-200">
+                <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                <span class="flex-1">{{ t('cartPage.closedScheduleNotice') }}</span>
+              </p>
+              <button
+                type="button"
+                class="ui-btn-outline w-full justify-center py-2 text-xs font-semibold"
+                @click="scheduleEnabled = true"
+              >{{ t('cartPage.scheduleLater') }}</button>
+            </div>
           </div>
 
           <!-- Errors -->
@@ -956,7 +983,7 @@ import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
 import { safeExternalUrl } from '../lib/escape';
 import { addTileLayer } from '../lib/mapTiles';
-import { isRestaurantOpenNow } from '../lib/businessHours';
+import { isRestaurantOpenNow, classifyClosedOrderState } from '../lib/businessHours';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -1345,6 +1372,33 @@ const prepayShortfall = computed(
   () => requiresPrepay.value && orderGrandTotal.value > 0 &&
     customerStore.isAuthenticated && !walletCoversTotal.value && !codChosen.value
 );
+
+// ── Closed-now ordering gate (mirror backend, prevent the checkout-time 409) ──
+// The backend lets the SCHEDULE win for an IMMEDIATE order and 409s
+// "restaurant_closed"; SCHEDULED pickup/delivery bypass that gate. We mirror it
+// here so the cart never silently builds an un-checkout-able immediate order.
+//
+// A scheduled order = the "Schedule for later" toggle is on with a chosen time
+// (only offered for pickup/delivery via canSchedule). It must remain placeable
+// even when closed-now — that is the whole point of order-ahead.
+const isScheduledOrder = computed(
+  () => canSchedule.value && scheduleEnabled.value && Boolean(scheduledFor.value)
+);
+// One shared classification (open | blocked | schedule) — see businessHours.js.
+const closedOrderState = computed(() =>
+  classifyClosedOrderState({
+    profile: meta.value?.profile,
+    isTableContext: isTableContextOrder.value,
+    isScheduled: isScheduledOrder.value,
+  })
+);
+// Closed-now AND placing an IMMEDIATE (non-scheduled) order (any context).
+const closedNowImmediate = computed(() => closedOrderState.value !== 'open');
+// Dine-in (table) has no scheduling → closed-now immediate is a hard block.
+const closedBlocksOrder = computed(() => closedOrderState.value === 'blocked');
+// Pickup/delivery → closed-now immediate is recoverable: steer to "Schedule for
+// later" instead of letting Place Order blind-409.
+const closedNeedsSchedule = computed(() => closedOrderState.value === 'schedule');
 
 // Pull COD eligibility for the signed-in customer at this restaurant.
 const fetchCodEligibility = async () => {
@@ -1761,6 +1815,19 @@ const pasteMapLink = async () => {
 };
 
 const validateForm = () => {
+  // Closed-now + IMMEDIATE order: mirror the backend gate so we never blind-409.
+  // Scheduled pickup/delivery (isScheduledOrder) is exempt — order-ahead is valid.
+  if (closedNowImmediate.value) {
+    if (isTableContextOrder.value) {
+      // Dine-in has no scheduling — closed means it cannot order at all.
+      toast.show(t('cartPage.restaurantCurrentlyClosed'), 'error');
+    } else {
+      // Pickup/delivery — point the customer at "Schedule for later".
+      toast.show(t('cartPage.closedScheduleNotice'), 'error');
+    }
+    return false;
+  }
+
   if (isTableContextOrder.value) {
     fieldErrors.value = {};
     return true;

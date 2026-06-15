@@ -202,6 +202,52 @@ export const isRestaurantOpenNow = (profile) => {
   return true;
 };
 
+// ── Closed-now ORDERING gates (mirror the backend order gate) ─────────────────
+//
+// The backend (menu/views.py _is_restaurant_currently_open) lets the weekly
+// SCHEDULE win for an IMMEDIATE order and 409s "restaurant_closed", while
+// SCHEDULED (order-ahead) pickup/delivery BYPASS the gate. Dine-in (table QR)
+// has no scheduling, so it can only order while open-now. These helpers keep the
+// storefront from building un-checkout-able carts by mirroring that rule on the
+// SAME verdict the display surfaces use (isRestaurantOpenNow).
+
+/**
+ * Can the customer add this item to the cart right now?
+ *
+ * Dine-in (table context) is immediate-only — when closed-now it cannot order at
+ * all, so block the add. Pickup/delivery stay addable even when closed-now
+ * because order-ahead (scheduled) checkout is still valid for them.
+ */
+export const canAddToCartNow = ({ profile, isTableContext }) => {
+  if (isTableContext && !isRestaurantOpenNow(profile)) return false;
+  return true;
+};
+
+/**
+ * Can an IMMEDIATE (non-scheduled) order be placed right now?
+ *
+ * Mirrors the backend immediate-order gate: only when open-now. Scheduled
+ * pickup/delivery is handled separately (it bypasses this) and must NOT be
+ * blocked by closed-now.
+ */
+export const canPlaceImmediateOrderNow = (profile) => isRestaurantOpenNow(profile);
+
+/**
+ * Classify the cart's closed-now ordering state so Place Order can react before
+ * the backend 409s. Returns one of:
+ *   - "open"       — open-now OR a valid scheduled order → Place Order proceeds.
+ *   - "blocked"    — closed-now + immediate + dine-in (no order-ahead escape).
+ *   - "schedule"   — closed-now + immediate + pickup/delivery → steer to schedule.
+ *
+ * A SCHEDULED order (isScheduled) is always "open" here regardless of closed-now
+ * — that is the order-ahead path the backend itself allows for pickup/delivery.
+ */
+export const classifyClosedOrderState = ({ profile, isTableContext, isScheduled }) => {
+  if (isScheduled) return "open";
+  if (canPlaceImmediateOrderNow(profile)) return "open";
+  return isTableContext ? "blocked" : "schedule";
+};
+
 /** Returns the next opening day/time, or null if none found in the week. */
 export const getNextOpenInfo = (schedule, locale = "en") => {
   if (!schedule || !Object.keys(schedule).length) return null;

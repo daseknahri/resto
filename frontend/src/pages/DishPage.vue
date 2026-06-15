@@ -399,6 +399,7 @@ import { useCartStore } from '../stores/cart';
 import { useToastStore } from '../stores/toast';
 import { useTenantStore } from '../stores/tenant';
 import { useVisibility } from '../composables/useVisibility';
+import { canAddToCartNow } from '../lib/businessHours';
 import { trackEvent } from '../lib/analytics';
 
 const props = defineProps({ category: String, dish: String });
@@ -432,12 +433,18 @@ const showSimilarSkeletons  = computed(() => menu.loading && !similarVis.isVisib
 const visibleSimilarDishes  = computed(() => similarVis.isVisible.value ? similarDishes.value : []);
 
 const isBrowseOnlyPlan  = computed(() => tenant.isBrowseOnlyPlan === true);
-// Ordering GATE — stays on the RAW manual `is_open` toggle on purpose (orderingDisabled
-// + addToCart below). Whether a schedule-closed restaurant should hard-block add-to-cart
-// is a separate product decision (order-ahead may be valid) and is intentionally NOT
-// changed in this batch. The "closed" notice (template) reads this same flag so it stays
-// in lockstep with the gate it describes (notice text says ordering is disabled).
+// Raw manual `is_open` toggle — one input to the add-to-cart permission. The
+// "closed" notice (template) reads this same flag so it stays in lockstep with
+// the gate text (notice says ordering is disabled).
 const isRestaurantOpen  = computed(() => meta.value?.profile?.is_open !== false);
+// Dine-in (table QR) is immediate-only. When the authoritative verdict says the
+// restaurant is closed NOW, a dine-in add builds a cart that can never check out
+// (table orders have no order-ahead escape), so block it — mirroring the backend
+// order gate. Pickup/delivery stay addable when closed-now (order-ahead valid).
+const isTableContextOrder = computed(() => Boolean(cart.tableSlug || cart.tableLabel));
+const dineInClosed      = computed(
+  () => !canAddToCartNow({ profile: meta.value?.profile, isTableContext: isTableContextOrder.value })
+);
 
 // ── Option helpers ────────────────────────────────────────────────────────────
 const groupIsSelected = (groupId, optionId) => {
@@ -508,7 +515,7 @@ const hasRequiredMissing  = computed(() => hasUngroupedRequiredMissing.value || 
 const isDishSoldOut       = computed(() => dish.value?.is_available === false);
 const isDishScheduleUnavailable = computed(() => dish.value?.is_schedule_available === false);
 const isComboUnavailable  = computed(() => dish.value?.combo_unavailable === true);
-const orderingDisabled    = computed(() => hasRequiredMissing.value || !isRestaurantOpen.value || isBrowseOnlyPlan.value || isDishSoldOut.value || isDishScheduleUnavailable.value || isComboUnavailable.value);
+const orderingDisabled    = computed(() => hasRequiredMissing.value || !isRestaurantOpen.value || dineInClosed.value || isBrowseOnlyPlan.value || isDishSoldOut.value || isDishScheduleUnavailable.value || isComboUnavailable.value);
 const isOptionSelected    = (optionId) => selectedOptionIds.value.includes(optionId);
 
 // ── Qty ───────────────────────────────────────────────────────────────────────
@@ -519,6 +526,7 @@ const decrementQty  = () => { qty.value = normalizeQty((qty.value || 1) - 1); };
 // ── Cart ──────────────────────────────────────────────────────────────────────
 const addToCart = () => {
   if (!isRestaurantOpen.value)        { toast.show(t('dishPage.restaurantCurrentlyClosed'), 'error'); return; }
+  if (dineInClosed.value)             { toast.show(t('cartPage.restaurantCurrentlyClosed'), 'error'); return; }
   if (isDishSoldOut.value)            { toast.show(t('menu.soldOutToast'), 'error'); return; }
   if (isDishScheduleUnavailable.value){ toast.show(t('menu.notAvailableNow'), 'error'); return; }
   if (isBrowseOnlyPlan.value)         { toast.show(t('dishPage.orderingDisabledForPlan'), 'info'); return; }

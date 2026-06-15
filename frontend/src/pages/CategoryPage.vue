@@ -238,6 +238,7 @@ import AppIcon from "../components/AppIcon.vue";
 import DishImage from "../components/DishImage.vue";
 import { useI18n } from "../composables/useI18n";
 import { withImageFallback } from "../lib/images";
+import { canAddToCartNow } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";
 import { useMenuStore } from "../stores/menu";
@@ -263,14 +264,20 @@ const categoryDescription = computed(() => {
 });
 
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
-// NOTE (open/closed coherence batch): this stays on the RAW manual `is_open`
-// toggle on purpose — it is an ordering-PERMISSION (gates quick-add below), not a
-// display badge. There is no independent open/closed header on this page, so it is
-// not repointed to isRestaurantOpenNow(). Whether a schedule-closed (but manually
-// "open") restaurant should hard-block immediate quick-add is a separate product
-// decision (order-ahead / scheduled orders may still be valid) — deferred.
+// Raw manual `is_open` toggle — kept as one input to the quick-add permission.
 const isRestaurantOpen = computed(() => tenant.resolvedMeta?.profile?.is_open !== false);
-const quickAddDisabled = computed(() => isBrowseOnlyPlan.value || !isRestaurantOpen.value);
+// Dine-in (table QR) is immediate-only. When the authoritative verdict says the
+// restaurant is closed NOW (schedule / temp-disable / closure aware), a dine-in
+// add would build a cart that can never check out (no order-ahead escape for
+// table orders), so block it — mirroring the backend order gate. Pickup/delivery
+// are intentionally left addable when closed-now (order-ahead is still valid).
+const isTableContextOrder = computed(() => Boolean(cart.tableSlug || cart.tableLabel));
+const dineInClosed = computed(
+  () => !canAddToCartNow({ profile: tenant.resolvedMeta?.profile, isTableContext: isTableContextOrder.value })
+);
+const quickAddDisabled = computed(
+  () => isBrowseOnlyPlan.value || !isRestaurantOpen.value || dineInClosed.value
+);
 
 const filteredDishes = computed(() => {
   const term = search.value.toLowerCase();
@@ -299,6 +306,11 @@ const addDishQuick = (dish) => {
   }
   if (!isRestaurantOpen.value) {
     toast.show(t("dishPage.restaurantCurrentlyClosed"), "error");
+    return;
+  }
+  // Dine-in + closed-now: immediate-only context with no order-ahead escape.
+  if (dineInClosed.value) {
+    toast.show(t("cartPage.restaurantCurrentlyClosed"), "error");
     return;
   }
 

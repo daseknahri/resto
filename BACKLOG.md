@@ -690,15 +690,17 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       storefront-wide closed banner (renders on EVERY customer route, role=status; the de-facto closed indicator on
       CategoryPage which has no header) agrees with the Menu/MenuSelect/Cart headers. temp-disable still handled by
       its own branch above. Frontend gates green. [scout frontend-open-state]
-- [ ] **Add-to-cart→checkout-409 DEAD-END — the real UX bug (ROUND 2)** — CategoryPage.vue:272 quickAddDisabled +
-      DishPage.vue:514 orderingDisabled gate add on RAW is_open, but the backend gate (menu/views.py:2084
-      _is_restaurant_currently_open) lets the SCHEDULE win → 409 restaurant_closed at Place Order. A schedule-closed
-      (manually-open) shop lets you fill a cart then bounces at checkout. **UNRECOVERABLE for DINE-IN** (Cart.vue
-      canSchedule = pickup/delivery only — table QR has no order-ahead escape). FIX (proven pattern): gate
-      add-to-cart on the schedule-aware verdict for NON-scheduling fulfillment + show a Closed pill, EXACTLY like
-      MarketplaceMenuPage.vue:327/336 already does (PRESERVE the order-ahead exception so scheduled pickup/delivery
-      still works). Folds in DishPage display consistency (its notice was reverted to raw is_open to stay truthful).
-      [scout frontend-open-state] **(real UX dead-end)**
+- [x] **Add-to-cart→checkout-409 DEAD-END — DONE (frontend-closed-deadend batch, the owner's chosen item)** —
+      new businessHours.js helpers canAddToCartNow / canPlaceImmediateOrderNow / classifyClosedOrderState
+      (open|blocked|schedule) mirror the backend order gate on the SAME verdict (isRestaurantOpenNow). CategoryPage
+      + DishPage now block dine-in (table-context) add-to-cart when closed-now (no order-ahead escape) while leaving
+      pickup/delivery addable; Cart.vue disables immediate Place Order when closed-now + steers pickup/delivery to
+      "Schedule for later" (dine-in shows a can't-order notice), and validateForm blocks the immediate-409 path.
+      **Order-ahead PRESERVED: a scheduled pickup/delivery order (isScheduledOrder) classifies "open" and still
+      places when closed-now.** 3 new i18n keys EN/FR/AR. **NOTE: the workflow DIED mid-run (5h, 0-byte output)
+      after the impl wrote the files; I reviewed the on-disk changes myself (scope guard held — only dine-in newly
+      blocked, no over-blocking) + ran the gates: verify:i18n + lint clean, 119 tests, build OK.** Frontend gates green.
+      [scout frontend-open-state]
 - [ ] **Menu / MenuSelect "opens at" label regression (ROUND 2)** — the display-verdict batch dropped the
       getNextOpenInfo "Opens at X" enrichment from Menu/MenuSelect statusLabel (now bare "Closed"); CustomerLeadPage
       kept it. Re-add the closed-branch enrichment mirroring CustomerLeadPage. (Menu.vue / MenuSelect.vue statusLabel).
@@ -847,6 +849,15 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] frontend-closed-deadend "block dine-in add-to-cart when closed; steer pickup/delivery to order-ahead;
+      preserve scheduling" (THE owner's chosen item; verified by me, frontend gates green: verify:i18n + lint clean,
+      119 tests, build OK). New businessHours.js canAddToCartNow / canPlaceImmediateOrderNow /
+      classifyClosedOrderState mirror the backend order gate; CategoryPage/DishPage block dine-in add when closed
+      (pickup/delivery stay addable); Cart.vue disables immediate Place Order when closed + steers to "Schedule for
+      later" (dine-in: can't-order notice); validateForm blocks the immediate-409 path. **Order-ahead preserved — a
+      scheduled pickup/delivery order still places when closed.** 3 i18n keys EN/FR/AR; 16 new businessHours tests.
+      **The workflow DIED mid-run (5h 0-byte output) after the impl wrote the files; I reviewed the diff myself
+      (scope guard held) + ran the gates (the dead run never did) before committing.** — frontend-closed-deadend commit.
 - [x] meta-live-isopen "recompute is_open_now POST-cache on /api/meta/ + bust meta cache on ClosureDate writes"
       (verified by me, backend 3878/0, migrations clean, reviewer APPROVE — cache-integrity #1 risk verified: the
       recompute deepcopies, cached object byte-for-byte unchanged, no cache-hit DB, no _isopen_raw leakage). The
