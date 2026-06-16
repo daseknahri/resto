@@ -58,16 +58,15 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       npm audit --audit-level=moderate full-tree (frontend) — both verified to FAIL on a planted CVE; + an
       informational full npm audit step. Added .github/dependabot.yml (pip/npm/github-actions weekly). pip-audit &
       npm audit both report 0 vulns; backend 3889/0/28, frontend 124 tests, all gates green. [scout prod-readiness]
-- [~] **R7 (P1) MFA on cross-tenant admin/owner + per-account lockout — LOCKOUT DONE (R7a, 6a9a5e2)** —
-      per-account login lockout in LoginSerializer (10 fails → 15-min lock, ATOMIC FIXED-window cache.add+incr —
-      review caught+fixed a slow-drip permanent-DoS in the naive sliding-window; fail-open on cache error; keyed on
-      user PK; no migration/dep). 3962 passed. Complements the IP throttle (defends a targeted account vs rotating
-      IPs). **R7b TOTP MFA = OWNER-GATED (surfaced):** large (pyotp + UserTOTPDevice model/migration + 4 endpoints +
-      a 202 mfa_required login-flow change [highest-risk edit] + frontend enrollment/verify UI). Policy decisions
-      needed: who must enroll (admin-only? owners?), mandatory+grace vs opt-in, recovery/reset flow. Recommended
-      staged build: model+endpoints+UI behind MFA_REQUIRED_ROLES flag defaulting EMPTY (zero behavior change),
-      platform-admin enrolls first, flip per role when ready. **Also follow-up: migrate cashout/voucher lockouts
-      to the same atomic add+incr (they share the older non-atomic get+set).** [R7b non-gated-once-policy-set, L]
+- [x] **R7 (P1) MFA on cross-tenant admin/owner + per-account lockout — COMPLETE (R7a 6a9a5e2 + R7b daac51b/0ba18b6)** —
+      R7a: per-account login lockout in LoginSerializer (10 fails → 15-min ATOMIC FIXED-window cache.add+incr; review
+      caught+fixed a slow-drip DoS; fail-open on cache error; per-PK key). R7b: full TOTP MFA — pyotp + UserTOTPDevice
+      (accounts/0044, PBKDF2 single-use backup codes) + setup/confirm/verify/disable/status endpoints + flag-gated
+      LoginView 202 second-factor + frontend enrollment (QR + backup codes) & login verify step. DEFAULT-OFF
+      (MFA_REQUIRED_ROLES empty + opt-in enrollment ⇒ live login byte-for-byte unchanged); reviews caught+fixed TOTP
+      replay-within-window, pending-session fail-closed, narrowed login DB-except, side-effect-free /mfa/status/.
+      OWNER: set DJANGO_MFA_REQUIRED_ROLES to enforce per role when ready. **STILL TODO (R7a follow-up): migrate the
+      cashout/voucher lockouts to the same atomic add+incr (they share the older racy get+set).**
 - [x] **R8 (P1) Fix frontend Sentry release tag — DONE (with prod-harden-load)** — sentry.js now reads
       VITE_SENTRY_RELEASE first (the var the Dockerfile/compose actually inject), fallback VITE_APP_VERSION.
       Frontend lint+build green. **DEPLOY STEP (owner/ops):** set VITE_SENTRY_RELEASE=$SOURCE_COMMIT as the frontend
