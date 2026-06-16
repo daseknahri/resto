@@ -136,8 +136,16 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       run is the gate. **R17b DEFERRED (needs a Docker daemon, none here): trivy IMAGE scan of built backend/frontend
       images for OS base-CVEs + base-image DIGEST-PINNING (FROM ...@sha256:) — dependabot docker will track digests
       once pinned. SBOM gen also R17b.**
-- [ ] **R18 (P2) PII erasure/export tooling + retention cron** — no data-subject erasure/export; no Customer/Order PII
-      retention. Tooling non-gated; jurisdiction + policy text owner-gated.
+- [~] **R18 (P2) PII erasure/export tooling + retention cron — ERASURE DONE (ed37761)** — `manage.py erase_customer
+      <id>` anonymizes a customer IN-PLACE across public + ALL tenant schemas (never deletes the row — CASCADE FKs
+      would destroy the ledger; financial rows retained). Dry-run default, --force-erase to write, --force bypasses
+      Phase-0 guards (open orders/pending charges/nonzero balance); per-tenant failures FAIL CLOSED (no false success
+      audit). CUSTOMER_ERASED audit (sales/0022). Adversarial model-grep review caught + I fixed 5 missed PII fields
+      (DriverPayout/WalletChargeRequest/ReservationTimelineEvent notes, RideRequest driver-FK + delivery_code,
+      DeliveryJob customer_driver_note) + an over-scrub. 3981 passed. **R18b DEFERRED (owner-policy): retention
+      windows/jurisdiction (GDPR export-before-erase, CCPA delay), hard-delete-vs-anonymize, export_customer command,
+      auto-erasure scheduling. NOTE: WORKFLOW DIED on a transient API ConnectionRefused after impl — recovered by
+      hand-review + own gates (the review/gates phases never ran); standard dead-workflow recovery.**
 - [ ] **R19 (P2) Police patch(create=True) + import-smoke / real-model money tests** — the masked-500 class (a
       swallowed ImportError 500'd every marketplace order while CI stayed green via create=True mocks). [non-gated]
 - [ ] **R20 (P3) Provision staging env** — unblocks rehearsing R1/R5 off-prod. [owner-gated: cost/setup]
