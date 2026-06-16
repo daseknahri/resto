@@ -53,25 +53,35 @@ class Command(BaseCommand):
             self.stdout.write("Re-run with --apply to zero these balances (an adjustment record is written for each).")
             return
 
+        from accounts.wallet_service import debit_wallet, InsufficientFunds
+
         swept = 0
         swept_total = Decimal("0")
         for cust_id in list(qs.values_list("id", flat=True)):
             with transaction.atomic():
+                # Re-check under lock (debit_wallet does its own select_for_update):
+                # read a fresh snapshot first to know the amount; if it changed to 0
+                # or the customer got verified, skip.
+                # Lock the row for the re-check so a concurrent phone-verification
+                # cannot slip between the check and the debit. debit_wallet re-locks
+                # the same row in this same transaction — a no-op in PostgreSQL.
                 cust = Customer.objects.select_for_update().get(pk=cust_id)
-                # Re-check under lock: skip if it got verified or zeroed meanwhile.
                 if cust.phone_verified or Decimal(str(cust.wallet_balance or "0")) <= 0:
                     continue
                 amount = Decimal(str(cust.wallet_balance)).quantize(Decimal("0.01"))
-                cust.wallet_balance = Decimal("0.00")
-                cust.save(update_fields=["wallet_balance", "updated_at"])
-                WalletTransaction.objects.create(
-                    customer=cust,
-                    type=WalletTransaction.Type.ADJUSTMENT,
-                    amount=amount,
-                    balance_after=Decimal("0.00"),
-                    note=note,
-                )
+                try:
+                    tx = debit_wallet(
+                        cust.id,
+                        amount,
+                        tx_type=WalletTransaction.Type.ADJUSTMENT,
+                        reference="sweep_unverified",
+                        note=note,
+                    )
+                except InsufficientFunds:
+                    # Balance may have dropped to zero between the snapshot above and
+                    # the debit_wallet lock — skip cleanly rather than fail the sweep.
+                    continue
                 swept += 1
-                swept_total += amount
+                swept_total += tx.amount if tx is not None else amount
 
         self.stdout.write(self.style.SUCCESS(f"Swept {swept} wallet(s), removing {swept_total} in unverified balance."))

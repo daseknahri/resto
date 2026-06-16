@@ -4178,19 +4178,19 @@ class MarketplacePlaceOrderView(APIView):
                             # app.customer handler, which keeps covering non-money errors.
                             try:
                                 from .models import WalletTransaction as _WTM
-                                _cust_locked = Customer.objects.select_for_update().get(pk=_linked_customer.pk)
-                                _actual = min(Decimal(str(_cust_locked.wallet_balance or "0")), _wallet_deduction)
+                                from accounts.wallet_service import debit_wallet as _debit_wallet_mkt
+                                from django.db import connection as _dbc_mkt
+                                _wallet_tx = _debit_wallet_mkt(
+                                    _linked_customer.pk,
+                                    _wallet_deduction,
+                                    tx_type=_WTM.Type.PAYMENT,
+                                    idempotency_key=f"mktpay:{_dbc_mkt.schema_name}:{order.id}",
+                                    reference=order.order_number,
+                                    tenant_id=tenant.id,
+                                    allow_partial=True,
+                                )
+                                _actual = _wallet_tx.amount if _wallet_tx is not None else Decimal("0")
                                 if _actual > Decimal("0"):
-                                    _cust_locked.wallet_balance = _cust_locked.wallet_balance - _actual
-                                    _cust_locked.save(update_fields=["wallet_balance", "updated_at"])
-                                    _WTM.objects.create(
-                                        customer=_cust_locked,
-                                        type=_WTM.Type.PAYMENT,
-                                        amount=_actual,
-                                        reference=order.order_number,
-                                        tenant_id=tenant.id,
-                                        balance_after=_cust_locked.wallet_balance,
-                                    )
                                     order.wallet_amount_paid = _actual
                                     order.save(update_fields=["wallet_amount_paid"])
                                     _paid_by_wallet = _actual

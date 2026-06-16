@@ -239,9 +239,9 @@ class MenuPlaceOrderCurrencyGuardTests(SimpleTestCase):
         req.session = session or _session()
         return req
 
-    def _drive(self, currency):
+    def _drive(self, currency, debit_side_effect=None):
         """Drive a funded pickup order to the wallet-debit chokepoint with the dish in the
-        given currency. Returns the response."""
+        given currency. Returns (response, debit_mock)."""
         dish = _menu_dish(currency=currency)
         customer = MagicMock()
         customer.phone_verified = True
@@ -252,6 +252,11 @@ class MenuPlaceOrderCurrencyGuardTests(SimpleTestCase):
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
         req = self._post(payload, session=_session(customer_id=7))
 
+        # R16b: debit now goes through wallet_service.debit_wallet; mock it so the unit
+        # test does not touch a real DB. The returned tx.amount drives _actual.
+        fake_wallet_tx = MagicMock()
+        fake_wallet_tx.amount = Decimal("10.00")
+
         import accounts.models as _accts
         with patch("menu.views.Profile.objects") as profile_mock, \
              patch("menu.views.Dish.objects") as dish_mock, \
@@ -260,9 +265,10 @@ class MenuPlaceOrderCurrencyGuardTests(SimpleTestCase):
             promo_mock.filter.return_value = []
             dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
             with patch.object(_accts.Customer, "objects") as cust_mock, \
-                 patch.object(_accts.WalletTransaction, "objects") as wtx_mock:
+                 patch("accounts.wallet_service.debit_wallet",
+                       return_value=fake_wallet_tx,
+                       side_effect=debit_side_effect) as debit_mock:
                 cust_mock.get.return_value = customer
-                cust_mock.select_for_update.return_value.get.return_value = customer
                 with patch("menu.views.DishOption.objects") as opt_mock, \
                      patch("menu.views.Order.objects") as order_mock, \
                      patch("menu.views.OrderItem.objects"), \
@@ -285,21 +291,21 @@ class MenuPlaceOrderCurrencyGuardTests(SimpleTestCase):
                     cm.__exit__ = MagicMock(return_value=False)
                     tx_mock.atomic.return_value = cm
                     resp = self.view(req)
-                    return resp, wtx_mock
+                    return resp, debit_mock
 
     def test_non_mad_order_refused_at_chokepoint(self):
-        resp, wtx_mock = self._drive(currency="USD")
+        resp, debit_mock = self._drive(currency="USD")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "currency_unsupported")
         # No wallet money moved for the refused non-MAD order.
-        self.assertFalse(wtx_mock.create.called)
+        self.assertFalse(debit_mock.called)
 
     def test_mad_order_proceeds_unchanged(self):
         """No regression: a MAD order is NOT refused by the guard (the debit runs)."""
-        resp, wtx_mock = self._drive(currency="MAD")
+        resp, debit_mock = self._drive(currency="MAD")
         self.assertNotEqual(resp.data.get("code"), "currency_unsupported")
-        # The MAD path reaches the wallet debit (records a PAYMENT transaction).
-        self.assertTrue(wtx_mock.create.called)
+        # The MAD path reaches the wallet debit (debit_wallet is called).
+        self.assertTrue(debit_mock.called)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -409,7 +415,7 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
         req.session = session or {}
         return self.view(req)
 
-    def _run_order(self, *, currency, customer, created_order=None, wtx_side_effect=None):
+    def _run_order(self, *, currency, customer, created_order=None, debit_side_effect=None):
         dish = _mkt_dish(currency=currency)
         fake_menu, order_cls = _fake_menu_models(dish)
         if created_order is not None:
@@ -421,9 +427,10 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
         tenant.name = "Bistro"
         tenant.schema_name = "bistro"
 
-        wtx_cls = MagicMock()
-        if wtx_side_effect is not None:
-            wtx_cls.objects.create.side_effect = wtx_side_effect
+        # R16b: debit now goes through wallet_service.debit_wallet; mock it so the
+        # unit test does not need a real DB. The returned tx.amount drives _actual.
+        fake_wallet_tx = MagicMock()
+        fake_wallet_tx.amount = Decimal("10.00")
 
         cm = MagicMock()
         cm.__enter__ = MagicMock(return_value=None)
@@ -442,7 +449,9 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", _sc_mock()), \
                     patch("tenancy.models.Profile") as mock_profile_cls, \
                     patch("accounts.views.Customer") as mock_cust_cls, \
-                    patch("accounts.models.WalletTransaction", wtx_cls), \
+                    patch("accounts.wallet_service.debit_wallet",
+                          return_value=fake_wallet_tx,
+                          side_effect=debit_side_effect) as debit_mock, \
                     patch("django.db.transaction.atomic", return_value=cm), \
                     patch("accounts.views._compute_is_open_now", return_value=True), \
                     patch("menu.views._cod_eligible", return_value=False), \
@@ -453,10 +462,9 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
                 mock_profile_cls.objects.filter.return_value.first.return_value = _mkt_profile()
                 mock_cust_cls.DoesNotExist = _FakeDNE
                 mock_cust_cls.objects.get.return_value = customer
-                mock_cust_cls.objects.select_for_update.return_value.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
                     resp = self._post(payload, session={"customer_id": customer.id})
-        return resp, order_cls, wtx_cls
+        return resp, order_cls, debit_mock
 
     def _created_order(self, currency="MAD"):
         o = MagicMock()
@@ -478,33 +486,34 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
     def test_non_mad_order_refused_with_currency_unsupported(self):
         customer = _mkt_customer(wallet="1000")  # funded, so the debit step is reached
         created = self._created_order(currency="USD")
-        resp, _order_cls, wtx_cls = self._run_order(
+        resp, _order_cls, debit_mock = self._run_order(
             currency="USD", customer=customer, created_order=created,
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "currency_unsupported")
         # No wallet money moved for the refused non-MAD order.
-        self.assertFalse(wtx_cls.objects.create.called)
+        self.assertFalse(debit_mock.called)
 
     def test_mad_order_proceeds_and_debits(self):
-        """No regression: a MAD order is not refused and records the wallet PAYMENT."""
+        """No regression: a MAD order is not refused and calls debit_wallet."""
         customer = _mkt_customer(wallet="1000")
         created = self._created_order(currency="MAD")
-        resp, _order_cls, wtx_cls = self._run_order(
+        resp, _order_cls, debit_mock = self._run_order(
             currency="MAD", customer=customer, created_order=created,
         )
         self.assertNotEqual(resp.data.get("code"), "currency_unsupported")
-        self.assertTrue(wtx_cls.objects.create.called)
+        # The MAD path reaches the wallet debit (debit_wallet is called).
+        self.assertTrue(debit_mock.called)
 
     def test_wallet_debit_failure_logs_to_payments(self):
-        """R15b.1: a money-mutation failure in the inline wallet debit emits on 'payments'
-        with attributable ids (no PII/secrets), and the existing 500 path is unchanged."""
+        """R15b.1: a money-mutation failure in debit_wallet emits on 'payments' with
+        attributable ids (no PII/secrets), and the existing 500 path is unchanged."""
         customer = _mkt_customer(wallet="1000")
         created = self._created_order(currency="MAD")
         with self.assertLogs("payments", level="ERROR") as cm:
-            resp, _order_cls, _wtx = self._run_order(
+            resp, _order_cls, _debit = self._run_order(
                 currency="MAD", customer=customer, created_order=created,
-                wtx_side_effect=RuntimeError("ledger write failed"),
+                debit_side_effect=RuntimeError("ledger write failed"),
             )
         joined = "\n".join(cm.output)
         self.assertIn("order_number=ORD-MKT", joined)

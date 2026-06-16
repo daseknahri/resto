@@ -180,6 +180,10 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
             "fulfillment_type": "pickup",
         }
 
+        # Fake wallet_tx returned by debit_wallet — amount matches the order total.
+        fake_wallet_tx = MagicMock()
+        fake_wallet_tx.amount = Decimal("20.00")
+
         with patch("tenancy.models.Tenant") as mock_tenant:
             mock_tenant.DoesNotExist = _FakeDNE
             tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
@@ -187,7 +191,7 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", _sc_mock()), \
                     patch("tenancy.models.Profile") as mock_profile_cls, \
                     patch("accounts.views.Customer") as mock_cust_cls, \
-                    patch("accounts.models.WalletTransaction", MagicMock()), \
+                    patch("accounts.wallet_service.debit_wallet", return_value=fake_wallet_tx), \
                     patch("django.db.transaction.atomic", return_value=cm), \
                     patch("accounts.views._compute_is_open_now", return_value=True), \
                     patch("menu.views._cod_eligible", return_value=False), \
@@ -198,7 +202,6 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
                 mock_profile_cls.objects.filter.return_value.first.return_value = profile
                 mock_cust_cls.DoesNotExist = _FakeDNE
                 mock_cust_cls.objects.get.return_value = customer
-                mock_cust_cls.objects.select_for_update.return_value.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
                     resp = self._post(payload, session={"customer_id": customer.id})
         return resp, order_cls

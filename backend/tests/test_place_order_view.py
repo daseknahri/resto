@@ -354,11 +354,13 @@ class PlaceOrderViewTests(SimpleTestCase):
         }
         req = self._post(data=payload, session=_session(customer_id=7))
         import accounts.models as _accts
+        # R16b: debit_wallet is now the canonical path; mock it so the unit test
+        # does not need a real DB. The returned tx.amount drives _actual.
+        fake_wallet_tx = MagicMock()
+        fake_wallet_tx.amount = Decimal("10.00")
         with patch.object(_accts.Customer, "objects") as cust_mock, \
-             patch.object(_accts.WalletTransaction, "objects"):
+             patch("accounts.wallet_service.debit_wallet", return_value=fake_wallet_tx):
             cust_mock.get.return_value = customer
-            # Delivery is pay-now: the locked-row wallet debit reads this same customer.
-            cust_mock.select_for_update.return_value.get.return_value = customer
             with patch("menu.views.DishOption.objects") as opt_mock:
                 opt_mock.filter.return_value = []
                 with patch("menu.views.Order.objects") as order_mock:
