@@ -49,6 +49,7 @@
 import { computed, ref, nextTick, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import SecuritySettings from "../components/SecuritySettings.vue";
 import { useI18n } from "../composables/useI18n";
 import StepBrand from "../onboarding/StepBrand.vue";
 import StepPublish from "../onboarding/StepPublish.vue";
@@ -85,6 +86,12 @@ const tabs = computed(() => [
     label: t("ownerBilling.tabLabel"),
     icon: "card",
     component: OwnerBilling,
+  },
+  {
+    key: "security",
+    label: t("mfa.securityTabLabel"),
+    icon: "shield",
+    component: SecuritySettings,
   },
 ]);
 

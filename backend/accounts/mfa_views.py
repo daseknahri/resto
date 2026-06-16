@@ -392,6 +392,23 @@ class MFAVerifyView(APIView):
         )
 
 
+class MFAStatusView(APIView):
+    """GET /api/mfa/status/
+
+    Side-effect-free enrollment probe.  Returns {enrolled: bool} where
+    enrolled is True iff a *confirmed* UserTOTPDevice exists for the
+    authenticated user.  No device is ever created by this endpoint.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        enrolled = UserTOTPDevice.objects.filter(
+            user=request.user, confirmed=True
+        ).exists()
+        return Response({"enrolled": enrolled}, status=status.HTTP_200_OK)
+
+
 class MFADisableView(APIView):
     """POST /api/mfa/disable/
 

@@ -78,7 +78,13 @@ export const useSessionStore = defineStore("session", {
       this.loading = true;
       this.error = null;
       try {
-        const { data } = await api.post("/login/", { identifier, password });
+        const { data, status } = await api.post("/login/", { identifier, password });
+        // HTTP 202 means MFA is required — do NOT set the user yet.
+        if (status === 202 || data?.mfa_required === true) {
+          this.user = null;
+          this.loaded = false;
+          return { mfaRequired: true };
+        }
         this.user = data?.user || null;
         this.loaded = true;
         return this.user;
@@ -86,6 +92,24 @@ export const useSessionStore = defineStore("session", {
         this.user = null;
         this.loaded = false;
         this.error = extractErrorMessage(err, translate("sessionStore.signInFailed"));
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async verifyMfa({ code, backup_code }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const payload = backup_code ? { backup_code } : { code };
+        const { data } = await api.post("/mfa/verify/", payload);
+        this.user = data?.user || null;
+        this.loaded = true;
+        return this.user;
+      } catch (err) {
+        this.user = null;
+        this.loaded = false;
+        this.error = extractErrorMessage(err, translate("sessionStore.mfaInvalidCode"));
         throw err;
       } finally {
         this.loading = false;

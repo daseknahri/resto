@@ -247,6 +247,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"],
   },
+  shield: {
+    viewBox: "0 0 24 24",
+    paths: ["M12 2l8 4v5c0 5-3.6 9.7-8 11-4.4-1.3-8-6-8-11V6l8-4z"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

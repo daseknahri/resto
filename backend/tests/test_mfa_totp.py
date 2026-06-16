@@ -314,6 +314,73 @@ class A5_TOTPReplayTests(SimpleTestCase):
 
 
 # ════════════════════════════════════════════════════════════════════════════════
+# A6: MFAStatusView pure-logic unit tests (no DB)
+# ════════════════════════════════════════════════════════════════════════════════
+
+class A6_MFAStatusViewTests(SimpleTestCase):
+    """GET /api/mfa/status/ — side-effect-free enrollment probe.
+
+    Uses the APIRequestFactory + mock QuerySet to avoid any DB access.
+    """
+
+    def _make_request(self, user_pk=1):
+        """Build a GET request with a mock authenticated user."""
+        factory = APIRequestFactory()
+        request = factory.get("/api/mfa/status/")
+        mock_user = MagicMock()
+        mock_user.pk = user_pk
+        mock_user.is_authenticated = True
+        request.user = mock_user
+        return request, mock_user
+
+    def test_enrolled_returns_true(self):
+        """Returns {enrolled: true} when a confirmed device exists."""
+        from accounts.mfa_views import MFAStatusView
+
+        request, mock_user = self._make_request(user_pk=1001)
+
+        with patch("accounts.mfa_views.UserTOTPDevice.objects") as mock_mgr:
+            mock_mgr.filter.return_value.exists.return_value = True
+            view = MFAStatusView()
+            view.permission_classes = []  # bypass IsAuthenticated for unit test
+            response = view.get(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"enrolled": True})
+        mock_mgr.filter.assert_called_once_with(user=mock_user, confirmed=True)
+        mock_mgr.filter.return_value.exists.assert_called_once()
+
+    def test_not_enrolled_returns_false(self):
+        """Returns {enrolled: false} when no confirmed device exists."""
+        from accounts.mfa_views import MFAStatusView
+
+        request, mock_user = self._make_request(user_pk=1002)
+
+        with patch("accounts.mfa_views.UserTOTPDevice.objects") as mock_mgr:
+            mock_mgr.filter.return_value.exists.return_value = False
+            view = MFAStatusView()
+            view.permission_classes = []
+            response = view.get(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"enrolled": False})
+
+    def test_no_device_created(self):
+        """Status check must NOT call UserTOTPDevice.objects.create."""
+        from accounts.mfa_views import MFAStatusView
+
+        request, mock_user = self._make_request(user_pk=1003)
+
+        with patch("accounts.mfa_views.UserTOTPDevice.objects") as mock_mgr:
+            mock_mgr.filter.return_value.exists.return_value = False
+            view = MFAStatusView()
+            view.permission_classes = []
+            view.get(request)
+
+        mock_mgr.create.assert_not_called()
+
+
+# ════════════════════════════════════════════════════════════════════════════════
 # B: DB-backed tests (TestCase — skip locally when Postgres is unavailable)
 # ════════════════════════════════════════════════════════════════════════════════
 
