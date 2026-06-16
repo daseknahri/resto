@@ -49,13 +49,14 @@ if [ -n "${DJANGO_SUPERADMIN_EMAIL:-}" ] && [ -n "${DJANGO_SUPERADMIN_PASSWORD:-
     --email "${DJANGO_SUPERADMIN_EMAIL}"
 fi
 
-# R13: fail loud at boot if local-disk media is not writable by this non-root
-# (UID 10001) container. Without this, user uploads would fail SILENTLY at runtime
-# with PermissionError; failing the boot instead makes Coolify keep the old healthy
-# container. Skipped when media is on object storage (S3), where uploads never touch
-# /app/media. Pre-chown the volume once on first deploy:
-#   docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d
-# Emergency bypass: SKIP_MEDIA_WRITABLE_CHECK=1.
+# R13: warn loudly (do NOT block boot) if local-disk media is not writable by this
+# non-root (UID 10001) container. Image uploads would fail until the media volume is
+# chowned, but the core flows (orders/menus/payments) do not touch /app/media — so a
+# non-writable media dir is a DEGRADED state, not a reason to refuse to serve the whole
+# app (unlike schema-health / check --deploy above, which fail closed because they would
+# serve 500s / lose money events). Skipped when media is on object storage (S3).
+# Fix uploads with: docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d
+# Silence the warning with SKIP_MEDIA_WRITABLE_CHECK=1.
 _media_backend="$(printf '%s' "${DJANGO_MEDIA_STORAGE_BACKEND:-local}" | tr '[:upper:]' '[:lower:]')"
 if [ "${SKIP_MEDIA_WRITABLE_CHECK:-0}" = "1" ]; then
   echo "[entrypoint] SKIP_MEDIA_WRITABLE_CHECK=1 -> skipping media writability check"
@@ -66,8 +67,7 @@ else
   if ( touch "$_media_dir/.writable-probe" && rm -f "$_media_dir/.writable-probe" ) 2>/dev/null; then
     echo "[entrypoint] media dir $_media_dir is writable"
   else
-    echo "[entrypoint] ERROR: $_media_dir is not writable by UID $(id -u). User uploads would fail. Pre-chown the media volume: docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d  (or set SKIP_MEDIA_WRITABLE_CHECK=1 to bypass)." >&2
-    exit 1
+    echo "[entrypoint] WARNING: $_media_dir is not writable by UID $(id -u) — image uploads will FAIL until the media volume is chowned: docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d . Serving anyway (core flows do not need media writes)." >&2
   fi
 fi
 
