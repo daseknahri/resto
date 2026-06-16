@@ -123,8 +123,12 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 - [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
 - [ ] **R23 (P3) Incident-response runbook + remove vestigial pytest.ini** — no SEV ladder; pytest.ini has no
       pytest-django/conftest (real runner is manage.py test). [non-gated, S]
-- [ ] **R24 (P3) Code-split i18n locales + responsive image srcset** — 3 locales statically bundled into the 669kB
-      entry chunk; single full-size WebP to every viewport (LCP on the QR-menu path). [non-gated, M]
+- [~] **R24 (P3) Code-split i18n locales + responsive image srcset — i18n DONE (prod-harden-frontend-perf, a84cc7d)** —
+      FR (195kB) + AR (221kB) catalogs now lazy dynamic-import()'d into separate chunks, out of the entry bundle;
+      EN bundled for first paint. Resilient to a failed chunk fetch (retry-evict + setLocale keeps current locale).
+      Images already had loading/decoding + sized containers (no CLS); LCP heroes eager+fetchpriority. Gates green
+      (124 fe tests). REMAINING → R24b: responsive image srcset needs a server-side thumbnail/CDN-proxy pipeline
+      (raw /media/ uploads have no size variants) — deferred.
 
 ## Restaurant (current focus — candidates for post-v1.0)
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
