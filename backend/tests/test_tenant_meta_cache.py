@@ -4,6 +4,13 @@ invalidation logic in ProfileView.perform_update().
 
 All tests are SimpleTestCase (no database).  The Django cache and DRF
 serializer are both mocked so the suite never touches Redis or Postgres.
+
+R14c NOTE: the actual cache GET/SET/lock operations now live in the shared
+single-flight helper (tenancy.cache_utils.get_or_build_single_flight), so
+cache-hit/miss assertions patch ``tenancy.cache_utils.cache`` (the module-
+level cache reference used by the helper).  _bust_tenant_meta_cache still
+calls ``cache.delete_many`` via its own module-level import (tenancy.api.cache),
+so bust tests continue to patch ``tenancy.api.cache``.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
@@ -55,18 +62,22 @@ def _auth_request(factory, path="/api/meta/", **kwargs):
 
 
 # ── TenantMetaView cache-hit tests ─────────────────────────────────────────────
+# R14c: single-flight GET/SET/lock live in tenancy.cache_utils, so we patch
+# ``tenancy.cache_utils.cache`` to control cache hits/misses.  On a miss we
+# also stub ``cache.add`` to return True (the winner acquires the build lock
+# uncontested in these single-request unit tests).
 
 class TenantMetaCacheHitTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_cache_hit_returns_cached_data_without_calling_serializer(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """A warm cache returns the stored dict directly; serializer is never called."""
-        mock_cache.get.return_value = _fake_meta_data()
+        mock_sf_cache.get.return_value = _fake_meta_data()
 
         req = _anon_request(self.factory)
         response = TenantMetaView.as_view()(req)
@@ -75,46 +86,50 @@ class TenantMetaCacheHitTests(SimpleTestCase):
         self.assertEqual(response.data["slug"], "demo")
         mock_serializer_cls.from_tenant.assert_not_called()
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
-    def test_cache_hit_does_not_call_cache_set(self, mock_serializer_cls, mock_cache):
+    def test_cache_hit_does_not_call_cache_set(self, mock_serializer_cls, mock_sf_cache):
         """On a cache hit we must not write back to the cache (no double-set)."""
-        mock_cache.get.return_value = _fake_meta_data()
+        mock_sf_cache.get.return_value = _fake_meta_data()
 
         req = _anon_request(self.factory)
         TenantMetaView.as_view()(req)
 
-        mock_cache.set.assert_not_called()
+        mock_sf_cache.set.assert_not_called()
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_cache_hit_uses_correct_key_for_lang_param(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Cache lookup uses the ?lang= query param in the key."""
-        mock_cache.get.return_value = _fake_meta_data()
+        mock_sf_cache.get.return_value = _fake_meta_data()
 
         req = self.factory.get("/api/meta/?lang=ar")
         req.tenant = _make_tenant()
         TenantMetaView.as_view()(req)
 
-        mock_cache.get.assert_called_once_with("meta:v1:demo:ar")
+        mock_sf_cache.get.assert_called_once_with("meta:v1:demo:ar")
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_cache_hit_uses_auth_key_for_authenticated_users(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Authenticated owner requests are keyed with '_auth' locale scope."""
-        mock_cache.get.return_value = _fake_meta_data()
+        mock_sf_cache.get.return_value = _fake_meta_data()
 
         req = _auth_request(self.factory)
         TenantMetaView.as_view()(req)
 
-        mock_cache.get.assert_called_once_with("meta:v1:demo:_auth")
+        mock_sf_cache.get.assert_called_once_with("meta:v1:demo:_auth")
 
 
 # ── TenantMetaView cache-miss tests ────────────────────────────────────────────
+# R14c: patch ``tenancy.cache_utils.cache`` (single-flight helper's cache).
+# On a miss, also stub ``cache.add`` to return True so this request wins the
+# (uncontested) build lock.  cache.set is called positionally by the helper:
+# cache.set(key, value, ttl) — no ``timeout=`` keyword.
 
 class TenantMetaCacheMissTests(SimpleTestCase):
     def setUp(self):
@@ -128,11 +143,12 @@ class TenantMetaCacheMissTests(SimpleTestCase):
         mock_cls.from_tenant.return_value = instance
         return fake_data
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
-    def test_cache_miss_calls_serializer(self, mock_serializer_cls, mock_cache):
+    def test_cache_miss_calls_serializer(self, mock_serializer_cls, mock_sf_cache):
         """On a miss the serializer is called once with the correct tenant."""
-        mock_cache.get.return_value = None
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True  # wins the build lock
         self._mock_serializer(mock_serializer_cls)
 
         req = _anon_request(self.factory)
@@ -143,51 +159,55 @@ class TenantMetaCacheMissTests(SimpleTestCase):
         call_kwargs = mock_serializer_cls.from_tenant.call_args
         self.assertEqual(call_kwargs.args[0].slug, "demo")
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
-    def test_cache_miss_stores_result_with_ttl(self, mock_serializer_cls, mock_cache):
+    def test_cache_miss_stores_result_with_ttl(self, mock_serializer_cls, mock_sf_cache):
         """After a miss, the computed result is written to cache with the correct TTL."""
-        mock_cache.get.return_value = None
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True  # wins the build lock
         fake_data = self._mock_serializer(mock_serializer_cls)
 
         req = _anon_request(self.factory)
         TenantMetaView.as_view()(req)
 
-        mock_cache.set.assert_called_once_with("meta:v1:demo:", fake_data, timeout=300)
+        # Single-flight calls cache.set(key, value, ttl) positionally (no timeout= kwarg).
+        mock_sf_cache.set.assert_called_once_with("meta:v1:demo:", fake_data, 300)
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_cache_miss_with_lang_param_uses_lang_in_key(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Cache set uses the same key that was looked up — including ?lang=."""
-        mock_cache.get.return_value = None
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True  # wins the build lock
         fake_data = self._mock_serializer(mock_serializer_cls)
 
         req = self.factory.get("/api/meta/?lang=fr")
         req.tenant = _make_tenant()
         TenantMetaView.as_view()(req)
 
-        mock_cache.set.assert_called_once_with("meta:v1:demo:fr", fake_data, timeout=300)
+        mock_sf_cache.set.assert_called_once_with("meta:v1:demo:fr", fake_data, 300)
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_cache_miss_authenticated_uses_auth_key(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Authenticated miss stores under the '_auth' key."""
-        mock_cache.get.return_value = None
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True  # wins the build lock
         fake_data = self._mock_serializer(mock_serializer_cls)
 
         req = _auth_request(self.factory)
         TenantMetaView.as_view()(req)
 
-        mock_cache.set.assert_called_once_with("meta:v1:demo:_auth", fake_data, timeout=300)
+        mock_sf_cache.set.assert_called_once_with("meta:v1:demo:_auth", fake_data, 300)
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_no_tenant_returns_400_without_touching_cache(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Missing tenant → 400 response; cache must not be read or written."""
         req = self.factory.get("/api/meta/")
@@ -196,8 +216,8 @@ class TenantMetaCacheMissTests(SimpleTestCase):
         response = TenantMetaView.as_view()(req)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        mock_cache.get.assert_not_called()
-        mock_cache.set.assert_not_called()
+        mock_sf_cache.get.assert_not_called()
+        mock_sf_cache.set.assert_not_called()
 
 
 # ── Cache key helper tests ──────────────────────────────────────────────────────
@@ -596,18 +616,22 @@ def copy_deep(obj):
 
 class MetaViewLiveRecomputeIntegrationTests(SimpleTestCase):
     """End-to-end through TenantMetaView: both return paths recompute is_open_now and
-    never leak _isopen_raw; the cache-hit path does NO DB query for the recompute."""
+    never leak _isopen_raw; the cache-hit path does NO DB query for the recompute.
+
+    R14c: patch ``tenancy.cache_utils.cache`` (single-flight helper's cache).
+    On a miss, stub ``cache.add`` to return True (wins build lock uncontested).
+    """
 
     def setUp(self):
         self.factory = APIRequestFactory()
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
-    def test_cache_hit_recompute_does_no_db_and_no_leak(self, mock_serializer_cls, mock_cache):
+    def test_cache_hit_recompute_does_no_db_and_no_leak(self, mock_serializer_cls, mock_sf_cache):
         """(c)+(d) On a warm cache the view recomputes is_open_now WITHOUT a DB query and
         without leaking _isopen_raw. We assert no ClosureDate query is issued on the hit
         path (closure_today is cached) and the serializer is never invoked."""
-        mock_cache.get.return_value = _meta_payload_with_raw(
+        mock_sf_cache.get.return_value = _meta_payload_with_raw(
             schedule=_MON_SCHEDULE, timezone="UTC", closure_today=False)
 
         req = _anon_request(self.factory)
@@ -625,11 +649,11 @@ class MetaViewLiveRecomputeIntegrationTests(SimpleTestCase):
         # Internal key never leaks to the client.
         self.assertNotIn(_META_ISOPEN_RAW_KEY, response.data)
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
-    def test_cache_hit_recomputes_open_at_open_instant(self, mock_serializer_cls, mock_cache):
+    def test_cache_hit_recomputes_open_at_open_instant(self, mock_serializer_cls, mock_sf_cache):
         """Same warm payload, an in-window instant → open (proves it is live, not baked)."""
-        mock_cache.get.return_value = _meta_payload_with_raw(
+        mock_sf_cache.get.return_value = _meta_payload_with_raw(
             schedule=_MON_SCHEDULE, timezone="UTC", baked_is_open_now=False)
 
         req = _anon_request(self.factory)
@@ -639,14 +663,15 @@ class MetaViewLiveRecomputeIntegrationTests(SimpleTestCase):
 
         self.assertTrue(response.data["profile"]["is_open_now"])
 
-    @patch("tenancy.api.cache")
+    @patch("tenancy.cache_utils.cache")
     @patch("tenancy.api.TenantMetaSerializer")
     def test_fresh_build_attaches_raw_caches_with_it_and_strips_from_response(
-        self, mock_serializer_cls, mock_cache
+        self, mock_serializer_cls, mock_sf_cache
     ):
         """Cache miss: the view attaches _isopen_raw from the profile, caches the payload
         WITH it, computes closure_today ONCE, and returns a stripped recomputed copy."""
-        mock_cache.get.return_value = None
+        mock_sf_cache.get.return_value = None
+        mock_sf_cache.add.return_value = True  # wins the build lock
         fresh = {"name": "Demo", "slug": "demo", "plan": {},
                  "profile": {"is_open_now": True, "name": "Demo"}}
         instance = MagicMock()
@@ -677,7 +702,8 @@ class MetaViewLiveRecomputeIntegrationTests(SimpleTestCase):
             response = TenantMetaView.as_view()(req)
 
         # The CACHED object carries _isopen_raw (so later hits can recompute).
-        cached_arg = mock_cache.set.call_args.args[1]
+        # Single-flight calls cache.set(key, value, ttl) positionally.
+        cached_arg = mock_sf_cache.set.call_args.args[1]
         self.assertIn(_META_ISOPEN_RAW_KEY, cached_arg)
         self.assertEqual(cached_arg[_META_ISOPEN_RAW_KEY]["timezone"], "UTC")
         self.assertIs(cached_arg[_META_ISOPEN_RAW_KEY]["schedule"], _MON_SCHEDULE)
