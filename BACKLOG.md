@@ -77,9 +77,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       to both views (default page_size=100 = old cap so the un-updated frontend is unaffected; explicit page_size
       clamped [1,50]); sort applied to the full set before the page slice; cache key varies by page/q; single-flight +
       post-cache recompute intact. Backend 3949/0; +14 tests.
-- [ ] **R9b (P2) Frontend load-more UI to browse past page 1** — the page/page_size/has_more API is now in place;
-      the marketplace/directory Vue pages still render only page 1 (default 100). Add infinite-scroll / "load more"
-      that consumes has_more + the page param so a customer can browse beyond the first 100 tenants. [scout prod-harden-pagination]
+- [x] **R9b (P2) Frontend load-more — DONE (c006520) + R9c polish (c57881e)** — Marketplace + Directory "Load more"
+      consumes page/has_more, carries the same filter params, appends results, race-guarded, aria-live. Initial fetch
+      now page_size=20. R9c: hide the button over a client-side-filtered-empty grid + named MKT_PAGE_SIZE. 124 fe tests.
+      **R9d (minor, deferred): add page-level load-more unit tests (SPA has no Directory/Marketplace page tests yet).**
 - [x] **R10 (P1) Run frontend vitest + verify:i18n in CI — DONE (prod-harden-deps-ci)** — ci.yml frontend job now
       runs verify:i18n + lint + test + build (was only lint+build); the 124 vitest tests + i18n key-completeness
       now gate every push/PR. [non-gated]
@@ -107,9 +108,9 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       tenancy/cache_utils.get_or_build_single_flight (DRY: the marketplace/directory helper now delegates to it) and
       applied it to the per-tenant MENU list cache (the hottest public path — every QR scan). Backend 3913/0; +15 tests;
       fixed 2 review minors (dead import, non-200 status re-emit). [scout prod-harden-load]
-- [ ] **R14c (P3) Single-flight the /api/meta/ cache (low pri)** — tenancy/api.py:294 TenantMetaView.get rebuilds
-      (serializer + 1 ClosureDate query) with no single-flight; cheap per-tenant build so the stampede cost is far
-      below the menu/list rebuilds already fixed. Reuse tenancy/cache_utils.get_or_build_single_flight. [scout prod-harden-load-2]
+- [x] **R14c (P3) Single-flight the /api/meta/ cache — DONE (3632e0d)** — TenantMetaView now builds via
+      get_or_build_single_flight; live is_open_now recompute still runs every request after the cache; key/TTL/bust
+      paths unchanged; 10 meta-cache tests updated; 4005 passed.
 - [x] **R15 (P2) payments logger + request_id→Sentry tag — DONE (prod-harden-observability)** — dedicated "payments"
       logger at wallet_service credit/debit/transfer/float failures + the swallowed driver-payout failure (alertable,
       still reaches Sentry); RequestLoggingMiddleware sets a guarded request_id Sentry tag (log↔error pivot). **Review
@@ -124,10 +125,15 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       GUARD shipped: PlaceOrderView + MarketplacePlaceOrderView refuse a wallet debit on a non-MAD order (400
       currency_unsupported) before any debit; a no-op for MAD (every order today). Also corrected the order-currency
       default from "USD" → "MAD" (a MAD-only app shouldn't default unspecified currency to USD; makes the guard a true
-      no-op for blank-currency dishes). **DEFERRED (R16b):** route the 2 inline hand-rolled wallet debits through
-      wallet_service.debit_wallet with a schema-namespaced per-tx key (placeorder:{schema}:{order.id}) so future
-      wallet_service invariants cover them — needs DB-test verification + careful money-path review. (MAD-only-for-launch
-      is the owner's confirm; the guard ships the safe default now.)
+      no-op for blank-currency dishes). **R16b DONE (6f0f575):** the 2 inline checkout wallet debits (PlaceOrderView +
+      MarketplacePlaceOrderView) + the unverified-wallet sweep now route through wallet_service.debit_wallet with
+      schema-namespaced per-order idempotency keys (orderpay_checkout/mktpay:{schema}:{order.id}) — adds the missing
+      wallet-level idempotency that closed a double-submit double-charge window; allow_partial preserves min()-charge;
+      prepay gate intact; sweep re-check now under lock. Adversarial money review APPROVE; lockout-atomic (cashout/
+      voucher → add+incr, 732ed8d) shipped too. **R16c DEFERRED (money-replay caveat): the loyalty-redeem inline wallet
+      CREDIT is currently CORRECT (IntegrityError-rollback on the unique key). Naive split to credit_wallet is a BUG —
+      credit_wallet is idempotent-returns-existing, so on replay points would double-deduct while the credit is skipped.
+      Needs an idempotency short-circuit + DB verification; not worth a money regression for consistency on correct code.** (MAD-only is the owner's confirm.)
 - [~] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM — fs SCAN DONE (1e671c1)** —
       .github/workflows/security-scan.yml: trivy fs (vuln+secret+config) on push/PR/weekly-cron, fail HIGH/CRITICAL,
       ignore-unfixed, SARIF→Security tab; .trivyignore seeded empty; dependabot docker ecosystem (backend+frontend).
