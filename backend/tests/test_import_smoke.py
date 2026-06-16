@@ -24,7 +24,6 @@ EXCLUSIONS
 * ``tests`` subpackages (if any) — not product code.
 * ``config.asgi`` / ``config.wsgi`` — they instantiate the ASGI/WSGI
   application at import time (server bootstrap, not importable app logic).
-* ``tenancy.profile`` — a KNOWN orphan dead module (see ``KNOWN_BROKEN`` below).
 """
 
 from __future__ import annotations
@@ -51,13 +50,10 @@ EXCLUDED_MODULES = {
 # starts failing for a DIFFERENT reason (a genuinely new broken import), the
 # substring check below fails and this test catches it loudly.
 #
-# tenancy.profile: an orphan, dead duplicate-`Profile`-model module.  Nothing in
-# the repo imports it (the live Profile is tenancy.models.Profile).  Importing it
-# raises a Django RuntimeError about conflicting 'profile' models.  R19 flags
-# this for deletion (product-code change, out of scope for this additive batch).
-KNOWN_BROKEN = {
-    "tenancy.profile": "Conflicting 'profile' models",
-}
+# Currently empty: the only former entry, ``tenancy.profile`` (an orphan dead
+# duplicate-`Profile`-model module), was deleted.  Add an entry here only when a
+# module legitimately cannot be plain-imported and that is intentional.
+KNOWN_BROKEN: dict[str, str] = {}
 
 
 def _walk_app_modules():
