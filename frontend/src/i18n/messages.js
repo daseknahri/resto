@@ -394,6 +394,9 @@ export const messages = {
       viewMenu: "View menu",
       loading: "Loading restaurants…",
       fetchError: "Could not load restaurants.",
+      loadMore: "Load more",
+      loadingMore: "Loading…",
+      loadMoreAriaLabel: "Load more restaurants",
     },
     services: {
       foodTitle: "Order food",
@@ -479,6 +482,9 @@ export const messages = {
       rideTileTitle: "Need to get somewhere?",
       rideTileSubtitle: "Book a Kepoli ride — fixed price upfront.",
       rideTileCta: "Book a ride",
+      loadMore: "Load more",
+      loadingMore: "Loading…",
+      loadMoreAriaLabel: "Load more restaurants",
     },
     mktMenu: {
       loading: "Loading menu…",
@@ -5290,6 +5296,9 @@ export const messages = {
       viewMenu: "Voir le menu",
       loading: "Chargement des restaurants…",
       fetchError: "Impossible de charger les restaurants.",
+      loadMore: "Afficher plus",
+      loadingMore: "Chargement…",
+      loadMoreAriaLabel: "Afficher plus de restaurants",
     },
     services: {
       foodTitle: "Commander à manger",
@@ -5375,6 +5384,9 @@ export const messages = {
       rideTileTitle: "Vous souhaitez aller quelque part ?",
       rideTileSubtitle: "Reservez une course Kepoli — prix fixe a l'avance.",
       rideTileCta: "Reserver une course",
+      loadMore: "Afficher plus",
+      loadingMore: "Chargement…",
+      loadMoreAriaLabel: "Afficher plus de restaurants",
     },
     mktMenu: {
       loading: "Chargement du menu…",

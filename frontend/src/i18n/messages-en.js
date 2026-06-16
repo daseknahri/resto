@@ -393,6 +393,9 @@ directory: {
   viewMenu: "View menu",
   loading: "Loading restaurants…",
   fetchError: "Could not load restaurants.",
+  loadMore: "Load more",
+  loadingMore: "Loading…",
+  loadMoreAriaLabel: "Load more restaurants",
 },
 services: {
   foodTitle: "Order food",
@@ -478,6 +481,9 @@ marketplace: {
   rideTileTitle: "Need to get somewhere?",
   rideTileSubtitle: "Book a Kepoli ride — fixed price upfront.",
   rideTileCta: "Book a ride",
+  loadMore: "Load more",
+  loadingMore: "Loading…",
+  loadMoreAriaLabel: "Load more restaurants",
 },
 mktMenu: {
   loading: "Loading menu…",

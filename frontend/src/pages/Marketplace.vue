@@ -447,8 +447,8 @@
         </button>
       </div>
 
-      <!-- Grid -->
-      <ul v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- Grid + Load More -->
+      <ul v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" :aria-label="t('marketplace.kicker')" aria-live="polite" aria-relevant="additions">
         <li
           v-for="(r, index) in displayedRestaurants"
           :key="r.slug"
@@ -595,6 +595,30 @@
           </div>
         </li>
       </ul>
+
+      <!-- Load More -->
+      <div v-if="!loading && !fetchError && hasMore" class="flex justify-center pt-2 pb-4">
+        <button
+          type="button"
+          class="ui-btn-outline ui-press inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:opacity-60"
+          :disabled="loadingMore"
+          :aria-busy="loadingMore"
+          :aria-label="t('marketplace.loadMoreAriaLabel')"
+          @click="loadMoreRestaurants"
+        >
+          <svg
+            v-if="loadingMore"
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            class="h-4 w-4 animate-spin shrink-0"
+          ><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ loadingMore ? t('marketplace.loadingMore') : t('marketplace.loadMore') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -673,9 +697,13 @@ const SHOP_SUBTYPES = computed(() => [
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);
+const loadingMore = ref(false);
 const fetchError = ref(false);
 const restaurants = ref([]);
 const filters = ref({ cities: [], cuisines: [], tags: [] });
+// Pagination state (R9b)
+const currentPage = ref(1);
+const hasMore = ref(false);
 
 // Filters
 const searchQuery = ref('');
@@ -907,24 +935,33 @@ const requestLocation = () => {
   );
 };
 
-// ── API fetch ─────────────────────────────────────────────────────────────────
+// ── API fetch helpers ─────────────────────────────────────────────────────────
+const _buildParams = () => {
+  const params = { page_size: 20 };
+  if (searchQuery.value) params.q = searchQuery.value;
+  if (selectedCity.value) params.city = selectedCity.value;
+  if (selectedCuisine.value) params.cuisine = selectedCuisine.value;
+  if (selectedFulfillment.value !== 'any') params.fulfillment = selectedFulfillment.value;
+  if (selectedPriceTier.value) params.price_tier = selectedPriceTier.value;
+  if (selectedMinRating.value) params.min_rating = selectedMinRating.value;
+  if (openOnly.value) params.open = '1';
+  if (selectedTags.value.length) params.tags = selectedTags.value.join(',');
+  if (userLat.value != null) { params.lat = userLat.value; params.lng = userLng.value; }
+  return params;
+};
+
+// ── Initial / filter-change fetch (resets to page 1, replaces results) ────────
 const fetchRestaurants = async () => {
   loading.value = true;
   fetchError.value = false;
+  currentPage.value = 1;
+  hasMore.value = false;
   try {
-    const params = {};
-    if (searchQuery.value) params.q = searchQuery.value;
-    if (selectedCity.value) params.city = selectedCity.value;
-    if (selectedCuisine.value) params.cuisine = selectedCuisine.value;
-    if (selectedFulfillment.value !== 'any') params.fulfillment = selectedFulfillment.value;
-    if (selectedPriceTier.value) params.price_tier = selectedPriceTier.value;
-    if (selectedMinRating.value) params.min_rating = selectedMinRating.value;
-    if (openOnly.value) params.open = '1';
-    if (selectedTags.value.length) params.tags = selectedTags.value.join(',');
-    if (userLat.value != null) { params.lat = userLat.value; params.lng = userLng.value; }
-
+    const params = { ..._buildParams(), page: 1 };
     const res = await api.get('/marketplace/', { params });
     restaurants.value = res.data.restaurants || [];
+    hasMore.value = Boolean(res.data.has_more);
+    currentPage.value = res.data.page ?? 1;
     // Merge filter options preserving any already loaded (so dropdowns don't disappear)
     const incoming = res.data.filters || {};
     if (incoming.cities?.length) filters.value.cities = incoming.cities;
@@ -934,6 +971,30 @@ const fetchRestaurants = async () => {
     fetchError.value = true;
   } finally {
     loading.value = false;
+  }
+};
+
+// ── Load More — fetches next page and appends results ─────────────────────────
+const loadMoreRestaurants = async () => {
+  if (loadingMore.value || !hasMore.value) return;
+  loadingMore.value = true;
+  const nextPage = currentPage.value + 1;
+  try {
+    const params = { ..._buildParams(), page: nextPage };
+    const res = await api.get('/marketplace/', { params });
+    const incoming = res.data.restaurants || [];
+    restaurants.value = [...restaurants.value, ...incoming];
+    hasMore.value = Boolean(res.data.has_more);
+    currentPage.value = res.data.page ?? nextPage;
+    // Merge filter options from new page too
+    const incomingFilters = res.data.filters || {};
+    if (incomingFilters.cities?.length) filters.value.cities = incomingFilters.cities;
+    if (incomingFilters.cuisines?.length) filters.value.cuisines = incomingFilters.cuisines;
+    if (incomingFilters.tags?.length) filters.value.tags = incomingFilters.tags;
+  } catch {
+    // Non-fatal: keep existing results, button remains visible so user can retry
+  } finally {
+    loadingMore.value = false;
   }
 };
 

@@ -111,10 +111,12 @@
         <p class="mt-1.5 text-sm text-slate-400">{{ t('directory.noResultsHint') }}</p>
       </div>
 
-      <!-- Restaurant grid -->
+      <!-- Restaurant grid + Load More -->
       <ul
         v-else
         class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        aria-live="polite"
+        aria-relevant="additions"
       >
         <li
           v-for="(r, index) in filteredRestaurants"
@@ -201,6 +203,30 @@
           </div>
         </li>
       </ul>
+
+      <!-- Load More -->
+      <div v-if="!loading && !fetchError && hasMore" class="flex justify-center pt-2 pb-4">
+        <button
+          type="button"
+          class="ui-btn-outline ui-press inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:opacity-60"
+          :disabled="loadingMore"
+          :aria-busy="loadingMore"
+          :aria-label="t('directory.loadMoreAriaLabel')"
+          @click="loadMoreDirectory"
+        >
+          <svg
+            v-if="loadingMore"
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            class="h-4 w-4 animate-spin shrink-0"
+          ><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ loadingMore ? t('directory.loadingMore') : t('directory.loadMore') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -213,9 +239,13 @@ import api from '../lib/api';
 const { t } = useI18n();
 
 const loading = ref(true);
+const loadingMore = ref(false);
 const fetchError = ref(false);
 const restaurants = ref([]);
 const filters = ref({ cities: [], cuisines: [] });
+// Pagination state (R9b)
+const currentPage = ref(1);
+const hasMore = ref(false);
 
 const searchQuery = ref('');
 const selectedCity = ref('');
@@ -267,17 +297,45 @@ const restaurantUrl = (slug) => {
   return `${protocol}//${slug}.${rootDomain}/browse`;
 };
 
+const _DIR_PAGE_SIZE = 20;
+
+// Initial fetch — resets to page 1, replaces results
 const fetchDirectory = async () => {
   loading.value = true;
   fetchError.value = false;
+  currentPage.value = 1;
+  hasMore.value = false;
   try {
-    const res = await api.get('/directory/');
+    const res = await api.get('/directory/', { params: { page: 1, page_size: _DIR_PAGE_SIZE } });
     restaurants.value = res.data.restaurants || [];
     filters.value = res.data.filters || { cities: [], cuisines: [] };
+    hasMore.value = Boolean(res.data.has_more);
+    currentPage.value = res.data.page ?? 1;
   } catch {
     fetchError.value = true;
   } finally {
     loading.value = false;
+  }
+};
+
+// Load More — fetches next page and appends (client-side filters still apply via computed)
+const loadMoreDirectory = async () => {
+  if (loadingMore.value || !hasMore.value) return;
+  loadingMore.value = true;
+  const nextPage = currentPage.value + 1;
+  try {
+    const res = await api.get('/directory/', { params: { page: nextPage, page_size: _DIR_PAGE_SIZE } });
+    restaurants.value = [...restaurants.value, ...(res.data.restaurants || [])];
+    hasMore.value = Boolean(res.data.has_more);
+    currentPage.value = res.data.page ?? nextPage;
+    // Merge filter options
+    const inc = res.data.filters || {};
+    if (inc.cities?.length) filters.value.cities = inc.cities;
+    if (inc.cuisines?.length) filters.value.cuisines = inc.cuisines;
+  } catch {
+    // Non-fatal: keep existing results, button stays so user can retry
+  } finally {
+    loadingMore.value = false;
   }
 };
 

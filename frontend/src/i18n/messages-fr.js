@@ -392,6 +392,9 @@ directory: {
   viewMenu: "Voir le menu",
   loading: "Chargement des restaurants…",
   fetchError: "Impossible de charger les restaurants.",
+  loadMore: "Afficher plus",
+  loadingMore: "Chargement…",
+  loadMoreAriaLabel: "Afficher plus de restaurants",
 },
 services: {
   foodTitle: "Commander à manger",
@@ -477,6 +480,9 @@ marketplace: {
   rideTileTitle: "Vous souhaitez aller quelque part ?",
   rideTileSubtitle: "Reservez une course Kepoli — prix fixe a l'avance.",
   rideTileCta: "Reserver une course",
+  loadMore: "Afficher plus",
+  loadingMore: "Chargement…",
+  loadMoreAriaLabel: "Afficher plus de restaurants",
 },
 mktMenu: {
   loading: "Chargement du menu…",
