@@ -1,0 +1,15 @@
+# Trivy ignore file — R17.
+#
+# Add named CVE/finding IDs here ONLY when there is no upstream fix and the
+# risk is formally accepted.  Each entry must include:
+#   1. The finding ID (CVE-YYYY-NNNNN or Trivy check ID).
+#   2. A dated comment with the reason and re-review date.
+#   3. A reference issue / ticket where the deferral was approved.
+#
+# Example (do not uncomment without a real acceptance decision):
+#   CVE-2024-12345  # python:3.12-slim base — no fix as of 2025-06-16; low
+#                   # exploitability in containerised runtime; revisit 2025-09.
+#                   # Tracked: https://github.com/org/resto/issues/NNN
+#
+# NEVER add entries without justification; never add wildcards or ecosystem-
+# wide ignores.  The goal is zero entries here through timely patching.

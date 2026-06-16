@@ -38,3 +38,32 @@ updates:
         update-types:
           - patch
           - minor
+
+  # R17: Docker base-image updates for backend/Dockerfile (python:3.12-slim).
+  # Dependabot opens a PR whenever a new patch/minor tag is published for the
+  # FROM image, keeping OS-level packages in the base layer current.
+  # NOTE: Once R17b digest-pinning is implemented (FROM python@sha256:...),
+  # Dependabot will also track digest updates automatically.
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      docker-backend-patch-minor:
+        update-types:
+          - patch
+          - minor
+
+  # R17: Docker base-image updates for frontend/Dockerfile (node:20-alpine,
+  # nginx:1.27-alpine).  Both build and runner stages are tracked.
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      docker-frontend-patch-minor:
+        update-types:
+          - patch
+          - minor

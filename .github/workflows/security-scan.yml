@@ -1,0 +1,116 @@
+name: security-scan
+
+# R17: Trivy supply-chain scan — complements ci.yml pip-audit + npm audit (R6).
+#
+# What R6 already does:
+#   - pip-audit: CVEs in Python packages listed in backend/requirements.txt
+#   - npm audit: CVEs in JS packages listed in frontend/package-lock.json
+#
+# What R17 adds that R6 cannot catch:
+#   1. SECRET SCANNING  — hardcoded API keys, tokens, passwords committed
+#      anywhere in the repo (Trivy secret scanner; catches what pip/npm audit
+#      never touches).
+#   2. DOCKERFILE / COMPOSE MISCONFIGURATIONS — e.g. USER root, ADD instead
+#      of COPY, privileged containers, exposed sensitive ports, missing
+#      HEALTHCHECK.  This is the REGRESSION GUARD for R13: if any Dockerfile
+#      reverts to running as root Trivy flags it as a HIGH/CRITICAL misconfig
+#      and the job fails.
+#   3. OS-PACKAGE LOCKFILE VULNS — CVEs in OS-level packages referenced by
+#      lockfiles that pip/npm audits do not inspect.
+#   4. WEEKLY SCHEDULE — re-scans unchanged code so newly-disclosed CVEs
+#      (published after the last push) are still caught promptly.
+#
+# R17b (DEFERRED — needs a Docker daemon, not available in this env):
+#   - trivy image scan of the built backend/frontend images for OS base-image
+#     CVEs (python:3.12-slim, nginx:1.27-alpine, node:20-alpine, etc.).
+#   - Digest-pinning the base images in the Dockerfiles (e.g.
+#     python@sha256:...) so FROM tags cannot be silently redirected; Dependabot
+#     docker entries (added in dependabot.yml) keep those digests current once
+#     pinning is in place.
+#   Both require `docker build` + `docker manifest inspect`, which need a live
+#   daemon.  Implement in a follow-up workflow step that runs on a self-hosted
+#   runner or a GitHub-hosted runner after images are pushed to a registry.
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan on Monday 06:00 UTC so newly-disclosed CVEs in unchanged
+    # deps are caught even without a code push.
+    - cron: '0 6 * * 1'
+
+jobs:
+  trivy-scan:
+    name: Trivy supply-chain scan
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload SARIF results to GitHub Security tab (optional but
+      # allows findings to appear in the Dependabot / code-scanning UI).
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        # aquasecurity/trivy-action wraps the Trivy CLI.
+        # Pin the action version; Dependabot (github-actions ecosystem, see
+        # dependabot.yml) will keep this current.
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          # fs scan: walks the repo tree — picks up Dockerfiles, docker-compose
+          # files (misconfig), lockfiles (vuln), and source files (secret).
+          scan-type: fs
+          scan-ref: .
+
+          # Scanners enabled:
+          #   vuln    — CVEs in OS packages found via lockfiles
+          #   secret  — hardcoded credentials / tokens anywhere in source
+          #   config  — Dockerfile + compose misconfigurations (R13 guard)
+          scanners: vuln,secret,config
+
+          # Only fail on HIGH and CRITICAL — keeps signal high and avoids
+          # blocking the build on LOW/MEDIUM noise that often has no available
+          # fix.  MEDIUM/LOW findings are still printed in the job log.
+          severity: HIGH,CRITICAL
+
+          # Skip findings where no fix version exists upstream — these are
+          # unactionable and would permanently block the build.
+          ignore-unfixed: true
+
+          # Exit code 1 on any HIGH/CRITICAL finding → job fails.
+          exit-code: '1'
+
+          # Human-readable table output in the CI log; also emit SARIF so
+          # findings appear in GitHub Security → Code Scanning.
+          format: table
+
+          # Suppress findings listed in .trivyignore (see repo root).
+          # The file is intentionally empty to start — only add named CVE/
+          # finding IDs with documented justification (never blanket-ignore).
+          trivyignores: .trivyignore
+
+      - name: Upload SARIF to GitHub Security tab
+        # Always upload even if the scan step failed, so findings are visible
+        # in the Security tab regardless of exit code.
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,config
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+          format: sarif
+          output: trivy-results.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload SARIF artifact
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true
