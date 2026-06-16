@@ -631,6 +631,8 @@ import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
 import { SERVICES } from '../lib/services';
 
+const MKT_PAGE_SIZE = 20;
+
 // ── Hub rail accent classes (full literal strings — never concat) ─────────────
 const HUB_ACCENT_CLASSES = {
   amber:   { active: 'border-amber-500/70 bg-amber-500/15 text-amber-300',   idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-amber-500/40 hover:text-amber-200'   },
@@ -937,7 +939,7 @@ const requestLocation = () => {
 
 // ── API fetch helpers ─────────────────────────────────────────────────────────
 const _buildParams = () => {
-  const params = { page_size: 20 };
+  const params = { page_size: MKT_PAGE_SIZE };
   if (searchQuery.value) params.q = searchQuery.value;
   if (selectedCity.value) params.city = selectedCity.value;
   if (selectedCuisine.value) params.cuisine = selectedCuisine.value;

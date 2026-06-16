@@ -205,7 +205,7 @@
       </ul>
 
       <!-- Load More -->
-      <div v-if="!loading && !fetchError && hasMore" class="flex justify-center pt-2 pb-4">
+      <div v-if="showLoadMore" class="flex justify-center pt-2 pb-4">
         <button
           type="button"
           class="ui-btn-outline ui-press inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:opacity-60"
@@ -251,6 +251,18 @@ const searchQuery = ref('');
 const selectedCity = ref('');
 const selectedCuisine = ref('');
 const openOnly = ref(false);
+
+// Show Load More only when there is more data AND the filtered list is non-empty
+// (or no client-side filter is active). Prevents the button appearing over an
+// empty grid when city/cuisine/search/openOnly narrows results to zero.
+const showLoadMore = computed(() => {
+  if (loading.value || fetchError.value || !hasMore.value) return false;
+  const anyFilterActive = searchQuery.value.trim() !== ''
+    || selectedCity.value !== ''
+    || selectedCuisine.value !== ''
+    || openOnly.value;
+  return !anyFilterActive || filteredRestaurants.value.length > 0;
+});
 
 const filteredRestaurants = computed(() => {
   let list = restaurants.value;
