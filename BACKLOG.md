@@ -27,10 +27,13 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       watchdog: alarms if newest dump missing/>26h), runbook §8 restore-drill checklist. Verified bash -n + live
       sandbox (marker isolation, alert-on-failure, dry-run/remove). OWNER GATE: install crons on VPS + run the §8
       RESTORE DRILL once before launch — that drill (needs VPS/Docker/Postgres) is the actual R1 completion gate.
-- [ ] **R2 (P1) Kill dead deploy.yml + gate redeploy on CI green** — deploy.yml builds/pushes the dead platform/
-      scaffold + fires the real Coolify webhook every push; CI green doesn't gate the manual redeploy. Replace with
-      a real-app workflow (needs ci.yml → build backend+frontend Dockerfiles → push ghcr → fire webhook). Branch
-      protection toggle is owner-gated; the workflow itself is not.
+- [x] **R2 (P1) Kill dead deploy.yml — DONE (ea20ebf)** — deleted .github/workflows/deploy.yml: it fired every
+      push to main and exclusively served the DEAD platform/ scaffold (built platform/apps/* → ghcr platform-*
+      images nothing consumes + an uninvited, NON-CI-gated Coolify webhook). Real app deploys via manual Coolify
+      Redeploy building from source (unaffected); ci.yml remains the gate. OWNER-GATED follow-ups (surfaced, not
+      assumed): (a) want push-to-deploy? → I'd add a CI-gated webhook-only workflow (workflow_run after ci.yml, no
+      image build since Coolify builds from source); (b) enable branch protection on main requiring CI-green. Do
+      NOT rebuild a build-and-push workflow (Option A) — Coolify building from source is simpler + already works.
 - [~] **R3 (P1) Sweeps + Celery worker default-on** — sweep_delivery_jobs/enforce_subscriptions/expire_charge_requests
       only run if an operator hand-wires them; CELERY_BROKER_URL not in required env → beat idle by default, silent.
       (making it required is owner-gated; the heartbeat/alert half is in flight, see R4).
