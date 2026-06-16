@@ -2801,6 +2801,46 @@ def _public_list_get_or_build(cache_key, build_fn):
     )
 
 
+# ── Public listing pagination (R9 scale/discoverability) ──────────────────────
+# Both public list endpoints (marketplace + directory) historically hard-capped at the
+# first ~100 tenants in tenant__name order, making every restaurant past that window
+# permanently undiscoverable. R9 adds page/page_size in a BACKWARD-COMPATIBLE way:
+#   - page  >= 1                       (clamped)
+#   - page_size: when the caller passes NO page_size, default to the OLD effective cap
+#     (100) so an un-updated frontend that reads payload["restaurants"] still gets up to
+#     100 rows on page 1 exactly as before. When the caller DOES pass page_size, it is
+#     clamped to [1, _PUBLIC_LIST_PAGE_SIZE_CAP] so the future load-more UI (R9b) can
+#     request smaller pages and walk page 2+.
+# page/page_size are ordinary query params, so they are already part of the response
+# cache key (_public_list_cache_key hashes the full querystring) — different pages cache
+# independently and a no-param request keeps its existing key/payload shape.
+_PUBLIC_LIST_PAGE_SIZE_CAP = 50          # max page_size a caller may explicitly request
+_PUBLIC_LIST_PAGE_SIZE_DEFAULT = 100     # no page_size param → old effective cap (non-breaking)
+
+
+def _parse_public_list_pagination(request):
+    """Return (page, page_size) for a public list request.
+
+    page defaults to 1 and is clamped to >= 1. page_size defaults to
+    _PUBLIC_LIST_PAGE_SIZE_DEFAULT (100, the pre-R9 cap → non-breaking for un-updated
+    clients) when the param is absent/blank, and is otherwise clamped to
+    [1, _PUBLIC_LIST_PAGE_SIZE_CAP]. Mirrors AdminCustomerListView's parse/clamp pattern.
+    """
+    try:
+        page = max(1, int(request.query_params.get("page") or 1))
+    except (ValueError, TypeError):
+        page = 1
+    ps_raw = (request.query_params.get("page_size") or "").strip()
+    if not ps_raw:
+        page_size = _PUBLIC_LIST_PAGE_SIZE_DEFAULT
+    else:
+        try:
+            page_size = min(_PUBLIC_LIST_PAGE_SIZE_CAP, max(1, int(ps_raw)))
+        except (ValueError, TypeError):
+            page_size = _PUBLIC_LIST_PAGE_SIZE_DEFAULT
+    return page, page_size
+
+
 class DirectoryView(APIView):
     """GET /api/directory/ — public list of restaurants that opted in.
 
@@ -2832,6 +2872,10 @@ class DirectoryView(APIView):
         if cuisine_q:
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
 
+        # R9: page/page_size (backward-compatible — default page_size=100 = the old cap,
+        # so a no-param request from the un-updated frontend still gets up to 100 rows).
+        page, page_size = _parse_public_list_pagination(request)
+
         _ck = _public_list_cache_key("directory", request)
 
         def _build():
@@ -2839,9 +2883,14 @@ class DirectoryView(APIView):
             # concurrency (single-flight; see _public_list_get_or_build). Returns the
             # payload WITH internal "_raw_*" inputs; the post-cache live recompute
             # (_refresh_marketplace_live_fields) strips them before the HTTP response.
-            # Materialise the (up-to-100) profile rows once so we can build filter
-            # lists from the same data without a second full-table scan.
-            profiles_page = list(qs[:100])
+            # R9: slice ONE PAST the page (start : start+size+1) so the extra row tells us
+            # has_more without a second COUNT. The qs is ordered (tenant__name) BEFORE the
+            # slice, so page boundaries are stable. Filter lists are built from the page
+            # rows (as before) — they describe the current page, not the whole table.
+            start = (page - 1) * page_size
+            window = list(qs[start:start + page_size + 1])
+            has_more = len(window) > page_size
+            profiles_page = window[:page_size]
 
             results = []
             cities_set: set = set()
@@ -2889,7 +2938,17 @@ class DirectoryView(APIView):
             cities = sorted(cities_set)
             cuisines = sorted(cuisines_set)
 
-            return {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
+            # R9: response stays ADDITIVE — keep restaurants[] + filters EXACTLY as
+            # before, ADD has_more/page/page_size alongside. These top-level keys ride
+            # through _refresh_marketplace_live_fields unchanged (it only touches rows +
+            # internal keys), so they reach the client on both cache hit and rebuild.
+            return {
+                "restaurants": results,
+                "filters": {"cities": cities, "cuisines": cuisines},
+                "has_more": has_more,
+                "page": page,
+                "page_size": page_size,
+            }
 
         # Single-flight: a HIT returns immediately; a MISS rebuilds at most once per key
         # (concurrent missers wait for + serve the winner's value). Return a COPY with
@@ -2921,7 +2980,10 @@ class MarketplaceView(APIView):
     def get(self, request, *args, **kwargs):
         from tenancy.models import Profile
 
-        q = (request.query_params.get("q") or "").strip().lower()
+        # R9 FIX1: q is matched in SQL (see _build) so search finds ANY tenant regardless
+        # of position. icontains is case-insensitive, so we pass the raw (stripped) term;
+        # no .lower() needed for the DB filter.
+        q = (request.query_params.get("q") or "").strip()
         city_q = (request.query_params.get("city") or "").strip()
         cuisine_q = (request.query_params.get("cuisine") or "").strip()
         fulfillment = (request.query_params.get("fulfillment") or "any").strip().lower()
@@ -2940,6 +3002,12 @@ class MarketplaceView(APIView):
                 user_lng = float(lng_raw)
             except ValueError:
                 pass
+
+        # R9: page/page_size (backward-compatible — default page_size=100 = the old cap,
+        # so a no-param request from the un-updated frontend still gets up to 100 rows on
+        # page 1). Parsed before the cache key is irrelevant (the key already hashes the
+        # full querystring incl. page/page_size); _build closes over these values.
+        page, page_size = _parse_public_list_pagination(request)
 
         _ck = _public_list_cache_key("marketplace", request)
 
@@ -2969,6 +3037,8 @@ class MarketplaceView(APIView):
 
             required_tags = [t.strip().lower() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
 
+            from django.db.models import Q
+
             qs = (
                 Profile.objects
                 # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
@@ -2977,6 +3047,19 @@ class MarketplaceView(APIView):
                 .select_related("tenant")
                 .order_by("tenant__name")
             )
+            # R9 FIX1: the ?q= search now runs in SQL BEFORE any slice (it used to filter
+            # in Python over a pre-sliced qs[:200] window, so it MISSED any matching tenant
+            # past that window). Match the SAME fields the old Python haystack searched —
+            # name / tagline / cuisine_type / city — case-insensitively. This selects from
+            # ALL tenants, so a customer can find a restaurant by name regardless of how
+            # many tenants exist or where it falls in tenant__name order.
+            if q:
+                qs = qs.filter(
+                    Q(tenant__name__icontains=q)
+                    | Q(tagline__icontains=q)
+                    | Q(cuisine_type__icontains=q)
+                    | Q(city__icontains=q)
+                )
             if city_q:
                 qs = qs.filter(city__icontains=city_q)
             if cuisine_q:
@@ -3021,8 +3104,16 @@ class MarketplaceView(APIView):
             except Exception:
                 pass
 
-            # Materialise the page so we can derive filter lists without an extra query.
-            profiles_page = list(qs[:200])
+            # R9: materialise the FULL filtered queryset (NOT a pre-slice qs[:200] window),
+            # so the open-first / distance sort and the page boundaries apply to ALL matching
+            # tenants — search/filters now select from every tenant, not the first N. qs[:]
+            # is a full-set clone (no SQL LIMIT) — every matching row, then sorted + paged in
+            # Python below. The whole computed payload is cached (90s TTL, single-flight), so
+            # this O(N) scan runs at most once per key per TTL across the worker pool, not
+            # per request. (`tags` — a JSON ALL-must-match filter — and the computed-is_open
+            # ?open=1 filter run in the loop below over this FULL set, before pagination, so
+            # they too select from all tenants rather than a pre-slice window.)
+            profiles_page = list(qs[:])
 
             results = []
             cities_set: set = set()
@@ -3045,15 +3136,8 @@ class MarketplaceView(APIView):
                 if open_only and not is_currently_open:
                     continue
 
-                if q:
-                    haystack = " ".join(filter(None, [
-                        (tenant.name or "").lower(),
-                        (profile.tagline or "").lower(),
-                        (profile.cuisine_type or "").lower(),
-                        (profile.city or "").lower(),
-                    ])).lower()
-                    if q not in haystack:
-                        continue
+                # NOTE: the ?q= search moved to SQL (above, before slicing) — it no longer
+                # filters here, so it can no longer MISS a match past a pre-slice window.
 
                 profile_tags = [str(t).lower() for t in (profile.tags or [])]
                 if required_tags and not all(rt in profile_tags for rt in required_tags):
@@ -3132,18 +3216,38 @@ class MarketplaceView(APIView):
                     "_raw_opted_flash_ids": sorted(tenant_opted_ids),
                 })
 
+            # R9: sort the FULL filtered result set BEFORE paginating, so page boundaries
+            # are stable/correct (a row's page is determined by its rank in the complete
+            # ordering, not within a pre-sliced window). The post-cache recompute
+            # (_refresh_marketplace_live_fields) re-applies the open-first sort / ?open=1
+            # filter on the returned page so it stays internally consistent at request time.
             if user_lat is not None:
                 results.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 9999))
             else:
                 results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
+            # R9: paginate the sorted full set. Slice ONE PAST the page so the extra row
+            # tells us has_more without a separate count.
+            start = (page - 1) * page_size
+            page_rows = results[start:start + page_size + 1]
+            has_more = len(page_rows) > page_size
+            page_rows = page_rows[:page_size]
+
             return {
-                "restaurants": results[:100],
+                # ADDITIVE response: restaurants[] (the current page) + filters are kept
+                # EXACTLY as before; has_more/page/page_size/total are added alongside and
+                # survive _refresh_marketplace_live_fields (it only touches rows + internal
+                # keys). total = full filtered count (cheap — we already materialised it).
+                "restaurants": page_rows,
                 "filters": {
                     "cities": sorted(cities_set),
                     "cuisines": sorted(cuisines_set),
                     "tags": sorted(all_tags),
                 },
+                "has_more": has_more,
+                "page": page,
+                "page_size": page_size,
+                "total": len(results),
                 # Internal: active flash-sale windows for the request-time flash recompute.
                 # Stripped from the HTTP response by _refresh_marketplace_live_fields.
                 _LIVE_PAYLOAD_INTERNAL_KEY: flash_windows,

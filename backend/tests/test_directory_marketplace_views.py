@@ -419,6 +419,291 @@ class MarketplaceViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
+# ── R9: SQL search + backward-compatible pagination ───────────────────────────
+# These guard the R9 scale/discoverability fix:
+#   FIX1 — ?q= search runs in SQL on the FULL queryset (before any slice), so it finds a
+#          tenant that would fall PAST the old pre-slice window. Proven non-DB by asserting
+#          the ?q= filter is pushed into the queryset (.filter with a Q on the right fields)
+#          and that the in-Python haystack no longer drops a SQL-matched row.
+#   FIX2 — page/page_size + has_more, with a no-param request staying backward-compatible
+#          (default page_size = 100 = the old cap; restaurants[] + filters unchanged; new
+#          keys added alongside). Pagination boundaries are exercised with a slice-aware
+#          fake queryset so has_more flips True/False at the real page edges.
+
+
+class _FakeListQS:
+    """A minimal queryset stand-in over an in-memory list of rows.
+
+    Supports the exact operations the public list views use on the queryset:
+      - .filter(*a, **k)  → records the call, returns self (chainable)
+      - qs[start:stop]    → real Python slice of the backing list (so pagination boundaries
+                            and has_more are exercised for real, not mocked away)
+      - iteration / qs[:] → the full backing list (MarketplaceView does list(qs[:]))
+    Ordering is treated as already-applied (rows are supplied in final order).
+    """
+
+    def __init__(self, rows):
+        self._rows = list(rows)
+        self.filter_calls = []  # list of (args, kwargs) for assertions
+
+    def filter(self, *args, **kwargs):
+        self.filter_calls.append((args, kwargs))
+        return self
+
+    def __getitem__(self, key):
+        return self._rows[key]
+
+    def __iter__(self):
+        return iter(self._rows)
+
+    def __len__(self):
+        return len(self._rows)
+
+
+def _profiles(n, *, name_prefix="R", **overrides):
+    """Build n distinct profile mocks, named/slugged R0..R(n-1) in order."""
+    out = []
+    for i in range(n):
+        p = _make_profile(**overrides)
+        p.tenant = MagicMock()
+        p.tenant.id = i
+        p.tenant.slug = f"r{i}"
+        p.tenant.name = f"{name_prefix}{i:03d}"
+        p.tenant.schema_name = f"r{i}"
+        out.append(p)
+    return out
+
+
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
+class MarketplaceSqlSearchTests(SimpleTestCase):
+    """FIX1: ?q= is pushed into SQL BEFORE slicing (finds matches past the old window)."""
+
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceView.as_view()
+
+    def _get(self, params=None):
+        req = self.factory.get("/api/marketplace/", params or {})
+        req.user = _anon()
+        return self.view(req)
+
+    def _run(self, fake_qs, params):
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = fake_qs
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                optin_m = MagicMock(); optin_m.objects.values.return_value = []
+                fs_m = MagicMock(); fs_m.objects.filter.return_value = []
+                with patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
+                        patch("accounts.models.PlatformFlashSale", fs_m):
+                    return self._get(params)
+
+    def test_q_is_pushed_into_sql_before_slicing(self):
+        """The ?q= term is applied as a queryset .filter (SQL), so the DB does the search
+        over ALL tenants — not a Python pass over a pre-sliced qs[:200] window. We assert a
+        .filter call carrying a Q over name/tagline/cuisine/city was made on the queryset."""
+        from django.db.models import Q
+
+        # The "match" — a tenant that, in a large table, would sort PAST the old 100/200
+        # window in tenant__name order. Because the search is SQL, the DB returns it directly
+        # and the view never windows it away.
+        target = _make_profile()
+        target.tenant.name = "Zzz Far Bistro"   # high in tenant__name order → past the window
+        target.tenant.slug = "zzz-far"
+        fake_qs = _FakeListQS([target])
+
+        resp = self._run(fake_qs, {"q": "zzz"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # The match is returned (SQL filtered it in)…
+        slugs = [r["slug"] for r in resp.data["restaurants"]]
+        self.assertIn("zzz-far", slugs)
+        # …and a Q-based .filter was applied to the queryset (SQL search, not Python window).
+        q_filter_calls = [
+            args for (args, kwargs) in fake_qs.filter_calls
+            if args and isinstance(args[0], Q)
+        ]
+        self.assertTrue(
+            q_filter_calls,
+            "expected ?q= to be applied as a queryset .filter(Q(...)) (SQL), found none",
+        )
+
+    def test_q_no_python_window_filter_returns_sql_result_verbatim(self):
+        """Proof the Python haystack no longer gates results: a row whose in-memory fields do
+        NOT contain the term is STILL returned if the (mocked) SQL filter yielded it — i.e.
+        the view trusts the SQL filter and does not re-filter by q in Python. Pre-fix, the
+        Python `if q not in haystack: continue` would have dropped this row."""
+        # Field values deliberately do NOT contain "needle"; only the SQL layer (mocked to
+        # return this row) decides membership now.
+        row = _make_profile(tagline="plain", cuisine_type="Italian", city="Paris")
+        row.tenant.name = "Bistro"
+        fake_qs = _FakeListQS([row])
+
+        resp = self._run(fake_qs, {"q": "needle"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Row survives — no Python window re-filter dropped it.
+        self.assertEqual(len(resp.data["restaurants"]), 1)
+        self.assertEqual(resp.data["restaurants"][0]["slug"], "bistro")
+
+    def test_no_q_does_not_apply_search_filter(self):
+        """Without ?q=, no Q-based search filter is added (only the structural filters)."""
+        from django.db.models import Q
+        row = _make_profile()
+        fake_qs = _FakeListQS([row])
+        resp = self._run(fake_qs, {})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        q_filter_calls = [
+            args for (args, kwargs) in fake_qs.filter_calls
+            if args and isinstance(args[0], Q)
+        ]
+        self.assertEqual(q_filter_calls, [], "no ?q= → no Q search filter expected")
+
+
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
+class MarketplacePaginationTests(SimpleTestCase):
+    """FIX2: page/page_size + has_more on MarketplaceView; no-param is backward-compatible."""
+
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceView.as_view()
+
+    def _get(self, params=None):
+        req = self.factory.get("/api/marketplace/", params or {})
+        req.user = _anon()
+        return self.view(req)
+
+    def _run(self, rows, params):
+        fake_qs = _FakeListQS(rows)
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = fake_qs
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                optin_m = MagicMock(); optin_m.objects.values.return_value = []
+                fs_m = MagicMock(); fs_m.objects.filter.return_value = []
+                with patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
+                        patch("accounts.models.PlatformFlashSale", fs_m):
+                    return self._get(params)
+
+    def test_no_param_request_is_backward_compatible(self):
+        """A request with NO page/page_size returns restaurants[] (up to the old cap of 100)
+        plus the additive keys — un-updated frontend keeps working."""
+        rows = _profiles(5)
+        resp = self._run(rows, {})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Existing keys preserved.
+        self.assertIn("restaurants", resp.data)
+        self.assertIn("filters", resp.data)
+        self.assertEqual(len(resp.data["restaurants"]), 5)
+        # New additive keys present with the non-breaking default page_size = 100.
+        self.assertEqual(resp.data["page"], 1)
+        self.assertEqual(resp.data["page_size"], 100)
+        self.assertFalse(resp.data["has_more"])
+        self.assertEqual(resp.data["total"], 5)
+
+    def test_default_page_size_caps_at_100_with_has_more(self):
+        """101 matching tenants, no params → page 1 returns 100 (the old cap) and has_more=True
+        (proving rows past the old window are now reachable via page 2)."""
+        rows = _profiles(101)
+        resp = self._run(rows, {})
+        self.assertEqual(len(resp.data["restaurants"]), 100)
+        self.assertTrue(resp.data["has_more"])
+        self.assertEqual(resp.data["total"], 101)
+
+    def test_page_2_returns_next_slice(self):
+        """page=2&page_size=10 returns rows 10..19 (stable, sorted-before-paginate slice)."""
+        rows = _profiles(25)  # R000..R024 in tenant__name order
+        resp = self._run(rows, {"page": "2", "page_size": "10"})
+        slugs = [r["slug"] for r in resp.data["restaurants"]]
+        self.assertEqual(slugs, [f"r{i}" for i in range(10, 20)])
+        self.assertEqual(resp.data["page"], 2)
+        self.assertEqual(resp.data["page_size"], 10)
+        self.assertTrue(resp.data["has_more"])  # rows 20..24 remain
+
+    def test_has_more_false_on_last_page(self):
+        """The final page reports has_more=False."""
+        rows = _profiles(25)
+        resp = self._run(rows, {"page": "3", "page_size": "10"})  # rows 20..24
+        slugs = [r["slug"] for r in resp.data["restaurants"]]
+        self.assertEqual(slugs, [f"r{i}" for i in range(20, 25)])
+        self.assertFalse(resp.data["has_more"])
+
+    def test_page_size_clamped_to_cap_50(self):
+        """An explicit page_size above the cap (50) is clamped to 50."""
+        rows = _profiles(60)
+        resp = self._run(rows, {"page_size": "999"})
+        self.assertEqual(resp.data["page_size"], 50)
+        self.assertEqual(len(resp.data["restaurants"]), 50)
+        self.assertTrue(resp.data["has_more"])
+
+    def test_filters_select_from_full_set_not_a_window(self):
+        """A filter (here ?open=1 via computed is_open) selects from the FULL set before
+        pagination: with all rows open, total reflects every matching tenant, and page 2 is
+        reachable — i.e. filtering is not confined to a pre-slice window."""
+        rows = _profiles(120)
+        resp = self._run(rows, {"open": "1", "page": "2", "page_size": "50"})
+        # Full set is 120 → page 2 (rows 50..99) is 50 rows with more remaining.
+        self.assertEqual(len(resp.data["restaurants"]), 50)
+        self.assertEqual(resp.data["total"], 120)
+        self.assertTrue(resp.data["has_more"])
+
+
+class DirectoryPaginationTests(SimpleTestCase):
+    """FIX2: page/page_size + has_more on DirectoryView; no-param is backward-compatible."""
+
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = DirectoryView.as_view()
+
+    def _get(self, params=None):
+        req = self.factory.get("/api/directory/", params or {})
+        req.user = _anon()
+        return self.view(req)
+
+    def _run(self, rows, params):
+        fake_qs = _FakeListQS(rows)
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = fake_qs
+            return self._get(params)
+
+    def test_no_param_request_is_backward_compatible(self):
+        rows = _profiles(3)
+        resp = self._run(rows, {})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("restaurants", resp.data)
+        self.assertIn("filters", resp.data)
+        self.assertEqual(len(resp.data["restaurants"]), 3)
+        self.assertEqual(resp.data["page"], 1)
+        self.assertEqual(resp.data["page_size"], 100)
+        self.assertFalse(resp.data["has_more"])
+
+    def test_default_page_size_caps_at_100_with_has_more(self):
+        rows = _profiles(101)
+        resp = self._run(rows, {})
+        self.assertEqual(len(resp.data["restaurants"]), 100)
+        self.assertTrue(resp.data["has_more"])
+
+    def test_page_2_returns_next_slice(self):
+        rows = _profiles(25)
+        resp = self._run(rows, {"page": "2", "page_size": "10"})
+        slugs = [r["slug"] for r in resp.data["restaurants"]]
+        self.assertEqual(slugs, [f"r{i}" for i in range(10, 20)])
+        self.assertTrue(resp.data["has_more"])
+
+    def test_has_more_false_on_last_page(self):
+        rows = _profiles(25)
+        resp = self._run(rows, {"page": "3", "page_size": "10"})
+        slugs = [r["slug"] for r in resp.data["restaurants"]]
+        self.assertEqual(slugs, [f"r{i}" for i in range(20, 25)])
+        self.assertFalse(resp.data["has_more"])
+
+    def test_page_size_clamped_to_cap_50(self):
+        rows = _profiles(60)
+        resp = self._run(rows, {"page_size": "999"})
+        self.assertEqual(resp.data["page_size"], 50)
+        self.assertEqual(len(resp.data["restaurants"]), 50)
+        self.assertTrue(resp.data["has_more"])
+
+
 # ── Post-cache live-verdict recompute (freshness fix) ─────────────────────────
 # The list-cache freezes the whole response for the TTL, but is_open / promo_badge /
 # flash_sale_active are time-sensitive. _refresh_marketplace_live_fields recomputes

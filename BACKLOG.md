@@ -53,8 +53,15 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       VITE_SENTRY_RELEASE first (the var the Dockerfile/compose actually inject), fallback VITE_APP_VERSION.
       Frontend lint+build green. **DEPLOY STEP (owner/ops):** set VITE_SENTRY_RELEASE=$SOURCE_COMMIT as the frontend
       build arg in Coolify so the SPA release tag populates with the git SHA (enables regression-by-release triage).
-- [ ] **R9 (P1) Paginate Marketplace + Directory** — both hard-cap results[:100], no page param → tenants past ~100
-      (name order) are undiscoverable; ?q= filters Python over [:200]. Caps GMV at the scale it's built for. [non-gated]
+- [x] **R9 (P1) Paginate Marketplace + Directory (backend) — DONE (prod-harden-pagination)** — ?q= search moved
+      into SQL (.filter(Q name|tagline|cuisine|city icontains) on the FULL queryset before slicing — finds any tenant,
+      no longer Python-windowed over [:200]); backward-compatible page/page_size + has_more (+marketplace total) added
+      to both views (default page_size=100 = old cap so the un-updated frontend is unaffected; explicit page_size
+      clamped [1,50]); sort applied to the full set before the page slice; cache key varies by page/q; single-flight +
+      post-cache recompute intact. Backend 3949/0; +14 tests.
+- [ ] **R9b (P2) Frontend load-more UI to browse past page 1** — the page/page_size/has_more API is now in place;
+      the marketplace/directory Vue pages still render only page 1 (default 100). Add infinite-scroll / "load more"
+      that consumes has_more + the page param so a customer can browse beyond the first 100 tenants. [scout prod-harden-pagination]
 - [x] **R10 (P1) Run frontend vitest + verify:i18n in CI — DONE (prod-harden-deps-ci)** — ci.yml frontend job now
       runs verify:i18n + lint + test + build (was only lint+build); the 124 vitest tests + i18n key-completeness
       now gate every push/PR. [non-gated]
