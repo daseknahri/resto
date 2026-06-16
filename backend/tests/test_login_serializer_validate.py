@@ -30,11 +30,12 @@ def _scope(user_or_none):
     return scope
 
 
-def _active_user(password_ok=True, has_tenant=False, tenant_active=True):
+def _active_user(password_ok=True, has_tenant=False, tenant_active=True, pk=1):
     tenant = None
     if has_tenant:
         tenant = SimpleNamespace(is_active=tenant_active, lifecycle_status="active")
     return SimpleNamespace(
+        pk=pk,
         check_password=lambda _: password_ok,
         is_active=True,
         tenant_id=42 if has_tenant else None,
@@ -91,6 +92,7 @@ class LoginSerializerValidateTests(SimpleTestCase):
     @patch("accounts.serializers.User.objects")
     def test_inactive_user_raises_account_inactive(self, user_objects):
         user = SimpleNamespace(
+            pk=5,
             check_password=lambda _: True,
             is_active=False,
             tenant_id=None,

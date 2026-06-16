@@ -10,6 +10,7 @@ class LoginSerializerTenantInactiveTests(SimpleTestCase):
     @patch("accounts.serializers.User.objects")
     def test_rejects_login_when_tenant_is_inactive(self, user_objects):
         user = SimpleNamespace(
+            pk=11,
             check_password=lambda _: True,
             is_active=True,
             tenant_id=11,

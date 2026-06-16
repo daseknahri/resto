@@ -10,6 +10,29 @@ from .models import PasswordResetToken
 
 User = get_user_model()
 
+# ── Per-account login brute-force lockout ────────────────────────────────────
+# Keyed on the user PK (not the submitted identifier) so rotating identifiers
+# cannot avoid the cap and a non-existent identifier never creates a key.
+#
+# Window semantics: FIXED, anchored at the FIRST failure in a window.
+#   - cache.add() sets the key + TTL only when the key does not yet exist
+#     (no-op if it already exists), so the TTL is set exactly once per window
+#     and counts down from the first bad attempt regardless of later attempts.
+#   - cache.incr() is an atomic server-side increment on Django's Redis backend;
+#     no read-modify-write race.
+#
+# These two properties fix both R7a findings:
+#   1. Atomicity — concurrent wrong-password bursts cannot undercount.
+#   2. Fixed window — a slow-drip attacker cannot extend the lock indefinitely
+#      by resetting the TTL; the key expires 15 min after the window opened.
+LOGIN_MAX_FAILURES = 10        # generous: operators mistype; trip after 10 wrong passwords
+LOGIN_LOCK_SECONDS = 900       # 15-minute FIXED window from first failure
+
+
+def _login_fail_cache_key(user_pk: int) -> str:
+    """Cache key for the per-user failed login counter."""
+    return f"login_fail:u{user_pk}"
+
 
 def _check_password_strength(password: str, user=None) -> None:
     """Run AUTH_PASSWORD_VALIDATORS and convert Django ValidationError to DRF."""
@@ -53,24 +76,63 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
+        from django.core.cache import cache
+
         identifier = attrs.get("identifier", "").strip()
         password = attrs.get("password", "")
 
         if not identifier or not password:
             raise serializers.ValidationError("Username/email and password are required")
 
+        # Step 1: resolve the candidate user from the identifier.
         user = (
             User.objects.filter(Q(username__iexact=identifier) | Q(email__iexact=identifier))
             .order_by("id")
             .first()
         )
+
+        # Step 2: if a user was found, check the lockout BEFORE check_password.
+        # A locked account is rejected even with the correct password (the TTL
+        # governs the window; we do NOT increment here — the existing count governs).
+        if user is not None:
+            fail_key = _login_fail_cache_key(user.pk)
+            try:
+                fail_count = cache.get(fail_key) or 0
+            except Exception:
+                # Cache unavailable — fail OPEN so a Redis blip can't lock everyone out.
+                fail_count = 0
+            if fail_count >= LOGIN_MAX_FAILURES:
+                raise serializers.ValidationError(
+                    "Too many failed attempts. Please try again in a few minutes."
+                )
+
+        # Step 3: validate credentials; on failure increment the per-user counter.
         if user is None or not user.check_password(password):
+            if user is not None:
+                fail_key = _login_fail_cache_key(user.pk)
+                try:
+                    # Atomic fixed-window increment (R7a fix):
+                    #   cache.add  — sets key to 0 with full TTL only on first call
+                    #               in the window; no-op on subsequent calls, so the
+                    #               TTL is anchored at the first failure (fixed window).
+                    #   cache.incr — atomic server-side increment; no race condition.
+                    cache.add(fail_key, 0, LOGIN_LOCK_SECONDS)
+                    cache.incr(fail_key)
+                except Exception:
+                    pass  # best-effort; a cache error must not 500 the login endpoint
             raise serializers.ValidationError("Invalid credentials")
+
+        # Step 4: post-auth checks; on success clear the counter.
         if not user.is_active:
             raise serializers.ValidationError("Account is inactive")
         if getattr(user, "tenant_id", None) and not getattr(getattr(user, "tenant", None), "is_active", True):
             lifecycle = getattr(getattr(user, "tenant", None), "lifecycle_status", "suspended")
             raise serializers.ValidationError(f"Tenant is {lifecycle}. Contact support.")
+
+        try:
+            cache.delete(_login_fail_cache_key(user.pk))
+        except Exception:
+            pass  # best-effort; clearing the counter is not critical
 
         attrs["user"] = user
         return attrs
