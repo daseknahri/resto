@@ -20,18 +20,21 @@ services:
     init: true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.menu-ibnbatoutaweb-com-frontend.loadbalancer.server.port=3000"
+      # R13: nginx now listens on 8080 (non-root); tell Traefik the real container port.
+      - "traefik.http.services.menu-ibnbatoutaweb-com-frontend.loadbalancer.server.port=8080"
     depends_on:
       api:
         condition: service_healthy
     expose:
-      - "3000"
+      # R13: container exposes 8080 (non-root nginx). Traefik label above routes to it.
+      - "8080"
     # Mount media volume read-only so nginx can serve uploaded files directly
     # without proxying through Django (faster and eliminates 404 race conditions).
     volumes:
       - media_data:/app/media:ro
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      # R13: healthcheck now hits the actual container port 8080.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -60,9 +63,11 @@ services:
       api:
         condition: service_healthy
     expose:
-      - "3000"
+      # R13: container exposes 8080 (non-root nginx). Traefik label above routes to it.
+      - "8080"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      # R13: healthcheck now hits the actual container port 8080.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -74,6 +79,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
+    # R13: run as fixed non-root UID matching the Dockerfile USER directive.
+    # Ensures the media_data volume and /app/staticfiles are writable at runtime.
+    user: "10001:10001"
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.ibnbatoutaweb-api.loadbalancer.server.port=8000"
@@ -171,6 +179,11 @@ services:
       DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS: ${DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT}
+      # R13/Goal-B: per-HTTP-request timeout (seconds). WebSockets AND the SSE
+      # tracking stream (/api/marketplace/track/) are exempt — see config/asgi.py.
+      # Default 120s is deliberately above the 90s SSE deadline so non-exempt API
+      # calls keep comfortable headroom; set to 0 to disable the cap entirely.
+      HTTP_REQUEST_TIMEOUT: ${HTTP_REQUEST_TIMEOUT:-120}
     depends_on:
       postgres:
         condition: service_healthy
@@ -196,6 +209,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
+    # R13: match the non-root UID from the Dockerfile.
+    user: "10001:10001"
     command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config worker -l info -Q notifications,default --concurrency 2; else echo 'Celery OFF (CELERY_BROKER_URL unset) — worker idle'; exec sleep infinity; fi"]
     environment: *django_env
     depends_on:
@@ -213,6 +228,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
+    # R13: match the non-root UID from the Dockerfile.
+    user: "10001:10001"
     command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config beat -l info; else echo 'Celery OFF (CELERY_BROKER_URL unset) — beat idle'; exec sleep infinity; fi"]
     environment: *django_env
     depends_on:

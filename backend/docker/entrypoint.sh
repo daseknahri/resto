@@ -49,6 +49,28 @@ if [ -n "${DJANGO_SUPERADMIN_EMAIL:-}" ] && [ -n "${DJANGO_SUPERADMIN_PASSWORD:-
     --email "${DJANGO_SUPERADMIN_EMAIL}"
 fi
 
+# R13: fail loud at boot if local-disk media is not writable by this non-root
+# (UID 10001) container. Without this, user uploads would fail SILENTLY at runtime
+# with PermissionError; failing the boot instead makes Coolify keep the old healthy
+# container. Skipped when media is on object storage (S3), where uploads never touch
+# /app/media. Pre-chown the volume once on first deploy:
+#   docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d
+# Emergency bypass: SKIP_MEDIA_WRITABLE_CHECK=1.
+_media_backend="$(printf '%s' "${DJANGO_MEDIA_STORAGE_BACKEND:-local}" | tr '[:upper:]' '[:lower:]')"
+if [ "${SKIP_MEDIA_WRITABLE_CHECK:-0}" = "1" ]; then
+  echo "[entrypoint] SKIP_MEDIA_WRITABLE_CHECK=1 -> skipping media writability check"
+elif [ "$_media_backend" = "s3" ] || [ "$_media_backend" = "s3boto3" ] || [ "$_media_backend" = "object" ]; then
+  echo "[entrypoint] media on object storage ($_media_backend) -> skipping local media writability check"
+else
+  _media_dir="/app/media"
+  if ( touch "$_media_dir/.writable-probe" && rm -f "$_media_dir/.writable-probe" ) 2>/dev/null; then
+    echo "[entrypoint] media dir $_media_dir is writable"
+  else
+    echo "[entrypoint] ERROR: $_media_dir is not writable by UID $(id -u). User uploads would fail. Pre-chown the media volume: docker run --rm -v <media_volume>:/d alpine chown -R 10001:10001 /d  (or set SKIP_MEDIA_WRITABLE_CHECK=1 to bypass)." >&2
+    exit 1
+  fi
+fi
+
 # Serve under ASGI (uvicorn) so WebSockets work. HTTP behaves identically under
 # both servers — only WebSockets require ASGI. Instant rollback: set USE_ASGI=0
 # in the environment to return to the previous gunicorn/WSGI server (no code change).
@@ -58,12 +80,22 @@ if [ "${USE_ASGI:-1}" = "1" ]; then
   # injected XFF straight through to DRF; restricting it to 172.16.0.0/12 means
   # uvicorn strips spoofed XFF before DRF/get_request_ip ever see it — defense in
   # depth complementing the trusted-proxy throttle ident fix (OPS-5d C).
+  # R13/Goal-B: --timeout-keep-alive 75 keeps idle HTTP/1.1 keep-alive
+  # connections open slightly past the default nginx proxy_read_timeout (60 s)
+  # so the proxy closes first rather than uvicorn — avoids spurious 502s.
+  # --timeout-graceful-shutdown 30 gives in-flight requests 30 s to drain when
+  # a worker is being replaced (SIGTERM from a rolling restart).
+  # Per-request HTTP timeout lives in BoundedHTTPMiddleware (config/asgi.py);
+  # uvicorn has no --timeout-request flag and we must NOT apply asyncio.wait_for
+  # at the ProtocolTypeRouter level because that would also kill websockets.
   exec uvicorn config.asgi:application \
     --host 0.0.0.0 \
     --port 8000 \
     --workers "${GUNICORN_WORKERS:-3}" \
     --proxy-headers \
-    --forwarded-allow-ips='172.16.0.0/12'
+    --forwarded-allow-ips='172.16.0.0/12' \
+    --timeout-keep-alive 75 \
+    --timeout-graceful-shutdown 30
 else
   exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \

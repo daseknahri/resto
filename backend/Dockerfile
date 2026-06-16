@@ -19,8 +19,19 @@ RUN apt-get update \
 
 COPY . .
 
+# R13: non-root runtime user (fixed numeric UID 10001).
+# collectstatic runs at runtime (entrypoint.sh) not build time, so both
+# /app/media and /app/staticfiles must be owned by the same UID before exec.
+# The working dir /app is also chowned so manage.py can write .pyc caches.
+# Host-mounted volumes (media_data) must be pre-chowned to 10001:10001 on first
+# deploy (see runbook: `docker run --rm -v media_data:/d alpine chown -R 10001:10001 /d`).
 RUN chmod +x docker/entrypoint.sh \
-    && mkdir -p /app/media /app/staticfiles
+    && mkdir -p /app/media /app/staticfiles \
+    && groupadd -r -g 10001 appuser \
+    && useradd -r -u 10001 -g appuser -s /sbin/nologin -M appuser \
+    && chown -R appuser:appuser /app
+
+USER 10001
 
 EXPOSE 8000
 

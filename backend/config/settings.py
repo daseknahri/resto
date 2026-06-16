@@ -765,6 +765,10 @@ LOGGING = {
     },
 }
 
+# NOTE (R13 non-root): the container runs as UID 10001, so if DJANGO_SECURITY_LOG_FILE
+# is set its path MUST be writable by that UID (use a path under /tmp or a volume
+# pre-chowned to 10001:10001). A root-owned target makes the first security-log write
+# raise. Leave unset to log to stdout/stderr (the default, collected by the platform).
 if SECURITY_LOG_FILE:
     LOGGING["handlers"]["security_file"] = {
         "class": "logging.handlers.RotatingFileHandler",
