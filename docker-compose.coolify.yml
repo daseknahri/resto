@@ -212,6 +212,12 @@ services:
     # R13: match the non-root UID from the Dockerfile.
     user: "10001:10001"
     command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config worker -l info -Q notifications,default --concurrency 2; else echo 'Celery OFF (CELERY_BROKER_URL unset) — worker idle'; exec sleep infinity; fi"]
+    # Celery worker is NOT an HTTP service — disable the inherited Dockerfile
+    # HEALTHCHECK (it probes the web server on :8000, which this container does not
+    # run, so it would always report unhealthy). Liveness is covered by
+    # restart: unless-stopped + the app's celery_beat_heartbeat check in /api/health/.
+    healthcheck:
+      disable: true
     environment: *django_env
     depends_on:
       postgres:
@@ -231,6 +237,10 @@ services:
     # R13: match the non-root UID from the Dockerfile.
     user: "10001:10001"
     command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config beat -l info; else echo 'Celery OFF (CELERY_BROKER_URL unset) — beat idle'; exec sleep infinity; fi"]
+    # Celery beat is NOT an HTTP service — disable the inherited web HEALTHCHECK
+    # (same rationale as the worker above).
+    healthcheck:
+      disable: true
     environment: *django_env
     depends_on:
       redis:
