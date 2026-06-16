@@ -22,9 +22,11 @@ NOT yet on OPERATIONS.** Full audit (architecture map + 7 dimension audits + syn
 app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (manual Coolify redeploy) — the Node
 `platform/` stack is DEAD scaffold. `ci.yml` DOES run the Django suite vs Postgres + Vue lint/build on push+PR
 (my earlier "no CI" premise was wrong). Ranked, mostly NON-gated:
-- [~] **R1 (P0) Automate DB backups + rehearse restore** — no proven nightly backup (cron is a runbook line; no
-      install_backup_cron.sh though uptime has one); restore never drilled = unbounded ledger data-loss. I can
-      write install_backup_cron.sh + alert; the actual restore DRILL needs VPS access (owner/ops). [non-gated script]
+- [~] **R1 (P0) Automate DB backups + rehearse restore** — SCRIPTS SHIPPED (56e4be1): install_backup_cron.sh
+      (daily backup cron + on-fail alert + off-VPS --remote-copy-cmd hook), backup_freshness_probe.sh (dead-cron
+      watchdog: alarms if newest dump missing/>26h), runbook §8 restore-drill checklist. Verified bash -n + live
+      sandbox (marker isolation, alert-on-failure, dry-run/remove). OWNER GATE: install crons on VPS + run the §8
+      RESTORE DRILL once before launch — that drill (needs VPS/Docker/Postgres) is the actual R1 completion gate.
 - [ ] **R2 (P1) Kill dead deploy.yml + gate redeploy on CI green** — deploy.yml builds/pushes the dead platform/
       scaffold + fires the real Coolify webhook every push; CI green doesn't gate the manual redeploy. Replace with
       a real-app workflow (needs ci.yml → build backend+frontend Dockerfiles → push ghcr → fire webhook). Branch
