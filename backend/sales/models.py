@@ -310,6 +310,8 @@ class AdminAuditLog(models.Model):
         # OPS-5c item 2: ride admin PII audit
         RIDE_PII_VIEWED = "ride_pii_viewed", "Ride PII viewed"
         CAR_DOCS_VIEWED = "car_docs_viewed", "Car docs viewed"
+        # R18: GDPR customer PII erasure
+        CUSTOMER_ERASED = "customer_erased", "Customer PII erased"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(
