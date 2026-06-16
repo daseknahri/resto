@@ -1,5 +1,5 @@
 import { normalizeLocale, DEFAULT_LOCALE } from "./config";
-import { messages } from "./messages";
+import { catalog, getMessages } from "./localeLoader";
 import { useLocaleStore } from "../stores/locale";
 
 const getByPath = (target, path) =>
@@ -25,6 +25,7 @@ const currentLocale = () => {
 
 export const translate = (key, params = {}) => {
   const locale = currentLocale();
-  const value = getByPath(messages[locale], key) ?? getByPath(messages[DEFAULT_LOCALE], key) ?? key;
+  const msgs = getMessages(locale);
+  const value = getByPath(msgs, key) ?? getByPath(catalog[DEFAULT_LOCALE], key) ?? key;
   return interpolate(value, params);
 };

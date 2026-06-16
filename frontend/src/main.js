@@ -5,6 +5,7 @@ import router from "./router";
 import { useLocaleStore } from "./stores/locale";
 import { primeOwnerTheme } from "./composables/useOwnerTheme";
 import { initSentry } from "./lib/sentry";
+import { ensureLocale } from "./i18n/localeLoader";
 import "./styles/tailwind.css";
 
 const normalizeDevHost = () => {
@@ -34,6 +35,16 @@ const pinia = createPinia();
 const app = createApp(App);
 app.use(pinia);
 app.use(router);
-useLocaleStore(pinia).bootstrap();
+
+const localeStore = useLocaleStore(pinia);
+localeStore.bootstrap();
+
+// Pre-load the active locale catalog so the first paint uses the right language.
+// EN is already bundled synchronously; for FR/AR this kicks off a parallel fetch
+// that resolves before or shortly after the first render without blocking mount.
+// Fire-and-forget: swallow a failed chunk fetch (the UI falls back to EN strings)
+// so it doesn't surface as an unhandledRejection / Sentry noise.
+ensureLocale(localeStore.current).catch(() => {});
+
 initSentry(app);
 app.mount("#app");

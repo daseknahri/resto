@@ -1,6 +1,6 @@
 import { computed } from "vue";
 import { DEFAULT_LOCALE, LOCALE_OPTIONS, getLocaleDirection, normalizeLocale } from "../i18n/config";
-import { messages } from "../i18n/messages";
+import { catalog, ensureLocale, getMessages } from "../i18n/localeLoader";
 import { useLocaleStore } from "../stores/locale";
 import { useCurrencyStore } from "../stores/currency";
 
@@ -18,7 +18,8 @@ const interpolate = (template, params = {}) =>
 
 const resolveMessage = (locale, key) => {
   const resolvedLocale = normalizeLocale(locale);
-  return getByPath(messages[resolvedLocale], key) ?? getByPath(messages[DEFAULT_LOCALE], key) ?? key;
+  const msgs = getMessages(resolvedLocale);
+  return getByPath(msgs, key) ?? getByPath(catalog[DEFAULT_LOCALE], key) ?? key;
 };
 
 export const useI18n = () => {
@@ -62,12 +63,31 @@ export const useI18n = () => {
    */
   const formatPrice = (madAmount) => currency.formatPrice(madAmount, currentLocale.value);
 
+  /**
+   * Switch locale: lazy-load the catalog if needed, then set it.
+   * Returns a Promise so callers can await the load before switching.
+   */
+  const setLocale = async (value) => {
+    const resolved = normalizeLocale(value);
+    try {
+      await ensureLocale(resolved);
+    } catch {
+      // Locale chunk failed to load (e.g. flaky network) — keep the current
+      // locale rather than switching to a catalog that falls back to EN strings
+      // (and, for Arabic, would leave RTL applied over English text). The loader
+      // evicts its cache on failure, so a later attempt can retry.
+      return false;
+    }
+    locale.setLocale(resolved);
+    return true;
+  };
+
   return {
     currentLocale,
     localeOptions,
     isRtl: computed(() => getLocaleDirection(currentLocale.value) === "rtl"),
     t,
-    setLocale: (value) => locale.setLocale(value),
+    setLocale,
     formatNumber,
     formatCurrency,
     formatPrice,

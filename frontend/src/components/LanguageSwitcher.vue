@@ -96,8 +96,8 @@ const localeFlag = (code) => {
   return map[String(code || "").toLowerCase()] || "🌐";
 };
 
-const selectLocale = (code) => {
-  setLocale(code);
+const selectLocale = async (code) => {
+  await setLocale(code);
   open.value = false;
   nextTick(() => triggerRef.value?.focus());
 };
