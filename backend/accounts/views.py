@@ -235,7 +235,12 @@ class LoginView(APIView):
             # surfaces as a 500 rather than silently skipping the MFA gate.
             has_confirmed_device = False
 
-        mfa_required = has_confirmed_device or role_forces_mfa
+        # R7b (updated): the 202 MFA challenge is issued ONLY when the user has a
+        # CONFIRMED device.  A role-forced user with NO enrolled device must still
+        # be able to reach the enrollment UI, so we let login() proceed (200) and
+        # include "mfa_enrollment_required": True as a frontend hint.
+        # HARD block-until-enrolled is a future owner-gated flow (R7c).
+        mfa_required = has_confirmed_device  # confirmed device is the ONLY 202 trigger
 
         if mfa_required:
             # Do NOT call login() — the session must not be authenticated yet.
@@ -248,7 +253,13 @@ class LoginView(APIView):
         # ── End R7b gate ──────────────────────────────────────────────────────
 
         login(request, user)
-        return Response({"detail": "Signed in", "user": serialize_user_session(user)}, status=status.HTTP_200_OK)
+        # Hint the frontend when the user's role mandates MFA but no device is enrolled yet.
+        enrollment_required = role_forces_mfa and not has_confirmed_device
+        return Response(
+            {"detail": "Signed in", "user": serialize_user_session(user),
+             "mfa_enrollment_required": enrollment_required},
+            status=status.HTTP_200_OK,
+        )
 
 
 class LogoutView(APIView):
@@ -1774,7 +1785,12 @@ class CustomerWalletTransferView(APIView):
             return Response({"detail": "Ambiguous recipient."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "").strip()[:200]
-        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        raw_idem = str(request.data.get("idempotency_key") or "").strip() or None
+        # Server-namespace the client key to isolate P2P transfers from server key
+        # patterns (voucher:, earning:, admincredit:, etc.).
+        # Truncate to 120 after constructing the full namespaced key so that
+        # long client keys (or high-ID customers) never exceed the DB max_length.
+        idem = f"p2p:{customer_id}:{raw_idem}"[:120] if raw_idem else None
 
         try:
             out_tx, _in_tx = transfer_between_customers(
@@ -1782,7 +1798,7 @@ class CustomerWalletTransferView(APIView):
                 recipient.id,
                 request.data.get("amount"),
                 note=note,
-                idempotency_key=idempotency_key,
+                idempotency_key=idem,
             )
         except InsufficientFunds:
             return Response({"detail": "Insufficient wallet balance."}, status=status.HTTP_402_PAYMENT_REQUIRED)
@@ -1826,7 +1842,14 @@ class AdminWalletBonusView(APIView):
             return Response({"detail": "Amount exceeds the maximum allowed per bonus (100000)."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Bonus credits").strip()[:200]
-        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:100] or None
+        idempotency_key = str(request.data.get("idempotency_key") or "").strip() or None
+        # Server-namespace the client key so the cache mutex and WalletTransaction
+        # keys cannot collide with other server-minted key patterns.
+        # Per-customer keys are f"{bonus_idem}:{cid}" — cap bonus_idem at 109 chars
+        # so the per-customer variant never exceeds the DB max_length=120
+        # (109 + 1 colon + up to 10-digit cid = 120).  Truncation is deterministic:
+        # the same client key always yields the same namespaced key.
+        bonus_idem = f"adminbonus:{idempotency_key}"[:109] if idempotency_key else None
         customer_ids = request.data.get("customer_ids")
         all_customers = bool(request.data.get("all_customers"))
 
@@ -1854,14 +1877,14 @@ class AdminWalletBonusView(APIView):
             # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
             # holds the lock and a corrected retry isn't falsely deduped; NOT released on
             # success — it expires, and the DB unique key is the permanent durable guard.
-            if idempotency_key:
-                _lock_key = f"walletbonus:{idempotency_key}"
+            if bonus_idem:
+                _lock_key = f"walletbonus:{bonus_idem}"
                 if not cache.add(_lock_key, "1", 60):
                     return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
             # Idempotency: a repeated submit with the same key (double-click, retry) must
             # not credit real money twice. Per-customer keys are derived from the batch key.
-            if idempotency_key and WalletTransaction.objects.filter(
-                idempotency_key__startswith=f"{idempotency_key}:"
+            if bonus_idem and WalletTransaction.objects.filter(
+                idempotency_key__startswith=f"{bonus_idem}:"
             ).exists():
                 return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
             # OPS-5b: populate balance_after for ledger reconcilability.
@@ -1882,7 +1905,7 @@ class AdminWalletBonusView(APIView):
                     amount=amount,
                     balance_after=new_balances.get(cid),
                     note=note,
-                    idempotency_key=(f"{idempotency_key}:{cid}" if idempotency_key else None),
+                    idempotency_key=(f"{bonus_idem}:{cid}" if bonus_idem else None),
                 )
                 for cid in ids
             ])
@@ -2214,7 +2237,13 @@ class AdminCustomerCreditView(APIView):
             return Response({"detail": "Amount must be between 0 and 100000."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Admin adjustment").strip()[:200]
-        idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        raw_idem = str(request.data.get("idempotency_key") or "").strip() or None
+        # Server-namespace the client key to prevent collision with server-minted
+        # keys (voucher:42, earning:5, etc.) that share the same WalletTransaction
+        # idempotency_key column.  Mirrors adminfund/ownertopup namespacing.
+        # Truncate to 120 after constructing the full namespaced key so that
+        # long client keys (or high-ID customers) never exceed the DB max_length.
+        idem = f"admincredit:{customer_id}:{raw_idem}"[:120] if raw_idem else None
         try:
             tx = credit_wallet(
                 customer_id, amount,

@@ -250,6 +250,37 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "below_threshold")
 
+    # ── Unverified phone blocked (FIX 1: wallet-bypass guard) ────────────────
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_unverified_phone_returns_403(self, mock_cust_objs, mock_cfg_objs, mock_tx_objs):
+        """An unverified-phone customer must be refused wallet credit via loyalty
+        redemption — same guard that credit_wallet enforces for direct top-ups."""
+        customer = MagicMock()
+        customer.pk = 1
+        customer.loyalty_points = 200
+        mock_cust_objs.get.return_value = customer
+
+        locked = MagicMock()
+        locked.loyalty_points = 200
+        locked.wallet_balance = Decimal("10.00")
+        locked.phone_verified = False  # unverified!
+        mock_cust_objs.select_for_update.return_value.get.return_value = locked
+
+        cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")
+        mock_cfg_objs.filter.return_value.first.return_value = cfg
+
+        req = self._post({"points": 100})
+        with patch("django.db.transaction.atomic"):
+            with patch("django.db.connection") as mock_dbc:
+                mock_dbc.tenant = SimpleNamespace(id=1)
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data.get("code"), "unverified_phone")
+
     # ── Happy path ────────────────────────────────────────────────────────────
 
     @patch("accounts.models.WalletTransaction.objects")
@@ -264,6 +295,7 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
         locked = MagicMock()
         locked.loyalty_points = 200
         locked.wallet_balance = Decimal("10.00")
+        locked.phone_verified = True  # verified — passes the FIX 1 guard
         mock_cust_objs.select_for_update.return_value.get.return_value = locked
 
         cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")

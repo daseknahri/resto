@@ -157,47 +157,67 @@ class A2_TOTPVerifyTests(SimpleTestCase):
 
 
 class A3_MFARequiredPredicateTests(SimpleTestCase):
-    """The 'is MFA required' predicate: confirmed-device OR role-in-flag."""
+    """The 'is MFA required' (202 challenge) predicate: confirmed-device ONLY.
+
+    R7b (updated): the 202 MFA challenge is issued ONLY when the user has a
+    confirmed device.  A role-forced user with no device gets a 200 login with
+    "mfa_enrollment_required": True — they can still reach the enrollment UI.
+    HARD block-until-enrolled is a future owner-gated flow (R7c).
+    """
 
     def _run_login_post(self, user, mfa_required_roles=None, has_confirmed_device=False):
-        """Simulate LoginView.post logic — extract the predicate only."""
+        """Simulate LoginView.post logic — extract the 202 predicate and the
+        enrollment-hint separately (matching the updated code)."""
         role_forces_mfa = user.role in (mfa_required_roles or [])
-        mfa_required = has_confirmed_device or role_forces_mfa
-        return mfa_required
+        mfa_required = has_confirmed_device  # ONLY confirmed device triggers 202
+        enrollment_required = role_forces_mfa and not has_confirmed_device
+        return mfa_required, enrollment_required
 
-    def test_confirmed_device_requires_mfa(self):
+    def test_confirmed_device_requires_mfa_challenge(self):
+        """Confirmed device => 202 MFA challenge."""
         user = MagicMock()
         user.role = "tenant_owner"
-        self.assertTrue(self._run_login_post(user, has_confirmed_device=True))
+        mfa_required, enrollment_required = self._run_login_post(user, has_confirmed_device=True)
+        self.assertTrue(mfa_required)
+        self.assertFalse(enrollment_required)
 
-    def test_role_in_flag_requires_mfa(self):
+    def test_role_forced_no_device_does_not_trigger_202(self):
+        """R7b updated: role in MFA_REQUIRED_ROLES but NO device => 200 + enrollment hint.
+
+        Previously this asserted 202; now it must assert 200 + mfa_enrollment_required.
+        (Hard block is R7c, not yet shipped.)
+        """
         user = MagicMock()
         user.role = "platform_superadmin"
-        self.assertTrue(
-            self._run_login_post(user, mfa_required_roles=["platform_superadmin"])
+        mfa_required, enrollment_required = self._run_login_post(
+            user, mfa_required_roles=["platform_superadmin"], has_confirmed_device=False
         )
+        self.assertFalse(mfa_required, "role-forced without device must NOT trigger 202")
+        self.assertTrue(enrollment_required, "role-forced without device must set enrollment hint")
 
-    def test_confirmed_device_plus_role_still_requires(self):
+    def test_confirmed_device_plus_role_still_triggers_202(self):
+        """Confirmed device + role in flag => 202 (device wins)."""
         user = MagicMock()
         user.role = "platform_superadmin"
-        self.assertTrue(
-            self._run_login_post(
-                user,
-                mfa_required_roles=["platform_superadmin"],
-                has_confirmed_device=True,
-            )
+        mfa_required, enrollment_required = self._run_login_post(
+            user,
+            mfa_required_roles=["platform_superadmin"],
+            has_confirmed_device=True,
         )
+        self.assertTrue(mfa_required)
+        self.assertFalse(enrollment_required)
 
     def test_no_device_role_not_in_flag_not_required(self):
+        """No device, role not in flag => no 202, no enrollment hint."""
         user = MagicMock()
         user.role = "tenant_staff"
-        self.assertFalse(
-            self._run_login_post(
-                user,
-                mfa_required_roles=["platform_superadmin"],
-                has_confirmed_device=False,
-            )
+        mfa_required, enrollment_required = self._run_login_post(
+            user,
+            mfa_required_roles=["platform_superadmin"],
+            has_confirmed_device=False,
         )
+        self.assertFalse(mfa_required)
+        self.assertFalse(enrollment_required)
 
 
 class A4_FlagEmptyNoDeviceTests(SimpleTestCase):

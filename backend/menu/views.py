@@ -4791,7 +4791,8 @@ class StaffOrderPaymentView(APIView):
         # is 5 minutes — long enough to cover any realistic network-retry window.
         idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
         if idempotency_key:
-            _idem_cache_key = f"staff_pay_idem:{order_id}:{idempotency_key}"
+            from django.db import connection as _staff_pay_conn
+            _idem_cache_key = f"staff_pay_idem:{_staff_pay_conn.schema_name}:{order_id}:{idempotency_key}"
             if cache.get(_idem_cache_key):
                 # Duplicate request: reload and return the current state.
                 idem_order = (
@@ -6576,7 +6577,8 @@ class OwnerOrderMarkPaidView(APIView):
         # without a second wallet debit or payment row.
         idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
         if idempotency_key:
-            _idem_cache_key = f"mark_paid_idem:{order_id}:{idempotency_key}"
+            from django.db import connection as _mark_paid_conn
+            _idem_cache_key = f"mark_paid_idem:{_mark_paid_conn.schema_name}:{order_id}:{idempotency_key}"
             if cache.get(_idem_cache_key):
                 # Fast-path cache hit: return current state without touching the DB.
                 _cached_order = Order.objects.filter(id=order_id).first()
@@ -9339,6 +9341,11 @@ class CustomerLoyaltyRedeemView(APIView):
             from django.db import transaction as _dbtx
             with _dbtx.atomic():
                 _locked = _CustM.objects.select_for_update().get(pk=_customer.pk)
+                if not _locked.phone_verified:
+                    return Response(
+                        {"detail": "A verified phone number is required to use a wallet.", "code": "unverified_phone"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 if _locked.loyalty_points < _redeemable:
                     return Response({"detail": "Insufficient points.", "code": "insufficient_points"}, status=status.HTTP_400_BAD_REQUEST)
                 _locked.loyalty_points -= _redeemable

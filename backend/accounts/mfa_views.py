@@ -327,6 +327,22 @@ class MFAVerifyView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # Defensive: if the user somehow reached MFAVerifyView with no confirmed device
+        # (e.g. stale session from before R7b), clear the pending state and return a clear
+        # 400 without penalising them with the mfa_fail lockout — a state that cannot be
+        # satisfied, so let them fall back to a clean login.
+        try:
+            _no_device = not UserTOTPDevice.objects.filter(user=user, confirmed=True).exists()
+        except Exception:
+            _no_device = False  # fail-open: let the verify path handle a transient/absent DB
+        if _no_device:
+            request.session.pop("_mfa_pending_user_id", None)
+            request.session.pop("_mfa_pending_ts", None)
+            return Response(
+                {"detail": "No MFA device enrolled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Per-account lockout check (mirrors LoginSerializer).
         if _check_mfa_lockout(user.pk):
             return Response(

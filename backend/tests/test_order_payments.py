@@ -519,13 +519,16 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         # The reload path uses Order.objects.prefetch_related().get()
         order_om.prefetch_related.return_value.get.return_value = already_paid_order
 
-        resp = self._post(body={"method": "cash", "amount": "20.00", "idempotency_key": "pay-abc-123"})
+        # FIX 6: cache key is now schema-namespaced; patch connection.schema_name.
+        from django.db import connection as _dbc
+        with patch.object(_dbc, "schema_name", "public"):
+            resp = self._post(body={"method": "cash", "amount": "20.00", "idempotency_key": "pay-abc-123"})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         # completed must be True in the replayed response
         self.assertTrue(resp.data["completed"])
-        # cache was checked
-        cache_mock.get.assert_called_once_with("staff_pay_idem:10:pay-abc-123")
+        # cache was checked with the schema-namespaced key
+        cache_mock.get.assert_called_once_with("staff_pay_idem:public:10:pay-abc-123")
         # No new payment row was created (OrderPayment.objects.create not called)
         broadcast_mock.assert_not_called()
 
@@ -550,7 +553,10 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         _setup_atomic_and_lock(tx_mock, order_om, order)
         order_om.prefetch_related.return_value.get.return_value = reload_order
 
-        with patch("menu.models.OrderPayment.objects") as op_om:
+        # FIX 6: cache key is now schema-namespaced; patch connection.schema_name.
+        from django.db import connection as _dbc
+        with patch("menu.models.OrderPayment.objects") as op_om, \
+                patch.object(_dbc, "schema_name", "public"):
             created_payment = _make_payment_row(amount=Decimal("20.00"), method="cash")
             created_payment.id = 501
             op_om.create.return_value = created_payment
@@ -558,9 +564,9 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
             resp = self._post(body={"method": "cash", "idempotency_key": "pay-xyz-999"})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        # Cache should have been set with the idempotency key
+        # Cache should have been set with the schema-namespaced idempotency key
         cache_mock.set.assert_called_once_with(
-            "staff_pay_idem:10:pay-xyz-999", True, timeout=300
+            "staff_pay_idem:public:10:pay-xyz-999", True, timeout=300
         )
 
 
