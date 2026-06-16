@@ -339,8 +339,8 @@ class ChannelLayerCheckTests(SimpleTestCase):
     def test_returns_ok_when_group_send_succeeds(self):
         mock_layer = MagicMock()
         with (
-            patch("config.api.get_channel_layer", return_value=mock_layer, create=True),
-            patch("config.api.async_to_sync", create=True) as mock_a2s,
+            patch("config.api.get_channel_layer", return_value=mock_layer, create=True),  # create-true-ok: get_channel_layer is imported lazily inside _check_channel_layer (from channels.layers import get_channel_layer), not at config.api module scope; create=True is required to patch the name.
+            patch("config.api.async_to_sync", create=True) as mock_a2s,  # create-true-ok: async_to_sync is imported lazily inside _check_channel_layer (from asgiref.sync import async_to_sync), not at config.api module scope; create=True is required to patch the name.
         ):
             # async_to_sync(layer.group_send)(...) — mock the whole call chain
             mock_a2s.return_value = MagicMock(return_value=None)
@@ -571,8 +571,8 @@ class CustomerOrderConsumerOwnershipGateTests(SimpleTestCase):
 
         async def _run():
             with (
-                _patch("realtime.consumers.schema_context", mock_schema_context, create=True),
-                _patch("realtime.consumers.Order", mock_order_cls, create=True),
+                _patch("realtime.consumers.schema_context", mock_schema_context, create=True),  # create-true-ok: schema_context is imported lazily inside _check_order_ownership (from django_tenants.utils import schema_context), not at realtime.consumers module scope; create=True is required to patch the name.
+                _patch("realtime.consumers.Order", mock_order_cls, create=True),  # create-true-ok: Order (menu.models.Order) is imported lazily inside _check_order_ownership, not at realtime.consumers module scope; create=True is required to patch the name.
             ):
                 # Import the function after patching
                 # We test the synchronous logic directly by calling the underlying

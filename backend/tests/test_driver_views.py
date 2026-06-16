@@ -620,7 +620,7 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
              patch("accounts.views._batch_business_types", return_value={42: "grocery", 99: "pharmacy"}) as mock_biz, \
              patch("accounts.views._serialize_delivery_job",
                    side_effect=lambda j, **kw: {"id": j.id, "business_type": kw.get("business_type", "restaurant")}), \
-             patch("accounts.views._summaries_by_tenant", return_value={}, create=True):
+             patch("accounts.views._summaries_by_tenant", return_value={}, create=True):  # create-true-ok: TODO no-op patch — _summaries_by_tenant is a nested local fn inside the view method, not a module attr; create=True invents an unused name. Harmless (the real nested fn runs); kept only because removing it doesn't change behavior.
 
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]

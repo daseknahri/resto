@@ -99,10 +99,12 @@ class OwnerWalletChargeInstantCapTests(SimpleTestCase):
         req.tenant = SimpleNamespace(id=1, schema_name="acme", name="Acme")
         # High threshold so every amount we use stays on the INSTANT path; PlatformConfig
         # lookup is neutralised to the env fallback path inside the view.
-        with patch.object(self.view_cls, "throttle_classes", []), \
-                patch("accounts.models.PlatformConfig.get_solo", side_effect=Exception("no DB")), \
-                patch("django.conf.settings.WALLET_CHARGE_APPROVAL_THRESHOLD", "10000", create=True), \
-                patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit:
+        with (
+            patch.object(self.view_cls, "throttle_classes", []),
+            patch("accounts.models.PlatformConfig.get_solo", side_effect=Exception("no DB")),
+            patch("django.conf.settings.WALLET_CHARGE_APPROVAL_THRESHOLD", "10000", create=True),  # create-true-ok: WALLET_CHARGE_APPROVAL_THRESHOLD is an OPTIONAL Django setting (env-fallback default in the view); not defined on settings by default, so create=True is required to patch it.
+            patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit,
+        ):
             resp = self.view(req)
         return resp, mock_debit
 

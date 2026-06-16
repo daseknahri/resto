@@ -147,11 +147,11 @@ class InitSentryTests(SimpleTestCase):
                     },
                     clear=False,
                 ),
-                patch("config.sentry.sentry_init", sentry_init_mock, create=True),
+                patch("config.sentry.sentry_init", sentry_init_mock, create=True),  # create-true-ok: sentry_init is imported lazily inside init_sentry (from sentry_sdk import init as sentry_init), not at config.sentry module scope; create=True is required to patch the name.
                 patch(
                     "config.sentry.DjangoIntegration",
                     django_integration_mock,
-                    create=True,
+                    create=True,  # create-true-ok: DjangoIntegration is imported lazily inside init_sentry (from sentry_sdk.integrations.django import DjangoIntegration), not at config.sentry module scope; create=True is required to patch the name.
                 ),
             ):
                 # Patch the local import inside init_sentry

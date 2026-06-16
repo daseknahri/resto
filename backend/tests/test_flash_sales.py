@@ -118,13 +118,13 @@ class AdminFlashSaleListCreateViewTests(SimpleTestCase):
 
     def test_get_non_admin_returns_403(self):
         req = self._get(user=_non_admin())
-        with patch("accounts.views.schema_context", create=True):
+        with patch("accounts.views.schema_context", create=True):  # create-true-ok: schema_context is imported lazily inside view fns (from django_tenants.utils import schema_context as _sc), not at accounts.views module scope; create=True needed to patch the name. 403 path short-circuits before any schema switch, so the patch is just a guard.
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_post_non_admin_returns_403(self):
         req = self._post({"name": "Sale"}, user=_non_admin())
-        with patch("accounts.views.schema_context", create=True):
+        with patch("accounts.views.schema_context", create=True):  # create-true-ok: schema_context is imported lazily inside view fns, not at accounts.views module scope; create=True needed to patch the name. 403 path short-circuits before any schema switch, so the patch is just a guard.
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 

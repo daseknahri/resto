@@ -434,9 +434,11 @@ class TranslateProviderBodyLeakTests(SimpleTestCase):
         req.user = self._owner()
         req.tenant = SimpleNamespace(id=1, schema_name="acme")
 
-        with patch("django.conf.settings.OPENROUTER_API_KEY", "sk-test", create=True), \
-             patch("tenancy.api.TranslateView._call_openrouter", side_effect=http_err), \
-             patch("tenancy.api.logger") as mock_logger:
+        with (
+            patch("django.conf.settings.OPENROUTER_API_KEY", "sk-test", create=True),  # create-true-ok: OPENROUTER_API_KEY is an OPTIONAL Django setting (env-fallback, undefined by default in the test env); create=True is the standard idiom for patching a settings attr that may not exist.
+            patch("tenancy.api.TranslateView._call_openrouter", side_effect=http_err),
+            patch("tenancy.api.logger") as mock_logger,
+        ):
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, 502)
