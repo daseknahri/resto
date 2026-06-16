@@ -121,8 +121,13 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       wallet_service.debit_wallet with a schema-namespaced per-tx key (placeorder:{schema}:{order.id}) so future
       wallet_service invariants cover them — needs DB-test verification + careful money-path review. (MAD-only-for-launch
       is the owner's confirm; the guard ships the safe default now.)
-- [ ] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM** — mutable base tags; Coolify rebuilds
-      from source (non-reproducible). [non-gated, M]
+- [~] **R17 (P2) Container image scanning (Trivy) + digest-pin bases + SBOM — fs SCAN DONE (1e671c1)** —
+      .github/workflows/security-scan.yml: trivy fs (vuln+secret+config) on push/PR/weekly-cron, fail HIGH/CRITICAL,
+      ignore-unfixed, SARIF→Security tab; .trivyignore seeded empty; dependabot docker ecosystem (backend+frontend).
+      Catches secrets + Dockerfile/compose misconfig (R13 non-root regression guard) the dep-audits miss. First CI
+      run is the gate. **R17b DEFERRED (needs a Docker daemon, none here): trivy IMAGE scan of built backend/frontend
+      images for OS base-CVEs + base-image DIGEST-PINNING (FROM ...@sha256:) — dependabot docker will track digests
+      once pinned. SBOM gen also R17b.**
 - [ ] **R18 (P2) PII erasure/export tooling + retention cron** — no data-subject erasure/export; no Customer/Order PII
       retention. Tooling non-gated; jurisdiction + policy text owner-gated.
 - [ ] **R19 (P2) Police patch(create=True) + import-smoke / real-model money tests** — the masked-500 class (a
