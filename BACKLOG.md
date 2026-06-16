@@ -73,8 +73,13 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       f"loyalty:{schema}:{raw}" at all 3 sites (read/create/replay); within-schema dedup preserved, same client key
       now succeeds independently across tenants. Scout CONFIRMED this was the LAST un-namespaced money key (others
       key off globally-unique public-schema PKs). New DB test (2-schema same-key) runs in CI. [scout prod-readiness]
-- [ ] **R13 (P2) Non-root containers + bounded ASGI request timeout** — Dockerfiles run uvicorn/nginx as root;
-      uvicorn path has no request timeout (GUNICORN_TIMEOUT only the WSGI fallback). [non-gated, M]
+- [x] **R13 (P2) Non-root containers + bounded ASGI request timeout — DONE (prod-harden-containers, 8824fa1)** —
+      backend USER 10001 (chown /app), frontend nginx UID 101 on :8080, compose user: on api/worker/beat.
+      BoundedHTTPMiddleware bounds HTTP only (websockets + the /api/marketplace/track/ SSE stream exempt;
+      HTTP_REQUEST_TIMEOUT default 120s) + uvicorn keep-alive/graceful-shutdown. entrypoint media-writable
+      fail-fast (S3-aware, bypass flag) + SECURITY_LOG_FILE non-root note. Review caught+fixed a critical (SSE
+      severed by a naive timeout). Verified bash -n + py_compile + full suite 3952 passed. OWNER: pre-chown the
+      media_data volume to 10001:10001 once; image build/boot is the deploy-time gate.
 - [x] **R14 (P2) Bound inline-notification threads + cache-stampede lock — DONE (prod-harden-load)** —
       accounts/tasks.py enqueue() inline fallback now submits to a module-level bounded ThreadPoolExecutor
       (max_workers=4) that closes the DB connection in finally (no per-thread conn leak); Celery-on path unchanged.
