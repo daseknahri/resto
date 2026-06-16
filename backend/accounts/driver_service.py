@@ -193,7 +193,8 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
 
     def _record_failure():
         try:
-            cache.set(fail_key, (cache.get(fail_key) or 0) + 1, CASHOUT_CONFIRM_LOCK_SECONDS)
+            cache.add(fail_key, 0, CASHOUT_CONFIRM_LOCK_SECONDS)
+            cache.incr(fail_key)
         except Exception:
             pass
 

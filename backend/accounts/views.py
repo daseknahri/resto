@@ -2462,7 +2462,8 @@ class CustomerWalletRedeemVoucherView(APIView):
 
         def _record_failure():
             try:
-                _cache.set(fail_key, (_cache.get(fail_key) or 0) + 1, VOUCHER_REDEEM_LOCK_SECONDS)
+                _cache.add(fail_key, 0, VOUCHER_REDEEM_LOCK_SECONDS)
+                _cache.incr(fail_key)
             except Exception:
                 pass
 
