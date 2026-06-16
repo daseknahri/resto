@@ -85,6 +85,14 @@ REST_FRAMEWORK = {
         "driver_doc_upload": "10/hour",
         # OPS-5c item 7: analytics ingestion keyed per (tenant, ip) — see AnalyticsEventThrottle
         "analytics_events_tenant": "600/hour",
+        # R7b: TOTP MFA endpoints
+        # mfa_confirm: verifying a TOTP code during enrollment — brute-force sensitive.
+        "mfa_confirm": "10/hour",
+        # mfa_verify: second-factor login step — same attack surface as login itself.
+        "mfa_verify_burst": "8/min",
+        "mfa_verify_sustained": "50/day",
+        # mfa_disable: requires re-auth; rate-limit to slow brute-force of current password.
+        "mfa_disable": "10/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

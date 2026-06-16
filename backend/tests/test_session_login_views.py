@@ -121,9 +121,13 @@ class LoginViewTests(SimpleTestCase):
             instance = mock_ser.return_value
             instance.is_valid.return_value = True
             instance.validated_data = {"user": user}
-            with patch("accounts.views.login"):
-                with patch("accounts.views.serialize_user_session", return_value=_session_data()):
-                    resp = self._post({"email": "owner@example.com", "password": "pass"})
+            # R7b MFA gate queries UserTOTPDevice — mock it so this no-DB test
+            # exercises the default (no device) path: login proceeds normally.
+            with patch("accounts.models.UserTOTPDevice") as mock_totp:
+                mock_totp.objects.filter.return_value.exists.return_value = False
+                with patch("accounts.views.login"):
+                    with patch("accounts.views.serialize_user_session", return_value=_session_data()):
+                        resp = self._post({"email": "owner@example.com", "password": "pass"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["detail"], "Signed in")
@@ -135,9 +139,12 @@ class LoginViewTests(SimpleTestCase):
             instance = mock_ser.return_value
             instance.is_valid.return_value = True
             instance.validated_data = {"user": user}
-            with patch("accounts.views.login") as mock_login:
-                with patch("accounts.views.serialize_user_session", return_value=_session_data()):
-                    self._post({"email": "owner@example.com", "password": "pass"})
+            # R7b MFA gate queries UserTOTPDevice — mock the no-device path.
+            with patch("accounts.models.UserTOTPDevice") as mock_totp:
+                mock_totp.objects.filter.return_value.exists.return_value = False
+                with patch("accounts.views.login") as mock_login:
+                    with patch("accounts.views.serialize_user_session", return_value=_session_data()):
+                        self._post({"email": "owner@example.com", "password": "pass"})
         mock_login.assert_called_once()
 
 

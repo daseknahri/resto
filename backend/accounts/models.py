@@ -2,6 +2,7 @@ import secrets
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -1065,3 +1066,68 @@ class WinbackNudge(models.Model):
 
     def __str__(self) -> str:
         return f"WinbackNudge tenant={self.tenant_id} customer={self.customer_id} @ {self.sent_at}"
+
+
+class UserTOTPDevice(models.Model):
+    """Per-user TOTP MFA device — lives in the public schema (accounts app).
+
+    Lifecycle:
+      1. POST /api/mfa/setup/   → row created/reset with confirmed=False, secret generated.
+      2. POST /api/mfa/confirm/ → user supplies a TOTP code; on success confirmed=True +
+                                  backup_codes (hashed, single-use) are generated and
+                                  returned ONCE in plaintext.
+      3. POST /api/mfa/verify/  → second-factor step of the login flow (only reached when
+                                  a confirmed device exists OR the user's role is in
+                                  MFA_REQUIRED_ROLES).
+
+    Security notes:
+      * secret is a pyotp base32 string — never logged or serialised in list endpoints.
+      * backup_codes stores SHA-256 hashes (via make_password) of single-use codes;
+        plaintext codes are returned only at confirm time and never stored.
+      * confirmed=False devices do NOT trigger the MFA login gate; only confirmed ones do.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="totp_device",
+    )
+    # pyotp.random_base32() secret — base32, never stored in logs.
+    secret = models.CharField(max_length=64)
+    # False until the user completes the confirm step by verifying a live TOTP code.
+    confirmed = models.BooleanField(default=False)
+    # JSON list of make_password()-hashed single-use backup codes.
+    # Never store plaintext codes here — plaintext is returned ONCE at confirm time only.
+    backup_codes = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Set only after a successful confirm.
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "User TOTP device"
+
+    def __str__(self) -> str:
+        state = "confirmed" if self.confirmed else "pending"
+        return f"TOTPDevice({self.user_id}, {state})"
+
+    # ── Backup code helpers ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _hash_backup_code(plaintext: str) -> str:
+        """Hash a plaintext backup code for storage (make_password uses PBKDF2)."""
+        return make_password(plaintext)
+
+    def verify_backup_code(self, plaintext: str) -> bool:
+        """Return True and REMOVE the matched hash if plaintext matches any stored hash.
+
+        Single-use: the matching hash is deleted on success so the code can never
+        be replayed.  The instance is saved in-place; callers must not re-save.
+        """
+        for i, stored_hash in enumerate(list(self.backup_codes)):
+            if check_password(plaintext, stored_hash):
+                new_codes = list(self.backup_codes)
+                new_codes.pop(i)
+                self.backup_codes = new_codes
+                self.save(update_fields=["backup_codes"])
+                return True
+        return False

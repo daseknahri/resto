@@ -18,6 +18,12 @@ from accounts.ride_views import (
     AdminRideListView,
     AdminCarApprovalView,
 )
+from accounts.mfa_views import (
+    MFASetupView,
+    MFAConfirmView,
+    MFAVerifyView,
+    MFADisableView,
+)
 from accounts.views import (
     ActivationView,
     AdminCreateDeliveryJobView,
@@ -203,6 +209,11 @@ shared_api_urlpatterns = [
     path("api/driver/rides/<int:ride_id>/rate/", DriverRateRideView.as_view(), name="driver-ride-rate"),
     path("api/marketplace/track/<str:order_number>/", OrderTrackingView.as_view(), name="marketplace-track"),
     path("api/marketplace/track/<str:order_number>/rate/", DeliveryRatingView.as_view(), name="marketplace-track-rate"),
+    # ── R7b: TOTP MFA ────────────────────────────────────────────────────────────
+    path("api/mfa/setup/", MFASetupView.as_view(), name="mfa-setup"),
+    path("api/mfa/confirm/", MFAConfirmView.as_view(), name="mfa-confirm"),
+    path("api/mfa/verify/", MFAVerifyView.as_view(), name="mfa-verify"),
+    path("api/mfa/disable/", MFADisableView.as_view(), name="mfa-disable"),
     path("api/lead-provision-preview/<int:lead_id>/", LeadProvisionPreviewView.as_view(), name="lead-provision-preview"),
     path("api/lead-resend-activation/<int:lead_id>/", LeadResendActivationView.as_view(), name="lead-resend-activation"),
     path("api/lead-onboarding-package/<int:lead_id>/", LeadOnboardingPackageView.as_view(), name="lead-onboarding-package"),

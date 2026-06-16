@@ -322,3 +322,33 @@ class EmailUnsubscribeThrottle(_IPThrottle):
     token already resists forgery; this throttle blunts sequential scanning of the
     endpoint. Keyed on the trusted-proxy-aware client IP (via _IPThrottle)."""
     scope = "email_unsubscribe"
+
+
+# ── R7b: TOTP MFA throttles ───────────────────────────────────────────────────
+
+class MFAConfirmThrottle(_IPThrottle):
+    """R7b: rate-limit TOTP confirm during enrollment (brute-force-sensitive, IP-keyed)."""
+    scope = "mfa_confirm"
+
+
+class MFAVerifyBurstThrottle(_IPThrottle):
+    """R7b: rate-limit MFA verify burst (second-factor login — same surface as login)."""
+    scope = "mfa_verify_burst"
+
+
+class MFAVerifySustainedThrottle(_IPThrottle):
+    """R7b: rate-limit MFA verify sustained (daily cap)."""
+    scope = "mfa_verify_sustained"
+
+
+class MFADisableThrottle(SimpleRateThrottle):
+    """R7b: rate-limit MFA disable per authenticated user (requires re-auth)."""
+    scope = "mfa_disable"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"mfadis:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}

@@ -209,6 +209,44 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
+
+        # ── R7b: MFA gate ─────────────────────────────────────────────────────
+        # Determine if MFA is required for this user.  MFA is required when:
+        #   (a) the user has a CONFIRMED UserTOTPDevice, OR
+        #   (b) the user's role is in settings.MFA_REQUIRED_ROLES (role-forced).
+        # With MFA_REQUIRED_ROLES empty AND no enrolled device, neither branch is
+        # taken and login() runs exactly as before — byte-for-byte unchanged.
+        mfa_required_roles = getattr(settings, "MFA_REQUIRED_ROLES", [])
+        role_forces_mfa = user.role in mfa_required_roles
+
+        has_confirmed_device = False
+        try:
+            from django.db import OperationalError, ProgrammingError
+            from accounts.models import UserTOTPDevice  # noqa: avoid circular at module level
+            has_confirmed_device = UserTOTPDevice.objects.filter(
+                user=user, confirmed=True
+            ).exists()
+        except (ProgrammingError, OperationalError):
+            # DB-absent ONLY: table not yet created (pre-migration) or the connection is
+            # unavailable. Failing open is safe here — the LoginSerializer already queried
+            # the DB (password check) moments earlier on the same connection, so a genuine
+            # mid-login outage is near-impossible; the realistic triggers are pre-migration
+            # and no-DB unit tests. A CODE bug (AttributeError, etc.) is NOT caught — it
+            # surfaces as a 500 rather than silently skipping the MFA gate.
+            has_confirmed_device = False
+
+        mfa_required = has_confirmed_device or role_forces_mfa
+
+        if mfa_required:
+            # Do NOT call login() — the session must not be authenticated yet.
+            # Store only the pending user id + timestamp (not a real authenticated session).
+            from django.utils.timezone import now as _tz_now
+            request.session["_mfa_pending_user_id"] = user.pk
+            request.session["_mfa_pending_ts"] = _tz_now().timestamp()
+            request.session.modified = True
+            return Response({"mfa_required": True}, status=status.HTTP_202_ACCEPTED)
+        # ── End R7b gate ──────────────────────────────────────────────────────
+
         login(request, user)
         return Response({"detail": "Signed in", "user": serialize_user_session(user)}, status=status.HTTP_200_OK)
 

@@ -509,6 +509,18 @@ RESERVATION_SLA_DUE_SOON_MINUTES = parse_int_env("RESERVATION_SLA_DUE_SOON_MINUT
 # Set GOOGLE_OAUTH_CLIENT_ID in your .env to enable Google sign-in.
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 
+# ── R7b: TOTP MFA ─────────────────────────────────────────────────────────────
+# PLATFORM_NAME is used as the issuer in the TOTP provisioning URI (shows in
+# authenticator apps next to the account).
+PLATFORM_NAME = os.getenv("PLATFORM_NAME", "Kepoli").strip() or "Kepoli"
+# MFA_REQUIRED_ROLES: CSV of role strings for which MFA is MANDATORY at login,
+# regardless of whether the user has enrolled a device.
+# Example:  DJANGO_MFA_REQUIRED_ROLES=platform_superadmin,tenant_owner
+# Default EMPTY → purely opt-in: MFA is only triggered for users who have an
+# already-confirmed TOTP device. With the flag empty AND no enrolled device,
+# LoginView behaves byte-for-byte as before this feature landed (no MFA gate).
+MFA_REQUIRED_ROLES: list[str] = parse_csv_env("DJANGO_MFA_REQUIRED_ROLES", "")
+
 # ── Web Push (VAPID) ──────────────────────────────────────────────────────────
 # Generate a key pair once with:  python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print('PRIVATE:', v.private_pem().decode()); print('PUBLIC:', v.public_key.public_bytes_raw().hex())"
 # Or use:  vapid --gen  (installs with pywebpush)
