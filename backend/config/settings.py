@@ -710,7 +710,29 @@ X_FRAME_OPTIONS = os.getenv("DJANGO_X_FRAME_OPTIONS", "DENY")
 
 # Referrer-Policy: send origin only on same-origin requests to avoid leaking
 # URLs with tokens in query strings to third-party analytics.
-SECURE_REFERRER_POLICY = os.getenv("DJANGO_REFERRER_POLICY", "strict-origin-when-cross-origin")
+# Validate the env value (a single policy OR a comma-separated list) against the
+# set Django's security.E023 check accepts. An invalid value would otherwise make
+# `manage.py check --deploy --fail-level ERROR` (the entrypoint deploy gate) fail
+# and crash-loop the whole deploy — so a bad/typo'd env var falls back to the safe
+# default with a warning instead of taking the app down.
+_VALID_REFERRER_POLICIES = {
+    "no-referrer", "no-referrer-when-downgrade", "origin",
+    "origin-when-cross-origin", "same-origin", "strict-origin",
+    "strict-origin-when-cross-origin", "unsafe-url",
+}
+_referrer_raw = os.getenv("DJANGO_REFERRER_POLICY", "strict-origin-when-cross-origin").strip()
+_referrer_tokens = [t.strip() for t in _referrer_raw.split(",") if t.strip()]
+if _referrer_tokens and all(t in _VALID_REFERRER_POLICIES for t in _referrer_tokens):
+    SECURE_REFERRER_POLICY = ",".join(_referrer_tokens)
+else:
+    import warnings as _referrer_warn
+    _referrer_warn.warn(
+        f"DJANGO_REFERRER_POLICY={_referrer_raw!r} is not a valid Referrer-Policy "
+        "(security.E023); falling back to 'strict-origin-when-cross-origin'. Valid "
+        "values: " + ", ".join(sorted(_VALID_REFERRER_POLICIES)),
+        stacklevel=2,
+    )
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # ── Django admin URL ──────────────────────────────────────────────────────────
 # Change DJANGO_ADMIN_URL in production to an unguessable path (no trailing slash
