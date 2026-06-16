@@ -121,6 +121,10 @@ CSRF_TRUSTED_ORIGINS = sorted(csrf_trusted_origins)
 
 SHARED_APPS = [
     "django_tenants",
+    # R5: enables django.contrib.postgres.operations.AddIndexConcurrently so hot-table
+    # index migrations can build without an ACCESS EXCLUSIVE lock (no models → adds no
+    # migrations). See backend/MIGRATIONS.md for the atomic=False/CONCURRENTLY pattern.
+    "django.contrib.postgres",
     "django.contrib.admin",
     "django.contrib.contenttypes",
     "django.contrib.auth",
