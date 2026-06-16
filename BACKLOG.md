@@ -38,8 +38,14 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       accounts.tasks.write_beat_heartbeat (beat every 60s, cache.set celery_beat_heartbeat ttl 300); _check_celery
       now reports degraded on missing/stale heartbeat once the broker is set + past a 240s boot grace (dev/no-broker
       preserved; +locmem guard so a per-process-cache SKIP_DEPLOY_CHECK edge can't false-flag). Backend 3889/0.
-- [ ] **R5 (P1) AddIndexConcurrently on hot tables + rehearse migrate/rollback** — every index migration is plain
-      AddIndex (ACCESS EXCLUSIVE lock per tenant schema at boot = write-outage scaling with tenant count).
+- [~] **R5 (P1) AddIndexConcurrently on hot tables + rehearse migrate/rollback — PREREQ+GUIDE DONE (0fe4c9d)** —
+      django.contrib.postgres added to SHARED_APPS (enables AddIndexConcurrently; verified no migration + 3952
+      passed). backend/MIGRATIONS.md = canonical guide: the per-tenant ACCESS-EXCLUSIVE-×N lock problem, the
+      atomic=False/CONCURRENTLY convention, ready-to-apply conversions for the 3 recent pure-AddIndex migrations
+      (menu/0058 Order = top priority, accounts/0043, tenancy/0042) + rollback. CONVERSION GATED on a staging
+      rehearsal (OWNER): can't verify atomic=False is txn-free in django-tenants 3.6.0's --tenant loop + new-tenant
+      auto_create_schema without Postgres → a wrong conversion breaks onboarding. GO/NO-GO checklist in the doc.
+      [unblocked once R20 staging exists]
 - [x] **R6 (P1) Dependency CVE patch + scanning + Dependabot — DONE (prod-harden-deps-ci)** — PATCHED the
       vulnerable deps (not just added a scanner): Django 4.2.11→4.2.30 (~20 advisories incl. CVE-2024-45231 /
       CVE-2025-59682 / CVE-2026-25673-4, stayed on 4.2 LTS), DRF 3.14→3.15.2, python-dotenv 1.0.1→1.2.2, Pillow
