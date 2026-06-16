@@ -151,8 +151,11 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 - [ ] **R20 (P3) Provision staging env** — unblocks rehearsing R1/R5 off-prod. [owner-gated: cost/setup]
 - [ ] **R21 (P3) Dockerized dev Postgres** — so the ~25 DB money tests run locally (CI covers them today). [non-gated, S]
 - [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
-- [ ] **R23 (P3) Incident-response runbook + remove vestigial pytest.ini** — no SEV ladder; pytest.ini has no
-      pytest-django/conftest (real runner is manage.py test). [non-gated, S]
+- [x] **R23 (P3) Incident-response runbook — DONE (d20a02c)** — infra/INCIDENT_RUNBOOK.md: SEV1/2/3 + first-5-min
+      triage + 8 grounded playbooks (deploy/rollback, DB restore, Redis, backup, migration, security, load, disk),
+      links R1 scripts + MIGRATIONS.md, owner TODOs marked. All referenced paths/commands verified. **pytest.ini
+      intentionally KEPT — it IS load-bearing: my local `pytest -q` (3981 passed) relies on it; the "vestigial"
+      premise was wrong. Removing it would break local runs. Owner-gated bits (on-call/escalation/URLs) = TODOs.**
 - [~] **R24 (P3) Code-split i18n locales + responsive image srcset — i18n DONE (prod-harden-frontend-perf, a84cc7d)** —
       FR (195kB) + AR (221kB) catalogs now lazy dynamic-import()'d into separate chunks, out of the entry bundle;
       EN bundled for first paint. Resilient to a failed chunk fetch (retry-evict + setLocale keeps current locale).
