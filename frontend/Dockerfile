@@ -43,8 +43,8 @@ FROM nginx:1.27-alpine AS runner
 #      /tmp (writable by any user) not /var/run / /var/cache (owned by root).
 #   2. Fix ownership of the html root and the conf.d directory.
 #   3. Drop to USER 101 (numeric) before CMD.
-# The server block in nginx.conf listens on 8080 (unprivileged); the compose
-# file maps container:8080 to host:3000 so no external reference changes.
+# The server block in nginx.conf listens on 3000 (unprivileged — UID 101 binds
+# it without root); Coolify/Traefik route directly to container port 3000.
 
 # Write a slim global nginx.conf that redirects all writable paths under /tmp.
 RUN printf 'worker_processes auto;\n\
@@ -81,7 +81,7 @@ RUN chown -R 101:101 /usr/share/nginx/html /etc/nginx/conf.d \
 USER 101
 
 # Expose the unprivileged port the server block listens on.
-EXPOSE 8080
+EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
-  CMD wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/health >/dev/null || exit 1

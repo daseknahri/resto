@@ -20,21 +20,21 @@ services:
     init: true
     labels:
       - "traefik.enable=true"
-      # R13: nginx now listens on 8080 (non-root); tell Traefik the real container port.
-      - "traefik.http.services.menu-ibnbatoutaweb-com-frontend.loadbalancer.server.port=8080"
+      # nginx listens on 3000 (non-root UID 101 binds it; 3000 > 1024). Match Coolify's routing.
+      - "traefik.http.services.menu-ibnbatoutaweb-com-frontend.loadbalancer.server.port=3000"
     depends_on:
       api:
         condition: service_healthy
     expose:
-      # R13: container exposes 8080 (non-root nginx). Traefik label above routes to it.
-      - "8080"
+      # Container exposes 3000 (non-root nginx UID 101 binds it; 3000 > 1024).
+      - "3000"
     # Mount media volume read-only so nginx can serve uploaded files directly
     # without proxying through Django (faster and eliminates 404 race conditions).
     volumes:
       - media_data:/app/media:ro
     healthcheck:
-      # R13: healthcheck now hits the actual container port 8080.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      # healthcheck hits the container port 3000.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -63,11 +63,11 @@ services:
       api:
         condition: service_healthy
     expose:
-      # R13: container exposes 8080 (non-root nginx). Traefik label above routes to it.
-      - "8080"
+      # Container exposes 3000 (non-root nginx UID 101 binds it; 3000 > 1024).
+      - "3000"
     healthcheck:
-      # R13: healthcheck now hits the actual container port 8080.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      # healthcheck hits the container port 3000.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
       interval: 15s
       timeout: 5s
       retries: 5
