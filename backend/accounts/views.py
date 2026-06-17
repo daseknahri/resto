@@ -2561,15 +2561,22 @@ class CustomerWalletRedeemVoucherView(APIView):
 
 
 def _compute_is_open_now(profile) -> bool:
-    """Evaluate open/closed for a Profile using manual toggle + schedule only.
+    """Evaluate open/closed for a Profile using manual toggle + schedule + closure dates.
 
-    Intentionally skips the ClosureDate check because that table lives in the
-    tenant schema and this function runs in the public-schema context.
+    closure_dates (Profile.closure_dates) is a denormalized list of ISO date strings
+    maintained by menu/signals.py ClosureDate post_save/post_delete — so no tenant-
+    schema query is needed here.
     """
     if not profile.is_open:
         return False
     if getattr(profile, "is_menu_temporarily_disabled", False):
         return False
+    # Denormalized holiday closures: check tenant-local today against the date list.
+    _closure_dates = getattr(profile, "closure_dates", None) or []
+    if _closure_dates:
+        _today_str = tenant_local_now(profile).date().isoformat()
+        if _today_str in set(_closure_dates):
+            return False
     # The window rule (tenant-local weekday + [open, close) HH:MM) is the SINGLE source of
     # truth in tenancy.openstate.schedule_open_now — shared with the menu-page serializer and
     # the order-acceptance gate. None means "no schedule configured" → fall back to is_open.
@@ -2673,6 +2680,7 @@ _LIVE_ROW_INTERNAL_KEYS = (
     "_raw_menu_disabled",
     "_raw_timezone",
     "_raw_schedule",
+    "_raw_closure_dates",
     "_raw_marketplace_promos",
     "_raw_opted_flash_ids",
 )
@@ -2699,15 +2707,19 @@ def _is_open_now_from_row(row) -> bool:
     """DICT-friendly mirror of _compute_is_open_now for a cached row.
 
     Same rule, same order: manual toggle off → False; menu temporarily disabled →
-    False; else delegate to the SINGLE window rule (openstate.schedule_open_now)
-    against a tenant-local now, falling back to the manual toggle when no schedule
-    is configured (result is None). Verdict is IDENTICAL to _compute_is_open_now for
-    the same instant — this is a freshness fix, not a logic change.
+    False; closure date → False; else delegate to the SINGLE window rule
+    (openstate.schedule_open_now). Verdict is IDENTICAL to _compute_is_open_now
+    for the same instant — this is a freshness fix, not a logic change.
     """
     if not row.get("_raw_is_open"):
         return False
     if row.get("_raw_menu_disabled"):
         return False
+    _closure_dates = row.get("_raw_closure_dates") or []
+    if _closure_dates:
+        _today_str = _row_local_now(row).date().isoformat()
+        if _today_str in set(_closure_dates):
+            return False
     schedule = row.get("_raw_schedule") or None
     result = schedule_open_now(schedule, _row_local_now(row))
     return bool(row.get("_raw_is_open")) if result is None else result
@@ -3001,6 +3013,7 @@ class DirectoryView(APIView):
                     "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
                     "_raw_timezone": (getattr(profile, "timezone", "") or ""),
                     "_raw_schedule": profile.business_hours_schedule or {},
+                    "_raw_closure_dates": list(getattr(profile, "closure_dates", None) or []),
                 })
 
             cities = sorted(cities_set)
@@ -3276,6 +3289,7 @@ class MarketplaceView(APIView):
                     "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
                     "_raw_timezone": (getattr(profile, "timezone", "") or ""),
                     "_raw_schedule": profile.business_hours_schedule or {},
+                    "_raw_closure_dates": list(getattr(profile, "closure_dates", None) or []),
                     "_raw_marketplace_promos": getattr(profile, "marketplace_promos", None),
                     "_raw_opted_flash_ids": sorted(tenant_opted_ids),
                 })

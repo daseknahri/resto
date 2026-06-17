@@ -141,3 +141,32 @@ def denormalize_promos_on_save(sender, instance, **kwargs):
 @receiver(post_delete, sender="menu.Promotion")
 def denormalize_promos_on_delete(sender, instance, **kwargs):
     _denormalize_current_tenant_promos()
+
+
+def _denormalize_current_tenant_closures():
+    """Recompute the denormalized closure dates for the CURRENT tenant.
+
+    Mirrors the promos denorm pattern: reads ClosureDate inside the tenant
+    schema, writes iso-date list to public Profile.closure_dates. Best-effort.
+    """
+    tenant = getattr(connection, "tenant", None)
+    if tenant is None or getattr(tenant, "schema_name", None) is None:
+        return
+    try:
+        from django_tenants.utils import get_public_schema_name
+        if tenant.schema_name == get_public_schema_name():
+            return
+        from .closure_denorm import recompute_tenant_closures
+        recompute_tenant_closures(tenant)
+    except Exception:
+        logger.exception("Failed to denormalize closure dates for current tenant")
+
+
+@receiver(post_save, sender="menu.ClosureDate")
+def denormalize_closures_on_save(sender, instance, **kwargs):
+    _denormalize_current_tenant_closures()
+
+
+@receiver(post_delete, sender="menu.ClosureDate")
+def denormalize_closures_on_delete(sender, instance, **kwargs):
+    _denormalize_current_tenant_closures()

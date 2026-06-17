@@ -831,11 +831,11 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       OwnerClosureDateListCreateView.post + OwnerClosureDateDeleteView.delete now _bust_tenant_meta_cache (new
       menu/views.py _bust_meta_cache_for_request helper).** New MetaIsOpenNowRecompute + integration tests + 2
       closure-bust tests. Backend 3878/0. (tenancy/api.py; menu/views.py). [scout marketplace-live-fields]
-- [ ] **Marketplace/Directory listings ignore ClosureDate entirely (design gap)** — DirectoryView/MarketplaceView
-      never read ClosureDate (it lives in the tenant schema; the listing runs in the public schema), so a tenant
-      closed for a holiday still shows is_open=true on the marketplace card even though its menu page + order gate
-      honor the closure. Closing this needs denormalizing "closed today" into the public Profile (like ratings/promos)
-      — deferred; low frequency (whole-day holiday closures). (accounts/views.py). [scout meta-live-isopen]
+- [x] **Marketplace/Directory listings ignore ClosureDate entirely** — DONE: denormalized
+      ClosureDate rows onto Profile.closure_dates (JSON list of ISO dates, tenancy migration
+      0044); post_save/post_delete signals (menu/signals.py) keep it in sync; backfill cmd
+      `backfill_profile_closures` for existing data; _compute_is_open_now + _is_open_now_from_row
+      now check closure_dates in-memory via tenant-local date. [scout meta-live-isopen]
 - [ ] **Menu list cache bakes in happy-hour effective_price + ends_at (60s TTL, same class)** — menu/views.py:425
       caches the menu list 60s; DishSerializer.get_effective_price / get_happy_hour are clock-derived (from
       get_active_happy_hours(now_local) at build) and the version key bumps only on CMS writes, so a happy hour that

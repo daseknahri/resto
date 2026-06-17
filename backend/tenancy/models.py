@@ -352,6 +352,19 @@ class Profile(models.Model):
             "discount first. 'Live now' is evaluated in-memory at request time."
         ),
     )
+    # Denormalized list of ISO date strings on which the tenant is closed (ClosureDate rows
+    # from the tenant schema, maintained by menu/signals.py post_save/post_delete).
+    # Marketplace listing checks today's tenant-local date against this list in-memory
+    # without a cross-schema query. Past dates are preserved (no cleanup on write) since
+    # the list is typically short (< 20 entries / year) and date comparison is exact.
+    closure_dates = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Denormalized list of ISO date strings (YYYY-MM-DD) on which the tenant "
+            "is closed. Auto-maintained by menu ClosureDate post_save/post_delete signals."
+        ),
+    )
 
     # ── Business type & capabilities (Kepoli super-app generalization seam) ─────
     # The platform began restaurant-only; business_type lets the same tenant
