@@ -57,10 +57,11 @@
           <RouterLink
             v-if="customerStore.customer?.is_driver"
             to="/driver"
-            class="ui-btn-outline ui-touch-target inline-flex border-emerald-500/40 px-3 py-2 text-[11px] text-emerald-200 hover:border-emerald-400/70 sm:px-4 sm:text-sm"
+            :aria-label="t('landingLayout.navDrive')"
+            class="ui-btn-outline ui-touch-target inline-flex items-center border-emerald-500/40 px-3 py-2 text-[11px] text-emerald-200 hover:border-emerald-400/70 sm:px-4 sm:text-sm"
           >
-            <AppIcon name="truck" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            {{ t("landingLayout.navDrive") }}
+            <AppIcon name="truck" class="h-3.5 w-3.5 sm:me-1.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t("landingLayout.navDrive") }}</span>
           </RouterLink>
           <RouterLink
             v-if="customerStore.isAuthenticated"
@@ -226,6 +227,7 @@ import { useSessionStore } from "../stores/session";
 import { useCustomerStore } from "../stores/customer";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { PLATFORM_MONOGRAM, SUPPORT_EMAIL } from "../lib/brand";
+import { isPlatformPublicHost } from "../lib/runtimeHost";
 
 const router = useRouter();
 const route = useRoute();
@@ -254,7 +256,9 @@ const logoStyle = computed(() => ({
 
 const signOut = async () => {
   await session.signOut();
-  router.push({ name: "home" });
+  // On the platform public host "home" redirects to the hub — push there
+  // directly to avoid a redundant double navigation.
+  router.push(isPlatformPublicHost() ? { name: "super-app-hub" } : { name: "home" });
 };
 
 // Resolve the customer session so the header can show "My account" on the marketplace.

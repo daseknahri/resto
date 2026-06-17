@@ -72,7 +72,6 @@
             class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
             :class="svc.status === 'coming_soon' ? 'cursor-default opacity-60' : 'ui-press cursor-pointer'"
             :style="{ '--ui-delay': (idx * 56) + 'ms' }"
-            :aria-label="svc.status === 'live' ? t('services.' + svc.id + 'Title') : undefined"
             :aria-disabled="svc.status === 'coming_soon' ? 'true' : undefined"
           >
             <!-- Icon tile -->
