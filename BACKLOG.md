@@ -151,8 +151,11 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       windows/jurisdiction (GDPR export-before-erase, CCPA delay), hard-delete-vs-anonymize, export_customer command,
       auto-erasure scheduling. NOTE: WORKFLOW DIED on a transient API ConnectionRefused after impl — recovered by
       hand-review + own gates (the review/gates phases never ran); standard dead-workflow recovery.**
-- [ ] **R19 (P2) Police patch(create=True) + import-smoke / real-model money tests** — the masked-500 class (a
-      swallowed ImportError 500'd every marketplace order while CI stayed green via create=True mocks). [non-gated]
+- [x] **R19 (P2) Police patch(create=True) + import-smoke / real-model money tests — DONE** — test_import_smoke.py
+      walks every importable module under accounts/menu/tenancy/sales/realtime/config and asserts each imports cleanly
+      (>50-module sanity floor; KNOWN_BROKEN registry for pinned landmines). test_no_unannotated_create_true.py scans
+      every tests/*.py file and fails if any create=True lacks a # create-true-ok: <reason> annotation. All existing
+      create=True occurrences annotated with justifications. 3 tests pass. [non-gated]
 - [ ] **R20 (P3) Provision staging env** — unblocks rehearsing R1/R5 off-prod. [owner-gated: cost/setup]
 - [ ] **R21 (P3) Dockerized dev Postgres** — so the ~25 DB money tests run locally (CI covers them today). [non-gated, S]
 - [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
@@ -221,49 +224,29 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future
 OPS batch or a security pass. file:line in the scout output; verify before acting.
 
-### OPS-6c — SEO / A11Y / PWA DEPTH (scout OPS-6b cluster; next polish batch)
-Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; verify first).
-- [ ] **meta-robots indexes personal pages — SEO + PRIVACY** — useSeoMeta shouldIndex=(customer||
-      landing) emits `index,follow` for cart/account/order-status/find-my-order (all router
-      interface:'customer'), contradicting robots.txt Disallow /cart,/account AND exposing
-      personalized order-status pages (customer name/items/address/order code) to indexing. noindex
-      personal/transactional routes; align meta-robots with robots.txt. (useSeoMeta.js:180-186;
-      router 118/122/123/124; robots.txt:29-30). [scout OPS-6b] **(privacy — prioritize)**
-- [ ] **No sitemap.xml + robots.txt has no Sitemap: directive** — SPA tenant menu/category/dish
-      routes are undiscoverable to crawlers. Generate a sitemap (per-tenant or index) + reference it
-      in robots.txt. Highest-leverage organic-discovery gap. (robots.txt:1-32). [scout OPS-6b]
-- [ ] **No hreflang alternates for en/fr/ar** — useSeoMeta sets og:locale but emits no
-      `<link rel="alternate" hreflang>`; Google can't associate language variants (Morocco market,
-      addressCountry 'MA'). Add reciprocal hreflang for en/fr/ar + x-default. (useSeoMeta.js:189-200).
-      [scout OPS-6b]
-- [ ] **No Product/MenuItem/Offer/BreadcrumbList structured data** — only the top-level business
-      node; add per-item MenuItem/Product offers + BreadcrumbList on dish/category/menu pages, and
-      enrich the business node (openingHoursSpecification, priceRange, geo, aggregateRating, hasMenu,
-      servesCuisine). Rich-result CTR. (useSeoMeta.js:220-241; DishPage/Menu/MarketplaceMenuPage).
-      [scout OPS-6b]
-- [ ] **DishCard: article role=button contains real <button> children (invalid ARIA)** — the core
-      conversion component nests qty/add buttons inside a role=button card; SR announces the whole
-      card as 'button' with tabbable buttons within. Make the wrapper non-button (clickable container
-      + visually-hidden 'open dish' control). (DishCard.vue:6/15-16/110-131/139/148-149). [scout OPS-6b]
-- [ ] **Skip-to-content doesn't move focus on Customer + Owner layouts** — #main-content lacks
-      tabindex='-1' there (Landing/Waiter have it), so the skip link scrolls but keyboard focus stays
-      in the header (WCAG 2.4.1 fail on the two busiest surfaces). Add tabindex='-1' to both mains.
-      (CustomerLayout.vue:123; OwnerLayout.vue:306). [scout OPS-6b]
-- [ ] **Wizard wraps whole step body in aria-live=polite + no focus move on step change** — SR reads
-      the entire new step verbatim each transition and loses place. Remove the broad live region;
-      move focus to the step heading + announce a terse "Step N of M" status. (Wizard.vue:82-87/153-161).
-      [scout OPS-6b]
-- [ ] **Customer PWA install button hidden on mobile** (class `hidden ... sm:inline-flex`) — the
-      captured beforeinstallprompt is unreachable on Android phones, the only place install matters;
-      Landing shows it unconditionally. Surface it at the mobile breakpoint. (CustomerLayout.vue:42-51).
-      [scout OPS-6b]
-- [ ] **theme-color meta static (#0b1c1a), never reflects tenant brand** — URL bar / PWA splash stay
-      teal regardless of restaurant brand. Sync `<meta theme-color>` with the resolved tenant brand
-      color on profile load. (index.html:20; App.vue:87; CustomerLayout.vue:247). [scout OPS-6b]
-- [ ] **Customer app-manifest icons declared 'any maskable' (logo cropped)** — same edge-to-edge icon
-      reused for maskable → home-screen icon clipped; owner manifest.json splits them correctly. Add a
-      padded safe-zone maskable icon for the customer manifest. (app-manifest.json:16/22 vs
-      manifest.json:18-35). [scout OPS-6b]
+### OPS-6c — SEO / A11Y / PWA DEPTH — ALL SHIPPED (verified against code)
+All items below verified as DONE by reading the actual source (not commit hashes — code-verified).
+- [x] **meta-robots personal pages** — DONE: INDEXABLE_ROUTE_NAMES allowlist in useSeoMeta.js;
+      all non-listed routes emit noindex,nofollow; personal/transactional routes excluded.
+- [x] **sitemap.xml + robots.txt Sitemap directive** — DONE: robots.txt has `Sitemap: /sitemap.xml`;
+      backend has config/sitemap.py serving the sitemap view.
+- [x] **hreflang alternates for en/fr/ar** — DONE: useSeoMeta.js emits reciprocal hreflang links
+      (HREFLANG_LOCALES) on every indexable route.
+- [x] **Product/MenuItem/Offer/BreadcrumbList structured data** — DONE: useSeoMeta.js emits
+      BreadcrumbList on menu/category/dish pages; MenuItem/Product + Offer on dish pages;
+      business node enriched with openingHoursSpecification, priceRange, geo, aggregateRating.
+- [x] **DishCard role=button invalid ARIA** — DONE: article is not role=button; real hidden
+      <button> provides the accessible name; qty/add buttons are properly nested siblings.
+- [x] **Skip-to-content focus** — DONE: CustomerLayout.vue:123 and OwnerLayout.vue:306 both
+      have tabindex="-1" on #main-content.
+- [x] **Wizard aria-live step change** — DONE: Wizard.vue removed broad live region; terse
+      stepAnnouncement + stepPanelRef.focus() on step change.
+- [x] **Customer PWA install button mobile** — DONE: button has no hidden/sm:inline-flex classes;
+      visible on all breakpoints when pwaCanInstall.
+- [x] **theme-color meta static** — DONE: stores/theme.js setThemeColorMeta() syncs the meta
+      tag to tenant brand on profile load; App.vue wires it.
+- [x] **Customer app-manifest maskable icon** — DONE: app-manifest.json already references
+      /icon-maskable-192.png and /icon-maskable-512.png with purpose:"maskable" separately.
 
 ### OPS-6b — A11Y / SEO / FIRST-IMPRESSION POLISH — SHIPPED (the items below are DONE; see Done section)
 - [ ] **<html lang="en"> hardcoded; dir only set after JS hydration (a11y/SEO, WCAG 3.1.1)**
