@@ -157,7 +157,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       every tests/*.py file and fails if any create=True lacks a # create-true-ok: <reason> annotation. All existing
       create=True occurrences annotated with justifications. 3 tests pass. [non-gated]
 - [ ] **R20 (P3) Provision staging env** — unblocks rehearsing R1/R5 off-prod. [owner-gated: cost/setup]
-- [ ] **R21 (P3) Dockerized dev Postgres** — so the ~25 DB money tests run locally (CI covers them today). [non-gated, S]
+- [x] **R21 (P3) Dockerized dev Postgres — DONE** — docker-compose.dev.yml: postgres:16-alpine
+      matching the backend default DATABASE_URL (user/pass/5432/resto) with healthcheck + named
+      volume. Usage in file header: `docker compose -f docker-compose.dev.yml up -d` then pytest.
+      CI continues to cover the DB tests via ci.yml; this makes them runnable locally too. [non-gated, S]
 - [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
 - [x] **R23 (P3) Incident-response runbook — DONE (d20a02c)** — infra/INCIDENT_RUNBOOK.md: SEV1/2/3 + first-5-min
       triage + 8 grounded playbooks (deploy/rollback, DB restore, Redis, backup, migration, security, load, disk),

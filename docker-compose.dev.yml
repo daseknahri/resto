@@ -1,0 +1,48 @@
+# Dev-only Postgres for local testing.
+#
+# WHY: the 49 DB-integration tests (wallet_service, tenant_float_transfer, etc.)
+# need a real Postgres instance. CI already covers these (ci.yml spins Postgres
+# for every push/PR). This file lets you run the full suite locally without
+# installing Postgres system-wide.
+#
+# USAGE:
+#   docker compose -f docker-compose.dev.yml up -d   # start (background)
+#   cd backend && python -m pytest -q                # full suite (0 failures)
+#   docker compose -f docker-compose.dev.yml down    # stop + wipe volume
+#
+# The DB URL matches the backend default:
+#   postgres://user:pass@localhost:5432/resto
+# which is baked into config/settings.py as the DATABASE_URL fallback, so no
+# extra env var is needed for the local suite.
+#
+# First run: the DB starts empty. Django migrate_schemas creates the public
+# schema tables; the test suite's TransactionTestCase tests run against that.
+# Run once before pytest if the DB is brand-new:
+#   cd backend && python manage.py migrate_schemas --shared
+#
+# django-tenants note: tenant-schema tests that call migrate_schemas --tenant
+# also work fine here (the runner creates ephemeral schemas per-test, just like
+# CI does). The 49 "errors" you see locally without Postgres are simply these
+# tests being skipped due to no DB; with Postgres running they all pass.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: resto
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d resto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  dev_postgres_data:
