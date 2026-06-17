@@ -826,12 +826,9 @@ class TableLinkSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        requested = validated_data.get("slug")
-        if requested is not None:
-            validated_data["slug"] = self._resolve_unique_slug(base_slug=requested, instance_id=instance.id)
-        elif "label" in validated_data and validated_data["label"] != instance.label and not instance.slug:
-            base = slugify(validated_data["label"]) or "table"
-            validated_data["slug"] = self._resolve_unique_slug(base_slug=base, instance_id=instance.id)
+        # Slug is immutable after creation: changing it would break printed QR codes and
+        # split historical orders (old orders carry the old table_slug; new ones the new slug).
+        validated_data.pop("slug", None)
         return super().update(instance, validated_data)
 
 

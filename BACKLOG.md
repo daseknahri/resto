@@ -596,10 +596,10 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [~] **StaffShiftSummaryView materializes orders in Python for avg prep** — RESOLVED in
       OPS-2 (ExpressionWrapper+Avg single query; currency folded into a values_list scan).
       [scout OPS-1 → fixed OPS-2]
-- [ ] **Order.table_slug vs table_label dual keys** — waiter UI groups by label, routing
-      uses slug; renaming a TableLink splits historical orders into two groups. No migration
-      on rename, no rename warning. Partially mitigated by OPS-1 table dropdown. (models.py
-      :401; WaiterPage.vue:1238). → OPS-6 (onboarding/table mgmt). [scout OPS-1]
+- [x] **Order.table_slug vs table_label dual keys** — FIXED: TableLinkSerializer.update()
+      now pops the slug from validated_data so slug is immutable after creation. Label can still
+      change freely; QR codes and historical order routing are unaffected. (menu/serializers.py:828).
+      [scout OPS-1]
 - [x] **revenue.py STILL materializes ledger_order_ids as a Python set** — DONE (verified
       code-read): revenue.py uses `orders_values_qs = order_qs.values("id")` + subquery
       `ledger_order_ids_sq = ledger_qs.values("order_id")` — no Python set materialization.
@@ -636,10 +636,9 @@ Several are HIGH. file:line in scout output; verify before acting.
       DONE (verified code-read): OwnerOrderExportView at line 6705 uses prefetch_related("items","payments");
       loop iterates items/payments once from prefetch cache. Z-report voids uses select_related("order")
       (single JOIN query); voids_total is in-Python but voids are <20/day so marginal.
-- [ ] **Dashboard SPA still shows gross wallet_revenue/cash_revenue, not payment_split** —
-      backend now documents payment_split as the drawer-accurate figure (sales/views.py:2482)
-      but OwnerDashboard cash/wallet display should migrate to it for consistency with the
-      Z-report. (OwnerDashboard*.vue). → OPS-6 (polish). [review OPS-2 major, documented]
+- [x] **Dashboard SPA still shows gross wallet_revenue/cash_revenue, not payment_split** —
+      DONE (defec65): OwnerDashboardRevenue.vue now shows payment_split (drawer-accurate) when
+      available and falls back to gross cash/wallet split for pre-ledger data. [review OPS-2]
 
 - [x] **Promotion max_uses overspend race (REVENUE LEAK)** — DONE (verified code-read):
       PlaceOrderView uses `filter(pk=.., use_count__lt=max_uses).update(use_count=F+1)` (atomic
@@ -657,10 +656,9 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [x] **WalletTransaction refund idempotency/aggregate scans unindexed (tenant_id,type,...)** —
       DONE: composite index (tenant_id, type, created_at) exists in accounts/models.py
       WalletTransaction.Meta.indexes. [scout OPS-3 → fixed OPS-4]
-- [ ] **StaffOrderPaymentView cache.set after atomic block** — the cache idempotency marker is
-      written post-commit; Redis-down loses it but the DB OrderPayment unique-key backstop
-      (added OPS-3) now covers replay. Document the DB constraint as the primary backstop so a
-      future refactor doesn't drop it. LOW. (menu/views.py:4796). [scout OPS-3]
+- [x] **StaffOrderPaymentView cache.set after atomic block** — DONE (c0f9483): added doc comment
+      to menu/views.py:4972 stating the DB OrderPayment.idempotency_key UNIQUE constraint is the
+      PRIMARY backstop and must not be dropped; cache.set is intentionally post-commit. [scout OPS-3]
 
 - [ ] **customer_phone btree index is dead for icontains search** — OPS-4 added a plain
       btree on Order.customer_phone but the two search paths use `customer_phone__icontains`
