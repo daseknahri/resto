@@ -1,9 +1,20 @@
 <template>
   <div class="ui-page-shell space-y-4">
     <!-- Header -->
-    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5">
-      <p class="ui-kicker">{{ t('driver.kicker') }}</p>
-      <h1 class="ui-display text-2xl font-semibold leading-tight text-white">{{ t('driver.title') }}</h1>
+    <header class="ui-hero-ribbon ui-reveal flex items-start justify-between gap-3 px-4 py-3.5">
+      <div class="min-w-0">
+        <p class="ui-kicker">{{ t('driver.kicker') }}</p>
+        <h1 class="ui-display text-2xl font-semibold leading-tight text-white">{{ t('driver.title') }}</h1>
+      </div>
+      <!-- Persistent driver⇄client switch: returns the rider to the consumer hub. -->
+      <RouterLink
+        v-if="customerStore.isAuthenticated"
+        :to="{ name: 'super-app-hub' }"
+        class="ui-btn-outline ui-touch-target inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-[11px] sm:text-sm"
+      >
+        <AppIcon name="home" class="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{{ t('driver.switchToOrdering') }}</span>
+      </RouterLink>
     </header>
 
     <!-- Loading -->

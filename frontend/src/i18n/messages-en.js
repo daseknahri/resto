@@ -136,6 +136,7 @@ landingLayout: {
   navMobile: "Main navigation",
   navOrder: "Order",
   navBusiness: "For business",
+  navDrive: "Drive",
 },
 home: {
   leadSuccess: "Your request was received. We will contact you shortly.",
@@ -1237,6 +1238,7 @@ ownerLoyalty: {
 driver: {
   kicker: "Delivery",
   title: "Driver",
+  switchToOrdering: "Switch to ordering",
   earnTitle: "Earn with Kepoli",
   earnSubtitle: "Deliver orders from restaurants and shops in your city — work when you want, get paid for every drop-off.",
   benefit1: "Flexible hours — go online whenever you want",

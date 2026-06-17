@@ -137,6 +137,7 @@ export const messages = {
       navMobile: "Main navigation",
       navOrder: "Order",
       navBusiness: "For business",
+      navDrive: "Drive",
     },
     home: {
       leadSuccess: "Your request was received. We will contact you shortly.",
@@ -1238,6 +1239,7 @@ export const messages = {
     driver: {
       kicker: "Delivery",
       title: "Driver",
+      switchToOrdering: "Switch to ordering",
       earnTitle: "Earn with Kepoli",
       earnSubtitle: "Deliver orders from restaurants and shops in your city — work when you want, get paid for every drop-off.",
       benefit1: "Flexible hours — go online whenever you want",
@@ -5053,6 +5055,7 @@ export const messages = {
       navMobile: "Navigation principale",
       navOrder: "Commander",
       navBusiness: "Pour les pros",
+      navDrive: "Conduire",
     },
     home: {
       leadSuccess: "Votre demande a bien ete recue. Nous vous contacterons bientot.",
@@ -6153,6 +6156,7 @@ export const messages = {
     driver: {
       kicker: "Livraison",
       title: "Livreur",
+      switchToOrdering: "Passer aux commandes",
       signInPrompt: "Connectez-vous a votre compte pour commencer a livrer.",
       earnTitle: "Gagnez avec Kepoli",
       earnSubtitle: "Livrez les commandes des restaurants et boutiques de votre ville — travaillez quand vous voulez, payé à chaque livraison.",

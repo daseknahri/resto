@@ -51,6 +51,17 @@
             <AppIcon name="settings" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {{ t("common.workspace") }}
           </RouterLink>
+          <!-- Persistent client⇄driver switch: shown once the customer has a
+               driver dimension (applied or approved). Routes into the driver
+               console, which itself offers "Switch to ordering" back here. -->
+          <RouterLink
+            v-if="customerStore.customer?.is_driver"
+            to="/driver"
+            class="ui-btn-outline ui-touch-target inline-flex border-emerald-500/40 px-3 py-2 text-[11px] text-emerald-200 hover:border-emerald-400/70 sm:px-4 sm:text-sm"
+          >
+            <AppIcon name="truck" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            {{ t("landingLayout.navDrive") }}
+          </RouterLink>
           <RouterLink
             v-if="customerStore.isAuthenticated"
             :to="{ name: 'customer-account' }"

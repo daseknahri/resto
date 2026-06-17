@@ -136,6 +136,7 @@ landingLayout: {
   navMobile: "Navigation principale",
   navOrder: "Commander",
   navBusiness: "Pour les pros",
+  navDrive: "Conduire",
 },
 home: {
   leadSuccess: "Votre demande a bien ete recue. Nous vous contacterons bientot.",
@@ -1236,6 +1237,7 @@ ownerLoyalty: {
 driver: {
   kicker: "Livraison",
   title: "Livreur",
+  switchToOrdering: "Passer aux commandes",
   signInPrompt: "Connectez-vous a votre compte pour commencer a livrer.",
   earnTitle: "Gagnez avec Kepoli",
   earnSubtitle: "Livrez les commandes des restaurants et boutiques de votre ville — travaillez quand vous voulez, payé à chaque livraison.",

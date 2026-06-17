@@ -106,7 +106,8 @@ const arabicMessages = {
     "navDesktop": "التنقل الرئيسي",
     "navMobile": "التنقل الرئيسي",
     "navOrder": "اطلب الآن",
-    "navBusiness": "للشركاء"
+    "navBusiness": "للشركاء",
+    "navDrive": "وضع السائق"
   },
   "home": {
     "leadSuccess": "تم استلام طلبك. سنتواصل معك قريباً.",
@@ -3081,6 +3082,7 @@ Object.assign(arabicMessages, {
   driver: {
     kicker: "التوصيل",
     title: "السائق",
+    switchToOrdering: "التبديل إلى الطلب",
     signInPrompt: "سجّل الدخول إلى حسابك لبدء التوصيل.",
     signInCta: "تسجيل الدخول",
     becomeTitle: "كن سائق توصيل",
