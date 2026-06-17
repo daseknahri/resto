@@ -8,10 +8,18 @@ order save, so it rolls back with the order if the order isn't committed.
 import logging
 
 from django.db import connection
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(pre_save, sender="menu.Order")
+def compute_phone_digits(sender, instance, **kwargs):
+    """Keep customer_phone_digits in sync with customer_phone on every save."""
+    raw = instance.customer_phone or ""
+    digits = "".join(c for c in raw if c.isdigit())
+    instance.customer_phone_digits = digits[-9:] if digits else ""
 
 
 @receiver(post_save, sender="menu.Order")

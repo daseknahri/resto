@@ -664,12 +664,11 @@ Several are HIGH. file:line in scout output; verify before acting.
       to menu/views.py:4972 stating the DB OrderPayment.idempotency_key UNIQUE constraint is the
       PRIMARY backstop and must not be dropped; cache.set is intentionally post-commit. [scout OPS-3]
 
-- [ ] **customer_phone btree index is dead for icontains search** — OPS-4 added a plain
-      btree on Order.customer_phone but the two search paths use `customer_phone__icontains`
-      (LIKE '%..%'), which a btree can't serve; only the exact-match CRM/win-back paths
-      benefit. Fix: pg_trgm GIN trigram index, OR rewrite search to digits[-9:] exact-match
-      (CustomerOrdersByPhoneView already does this at menu/views.py:3184). (migration 0058).
-      → OPS-4 follow-up / search-perf. [scout OPS-4]
+- [x] **customer_phone btree index is dead for icontains search** — DONE (migration 0062):
+      added Order.customer_phone_digits (last 9 digits, btree-indexed); pre_save signal
+      (menu/signals.py) auto-maintains it; CustomerOrdersByPhoneView now does exact-match on
+      customer_phone_digits; OwnerCustomerListView uses exact-match when search ≥6 stripped
+      digits, falls back to icontains for name/email terms. [scout OPS-4]
 - [x] **OrderItem.voided_at unindexed — Z-report full-scans items every shift close** — DONE
       (commit 57c5482): migration 0060 adds partial Index(voided_at) WHERE is_voided=True.
 - [x] **DirectoryView/MarketplaceView N+1 cross-schema** — per-tenant schema switch + rating

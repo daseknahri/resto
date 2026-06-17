@@ -3263,7 +3263,7 @@ class CustomerOrdersByPhoneView(APIView):
         since = timezone.now() - timedelta(days=90)
         orders = (
             Order.objects
-            .filter(customer_phone__icontains=digits[-9:], created_at__gte=since)
+            .filter(customer_phone_digits=digits[-9:], created_at__gte=since)
             .prefetch_related("items")
             .order_by("-created_at")[:20]
         )
@@ -8894,15 +8894,23 @@ class OwnerCustomerListView(APIView):
         _linked_base_q = Q(customer_id__isnull=False, status__in=self._COUNTED)
         _anon_base_q = Q(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
         if search:
+            # When the search term looks like a phone number (6+ stripped digits), use
+            # the indexed customer_phone_digits column for an exact btree lookup on the
+            # last 9 digits. Otherwise fall back to icontains for name/email-style terms.
+            _search_digits = "".join(c for c in search if c.isdigit())
+            if len(_search_digits) >= 6:
+                _phone_q = Q(customer_phone_digits=_search_digits[-9:])
+            else:
+                _phone_q = Q(customer_phone__icontains=search)
             # Linked: name OR phone OR email (via FK join to platform Customer).
             _linked_search_q = (
                 Q(customer_name__icontains=search)
-                | Q(customer_phone__icontains=search)
+                | _phone_q
                 | Q(customer__email__icontains=search)
             )
             _linked_base_q &= _linked_search_q
             # Anon: name OR phone only (no customer account → no email).
-            _anon_base_q &= Q(customer_name__icontains=search) | Q(customer_phone__icontains=search)
+            _anon_base_q &= Q(customer_name__icontains=search) | _phone_q
 
         # ── 1. Aggregate linked orders (customer_id is set) ──────────────────
         # OPS-4 B: evaluate once into a list — prevents the double GROUP BY that

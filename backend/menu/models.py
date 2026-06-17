@@ -398,6 +398,9 @@ class Order(models.Model):
     )
     customer_name = models.CharField(max_length=80, blank=True)
     customer_phone = models.CharField(max_length=30, blank=True)
+    # Last 9 digits of customer_phone, stored for btree-indexed exact-match search.
+    # Auto-maintained by the pre_save signal in menu/signals.py.
+    customer_phone_digits = models.CharField(max_length=9, blank=True, default="")
     customer_note = models.TextField(blank=True)
     fulfillment_type = models.CharField(max_length=20, choices=FulfillmentType.choices, blank=True)
     table_label = models.CharField(max_length=40, blank=True)
@@ -562,6 +565,10 @@ class Order(models.Model):
             # (4 scan paths). A plain db_index on the field alone conflicts with the field
             # definition, so it is expressed as a Meta index instead.
             models.Index(fields=("customer_phone",), name="order_customer_phone_idx"),
+            # Indexed suffix-digits for exact-match phone search (btree-friendly).
+            # customer_phone btree is useless for LIKE '%..%'; this column stores the
+            # last 9 digits so searches hit a btree exact-match instead.
+            models.Index(fields=("customer_phone_digits",), name="order_phone_digits_idx"),
             # OPS-4 C: Z-report / digest paid_at range queries filter on (status, paid_at).
             models.Index(fields=("status", "paid_at"), name="order_status_paid_at_idx"),
         ]
