@@ -895,10 +895,12 @@ live yet so none of this is actively harming, but it gates turning the email pro
       same address is retried every campaign + every 90-day winback cycle. Add a CustomerEmailSuppression
       model fed by an ESP webhook + check it in every audience query. (needs the owner's ESP/webhook).
       [scout B1]
-- [ ] **notify_promotions is a single GLOBAL cross-tenant opt-out** — one BooleanField on the shared
+- [x] **notify_promotions is a single GLOBAL cross-tenant opt-out** — one BooleanField on the shared
       Customer gates promos from ALL tenants; unsubscribing from one restaurant silently kills (or re-floods)
       every restaurant's promos. Consider per-(customer,tenant) opt-out for marketplace customers.
       (accounts/models.py notify_promotions; both audiences). [scout B1]
+      → DONE: CustomerTenantOptOut model + per-tenant signed token (email-tenant-unsub salt); legacy global
+        token still accepted; winback + campaign audiences both exclude per-tenant optouts. (commit 072322b)
 
 ### COMMISSION LEDGER / REVENUE-RECOGNITION REDESIGN (scout A5-followup cluster)
 The A5/A5-followup scouts keep surfacing deeper statement issues → the commission statement should become a
