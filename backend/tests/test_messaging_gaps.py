@@ -138,3 +138,109 @@ class SendActivationWhatsappTests(SimpleTestCase):
         result = send_activation_whatsapp("+212600000001", **self._URLS)
         # '+' is kept in the sanitized number
         self.assertIn("+212600000001", result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# send_renewal_reminder_email (B11)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SendRenewalReminderEmailTests(SimpleTestCase):
+    """send_renewal_reminder_email sends a grace-period warning to the owner."""
+
+    from accounts.messaging import send_renewal_reminder_email
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.send_mail", return_value=1)
+    def test_sends_to_correct_recipient(self, mock_send):
+        from accounts.messaging import send_renewal_reminder_email
+        send_renewal_reminder_email("owner@shop.com", "Cafe Test", grace_days=5)
+        args, _ = mock_send.call_args
+        self.assertIn("owner@shop.com", args[3])
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.send_mail", return_value=1)
+    def test_subject_mentions_tenant_name(self, mock_send):
+        from accounts.messaging import send_renewal_reminder_email
+        send_renewal_reminder_email("owner@shop.com", "Cafe Test", grace_days=5)
+        args, _ = mock_send.call_args
+        self.assertIn("Cafe Test", args[0])
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.send_mail", return_value=1)
+    def test_body_includes_grace_days(self, mock_send):
+        from accounts.messaging import send_renewal_reminder_email
+        send_renewal_reminder_email("owner@shop.com", "Cafe Test", grace_days=3)
+        args, _ = mock_send.call_args
+        self.assertIn("3", args[1])
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.send_mail", return_value=1)
+    def test_body_includes_end_date_when_given(self, mock_send):
+        from accounts.messaging import send_renewal_reminder_email
+        send_renewal_reminder_email(
+            "owner@shop.com", "Cafe Test", grace_days=5, subscription_end_date="2026-06-01"
+        )
+        args, _ = mock_send.call_args
+        self.assertIn("2026-06-01", args[1])
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.send_mail", return_value=1)
+    def test_returns_sent_count(self, mock_send):
+        from accounts.messaging import send_renewal_reminder_email
+        result = send_renewal_reminder_email("owner@shop.com", "Cafe Test", grace_days=7)
+        self.assertEqual(result, 1)
+
+    @override_settings(EMAIL_FAIL_SILENTLY=True)
+    @patch("accounts.messaging.logger")
+    @patch("accounts.messaging.send_mail", return_value=0)
+    def test_logs_warning_when_not_sent(self, mock_send, mock_logger):
+        from accounts.messaging import send_renewal_reminder_email
+        send_renewal_reminder_email("owner@shop.com", "Cafe Test", grace_days=7)
+        mock_logger.warning.assert_called_once()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _send_renewal_reminder helper (enforce_subscriptions B11)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SendRenewalReminderHelperTests(SimpleTestCase):
+    """_send_renewal_reminder is best-effort; silently skips on bad state."""
+
+    def _get_helper(self):
+        from sales.management.commands.enforce_subscriptions import _send_renewal_reminder
+        return _send_renewal_reminder
+
+    @patch("accounts.messaging.send_renewal_reminder_email")
+    def test_calls_email_with_owner_email(self, mock_fn):
+        """Happy path: owner with email → email sent."""
+        owner = type("U", (), {"email": "boss@shop.com"})()
+        tenant = type("T", (), {"owner": owner, "name": "Pastries", "id": 99})()
+        with patch("sales.models.Subscription") as MockSub:
+            MockSub.objects.filter.return_value.order_by.return_value.values_list.return_value.first.return_value = None
+            helper = self._get_helper()
+            helper(tenant, 7)
+        mock_fn.assert_called_once_with(
+            email="boss@shop.com",
+            tenant_name="Pastries",
+            grace_days=7,
+            subscription_end_date=None,
+        )
+
+    def test_skips_when_owner_missing(self):
+        """No owner → no error, no send."""
+        tenant = type("T", (), {"owner": None, "name": "Pastries", "id": 99})()
+        helper = self._get_helper()
+        helper(tenant, 7)  # must not raise
+
+    def test_skips_when_owner_has_no_email(self):
+        """Owner without email → no error, no send."""
+        owner = type("U", (), {"email": ""})()
+        tenant = type("T", (), {"owner": owner, "name": "Pastries", "id": 99})()
+        helper = self._get_helper()
+        helper(tenant, 7)  # must not raise
+
+    def test_exception_swallowed(self):
+        """Any internal error is silently swallowed (best-effort)."""
+        tenant = type("T", (), {"owner": object(), "name": "X", "id": 1})()
+        helper = self._get_helper()
+        helper(tenant, 7)  # must not raise

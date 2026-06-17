@@ -354,6 +354,21 @@
           <p class="text-xs text-slate-500">{{ t("adminConsole.domain") }}: {{ tenant.primary_domain || "-" }}</p>
           <p class="text-xs text-slate-500">{{ t("adminConsole.owner") }}: {{ tenant.owner_username || "-" }}</p>
           <p class="text-xs text-slate-500">{{ t("adminConsole.renewalDate") }}: {{ tenant.subscription_end_date ? formatDate(tenant.subscription_end_date) : t("adminConsole.noRenewalDate") }}</p>
+          <div
+            v-if="tenant.payment_overdue_since"
+            class="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5"
+            :class="tenantGraceDaysRemaining(tenant) > 0 ? 'bg-amber-500/10' : 'bg-rose-500/10'"
+          >
+            <span
+              class="text-xs font-semibold"
+              :class="tenantGraceDaysRemaining(tenant) > 0 ? 'text-amber-300' : 'text-rose-300'"
+            >
+              {{ tenantGraceDaysRemaining(tenant) > 0
+                ? t("adminConsole.tenantGraceWarning", { days: tenantGraceDaysRemaining(tenant) })
+                : t("adminConsole.tenantGraceExpired") }}
+            </span>
+            <span class="text-[10px] text-slate-500">{{ t("adminConsole.paymentOverdueSince") }} {{ formatDate(tenant.payment_overdue_since) }}</span>
+          </div>
           <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">{{ t("adminConsole.cancelReason") }}: {{ tenant.canceled_reason }}</p>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
@@ -2207,6 +2222,13 @@ const tenantLifecycleStatusClass = (status) => {
   if (status === "suspended") return "bg-amber-500/20 text-amber-200";
   if (status === "canceled") return "bg-rose-500/20 text-rose-200";
   return "bg-slate-700/60 text-slate-300";
+};
+
+const _GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+const tenantGraceDaysRemaining = (tenant) => {
+  if (!tenant.payment_overdue_since) return null;
+  const deadline = new Date(new Date(tenant.payment_overdue_since).getTime() + _GRACE_PERIOD_MS);
+  return Math.ceil((deadline - Date.now()) / (24 * 60 * 60 * 1000));
 };
 
 const applyTenantLifecycle = async (tenant, action) => {

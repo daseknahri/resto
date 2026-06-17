@@ -24,6 +24,31 @@ from django.db import transaction
 from django.utils import timezone
 
 
+def _send_renewal_reminder(tenant, grace_days: int) -> None:
+    """Best-effort: email the tenant owner a grace-period warning."""
+    try:
+        from accounts.messaging import send_renewal_reminder_email
+        from sales.models import Subscription
+
+        owner = getattr(tenant, "owner", None)
+        if not owner or not getattr(owner, "email", ""):
+            return
+        sub_end = (
+            Subscription.objects.filter(tenant_id=tenant.id)
+            .order_by("-end_date")
+            .values_list("end_date", flat=True)
+            .first()
+        )
+        send_renewal_reminder_email(
+            email=owner.email,
+            tenant_name=tenant.name,
+            grace_days=grace_days,
+            subscription_end_date=sub_end.isoformat() if sub_end else None,
+        )
+    except Exception:
+        pass
+
+
 class Command(BaseCommand):
     help = "Enforce subscription lapse -> grace -> suspend transitions (run daily)."
 
@@ -95,6 +120,8 @@ class Command(BaseCommand):
                 if apply:
                     with transaction.atomic():
                         Tenant.objects.filter(pk=tenant.pk).update(payment_overdue_since=now)
+                    # B11: send renewal reminder to the tenant owner (best-effort).
+                    _send_renewal_reminder(tenant, grace_days)
                 continue
 
             # Already flagged and still lapsed — suspend once past the grace window.

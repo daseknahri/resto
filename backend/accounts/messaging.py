@@ -146,3 +146,43 @@ def send_marketing_email(
     if sent < 1:
         logger.warning("Marketing email not sent", extra={"target_email": email})
     return sent
+
+
+def send_renewal_reminder_email(
+    email: str,
+    tenant_name: str,
+    grace_days: int,
+    subscription_end_date: str | None = None,
+) -> int:
+    """Pre-lapse renewal reminder to the restaurant owner.
+
+    Sent by enforce_subscriptions when payment_overdue_since is first set.
+    grace_days is the grace window remaining before suspension.
+    """
+    brand_base = _brand_https_base()
+    end_note = (
+        f"\nYour subscription ended on: {subscription_end_date}\n"
+        if subscription_end_date else ""
+    )
+    subject = f"Action required: renew your {tenant_name} subscription"
+    body = (
+        f"Hello,\n\n"
+        f"Your Kepoli subscription for {tenant_name} has lapsed.{end_note}\n"
+        f"You have {grace_days} day(s) remaining before your account is suspended.\n\n"
+        f"To renew your subscription, please contact support or log in to your dashboard:\n"
+        f"{brand_base}/admin\n\n"
+        "If you have already renewed, please disregard this message.\n"
+    )
+    sent = send_mail(
+        subject,
+        body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning(
+            "Renewal reminder email not sent",
+            extra={"target_email": email, "tenant_name": tenant_name},
+        )
+    return sent
