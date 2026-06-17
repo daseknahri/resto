@@ -162,6 +162,7 @@ _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
     "prune_winback_nudges",
     "prune_staff_messages",
     "prune_auth_tokens",
+    "prune_customer_ratings",
 })
 
 

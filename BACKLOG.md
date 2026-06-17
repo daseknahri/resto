@@ -257,17 +257,14 @@ All items below verified as DONE by reading the actual source (not commit hashes
       /icon-maskable-192.png and /icon-maskable-512.png with purpose:"maskable" separately.
 
 ### OPS-6b — A11Y / SEO / FIRST-IMPRESSION POLISH — SHIPPED (the items below are DONE; see Done section)
-- [ ] **<html lang="en"> hardcoded; dir only set after JS hydration (a11y/SEO, WCAG 3.1.1)**
-      — AT + non-JS crawlers see English/LTR before locale.js fixes it. Set lang/dir
-      synchronously (cookie-driven inline script) or SSR. (index.html:2; locale.js:27). [scout OPS-6]
-- [ ] **JSON-LD always @type "Restaurant"** regardless of business_type — pharmacy/grocery/
-      bakery/retail/cafe mis-indexed. Add BUSINESS_TYPE_SCHEMA_MAP. (useSeoMeta.js:208). [scout OPS-6]
-- [ ] **og:site_name overwritten with tenant name** — every social share drops Kepoli platform
-      attribution. Restore BRAND_NAME for og:site_name; tenant stays in og:title. (useSeoMeta.js:178).
-      [scout OPS-6]
-- [ ] **Wizard step-nav has no forward-progression guard** — a tenant can jump to Publish with
-      an empty menu/no brand; StepPublish warns but doesn't block. Track highestCompleted +
-      disable Publish until canPublish. (Wizard.vue:44; StepPublish.vue:41). [scout OPS-6]
+- [x] **<html lang="en"> hardcoded; dir only set after JS hydration** — DONE: public/locale-boot.js
+      sets html lang+dir synchronously from stored/browser locale before Vue hydration. [scout OPS-6]
+- [x] **JSON-LD always @type "Restaurant"** — DONE: BUSINESS_TYPE_SCHEMA_MAP in useSeoMeta.js
+      maps business_type to the correct schema @type. [scout OPS-6]
+- [x] **og:site_name overwritten with tenant name** — DONE: og:site_name uses PLATFORM_NAME
+      constant in useSeoMeta.js. [scout OPS-6]
+- [x] **Wizard step-nav has no forward-progression guard** — DONE: highestCompleted ref +
+      forward-jump guard in Wizard.vue (lines 118-177). [scout OPS-6]
 - [ ] **Activate.vue: <main> nested in <section> (HTML-invalid) + decorative card shows the
       post-activation success string as pre-activation copy** (confusing). (Activate.vue:3/17/24).
       [scout OPS-6]
@@ -276,13 +273,12 @@ All items below verified as DONE by reading the actual source (not commit hashes
       tabindex/arrow handlers. (Cart.vue:883/1101; Menu.vue:277). [scout OPS-6]
 - [ ] **Pharmacy option has no "parapharmacie / no Rx" disclaimer** in the wizard — qualified
       leads churn post-signup. One-line hint. (StepPublish.vue:107). [scout OPS-6]
-- [ ] **<noscript> is English-only** for an ar/fr SaaS — stack all three + a support link.
-      (index.html:38). [scout OPS-6]
-- [ ] **StaffChangePasswordView has no throttle** — session-gated current-password brute-force.
-      Add a per-user/IP throttle (auth-endpoint pattern). (accounts/views.py:1194). [review OPS-6 minor]
-- [ ] **Print rule .ui-command-deck button{display:none} also hides OwnerLaunchSuccess buttons**
-      — scope the @media print block to analytics panels only. (tailwind.css ~2885;
-      OwnerLaunchSuccess.vue:60). [review OPS-6 minor]
+- [x] **<noscript> is English-only** — DONE: index.html noscript has FR, AR, and support
+      mailto link. [scout OPS-6]
+- [x] **StaffChangePasswordView has no throttle** — DONE: StaffChangePasswordThrottle on
+      accounts/views.py:1449. [review OPS-6 minor]
+- [x] **Print rule .ui-command-deck button{display:none} also hides OwnerLaunchSuccess buttons**
+      — DONE: `button:not(.print-keep)` rule in tailwind.css:2893-2901 excludes .print-keep. [review OPS-6 minor]
 - [ ] **Cart loyalty_/schedule_/promo_not_found branches still pass raw data.detail to customers**
       — extend the OPS-6 generic-message mapping to these named branches. (Cart.vue:1951/1982/1987).
       [review OPS-6 minor]
@@ -571,9 +567,9 @@ Several are HIGH. file:line in scout output; verify before acting.
       [review OPS-5 minor]
 
 ### Earlier scout notes
-- [ ] **Section assignment accepts any user_id (no tenant-membership check)** — RESOLVED in
+- [x] **Section assignment accepts any user_id (no tenant-membership check)** — RESOLVED in
       OPS-5 (menu/views.py:7432 whitelist filter(id__in, tenant)). [scout OPS-1 → fixed OPS-5]
-- [ ] **CustomerOrderConsumer accepts any order_number (enumeration)** — RESOLVED in OPS-5
+- [x] **CustomerOrderConsumer accepts any order_number (enumeration)** — RESOLVED in OPS-5
       (realtime/consumers.py _check_order_ownership: session/delivery_code gate; anonymous
       residual risk documented). [scout OPS-1 → fixed OPS-5]
 - [ ] **Plan limits unenforced on write** — Plan.max_dishes / max_staff_accounts checked
@@ -589,12 +585,10 @@ Several are HIGH. file:line in scout output; verify before acting.
       a future section-semantics change will miss one. Extract one helper. (menu/views.py
       :3160/:3268; waiter_views.py:85). → fold into whichever OPS batch next touches sections.
       [scout OPS-1]
-- [ ] **WaiterCall throttle is per-IP** — shared restaurant NAT collapses the 10/min bucket
-      across all tables → real customers get 429. Key on (tenant + table_slug) instead.
-      (waiter_views.py:45; throttles.py:32). → OPS-3 (throttle scoping). [scout OPS-1]
-- [ ] **StaffMessage unbounded + no created_at index** — staff chat grows forever, Meta
-      ordering ('-created_at') has no index. Add prune cron + db_index. (menu/models.py:341).
-      → OPS-4 (retention). [scout OPS-1]
+- [x] **WaiterCall throttle is per-IP** — DONE: WaiterCallThrottle (throttles.py) scoped per
+      (tenant-schema + table_slug), not per IP. [scout OPS-1 → fixed OPS-3]
+- [x] **StaffMessage unbounded + no created_at index** — DONE: created_at has db_index=True
+      (menu/models.py:359); prune_staff_messages in MANAGEMENT_COMMAND_ALLOWLIST. [scout OPS-1 → fixed OPS-4]
 - [~] **StaffShiftSummaryView materializes orders in Python for avg prep** — RESOLVED in
       OPS-2 (ExpressionWrapper+Avg single query; currency folded into a values_list scan).
       [scout OPS-1 → fixed OPS-2]
@@ -602,17 +596,12 @@ Several are HIGH. file:line in scout output; verify before acting.
       uses slug; renaming a TableLink splits historical orders into two groups. No migration
       on rename, no rename warning. Partially mitigated by OPS-1 table dropdown. (models.py
       :401; WaiterPage.vue:1238). → OPS-6 (onboarding/table mgmt). [scout OPS-1]
-- [ ] **revenue.py STILL materializes ledger_order_ids as a Python set** — the comment AND
-      the sweep-2 "Done" entry claim a subquery, but menu/revenue.py:49 does
-      `set(ledger_qs.values_list('order_id'))` then uses it in filter/exclude IN-lists. At
-      90-day × busy-tenant scale this is a Postgres IN-list cliff. The false "Done" claim is
-      itself the risk (next reviewer trusts it). Replace set() with a `.values('order_id')`
-      subquery. (menu/revenue.py:39/49/52/63). → OPS-4. [scout OPS-2] **(corrects a false
-      sweep-2 Done claim.)**
-- [ ] **Order.paid_at unindexed** — Z-report (menu/views.py:6347) + daily digest range-query
-      paid_at; Order.Meta.indexes has (status,created_at)/(status,updated_at) but not paid_at.
-      Add Index(status, paid_at) in the same migration as the next Order change. (models.py
-      :435/529). → OPS-4. [scout OPS-2]
+- [x] **revenue.py STILL materializes ledger_order_ids as a Python set** — DONE (verified
+      code-read): revenue.py uses `orders_values_qs = order_qs.values("id")` + subquery
+      `ledger_order_ids_sq = ledger_qs.values("order_id")` — no Python set materialization.
+      [scout OPS-2 → fixed OPS-4]
+- [x] **Order.paid_at unindexed** — DONE: `order_status_paid_at_idx` composite index on
+      (status, paid_at) exists in menu/models.py Order.Meta.indexes. [scout OPS-2 → fixed OPS-4]
 - [ ] **Marketplace commission mixed-basis** — commission = food_subtotal × 0.10 (PRE-discount
       GMV) but the statement reports revenue as Sum(Order.total) (POST-discount), so net_payout
       makes the effective take-rate look >10% whenever a discount applies. Document the basis
@@ -629,9 +618,8 @@ Several are HIGH. file:line in scout output; verify before acting.
       wallet settle, legacy_cash can go negative and max(0) hides it, so cash+wallet no longer
       reconciles to gross. A pro ledger should assert reconciliation, not clamp. (revenue.py
       :63/77). → OPS-4 (reconciliation assertions). [scout OPS-2]
-- [ ] **OrderItem has no voided_by_user_id** — Z-report voided_by is always null; can't surface
-      per-staff void rates / loss-prevention. Mirror Order.handled_by_user_id (1 field + 1-line
-      migration). (models.py:582). → fold into next OPS batch touching voids. [scout OPS-2]
+- [x] **OrderItem has no voided_by_user_id** — DONE (5b7e013): added IntegerField null/blank;
+      migration 0061; StaffVoidOrderItemView stamps it; Z-report/CSV now exposes it. [scout OPS-2]
 - [ ] **Order CSV "subtotal" column includes tip + nets discounts** — subtotal = total −
       delivery_fee, but total includes tip; an owner summing the column to get food sales is
       off by total tips. Also no commission_amount column. (menu/views.py:6199). → OPS-6
@@ -645,33 +633,22 @@ Several are HIGH. file:line in scout output; verify before acting.
       but OwnerDashboard cash/wallet display should migrate to it for consistency with the
       Z-report. (OwnerDashboard*.vue). → OPS-6 (polish). [review OPS-2 major, documented]
 
-- [ ] **Promotion max_uses overspend race (REVENUE LEAK)** — PlaceOrderView checks
-      `use_count >= max_uses` OUTSIDE the lock (menu/views.py:2345), then F()-increments
-      inside atomic with no cap enforcement; N concurrent checkouts all pass the pre-check
-      and the promo is applied N times past the cap. Same in marketplace (accounts/views.py
-      ~2963/3172). Fix: `filter(pk=..., use_count__lt=max_uses).update(use_count=F+1)` and
-      treat 0-rows as cap-exceeded (single atomic op, no extra latency). HIGH — money.
-      [scout OPS-3]
-- [ ] **PlaceOrderThrottle still IP-scoped** — OPS-3 scoped StaffOrderList + WaiterCall per
-      user/table but PlaceOrderView (staff-placed orders via waiter app) still keys on IP →
-      shared restaurant NAT collapses the bucket at rush. Apply the StaffOrderListThrottle
-      pattern (user.pk for authed staff, IP for anon customers). (throttles.py:25). → OPS-4
-      or quick follow-up. [scout OPS-3]
+- [x] **Promotion max_uses overspend race (REVENUE LEAK)** — DONE (verified code-read):
+      PlaceOrderView uses `filter(pk=.., use_count__lt=max_uses).update(use_count=F+1)` (atomic
+      single-op); marketplace path mirrors it. [scout OPS-3 → fixed OPS-4]
+- [x] **PlaceOrderThrottle still IP-scoped** — DONE: throttles.py PlaceOrderThrottle is
+      "OPS-4 G: per-user for authenticated staff/owner, IP for anonymous customers". [scout OPS-3 → fixed OPS-4]
 - [ ] **Status-advance idempotency_key sent but not consumed server-side** — client sends it
       on the status PATCH; OwnerOrderStatusUpdateView never reads it. The target-idempotency
       BFS ("already_advanced" 200) covers the stale-superseded-retry case (verified), so this
       is belt-and-suspenders, not a correctness gap. Optional: cache (key→status) inside the
       atomic for true at-least-once. LOW. (menu/views.py:5890). [scout OPS-3]
-- [ ] **Offline queue drop-policy + no TTL** — queue caps at 50 dropping OLDEST (arguably the
-      most urgent; per-order dedup limits the blast radius) and entries carry queuedAt but no
-      TTL/expiry, so a stale op could in theory replay next session (idempotency keys make
-      replay safe; only a stale cancel vs a reused integer PK is risky, and Postgres doesn't
-      reuse PKs). Add an 8h/service-day TTL drop on load + consider drop-newest. MEDIUM.
-      (waiter.js queue cap + _loadQueue). [scout OPS-3]
-- [ ] **WalletTransaction refund idempotency/aggregate scans unindexed (tenant_id,type,...)**
-      — cancel-refund EXISTS check + Z-report/digest REFUND aggregate scan WalletTransaction
-      without a covering index; fine now, a scan at 10k+ orders. Add (tenant_id, type,
-      created_at) index. → OPS-4 (scale). [scout OPS-3]
+- [x] **Offline queue drop-policy + no TTL** — DONE (5b7e013): _loadQueue() in waiter.js now
+      drops entries where queuedAt is present and older than 8 h on load (backwards-compat:
+      entries without queuedAt are kept). [scout OPS-3]
+- [x] **WalletTransaction refund idempotency/aggregate scans unindexed (tenant_id,type,...)** —
+      DONE: composite index (tenant_id, type, created_at) exists in accounts/models.py
+      WalletTransaction.Meta.indexes. [scout OPS-3 → fixed OPS-4]
 - [ ] **StaffOrderPaymentView cache.set after atomic block** — the cache idempotency marker is
       written post-commit; Redis-down loses it but the DB OrderPayment unique-key backstop
       (added OPS-3) now covers replay. Document the DB constraint as the primary backstop so a
@@ -691,12 +668,11 @@ Several are HIGH. file:line in scout output; verify before acting.
       post_save signal/cron. (accounts/views.py:2243/2418). → marketplace-perf batch. [scout OPS-4]
 - [x] **OwnerRatingListView no pagination** — DONE (commit 57c5482): proper page/page_size
       pagination (default 50, max 200) + ?from/?to date filters; has_more signal; CSV uncapped.
-- [ ] **CustomerRating (public) no retention prune** — write-only, grows with platform order
-      volume; add a prune cron like the OPS-4 ones. (accounts/models.py:506). → retention. [scout OPS-4]
-- [ ] **OwnerCustomerListView still materializes all customers before paginating** — segment
-      label is Python-derived so segment filter + sort + pagination happen in Python over the
-      full 3k-row aggregate; push the segment predicate (last_order_at < cutoff) to SQL for
-      true DB-level pagination. (menu/views.py:8458/8601/8670). → customer-perf follow-up. [scout OPS-4]
+- [x] **CustomerRating (public) no retention prune** — DONE: prune_customer_ratings command
+      (default 365 days) + added to MANAGEMENT_COMMAND_ALLOWLIST. [scout OPS-4]
+- [x] **OwnerCustomerListView still materializes all customers before paginating** — DONE:
+      segment parsed early; `_seg_having` dict pushed to DB as HAVING clause on `order_count` /
+      `last_order_at` annotations for `new`/`at_risk`/`returning`; `all` unchanged. [scout OPS-4]
 - [x] **Z-report by_staff = 2 OrderPayment queries** — DONE: collapsed to one .values()
       .annotate(cash_sum=Sum(filter=CASH), wallet_sum=Sum(filter=WALLET), order_count=Count(distinct)).
 - [x] **_staff_order_payload calls order.items.all() twice** — DONE: materialized once

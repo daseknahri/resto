@@ -8864,6 +8864,19 @@ class OwnerCustomerListView(APIView):
         # we can reach it via the FK join (customer__email__icontains); for
         # anonymous orders (no FK) there is no email to search.
         search = (request.query_params.get("search") or "").strip().lower()
+        segment = (request.query_params.get("segment") or "all").strip().lower()
+
+        # Push segment predicate to SQL (HAVING on aggregated annotation) so that
+        # a filtered request does not materialise every customer row in Python.
+        # "all" fetches everything; specific segments add a HAVING clause.
+        _seg_having: dict = {}
+        if segment == "at_risk":
+            _seg_having = {"last_order_at__lt": at_risk_cutoff, "order_count__gt": self._NEW_THRESHOLD}
+        elif segment == "new":
+            _seg_having = {"order_count__lte": self._NEW_THRESHOLD}
+        elif segment == "returning":
+            _seg_having = {"order_count__gt": self._NEW_THRESHOLD, "last_order_at__gte": at_risk_cutoff}
+
         _linked_base_q = Q(customer_id__isnull=False, status__in=self._COUNTED)
         _anon_base_q = Q(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
         if search:
@@ -8894,6 +8907,7 @@ class OwnerCustomerListView(APIView):
                 last_phone=Max("customer_phone"),
                 currency=Max("currency"),
             )
+            .filter(**_seg_having)
         )
 
         # ── 2. Aggregate anonymous orders (no customer_id, phone only) ───────
@@ -8909,6 +8923,7 @@ class OwnerCustomerListView(APIView):
                 last_name=Max("customer_name"),
                 currency=Max("currency"),
             )
+            .filter(**_seg_having)
         )
 
         # ── 3. Fetch CustomerRating for linked customers (public schema) ──────
@@ -9043,8 +9058,7 @@ class OwnerCustomerListView(APIView):
             else:
                 c["segment"] = "returning"
 
-        # ── 7. Filter — segment (name/phone/email search applied at DB layer) ──
-        segment = (request.query_params.get("segment") or "all").strip().lower()
+        # ── 7. Filter — DB HAVING already filtered; Python pass is a safety net ──
         if segment in ("new", "returning", "at_risk"):
             customers = [c for c in customers if c["segment"] == segment]
 
