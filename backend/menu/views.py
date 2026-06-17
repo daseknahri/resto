@@ -4972,6 +4972,12 @@ class StaffOrderPaymentView(APIView):
         )
 
         # Mark this idempotency key as committed so retries are short-circuited.
+        # NOTE: cache.set is intentionally POST-commit — writing inside atomic would
+        # set the key even if the transaction rolls back (false short-circuit on retry).
+        # IMPORTANT: the OrderPayment.idempotency_key DB UNIQUE constraint is the PRIMARY
+        # backstop. If Redis is down, cache.set silently fails, but the next retry hits the
+        # IntegrityError path above (lines 4944-4965) and correctly replays. Do NOT drop
+        # that constraint — it is load-bearing, not just a belt-and-suspenders guard.
         if idempotency_key:
             cache.set(_idem_cache_key, True, timeout=300)  # 5 minutes
 

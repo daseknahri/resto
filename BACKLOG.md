@@ -583,11 +583,12 @@ Several are HIGH. file:line in scout output; verify before acting.
       spans the section-resolution queries on every staff mutation; lock-queue at rush.
       Cache section assignment per-request or single combined query. (menu/views.py:3160).
       → OPS-4 (scale). [scout OPS-1]
-- [ ] **Section-access logic copy-pasted 3×** — StaffOrderListView inline, _can_access_order,
+- [x] **Section-access logic copy-pasted 3×** — StaffOrderListView inline, _can_access_order,
       waiter_views._section_slugs_for all reimplement (my_slugs, claimed_slugs) differently;
       a future section-semantics change will miss one. Extract one helper. (menu/views.py
       :3160/:3268; waiter_views.py:85). → fold into whichever OPS batch next touches sections.
       [scout OPS-1]
+      SHIPPED 3d17795 — _can_access_order + StaffOrderListView now call waiter_views._section_slugs_for.
 - [x] **WaiterCall throttle is per-IP** — DONE: WaiterCallThrottle (throttles.py) scoped per
       (tenant-schema + table_slug), not per IP. [scout OPS-1 → fixed OPS-3]
 - [x] **StaffMessage unbounded + no created_at index** — DONE: created_at has db_index=True
