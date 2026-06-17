@@ -44,9 +44,15 @@ function _loadQueue() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Validate each entry has the minimum required shape
+    const MAX_AGE_MS = 8 * 60 * 60 * 1000;
+    const now = Date.now();
     return parsed.filter(
-      (e) => e && typeof e.orderId !== "undefined" && typeof e.newStatus === "string" && typeof e.idempotency_key === "string"
+      (e) =>
+        e &&
+        typeof e.orderId !== "undefined" &&
+        typeof e.newStatus === "string" &&
+        typeof e.idempotency_key === "string" &&
+        (typeof e.queuedAt !== "number" || now - e.queuedAt < MAX_AGE_MS)
     );
   } catch (err) {
     console.warn("[waiterQueue] Failed to load queue from localStorage:", err);

@@ -621,6 +621,7 @@ class OrderItem(models.Model):
     is_voided = models.BooleanField(default=False)
     voided_at = models.DateTimeField(null=True, blank=True)
     void_reason = models.CharField(max_length=120, blank=True)
+    voided_by_user_id = models.IntegerField(null=True, blank=True)
     # Course sequencing — snapshot of dish.category.course at placement/append time.
     # 0 = no course / fire immediately; 1–4 = course number held until staff fires it.
     course = models.PositiveSmallIntegerField(

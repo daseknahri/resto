@@ -4268,7 +4268,8 @@ class StaffVoidOrderItemView(APIView):
             item.is_voided = True
             item.voided_at = now
             item.void_reason = reason
-            item.save(update_fields=["is_voided", "voided_at", "void_reason"])
+            item.voided_by_user_id = getattr(request.user, "id", None)
+            item.save(update_fields=["is_voided", "voided_at", "void_reason", "voided_by_user_id"])
 
             # Restock — same locked pattern as _restock_cancelled_order but per-item.
             # For combo items, also restock each component (component.qty × item.qty).
@@ -6938,7 +6939,7 @@ class OwnerZReportView(APIView):
                 "qty": item.qty,
                 "line_total": str(line_total),
                 "reason": item.void_reason or "",
-                "voided_by": None,  # no voided_by_user_id field exists today
+                "voided_by": item.voided_by_user_id,
             })
 
         # ── By-staff breakdown ────────────────────────────────────────────────

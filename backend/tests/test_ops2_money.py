@@ -396,9 +396,9 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = OwnerZReportView.as_view()
 
-    def test_void_item_has_required_fields_and_voided_by_is_null(self):
+    def test_void_item_has_required_fields_and_voided_by_propagated(self):
         """Each void entry: order_number, dish_name, qty, line_total, reason, voided_by.
-        voided_by MUST be null (no voided_by_user_id field in the data model today).
+        voided_by propagates OrderItem.voided_by_user_id (integer or null).
         """
         fake_item = MagicMock()
         fake_item.order.order_number = "ORD-001"
@@ -406,6 +406,7 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         fake_item.qty = 2
         fake_item.unit_price = Decimal("4.50")
         fake_item.void_reason = "wrong size"
+        fake_item.voided_by_user_id = 7
 
         # Order queryset
         order_qs = MagicMock()
@@ -450,7 +451,7 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         item = voids[0]
         for field in ("order_number", "dish_name", "qty", "line_total", "reason", "voided_by"):
             self.assertIn(field, item, f"void item missing field: {field}")
-        self.assertIsNone(item["voided_by"], "voided_by must be null (no DB field)")
+        self.assertEqual(item["voided_by"], 7, "voided_by must propagate voided_by_user_id")
         self.assertEqual(item["reason"], "wrong size")
         self.assertEqual(Decimal(item["line_total"]), Decimal("9.00"))  # 2 × 4.50
 

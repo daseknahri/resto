@@ -526,7 +526,7 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # item.save called with the exact update_fields
-        item.save.assert_called_once_with(update_fields=["is_voided", "voided_at", "void_reason"])
+        item.save.assert_called_once_with(update_fields=["is_voided", "voided_at", "void_reason", "voided_by_user_id"])
         # order.save — no wallet refund so wallet_amount_paid NOT in update_fields
         second_order.save.assert_called_once_with(
             update_fields=["total", "updated_at"]
