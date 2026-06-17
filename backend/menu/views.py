@@ -3407,7 +3407,7 @@ def _can_edit_tenant_order(request) -> bool:
             and user.effective_perm_manage_orders())
 
 
-def _can_access_order(request, order) -> bool:
+def _can_access_order(request, order, *, my_slugs=None, claimed_slugs=None) -> bool:
     """Check that a waiter is allowed to mutate *order*.
 
     Owners (and superusers) may access any order. Staff are restricted to orders
@@ -3417,6 +3417,9 @@ def _can_access_order(request, order) -> bool:
     Non-table orders (pickup / delivery) are shared: any waiter may handle them.
     Tables that have no assigned section server are also unowned and accessible
     to all waiters (pre-section behaviour).
+
+    Pass *my_slugs* and *claimed_slugs* (pre-computed via _section_slugs_for) to
+    avoid re-querying inside a select_for_update() critical section.
     """
     if _is_tenant_owner(request):
         return True
@@ -3425,8 +3428,18 @@ def _can_access_order(request, order) -> bool:
     if not order.table_slug:
         return True  # no table → not a section table
 
-    from .waiter_views import _section_slugs_for
-    my_slugs, claimed_slugs = _section_slugs_for(request.user)
+    if my_slugs is None or claimed_slugs is None:
+        # Cache on the request to avoid redundant DB hits within a single request
+        # (e.g. when multiple orders are checked in the same call-chain).
+        _cached = getattr(request, "_section_slugs_cache", None)
+        if _cached is None:
+            from .waiter_views import _section_slugs_for
+            _cached = _section_slugs_for(request.user)
+            try:
+                request._section_slugs_cache = _cached
+            except AttributeError:
+                pass  # immutable in some test setups
+        my_slugs, claimed_slugs = _cached
     if not claimed_slugs:
         return True  # floor not yet divided — any waiter can see everything
     if order.table_slug not in claimed_slugs:
