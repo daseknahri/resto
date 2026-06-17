@@ -3425,18 +3425,8 @@ def _can_access_order(request, order) -> bool:
     if not order.table_slug:
         return True  # no table → not a section table
 
-    uid = getattr(request.user, "id", None)
-    my_section_ids = list(
-        SectionServer.objects.filter(user_id=uid).values_list("section_id", flat=True)
-    )
-    my_slugs = set(
-        TableLink.objects.filter(section_id__in=my_section_ids).values_list("slug", flat=True)
-    ) if my_section_ids else set()
-    claimed_slugs = set(
-        TableLink.objects.filter(
-            section_id__in=SectionServer.objects.values_list("section_id", flat=True)
-        ).values_list("slug", flat=True)
-    )
+    from .waiter_views import _section_slugs_for
+    my_slugs, claimed_slugs = _section_slugs_for(request.user)
     if not claimed_slugs:
         return True  # floor not yet divided — any waiter can see everything
     if order.table_slug not in claimed_slugs:
@@ -3533,17 +3523,8 @@ class StaffOrderListView(APIView):
         # or a section with no assigned server) so nothing is ever invisible.
         # Owners see everything.
         if not _is_tenant_owner(request):
-            uid = getattr(request.user, "id", None)
-            my_section_ids = list(
-                SectionServer.objects.filter(user_id=uid).values_list("section_id", flat=True)
-            )
-            my_slugs = set(
-                TableLink.objects.filter(section_id__in=my_section_ids).values_list("slug", flat=True)
-            ) if my_section_ids else set()
-            claimed_section_ids = set(SectionServer.objects.values_list("section_id", flat=True))
-            claimed_slugs = set(
-                TableLink.objects.filter(section_id__in=claimed_section_ids).values_list("slug", flat=True)
-            ) if claimed_section_ids else set()
+            from .waiter_views import _section_slugs_for
+            my_slugs, claimed_slugs = _section_slugs_for(request.user)
             # Only filter once the floor is actually divided into served sections.
             # With no assignments every waiter sees all orders (pre-section behaviour).
             if claimed_slugs:

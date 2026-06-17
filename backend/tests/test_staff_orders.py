@@ -86,15 +86,21 @@ class StaffOrderListViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffOrderListView.as_view()
-        # The section hard-filter queries SectionServer/TableLink. Stub them so
-        # these unit tests stay DB-free; empty assignments → filter is a no-op
-        # (every active order is returned, matching pre-section behaviour).
-        self._patchers = [patch("menu.views.SectionServer"), patch("menu.views.TableLink")]
-        ss, tl = (p.start() for p in self._patchers)
-        ss.objects.filter.return_value.values_list.return_value = []
-        ss.objects.values_list.return_value = []
-        tl.objects.filter.return_value.values_list.return_value = []
-        tl.objects.exclude.return_value.values_list.return_value = []
+        # The section hard-filter delegates to waiter_views._section_slugs_for
+        # which reads SectionServer/TableLink from waiter_views. Stub both
+        # modules so these unit tests stay DB-free; empty assignments → filter
+        # is a no-op (every active order is returned, pre-section behaviour).
+        self._patchers = [
+            patch("menu.waiter_views.SectionServer"),
+            patch("menu.waiter_views.TableLink"),
+            patch("menu.views.TableLink"),  # section_name_by_slug + other views.py uses
+        ]
+        wvss, wvtl, vtl = (p.start() for p in self._patchers)
+        wvss.objects.filter.return_value.values_list.return_value = []
+        wvss.objects.values_list.return_value = []
+        wvtl.objects.filter.return_value.values_list.return_value = []
+        vtl.objects.filter.return_value.values_list.return_value = []
+        vtl.objects.exclude.return_value.values_list.return_value = []
 
     def tearDown(self):
         for p in self._patchers:
