@@ -4,6 +4,8 @@ These coordinate the public-schema ``DeliveryJob`` with tenant-schema orders, so
 live outside ``views`` to avoid circular imports and can be reused from management
 commands.
 """
+from decimal import Decimal
+
 from django.db import transaction
 
 
@@ -30,7 +32,8 @@ def cancel_delivery_job_for_order(tenant_id, order_number):
         prev_driver_id = job.driver_id
         job.status = DeliveryJob.Status.CANCELLED
         job.cancelled_at = timezone.now()
-        job.save(update_fields=["status", "cancelled_at"])
+        job.platform_commission = Decimal("0")
+        job.save(update_fields=["status", "cancelled_at", "platform_commission"])
 
     # Tell the assigned driver to stand down (never blocks / raises).
     if prev_driver_id:

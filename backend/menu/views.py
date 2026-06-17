@@ -8124,7 +8124,7 @@ class OwnerCommissionStatementView(APIView):
                 "commission_amount": float(o.commission_amount),
                 # A5: surface the snapshotted rate so each row's commission is auditable.
                 "commission_rate_applied": float(o.commission_rate_applied),
-                "net_payout": round(float(o.total) - float(o.commission_amount), 2),
+                "net_payout": float((o.total - o.commission_amount).quantize(Decimal("0.01"))),
                 "currency": o.currency,
                 "status": o.status,
             }
