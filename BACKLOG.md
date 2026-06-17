@@ -201,9 +201,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 - [ ] **ride_per_minute default 0** — enable/tune once live trip data exists.
 - [ ] **Car-doc expiry** — licence/insurance have no expiry date / re-verification
       cycle; admin approval is one-shot.
-- [~] **Admin PII-read audit logging** — RESOLVED for rides in OPS-5c (AdminRideListView now
-      logs RIDE_PII_VIEWED + IsPlatformAdmin + AdminPIIThrottle). Delivery-equivalent admin PII
-      GETs (if any remain) still to confirm. [scout OPS-5b → fixed OPS-5c]
+- [x] **Admin PII-read audit logging — FULLY DONE** — AdminRideListView (OPS-5c) + now
+      AdminDeliveryJobListView: added AdminPIIThrottle + log_admin_action(DELIVERY_JOB_PII_VIEWED).
+      New AdminAuditLog.Actions.DELIVERY_JOB_PII_VIEWED (TextChoices, no migration needed).
+      +2 tests (has_pii_throttle + pii_audit_log_recorded). All admin PII endpoints now audited.
 - [ ] **code_locked_until unindexed** — only matters if a future sweep/admin query
       filters on it. Review minor, explicitly "not a current issue".
 

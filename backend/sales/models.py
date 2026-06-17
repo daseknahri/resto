@@ -310,6 +310,8 @@ class AdminAuditLog(models.Model):
         # OPS-5c item 2: ride admin PII audit
         RIDE_PII_VIEWED = "ride_pii_viewed", "Ride PII viewed"
         CAR_DOCS_VIEWED = "car_docs_viewed", "Car docs viewed"
+        # OPS-5c follow-up: delivery-job admin PII audit (mirrors RIDE_PII_VIEWED)
+        DELIVERY_JOB_PII_VIEWED = "delivery_job_pii_viewed", "Delivery job PII viewed"
         # R18: GDPR customer PII erasure
         CUSTOMER_ERASED = "customer_erased", "Customer PII erased"
 

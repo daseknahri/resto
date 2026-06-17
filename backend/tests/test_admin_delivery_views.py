@@ -428,6 +428,25 @@ class AdminDeliveryJobListViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         qs.filter.assert_called()
 
+    def test_has_pii_throttle(self):
+        from accounts.throttles import AdminPIIThrottle
+        self.assertIn(AdminPIIThrottle, AdminDeliveryJobListView.throttle_classes)
+
+    @patch("sales.audit.AdminAuditLog.objects.create")
+    def test_pii_audit_log_recorded(self, mock_create):
+        """GET must write a DELIVERY_JOB_PII_VIEWED audit entry."""
+        from sales.models import AdminAuditLog
+        with patch("accounts.models.DeliveryJob") as mock_dj:
+            qs = MagicMock()
+            mock_dj.objects.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: []
+            self._get()
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args[1]
+        self.assertEqual(call_kwargs["action"], AdminAuditLog.Actions.DELIVERY_JOB_PII_VIEWED)
+        self.assertEqual(call_kwargs["target_repr"], "admin:delivery_job_list")
+
 
 # ── OwnerDeliveryZoneView ─────────────────────────────────────────────────────
 

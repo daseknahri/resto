@@ -6882,12 +6882,27 @@ class AdminDeliveryJobListView(APIView):
     ?tenant_id= filter by tenant
 
     OPS-5b: consolidated onto IsPlatformAdmin (drops inline is_platform_admin check).
+    OPS-5c follow-up: AdminPIIThrottle + DELIVERY_JOB_PII_VIEWED audit log (mirrors
+    AdminRideListView — delivery jobs carry driver name/phone and customer addresses).
     """
 
     permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
-        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
+        from sales.audit import log_admin_action
+        from sales.models import AdminAuditLog
+
+        log_admin_action(
+            action=AdminAuditLog.Actions.DELIVERY_JOB_PII_VIEWED,
+            request=request,
+            target_repr="admin:delivery_job_list",
+            metadata={
+                "status_filter": request.query_params.get("status", ""),
+                "tenant_filter": request.query_params.get("tenant_id", ""),
+            },
+        )
+
         from .models import DeliveryJob
         qs = DeliveryJob.objects.select_related("driver", "zone").order_by("-created_at")
         status_filter = request.query_params.get("status")
