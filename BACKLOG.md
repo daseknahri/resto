@@ -173,13 +173,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       tenants are single-location today.
 - [ ] **Auto-print on new order** — needs kiosk browser / local agent / network
       ESC-POS printer. Manual print button shipped long ago.
-- [ ] **DishViewSet.perform_update marker clear not atomic** — serializer.save() and the
-      stock_auto_zeroed=False clear are two writes outside one atomic block; a checkout
-      zeroing the dish in that microsecond window loses its marker. Wrap in atomic.
-      Source: sweep-2 review minor.
-- [ ] **Clawback test asserts points_earned decrement weakly** — string-contains check on
-      update call args instead of asserting points_earned=<exact value>. Tighten.
-      Source: sweep-2 review minor.
+- [x] **DishViewSet.perform_update marker clear not atomic** — DONE: both writes now
+      wrapped in transaction.atomic() (commit after 3bb05b9).
+- [x] **Clawback test asserts points_earned decrement weakly** — DONE: replaced string-
+      contains check with exact assertEqual on pe_values (commit after 3bb05b9).
 
 ## Verticals (parked by strategy — doc §4b)
 - [ ] **Store pick-flow**: substitutions + out-of-stock at pick time + refund deltas.

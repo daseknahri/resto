@@ -394,7 +394,8 @@ class LoyaltyVoidClawbackTests(SimpleTestCase):
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
         # Clawback = 20 pts (for the voided 20.00 item at rate=1)
         self.assertEqual(cust.loyalty_points, 20)
-        # order.points_earned update called with 20 (40 - 20) to prevent double-claw
+        # order.points_earned updated to exactly 20 (40 - 20) to prevent double-claw
         update_calls = order_om.filter.return_value.update.call_args_list
-        self.assertTrue(any("points_earned" in str(c) for c in update_calls),
-                        "Expected Order.objects.filter().update(points_earned=...) to be called")
+        pe_values = [c.kwargs["points_earned"] for c in update_calls if "points_earned" in c.kwargs]
+        self.assertEqual(pe_values, [20],
+                         "Order.objects.filter().update(points_earned=20) must be called exactly once")

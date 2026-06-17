@@ -650,12 +650,17 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
           - The field is never writable by clients (excluded from
             DishSerializer.Meta.fields).
           - The clear fires for both PATCH and PUT.
+
+        Both writes are wrapped in atomic() so a concurrent checkout that zeros
+        stock_qty cannot observe the save-without-clear intermediate state.
         """
-        instance = serializer.save()
-        if "stock_qty" in serializer.validated_data:
-            # stock_auto_zeroed is backend-managed and not in the serializer,
-            # so use a direct .update() call rather than serializer.save() kwargs.
-            Dish.objects.filter(pk=instance.pk).update(stock_auto_zeroed=False)
+        from django.db import transaction
+        with transaction.atomic():
+            instance = serializer.save()
+            if "stock_qty" in serializer.validated_data:
+                # stock_auto_zeroed is backend-managed and not in the serializer,
+                # so use a direct .update() call rather than serializer.save() kwargs.
+                Dish.objects.filter(pk=instance.pk).update(stock_auto_zeroed=False)
 
     def destroy(self, request, *args, **kwargs):
         """Delete a dish. Returns 409 if the dish is a component of a combo
