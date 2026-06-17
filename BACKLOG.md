@@ -349,7 +349,7 @@ unthrottled redemption endpoints. Closing these should largely complete the mone
 
 ### OPS-5f — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5e scout surfaced these (file:line in scout output; verify first). Several are HIGH.
-- [ ] **MarketplacePlaceOrderView DishOption price manipulation (HIGH money/IDOR)** —
+- [x] **MarketplacePlaceOrderView DishOption price manipulation (HIGH money/IDOR)** —
       accounts/views.py:3065 builds options_map = DishOption.objects.filter(id__in=all_option_ids) with
       NO option→dish binding check, no published gate, no sign check, then unconditionally does
       unit_price += opt.price_delta (3090-3094). price_delta has no MinValueValidator (negative deltas are
@@ -357,34 +357,34 @@ The OPS-5e scout surfaced these (file:line in scout output; verify first). Sever
       dish to drive the wallet-PREPAID unit_price/total DOWN, even below zero. EVERY other order path
       validates opt_dish_slug==dish.slug (menu/views.py:1649-1655/1810-1818/2186-2191) — this path is the
       regression. Fix: enforce option↔dish membership + reject mismatches like the other builders. [scout OPS-5e]
-- [ ] **DeliveryRatingView customer branch — no order-ownership check + no throttle (IDOR)** —
+- [x] **DeliveryRatingView customer branch — no order-ownership check + no throttle (IDOR)** —
       accounts/views.py:5104 (AllowAny), the role=='customer' branch (5157-5163) only checks a session
       customer_id EXISTS, never that it owns the order, then writes customer_driver_rating/note. Driver
       (5164-5168) + restaurant (5172-5178) branches ARE gated — the customer branch is the oversight
       (sibling to the OPS-5e CustomerOrderRate fix). Reputation manipulation / stored-text, overwritable.
       Fix: require session-customer ownership + throttle (mirror CustomerOrderRateThrottle). [scout OPS-5e]
-- [ ] **Driver money/state endpoints gate on is_driver only, NOT driver_approved** —
+- [x] **Driver money/state endpoints gate on is_driver only, NOT driver_approved** —
       DriverPositionUpdateView (accounts/views.py:4478), DriverJobListView (4518), DriverJobDeclineView
       (4697), DriverJobStatusUpdateView (4885), ride DriverRideStatusView (ride_views.py:798). A driver
       APPROVED → accepted a job → then REJECTED can still advance it to DELIVERED via the status endpoint,
       triggering _credit_driver_earnings (require_verified=False) → banks EARNINGs after de-approval. Fix:
       re-check driver_approved at the money-emitting state transition, not only at accept. [scout OPS-5e]
-- [ ] **transfer_between_customers (P2P) replay branch missing the ownership assertion** —
+- [x] **transfer_between_customers (P2P) replay branch missing the ownership assertion** —
       wallet_service.py:315-322 returns the existing tx on an idempotency hit with no sender/recipient
       check (OPS-5e added the assertion to credit_wallet/debit_wallet/credit_tenant_float/transfer_to_customer
       but not this one). Gated behind WALLET_P2P_ENABLED (off) so latent. Fix: mirror the customer-match
       assertion. [scout OPS-5e]
-- [ ] **OwnerWalletChargeView below-threshold instant charge — no amount cap, no throttle** —
+- [x] **OwnerWalletChargeView below-threshold instant charge — no amount cap, no throttle** —
       menu/views.py:9558 (IsAuthenticated + _can_edit_tenant_order, no throttle_classes); sub-threshold
       charges debit instantly with only the 5-min QR pay-token as consent (9663-9667). A compromised/abusive
       waiter session can fire many sub-threshold debits against a present customer within the token window.
       Fix: per-actor/customer throttle + an absolute amount/velocity cap on the instant-charge path. [scout OPS-5e]
-- [ ] **CustomerWalletRedeemVoucherView bypasses the wallet ledger service + no customer row lock** —
+- [x] **CustomerWalletRedeemVoucherView bypasses the wallet ledger service + no customer row lock** —
       accounts/views.py:2243 locks the voucher row but read-modify-writes customer.wallet_balance + a manual
       WalletTransaction directly (2269-2279) instead of credit_wallet, WITHOUT select_for_update on the
       Customer → lost-update race vs any concurrent wallet_service op. Fix: funnel through credit_wallet (or
       lock the customer row). Violates the single-funnel invariant in wallet_service.py:1-15. [scout OPS-5e]
-- [ ] **Password-reset host-header poisoning + reset doesn't invalidate sessions** —
+- [x] **Password-reset host-header poisoning + reset doesn't invalidate sessions** —
       build_frontend_base_url falls back to request.get_host() (X-Forwarded-Host-honouring, USE_X_FORWARDED_HOST
       on) for tenant-less users (accounts/views.py:124-126); the reset link token is built from it (256-258).
       Also PasswordResetConfirmSerializer.save() (serializers.py:118-125) doesn't rotate/invalidate existing
@@ -393,7 +393,7 @@ The OPS-5e scout surfaced these (file:line in scout output; verify first). Sever
 
 ### OPS-5e — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5d scout surfaced these (file:line in scout output; verify first). Several are HIGH.
-- [ ] **Driver cash-out codes platform-global, no throttle, no tenant scoping (HIGH money/IDOR)** —
+- [x] **Driver cash-out codes platform-global, no throttle, no tenant scoping (HIGH money/IDOR)** —
       create_cashout_request (accounts/driver_service.py:122-138) mints a 6-digit code unique only
       among PENDING globally; confirm_cashout (141-187) + OwnerDriverCashoutLookupView/ConfirmView
       (menu/views.py:4886-4942) look it up by code across ALL tenants with NO tenant scope and credit
@@ -402,7 +402,7 @@ The OPS-5d scout surfaced these (file:line in scout output; verify first). Sever
       float. Fix: bind the cash-out to the driver's intended tenant (or driver-scans-restaurant),
       throttle the confirm endpoint per-user, and lock the request after N bad attempts (mirror the
       delivery-code lockout DriverJobStatusUpdateView:4869-4883). [scout OPS-5d]
-- [ ] **MarketplaceOrderStatusView IDOR — full order + financial data to anyone with the order number
+- [x] **MarketplaceOrderStatusView IDOR — full order + financial data to anyone with the order number
       (HIGH)** — accounts/views.py:3566-3655 is AllowAny/auth=[] and only gates delivery_code/can_cancel
       on ownership; the body (items, totals, payment_status, wallet_amount_paid, loyalty, promo,
       scheduled_for) is returned for ANY order to ANY caller. Order numbers are ORD-+token_hex(3) = 24
@@ -410,7 +410,7 @@ The OPS-5d scout surfaced these (file:line in scout output; verify first). Sever
       shape on the direct-checkout status path. Fix: require session-customer ownership for the detailed
       body (as cancel/pay already do) OR an unguessable per-order access token issued at placement.
       [scout OPS-5d]
-- [ ] **OwnerWalletChargeView trusts caller-supplied idempotency_key vs a global non-tenant-scoped
+- [x] **OwnerWalletChargeView trusts caller-supplied idempotency_key vs a global non-tenant-scoped
       ledger key (money)** — menu/views.py:9587/9638 reads idempotency_key from the body; debit_wallet
       replays the FIRST WalletTransaction with that key WITHOUT re-checking amount/tenant/customer
       (wallet_service.py:134-136). Because the key namespace is global + attacker-chosen, tenant A can
@@ -419,25 +419,25 @@ The OPS-5d scout surfaced these (file:line in scout output; verify first). Sever
       :1729) + above-threshold WalletChargeRequest.get_or_create (menu/views.py:9605). Fix: server-
       namespace idempotency keys (prefix tenant_id+endpoint) AND assert stored row amount/tenant/customer
       match before returning the replay. [scout OPS-5d]
-- [ ] **CustomerOrderRateView no ownership check + no throttle (review fraud)** — menu/views.py:7231-7319
+- [x] **CustomerOrderRateView no ownership check + no throttle (review fraud)** — menu/views.py:7231-7319
       AllowAny, no throttle; "any caller who knows the order number can rate it once". With 24-bit order
       numbers + the public status endpoint confirming COMPLETED orders, an attacker can submit fraudulent
       ratings against competitors. Fix: require session-customer ownership of the order to rate + add a
       per-IP/session throttle. [scout OPS-5d]
-- [ ] **CustomerPushSubscribeView endpoint-keyed upsert allows subscription hijack (IDOR)** —
+- [x] **CustomerPushSubscribeView endpoint-keyed upsert allows subscription hijack (IDOR)** —
       accounts/views.py:1464-1478 update_or_create(endpoint=endpoint, defaults={customer_id:...}) — a
       customer submitting an endpoint already owned by another customer overwrites its customer_id,
       stealing future pushes. Fix: scope uniqueness/update to (customer_id, endpoint) or reject when an
       existing row's customer_id differs. [scout OPS-5d]
-- [ ] **TranslateView echoes upstream provider raw error body to the client (info disclosure)** —
+- [x] **TranslateView echoes upstream provider raw error body to the client (info disclosure)** —
       tenancy/api.py:379-384 returns the OpenRouter HTTPError body (200 chars) to the tenant editor,
       leaking quota/account/model metadata. Fix: generic 'provider_error' to the client, log the body
       server-side only. [scout OPS-5d minor]
-- [ ] **OGView reflects request Host (X-Forwarded-Host) into canonical/og:image/cache-key** —
+- [x] **OGView reflects request Host (X-Forwarded-Host) into canonical/og:image/cache-key** —
       accounts/og_views.py:103/108/116/161; ALLOWED_HOSTS constrains it but multi-alias hosts can prime
       the Host-keyed cache + bake a non-authoritative host into og:url/og:image. Fix: derive canonical/
       image from the resolved tenant's Domain, normalize the host in the cache key. [scout OPS-5d minor]
-- [ ] **is_staff in capability FLAGS (not gates)** — accounts/views.py:75 can_access_admin_console +
+- [x] **is_staff in capability FLAGS (not gates)** — accounts/views.py:75 can_access_admin_console +
       :79 all_access still include user.is_staff. The actual admin endpoints are is_staff-free (OPS-5b/
       5d) so this only affects UI-visibility hints, but converge them onto is_superuser/is_platform_admin
       for consistency so a staff-only user isn't shown an admin console that 403s. [grep OPS-5d follow-up]
@@ -445,124 +445,124 @@ The OPS-5d scout surfaced these (file:line in scout output; verify first). Sever
 ### OPS-5d — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5c scout (SaaS-expert lens) surfaced these while we hardened uploads/SSRF/PII.
 Several are HIGH. file:line in scout output; verify before acting.
-- [ ] **Celery `run_management_command` = arbitrary command execution (HIGH)** — accounts/tasks.py
+- [x] **Celery `run_management_command` = arbitrary command execution (HIGH)** — accounts/tasks.py
       :100-104 passes any `name` straight to `call_command`; the task is registered by name and the
       default broker (redis://redis:6379/0) has NO auth, so anyone who can LPUSH to Redis can run
       `shell`/`dbshell`/`flush`/`migrate` with full DB creds (the inline-thread fallback runs in the
       web process too). Fix: (1) set Redis `requirepass`/ACL + validate the URL at startup; (2) replace
       the generic task with per-command tasks OR an allowlist of permitted command names. [scout OPS-5c]
-- [ ] **Google One-Tap auto-links without `email_verified` (account takeover, HIGH)** —
+- [x] **Google One-Tap auto-links without `email_verified` (account takeover, HIGH)** —
       _verify_google_token (accounts/views.py:299-316) checks aud+sub but NOT the email_verified
       claim, and CustomerGoogleAuthView (548-558) silently links the Google identity to an existing
       phone-registered Customer by email → an unverified-email Google account can take over a Kepoli
       customer. Fix: `if not data.get('email_verified'): return None`. One line. [scout OPS-5c]
-- [ ] **AdminWalletBonusView bulk-credit double-credit race (money)** — accounts/views.py:1609-1640:
+- [x] **AdminWalletBonusView bulk-credit double-credit race (money)** — accounts/views.py:1609-1640:
       idempotency `exists()` pre-check and the balance `UPDATE(F+1)` are not atomic; two concurrent
       POSTs with the same idempotency_key both clear the guard and both run the UPDATE (the unique
       idempotency_key only blocks the 2nd ledger insert — balances still inflate). Fix: SELECT FOR
       UPDATE on a sentinel / `cache.add` mutex (campaign-cap pattern), or bulk_create-first then
       UPDATE only on success. [scout OPS-5c]
-- [ ] **CORS_ALLOWED_ORIGIN_REGEXES default allows `*.localhost:5173` in prod** — settings.py:408-414
+- [x] **CORS_ALLOWED_ORIGIN_REGEXES default allows `*.localhost:5173` in prod** — settings.py:408-414
       default regex stays active if DJANGO_CORS_ALLOWED_ORIGIN_REGEXES is blank → any localhost:5173
       origin gets credentialed cross-origin access to the prod API. Fix: change in-code default to ''
       and add the var (empty) to coolify.env.example with a comment. [scout OPS-5c]
-- [ ] **uvicorn `--forwarded-allow-ips='*'` lets DRF throttles read spoofable XFF** —
+- [x] **uvicorn `--forwarded-allow-ips='*'` lets DRF throttles read spoofable XFF** —
       docker/entrypoint.sh:41; DRF's SimpleRateThrottle.get_ident() trusts XFF unboundedly, so
       _IPThrottle subclasses (OrderHandoff/CheckoutIntent, menu/throttles.py) can be reset per-request
       by sending `X-Forwarded-For: <random>`. Fix: pin --forwarded-allow-ips to the docker bridge
       subnet OR make _IPThrottle use the trusted-proxy-aware _client_ip helper. [scout OPS-5c]
-- [ ] **Customer session can be layered onto a staff session (cross-persona fixation)** —
+- [x] **Customer session can be layered onto a staff session (cross-persona fixation)** —
       OTP/email/Google auth write customer_id into the SAME Django session without checking
       request.user.is_authenticated (accounts/views.py:411-418/548/837); a staff/owner can mint a
       customer identity on their privileged session. Fix: refuse the customer_id write when
       request.user is an authenticated staff user; consider a separate customer cookie name. [scout OPS-5c]
-- [ ] **CustomerReservationsView no throttle + returns cancel_token** — accounts/views.py:711-766 is
+- [x] **CustomerReservationsView no throttle + returns cancel_token** — accounts/views.py:711-766 is
       AllowAny, unthrottled, and returns each reservation's cancel_token UUID; a session holder can
       bulk-harvest tokens and learn which restaurants a customer booked. Fix: add a throttle (~60/hr)
       and stop returning cancel_token in the list (cancel via the emailed link). [scout OPS-5c]
-- [ ] **public_urls.py serves /media/ via Django static_serve in prod** — config/public_urls.py:14-18
+- [x] **public_urls.py serves /media/ via Django static_serve in prod** — config/public_urls.py:14-18
       adds django.views.static.serve unconditionally on the non-DEBUG public host: no Cache-Control/
       security headers, holds an fd open, historically traversal-friendly. Nginx already owns /media/
       end-to-end. Fix: remove the route (or guard behind SERVE_MEDIA_FROM_DJANGO). [scout OPS-5c]
-- [ ] **DJANGO_SUPERADMIN_PASSWORD still passed as `--password` CLI arg** — docker/entrypoint.sh:26-29
+- [x] **DJANGO_SUPERADMIN_PASSWORD still passed as `--password` CLI arg** — docker/entrypoint.sh:26-29
       funnels the secret through argv (visible in /proc/<pid>/cmdline, docker inspect, deploy logs)
       even though ensure_platform_admin already prefers PLATFORM_ADMIN_PASSWORD env. Fix: set
       PLATFORM_ADMIN_PASSWORD in entrypoint and drop --password; rename in coolify.env.example.
       [scout OPS-5c] (deploy-config; complements the OPS-5b in-code env path)
-- [ ] **DJANGO_ADMIN_URL default 'admin/' + hardcoded nginx /admin/ block** — settings.py:675 +
+- [x] **DJANGO_ADMIN_URL default 'admin/' + hardcoded nginx /admin/ block** — settings.py:675 +
       frontend/nginx.conf:126-138: admin path is discoverable and a two-step env+rebuild to change.
       Fix: add DJANGO_ADMIN_URL to coolify.env.example + envsubst the nginx location so it tracks the
       Django setting. [scout OPS-5c]
 
 ### OPS-5c — SECURITY/OPS FOLLOW-UP — SHIPPED (the items below are DONE; see Done section)
-- [ ] **is_staff STILL bleeds elsewhere? — RESOLVED in OPS-5b** for menu/permissions
+- [x] **is_staff STILL bleeds elsewhere? — RESOLVED in OPS-5b** for menu/permissions
       (user_can_edit_tenant/menu), tenancy/api _can_edit_tenant, sales IsTenantEditor (all
       dropped is_staff). If any new gate copies the old triple-check, fix it. [scout OPS-5b → fixed]
-- [ ] **Image-upload content-type trust (SECURITY)** — _optimize_image except-fallback
+- [x] **Image-upload content-type trust (SECURITY)** — _optimize_image except-fallback
       (tenancy/api.py ~127) stores raw bytes with the client-supplied content_type; a JPEG/SVG
       polyglot can be served verbatim. Pillow transcode is the real sanitiser — on fallback,
       reject or force application/octet-stream. Same on driver-doc upload (ride_views.py ~908).
       [scout OPS-5b]
-- [ ] **AdminRideListView / AdminCarApprovalView: permission_classes=[] + manual check, no
+- [x] **AdminRideListView / AdminCarApprovalView: permission_classes=[] + manual check, no
       throttle, no audit on PII GET (SECURITY)** — ride_views.py ~1232/1301; mirror the OPS-5/5b
       pattern (IsPlatformAdmin + AdminPIIThrottle + audit). authentication_classes=[] also drops
       DRF CSRF. [scout OPS-5b]
-- [ ] **OSRM SSRF** — DELIVERY_OSRM_URL passed verbatim to requests.get (tenancy/routing.py
+- [x] **OSRM SSRF** — DELIVERY_OSRM_URL passed verbatim to requests.get (tenancy/routing.py
       ~81/131); validate scheme + non-RFC1918 host (or allowlist) at settings parse. [scout OPS-5b]
-- [ ] **IsTenantEditor lifecycle scope** — RESOLVED via is_staff drop, but confirm tenant
+- [x] **IsTenantEditor lifecycle scope** — RESOLVED via is_staff drop, but confirm tenant
       LIFECYCLE endpoints (suspend/cancel) use IsPlatformAdmin not IsTenantEditor. [scout OPS-5b]
-- [ ] **DriverDocUploadView no throttle** — AllowAny 8MB uploads + admin-email on each; add a
+- [x] **DriverDocUploadView no throttle** — AllowAny 8MB uploads + admin-email on each; add a
       per-session throttle (ride_views.py ~945). [scout OPS-5b]
-- [ ] **AnalyticsEventIngestView throttle IP-scoped** — CDN/shared-NAT collapses the 600/hr
+- [x] **AnalyticsEventIngestView throttle IP-scoped** — CDN/shared-NAT collapses the 600/hr
       bucket; key on (tenant, ip) like WaiterCallThrottle. (menu/views.py ~1047). [scout OPS-5b]
-- [ ] **PasswordResetToken / ActivationToken never pruned** — add a prune cron (delete used
+- [x] **PasswordResetToken / ActivationToken never pruned** — add a prune cron (delete used
       >7d). (accounts/models.py ~514). [scout OPS-5b]
-- [ ] **TRUSTED_PROXY_COUNT not declared in settings.py** — read via getattr default 1 in 2
+- [x] **TRUSTED_PROXY_COUNT not declared in settings.py** — read via getattr default 1 in 2
       places; declare it explicitly + comment the Coolify topology (Traefik+nginx may be 2).
       Also: get_request_ip miscount fallback returns spoofable XFF[0] — clamp safely.
       (middleware.py ~137; sales/audit.py ~29). [scout OPS-5b + review minor]
-- [ ] **SESSION_SAVE_EVERY_REQUEST not set** — 90-day window is ABSOLUTE not sliding; read-heavy
+- [x] **SESSION_SAVE_EVERY_REQUEST not set** — 90-day window is ABSOLUTE not sliding; read-heavy
       staff get logged out mid-shift. One line: SESSION_SAVE_EVERY_REQUEST=True. [scout OPS-5b]
-- [ ] **AdminWalletBonus balance_after stale-read** under concurrent wallet writes (documented
+- [x] **AdminWalletBonus balance_after stale-read** under concurrent wallet writes (documented
       limitation; per-customer credit_wallet or returning-UPDATE for exactness). [review OPS-5b minor]
-- [ ] **Plan-limit returns HTTP 400 not 402** — still deferred; SPA axios behavior unaudited.
+- [x] **Plan-limit returns HTTP 400 not 402** — still deferred; SPA axios behavior unaudited.
       [review OPS-5/5b minor]
 
 ### OPS-5b — ADMIN SECURITY HARDENING — SHIPPED (the items below are DONE; see Done section)
-- [ ] **IsPlatformAdmin admits any Django is_staff user → money endpoints (PRIV-ESC, HIGH)**
+- [x] **IsPlatformAdmin admits any Django is_staff user → money endpoints (PRIV-ESC, HIGH)**
       — sales/permissions.py:11 returns True for is_staff, so any /admin/-capable Django
       user can POST wallet bonus / fund-tenant / vouchers / ride-fare settings. Intended
       gate is is_platform_admin (role PLATFORM_SUPERADMIN). Fix: drop is_staff from
       IsPlatformAdmin (keep is_platform_admin + is_superuser). One line, but audit every
       admin view that relied on it. [scout OPS-5]
-- [ ] **Admin auth pattern triplication** — 15+ admin views use 3 inconsistent gates
+- [x] **Admin auth pattern triplication** — 15+ admin views use 3 inconsistent gates
       (IsPlatformAdmin class / inline is_platform_admin / inline that also admits is_staff).
       Consolidate on IsPlatformAdmin (after the fix above) + add a test that every
       /api/admin/ URL rejects a TENANT_OWNER. [scout OPS-5]
-- [ ] **AdminCustomerList/Detail: full PII directory, no throttle, no read-audit, is_staff
+- [x] **AdminCustomerList/Detail: full PII directory, no throttle, no read-audit, is_staff
       gate** — accounts/views.py:1687/1744. Add per-admin throttle + log_admin_action on
       GET + IsPlatformAdmin. SECURITY/compliance. [scout OPS-5]
-- [ ] **Missing audit on admin writes** — is_driver toggle (accounts/views.py:1813), manual
+- [x] **Missing audit on admin writes** — is_driver toggle (accounts/views.py:1813), manual
       delivery-job create (5858/5909) have no log_admin_action; tenant deletion request
       (tenancy/api.py:437, GDPR) has no audit + no TENANT_DELETION_REQUESTED action. Add
       actions + log calls. [scout OPS-5]
-- [ ] **plan_feature_flags_updated logged as raw string not in Actions enum** — invisible to
+- [x] **plan_feature_flags_updated logged as raw string not in Actions enum** — invisible to
       audit queries filtering Actions.choices. Add the enum member. (sales/views.py:1435).
       [scout OPS-5]
-- [ ] **Audit-log IP spoofable** — get_request_ip takes XFF[0] (client-controlled), no
+- [x] **Audit-log IP spoofable** — get_request_ip takes XFF[0] (client-controlled), no
       trusted-proxy config. Use rightmost-trusted / django-ipware. (sales/audit.py:10;
       middleware.py:128). [scout OPS-5]
-- [ ] **AdminWalletBonus bulk-credit leaves balance_after=NULL** — breaks ledger
+- [x] **AdminWalletBonus bulk-credit leaves balance_after=NULL** — breaks ledger
       reconstruction; per-customer credit_wallet or a returning-UPDATE. (accounts/views.py
       :1512). [scout OPS-5]
-- [ ] **Dish/staff plan-limit is a read-then-create RACE** — concurrent creates overshoot
+- [x] **Dish/staff plan-limit is a read-then-create RACE** — concurrent creates overshoot
       the cap (no lock). select_for_update sentinel or DB constraint. (menu/views.py:587;
       accounts/views.py:1014). [scout OPS-5]
-- [ ] **ensure_platform_admin password as CLI arg** — visible in /proc + shell history +
+- [x] **ensure_platform_admin password as CLI arg** — visible in /proc + shell history +
       deploy logs. Read from env/stdin. (commands/ensure_platform_admin.py:9). [scout OPS-5]
-- [ ] **Health endpoint leaks MEDIA_ROOT absolute path** to unauthenticated callers — return
+- [x] **Health endpoint leaks MEDIA_ROOT absolute path** to unauthenticated callers — return
       'ok' not str(path). (config/api.py:171). [review OPS-5 minor]
-- [ ] **Plan-limit returns HTTP 400 not 402** — contract said 402/403 for entitlement
+- [x] **Plan-limit returns HTTP 400 not 402** — contract said 402/403 for entitlement
       boundary; clients may mis-classify. (menu/views.py:602; accounts/views.py:1019).
       [review OPS-5 minor]
 
