@@ -134,7 +134,9 @@ export const messages = {
       title: "Kepoli",
       footerTitle: "Kepoli",
       navDesktop: "Main navigation",
-      navMobile: "Main navigation"
+      navMobile: "Main navigation",
+      navOrder: "Order",
+      navBusiness: "For business",
     },
     home: {
       leadSuccess: "Your request was received. We will contact you shortly.",
@@ -409,7 +411,18 @@ export const messages = {
       pharmacyDesc: "Medicines and essentials, to your door.",
       courierTitle: "Send a package",
       courierDesc: "Same-day city delivery by Kepoli riders.",
+      driverTitle: "Become a driver",
+      driverDesc: "Earn on every delivery — work when you want.",
       comingSoon: "Coming soon",
+    },
+    superAppHub: {
+      heroKicker: "The Kepoli super-app",
+      heroTitle: "{platform} — your city in one app",
+      heroSubtitle: "Food, shops, rides, courier delivery — one wallet, one account.",
+      signInCta: "Sign in",
+      signInGreeting: "Hi, {name}",
+      myAccount: "My account",
+      partnerLink: "List your business",
     },
     marketplace: {
       kicker: "Order online",
@@ -5037,7 +5050,9 @@ export const messages = {
       title: "Kepoli",
       footerTitle: "Kepoli",
       navDesktop: "Navigation principale",
-      navMobile: "Navigation principale"
+      navMobile: "Navigation principale",
+      navOrder: "Commander",
+      navBusiness: "Pour les pros",
     },
     home: {
       leadSuccess: "Votre demande a bien ete recue. Nous vous contacterons bientot.",
@@ -5311,7 +5326,18 @@ export const messages = {
       pharmacyDesc: "Médicaments et essentiels, livrés chez vous.",
       courierTitle: "Envoyer un colis",
       courierDesc: "Livraison en ville le jour même par les livreurs Kepoli.",
+      driverTitle: "Devenir livreur",
+      driverDesc: "Gagnez à chaque livraison — travaillez quand vous voulez.",
       comingSoon: "Bientôt disponible",
+    },
+    superAppHub: {
+      heroKicker: "La super-app Kepoli",
+      heroTitle: "{platform} — votre ville dans une seule app",
+      heroSubtitle: "Restauration, boutiques, courses, livraison — un portefeuille, un compte.",
+      signInCta: "Se connecter",
+      signInGreeting: "Bonjour, {name}",
+      myAccount: "Mon compte",
+      partnerLink: "Référencer mon commerce",
     },
     marketplace: {
       kicker: "Commander en ligne",

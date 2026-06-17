@@ -24,6 +24,7 @@ const WaiterLayout = () => import("../layouts/WaiterLayout.vue");
 const PlainLayout = () => import("../layouts/PlainLayout.vue");
 
 const Home = () => import("../pages/Home.vue");
+const SuperAppHub = () => import("../pages/SuperAppHub.vue");
 const DemoLanding = () => import("../pages/DemoLanding.vue");
 const CustomerLeadPage = () => import("../pages/CustomerLeadPage.vue");
 const MenuSelect = () => import("../pages/MenuSelect.vue");
@@ -92,7 +93,14 @@ const routes = [
     path: "/",
     component: LandingLayout,
     children: [
+      // Platform-public-host root → super-app consumer hub.
+      // Tenant-host root → B2B owner-marketing page (Home).
+      // The beforeEach guard below performs the host-based dispatch.
       { path: "", name: "home", component: Home, meta: { interface: "landing" } },
+      // Consumer hub — rendered at "/" on the platform public host only.
+      { path: "hub", name: "super-app-hub", component: SuperAppHub, meta: { interface: "landing" } },
+      // B2B owner-acquisition funnel — moved to /business but fully functional.
+      { path: "business", name: "business", component: Home, meta: { interface: "landing" } },
       { path: "demo", name: "demo", component: DemoLanding, meta: { interface: "landing" } },
       { path: "get-started", name: "lead", component: LeadCapture, meta: { interface: "landing" } },
       { path: "privacy", name: "privacy", component: PrivacyPolicy, meta: { interface: "landing" } },
@@ -103,6 +111,12 @@ const routes = [
       { path: "order", name: "marketplace", component: Marketplace, meta: { interface: "landing" } },
       { path: "order/:slug", name: "marketplace-menu", component: MarketplaceMenuPage, props: true, meta: { interface: "landing" } },
       { path: "order/:slug/status/:orderNumber", name: "marketplace-order-status", component: MarketplaceOrderStatus, props: true, meta: { interface: "landing" } },
+      // Consumer-facing pages that include CustomerAuthModal inline and must be
+      // reachable on the platform public host (kepoli.app) — kept under
+      // LandingLayout so the needsCustomerInterface guard never blocks them.
+      { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "landing" } },
+      { path: "ride", name: "ride", component: RidePage, meta: { interface: "landing" } },
+      { path: "send-package", name: "send-package", component: SendPackagePage, meta: { interface: "landing" } },
     ],
   },
   {
@@ -127,9 +141,6 @@ const routes = [
       // otherwise win on a hard refresh of /order/ORD-XXXXXX.
       { path: "orders/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
       { path: "find-my-order", name: "find-my-order", component: FindMyOrder, meta: { interface: "customer" } },
-      { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
-      { path: "ride", name: "ride", component: RidePage, meta: { interface: "customer" } },
-      { path: "send-package", name: "send-package", component: SendPackagePage, meta: { interface: "customer" } },
       {
         path: "menu/:slug",
         redirect: (to) => ({ name: "category", params: { slug: to.params.slug } }),
@@ -321,6 +332,15 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const toast = useToastStore();
+
+  // ── Platform-public-host root dispatch ───────────────────────────────────
+  // On the platform consumer domain (e.g. kepoli.app) the root "/" renders the
+  // super-app hub. On tenant subdomains it keeps the current B2B home page.
+  // Only redirect when actually landing on "home" to avoid infinite loops.
+  if (to.name === "home" && isPlatformPublicHost()) {
+    return { name: "super-app-hub", replace: true };
+  }
+
   const needsCustomerInterface = to.matched.some((route) => route.meta?.interface === "customer");
   if (needsCustomerInterface && isPlatformPublicHost()) {
     return { name: "demo" };

@@ -30,4 +30,5 @@ export const SERVICES = [
   { id: 'rides',    icon: '🚕', status: 'live',        kind: 'route', routeName: 'ride', accent: 'emerald' },
   { id: 'pharmacy', icon: '💊', status: 'live',        kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
   { id: 'courier',  icon: '📦', status: 'live',        kind: 'route', routeName: 'send-package', accent: 'sky'     },
+  { id: 'driver',   icon: '🏍️', status: 'live',        kind: 'route', routeName: 'driver',       accent: 'violet'  },
 ];
