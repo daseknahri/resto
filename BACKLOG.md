@@ -837,16 +837,10 @@ old client logic when absent); the storefront DISPLAY verdicts now delegate to i
       opens/closes mid-window shows the wrong price for ≤60s. Same recompute-post-cache class as is_open; lower
       severity (60s, pre-launch). Fix = recompute effective_price/happy_hour post-cache or document the 60s drift.
       (menu/views.py:425; menu/serializers.py:330). [scout meta-live-isopen]
-- [ ] **Promo-badge fill-time tz fallback forks from the recompute fallback (nit, latent)** — MarketplaceView fill
-      loop resolves the promo clock as ZoneInfo(profile.timezone or "UTC") (skips settings.TIME_ZONE) while the
-      post-cache recompute uses the tenant_local_now chain (timezone → settings.TIME_ZONE → UTC). Harmless today
-      (recompute overwrites the fill-time promo_badge; TIME_ZONE="UTC" so they coincide) but align the fill clock if
-      TIME_ZONE ever changes. (accounts/views.py promo fill). [scout marketplace-live-fields] (nit)
-- [ ] **Promo-badge fill-time tz fallback forks from the recompute fallback (nit, latent)** — MarketplaceView fill
-      loop resolves the promo clock as ZoneInfo(profile.timezone or "UTC") (skips settings.TIME_ZONE) while the
-      post-cache recompute uses the tenant_local_now chain (timezone → settings.TIME_ZONE → UTC). Harmless today
-      (recompute overwrites the fill-time promo_badge; TIME_ZONE="UTC" so they coincide) but align the fill clock if
-      TIME_ZONE ever changes. (accounts/views.py promo fill). [scout marketplace-live-fields] (nit)
+- [x] **Promo-badge fill-time tz fallback forks from the recompute fallback** — DONE: MarketplaceView fill
+      loop now calls tenant_local_now(profile) (the canonical chain: timezone → settings.TIME_ZONE → UTC)
+      instead of inlining ZoneInfo(profile.timezone or "UTC"). Fill and recompute clocks are now identical.
+      (accounts/views.py:3228). [scout marketplace-live-fields]
 - [x] **Recompute/bust on EVERY bounded-promo redemption — DONE (denorm-coherence batch)** — the checkout
       cap-strip now refresh_from_db's the post-increment use_count and only recompute_tenant_promos (which
       busts the GLOBAL list cache) when the redemption crosses the cap, not on every below-cap order.

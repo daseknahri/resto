@@ -3226,16 +3226,12 @@ class MarketplaceView(APIView):
                 # denormalized in B8); the loop is now fully in-memory.
                 try:
                     # Evaluate "live now" in the TENANT's local wall-clock time (a promo
-                    # "Tue 14:00–16:00" is tenant-local), not the server's. Per-tenant and
-                    # cheap (no DB) — just a ZoneInfo from the denormalized timezone.
-                    from datetime import datetime as _dt
-                    from zoneinfo import ZoneInfo
-                    try:
-                        _badge_now = _dt.now(ZoneInfo((getattr(profile, "timezone", "") or "UTC")))
-                    except Exception:
-                        _badge_now = _dt.now(ZoneInfo("UTC"))
+                    # "Tue 14:00–16:00" is tenant-local), not the server's. Use the
+                    # canonical tenant_local_now() chain (timezone → settings.TIME_ZONE
+                    # → UTC) so the fill clock matches the post-cache recompute clock.
                     promo_badge = _promo_badge_from_denorm(
-                        getattr(profile, "marketplace_promos", None), now_local=_badge_now
+                        getattr(profile, "marketplace_promos", None),
+                        now_local=tenant_local_now(profile),
                     )
                 except Exception:
                     promo_badge = None
