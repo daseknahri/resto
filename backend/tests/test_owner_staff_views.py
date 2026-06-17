@@ -89,6 +89,7 @@ class OwnerStaffListViewTests(SimpleTestCase):
                 "perm_manage_orders": True,
                 "perm_view_revenue": False,
                 "perm_edit_menu": False,
+                "perm_void": True,
             }
         ]
         import accounts.models as _accts
@@ -263,6 +264,7 @@ class OwnerStaffPatchViewTests(SimpleTestCase):
         u.perm_manage_orders = True
         u.perm_view_revenue = False
         u.perm_edit_menu = False
+        u.perm_void = True
         return u
 
     # ── Auth / access ─────────────────────────────────────────────────────────
@@ -302,7 +304,7 @@ class OwnerStaffPatchViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("permissions", resp.data)
         self.assertEqual(resp.data["id"], 10)
-        for key in ("manage_orders", "view_revenue", "edit_menu"):
+        for key in ("manage_orders", "view_revenue", "edit_menu", "void_orders"):
             self.assertIn(key, resp.data["permissions"])
 
     def test_save_called_with_correct_update_fields(self):

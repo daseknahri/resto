@@ -1805,6 +1805,8 @@ ownerStaff: {
   permViewRevenueDesc: "See revenue analytics, sales data and financial summaries.",
   permEditMenu: "Edit menu",
   permEditMenuDesc: "Create, edit and delete categories, dishes and options.",
+  permVoidOrders: "Void items",
+  permVoidOrdersDesc: "Remove order items and issue partial refunds. Disable for waiters who should not reverse charges.",
   saving: "Saving…",
   savePermFailed: "Failed to save permission. Please try again.",
   permissionSaved: "Permission updated.",

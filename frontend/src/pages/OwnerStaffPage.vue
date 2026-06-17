@@ -307,6 +307,11 @@ const permDefs = [
     labelKey: "ownerStaff.permEditMenu",
     descKey: "ownerStaff.permEditMenuDesc",
   },
+  {
+    key: "void_orders",
+    labelKey: "ownerStaff.permVoidOrders",
+    descKey: "ownerStaff.permVoidOrdersDesc",
+  },
 ];
 
 const STAFF_CACHE_KEY = "owner.staff";
@@ -370,7 +375,7 @@ const fmtRelative = (iso) => {
 // ── Staff list ─────────────────────────────────────────────────────────────────
 const mapStaff = (s) => ({
   ...s,
-  permissions: s.permissions ?? { manage_orders: true, view_revenue: false, edit_menu: false },
+  permissions: s.permissions ?? { manage_orders: true, view_revenue: false, edit_menu: false, void_orders: true },
 });
 
 const fetchStaff = async (force = false) => {

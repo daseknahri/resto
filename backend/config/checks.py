@@ -14,6 +14,7 @@ In DEBUG (dev / test) the in-memory fallbacks are intentional, so every check
 here returns nothing.
 """
 import os
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.checks import Error, Warning, register
@@ -60,3 +61,40 @@ def redis_and_celery_configured(app_configs, **kwargs):
         ))
 
     return issues
+
+
+@register(deploy=True)
+def redis_has_auth_credentials(app_configs, **kwargs):
+    """A6: in production the REDIS_URL must carry authentication credentials.
+
+    An unauthenticated Redis instance holding session data, OTP guards,
+    idempotency-key mutexes, and channel state with real money flowing is a
+    defence-in-depth failure.  Set Redis requirepass (or a Redis 6+ ACL user)
+    and include the credentials in REDIS_URL: redis://:yourpassword@host:port/db.
+    """
+    if settings.DEBUG:
+        return []
+
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if not redis_url:
+        return []  # Already caught by kepoli.E001.
+
+    try:
+        parsed = urlparse(redis_url)
+        has_password = bool(parsed.password)
+    except Exception:
+        has_password = False
+
+    if not has_password:
+        return [Warning(
+            "REDIS_URL has no password in production.",
+            hint=(
+                "An unauthenticated Redis instance holding session data, OTP "
+                "guards, idempotency-key mutexes, and channel-layer state is a "
+                "security risk once real money flows through the system. "
+                "Enable Redis requirepass (or a Redis 6+ ACL user) and include "
+                "the credentials in REDIS_URL: redis://:yourpassword@host:port/db."
+            ),
+            id="kepoli.W002",
+        )]
+    return []

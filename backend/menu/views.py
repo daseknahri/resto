@@ -3464,6 +3464,27 @@ def _can_view_revenue(request) -> bool:
             and user.effective_perm_view_revenue())
 
 
+def _can_void_order_item(request) -> bool:
+    """Owner, or staff with BOTH 'manage orders' and 'void orders' permissions.
+
+    Splitting void from manage_orders is a loss-prevention control: a waiter
+    can handle the order flow without being authorised to reverse items
+    (and trigger wallet refunds).
+    """
+    user = getattr(request, "user", None)
+    tenant = getattr(request, "tenant", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    from accounts.models import User
+    return (user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+            and user.effective_perm_manage_orders()
+            and user.effective_perm_void())
+
+
 def _can_edit_menu(request) -> bool:
     """Owner, or staff with the 'edit menu' permission, on this tenant."""
     user = getattr(request, "user", None)
@@ -4229,8 +4250,8 @@ class StaffVoidOrderItemView(APIView):
     _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
 
     def post(self, request, order_id, item_id, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _can_void_order_item(request):
+            return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:

@@ -2,7 +2,7 @@
 
 Verifies that tenant STAFF (waiters) are confined to their granted capabilities:
   - owner-only endpoints reject staff (_is_tenant_owner)
-  - order/revenue/menu helpers honor the per-account effective permission flags
+  - order/revenue/menu/void helpers honor the per-account effective permission flags
   - the menu-builder write permission requires 'edit menu'
   - serialize_user_session emits the correct effective permissions
 """
@@ -17,12 +17,13 @@ from menu.views import (
     _can_edit_tenant_order,
     _can_view_revenue,
     _can_edit_menu,
+    _can_void_order_item,
 )
 from menu.permissions import user_can_edit_menu
 from accounts.views import serialize_user_session
 
 
-def _staff(*, manage_orders=True, view_revenue=False, edit_menu=False, tenant_id=1):
+def _staff(*, manage_orders=True, view_revenue=False, edit_menu=False, void=True, tenant_id=1):
     u = MagicMock(spec=User)
     u.is_authenticated = True
     u.is_superuser = False
@@ -34,9 +35,11 @@ def _staff(*, manage_orders=True, view_revenue=False, edit_menu=False, tenant_id
     u.perm_manage_orders = manage_orders
     u.perm_view_revenue = view_revenue
     u.perm_edit_menu = edit_menu
+    u.perm_void = void
     u.effective_perm_manage_orders.return_value = manage_orders
     u.effective_perm_view_revenue.return_value = view_revenue
     u.effective_perm_edit_menu.return_value = edit_menu
+    u.effective_perm_void.return_value = void
     return u
 
 
@@ -83,8 +86,33 @@ class MenuPermissionGating(SimpleTestCase):
         self.assertFalse(user_can_edit_menu(_staff(edit_menu=False), tenant))
 
 
+class VoidPermissionGating(SimpleTestCase):
+    def test_staff_with_manage_and_void_can_void(self):
+        self.assertTrue(_can_void_order_item(_req(_staff(manage_orders=True, void=True))))
+
+    def test_staff_without_void_perm_cannot_void(self):
+        self.assertFalse(_can_void_order_item(_req(_staff(manage_orders=True, void=False))))
+
+    def test_staff_without_manage_orders_cannot_void(self):
+        self.assertFalse(_can_void_order_item(_req(_staff(manage_orders=False, void=True))))
+
+    def test_owner_can_void_regardless_of_void_flag(self):
+        u = _staff(manage_orders=False, void=False)
+        u.role = User.Roles.TENANT_OWNER
+        u.is_superuser = False
+        u.is_platform_admin = False
+        u.effective_perm_manage_orders.return_value = True
+        u.effective_perm_void.return_value = True
+        self.assertTrue(_can_void_order_item(_req(u)))
+
+    def test_superuser_can_always_void(self):
+        u = _staff(manage_orders=False, void=False)
+        u.is_superuser = True
+        self.assertTrue(_can_void_order_item(_req(u)))
+
+
 class SessionSerialization(SimpleTestCase):
-    def _user(self, *, owner, manage=True, revenue=False, menu=False):
+    def _user(self, *, owner, manage=True, revenue=False, menu=False, void=True):
         u = MagicMock(spec=User)
         u.id = 1
         u.username = "u"
@@ -97,15 +125,20 @@ class SessionSerialization(SimpleTestCase):
         u.perm_manage_orders = manage
         u.perm_view_revenue = revenue
         u.perm_edit_menu = menu
+        u.perm_void = void
         u.tenant = None
         return u
 
     def test_owner_session_grants_all_permissions(self):
-        data = serialize_user_session(self._user(owner=True, manage=False, revenue=False, menu=False))
-        self.assertEqual(data["permissions"], {"manage_orders": True, "view_revenue": True, "edit_menu": True})
+        data = serialize_user_session(self._user(owner=True, manage=False, revenue=False, menu=False, void=False))
+        self.assertEqual(data["permissions"], {"manage_orders": True, "view_revenue": True, "edit_menu": True, "void_orders": True})
         self.assertTrue(data["can_edit_tenant_menu"])
 
     def test_staff_session_reflects_flags(self):
-        data = serialize_user_session(self._user(owner=False, manage=True, revenue=False, menu=False))
-        self.assertEqual(data["permissions"], {"manage_orders": True, "view_revenue": False, "edit_menu": False})
+        data = serialize_user_session(self._user(owner=False, manage=True, revenue=False, menu=False, void=True))
+        self.assertEqual(data["permissions"], {"manage_orders": True, "view_revenue": False, "edit_menu": False, "void_orders": True})
         self.assertFalse(data["can_edit_tenant_menu"])
+
+    def test_staff_void_false_reflected(self):
+        data = serialize_user_session(self._user(owner=False, manage=True, revenue=False, menu=False, void=False))
+        self.assertFalse(data["permissions"]["void_orders"])

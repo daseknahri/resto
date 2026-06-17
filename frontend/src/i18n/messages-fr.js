@@ -1804,6 +1804,8 @@ ownerStaff: {
   permViewRevenueDesc: "Acceder aux analytics, donnees de vente et bilans financiers.",
   permEditMenu: "Modifier le menu",
   permEditMenuDesc: "Creer, modifier et supprimer des categories, plats et options.",
+  permVoidOrders: "Annuler des articles",
+  permVoidOrdersDesc: "Supprimer des articles de commande et emettre des remboursements partiels. Desactiver pour les serveurs ne devant pas annuler des encaissements.",
   saving: "Enregistrement…",
   savePermFailed: "Echec de l'enregistrement. Veuillez reessayer.",
   permissionSaved: "Permission mise a jour.",

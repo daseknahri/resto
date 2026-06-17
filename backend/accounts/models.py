@@ -462,6 +462,14 @@ class User(AbstractUser):
         default=False,
         help_text="Staff can create, edit and delete menu items.",
     )
+    perm_void = models.BooleanField(
+        default=True,
+        help_text=(
+            "Staff can void order items and trigger the resulting partial wallet "
+            "refund. Default True preserves existing behaviour; set False for "
+            "waiters who should handle orders but not reverse them."
+        ),
+    )
 
     @property
     def is_platform_admin(self) -> bool:
@@ -486,6 +494,10 @@ class User(AbstractUser):
     def effective_perm_edit_menu(self) -> bool:
         """Owners always have this; staff respect the flag."""
         return self.is_tenant_owner or self.perm_edit_menu
+
+    def effective_perm_void(self) -> bool:
+        """Owners always have this; staff respect the flag."""
+        return self.is_tenant_owner or self.perm_void
 
 
 class CustomerRating(models.Model):

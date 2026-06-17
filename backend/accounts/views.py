@@ -116,6 +116,7 @@ def serialize_user_session(user):
     perm_manage_orders = bool(all_access or user.perm_manage_orders)
     perm_view_revenue = bool(all_access or user.perm_view_revenue)
     perm_edit_menu = bool(all_access or user.perm_edit_menu)
+    perm_void = bool(all_access or user.perm_void)
     return {
         "id": user.id,
         "username": user.username,
@@ -130,6 +131,7 @@ def serialize_user_session(user):
             "manage_orders": perm_manage_orders,
             "view_revenue": perm_view_revenue,
             "edit_menu": perm_edit_menu,
+            "void_orders": perm_void,
         },
         "tenant": {
             "id": tenant.id,
@@ -1173,7 +1175,7 @@ class OwnerStaffListCreateView(APIView):
             .order_by("date_joined")
             .values(
                 "id", "email", "first_name", "last_name", "username", "date_joined",
-                "perm_manage_orders", "perm_view_revenue", "perm_edit_menu",
+                "perm_manage_orders", "perm_view_revenue", "perm_edit_menu", "perm_void",
             )
         )
         staff_ids = [s["id"] for s in staff]
@@ -1227,6 +1229,7 @@ class OwnerStaffListCreateView(APIView):
                     "manage_orders": s["perm_manage_orders"],
                     "view_revenue": s["perm_view_revenue"],
                     "edit_menu": s["perm_edit_menu"],
+                    "void_orders": s["perm_void"],
                 },
                 "stats": stats_map.get(s["id"], {"orders_handled": 0, "revenue": "0.00", "last_active": None}),
             }
@@ -1402,12 +1405,18 @@ class OwnerStaffDeleteView(APIView):
         if not isinstance(permissions, dict):
             return Response({"detail": "Invalid permissions payload.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
-        allowed = {"manage_orders", "view_revenue", "edit_menu"}
+        _KEY_TO_FIELD = {
+            "manage_orders": "perm_manage_orders",
+            "view_revenue": "perm_view_revenue",
+            "edit_menu": "perm_edit_menu",
+            "void_orders": "perm_void",
+        }
         update_fields = []
         for key, val in permissions.items():
-            if key in allowed and isinstance(val, bool):
-                setattr(staff_user, f"perm_{key}", val)
-                update_fields.append(f"perm_{key}")
+            field = _KEY_TO_FIELD.get(key)
+            if field and isinstance(val, bool):
+                setattr(staff_user, field, val)
+                update_fields.append(field)
 
         if update_fields:
             staff_user.save(update_fields=update_fields)
@@ -1418,6 +1427,7 @@ class OwnerStaffDeleteView(APIView):
                 "manage_orders": staff_user.perm_manage_orders,
                 "view_revenue": staff_user.perm_view_revenue,
                 "edit_menu": staff_user.perm_edit_menu,
+                "void_orders": staff_user.perm_void,
             },
         })
 
