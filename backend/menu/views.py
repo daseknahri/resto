@@ -5044,7 +5044,8 @@ class OwnerDriverCashoutLookupView(APIView):
         )
         if req is None:
             try:
-                _cache.set(_fail_key, (_cache.get(_fail_key) or 0) + 1, CASHOUT_CONFIRM_LOCK_SECONDS)
+                _cache.add(_fail_key, 0, CASHOUT_CONFIRM_LOCK_SECONDS)
+                _cache.incr(_fail_key)
             except Exception:
                 pass
             return Response({"detail": "No pending cash-out for that code.", "code": "not_found"},

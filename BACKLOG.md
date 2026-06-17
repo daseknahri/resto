@@ -65,8 +65,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       LoginView 202 second-factor + frontend enrollment (QR + backup codes) & login verify step. DEFAULT-OFF
       (MFA_REQUIRED_ROLES empty + opt-in enrollment ⇒ live login byte-for-byte unchanged); reviews caught+fixed TOTP
       replay-within-window, pending-session fail-closed, narrowed login DB-except, side-effect-free /mfa/status/.
-      OWNER: set DJANGO_MFA_REQUIRED_ROLES to enforce per role when ready. **STILL TODO (R7a follow-up): migrate the
-      cashout/voucher lockouts to the same atomic add+incr (they share the older racy get+set).**
+      OWNER: set DJANGO_MFA_REQUIRED_ROLES to enforce per role when ready. R7a follow-up DONE: all
+      lockout counters now use atomic cache.add()+cache.incr() — voucher (accounts/views.py), cashout
+      confirm (driver_service.py), MFA (mfa_views.py), and the last holdout (cashout LOOKUP, menu/views.py)
+      migrated from racy get+set in this session.
 - [x] **R8 (P1) Fix frontend Sentry release tag — DONE (with prod-harden-load)** — sentry.js now reads
       VITE_SENTRY_RELEASE first (the var the Dockerfile/compose actually inject), fallback VITE_APP_VERSION.
       Frontend lint+build green. **DEPLOY STEP (owner/ops):** set VITE_SENTRY_RELEASE=$SOURCE_COMMIT as the frontend
@@ -304,77 +306,50 @@ The OPS-5g scout EXPLICITLY confirmed the core money/IDOR/wallet-idempotency sur
 loyalty customer-scoped; voucher/loyalty throttled; cash-out lockout; push-sub scoped; WS ownership;
 OG cache-key; admin PII gated; SSRF allow_redirects=False; upload re-encode). These 5 are the
 ADJACENT remainder — close them and the OPS-5x security program is done; then pivot to Phase-A eng.
-- [ ] **Customer login session fixation — no cycle_key** — phone-OTP (accounts/views.py:594), Google
-      (:657), email-OTP (:933) write request.session['customer_id'] WITHOUT request.session.cycle_key();
-      staff login() rotates but customer paths don't, and SESSION_COOKIE_DOMAIN=.{TENANT_DOMAIN_SUFFIX}
-      shares the cookie across all tenant subdomains → an anonymous/planted session id survives the
-      anon→authenticated-customer jump. Fix: cycle_key() immediately before setting customer_id on all
-      three finalizers (and the staff-conflict-cleared path). [scout OPS-5g]
-- [ ] **OTP request SMS-bombing / Twilio toll fraud — IP-only throttle, no per-recipient cap/cooldown** —
-      CustomerPhoneRequestView (accounts/views.py:486-508) + CustomerEmailRequestView (:870-886) fire a
-      paid SMS/email on every call, guarded only by an IP-keyed throttle; no per-phone/email cap, no
-      resend cooldown, and a re-request resets attempts=0. Fix: per-recipient counter + short resend
-      cooldown in cache (key on phone/email), independent of the IP throttle. Direct revenue drain
-      pre-PSP. [scout OPS-5g]
-- [ ] **Auth OTP uses random.randint (non-CSPRNG)** — phone (accounts/views.py:499) + email (:878) OTPs
-      are f"{random.randint(100000,999999)}" (Mersenne Twister, state-recoverable) — these are full
-      login credentials. OPS-5g hardened the lower-value VOUCHER code to secrets but left the AUTH OTP on
-      random. Fix: secrets.randbelow(900000)+100000 (mirror menu/views.py:1911 _generate_delivery_code).
-      [scout OPS-5g]
-- [ ] **Cancel-refund idempotency on a NON-namespaced order_number (missed instance — money-loss)** —
-      _refund_wallet_for_cancelled_order (menu/views.py:5971) bypasses credit_wallet (direct balance
-      mutation) and guards replay with _already_refunded() filtering on reference=order.order_number +
-      note (5994-5999). order_number is only schema-unique → a repeat cross-tenant customer with a
-      colliding order_number has a legit tenant-B refund SILENTLY SKIPPED (matches tenant-A's row). Fix:
-      route through credit_wallet with a schema-namespaced key (e.g. f"cancelrefund:{schema}:{order.id}")
-      like the sibling refund paths now do. [scout OPS-5g] (the one idempotency site 5g missed)
-- [ ] **Cash-out code + customer phone logged in cleartext via get_full_path()** —
-      RequestLoggingMiddleware logs request.get_full_path() incl. query string on every request
-      (config/middleware.py:183); OwnerDriverCashoutLookupView takes the 6-digit cash-out CODE via ?code=
-      (menu/views.py:4919, a bearer credential) and CustomerOrdersByPhoneView takes ?phone= (:3199) →
-      live codes + PII land in app logs / Sentry breadcrumbs. Fix: scrub known-sensitive query params
-      (code/phone/token/credential/delivery_code) before logging (log path + redacted querystring); prefer
-      moving the cash-out lookup code to a POST body. [scout OPS-5g]
+- [x] **Customer login session fixation — no cycle_key** — DONE: cycle_key() called immediately before
+      setting customer_id on phone-OTP, Google, email-OTP, and the staff-conflict-cleared path. Session
+      rotation prevents anonymous/planted session ids surviving the anon→authenticated-customer jump.
+- [x] **OTP request SMS-bombing / Twilio toll fraud — IP-only throttle, no per-recipient cap/cooldown** —
+      DONE: per-recipient counter + short resend cooldown in cache (key on phone/email), independent of the
+      IP throttle; a re-request no longer resets attempts=0. Direct revenue drain path closed.
+- [x] **Auth OTP uses random.randint (non-CSPRNG)** — DONE: phone + email OTPs now use
+      secrets.randbelow(900000)+100000 (mirrors menu/views.py:1911 _generate_delivery_code). Mersenne
+      Twister replaced on the full-login-credential path.
+- [x] **Cancel-refund idempotency on a NON-namespaced order_number (missed instance — money-loss)** —
+      DONE: _refund_wallet_for_cancelled_order now routes through credit_wallet with
+      f"cancelrefund:{schema}:{order.id}" (schema-namespaced) like all sibling refund paths.
+- [x] **Cash-out code + customer phone logged in cleartext via get_full_path()** — DONE:
+      RequestLoggingMiddleware scrubs SENSITIVE_QUERY_PARAMS (code/phone/token/credential/delivery_code)
+      via _safe_path() before logging; live bearer credentials and PII no longer appear in app logs /
+      Sentry breadcrumbs.
 
 ### OPS-5g — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5f scout CONFIRMED the previously-fixed dimensions are clean (WS auth, driver/ride state
 machines re-check approval, admin money caps, core wallet service, profile allowlist, IP throttles)
 and said the remaining gaps cluster on (1) tenant-schema-derived idempotency keys and (2) the two
 unthrottled redemption endpoints. Closing these should largely complete the money/IDOR hardening.
-- [ ] **Cross-tenant idempotency-key collision on customer/staff order-payment + refund keys (HIGH —
-      free order / unrecorded refund)** — WalletTransaction is shared-schema so idempotency_key is GLOBAL,
-      but three money calls derive keys from tenant-schema-local ids with NO tenant namespace:
-      CustomerOrderPayWalletView f"order-pay-{order_number}" (menu/views.py:9560; order_number is 24-bit,
-      per-schema-unique), the order-payment debit f"orderpay:{payment.id}" (menu/views.py:4823), and the
-      void refund f"voiditem:{item_id}" (menu/views.py:4366). A repeat cross-tenant customer hits a
-      colliding key → the OPS-5f guard (customer_id match) PASSES → silent replay → order marked PAID with
-      no money moved (free order). Fix: namespace every wallet idempotency_key derived from a tenant-schema
-      id with the tenant schema_name (mirror ownercharge:/ownertopup:). This is the SAME class fixed for
-      owner/admin in 5e/5f, missed for the customer/staff paths. [scout OPS-5f] **(HIGH — do first)**
-- [ ] **Loyalty-redeem replay trusts a client-supplied GLOBAL key with no customer filter (IDOR)** —
-      CustomerLoyaltyRedeemView (menu/views.py:8985) looks up the idempotency replay GLOBALLY
-      (_WTM.objects.filter(idempotency_key=_idem, type=LOYALTY).first(), menu/views.py:9028 + 9080-9082) with
-      NO customer filter, and returns _prior.amount (9037) → an attacker supplying another customer's key
-      gets that customer's redemption disclosed. It bypasses credit_wallet so it never inherits the OPS-5f
-      collision guard. Fix: add customer=_customer to both replay lookups (or route through credit_wallet) +
-      a throttle. [scout OPS-5f]
-- [ ] **Voucher redemption no throttle + no failed-attempt lockout (brute-force to money)** —
-      CustomerWalletRedeemVoucherView (accounts/views.py:2235) has no throttle_classes; a voucher code maps
-      directly to wallet credit. Fix: per-customer throttle (voucher_redeem ~10/hour) + exponential lockout
-      on consecutive invalid codes (mirror driver_cashout_confirm). [scout OPS-5f]
-- [ ] **Voucher codes use a non-CSPRNG (random.choices, Mersenne Twister) for a bearer money token** —
-      WalletVoucher.generate_code() (accounts/models.py:412-419). Fix: secrets.choice / secrets.token_urlsafe
-      (the rest of the codebase uses secrets for tokens). [scout OPS-5f]
-- [ ] **Wallet-paid rides take no hold/escrow at booking** — RideCreateView (ride_views.py:332-342) checks
-      balance at create but debits only at completion (ride_service.py:108-121), silently flipping to cash on
-      shortfall; the rider can spend the balance in between (or book multiple wallet rides they can't pay).
-      Fix: authorize/hold the fare at booking (debit to held, refund on cancel) OR re-verify+debit atomically
-      with a rider-visible "switched to cash" signal. [scout OPS-5f] (ops/escrow — medium)
-- [ ] **OG bot endpoint cache key trusts spoofable X-Forwarded-Host + raw ?path (cache fan-out/poisoning)** —
-      OGView (og_views.py:107-115) keys ogpage:{host}:{path} on get_host() + raw path; the OUTPUT is safe
-      (canonical re-derived from tenant domain, escaped, noindex) but the cache key isn't. Fix: key on the
-      RESOLVED tenant id + a length-bounded sanitized path; reject non-allowlisted hosts before caching.
-      [scout OPS-5f] (cache — medium)
+- [x] **Cross-tenant idempotency-key collision on customer/staff order-payment + refund keys (HIGH)** —
+      DONE: all three paths schema-namespaced: CustomerOrderPayWalletView → f"orderpay_checkout:{schema}:{order.id}",
+      order-payment debit → f"orderpay:{schema}:{payment.id}", void refund → f"voiditem:{schema}:{item_id}".
+      The OPS-5f customer_id ownership assertion was already in credit_wallet/debit_wallet; namespace
+      closes the remaining cross-tenant collision window.
+- [x] **Loyalty-redeem replay trusts a client-supplied GLOBAL key with no customer filter (IDOR)** —
+      DONE: both replay lookups in CustomerLoyaltyRedeemView now filter customer=_customer; throttle added
+      (CustomerLoyaltyRedeemThrottle). Attacker can no longer supply another customer's key to get their
+      redemption amount disclosed.
+- [x] **Voucher redemption no throttle + no failed-attempt lockout (brute-force to money)** —
+      DONE: VoucherRedeemThrottle added to CustomerWalletRedeemVoucherView; exponential lockout on
+      consecutive invalid codes mirrors driver_cashout_confirm pattern.
+- [x] **Voucher codes use a non-CSPRNG (random.choices, Mersenne Twister) for a bearer money token** —
+      DONE: WalletVoucher.generate_code() now uses secrets.choice (mirrors the rest of the codebase).
+- [x] **Wallet-paid rides take no hold/escrow at booking** — DONE: _do_settle (ride_service.py:128+)
+      calls debit_wallet which holds a select_for_update lock on the rider row and re-checks the balance
+      atomically inside the completion transaction — this is the authoritative re-verification; a rider who
+      drained their wallet after booking is caught here. InsufficientFunds falls back to cash with an
+      explicit payments_logger.warning and cash_fallback=True flag (rider-visible in serialization).
+- [x] **OG bot endpoint cache key trusts spoofable X-Forwarded-Host + raw ?path (cache fan-out/poisoning)** —
+      DONE: _og_cache_key(tenant, path) in og_views.py uses the resolved tenant.id (not spoofable Host)
+      and a sanitized + bounded (128 chars) path. Non-allowlisted hosts are rejected before caching.
 
 ### OPS-5f — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5e scout surfaced these (file:line in scout output; verify first). Several are HIGH.
