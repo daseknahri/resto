@@ -242,6 +242,7 @@ customerLayout: {
   navCart: "Cart",
   navReserve: "Reserve",
   navAccount: "Account",
+  exploreKepoli: "Restaurants, shops & more",
   navDesktop: "Main navigation",
   navMobile: "Main navigation",
   trackOrderBanner: "Order #{number} — Tap to track",

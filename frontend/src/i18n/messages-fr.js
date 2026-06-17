@@ -241,6 +241,7 @@ customerLayout: {
   navCart: "Panier",
   navReserve: "Reserver",
   navAccount: "Compte",
+  exploreKepoli: "Restaurants, boutiques et plus",
   navDesktop: "Navigation principale",
   navMobile: "Navigation principale",
   trackOrderBanner: "Commande #{number} — Suivre",

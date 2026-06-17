@@ -212,6 +212,7 @@ const arabicMessages = {
     "navCart": "السلة",
     "navReserve": "الحجز",
     "navAccount": "الحساب",
+    "exploreKepoli": "مطاعم ومتاجر والمزيد",
     "navDesktop": "التنقل الرئيسي",
     "navMobile": "التنقل الرئيسي",
     "trackOrderBanner": "الطلب #{number} — تتبع طلبك",

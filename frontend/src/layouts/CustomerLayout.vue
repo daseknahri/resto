@@ -128,6 +128,35 @@
           </div>
         </Transition>
       </RouterView>
+
+      <!-- Super-app discovery: a tasteful "Kepoli · explore more" strip links the
+           restaurant storefront back into the wider super-app (so tenant pages are
+           no longer a dead-end), plus a Drive switch for drivers. Inside <main> so
+           it inherits the bottom-dock clearance. -->
+      <div class="px-4 pt-6">
+        <div class="ui-panel-soft flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <RouterLink
+            :to="{ name: 'super-app-hub' }"
+            class="ui-touch-target inline-flex items-center gap-2 text-xs text-slate-400 transition-colors hover:text-slate-200"
+          >
+            <span class="font-semibold text-slate-300">{{ platformName }}</span>
+            <span aria-hidden="true" class="text-slate-600">·</span>
+            <span class="inline-flex items-center gap-1">
+              {{ t('customerLayout.exploreKepoli') }}
+              <AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
+            </span>
+          </RouterLink>
+          <RouterLink
+            v-if="customerStore.customer?.is_driver"
+            to="/driver"
+            :aria-label="t('landingLayout.navDrive')"
+            class="ui-btn-outline ui-touch-target inline-flex items-center gap-1.5 border-emerald-500/40 px-3 py-1.5 text-[11px] text-emerald-200 hover:border-emerald-400/70"
+          >
+            <AppIcon name="truck" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{{ t('landingLayout.navDrive') }}</span>
+          </RouterLink>
+        </div>
+      </div>
     </main>
 
     <nav class="ui-bottom-dock md:hidden" :aria-label="t('customerLayout.navMobile')">
@@ -162,6 +191,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import { isRestaurantOpenNow } from "../lib/businessHours";
+import { PLATFORM_NAME } from "../lib/brand";
 import AppIcon from "../components/AppIcon.vue";
 import ChargeApprovalWatcher from "../components/ChargeApprovalWatcher.vue";
 import CurrencySelector from "../components/CurrencySelector.vue";
@@ -176,6 +206,7 @@ import { useTenantStore } from "../stores/tenant";
 
 const cart = useCartStore();
 const customerStore = useCustomerStore();
+const platformName = PLATFORM_NAME;
 const currencyStore = useCurrencyStore();
 const tenant = useTenantStore();
 const route = useRoute();
