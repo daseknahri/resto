@@ -6736,7 +6736,7 @@ class OwnerOrderExportView(APIView):
             "table_label", "customer_name", "customer_phone",
             "customer_note", "owner_note", "delivery_address",
             "items", "void_items", "subtotal", "delivery_fee", "tip_amount",
-            "loyalty_discount", "promotion_discount", "wallet_amount_paid", "paid_at", "total", "currency",
+            "loyalty_discount", "promotion_discount", "wallet_amount_paid", "paid_at", "total", "commission_amount", "currency",
             "recorded_by_names",
         ])
 
@@ -6766,7 +6766,7 @@ class OwnerOrderExportView(APIView):
             recorded_by_names = ", ".join(
                 sorted({p.recorded_by_name for p in order.payments.all() if p.recorded_by_name})
             )
-            subtotal = order.total - order.delivery_fee
+            subtotal = order.total - order.delivery_fee - (order.tip_amount or Decimal("0"))
             writer.writerow([
                 order.order_number,                          # system-generated — safe
                 timezone.localtime(order.created_at).isoformat(),
@@ -6789,6 +6789,7 @@ class OwnerOrderExportView(APIView):
                 str(order.wallet_amount_paid or "0"),
                 timezone.localtime(order.paid_at).isoformat() if order.paid_at else "",
                 str(order.total),
+                str(order.commission_amount or "0"),
                 order.currency or "",
                 _csv_safe(recorded_by_names),                # Contract F: who recorded the payment
             ])

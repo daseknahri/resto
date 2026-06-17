@@ -265,28 +265,28 @@ All items below verified as DONE by reading the actual source (not commit hashes
       constant in useSeoMeta.js. [scout OPS-6]
 - [x] **Wizard step-nav has no forward-progression guard** — DONE: highestCompleted ref +
       forward-jump guard in Wizard.vue (lines 118-177). [scout OPS-6]
-- [ ] **Activate.vue: <main> nested in <section> (HTML-invalid) + decorative card shows the
-      post-activation success string as pre-activation copy** (confusing). (Activate.vue:3/17/24).
-      [scout OPS-6]
-- [ ] **a11y keyboard: Cart map dialog doesn't move focus in on open; Menu.vue review carousel
-      not keyboard-reachable (hidden scrollbar, no tabindex)**. Standard APG dialog focus +
-      tabindex/arrow handlers. (Cart.vue:883/1101; Menu.vue:277). [scout OPS-6]
-- [ ] **Pharmacy option has no "parapharmacie / no Rx" disclaimer** in the wizard — qualified
-      leads churn post-signup. One-line hint. (StepPublish.vue:107). [scout OPS-6]
+- [x] **Activate.vue: <main> nested in <section> (HTML-invalid)** — DONE (verified): no
+      `<main>` in Activate.vue; structure is div>div>section+div. Decorative cards show
+      title/description (not the success copy). [scout OPS-6]
+- [x] **a11y keyboard: Cart map dialog + Menu.vue review carousel** — DONE: Cart.vue has APG
+      dialog pattern (role=dialog aria-modal + focusable query + restore-on-close, lines 917/1122);
+      Menu.vue carousel has tabindex=0 + aria-label + arrow-key handler (lines 279-284). [scout OPS-6]
+- [x] **Pharmacy option has no "parapharmacie / no Rx" disclaimer** — DONE: StepPublish.vue
+      shows pharmacyParapharmacieHint block when business_type == 'pharmacy'. [scout OPS-6]
 - [x] **<noscript> is English-only** — DONE: index.html noscript has FR, AR, and support
       mailto link. [scout OPS-6]
 - [x] **StaffChangePasswordView has no throttle** — DONE: StaffChangePasswordThrottle on
       accounts/views.py:1449. [review OPS-6 minor]
 - [x] **Print rule .ui-command-deck button{display:none} also hides OwnerLaunchSuccess buttons**
       — DONE: `button:not(.print-keep)` rule in tailwind.css:2893-2901 excludes .print-keep. [review OPS-6 minor]
-- [ ] **Cart loyalty_/schedule_/promo_not_found branches still pass raw data.detail to customers**
-      — extend the OPS-6 generic-message mapping to these named branches. (Cart.vue:1951/1982/1987).
-      [review OPS-6 minor]
-- [ ] **priceZeroWarningBody says "the following" but lists no dish names** — backend
-      publish_warnings returns only a count; either list slugs or reword. (messages.js;
-      tenancy/serializers.py:210). [review OPS-6 minor]
-- [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
-      default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
+- [x] **Cart loyalty_/schedule_/promo_not_found branches still pass raw data.detail** — DONE:
+      all three code branches return localized t() strings with explicit "Never surface raw
+      backend detail" comments (Cart.vue:2034/2064/2071). [review OPS-6 minor]
+- [x] **priceZeroWarningBody says "the following" but lists no dish names** — DONE: message
+      was reworded to "Some published items have no price set…Review your prices" — no
+      "the following" phrasing remains. [review OPS-6 minor]
+- [x] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** — DONE: help
+      text now says "for example https://menu.example.com". [grep OPS-6]
 
 ### OPS-5x SECURITY PROGRAM — COMPLETE (2026-06-14)
 OPS-5/5b/5c/5d/5e/5f/5g/5h shipped. The OPS-5h final convergence scout audited every money/auth/IDOR/
@@ -611,19 +611,18 @@ Several are HIGH. file:line in scout output; verify before acting.
       can't offer a negotiated/promo rate without a code change for ALL tenants, and historical
       orders can't be re-audited (no rate_applied column). (accounts/views.py:3020;
       models.py:452). → OPS-5 (billing). [scout OPS-2]
-- [ ] **Commission statement buckets by UTC month** — created_at__year/month with no tzinfo →
-      a late-night month-boundary order lands on the wrong monthly invoice for non-UTC tenants.
-      (menu/views.py:7384). → OPS-5 / tz-cleanup. [scout OPS-2]
+- [x] **Commission statement buckets by UTC month** — DONE (verified code-read): view now
+      builds [month_start, next_month_start) range in the tenant timezone (ZoneInfo) and filters
+      created_at__gte/__lt on it (menu/views.py:8067-8083 with comment "A5"). [scout OPS-2]
 - [ ] **legacy split cash = total − wallet silently clamped at 0** — if a tip is added after a
       wallet settle, legacy_cash can go negative and max(0) hides it, so cash+wallet no longer
       reconciles to gross. A pro ledger should assert reconciliation, not clamp. (revenue.py
       :63/77). → OPS-4 (reconciliation assertions). [scout OPS-2]
 - [x] **OrderItem has no voided_by_user_id** — DONE (5b7e013): added IntegerField null/blank;
       migration 0061; StaffVoidOrderItemView stamps it; Z-report/CSV now exposes it. [scout OPS-2]
-- [ ] **Order CSV "subtotal" column includes tip + nets discounts** — subtotal = total −
-      delivery_fee, but total includes tip; an owner summing the column to get food sales is
-      off by total tips. Also no commission_amount column. (menu/views.py:6199). → OPS-6
-      (CSV/reporting polish). [scout OPS-2]
+- [x] **Order CSV "subtotal" column includes tip + nets discounts** — DONE: subtotal now
+      = total − delivery_fee − tip_amount (pure food net after discounts); commission_amount
+      column added to CSV export. (menu/views.py OwnerOrderExportView). [scout OPS-2]
 - [ ] **Z-report voids loop + dashboard/CSV N+1** — voids loop materializes items with a
       select_related('order') join per row (use annotate + DB Sum for the total); OwnerOrderExport
       iterates order.items.all() twice + payments per row without prefetch. Perf at scale.
