@@ -250,23 +250,32 @@ class OwnerRatingListViewTests(SimpleTestCase):
 
     # ── Response shape ────────────────────────────────────────────────────────
 
+    def _mock_qs(self, agg=None):
+        """Build a Rating.objects chain mock that satisfies the paginated view."""
+        qs = MagicMock()
+        qs.filter.return_value = qs  # date-filter chains collapse back to same qs
+        qs.aggregate.return_value = agg or {"avg": None, "total": 0}
+        qs.__getitem__ = lambda s, k: []  # slicing for pagination returns []
+        return qs
+
     @patch("menu.views.Rating.objects")
     def test_response_includes_count_average_and_ratings(self, mock_ratings):
-        mock_ratings.select_related.return_value.order_by.return_value = []
-        mock_ratings.aggregate.return_value = {"avg": 4.2, "total": 10}
+        qs = self._mock_qs({"avg": 4.2, "total": 10})
+        mock_ratings.select_related.return_value.order_by.return_value = qs
 
         resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        for key in ("count", "average", "ratings"):
+        for key in ("count", "average", "ratings", "page", "page_size", "has_more"):
             self.assertIn(key, resp.data, f"Missing key: {key}")
         self.assertEqual(resp.data["count"], 10)
         self.assertEqual(resp.data["average"], 4.2)
+        self.assertFalse(resp.data["has_more"])  # 10 > 0+50 → False
 
     @patch("menu.views.Rating.objects")
     def test_response_with_no_ratings(self, mock_ratings):
-        mock_ratings.select_related.return_value.order_by.return_value = []
-        mock_ratings.aggregate.return_value = {"avg": None, "total": 0}
+        qs = self._mock_qs({"avg": None, "total": 0})
+        mock_ratings.select_related.return_value.order_by.return_value = qs
 
         resp = self._get()
 
@@ -274,3 +283,36 @@ class OwnerRatingListViewTests(SimpleTestCase):
         self.assertEqual(resp.data["count"], 0)
         self.assertIsNone(resp.data["average"])
         self.assertEqual(resp.data["ratings"], [])
+        self.assertFalse(resp.data["has_more"])
+
+    @patch("menu.views.Rating.objects")
+    def test_pagination_has_more_true(self, mock_ratings):
+        qs = self._mock_qs({"avg": 3.5, "total": 20})
+        mock_ratings.select_related.return_value.order_by.return_value = qs
+
+        resp = self._get(params={"page": "1", "page_size": "10"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["page"], 1)
+        self.assertEqual(resp.data["page_size"], 10)
+        self.assertTrue(resp.data["has_more"])  # 20 > 0+10 → True
+
+    @patch("menu.views.Rating.objects")
+    def test_invalid_from_date_returns_400(self, mock_ratings):
+        resp = self._get(params={"from": "not-a-date"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("menu.views.Rating.objects")
+    def test_invalid_to_date_returns_400(self, mock_ratings):
+        resp = self._get(params={"to": "99-99-9999"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("menu.views.Rating.objects")
+    def test_date_filter_applied_to_queryset(self, mock_ratings):
+        qs = self._mock_qs({"avg": 5.0, "total": 3})
+        mock_ratings.select_related.return_value.order_by.return_value = qs
+
+        resp = self._get(params={"from": "2026-01-01", "to": "2026-06-01"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(qs.filter.call_count, 2)  # once for from, once for to

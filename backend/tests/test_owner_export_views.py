@@ -85,6 +85,7 @@ class OwnerOrderExportViewTests(SimpleTestCase):
             qs = MagicMock()
             mock_order.objects.prefetch_related.return_value.order_by.return_value = qs
             qs.filter.return_value = qs
+            qs.count.return_value = 0
             qs.__getitem__ = lambda s, k: []
             mock_order.Status = MagicMock()
             mock_order.Status.__iter__ = lambda s: iter([])  # empty status set
@@ -99,6 +100,7 @@ class OwnerOrderExportViewTests(SimpleTestCase):
             qs = MagicMock()
             mock_order.objects.prefetch_related.return_value.order_by.return_value = qs
             qs.filter.return_value = qs
+            qs.count.return_value = 0
             qs.__getitem__ = lambda s, k: []
             mock_order.Status = MagicMock()
             mock_order.Status.__iter__ = lambda s: iter([])
@@ -112,12 +114,41 @@ class OwnerOrderExportViewTests(SimpleTestCase):
             qs = MagicMock()
             mock_order.objects.prefetch_related.return_value.order_by.return_value = qs
             qs.filter.return_value = qs
+            qs.count.return_value = 0
             qs.__getitem__ = lambda s, k: []
             mock_order.Status = MagicMock()
             mock_order.Status.__iter__ = lambda s: iter([])
             resp = self._get()
 
         self.assertIn("attachment", resp.get("Content-Disposition", ""))
+
+    def test_export_headers_not_truncated(self):
+        with patch("menu.views.Order") as mock_order:
+            qs = MagicMock()
+            mock_order.objects.prefetch_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.count.return_value = 42
+            qs.__getitem__ = lambda s, k: []
+            mock_order.Status = MagicMock()
+            mock_order.Status.__iter__ = lambda s: iter([])
+            resp = self._get()
+
+        self.assertEqual(resp.get("X-Kepoli-Export-Total"), "42")
+        self.assertEqual(resp.get("X-Kepoli-Export-Truncated"), "false")
+
+    def test_export_headers_truncated(self):
+        with patch("menu.views.Order") as mock_order:
+            qs = MagicMock()
+            mock_order.objects.prefetch_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.count.return_value = 6000
+            qs.__getitem__ = lambda s, k: []
+            mock_order.Status = MagicMock()
+            mock_order.Status.__iter__ = lambda s: iter([])
+            resp = self._get()
+
+        self.assertEqual(resp.get("X-Kepoli-Export-Total"), "6000")
+        self.assertEqual(resp.get("X-Kepoli-Export-Truncated"), "true")
 
 
 # ── OwnerCommissionStatementView ──────────────────────────────────────────────

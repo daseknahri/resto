@@ -6705,8 +6705,15 @@ class OwnerOrderExportView(APIView):
         tenant_slug = getattr(getattr(request, "tenant", None), "slug", "export")
         filename = f"{tenant_slug}-orders-{timezone.now():%Y%m%d}.csv"
 
+        # Compute total before slicing so we can signal truncation to the caller.
+        _EXPORT_CAP = 5000
+        total_count = qs.count()
+        truncated = total_count > _EXPORT_CAP
+
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["X-Kepoli-Export-Total"] = str(total_count)
+        response["X-Kepoli-Export-Truncated"] = "true" if truncated else "false"
         # Prepend the UTF-8 BOM (\xef\xbb\xbf) so Excel on Windows opens the
         # file as UTF-8 rather than defaulting to the system code page (Latin-1).
         # This prevents garbled display of Arabic / French characters in names.
@@ -6725,7 +6732,7 @@ class OwnerOrderExportView(APIView):
             "recorded_by_names",
         ])
 
-        for order in qs[:5000]:
+        for order in qs[:_EXPORT_CAP]:
             # Iterate items exactly once from the prefetch cache; split into active/voided.
             # A second call to order.items.all() would re-hit the DB (N+1).
             _all_items = list(order.items.all())
@@ -7630,11 +7637,16 @@ class OwnerRatingListView(APIView):
     """
     GET /api/owner/ratings/
 
-    Returns all ratings for the current tenant, newest first.
-    Supports ?format=csv for a spreadsheet export.
+    Returns ratings for the current tenant, newest first.
+    Supports ?format=csv for a spreadsheet export with optional ?from/to date filters.
+
+    JSON pagination: ?page=<n>&page_size=<n> (default page_size=50, max 200).
 
     Requires: authenticated tenant owner or staff.
     """
+
+    _DEFAULT_PAGE_SIZE = 50
+    _MAX_PAGE_SIZE = 200
 
     permission_classes = [IsAuthenticated]
 
@@ -7648,14 +7660,46 @@ class OwnerRatingListView(APIView):
             .order_by("-created_at")
         )
 
-        # CSV export
+        # Optional date range (ISO YYYY-MM-DD) — applies to both CSV and JSON
+        from_raw = (request.query_params.get("from") or "").strip()
+        to_raw = (request.query_params.get("to") or "").strip()
+        if from_raw:
+            try:
+                from_date = datetime.strptime(from_raw, "%Y-%m-%d").date()
+                qs = qs.filter(created_at__date__gte=from_date)
+            except ValueError:
+                return Response({"detail": "Invalid 'from' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if to_raw:
+            try:
+                to_date = datetime.strptime(to_raw, "%Y-%m-%d").date()
+                qs = qs.filter(created_at__date__lte=to_date)
+            except ValueError:
+                return Response({"detail": "Invalid 'to' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # CSV export — returns the full filtered set (no row cap)
         if request.query_params.get("format", "").lower() == "csv":
             return self._csv_response(qs)
 
-        # Aggregate summary
+        # Aggregate summary (over the filtered set)
         from django.db.models import Avg, Count
-        agg = Rating.objects.aggregate(avg=Avg("score"), total=Count("id"))
+        agg = qs.aggregate(avg=Avg("score"), total=Count("id"))
         average = round(float(agg["avg"]), 1) if agg["avg"] is not None else None
+        total = agg["total"] or 0
+
+        # Pagination
+        try:
+            page_size = int(request.query_params.get("page_size") or self._DEFAULT_PAGE_SIZE)
+            page_size = max(1, min(page_size, self._MAX_PAGE_SIZE))
+        except (ValueError, TypeError):
+            page_size = self._DEFAULT_PAGE_SIZE
+        try:
+            page = int(request.query_params.get("page") or 1)
+            page = max(1, page)
+        except (ValueError, TypeError):
+            page = 1
+
+        offset = (page - 1) * page_size
+        page_qs = qs[offset: offset + page_size]
 
         ratings = [
             {
@@ -7668,12 +7712,15 @@ class OwnerRatingListView(APIView):
                 "owner_reply": r.owner_reply or "",
                 "owner_reply_at": r.owner_reply_at.isoformat() if r.owner_reply_at else None,
             }
-            for r in qs[:500]
+            for r in page_qs
         ]
 
         return Response({
-            "count": agg["total"],
+            "count": total,
             "average": average,
+            "page": page,
+            "page_size": page_size,
+            "has_more": total > offset + page_size,
             "ratings": ratings,
         })
 

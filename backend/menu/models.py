@@ -647,6 +647,13 @@ class OrderItem(models.Model):
 
     class Meta:
         ordering = ("id",)
+        indexes = [
+            models.Index(
+                condition=models.Q(is_voided=True),
+                fields=["voided_at"],
+                name="menu_orderitem_voided_at_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.qty}x {self.dish_name}"
