@@ -208,20 +208,22 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       filters on it. Review minor, explicitly "not a current issue".
 
 ## Platform / ops
-- [ ] **Notification provider-level retry** — senders record 'failed' but don't raise,
-      so Celery retry never triggers. Old Phase-4 follow-up.
+- [x] **Notification provider-level retry — SMS DONE** — SmsProviderError (RuntimeError subclass)
+      added to menu/sms.py; raised on Twilio non-2xx / network exceptions; permanent failures
+      (no credentials, invalid phone) return False without raising (no pointless retry). The
+      existing autoretry_for=(Exception,) on the Celery task now naturally retries transient
+      SMS failures up to 3× with exponential backoff. +2 utility tests +2 task tests. Push/
+      WhatsApp/email senders still swallow (lower-critical channels, future follow-up if needed).
 - [ ] **Stripe wallet top-up seam** — build when owner has a PSP account (owner said
       not yet). Webhook → credit_wallet with event-id idempotency. Doc Phase 3.
 - [ ] **Driver bank-transfer payouts** — needs a PSP. Memory note.
 - [ ] **nginx bot-branch syntax** — could not run `nginx -t` locally (no docker);
       verify container start + checklist curls on the NEXT deploy, then tick this.
-- [ ] **Local Postgres dev environment** — 25 DB-backed tests error locally (auth
-      fail); a docker-compose dev DB would let the full suite run everywhere.
+- [x] **Local Postgres dev environment** — DONE (docker-compose.dev.yml, R21 above).
 - [ ] **_batch_business_types singleton calls** — 4 single-job endpoints pay one extra
       Profile query each. Review minor, functionally correct.
-- [ ] **SEO beyond OG** — sitemap, per-tenant meta description for Google (the OG view
-      serves social bots only; googlebot isn't routed to it by design — decide whether
-      it should be).
+- [x] **SEO beyond OG** — DONE (sitemap.xml via config/sitemap.py + robots.txt Sitemap:
+      directive; structured data enrichment, hreflang, noindex on personal routes — all in OPS-6c).
 
 ## Scout notes (SaaS-expert audit — every OPS batch appends; triage at ship)
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future

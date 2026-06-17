@@ -6,9 +6,18 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+class SmsProviderError(RuntimeError):
+    """Raised by send_order_ready_sms on transient Twilio / network failures.
+
+    The Celery task (accounts.tasks.sms_order_ready) has autoretry_for=(Exception,)
+    so it will retry up to 3 times with exponential backoff when this is raised.
+    Permanent failures (no credentials, invalid phone) return False without raising
+    so those are NOT retried.
+    """
 
 _TWILIO_API = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
 
@@ -39,11 +48,13 @@ def send_order_ready_sms(
     order_number: str | int,
     tenant_id=None,
 ) -> bool:
-    """
-    Send an "order ready" SMS to *phone*.
+    """Send an "order ready" SMS to *phone*.
 
-    Returns True on success, False on failure (or when credentials are missing).
-    Never raises — all errors are logged and swallowed so order flow is unaffected.
+    Returns True on success.
+    Returns False (does NOT raise) for permanent failures: missing credentials,
+    or invalid phone number — retrying cannot fix these.
+    Raises SmsProviderError for transient Twilio / network failures — the Celery
+    task wrapper retries these automatically via autoretry_for=(Exception,).
     """
     from accounts.notifications import record_notification
 
@@ -92,9 +103,11 @@ def send_order_ready_sms(
             record_notification(channel="sms", event="order.ready", status="failed",
                                 recipient=to_phone, detail=tenant_name, reference=str(order_number),
                                 error=f"twilio {resp.status_code}", tenant_id=tenant_id)
-            return False
+            raise SmsProviderError(f"Twilio returned {resp.status_code} for order #{order_number}")
+    except SmsProviderError:
+        raise  # propagate so the Celery task retries
     except Exception as exc:  # noqa: BLE001
         logger.warning("SMS failed: %s", exc)
         record_notification(channel="sms", event="order.ready", status="failed",
                             recipient=to_phone, detail=tenant_name, reference=str(order_number), error=str(exc), tenant_id=tenant_id)
-        return False
+        raise SmsProviderError(f"SMS network/provider error for order #{order_number}") from exc

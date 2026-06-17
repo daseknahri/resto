@@ -8,9 +8,10 @@ historical fire-and-forget daemon thread. So:
   - Without a broker (dev/local)   → identical to the old behaviour, no worker needed.
 
 Tasks are thin wrappers around the existing synchronous dispatch functions (which already
-write NotificationLog rows). ``autoretry_for`` retries on unexpected task-level errors;
-provider-level failures (e.g. a Twilio 5xx) are recorded as ``failed`` by the sync
-functions — surfacing those for retry is a follow-up that needs the senders to raise.
+write NotificationLog rows). ``autoretry_for=(Exception,)`` retries on task-level errors.
+SMS transient failures (Twilio 5xx / network) raise ``menu.sms.SmsProviderError`` (a
+subclass of Exception) so they are retried automatically; permanent failures (no
+credentials, invalid phone) return False without raising and are NOT retried.
 """
 from __future__ import annotations
 

@@ -75,20 +75,22 @@ class SendOrderReadySmsTests(SimpleTestCase):
                 result = send_order_ready_sms("+33600000001", "Demo", "42")
         self.assertTrue(result)
 
-    def test_returns_false_on_twilio_error(self):
+    def test_raises_sms_provider_error_on_twilio_error(self):
+        from menu.sms import SmsProviderError
         resp = MagicMock()
         resp.status_code = 429
         resp.text = "rate limited"
         with patch("menu.sms._credentials", return_value=("SID", "TOK", "+15550000")):
             with patch("requests.post", return_value=resp):
-                result = send_order_ready_sms("+33600000001", "Demo", "42")
-        self.assertFalse(result)
+                with self.assertRaises(SmsProviderError):
+                    send_order_ready_sms("+33600000001", "Demo", "42")
 
-    def test_returns_false_on_exception(self):
+    def test_raises_sms_provider_error_on_network_exception(self):
+        from menu.sms import SmsProviderError
         with patch("menu.sms._credentials", return_value=("SID", "TOK", "+15550000")):
             with patch("requests.post", side_effect=Exception("timeout")):
-                result = send_order_ready_sms("+33600000001", "Demo", "42")
-        self.assertFalse(result)
+                with self.assertRaises(SmsProviderError):
+                    send_order_ready_sms("+33600000001", "Demo", "42")
 
     def test_message_body_includes_order_number_and_tenant(self):
         resp = MagicMock()

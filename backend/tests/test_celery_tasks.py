@@ -100,6 +100,24 @@ class TaskWrapperTests(SimpleTestCase):
         sms_order_ready.run("+212600", "Acme", "ORD-1", tenant_id=7)
         sms.assert_called_once_with("+212600", "Acme", "ORD-1", tenant_id=7)
 
+    @patch("menu.sms.send_order_ready_sms")
+    def test_sms_task_propagates_sms_provider_error(self, sms):
+        """SmsProviderError (transient Twilio/network failure) must propagate so
+        Celery's autoretry_for=(Exception,) retries the task automatically."""
+        from accounts.tasks import sms_order_ready
+        from menu.sms import SmsProviderError
+        sms.side_effect = SmsProviderError("Twilio returned 503")
+        with self.assertRaises(SmsProviderError):
+            sms_order_ready.run("+212600", "Acme", "ORD-1", tenant_id=7)
+
+    @patch("menu.sms.send_order_ready_sms")
+    def test_sms_task_succeeds_on_permanent_failure(self, sms):
+        """Permanent failures (return False, don't raise) must NOT propagate — the
+        task should complete successfully so Celery doesn't retry a no-op."""
+        from accounts.tasks import sms_order_ready
+        sms.return_value = False  # no credentials / invalid phone
+        sms_order_ready.run("+invalid", "Acme", "ORD-1")  # should not raise
+
     @patch("accounts.push.notify_online_drivers_new_job_sync")
     def test_driver_dispatch_calls_sync(self, notify):
         from accounts.tasks import driver_dispatch
