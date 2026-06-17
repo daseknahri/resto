@@ -1017,6 +1017,7 @@ class AdminTenantListView(APIView):
                     "suspended_at",
                     "canceled_at",
                     "canceled_reason",
+                    "payment_overdue_since",
                     "owner_username_value",
                     "plan_code_value",
                     "plan_name_value",
@@ -1036,6 +1037,10 @@ class AdminTenantListView(APIView):
                     "suspended_at": row["suspended_at"],
                     "canceled_at": row["canceled_at"],
                     "canceled_reason": row["canceled_reason"] or "",
+                    "payment_overdue_since": (
+                        row["payment_overdue_since"].isoformat()
+                        if row.get("payment_overdue_since") else None
+                    ),
                     "owner_username": row["owner_username_value"] or "",
                     "plan_code": external_plan_code(row["plan_code_value"] or ""),
                     "plan_name": plan_display_name(row["plan_code_value"] or "", fallback=row["plan_name_value"] or ""),
@@ -2680,6 +2685,49 @@ class OwnerDashboardView(APIView):
             for row in popular_dish_rows
         ]
 
+        # Food-cost % (B3 phase 1) — join OrderItems to Dish.cost_price via dish_slug.
+        # Only items with a cost_price set contribute; we report coverage so the owner
+        # knows how complete their cost data is.
+        from django.db.models import Subquery, OuterRef, ExpressionWrapper
+        from django.db.models.fields import DecimalField as _DFld
+
+        _cost_sq = Dish.objects.filter(slug=OuterRef("dish_slug")).values("cost_price")[:1]
+        _fc_agg = (
+            OrderItem.objects
+            .filter(order__in=revenue_qs, is_voided=False)
+            .annotate(unit_cost=Subquery(_cost_sq))
+            .filter(unit_cost__isnull=False)
+            .annotate(
+                item_cost=ExpressionWrapper(
+                    F("unit_cost") * F("qty"),
+                    output_field=_DFld(max_digits=12, decimal_places=2),
+                )
+            )
+            .aggregate(
+                total_food_cost=Sum("item_cost"),
+                costed_item_count=Count("id"),
+            )
+        )
+        _total_fc = float(_fc_agg["total_food_cost"] or 0)
+        _costed_items = int(_fc_agg["costed_item_count"] or 0)
+        # Total item count (non-voided) for coverage metric
+        _all_item_count = OrderItem.objects.filter(order__in=revenue_qs, is_voided=False).count()
+        food_cost = {
+            "total_food_cost": round(_total_fc, 2),
+            "food_cost_pct": (
+                round(_total_fc / total_revenue * 100, 1) if total_revenue and _total_fc else None
+            ),
+            "gross_profit": round(total_revenue - _total_fc, 2) if _total_fc else None,
+            "gross_profit_pct": (
+                round((total_revenue - _total_fc) / total_revenue * 100, 1)
+                if total_revenue and _total_fc else None
+            ),
+            "coverage_pct": (
+                round(_costed_items / _all_item_count * 100, 1) if _all_item_count else None
+            ),
+            "has_cost_data": _costed_items > 0,
+        }
+
         # Fulfillment breakdown — pickup / delivery / table split for the period
         _fulfillment_rows = (
             revenue_qs
@@ -2908,6 +2956,7 @@ class OwnerDashboardView(APIView):
                     "loyalty_promo": loyalty_promo,
                     "payment_split": payment_split,
                     "top_items_by_revenue": top_items_by_revenue,
+                    "food_cost": food_cost,
                     "statement": statement,
                 },
                 "today_reservations": today_reservations,

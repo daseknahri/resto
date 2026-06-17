@@ -105,6 +105,10 @@ def _orderitem_qs_mock():
     qs = MagicMock()
     qs.filter.return_value = qs
     qs.exclude.return_value = qs
+    qs.count.return_value = 0
+    # B3 food-cost chain: annotate().filter().annotate().aggregate()
+    qs.annotate.return_value = qs
+    qs.aggregate.return_value = {"total_food_cost": None, "costed_item_count": 0}
     qs.values.return_value.annotate.return_value.order_by.return_value.__getitem__ = MagicMock(return_value=[])
     return qs
 

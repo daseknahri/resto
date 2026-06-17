@@ -480,7 +480,11 @@ const arabicMessages = {
     "nvr_title": "الزبائن المتكررون",
     "nvr_returning": "الزبائن العائدون",
     "nvr_new": "الزبائن الجدد والمجهولون",
-    "nvr_orders": "{n} طلبات"
+    "nvr_orders": "{n} طلبات",
+    "foodCostTitle": "تكلفة الغذاء",
+    "foodCostPct": "نسبة تكلفة الغذاء",
+    "grossProfit": "هامش الربح الإجمالي",
+    "foodCostCoverage": "{pct}٪ من المنتجات لها تكلفة محددة"
   },
   "inventory": {
     "tab": "المخزون",

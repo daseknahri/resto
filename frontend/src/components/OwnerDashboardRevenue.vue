@@ -273,6 +273,45 @@
       </div>
     </div>
 
+    <!-- B3 Food cost % panel — only rendered when at least one dish has cost_price set -->
+    <div
+      v-if="data && foodCost"
+      class="space-y-2 border-t border-slate-800/60 pt-2"
+    >
+      <p class="ui-kicker">{{ t("ownerAnalytics.foodCostTitle") }}</p>
+      <!-- Cost bar: food cost (amber) + gross profit (emerald) -->
+      <div class="flex h-3 w-full overflow-hidden rounded-full bg-slate-800" :title="`${t('ownerAnalytics.foodCostPct')}: ${foodCost.food_cost_pct}%`">
+        <div
+          class="h-full rounded-l-full transition-all duration-500"
+          :class="(foodCost.food_cost_pct ?? 0) > 50 ? 'bg-rose-500/70' : 'bg-amber-500/60'"
+          :style="{ width: `${Math.min(foodCost.food_cost_pct ?? 0, 100)}%` }"
+        />
+        <div class="h-full flex-1 rounded-r-full bg-emerald-500/30" />
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerAnalytics.foodCostPct") }}</p>
+          <p
+            class="ui-stat-value tabular-nums"
+            :class="(foodCost.food_cost_pct ?? 0) > 50 ? 'text-rose-300' : 'text-amber-300'"
+          >
+            {{ foodCost.food_cost_pct !== null ? `${foodCost.food_cost_pct}%` : "—" }}
+          </p>
+          <p class="ui-stat-note">{{ fmt(foodCost.total_food_cost) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerAnalytics.grossProfit") }}</p>
+          <p class="ui-stat-value tabular-nums text-emerald-300">
+            {{ foodCost.gross_profit_pct !== null ? `${foodCost.gross_profit_pct}%` : "—" }}
+          </p>
+          <p class="ui-stat-note">{{ fmt(foodCost.gross_profit) }}</p>
+        </div>
+      </div>
+      <p v-if="foodCost.coverage_pct !== null && foodCost.coverage_pct < 100" class="text-[10px] text-slate-500">
+        {{ t("ownerAnalytics.foodCostCoverage", { pct: foodCost.coverage_pct }) }}
+      </p>
+    </div>
+
     <!-- Period statement -->
     <div v-if="data && statement" class="space-y-2 border-t border-slate-800/60 pt-2">
       <p class="ui-kicker">{{ t("ownerAnalytics.statementTitle") }}</p>
@@ -489,6 +528,13 @@ const statement = computed(() => {
   // Only show if gross is non-zero
   if (Number(s.gross) === 0) return null;
   return s;
+});
+
+// ── Food cost % (B3 phase 1) ─────────────────────────────────────────────────
+const foodCost = computed(() => {
+  const fc = props.data?.food_cost;
+  if (!fc || !fc.has_cost_data) return null;
+  return fc;
 });
 
 // ── New vs returning revenue split (B2) ──────────────────────────────────────

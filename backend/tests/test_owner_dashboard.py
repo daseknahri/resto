@@ -100,11 +100,21 @@ def _order_qs_mock():
 
 
 def _orderitem_qs_mock():
-    """Minimal OrderItem queryset mock for the popular_dishes aggregation chain."""
+    """Minimal OrderItem queryset mock for popular_dishes + food-cost aggregation chains.
+
+    food-cost (B3) chain: .filter().annotate().filter().annotate().aggregate()
+    popular_dishes chain: .filter().exclude().values().annotate().order_by()[:10]
+    top_items:            .filter().exclude().values().annotate().order_by()[:5]
+    item count (B3):      .filter().count()
+    """
     qs = MagicMock()
     qs.filter.return_value = qs
     qs.exclude.return_value = qs
-    # .values().annotate().order_by()[:10] must be iterable → return empty list
+    qs.count.return_value = 0
+    # food-cost chain: annotate returns qs for chaining; aggregate returns the B3 dict
+    qs.annotate.return_value = qs
+    qs.aggregate.return_value = {"total_food_cost": None, "costed_item_count": 0}
+    # popular_dishes / top_items: values().annotate().order_by()[:N] → []
     qs.values.return_value.annotate.return_value.order_by.return_value.__getitem__ = MagicMock(return_value=[])
     return qs
 
@@ -363,7 +373,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
             "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
             "currency", "loyalty_promo", "wallet_revenue", "cash_revenue",
             "payment_split", "top_items_by_revenue", "statement",
-            "customer_return", "new_vs_returning",
+            "customer_return", "new_vs_returning", "food_cost",
         ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
         for key in ("promo_discount_total", "promo_order_count", "loyalty_discount_total",

@@ -321,6 +321,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "is_combo",
             "combo_unavailable",
             "combo_components",
+            "cost_price",
         ]
 
     def get_options(self, instance):

@@ -422,6 +422,7 @@ class DishSerializerHappyHourTests(SimpleTestCase):
         d.stock_qty = None
         d.low_stock_threshold = 3
         d.availability_schedule = None
+        d.cost_price = None
         cc_qs = MagicMock()
         cc_qs.all.return_value = []
         cc_qs.exists.return_value = False

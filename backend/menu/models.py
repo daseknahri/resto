@@ -114,6 +114,17 @@ class Dish(models.Model):
             "Defaults to 3. Ignored when stock_qty is null (unlimited)."
         ),
     )
+    cost_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Operator-set cost / COGS per unit. Optional. Used to compute food-cost% "
+            "on the owner dashboard. Leave blank for items whose cost is not tracked."
+        ),
+    )
     availability_schedule = models.JSONField(
         default=None,
         null=True,

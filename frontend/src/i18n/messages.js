@@ -3081,6 +3081,10 @@ export const messages = {
       nvr_returning: "Returning customers",
       nvr_new: "New & anonymous",
       nvr_orders: "{n} orders",
+      foodCostTitle: "Food cost",
+      foodCostPct: "Food cost %",
+      grossProfit: "Gross profit",
+      foodCostCoverage: "{pct}% of items have cost data",
     },
     inventory: {
       tab: "Inventory",
@@ -7974,6 +7978,10 @@ export const messages = {
       nvr_returning: "Clients recurrents",
       nvr_new: "Nouveaux et anonymes",
       nvr_orders: "{n} commandes",
+      foodCostTitle: "Cout matiere",
+      foodCostPct: "Cout matiere %",
+      grossProfit: "Marge brute",
+      foodCostCoverage: "{pct}% des articles ont un cout renseigne",
     },
     inventory: {
       tab: "Inventaire",

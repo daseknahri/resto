@@ -3082,6 +3082,10 @@ ownerAnalytics: {
   nvr_returning: "Returning customers",
   nvr_new: "New & anonymous",
   nvr_orders: "{n} orders",
+  foodCostTitle: "Food cost",
+  foodCostPct: "Food cost %",
+  grossProfit: "Gross profit",
+  foodCostCoverage: "{pct}% of items have cost data",
 },
 inventory: {
   tab: "Inventory",
