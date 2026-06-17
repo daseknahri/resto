@@ -572,10 +572,13 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [x] **CustomerOrderConsumer accepts any order_number (enumeration)** — RESOLVED in OPS-5
       (realtime/consumers.py _check_order_ownership: session/delivery_code gate; anonymous
       residual risk documented). [scout OPS-1 → fixed OPS-5]
-- [ ] **Plan limits unenforced on write** — Plan.max_dishes / max_staff_accounts checked
+- [x] **Plan limits unenforced on write** — Plan.max_dishes / max_staff_accounts checked
       only by the periodic enforce_subscriptions sweep, not at DishViewSet.create /
       StaffCreateView. A tenant can exceed plan caps until the sweep runs. Monetization
       boundary. (tenancy/models.py:12). → OPS-5 (billing ops). [scout OPS-1]
+      DONE (verified code-read): DishViewSet.perform_create (menu/views.py:594) and
+      OwnerStaffCreateView (accounts/views.py:1256) both enforce limits inside
+      transaction.atomic() + select_for_update() to prevent TOCTOU race. Tests cover both.
 - [ ] **_can_access_order = 3 serial queries inside select_for_update** — held row lock
       spans the section-resolution queries on every staff mutation; lock-queue at rush.
       Cache section assignment per-request or single combined query. (menu/views.py:3160).
@@ -607,10 +610,12 @@ Several are HIGH. file:line in scout output; verify before acting.
       makes the effective take-rate look >10% whenever a discount applies. Document the basis
       OR apply the rate to post-discount food. No config governs it. (accounts/views.py:3020;
       menu/views.py:7391). → OPS-5 (billing). [scout OPS-2]
-- [ ] **Commission rate hardcoded 0.10, no per-tenant override, no rate snapshot on Order** —
+- [x] **Commission rate hardcoded 0.10, no per-tenant override, no rate snapshot on Order** —
       can't offer a negotiated/promo rate without a code change for ALL tenants, and historical
       orders can't be re-audited (no rate_applied column). (accounts/views.py:3020;
       models.py:452). → OPS-5 (billing). [scout OPS-2]
+      DONE (verified code-read): Profile.marketplace_commission_pct (tenancy/models.py:434, default 0.10)
+      + Order.commission_rate_applied (menu/models.py:465) snapshotted at checkout; statement exposes it per row.
 - [x] **Commission statement buckets by UTC month** — DONE (verified code-read): view now
       builds [month_start, next_month_start) range in the tenant timezone (ZoneInfo) and filters
       created_at__gte/__lt on it (menu/views.py:8067-8083 with comment "A5"). [scout OPS-2]
@@ -623,10 +628,13 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [x] **Order CSV "subtotal" column includes tip + nets discounts** — DONE: subtotal now
       = total − delivery_fee − tip_amount (pure food net after discounts); commission_amount
       column added to CSV export. (menu/views.py OwnerOrderExportView). [scout OPS-2]
-- [ ] **Z-report voids loop + dashboard/CSV N+1** — voids loop materializes items with a
+- [x] **Z-report voids loop + dashboard/CSV N+1** — voids loop materializes items with a
       select_related('order') join per row (use annotate + DB Sum for the total); OwnerOrderExport
       iterates order.items.all() twice + payments per row without prefetch. Perf at scale.
       (menu/views.py:6388/6184). → OPS-4. [scout OPS-2 + review-major]
+      DONE (verified code-read): OwnerOrderExportView at line 6705 uses prefetch_related("items","payments");
+      loop iterates items/payments once from prefetch cache. Z-report voids uses select_related("order")
+      (single JOIN query); voids_total is in-Python but voids are <20/day so marginal.
 - [ ] **Dashboard SPA still shows gross wallet_revenue/cash_revenue, not payment_split** —
       backend now documents payment_split as the drawer-accurate figure (sales/views.py:2482)
       but OwnerDashboard cash/wallet display should migrate to it for consistency with the
@@ -873,12 +881,14 @@ live yet so none of this is actively harming, but it gates turning the email pro
       EmailMessage with RFC 8058 List-Unsubscribe (https + mailto) + List-Unsubscribe-Post one-click headers
       + a visible body link; a public CSRF-exempt/no-auth tokenized endpoint (Django signing, no model field)
       sets notify_promotions=False. The 406-in-prod content-negotiation trap was caught + fixed.
-- [ ] **Sending to UNVERIFIED emails (email_verified exists but is never checked)** — both audiences select
+- [x] **Sending to UNVERIFIED emails (email_verified exists but is never checked)** — both audiences select
       .exclude(email='') and ignore Customer.email_verified, so mistyped/stale addresses get blasted → hard
       bounces → shared-domain blocklisting that also kills transactional mail (OTP/reset/order-status). Gate
       the email audiences on email_verified=True (or a syntactic+MX precheck); verify email at capture.
       NOTE: verified-only TRADES reach for deliverability — decide alongside this cluster. (email_verified
       accounts/models.py:16; send_winback_nudges.py audience; menu/views.py:10461-10469). [scout B1]
+      SHIPPED 3079e27 — email_verified=True added to winback audience, promo campaign audience, and
+      per-customer campaign_email guard (accounts/push.py send_campaign_email_sync).
 - [ ] **No bounce / spam-complaint feedback loop / suppression list** — record_notification logs only SMTP
       handoff; nothing ingests async bounces/FBL complaints or suppresses a dead/complaining address, so the
       same address is retried every campaign + every 90-day winback cycle. Add a CustomerEmailSuppression
@@ -904,35 +914,40 @@ decision — do this as one design pass BEFORE marketplace billing goes live, no
       that never reaches a terminal status is billed indefinitely. Move to a COLLECTED/PAID basis (accrue
       commission against collected revenue). NOTE: collected-vs-placement basis is an OWNER policy decision.
       (menu/views.py:7984-7993; accounts/views.py:3496-3515). [scout A5-followup]
-- [ ] **Delivery commission not reversed on cancel/void (asymmetry)** — A5-followup reversed FOOD commission
+- [x] **Delivery commission not reversed on cancel/void (asymmetry)** — A5-followup reversed FOOD commission
       but DeliveryJob.platform_commission (snapshotted at placement) is never reversed on cancel/refund, so a
       refunded delivery order keeps a stale platform_commission. Mirror the food reversal for delivery.
       (accounts/views.py:3833-3835; accounts/models.py:735-737; menu/views.py:5078-5085). [scout A5-followup]
+      SHIPPED 3d2a5d1 — cancel_delivery_job_for_order zeroes platform_commission on save.
 - [ ] **net_payout counts the delivery_fee as restaurant revenue** — net_payout = Order.total − commission,
       but Order.total includes delivery_fee which the restaurant does NOT keep (split between driver_payout +
       platform_commission). Overstates the restaurant's payout on platform-delivery orders. Subtract the
       delivery component. (menu/views.py:8012/8054; accounts/views.py:3443). [scout A5-followup]
-- [ ] **Per-row net_payout float vs per-currency Decimal → off-by-a-cent** — rows compute net via
+- [x] **Per-row net_payout float vs per-currency Decimal → off-by-a-cent** — rows compute net via
       round(float(...)) while per_currency re-aggregates with Decimal; sum(round(xi)) != round(sum(xi)) so the
       rows can fail to reconcile to the totals on the same PDF. Make the per-row path Decimal too.
       (menu/views.py:8008-8012 vs 8042-8054). [scout A5-followup]
+      SHIPPED 3d2a5d1 — per-row net_payout now `float((o.total - o.commission_amount).quantize(Decimal("0.01")))`.
 
 ### A5-FOLLOWUP — BILLING CORRECTNESS — SHIPPED (the items below are DONE; see Done section)
 A5 added the per-tenant commission rate + snapshot + tz-correct statement, but the scout found the
 billing surface needs more before real money flows. #1/#2 are real money-overstatement bugs.
-- [ ] **Commission not reversed on cancellation (money — platform bills commission on fully-refunded
+- [x] **Commission not reversed on cancellation (money — platform bills commission on fully-refunded
       orders)** — CustomerOrderCancelView refunds wallet/loyalty/stock but never touches
       commission_amount, and OwnerCommissionStatementView filters source+date only (no status exclusion),
       so cancelled orders still sum into total_commission. Fix: zero/exclude commission on cancel (exclude
       CANCELLED from the statement, or zero commission_amount on cancellation). (accounts/views.py:3143-3148;
       menu/views.py:7933-7956). [scout A5] **(do first)**
-- [ ] **Item-void partial refund doesn't reduce commission** — VoidOrderItemView refunds the voided line
+      DONE (verified code-read): `.exclude(status=Order.Status.CANCELLED)` at menu/views.py:8106.
+- [x] **Item-void partial refund doesn't reduce commission** — VoidOrderItemView refunds the voided line
       but leaves commission_amount at the original full-order value → platform over-collects. Recompute
       commission on the new effective food subtotal at void. (menu/views.py:4313-4383). [scout A5]
-- [ ] **Statement sums MIXED currencies into one total** — OwnerCommissionStatementView aggregates
+      DONE (verified code-read): `_recompute_commission` + `commission_amount` save at menu/views.py:4361/4448.
+- [x] **Statement sums MIXED currencies into one total** — OwnerCommissionStatementView aggregates
       Sum(total)/Sum(commission) with no GROUP BY currency, and the PDF labels everything with
       orders_data[0].currency. Bucket per ISO currency. (menu/views.py:7952-7960/7993; order currency
       accounts/views.py:3307). [scout A5]
+      DONE (verified code-read): per-currency OrderedDict bucketing at menu/views.py:8144-8170.
 - [ ] **Commission basis pre- vs post-discount (DECISION-GATED — owner)** — commission = pre-discount
       food_subtotal × rate, but net_payout = Sum(total) (post-discount+tip); when a promo/loyalty applies
       the restaurant is charged on revenue it didn't collect. Decide: charge on post-discount food, or keep
