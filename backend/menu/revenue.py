@@ -85,7 +85,23 @@ def split_revenue_for_orders(order_qs) -> dict:
     legacy_total = Decimal(str(legacy_agg["legacy_total"] or 0))
     legacy_cash = legacy_total - legacy_wallet
 
-    wallet = max(Decimal("0"), ledger_wallet + legacy_wallet)
-    cash = max(Decimal("0"), ledger_cash + legacy_cash)
+    _raw_wallet = ledger_wallet + legacy_wallet
+    _raw_cash = ledger_cash + legacy_cash
+
+    if _raw_cash < 0:
+        # Reconciliation gap: wallet_amount_paid exceeds order.total on at least one
+        # legacy order (e.g. a tip was added after a full-wallet settlement, or a
+        # post-placement discount reduced total below what was already paid). Clamping
+        # to 0 keeps the dashboard from showing negative cash but means cash+wallet
+        # no longer reconciles to gross revenue. Log so it can be investigated.
+        import logging as _logging
+        _logging.getLogger("payments").warning(
+            "revenue.split: legacy_cash=%s < 0 (ledger_cash=%s, legacy_total=%s, "
+            "legacy_wallet=%s) — clamping to 0; reconciliation gap = %s",
+            _raw_cash, ledger_cash, legacy_total, legacy_wallet, abs(_raw_cash),
+        )
+
+    wallet = max(Decimal("0"), _raw_wallet)
+    cash = max(Decimal("0"), _raw_cash)
 
     return {"wallet": wallet.quantize(Decimal("0.01")), "cash": cash.quantize(Decimal("0.01"))}

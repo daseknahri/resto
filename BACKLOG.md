@@ -608,10 +608,11 @@ Several are HIGH. file:line in scout output; verify before acting.
       [scout OPS-2 → fixed OPS-4]
 - [x] **Order.paid_at unindexed** — DONE: `order_status_paid_at_idx` composite index on
       (status, paid_at) exists in menu/models.py Order.Meta.indexes. [scout OPS-2 → fixed OPS-4]
-- [ ] **Marketplace commission mixed-basis** — commission = food_subtotal × 0.10 (PRE-discount
+- [~] **Marketplace commission mixed-basis** — commission = food_subtotal × 0.10 (PRE-discount
       GMV) but the statement reports revenue as Sum(Order.total) (POST-discount), so net_payout
-      makes the effective take-rate look >10% whenever a discount applies. Document the basis
-      OR apply the rate to post-discount food. No config governs it. (accounts/views.py:3020;
+      makes the effective take-rate look >10% whenever a discount applies. Basis mismatch is
+      DOCUMENTED in code (menu/views.py:8110-8117 comment "A5, step 5"). Changing the commission
+      basis to post-discount is an OWNER business decision — deferred. (accounts/views.py:3020;
       menu/views.py:7391). → OPS-5 (billing). [scout OPS-2]
 - [x] **Commission rate hardcoded 0.10, no per-tenant override, no rate snapshot on Order** —
       can't offer a negotiated/promo rate without a code change for ALL tenants, and historical
@@ -622,10 +623,11 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [x] **Commission statement buckets by UTC month** — DONE (verified code-read): view now
       builds [month_start, next_month_start) range in the tenant timezone (ZoneInfo) and filters
       created_at__gte/__lt on it (menu/views.py:8067-8083 with comment "A5"). [scout OPS-2]
-- [ ] **legacy split cash = total − wallet silently clamped at 0** — if a tip is added after a
-      wallet settle, legacy_cash can go negative and max(0) hides it, so cash+wallet no longer
-      reconciles to gross. A pro ledger should assert reconciliation, not clamp. (revenue.py
-      :63/77). → OPS-4 (reconciliation assertions). [scout OPS-2]
+- [x] **legacy split cash = total − wallet silently clamped at 0** — DONE: added "payments"
+      logger warning when legacy_cash + ledger_cash < 0 so the gap is visible in monitoring.
+      The clamp is preserved for dashboard correctness; the log surfaces scenarios where
+      wallet_amount_paid exceeds order.total (tip-after-settle / post-discount). A full
+      ledger redesign stays deferred. (revenue.py). → OPS-4 (reconciliation assertions). [scout OPS-2]
 - [x] **OrderItem has no voided_by_user_id** — DONE (5b7e013): added IntegerField null/blank;
       migration 0061; StaffVoidOrderItemView stamps it; Z-report/CSV now exposes it. [scout OPS-2]
 - [x] **Order CSV "subtotal" column includes tip + nets discounts** — DONE: subtotal now
