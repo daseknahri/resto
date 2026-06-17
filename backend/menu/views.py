@@ -6242,6 +6242,30 @@ class OwnerOrderStatusUpdateView(APIView):
         owner_note = request.data.get("owner_note")
         estimated_ready_minutes = request.data.get("estimated_ready_minutes")
 
+        # Optional client-supplied idempotency key. The BFS already covers the
+        # stale-retry case ("already_at_target" / "already_advanced"), so this
+        # is purely belt-and-suspenders: it avoids acquiring the select_for_update
+        # lock on a fast-path cache hit for duplicate in-flight retries.
+        _idem_key = str(request.data.get("idempotency_key") or "")[:64] or None
+        _idem_cache_key = None
+        if _idem_key and new_status:
+            from django.db import connection as _stu_conn
+            _schema = getattr(getattr(_stu_conn, "tenant", None), "schema_name", None) or _stu_conn.schema_name
+            _idem_cache_key = f"owner_status_idem:{_schema}:{order_id}:{_idem_key}"
+            if cache.get(_idem_cache_key):
+                _idem_order = Order.objects.filter(id=order_id).first()
+                if _idem_order is None:
+                    return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response({
+                    "id": _idem_order.id,
+                    "order_number": _idem_order.order_number,
+                    "status": _idem_order.status,
+                    "owner_note": _idem_order.owner_note,
+                    "estimated_ready_minutes": _idem_order.estimated_ready_minutes,
+                    "status_updated_at": _idem_order.status_updated_at.isoformat() if _idem_order.status_updated_at else None,
+                    "payment_status": _idem_order.payment_status,
+                })
+
         # OPS-3 contract B: wrap the read-mutate-write in transaction.atomic() +
         # select_for_update() for ALL transitions (not only cancel).  This prevents
         # last-write-wins races when two devices (or a retry) PATCH simultaneously.
@@ -6451,6 +6475,11 @@ class OwnerOrderStatusUpdateView(APIView):
         }
         if cash_collected is not None:
             resp["cash_collected"] = cash_collected
+
+        # Mark the idempotency key as committed so retries skip the DB lock.
+        if _idem_cache_key:
+            cache.set(_idem_cache_key, 1, 300)
+
         return Response(resp)
 
 

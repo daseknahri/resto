@@ -651,11 +651,10 @@ Several are HIGH. file:line in scout output; verify before acting.
       single-op); marketplace path mirrors it. [scout OPS-3 → fixed OPS-4]
 - [x] **PlaceOrderThrottle still IP-scoped** — DONE: throttles.py PlaceOrderThrottle is
       "OPS-4 G: per-user for authenticated staff/owner, IP for anonymous customers". [scout OPS-3 → fixed OPS-4]
-- [ ] **Status-advance idempotency_key sent but not consumed server-side** — client sends it
-      on the status PATCH; OwnerOrderStatusUpdateView never reads it. The target-idempotency
-      BFS ("already_advanced" 200) covers the stale-superseded-retry case (verified), so this
-      is belt-and-suspenders, not a correctness gap. Optional: cache (key→status) inside the
-      atomic for true at-least-once. LOW. (menu/views.py:5890). [scout OPS-3]
+- [x] **Status-advance idempotency_key sent but not consumed server-side** — DONE: cache
+      check added to OwnerOrderStatusUpdateView.patch (key→1, 5 min TTL, schema-namespaced).
+      On cache hit the select_for_update lock is skipped and current state is returned.
+      BFS still the primary backstop; cache is belt-and-suspenders. [scout OPS-3]
 - [x] **Offline queue drop-policy + no TTL** — DONE (5b7e013): _loadQueue() in waiter.js now
       drops entries where queuedAt is present and older than 8 h on load (backwards-compat:
       entries without queuedAt are kept). [scout OPS-3]
