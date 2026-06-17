@@ -921,10 +921,11 @@ decision — do this as one design pass BEFORE marketplace billing goes live, no
       refunded delivery order keeps a stale platform_commission. Mirror the food reversal for delivery.
       (accounts/views.py:3833-3835; accounts/models.py:735-737; menu/views.py:5078-5085). [scout A5-followup]
       SHIPPED 3d2a5d1 — cancel_delivery_job_for_order zeroes platform_commission on save.
-- [ ] **net_payout counts the delivery_fee as restaurant revenue** — net_payout = Order.total − commission,
-      but Order.total includes delivery_fee which the restaurant does NOT keep (split between driver_payout +
-      platform_commission). Overstates the restaurant's payout on platform-delivery orders. Subtract the
-      delivery component. (menu/views.py:8012/8054; accounts/views.py:3443). [scout A5-followup]
+- [x] **net_payout counts the delivery_fee as restaurant revenue** — DONE: net_payout now subtracts
+      delivery_fee from every per-row and per-currency calculation: restaurant earns (total − delivery_fee
+      − commission_amount). PDF summary now shows "Gross order revenue / Delivery pass-through / Commission
+      / Net payout" for clarity. +2 tests (delivery_fee=20 and delivery_fee=0 cases). (menu/views.py;
+      test_a5followup_billing.py). [scout A5-followup]
 - [x] **Per-row net_payout float vs per-currency Decimal → off-by-a-cent** — rows compute net via
       round(float(...)) while per_currency re-aggregates with Decimal; sum(round(xi)) != round(sum(xi)) so the
       rows can fail to reconcile to the totals on the same PDF. Make the per-row path Decimal too.

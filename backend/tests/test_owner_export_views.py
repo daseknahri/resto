@@ -232,6 +232,7 @@ class OwnerCommissionStatementViewTests(SimpleTestCase):
                 created_at=datetime(2026, 6, 10, 12, 0, tzinfo=_utc.utc),
                 customer_name="Diner",
                 total=_D("100.00"),
+                delivery_fee=_D("0.00"),
                 commission_amount=_D("10.00"),
                 commission_rate_applied=_D("0.10"),
                 currency="MAD",

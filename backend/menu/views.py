@@ -8108,10 +8108,14 @@ class OwnerCommissionStatementView(APIView):
                 "created_at": o.created_at.isoformat(),
                 "customer_name": o.customer_name or "",
                 "total": float(o.total),
+                # Delivery fee is NOT restaurant revenue — it passes through to the driver
+                # (minus platform's delivery commission). net_payout subtracts it so the
+                # restaurant sees only what it actually earns.
+                "delivery_fee": float(o.delivery_fee),
                 "commission_amount": float(o.commission_amount),
                 # A5: surface the snapshotted rate so each row's commission is auditable.
                 "commission_rate_applied": float(o.commission_rate_applied),
-                "net_payout": float((o.total - o.commission_amount).quantize(Decimal("0.01"))),
+                "net_payout": float((o.total - o.delivery_fee - o.commission_amount).quantize(Decimal("0.01"))),
                 "currency": o.currency,
                 "status": o.status,
             }
@@ -8138,22 +8142,28 @@ class OwnerCommissionStatementView(APIView):
                     "currency": cur,
                     "order_count": 0,
                     "_revenue": Decimal("0"),
+                    "_delivery_fees": Decimal("0"),
                     "_commission": Decimal("0"),
                 }
             bucket["order_count"] += 1
             bucket["_revenue"] += Decimal(str(o["total"]))
+            bucket["_delivery_fees"] += Decimal(str(o["delivery_fee"]))
             bucket["_commission"] += Decimal(str(o["commission_amount"]))
 
         per_currency = []
         for bucket in _by_cur.values():
             rev = bucket["_revenue"]
+            del_fees = bucket["_delivery_fees"]
             com = bucket["_commission"]
             per_currency.append({
                 "currency": bucket["currency"],
                 "order_count": bucket["order_count"],
                 "total_revenue": float(rev),
+                "total_delivery_fees": float(del_fees),
                 "total_commission": float(com),
-                "net_payout": float((rev - com).quantize(Decimal("0.01"))),
+                # net_payout is what the restaurant actually earns: gross revenue minus
+                # delivery pass-through (driver's) and the platform food commission.
+                "net_payout": float((rev - del_fees - com).quantize(Decimal("0.01"))),
             })
 
         order_count = len(orders_data)
@@ -8231,9 +8241,10 @@ class OwnerCommissionStatementView(APIView):
 
         # Summary box — one sub-block per currency (each labelled with its own code).
         # Height scales with the number of currencies: a header line (order count)
-        # plus 3 money lines per currency, with a blank separator between currencies.
+        # plus 4 money lines per currency (gross, delivery pass-through, commission, net),
+        # with a blank separator between currencies.
         _n_cur = max(1, len(per_currency))
-        _box_h = (3 + _n_cur * 4) * 5 * mm  # rough: count line + 3 money lines × N + spacing
+        _box_h = (3 + _n_cur * 5) * 5 * mm  # rough: count line + 4 money lines × N + spacing
         doc.setFillColorRGB(0.94, 0.95, 0.98)
         doc.rect(margin, y - _box_h, page_w - 2 * margin, _box_h, fill=1, stroke=0)
         doc.setFillColorRGB(0, 0, 0)
@@ -8248,8 +8259,9 @@ class OwnerCommissionStatementView(APIView):
         for _pc in per_currency:
             _cur = _pc["currency"]
             summary_items = [
-                ("Total revenue:", f"{_cur} {_pc['total_revenue']:,.2f}"),
-                (commission_label, f"{_cur} {_pc['total_commission']:,.2f}"),
+                ("Gross order revenue:", f"{_cur} {_pc['total_revenue']:,.2f}"),
+                ("  Delivery pass-through:", f"- {_cur} {_pc['total_delivery_fees']:,.2f}"),
+                (commission_label, f"- {_cur} {_pc['total_commission']:,.2f}"),
                 ("Net payout to restaurant:", f"{_cur} {_pc['net_payout']:,.2f}"),
             ]
             for label, value in summary_items:

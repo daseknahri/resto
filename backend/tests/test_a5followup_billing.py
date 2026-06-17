@@ -57,12 +57,14 @@ class _CommissionStatementHarness(SimpleTestCase):
         return tenant
 
     def _order_row(self, *, number="ORD-1", total="20.00", commission="3.00",
-                   rate="0.15", currency="MAD", status_val="completed"):
+                   rate="0.15", currency="MAD", status_val="completed",
+                   delivery_fee="0.00"):
         return SimpleNamespace(
             order_number=number,
             created_at=datetime(2026, 6, 15, 12, 0, tzinfo=_tz.utc),
             customer_name="Diner",
             total=Decimal(total),
+            delivery_fee=Decimal(delivery_fee),
             commission_amount=Decimal(commission),
             commission_rate_applied=Decimal(rate),
             currency=currency,
@@ -220,6 +222,34 @@ class PerCurrencyStatementTests(_CommissionStatementHarness):
         self.assertEqual(data["summary"]["total_commission"], 0.0)
         # …but the order count across currencies is still correct.
         self.assertEqual(data["summary"]["order_count"], 2)
+
+    def test_delivery_fee_excluded_from_net_payout(self):
+        """net_payout must subtract delivery_fee: the restaurant does NOT keep the
+        delivery fee — it passes through to the driver. For a delivery order with
+        total=120, delivery_fee=20, commission=10 the restaurant earns 90, not 110."""
+        resp = self._run_json([
+            self._order_row(number="ORD-DEL", total="120.00", commission="10.00",
+                            rate="0.10", delivery_fee="20.00"),
+        ])
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data
+        row = data["orders"][0]
+        self.assertEqual(row["delivery_fee"], 20.0)
+        self.assertEqual(row["net_payout"], 90.0)  # 120 - 20 - 10
+        pc = data["per_currency"][0]
+        self.assertEqual(pc["total_delivery_fees"], 20.0)
+        self.assertEqual(pc["net_payout"], 90.0)   # 120 - 20 - 10
+
+    def test_zero_delivery_fee_leaves_net_payout_unchanged(self):
+        """A pickup/dine-in order with delivery_fee=0 must still compute
+        net_payout = total − commission (identical to the pre-fix formula)."""
+        resp = self._run_json([
+            self._order_row(number="ORD-PICKUP", total="50.00", commission="5.00",
+                            rate="0.10", delivery_fee="0.00"),
+        ])
+        data = resp.data
+        self.assertEqual(data["orders"][0]["net_payout"], 45.0)  # 50 - 0 - 5
+        self.assertEqual(data["per_currency"][0]["net_payout"], 45.0)
 
     def test_pdf_labels_each_currency_with_its_own_code(self):
         """The PDF must render each currency with ITS OWN code/total — never stamp
