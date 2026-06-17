@@ -28,7 +28,9 @@ from rest_framework.test import APIRequestFactory
 from accounts.unsubscribe import (
     MAX_AGE_SECONDS,
     load_unsubscribe_token,
+    load_tenant_unsubscribe_token,
     make_unsubscribe_token,
+    make_tenant_unsubscribe_token,
 )
 from accounts.views import EmailUnsubscribeView
 
@@ -321,3 +323,104 @@ class EmailUnsubscribeContentNegotiationTests(SimpleTestCase):
                 cache.clear()
                 resp, _ = self._call("get", accept)
                 self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. Per-tenant unsubscribe token (email-tenant-unsub salt)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TenantUnsubscribeTokenTests(SimpleTestCase):
+
+    def test_round_trip_returns_customer_and_tenant_id(self):
+        token = make_tenant_unsubscribe_token(42, 7)
+        result = load_tenant_unsubscribe_token(token)
+        self.assertEqual(result, (42, 7))
+
+    def test_string_ids_coerced_to_int(self):
+        token = make_tenant_unsubscribe_token("99", "3")
+        self.assertEqual(load_tenant_unsubscribe_token(token), (99, 3))
+
+    def test_garbage_token_returns_none(self):
+        self.assertIsNone(load_tenant_unsubscribe_token("not-a-real-token"))
+
+    def test_empty_or_none_token_returns_none(self):
+        self.assertIsNone(load_tenant_unsubscribe_token(""))
+        self.assertIsNone(load_tenant_unsubscribe_token(None))
+
+    def test_global_token_not_accepted_as_tenant_token(self):
+        """A legacy global token (email-unsubscribe salt) must not decode as a
+        per-tenant token — the salts are separate by design."""
+        global_token = make_unsubscribe_token(42)
+        self.assertIsNone(load_tenant_unsubscribe_token(global_token))
+
+    def test_wrong_salt_token_returns_none(self):
+        forged = signing.dumps({"c": 1, "t": 2}, salt="some-other-purpose")
+        self.assertIsNone(load_tenant_unsubscribe_token(forged))
+
+    def test_expired_token_returns_none(self):
+        token = make_tenant_unsubscribe_token(42, 7)
+        with patch(
+            "accounts.unsubscribe.signing.loads",
+            side_effect=signing.SignatureExpired("too old"),
+        ):
+            self.assertIsNone(load_tenant_unsubscribe_token(token))
+
+
+class EmailUnsubscribeViewPerTenantTests(SimpleTestCase):
+    """EmailUnsubscribeView with a per-tenant token creates CustomerTenantOptOut."""
+
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = EmailUnsubscribeView.as_view()
+
+    def _call(self, method, token):
+        # Lazy import inside _unsubscribe resolves from accounts.models, so patch there.
+        with patch("accounts.models.CustomerTenantOptOut") as MockOptOut:
+            req = getattr(self.factory, method)(f"/api/unsubscribe/{token}/")
+            resp = self.view(req, token=token)
+        return resp, MockOptOut
+
+    def test_get_with_per_tenant_token_creates_optout_row(self):
+        token = make_tenant_unsubscribe_token(55, 3)
+        resp, MockOptOut = self._call("get", token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        MockOptOut.objects.get_or_create.assert_called_once_with(customer_id=55, tenant_id=3)
+
+    def test_post_with_per_tenant_token_creates_optout_row(self):
+        token = make_tenant_unsubscribe_token(55, 3)
+        resp, MockOptOut = self._call("post", token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        MockOptOut.objects.get_or_create.assert_called_once_with(customer_id=55, tenant_id=3)
+
+    def test_per_tenant_token_does_not_flip_global_flag(self):
+        """A per-tenant token must not touch notify_promotions — it only records
+        the per-tenant opt-out and returns early."""
+        token = make_tenant_unsubscribe_token(55, 3)
+        with patch("accounts.models.CustomerTenantOptOut"), \
+             patch("accounts.views.Customer") as MockCustomer:
+            req = self.factory.get(f"/api/unsubscribe/{token}/")
+            self.view(req, token=token)
+        # Customer.objects must NOT be touched — the per-tenant path returns early.
+        MockCustomer.objects.filter.assert_not_called()
+
+    def test_idempotent_get_or_create_called_on_repeat(self):
+        """A repeated per-tenant unsubscribe request calls get_or_create again
+        (idempotent at DB level via get_or_create; the view delegates)."""
+        token = make_tenant_unsubscribe_token(55, 3)
+        with patch("accounts.models.CustomerTenantOptOut") as MockOptOut:
+            req = self.factory.get(f"/api/unsubscribe/{token}/")
+            resp = self.view(req, token=token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        MockOptOut.objects.get_or_create.assert_called_once_with(customer_id=55, tenant_id=3)
+
+    def test_per_tenant_db_error_swallowed_returns_200(self):
+        """A DB failure in the per-tenant path must not 500 — the view is
+        best-effort and never reveals internal state."""
+        token = make_tenant_unsubscribe_token(55, 3)
+        with patch("accounts.models.CustomerTenantOptOut") as MockOptOut, \
+             patch("accounts.views.logger"):
+            MockOptOut.objects.get_or_create.side_effect = Exception("db gone")
+            req = self.factory.get(f"/api/unsubscribe/{token}/")
+            resp = self.view(req, token=token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
