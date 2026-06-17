@@ -75,6 +75,45 @@
       </template>
     </div>
 
+    <!-- B2: New vs returning revenue split -->
+    <div
+      v-if="data && newVsReturning"
+      class="space-y-2 border-t border-slate-800/60 pt-3"
+    >
+      <p class="ui-kicker">{{ t("ownerAnalytics.nvr_title") }}</p>
+      <!-- Stacked bar -->
+      <div class="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
+        <div
+          class="h-full rounded-l-full bg-emerald-500/70 transition-all duration-500"
+          :style="{ width: `${newVsReturning.returning_revenue_pct ?? 0}%` }"
+          :title="`${t('ownerAnalytics.nvr_returning')}: ${newVsReturning.returning_revenue_pct ?? 0}%`"
+        />
+        <div
+          class="h-full flex-1 rounded-r-full bg-slate-500/40"
+          :title="`${t('ownerAnalytics.nvr_new')}: ${newVsReturning.new_revenue_pct ?? 0}%`"
+        />
+      </div>
+      <!-- Two stat tiles -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="ui-stat-tile border-emerald-500/20">
+          <p class="ui-stat-label text-emerald-400/80">{{ t("ownerAnalytics.nvr_returning") }}</p>
+          <p class="ui-stat-value tabular-nums text-emerald-300">{{ fmt(newVsReturning.returning_revenue) }}</p>
+          <p class="ui-stat-note">
+            {{ newVsReturning.returning_revenue_pct !== null ? `${newVsReturning.returning_revenue_pct}%` : "—" }}
+            · {{ t("ownerAnalytics.nvr_orders", { n: newVsReturning.returning_orders }) }}
+          </p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerAnalytics.nvr_new") }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ fmt(newVsReturning.new_revenue) }}</p>
+          <p class="ui-stat-note">
+            {{ newVsReturning.new_revenue_pct !== null ? `${newVsReturning.new_revenue_pct}%` : "—" }}
+            · {{ t("ownerAnalytics.nvr_orders", { n: newVsReturning.new_orders }) }}
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Daily revenue mini-chart -->
     <div v-if="data && chartDays.length > 1" class="max-w-full space-y-1">
       <p class="ui-kicker">{{ t("ownerHome.dailyRevenueKicker") }}</p>
@@ -450,6 +489,14 @@ const statement = computed(() => {
   // Only show if gross is non-zero
   if (Number(s.gross) === 0) return null;
   return s;
+});
+
+// ── New vs returning revenue split (B2) ──────────────────────────────────────
+const newVsReturning = computed(() => {
+  const nvr = props.data?.new_vs_returning;
+  if (!nvr) return null;
+  if (nvr.returning_revenue === 0 && nvr.new_revenue === 0) return null;
+  return nvr;
 });
 
 // ── Return rate ───────────────────────────────────────────────────────────────

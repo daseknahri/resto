@@ -3045,6 +3045,10 @@ ownerAnalytics: {
   paySplitTitle: "Modes de paiement",
   paySplitLine: "{wallet} portefeuille · {cash} espèces",
   topRevenueTitle: "Top articles par revenu",
+  nvr_title: "Clients fideles",
+  nvr_returning: "Clients recurrents",
+  nvr_new: "Nouveaux et anonymes",
+  nvr_orders: "{n} commandes",
 },
 inventory: {
   tab: "Inventaire",

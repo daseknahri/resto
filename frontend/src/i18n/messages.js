@@ -3077,6 +3077,10 @@ export const messages = {
       paySplitTitle: "Payment methods",
       paySplitLine: "{wallet} wallet · {cash} cash",
       topRevenueTitle: "Top items by revenue",
+      nvr_title: "Repeat business",
+      nvr_returning: "Returning customers",
+      nvr_new: "New & anonymous",
+      nvr_orders: "{n} orders",
     },
     inventory: {
       tab: "Inventory",
@@ -7963,6 +7967,10 @@ export const messages = {
       paySplitTitle: "Modes de paiement",
       paySplitLine: "{wallet} portefeuille · {cash} espèces",
       topRevenueTitle: "Top articles par revenu",
+      nvr_title: "Clients fideles",
+      nvr_returning: "Clients recurrents",
+      nvr_new: "Nouveaux et anonymes",
+      nvr_orders: "{n} commandes",
     },
     inventory: {
       tab: "Inventaire",

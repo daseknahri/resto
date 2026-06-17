@@ -92,6 +92,9 @@ def _order_qs_mock_with_wallet(wallet_total=30.0, grand_total=100.0, order_count
         "loyalty_discounts": None,
         "tips": None,
         "commission": None,
+        # B2: new-vs-returning split
+        "ret_rev": None,
+        "ret_cnt": 0,
     }
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
     qs.values_list.return_value.exclude.return_value.order_by.return_value.first.return_value = "MAD"

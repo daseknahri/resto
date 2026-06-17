@@ -3078,6 +3078,10 @@ ownerAnalytics: {
   paySplitTitle: "Payment methods",
   paySplitLine: "{wallet} wallet · {cash} cash",
   topRevenueTitle: "Top items by revenue",
+  nvr_title: "Repeat business",
+  nvr_returning: "Returning customers",
+  nvr_new: "New & anonymous",
+  nvr_orders: "{n} orders",
 },
 inventory: {
   tab: "Inventory",

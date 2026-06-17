@@ -68,6 +68,7 @@ def _order_qs_mock():
       3. Statement:      gross, promo_discounts, loyalty_discounts, tips, commission
       4. Prev-period:    total_revenue, order_count
       5. Marketplace:    mkt_count, mkt_revenue, mkt_commission
+      6. B2 NVR split:   ret_rev, ret_cnt
     Returning a superset dict covers all calls regardless of order.
     """
     daily_result = MagicMock()
@@ -88,6 +89,8 @@ def _order_qs_mock():
         # Statement keys (revenue-summary extension)
         "gross": None, "promo_discounts": None, "loyalty_discounts": None,
         "tips": None, "commission": None,
+        # B2: new-vs-returning revenue split
+        "ret_rev": None, "ret_cnt": 0,
     }
     # daily / hourly / weekday chain: annotate().values().annotate().order_by()
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
@@ -360,6 +363,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
             "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
             "currency", "loyalty_promo", "wallet_revenue", "cash_revenue",
             "payment_split", "top_items_by_revenue", "statement",
+            "customer_return", "new_vs_returning",
         ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
         for key in ("promo_discount_total", "promo_order_count", "loyalty_discount_total",

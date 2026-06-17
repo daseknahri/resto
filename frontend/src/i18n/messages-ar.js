@@ -476,7 +476,11 @@ const arabicMessages = {
     "statementNet": "الإيراد الصافي",
     "paySplitTitle": "طرق الدفع",
     "paySplitLine": "{wallet} محفظة · {cash} نقدًا",
-    "topRevenueTitle": "أفضل المنتجات حسب الإيراد"
+    "topRevenueTitle": "أفضل المنتجات حسب الإيراد",
+    "nvr_title": "الزبائن المتكررون",
+    "nvr_returning": "الزبائن العائدون",
+    "nvr_new": "الزبائن الجدد والمجهولون",
+    "nvr_orders": "{n} طلبات"
   },
   "inventory": {
     "tab": "المخزون",

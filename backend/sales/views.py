@@ -2805,8 +2805,7 @@ class OwnerDashboardView(APIView):
             "refunds_issued": str(round(_refunds, 2)),
         }
 
-        # Customer return rate — among phone-identified customers in this window,
-        # what % had placed an order at least once BEFORE the window opened?
+        # Customer return rate & B2 new-vs-returning revenue split.
         # OPS-4 D: use a subquery instead of materialising a Python set of 2000+
         # phones.  phones_sq is a queryset (sub-SELECT); Order.objects.filter(
         # customer_phone__in=phones_sq) keeps all PKs server-side.
@@ -2818,17 +2817,33 @@ class OwnerDashboardView(APIView):
         )
         total_phone_customers = phones_sq.count()
         if total_phone_customers:
-            returning_count = (
+            _returning_phones_sq = (
                 Order.objects
                 .filter(customer_phone__in=phones_sq, created_at__lt=since)
                 .values("customer_phone")
                 .distinct()
-                .count()
             )
+            returning_count = _returning_phones_sq.count()
             return_rate_pct = round(returning_count / total_phone_customers * 100, 1)
+            # B2: revenue split — what share of period revenue comes from regulars?
+            _nvr = revenue_qs.exclude(customer_phone="").aggregate(
+                ret_rev=Sum("total", filter=Q(customer_phone__in=_returning_phones_sq)),
+                ret_cnt=Count("id", filter=Q(customer_phone__in=_returning_phones_sq)),
+            )
+            _ret_rev = float(_nvr["ret_rev"] or 0)
+            _ret_cnt = int(_nvr["ret_cnt"] or 0)
+            new_vs_returning = {
+                "returning_revenue": round(_ret_rev, 2),
+                "new_revenue": round(total_revenue - _ret_rev, 2),
+                "returning_orders": _ret_cnt,
+                "new_orders": order_count - _ret_cnt,
+                "returning_revenue_pct": round(_ret_rev / total_revenue * 100, 1) if total_revenue else None,
+                "new_revenue_pct": round((total_revenue - _ret_rev) / total_revenue * 100, 1) if total_revenue else None,
+            }
         else:
             returning_count = 0
             return_rate_pct = None  # null = insufficient data to compute
+            new_vs_returning = None
 
         return Response(
             {
@@ -2887,6 +2902,7 @@ class OwnerDashboardView(APIView):
                         "returning_customers": returning_count,
                         "return_rate_pct": return_rate_pct,
                     },
+                    "new_vs_returning": new_vs_returning,
                     "marketplace": marketplace_stats,
                     "fulfillment_breakdown": fulfillment_breakdown,
                     "loyalty_promo": loyalty_promo,
