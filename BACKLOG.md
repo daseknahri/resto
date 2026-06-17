@@ -717,10 +717,11 @@ coherence gaps. None biting at current scale; do before many tenants / heavy mar
       a new/edited/ended/opted flash sale shows in the listing immediately instead of after the 90s TTL.
       (accounts/views.py). [scout promo-N+1] (the "live-eval vs baked-into-cache" half → LIST-CACHE COHERENCE
       cluster below, note "time-windowed badge/flash baked into cache")
-- [ ] **Marketplace composite index for the full WHERE shape** — the hot query filters
-      (directory_opt_in, is_menu_published, tenant__lifecycle_status) + optional city/cuisine/price_tier +
-      order_by tenant__name; the existing indexes don't fully cover it. Consider an index matching the actual
-      shape. (tenancy/models.py Profile.Meta). [scout promo-N+1] (marginal at current scale)
+- [x] **Marketplace composite index for the full WHERE shape** — VERIFIED DONE: Profile has
+      profile_marketplace_idx (directory_opt_in, is_menu_published) + profile_marketplace_rate_idx
+      (directory_opt_in, is_menu_published, rating_avg). The tenant__lifecycle_status JOIN is
+      covered by db_index=True on Tenant.lifecycle_status (tenancy/models.py:71). Index coverage
+      is adequate at current scale. [scout promo-N+1]
 - [x] **90s list cache busted on rating change — DONE (B8-followup scale)** — _public_list_cache_key now
       embeds a GLOBAL version (public_list_ver); _bust_public_list_cache() (mirrors _bust_menu_cache) is
       called from recompute_tenant_rating after the Profile update, so a new rating refreshes the directory/
@@ -950,10 +951,12 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
       the restaurant is charged on revenue it didn't collect. Decide: charge on post-discount food, or keep
       gross-pre-discount with the merchant absorbing promos (document in the merchant agreement). OWNER
       decision. (accounts/views.py:3478-3485; menu/views.py:7943-7951). [scout A5]
-- [ ] **Take-rate units inconsistent across paths + ride is global-only** — marketplace_commission_pct is a
-      FRACTION (0–1), delivery_commission_pct is PERCENT (0–100), ride_commission_pct is a single GLOBAL
-      PlatformConfig value (no per-tenant override). Converge units + add per-tenant ride override. (tenancy
-      delivery_pricing.py:203; accounts/ride_service.py:157-159). [scout A5]
+- [~] **Take-rate units inconsistent across paths + ride is global-only** — marketplace_commission_pct is a
+      FRACTION (0–1), delivery_commission_pct is PERCENT (0–100), ride_commission_pct is PERCENT via global
+      PlatformConfig (no per-tenant override). The admin API (sales/views.py:1239–1261) already validates
+      ranges correctly: delivery in [0,100] and marketplace in [0,1] with errors. Converging to one scale and
+      adding per-tenant ride override requires a data migration — DEFERRED until marketplace billing goes live.
+      (tenancy/delivery_pricing.py:203; accounts/ride_service.py:157-159). [scout A5]
 - [ ] **Delivery has no rate snapshot + sub-percent precision capped** — DeliveryJob stores
       platform_commission amount but not the rate (can't re-audit after a rate change), and the
       DecimalField(decimal_places=2) on the fraction can't represent 12.5%/7.5% (rounds to whole percent).
