@@ -79,6 +79,7 @@ def send_marketing_email(
     body: str,
     tenant_name: str = "",
     customer_id=None,
+    tenant_id=None,
 ):
     """Send a plain-text promotional/retention email (win-back nudge or owner campaign).
 
@@ -103,9 +104,12 @@ def send_marketing_email(
 
     unsubscribe_url = ""
     if customer_id is not None:
-        from .unsubscribe import make_unsubscribe_token
-
-        token = make_unsubscribe_token(customer_id)
+        if tenant_id is not None:
+            from .unsubscribe import make_tenant_unsubscribe_token
+            token = make_tenant_unsubscribe_token(customer_id, tenant_id)
+        else:
+            from .unsubscribe import make_unsubscribe_token
+            token = make_unsubscribe_token(customer_id)
         unsubscribe_url = f"{_brand_https_base()}/api/unsubscribe/{token}/"
 
     body_lines = [

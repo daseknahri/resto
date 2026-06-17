@@ -104,14 +104,17 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
         mock_winback_qs = MagicMock()
         mock_winback_qs.filter.return_value.values_list.return_value = []
 
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.values_list.return_value = []
         patches = [
             patch("menu.management.commands.send_winback_nudges.schema_context"),
             patch("menu.models.Order.objects", mock_order_qs),
             patch("accounts.models.Customer.objects", mock_customer_qs),
             patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs),
             patch("accounts.models.WinbackNudge.objects", mock_winback_qs),
+            patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs),
         ]
-        with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4]:
+        with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4], patches[5]:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
             result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=inactive_weeks, cap=cap)
@@ -203,9 +206,12 @@ class WinbackNoPushSubTests(SimpleTestCase):
         mock_sub_qs = MagicMock()
         mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = []
 
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
+             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -251,10 +257,13 @@ class WinbackDedupeTests(SimpleTestCase):
         # Batch query returns [99] → customer was recently nudged
         mock_winback_qs = _make_winback_nudge_qs_mock([99])
 
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
+             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -270,10 +279,13 @@ class WinbackDedupeTests(SimpleTestCase):
         # Batch query returns [] → no recently nudged customers
         mock_winback_qs = _make_winback_nudge_qs_mock([])
 
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
+             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -310,10 +322,13 @@ class WinbackCapTests(SimpleTestCase):
         # Batched WinbackNudge query returns no recently-nudged customers
         mock_winback_qs = _make_winback_nudge_qs_mock([])
 
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
+             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)

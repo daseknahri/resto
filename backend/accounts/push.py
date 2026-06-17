@@ -592,12 +592,21 @@ def send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id
             return 0
         if not getattr(cust, "email_verified", False):
             return 0
+        # Per-tenant opt-out: if the customer has opted out of this specific tenant's
+        # promos (marketplace unsubscribe), suppress even when global flag is still True.
+        if tenant_id is not None:
+            from .models import CustomerTenantOptOut
+            if CustomerTenantOptOut.objects.filter(customer_id=customer_id, tenant_id=tenant_id).exists():
+                return 0
         email = (getattr(cust, "email", "") or "").strip()
     if not email:
         return 0
 
     try:
-        sent = send_marketing_email(email, title, message, tenant_name, customer_id=customer_id)
+        sent = send_marketing_email(
+            email, title, message, tenant_name,
+            customer_id=customer_id, tenant_id=tenant_id,
+        )
     except Exception:
         record_notification(
             channel="email", event="campaign", status="failed",

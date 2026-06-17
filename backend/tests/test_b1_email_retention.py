@@ -110,10 +110,13 @@ def _build_audience_with(
     mock_winback_qs = MagicMock()
     mock_winback_qs.filter.return_value.values_list.return_value = list(recently_nudged)
 
+    mock_optout_qs = MagicMock()
+    mock_optout_qs.filter.return_value.values_list.return_value = []
     with patch("menu.models.Order.objects", mock_order_qs), \
          patch("accounts.models.Customer.objects", mock_customer_qs), \
          patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
          patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
+         patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
          patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
         _ctx_mock(mock_ctx)
         return _build_audience(tenant_id=1, inactive_weeks=4, cap=cap)
@@ -190,7 +193,7 @@ class WinbackDualSendTests(SimpleTestCase):
             calls["push"].append(cid)
             return push_return
 
-        def fake_email(email, tname, slug, title, body, cid):
+        def fake_email(email, tname, slug, title, body, cid, tid):
             calls["email"].append(email)
             return email_return
 
@@ -322,7 +325,10 @@ class CampaignEmailSyncTests(SimpleTestCase):
         from accounts import push as push_mod
         mock_customer = MagicMock()
         mock_customer.objects.filter.return_value.first.return_value = cust
+        mock_optout_qs = MagicMock()
+        mock_optout_qs.filter.return_value.exists.return_value = False
         with patch("accounts.models.Customer", mock_customer), \
+             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
              patch("django_tenants.utils.schema_context") as mock_ctx, \
              patch("accounts.messaging.send_marketing_email", return_value=1) as mock_email, \
              patch("accounts.notifications.record_notification"):

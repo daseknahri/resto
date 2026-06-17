@@ -1077,6 +1077,39 @@ class WinbackNudge(models.Model):
         return f"WinbackNudge tenant={self.tenant_id} customer={self.customer_id} @ {self.sent_at}"
 
 
+class CustomerTenantOptOut(models.Model):
+    """Per-(customer, tenant) promotional email opt-out for marketplace customers.
+
+    A customer who clicks "unsubscribe" on Restaurant A's promo email should
+    stop receiving Restaurant A's promos, NOT all restaurants'. This model
+    stores the per-tenant opt-out so send_campaign_email_sync and
+    send_winback_nudges can suppress promos per-restaurant.
+
+    Lives in the public schema (accounts app). IntegerField tenant_id avoids
+    cross-schema FK issues with django-tenants.
+    """
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="tenant_optouts",
+    )
+    tenant_id = models.IntegerField(
+        db_index=True,
+        help_text="FK to tenancy.Tenant (loose — no FK constraint for cross-schema safety).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("customer", "tenant_id")]
+        indexes = [
+            models.Index(fields=("customer", "tenant_id"), name="cust_tenant_optout_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"CustomerTenantOptOut customer={self.customer_id} tenant={self.tenant_id}"
+
+
 class UserTOTPDevice(models.Model):
     """Per-user TOTP MFA device — lives in the public schema (accounts app).
 

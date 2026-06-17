@@ -7121,13 +7121,33 @@ class EmailUnsubscribeView(APIView):
     )
 
     def _unsubscribe(self, token):
-        """Flip notify_promotions=False for the token's customer (idempotent).
+        """Record the opt-out for the token's customer (idempotent).
 
-        Never raises and never reveals whether the id exists — an invalid token
-        and an already-opted-out customer both fall through silently.
+        Per-tenant token → create CustomerTenantOptOut row (suppresses promos
+        from that specific restaurant only). Global/legacy token → flip the
+        customer-level notify_promotions=False (backwards-compatible).
+
+        Never raises and never reveals whether the id exists.
         """
-        from .unsubscribe import load_unsubscribe_token
+        from .unsubscribe import load_tenant_unsubscribe_token, load_unsubscribe_token
 
+        # Try per-tenant token first (new format).
+        pair = load_tenant_unsubscribe_token(token)
+        if pair is not None:
+            customer_id, tenant_id = pair
+            try:
+                from .models import CustomerTenantOptOut
+                CustomerTenantOptOut.objects.get_or_create(
+                    customer_id=customer_id, tenant_id=tenant_id
+                )
+            except Exception:  # pragma: no cover
+                logger.exception(
+                    "Email unsubscribe (per-tenant) failed for customer=%s tenant=%s",
+                    customer_id, tenant_id,
+                )
+            return
+
+        # Fallback: legacy global token (old emails in inboxes stay working).
         customer_id = load_unsubscribe_token(token)
         if customer_id is None:
             return
@@ -7136,8 +7156,8 @@ class EmailUnsubscribeView(APIView):
             if customer is not None and customer.notify_promotions:
                 customer.notify_promotions = False
                 customer.save(update_fields=["notify_promotions"])
-        except Exception:  # pragma: no cover - defensive: opt-out must never 500
-            logger.exception("Email unsubscribe failed for token customer %s", customer_id)
+        except Exception:  # pragma: no cover
+            logger.exception("Email unsubscribe (global) failed for customer %s", customer_id)
 
     def _respond(self):
         from django.http import HttpResponse
