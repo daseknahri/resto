@@ -366,7 +366,7 @@
         <div ref="hhDrawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-hh-form-dialog-title" class="ui-panel-soft w-full max-w-md max-h-[92vh] overflow-y-auto">
 
           <!-- Dialog header -->
-          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-inherit px-5 py-4">
+          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-[var(--color-elevated)] px-5 py-4">
             <h2 id="owner-hh-form-dialog-title" class="text-base font-bold tracking-tight text-white">
               {{ hhEditing ? t('happyHour.edit') : t('happyHour.add') }}
             </h2>
@@ -487,7 +487,7 @@
         <div ref="drawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="ui-panel-soft w-full max-w-md max-h-[92vh] overflow-y-auto">
 
           <!-- Dialog header -->
-          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-inherit px-5 py-4">
+          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-[var(--color-elevated)] px-5 py-4">
             <h2 id="owner-promotions-form-dialog-title" class="text-base font-bold tracking-tight text-white">
               {{ editingPromo ? t('common.edit') : t('ownerPromotions.newPromotion') }}
             </h2>
