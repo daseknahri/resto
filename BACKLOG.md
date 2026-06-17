@@ -669,10 +669,13 @@ Several are HIGH. file:line in scout output; verify before acting.
       → OPS-4 follow-up / search-perf. [scout OPS-4]
 - [x] **OrderItem.voided_at unindexed — Z-report full-scans items every shift close** — DONE
       (commit 57c5482): migration 0060 adds partial Index(voided_at) WHERE is_voided=True.
-- [ ] **DirectoryView/MarketplaceView N+1 cross-schema** — per-tenant schema switch + rating
+- [x] **DirectoryView/MarketplaceView N+1 cross-schema** — per-tenant schema switch + rating
       aggregate + promo scan inside the serialization loop (100+ cross-schema queries/cold
       request; 90s cache is a bandage). Denormalize Profile.rating_avg/rating_count via
       post_save signal/cron. (accounts/views.py:2243/2418). → marketplace-perf batch. [scout OPS-4]
+      DONE (verified code-read): B8 shipped rating denorm (Profile.rating_avg/rating_count via signal);
+      B8-followup + promo-N+1 batches killed the promo N+1 (marketplace_promos denorm + in-memory eval).
+      Listing loop is fully query-free (comments at accounts/views.py:2967/3215 confirm). [scout OPS-4]
 - [x] **OwnerRatingListView no pagination** — DONE (commit 57c5482): proper page/page_size
       pagination (default 50, max 200) + ?from/?to date filters; has_more signal; CSV uncapped.
 - [x] **CustomerRating (public) no retention prune** — DONE: prune_customer_ratings command

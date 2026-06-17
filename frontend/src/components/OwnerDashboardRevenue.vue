@@ -44,10 +44,11 @@
           <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
           <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
           <PeriodBadge :pct="data.prev_period?.revenue_change_pct" />
-          <p v-if="data.cash_revenue != null && data.wallet_revenue != null" class="ui-stat-note mt-0.5 text-slate-400">
+          <!-- Gross split (fallback for pre-ledger data; hidden when ledger split is present) -->
+          <p v-if="!paymentSplit && data.cash_revenue != null && data.wallet_revenue != null" class="ui-stat-note mt-0.5 text-slate-400">
             {{ t("ownerHome.cashWalletSplit", { cash: fmt(data.cash_revenue), wallet: fmt(data.wallet_revenue) }) }}
           </p>
-          <!-- Payment-methods split (from payment_split ledger) -->
+          <!-- Payment-methods split (from payment_split ledger — drawer-accurate, matches Z-report) -->
           <p v-if="paymentSplit" class="ui-stat-note mt-0.5 text-slate-500">
             {{ t("ownerAnalytics.paySplitLine", { wallet: fmt(paymentSplit.wallet), cash: fmt(paymentSplit.cash) }) }}
           </p>
