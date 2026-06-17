@@ -2883,6 +2883,7 @@ class PlaceOrderView(APIView):
                     delivery_fee=_delivery_fee,
                     driver_payout=_dsplit["driver_payout"],
                     platform_commission=_dsplit["platform_commission"],
+                    delivery_commission_rate_applied=_dsplit["commission_pct"],
                 )
                 # Ranked dispatch: offer to the nearest free driver first, cascading
                 # to the next on decline/timeout, falling back to the open pool.

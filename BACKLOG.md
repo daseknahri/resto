@@ -579,9 +579,11 @@ Several are HIGH. file:line in scout output; verify before acting.
       DONE (verified code-read): DishViewSet.perform_create (menu/views.py:594) and
       OwnerStaffCreateView (accounts/views.py:1256) both enforce limits inside
       transaction.atomic() + select_for_update() to prevent TOCTOU race. Tests cover both.
-- [ ] **_can_access_order = 3 serial queries inside select_for_update** — held row lock
+- [x] **_can_access_order = 3 serial queries inside select_for_update** — held row lock
       spans the section-resolution queries on every staff mutation; lock-queue at rush.
-      Cache section assignment per-request or single combined query. (menu/views.py:3160).
+      DONE (4cd7723): added per-request cache on request._section_slugs_cache; repeated
+      calls within the same request hit DB only once. Function also accepts optional
+      pre-computed (my_slugs, claimed_slugs) for callers that can supply them.
       → OPS-4 (scale). [scout OPS-1]
 - [x] **Section-access logic copy-pasted 3×** — StaffOrderListView inline, _can_access_order,
       waiter_views._section_slugs_for all reimplement (my_slugs, claimed_slugs) differently;
@@ -957,11 +959,12 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
       ranges correctly: delivery in [0,100] and marketplace in [0,1] with errors. Converging to one scale and
       adding per-tenant ride override requires a data migration — DEFERRED until marketplace billing goes live.
       (tenancy/delivery_pricing.py:203; accounts/ride_service.py:157-159). [scout A5]
-- [ ] **Delivery has no rate snapshot + sub-percent precision capped** — DeliveryJob stores
-      platform_commission amount but not the rate (can't re-audit after a rate change), and the
-      DecimalField(decimal_places=2) on the fraction can't represent 12.5%/7.5% (rounds to whole percent).
-      Add delivery_commission_rate_applied + widen decimal_places if sub-percent rates are wanted.
-      (accounts/models.py:733-737; menu/models.py:465-467; sales/views.py:1244). [scout A5]
+- [x] **Delivery has no rate snapshot + sub-percent precision capped** — DONE (0045 migration):
+      added DeliveryJob.delivery_commission_rate_applied (max_digits=7, decimal_places=4) — stores
+      the commission_pct (0–100) that was in effect at job creation; all 3 job creation paths
+      (PlaceOrderView, MarketplacePlaceOrderView, release_scheduled_orders) now pass
+      _dsplit["commission_pct"]. Exposed in _serialize_delivery_job alongside platform_commission.
+      Admin-created jobs (manual split) default to 0 (no rate applied). [scout A5]
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->

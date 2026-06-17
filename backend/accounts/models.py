@@ -736,6 +736,12 @@ class DeliveryJob(models.Model):
     # Platform's cut of the delivery fee (delivery_fee = driver_payout + platform_commission).
     # Snapshot at job creation from the restaurant's delivery_commission_pct; default 0.
     platform_commission = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    # The RATE (0–100 percent) that was applied when platform_commission was computed.
+    # Stored separately so audits can detect if the rate changed after job creation.
+    # decimal_places=4 supports sub-percent rates such as 12.57% or 0.75%.
+    delivery_commission_rate_applied = models.DecimalField(
+        max_digits=7, decimal_places=4, default=0
+    )
 
     # Delivery zone (optional — set if order is inside a managed zone)
     zone = models.ForeignKey(

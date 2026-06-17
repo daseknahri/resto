@@ -4353,6 +4353,7 @@ class MarketplacePlaceOrderView(APIView):
                             delivery_fee=_delivery_fee,
                             driver_payout=_dsplit["driver_payout"],
                             platform_commission=_dsplit["platform_commission"],
+                            delivery_commission_rate_applied=_dsplit["commission_pct"],
                         )
                         # Ranked dispatch: offer nearest free driver first, cascade,
                         # then fall back to the open pool.
@@ -5016,6 +5017,8 @@ def _serialize_delivery_job(
         "distance_km": _job_distance_km(job),
         "delivery_fee": str(job.delivery_fee),
         "driver_payout": str(job.driver_payout),
+        "platform_commission": str(job.platform_commission),
+        "delivery_commission_rate_applied": str(job.delivery_commission_rate_applied),
         "assigned_at": job.assigned_at.isoformat() if job.assigned_at else None,
         "picked_up_at": job.picked_up_at.isoformat() if job.picked_up_at else None,
         "delivered_at": job.delivered_at.isoformat() if job.delivered_at else None,

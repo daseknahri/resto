@@ -141,6 +141,7 @@ class Command(BaseCommand):
                                     delivery_fee=order.delivery_fee,
                                     driver_payout=_dsplit["driver_payout"],
                                     platform_commission=_dsplit["platform_commission"],
+                                    delivery_commission_rate_applied=_dsplit["commission_pct"],
                                 )
                                 from accounts.dispatch import start_dispatch
                                 start_dispatch(_job)
