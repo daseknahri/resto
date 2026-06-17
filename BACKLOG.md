@@ -722,29 +722,26 @@ Several are HIGH. file:line in scout output; verify before acting.
       benefit. Fix: pg_trgm GIN trigram index, OR rewrite search to digits[-9:] exact-match
       (CustomerOrdersByPhoneView already does this at menu/views.py:3184). (migration 0058).
       → OPS-4 follow-up / search-perf. [scout OPS-4]
-- [ ] **OrderItem.voided_at unindexed — Z-report full-scans items every shift close** — add
-      partial Index(voided_at) WHERE is_voided=True to OrderItem.Meta. (models.py:608/635;
-      Z-report query menu/views.py:6730). → next OrderItem migration. [scout OPS-4]
+- [x] **OrderItem.voided_at unindexed — Z-report full-scans items every shift close** — DONE
+      (commit 57c5482): migration 0060 adds partial Index(voided_at) WHERE is_voided=True.
 - [ ] **DirectoryView/MarketplaceView N+1 cross-schema** — per-tenant schema switch + rating
       aggregate + promo scan inside the serialization loop (100+ cross-schema queries/cold
       request; 90s cache is a bandage). Denormalize Profile.rating_avg/rating_count via
       post_save signal/cron. (accounts/views.py:2243/2418). → marketplace-perf batch. [scout OPS-4]
-- [ ] **OwnerRatingListView no pagination** — qs[:500] JSON (silently truncates, exposes a
-      COUNT that diverges) + uncapped CSV. Add cursor/offset pagination + CSV date fence.
-      (menu/views.py:7431/7466). → OPS-4 follow-up. [scout OPS-4]
+- [x] **OwnerRatingListView no pagination** — DONE (commit 57c5482): proper page/page_size
+      pagination (default 50, max 200) + ?from/?to date filters; has_more signal; CSV uncapped.
 - [ ] **CustomerRating (public) no retention prune** — write-only, grows with platform order
       volume; add a prune cron like the OPS-4 ones. (accounts/models.py:506). → retention. [scout OPS-4]
 - [ ] **OwnerCustomerListView still materializes all customers before paginating** — segment
       label is Python-derived so segment filter + sort + pagination happen in Python over the
       full 3k-row aggregate; push the segment predicate (last_order_at < cutoff) to SQL for
       true DB-level pagination. (menu/views.py:8458/8601/8670). → customer-perf follow-up. [scout OPS-4]
-- [ ] **Z-report by_staff = 2 OrderPayment queries** — amount + count can collapse to one
-      .annotate(Sum, Count(distinct)). (menu/views.py:6761/6783). → perf. [scout OPS-4]
-- [ ] **_staff_order_payload calls order.items.all() twice** — materialize once
-      (list(order.items.all())) to remove a latent double-query for unprefetched callers.
-      (menu/views.py:3789/3805). → perf. [scout OPS-4]
-- [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
-      add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
+- [x] **Z-report by_staff = 2 OrderPayment queries** — DONE: collapsed to one .values()
+      .annotate(cash_sum=Sum(filter=CASH), wallet_sum=Sum(filter=WALLET), order_count=Count(distinct)).
+- [x] **_staff_order_payload calls order.items.all() twice** — DONE: materialized once
+      (_items = list(order.items.all())) used for both items_count and items list.
+- [x] **OwnerOrderExport 5000-row hard cap, silent truncation** — DONE (commit 57c5482):
+      X-Kepoli-Export-Total and X-Kepoli-Export-Truncated headers added.
 
 ### B8-FOLLOWUP — MARKETPLACE SCALE + DENORM COHERENCE (scout B8 cluster)
 B8 killed the RATING cross-schema N+1, but the scout found the loop isn't fully query-free + the denorm has

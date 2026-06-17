@@ -3829,6 +3829,7 @@ def _staff_order_payload(order):
         (Decimal(str(p.amount)) for p in payment_rows), Decimal("0")
     ).quantize(_CENT)
     outstanding = max(Decimal("0"), Decimal(str(order.total or "0")) - ledger_paid).quantize(_CENT)
+    _items = list(order.items.all())
 
     return {
         "id": order.id,
@@ -3862,7 +3863,7 @@ def _staff_order_payload(order):
             }
             for p in payment_rows
         ],
-        "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
+        "items_count": sum(i.qty for i in _items if not i.is_voided),
         "items": [
             {
                 "id": i.id,
@@ -3878,7 +3879,7 @@ def _staff_order_payload(order):
                 "combo_components": i.combo_components,
                 "course": getattr(i, "course", 0),
             }
-            for i in order.items.all()
+            for i in _items
         ],
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
@@ -6939,36 +6940,15 @@ class OwnerZReportView(APIView):
         # Legacy (one-shot settle) orders have no ledger row; they cannot be
         # attributed to a specific staff member from existing data.
         #
-        # IMPORTANT: we filter on order__paid_at (not OrderPayment.created_at) so that
-        # by_staff totals are drawn from the same service-day population as the collected
-        # header totals.  For split-bill orders the last instalment sets paid_at; earlier
-        # instalments have earlier created_at values that can land in a different service
-        # day if the order straddles the cutover hour.  Using order__paid_at ensures
+        # IMPORTANT: filter on order__paid_at (not OrderPayment.created_at) so that
+        # by_staff totals are drawn from the same service-day population as the
+        # collected header totals.  Using order__paid_at ensures
         # Sum(by_staff.collected_cash) + Sum(by_staff.collected_wallet) == collected.total.
+        #
+        # Conditional aggregation (Sum with filter=) groups by staff name once,
+        # computing cash sum, wallet sum, and distinct order count in a single query.
         from django.db.models import Q as _Q
-        staff_payments = (
-            OrderPayment.objects.filter(
-                order__status=Order.Status.COMPLETED,
-                order__payment_status=Order.PaymentStatus.PAID,
-                order__paid_at__gte=window_start,
-                order__paid_at__lt=window_end,
-            )
-            .values("recorded_by_name", "method")
-            .annotate(amount_sum=_Sum("amount"))
-        )
-        staff_map = {}
-        for row in staff_payments:
-            name = row["recorded_by_name"] or "(unknown)"
-            if name not in staff_map:
-                staff_map[name] = {"name": name, "orders": 0, "collected_cash": Decimal("0.00"), "collected_wallet": Decimal("0.00")}
-            amt = Decimal(str(row["amount_sum"] or 0))
-            if row["method"] == OrderPayment.Method.CASH:
-                staff_map[name]["collected_cash"] += amt
-            else:
-                staff_map[name]["collected_wallet"] += amt
-
-        # Count distinct orders per staff member from the payment ledger
-        staff_order_counts = (
+        staff_rows = (
             OrderPayment.objects.filter(
                 order__status=Order.Status.COMPLETED,
                 order__payment_status=Order.PaymentStatus.PAID,
@@ -6976,22 +6956,28 @@ class OwnerZReportView(APIView):
                 order__paid_at__lt=window_end,
             )
             .values("recorded_by_name")
-            .annotate(order_count=_Count("order_id", distinct=True))
+            .annotate(
+                cash_sum=_Sum("amount", filter=_Q(method=OrderPayment.Method.CASH)),
+                wallet_sum=_Sum("amount", filter=_Q(method=OrderPayment.Method.WALLET)),
+                order_count=_Count("order_id", distinct=True),
+            )
         )
-        for row in staff_order_counts:
-            name = row["recorded_by_name"] or "(unknown)"
-            if name in staff_map:
-                staff_map[name]["orders"] = row["order_count"]
-
-        by_staff = [
-            {
-                "name": v["name"],
-                "orders": v["orders"],
-                "collected_cash": str(v["collected_cash"].quantize(Decimal("0.01"))),
-                "collected_wallet": str(v["collected_wallet"].quantize(Decimal("0.01"))),
-            }
-            for v in sorted(staff_map.values(), key=lambda x: x["name"])
-        ]
+        by_staff = sorted(
+            [
+                {
+                    "name": (row["recorded_by_name"] or "(unknown)"),
+                    "orders": row["order_count"],
+                    "collected_cash": str(
+                        Decimal(str(row["cash_sum"] or 0)).quantize(Decimal("0.01"))
+                    ),
+                    "collected_wallet": str(
+                        Decimal(str(row["wallet_sum"] or 0)).quantize(Decimal("0.01"))
+                    ),
+                }
+                for row in staff_rows
+            ],
+            key=lambda x: x["name"],
+        )
 
         # ── Net cash position ─────────────────────────────────────────────────
         # net_cash_position = collected.cash − cash_refunds_issued
