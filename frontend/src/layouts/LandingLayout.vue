@@ -70,10 +70,29 @@
             <AppIcon name="user" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {{ t("common.myAccount") }}
           </RouterLink>
-          <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm">{{ t("common.signIn") }}</RouterLink>
-          <button v-else class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm" @click="signOut">
+          <!-- Audience-aware sign-in: a live business/staff session always shows
+               sign-out; otherwise consumer pages offer CUSTOMER sign-in (modal)
+               and B2B/neutral pages keep the partner/staff sign-in (/signin). -->
+          <button
+            v-if="session.isAuthenticated"
+            class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm"
+            @click="signOut"
+          >
             {{ t("common.signOut") }}
           </button>
+          <button
+            v-else-if="isConsumerContext && !customerStore.isAuthenticated"
+            type="button"
+            class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm"
+            @click="showAuthModal = true"
+          >
+            {{ t("common.signIn") }}
+          </button>
+          <RouterLink
+            v-else-if="!isConsumerContext"
+            to="/signin"
+            class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm"
+          >{{ t("common.signIn") }}</RouterLink>
         </div>
       </div>
       <div class="ui-divider"></div>
@@ -186,13 +205,21 @@
         </div>
       </div>
     </footer>
+
+    <!-- Customer sign-in, opened from the consumer-context header button. -->
+    <CustomerAuthModal
+      v-if="showAuthModal"
+      @close="showAuthModal = false"
+      @authenticated="showAuthModal = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
@@ -201,6 +228,7 @@ import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { PLATFORM_MONOGRAM, SUPPORT_EMAIL } from "../lib/brand";
 
 const router = useRouter();
+const route = useRoute();
 const brandMonogram = PLATFORM_MONOGRAM;
 const { canInstall, isStandalone, install: installApp } = useInstallPrompt();
 const session = useSessionStore();
@@ -208,6 +236,17 @@ const customerStore = useCustomerStore();
 const { t } = useI18n();
 const year = new Date().getFullYear();
 const supportEmail = SUPPORT_EMAIL;
+const showAuthModal = ref(false);
+
+// Consumer-facing routes (hub, marketplace, account, ride, courier, driver,
+// directory). On these the header offers CUSTOMER sign-in via the modal; on
+// B2B/neutral pages (business, get-started, contact, legal) it keeps the
+// partner/staff sign-in at /signin. B2B behaviour is therefore unchanged.
+const CONSUMER_ROUTES = new Set([
+  "super-app-hub", "marketplace", "marketplace-menu", "marketplace-order-status",
+  "customer-account", "ride", "send-package", "driver", "directory",
+]);
+const isConsumerContext = computed(() => CONSUMER_ROUTES.has(String(route.name || "")));
 
 const logoStyle = computed(() => ({
   background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
