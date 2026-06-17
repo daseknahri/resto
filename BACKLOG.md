@@ -972,6 +972,22 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B10 "perm_void loss-prevention gate" (KEPOLI_NEXT.md Phase B; verified by me, backend
+      4036/0, frontend gates green, commit 4f8acc1): `perm_void` BooleanField(default=True) added
+      to `User` (migration 0048). Splits void authority from `perm_manage_orders` so a waiter
+      can handle the order flow without being authorised to remove items and trigger wallet
+      refunds. `_can_void_order_item()` helper in menu/views.py gates `StaffVoidOrderItemView`
+      (must have both effective_perm_manage_orders AND effective_perm_void; owners/superadmins
+      always pass). OwnerStaffPage.vue shows a "Void items" toggle (key void_orders); PATCH
+      handler maps void_orders→perm_void via _KEY_TO_FIELD dict. Session payload +
+      staff-list endpoint both include void_orders. i18n EN/FR/AR. 5 new
+      VoidPermissionGating tests; test_owner_staff_views.py updated for new field.
+- [x] A6 "Redis URL auth deploy check" (KEPOLI_NEXT.md Phase A; commit 4f8acc1): kepoli.W002
+      WARNING in config/checks.py (register(deploy=True)) fires when REDIS_URL has no password
+      in production. Defence-in-depth: an unauthenticated Redis holding session data, OTP guards,
+      idempotency-key mutexes, and channel-layer state is a security risk before real money flows.
+      Check parses the URL with urlparse and warns if parsed.password is falsy; skips if DEBUG or
+      REDIS_URL absent (E001 already fires in that case).
 - [x] a11y-standalone-routes "skip-link + focusable <main> on the no-layout routes + ErrorBoundary landmark"
       (verified by me, frontend gates green: lint clean, 124 tests, i18n complete, build OK; reviewer SHIP, no
       blocking). New PlainLayout.vue (chrome-less skip-link + <main id=main-content tabindex=-1>, reuses
