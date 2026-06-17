@@ -10632,6 +10632,7 @@ class OwnerCampaignView(APIView):
                 for cid, email in Customer.objects.filter(
                     id__in=all_orderer_ids,
                     notify_promotions=True,
+                    email_verified=True,
                 ).exclude(email="").values_list("id", "email")
                 if email
             }

@@ -147,12 +147,14 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> tuple[list
             ).values_list("customer_id", flat=True).distinct()
         )
 
-        # Step 3b: customers with a non-empty email (email channel). B1 — this
-        # is what broadens the audience beyond push-subscribed customers.
+        # Step 3b: customers with a verified, non-empty email (email channel). B1 —
+        # this broadens the audience beyond push-subscribed customers. email_verified
+        # guards against bouncing to addresses that were entered but never confirmed.
         email_by_id = {
             cid: email
             for cid, email in Customer.objects.filter(
                 id__in=opted_in,
+                email_verified=True,
             ).exclude(email="").values_list("id", "email")
             if email
         }

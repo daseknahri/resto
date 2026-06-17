@@ -590,6 +590,8 @@ def send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id
             return 0
         if not getattr(cust, "notify_promotions", True):
             return 0
+        if not getattr(cust, "email_verified", False):
+            return 0
         email = (getattr(cust, "email", "") or "").strip()
     if not email:
         return 0
