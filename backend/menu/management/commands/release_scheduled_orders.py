@@ -142,6 +142,7 @@ class Command(BaseCommand):
                                     driver_payout=_dsplit["driver_payout"],
                                     platform_commission=_dsplit["platform_commission"],
                                     delivery_commission_rate_applied=_dsplit["commission_pct"],
+                                    business_type=getattr(profile, "business_type", "restaurant") or "restaurant",
                                 )
                                 from accounts.dispatch import start_dispatch
                                 start_dispatch(_job)

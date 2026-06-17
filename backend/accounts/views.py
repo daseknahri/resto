@@ -4354,6 +4354,7 @@ class MarketplacePlaceOrderView(APIView):
                             driver_payout=_dsplit["driver_payout"],
                             platform_commission=_dsplit["platform_commission"],
                             delivery_commission_rate_applied=_dsplit["commission_pct"],
+                            business_type=getattr(profile, "business_type", "restaurant") or "restaurant",
                         )
                         # Ranked dispatch: offer nearest free driver first, cascade,
                         # then fall back to the open pool.
@@ -5511,7 +5512,7 @@ class DriverJobAcceptView(APIView):
 
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
-        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        _bt = job.business_type or "restaurant"
         return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_200_OK)
 
 
@@ -5842,7 +5843,7 @@ class DriverJobStatusUpdateView(APIView):
             except Exception:
                 pass  # Never fail the driver status update due to push errors
 
-        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        _bt = job.business_type or "restaurant"
         return Response(_serialize_delivery_job(job, business_type=_bt))
 
 
@@ -5920,7 +5921,7 @@ class OrderTrackingView(APIView):
         if not _tracking_request_owns_order(request, tenant, order_number):
             return Response({"detail": "Not your order.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
-        _tracking_bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        _tracking_bt = job.business_type or "restaurant"
 
         if not use_sse:
             return Response(_serialize_delivery_job(
@@ -6995,6 +6996,16 @@ class AdminCreateDeliveryJobView(APIView):
         except (InvalidOperation, TypeError):
             return Response({"detail": "Invalid delivery_fee or driver_payout."}, status=400)
 
+        try:
+            from tenancy.models import Profile as _Profile
+            _admin_bt = (
+                _Profile.objects.filter(tenant_id=tenant_id)
+                .values_list("business_type", flat=True)
+                .first()
+            ) or "restaurant"
+        except Exception:
+            _admin_bt = "restaurant"
+
         job = DeliveryJob.objects.create(
             tenant_id=tenant_id,
             order_number=order_number,
@@ -7007,6 +7018,7 @@ class AdminCreateDeliveryJobView(APIView):
             delivery_fee=delivery_fee,
             driver_payout=driver_payout,
             zone=zone,
+            business_type=_admin_bt,
         )
         # Real-time dispatch: nudge online/free drivers to claim the new job.
         try:
@@ -7026,7 +7038,7 @@ class AdminCreateDeliveryJobView(APIView):
                 "driver_payout": str(driver_payout),
             },
         )
-        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        _bt = job.business_type or "restaurant"
         return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_201_CREATED)
 
 

@@ -207,6 +207,7 @@ class SerializeDeliveryJobTests(SimpleTestCase):
             driver_payout=Decimal("3.00"),
             platform_commission=Decimal("2.00"),
             delivery_commission_rate_applied=Decimal("40.0000"),
+            business_type="restaurant",
             assigned_at=None,
             picked_up_at=None,
             delivered_at=None,

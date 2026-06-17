@@ -223,8 +223,10 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
 - [ ] **nginx bot-branch syntax** — could not run `nginx -t` locally (no docker);
       verify container start + checklist curls on the NEXT deploy, then tick this.
 - [x] **Local Postgres dev environment** — DONE (docker-compose.dev.yml, R21 above).
-- [ ] **_batch_business_types singleton calls** — 4 single-job endpoints pay one extra
-      Profile query each. Review minor, functionally correct.
+- [x] **_batch_business_types singleton calls** — DONE (migration 0046): denormalized
+      business_type onto DeliveryJob; 4 single-job endpoints now read job.business_type
+      directly (no extra Profile query); batch list views still use _batch_business_types
+      for genuine N-tenant loads.
 - [x] **SEO beyond OG** — DONE (sitemap.xml via config/sitemap.py + robots.txt Sitemap:
       directive; structured data enrichment, hreflang, noindex on personal routes — all in OPS-6c).
 

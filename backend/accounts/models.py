@@ -742,6 +742,9 @@ class DeliveryJob(models.Model):
     delivery_commission_rate_applied = models.DecimalField(
         max_digits=7, decimal_places=4, default=0
     )
+    # Snapshot of the tenant's business_type at job creation. Avoids a cross-schema
+    # Profile query every time a single-job endpoint serializes the job.
+    business_type = models.CharField(max_length=40, blank=True, default="restaurant")
 
     # Delivery zone (optional — set if order is inside a managed zone)
     zone = models.ForeignKey(
