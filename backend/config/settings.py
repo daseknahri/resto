@@ -752,6 +752,16 @@ EMAIL_LOG_LEVEL = os.getenv("DJANGO_EMAIL_LOG_LEVEL", "INFO").strip().upper()
 # general ERROR firehose. It still reaches Sentry (sentry-sdk's LoggingIntegration
 # captures via logging.Logger.callHandlers, which fires regardless of propagate).
 PAYMENT_LOG_LEVEL = os.getenv("DJANGO_PAYMENT_LOG_LEVEL", "INFO").strip().upper()
+
+# ── PSP top-up seam (Stripe Checkout, dormant until PSP_TOPUP_ENABLED=1) ─────
+# Set PSP_TOPUP_ENABLED=1 + PSP_STRIPE_SECRET_KEY + PSP_STRIPE_WEBHOOK_SECRET in
+# production env to activate. PSP_SITE_URL sets the Stripe redirect base URL
+# (success/cancel); falls back to PUBLIC_MENU_BASE_URL.
+PSP_TOPUP_ENABLED = os.getenv("PSP_TOPUP_ENABLED", "").strip().lower() in ("1", "true", "yes")
+PSP_STRIPE_SECRET_KEY = os.getenv("PSP_STRIPE_SECRET_KEY", "")
+PSP_STRIPE_WEBHOOK_SECRET = os.getenv("PSP_STRIPE_WEBHOOK_SECRET", "")
+PSP_SITE_URL = os.getenv("PSP_SITE_URL", PUBLIC_MENU_BASE_URL).rstrip("/")
+
 ACTIVE_LOG_FORMATTER = "json" if LOG_FORMAT == "json" else "standard"
 
 LOGGING = {

@@ -5016,6 +5016,14 @@ customerAccount: {
   saveNameFailed: "Could not save name. Please try again.",
   walletLoadFailed: "Could not load wallet data — please refresh.",
   addressLoadFailed: "Could not load saved addresses — please refresh.",
-  tabNav: "Account sections"
+  tabNav: "Account sections",
+  topUpTitle: "Top Up Wallet",
+  topUpAmountLabel: "Amount (MAD)",
+  topUpAmountHint: "Min 10, max 2 000",
+  topUpBtn: "Top Up with Card",
+  topUpLoading: "Redirecting to payment…",
+  topUpSuccessMsg: "Top-up processed — your balance will reflect shortly.",
+  topUpCancelledMsg: "Payment cancelled.",
+  topUpError: "Could not start payment. Please try again."
 }
 };

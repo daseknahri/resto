@@ -845,6 +845,42 @@
             </button>
           </div>
 
+          <!-- PSP top-up (Stripe Checkout, visible only when platform flag is on) -->
+          <div
+            v-if="walletVerified && customerStore.platform?.psp_topup_enabled"
+            class="ui-panel space-y-3 p-4"
+          >
+            <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.topUpTitle') }}</p>
+            <p
+              v-if="topUpQueryMsg"
+              class="rounded-lg px-3 py-2 text-xs font-medium"
+              :class="route.query.topup === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
+              role="status"
+            >{{ topUpQueryMsg }}</p>
+            <label class="flex flex-col gap-1 text-xs text-slate-400">
+              <span>{{ t('customerAccount.topUpAmountLabel') }}</span>
+              <input
+                v-model.number="topUpAmount"
+                type="number"
+                min="10"
+                max="2000"
+                step="10"
+                class="ui-input w-full"
+                :placeholder="t('customerAccount.topUpAmountHint')"
+                :disabled="topUpLoading"
+              />
+            </label>
+            <p v-if="topUpError" class="text-xs text-red-400" role="alert">{{ topUpError }}</p>
+            <button
+              class="w-full rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 py-2.5 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15 disabled:opacity-50"
+              :disabled="topUpLoading || !topUpAmount"
+              @click="initTopUp"
+            >
+              <span v-if="topUpLoading">{{ t('customerAccount.topUpLoading') }}</span>
+              <span v-else>{{ t('customerAccount.topUpBtn') }}</span>
+            </button>
+          </div>
+
           <!-- Empty-wallet onboarding guide — shown only until first top-up -->
           <div
             v-if="walletVerified && walletBalance <= 0 && !loadingWallet"
@@ -1657,7 +1693,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { RouterLink, useRouter, useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
@@ -1679,6 +1715,15 @@ const cart = useCartStore();
 const toast = useToastStore();
 const menuStore = useMenuStore();
 const router = useRouter();
+const route = useRoute();
+
+// Show a one-time banner when Stripe redirects back with ?topup=success|cancelled
+const topUpQueryMsg = computed(() => {
+  const q = route.query.topup;
+  if (q === 'success') return t('customerAccount.topUpSuccessMsg');
+  if (q === 'cancelled') return t('customerAccount.topUpCancelledMsg');
+  return '';
+});
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
 const activeTab = ref('overview');
@@ -2209,6 +2254,28 @@ const walletVerified = computed(() => !!customerStore.customer?.phone_verified);
 // ── Pay code (QR) — a restaurant scans this to top up the wallet ───────────────
 const showPayCode = ref(false);
 const payCodeImg = ref('');
+
+// ── PSP top-up (Stripe Checkout, shown only when platform flag is on) ─────────
+const topUpAmount = ref(100);
+const topUpLoading = ref(false);
+const topUpError = ref('');
+
+const initTopUp = async () => {
+  topUpError.value = '';
+  topUpLoading.value = true;
+  try {
+    const { data } = await api.post('/customer/topup/intent/', { amount: String(topUpAmount.value) });
+    if (data.enabled && data.url) {
+      window.location.href = data.url;
+    } else {
+      topUpError.value = t('customerAccount.topUpError');
+    }
+  } catch {
+    topUpError.value = t('customerAccount.topUpError');
+  } finally {
+    topUpLoading.value = false;
+  }
+};
 
 const refreshPayCode = async () => {
   payCodeImg.value = '';

@@ -5011,7 +5011,15 @@ export const messages = {
       saveNameFailed: "Could not save name. Please try again.",
       walletLoadFailed: "Could not load wallet data — please refresh.",
       addressLoadFailed: "Could not load saved addresses — please refresh.",
-      tabNav: "Account sections"
+      tabNav: "Account sections",
+      topUpTitle: "Top Up Wallet",
+      topUpAmountLabel: "Amount (MAD)",
+      topUpAmountHint: "Min 10, max 2 000",
+      topUpBtn: "Top Up with Card",
+      topUpLoading: "Redirecting to payment…",
+      topUpSuccessMsg: "Top-up processed — your balance will reflect shortly.",
+      topUpCancelledMsg: "Payment cancelled.",
+      topUpError: "Could not start payment. Please try again."
     }
   },
   fr: {
@@ -10023,7 +10031,15 @@ export const messages = {
       saveNameFailed: "Impossible d'enregistrer le nom. Veuillez reessayer.",
       walletLoadFailed: "Impossible de charger les donnees du portefeuille — veuillez actualiser.",
       addressLoadFailed: "Impossible de charger les adresses enregistrees — veuillez actualiser.",
-      tabNav: "Sections du compte"
+      tabNav: "Sections du compte",
+      topUpTitle: "Recharger le portefeuille",
+      topUpAmountLabel: "Montant (MAD)",
+      topUpAmountHint: "Min 10, max 2 000",
+      topUpBtn: "Recharger par carte",
+      topUpLoading: "Redirection vers le paiement…",
+      topUpSuccessMsg: "Rechargement effectué — votre solde sera mis à jour sous peu.",
+      topUpCancelledMsg: "Paiement annulé.",
+      topUpError: "Impossible de démarrer le paiement. Veuillez réessayer."
     }
   },
   ar: arabicMessages

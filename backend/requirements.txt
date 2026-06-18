@@ -27,3 +27,5 @@ channels-redis==4.2.0
 daphne==4.1.2
 uvicorn[standard]==0.30.6
 pyotp==2.9.0
+# PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
+stripe>=10.0.0,<13.0.0

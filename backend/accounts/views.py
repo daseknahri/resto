@@ -582,15 +582,16 @@ class CustomerSessionView(APIView):
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
+        psp_flag = {"psp_topup_enabled": bool(settings.PSP_TOPUP_ENABLED)}
         customer_id = request.session.get("customer_id")
         if not customer_id:
-            return Response({"customer": None})
+            return Response({"customer": None, "platform": psp_flag})
         try:
             customer = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
             request.session.pop("customer_id", None)
-            return Response({"customer": None})
-        return Response({"customer": _serialize_customer(customer)})
+            return Response({"customer": None, "platform": psp_flag})
+        return Response({"customer": _serialize_customer(customer), "platform": psp_flag})
 
     def delete(self, request):
         request.session.pop("customer_id", None)
@@ -7263,3 +7264,153 @@ class EmailUnsubscribeView(APIView):
         # RFC 8058 one-click: same effect as GET, accepted without CSRF/auth/body.
         self._unsubscribe(token)
         return self._respond()
+
+
+# ── PSP top-up seam (Stripe Checkout, dormant when PSP_TOPUP_ENABLED=False) ──
+
+
+class CustomerTopUpIntentView(APIView):
+    """POST /api/customer/topup/intent/ — start a Stripe Checkout Session for wallet top-up.
+
+    Returns ``{"enabled": False}`` when the feature flag is off (safe to call always).
+    When enabled, validates the requested amount, creates a Checkout Session, and returns
+    ``{"enabled": True, "url": "<stripe_url>"}``. The frontend redirects to that URL.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = []
+
+    def post(self, request):
+        if not settings.PSP_TOPUP_ENABLED:
+            return Response({"enabled": False})
+
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from decimal import Decimal as _D, InvalidOperation as _IO
+        raw = str(request.data.get("amount") or "").strip()
+        try:
+            amount = _D(raw).quantize(_D("0.01"))
+        except (_IO, ValueError):
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount < _D("10.00") or amount > _D("2000.00"):
+            return Response(
+                {"detail": "Amount must be between 10 and 2000."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            import stripe as _stripe
+            _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
+        except ImportError:
+            return Response(
+                {"detail": "PSP provider not available."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        site_url = settings.PSP_SITE_URL or "/"
+        try:
+            session = _stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "mad",
+                        "product_data": {"name": "Wallet top-up"},
+                        "unit_amount": int(amount * 100),
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                success_url=f"{site_url}/account?topup=success",
+                cancel_url=f"{site_url}/account?topup=cancelled",
+                metadata={"customer_id": str(customer.pk), "amount": str(amount)},
+                client_reference_id=str(customer.pk),
+            )
+        except Exception:
+            return Response(
+                {"detail": "Could not create payment session."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"enabled": True, "url": session.url})
+
+
+class CustomerTopUpWebhookView(APIView):
+    """POST /api/customer/topup/webhook/ — receive Stripe events.
+
+    Handles ``checkout.session.completed`` by crediting the customer wallet.
+    Idempotent: Stripe may deliver each event more than once; the wallet service
+    deduplicates on ``idempotency_key="stripe:<event_id>"``.
+
+    Stripe-Signature verification is enforced when PSP_STRIPE_WEBHOOK_SECRET is set
+    (required in production). Without a secret the handler still runs (useful in
+    staging/dev where the signing secret is unknown), but any malicious caller
+    could fabricate top-ups — always set the secret in production.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        if not settings.PSP_TOPUP_ENABLED:
+            return Response({"ok": False, "detail": "PSP disabled."})
+
+        payload = request._request.body
+        sig = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+        webhook_secret = settings.PSP_STRIPE_WEBHOOK_SECRET
+
+        try:
+            import stripe as _stripe
+            _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
+        except ImportError:
+            return Response({"ok": False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if webhook_secret:
+            try:
+                event = _stripe.Webhook.construct_event(payload, sig, webhook_secret)
+            except (_stripe.error.SignatureVerificationError, ValueError):
+                return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            import json as _json
+            try:
+                event = _json.loads(payload)
+            except Exception:
+                return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
+
+        if event.get("type") != "checkout.session.completed":
+            return Response({"ok": True})
+
+        cs = event.get("data", {}).get("object", {})
+        meta = cs.get("metadata") or {}
+        customer_id = meta.get("customer_id")
+        amount_str = meta.get("amount")
+        event_id = event.get("id", "")
+
+        if not customer_id or not amount_str or not event_id:
+            return Response(
+                {"ok": False, "detail": "Missing metadata."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .wallet_service import credit_wallet, WalletError
+        try:
+            credit_wallet(
+                customer_id=customer_id,
+                amount=amount_str,
+                idempotency_key=f"stripe:{event_id}",
+                reference=f"stripe:{cs.get('id', '')}",
+                note="PSP top-up via Stripe Checkout",
+                require_verified=False,
+            )
+        except WalletError:
+            return Response(
+                {"ok": False, "detail": "Wallet credit failed."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        return Response({"ok": True})

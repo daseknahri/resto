@@ -5,6 +5,8 @@ export const useCustomerStore = defineStore("customer", {
   state: () => ({
     /** @type {{ id: number, name: string, email: string, phone: string, phone_verified: boolean, email_verified: boolean, has_google: boolean, wallet_balance: string } | null} */
     customer: null,
+    /** @type {{ psp_topup_enabled: boolean } | null} */
+    platform: null,
     loaded: false,
     loading: false,
   }),
@@ -29,6 +31,7 @@ export const useCustomerStore = defineStore("customer", {
       try {
         const { data } = await api.get("/customer/session/");
         this.customer = data.customer || null;
+        this.platform = data.platform || null;
       } catch {
         this.customer = null;
       } finally {

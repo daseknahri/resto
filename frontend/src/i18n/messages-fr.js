@@ -5011,6 +5011,14 @@ customerAccount: {
   saveNameFailed: "Impossible d'enregistrer le nom. Veuillez reessayer.",
   walletLoadFailed: "Impossible de charger les donnees du portefeuille — veuillez actualiser.",
   addressLoadFailed: "Impossible de charger les adresses enregistrees — veuillez actualiser.",
-  tabNav: "Sections du compte"
+  tabNav: "Sections du compte",
+  topUpTitle: "Recharger le portefeuille",
+  topUpAmountLabel: "Montant (MAD)",
+  topUpAmountHint: "Min 10, max 2 000",
+  topUpBtn: "Recharger par carte",
+  topUpLoading: "Redirection vers le paiement…",
+  topUpSuccessMsg: "Rechargement effectué — votre solde sera mis à jour sous peu.",
+  topUpCancelledMsg: "Paiement annulé.",
+  topUpError: "Impossible de démarrer le paiement. Veuillez réessayer."
 }
 };
