@@ -7503,6 +7503,39 @@ class OwnerZReportView(APIView):
         if total_labor_cost is not None and collected_total > 0:
             labor_pct = str((total_labor_cost / collected_total * 100).quantize(_CENT))
 
+        # ── Food cost (B3 Phase 1) ────────────────────────────────────────────
+        from menu.models import Dish as _Dish
+        from django.db.models import (
+            Subquery as _Subquery,
+            OuterRef as _OuterRef,
+            ExpressionWrapper as _EW,
+            F as _F2,
+            DecimalField as _DF,
+        )
+
+        _cost_subq = (
+            _Dish.objects.filter(slug=_OuterRef("dish_slug"))
+            .values("cost_price")[:1]
+        )
+        _food_agg = (
+            OrderItem.objects
+            .filter(
+                order__payment_status=Order.PaymentStatus.PAID,
+                order__paid_at__gte=window_start,
+                order__paid_at__lt=window_end,
+                is_voided=False,
+            )
+            .annotate(dish_cost=_Subquery(_cost_subq, output_field=_DF(max_digits=8, decimal_places=2)))
+            .filter(dish_cost__isnull=False)
+            .annotate(line_food_cost=_EW(_F2("qty") * _F2("dish_cost"), output_field=_DF(max_digits=12, decimal_places=2)))
+            .aggregate(total=Sum("line_food_cost"))
+        )
+        _food_total = _food_agg["total"]
+        food_cost_total = _food_total.quantize(_CENT) if _food_total is not None else None
+        food_cost_pct = None
+        if food_cost_total is not None and collected_total > 0:
+            food_cost_pct = str((food_cost_total / collected_total * 100).quantize(_CENT))
+
         return {
             "window": {
                 "service_day": service_day_date.isoformat(),
@@ -7537,6 +7570,10 @@ class OwnerZReportView(APIView):
                 "total_hours": float(round(total_labor_hours, 2)),
                 "total_labor_cost": str(total_labor_cost.quantize(_CENT)) if total_labor_cost is not None else None,
                 "labor_pct": labor_pct,
+            },
+            "food_cost": {
+                "total": str(food_cost_total) if food_cost_total is not None else None,
+                "food_cost_pct": food_cost_pct,
             },
             "net_cash_position": str(net_cash_position),
             "net": str((collected_total - refund_total).quantize(Decimal("0.01"))),

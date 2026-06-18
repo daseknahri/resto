@@ -284,11 +284,18 @@ def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
     mock_wt_class.Type.REFUND = "REFUND"
     mock_wt_class.objects.filter.return_value = wt_qs
 
-    # OrderItem.objects: voided items (empty)
+    # OrderItem.objects:
+    #   .select_related("order").filter(...) → voided-items iteration (empty)
+    #   .filter(...).annotate(...).filter(...).annotate(...).aggregate(...) → food-cost query (total=None)
     oi_qs = MagicMock()
     oi_qs.__iter__ = lambda s: iter([])
+    food_cost_chain = MagicMock()
+    food_cost_chain.annotate.return_value = food_cost_chain
+    food_cost_chain.filter.return_value = food_cost_chain
+    food_cost_chain.aggregate.return_value = {"total": None}
     mock_oi_objs = MagicMock()
     mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
+    mock_oi_objs.filter.return_value = food_cost_chain
 
     # OrderPayment.objects: by_staff (empty).
     # The by_staff filter now uses order__paid_at instead of created_at; the mock
@@ -342,7 +349,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         for key in ("window", "collected", "refunds", "voids", "tips", "by_staff",
-                    "net_cash_position", "net"):
+                    "food_cost", "labor", "net_cash_position", "net"):
             self.assertIn(key, resp.data, f"Missing top-level key: {key}")
 
     def test_collected_cash_plus_wallet_equals_total(self):
@@ -449,6 +456,11 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         ):
             mock_order_objs.filter.return_value = order_qs
             mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
+            _fc_chain = MagicMock()
+            _fc_chain.annotate.return_value = _fc_chain
+            _fc_chain.filter.return_value = _fc_chain
+            _fc_chain.aggregate.return_value = {"total": None}
+            mock_oi_objs.filter.return_value = _fc_chain
             mock_op_objs.filter.return_value = _make_empty_op_qs()
 
             req = self.factory.get("/api/owner/z-report/", {"date": "2026-06-10"})
@@ -524,6 +536,11 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
         ):
             mock_order_objs.filter.return_value = order_qs
             mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
+            _rfc_chain = MagicMock()
+            _rfc_chain.annotate.return_value = _rfc_chain
+            _rfc_chain.filter.return_value = _rfc_chain
+            _rfc_chain.aggregate.return_value = {"total": None}
+            mock_oi_objs.filter.return_value = _rfc_chain
             mock_op_objs.filter.return_value = _make_empty_op_qs()
 
             req = self.factory.get("/api/owner/z-report/", {"date": "2026-06-10"})

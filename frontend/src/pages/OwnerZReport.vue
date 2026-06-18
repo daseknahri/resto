@@ -210,6 +210,81 @@
       </div>
       <p v-else-if="report" class="px-4 text-xs text-slate-500">{{ t("zReport.noStaffData") }}</p>
 
+      <!-- Food-cost card -->
+      <div v-if="report?.food_cost?.total" class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 px-4 py-3 print:border-slate-300 print:bg-white">
+        <p class="mb-2 text-sm font-semibold text-slate-200 print:text-black">{{ t("zReport.foodCostTitle") }}</p>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 print:text-slate-400">{{ t("zReport.foodCostTotal") }}</p>
+            <p class="text-lg font-bold tabular-nums text-orange-300 print:text-orange-700">{{ fmtMoney(report.food_cost.total) }}</p>
+          </div>
+          <div v-if="report.food_cost.food_cost_pct">
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 print:text-slate-400">{{ t("zReport.foodCostPct") }}</p>
+            <p class="text-lg font-bold tabular-nums text-orange-300 print:text-orange-700">{{ report.food_cost.food_cost_pct }}%</p>
+          </div>
+        </div>
+        <p class="mt-1.5 text-[10px] text-slate-600 print:text-slate-400">{{ t("zReport.foodCostNote") }}</p>
+      </div>
+
+      <!-- Labor section -->
+      <div v-if="report?.labor" class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 print:border-slate-300 print:bg-white">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
+          :aria-expanded="laborExpanded"
+          @click="laborExpanded = !laborExpanded"
+        >
+          <span>{{ t("zReport.laborTitle") }} <span class="ms-1.5 text-xs font-normal text-slate-500">({{ report.labor.shifts?.length ?? 0 }})</span></span>
+          <span class="text-xs text-slate-500 print:hidden">{{ report.labor.total_labor_cost ? fmtMoney(report.labor.total_labor_cost) : (report.labor.total_hours + 'h') }}</span>
+          <AppIcon :name="laborExpanded ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500 ms-2 print:hidden" aria-hidden="true" />
+        </button>
+        <Transition name="ui-fade">
+          <div v-if="laborExpanded" class="border-t border-slate-800 px-4 pb-3 print:border-slate-300">
+            <!-- Labor KPIs -->
+            <div class="mt-2 grid grid-cols-3 gap-3 pb-2">
+              <div>
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("zReport.laborTotalHours") }}</p>
+                <p class="text-base font-bold tabular-nums text-slate-200">{{ report.labor.total_hours }}h</p>
+              </div>
+              <div v-if="report.labor.total_labor_cost">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("zReport.laborTotalCost") }}</p>
+                <p class="text-base font-bold tabular-nums text-slate-200">{{ fmtMoney(report.labor.total_labor_cost) }}</p>
+              </div>
+              <div v-if="report.labor.labor_pct">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("zReport.laborPct") }}</p>
+                <p class="text-base font-bold tabular-nums text-slate-200">{{ report.labor.labor_pct }}%</p>
+              </div>
+            </div>
+            <!-- Shift list -->
+            <p v-if="!report.labor.shifts?.length" class="text-xs text-slate-500">{{ t("zReport.laborNoShifts") }}</p>
+            <table v-else class="w-full text-xs mt-1">
+              <thead>
+                <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
+                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
+                  <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
+                  <th class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(sh, idx) in report.labor.shifts"
+                  :key="idx"
+                  class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
+                >
+                  <td class="py-1.5 pe-2 font-medium text-slate-200 print:text-black">{{ sh.user_name }}</td>
+                  <td class="py-1.5 pe-2 text-center tabular-nums text-slate-400">
+                    {{ sh.hours != null ? sh.hours + 'h' : t("zReport.laborStillOpen") }}
+                  </td>
+                  <td class="py-1.5 text-end tabular-nums text-slate-400">
+                    {{ sh.labor_cost ? fmtMoney(sh.labor_cost) : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Transition>
+      </div>
+
     </div>
 
     <!-- Empty state when no report yet and not loading -->
@@ -238,6 +313,7 @@ const loading = ref(false);
 const exporting = ref(false);
 const error = ref("");
 const voidsExpanded = ref(true);
+const laborExpanded = ref(true);
 
 // Default date = today in ISO format
 const todayIso = computed(() => new Date().toISOString().slice(0, 10));
