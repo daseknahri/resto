@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from io import StringIO
 
 from django.conf import settings
 from django.contrib.auth import login, logout
@@ -27,8 +28,10 @@ from rest_framework.views import APIView
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.openstate import schedule_open_now, tenant_local_now
 
+from django.core.management import call_command
+
 from .messaging import send_password_reset_email
-from .models import Customer
+from .models import Customer, CustomerOrderRef, SavedAddress, WalletTransaction
 from .throttles import (
     ActivationThrottle,
     AdminPIIThrottle,
@@ -7506,3 +7509,125 @@ class CustomerTopUpWebhookView(APIView):
             )
 
         return Response({"ok": True})
+
+
+# ── C6: self-serve data export + PII erasure ──────────────────────────────────
+
+
+class CustomerDataExportView(APIView):
+    """GET /api/customer/my-data/ — export all PII for the current customer session.
+
+    Returns a JSON attachment with profile, wallet, order history, and saved
+    addresses (limited to the most recent 200 rows each to stay < 1 MB).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response(
+                {"detail": "Not authenticated."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        wallet_txns = list(
+            WalletTransaction.objects.filter(customer_id=customer_id)
+            .order_by("-created_at")
+            .values("type", "amount", "note", "created_at")[:200]
+        )
+        order_refs = list(
+            CustomerOrderRef.objects.filter(customer_id=customer_id)
+            .order_by("-order_created_at")
+            .values(
+                "restaurant_name", "order_number", "status",
+                "total", "currency", "order_created_at",
+            )[:200]
+        )
+        addresses = list(
+            SavedAddress.objects.filter(customer_id=customer_id)
+            .values("label", "address_line", "lat", "lng")
+        )
+
+        for row in wallet_txns:
+            row["amount"] = str(row["amount"])
+            if row.get("created_at"):
+                row["created_at"] = row["created_at"].isoformat()
+        for row in order_refs:
+            row["total"] = str(row["total"])
+            if row.get("order_created_at"):
+                row["order_created_at"] = row["order_created_at"].isoformat()
+
+        payload = {
+            "export_version": 1,
+            "profile": {
+                "id": customer.pk,
+                "name": customer.name,
+                "email": customer.email,
+                "phone": customer.phone,
+                "locale": customer.locale,
+                "birthday": str(customer.birthday) if customer.birthday else None,
+                "created_at": customer.created_at.isoformat(),
+            },
+            "loyalty": {
+                "points": customer.loyalty_points,
+                "lifetime_points": customer.lifetime_loyalty_points,
+            },
+            "wallet": {
+                "balance": str(customer.wallet_balance),
+                "transactions": wallet_txns,
+            },
+            "orders": order_refs,
+            "saved_addresses": addresses,
+        }
+
+        response = Response(payload)
+        response["Content-Disposition"] = 'attachment; filename="kepoli-data-export.json"'
+        return response
+
+
+class CustomerErasureRequestView(APIView):
+    """POST /api/customer/request-erasure/ — GDPR right-to-erasure, self-service.
+
+    Runs Phase 0 guard-rail checks (open orders, pending charges, non-zero wallet
+    balance) before delegating to the erase_customer management command.  The
+    command is idempotent and scrubs PII across all schemas atomically.
+
+    On success: the customer's session is flushed and HTTP 204 is returned.
+    On guard failure: HTTP 409 with {"detail": "...", "errors": ["…", "…"]}.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response(
+                {"detail": "Not authenticated."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from accounts.management.commands.erase_customer import _check_guard_rails
+
+        errors = _check_guard_rails(customer, customer_id)
+        if errors:
+            return Response(
+                {"detail": "Account cannot be erased at this time.", "errors": errors},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        _buf = StringIO()
+        call_command("erase_customer", customer_id, force_erase=True, stdout=_buf, stderr=_buf)
+
+        request.session.flush()
+        return Response(status=status.HTTP_204_NO_CONTENT)

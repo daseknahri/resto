@@ -1690,7 +1690,7 @@
             </div>
 
             <!-- Notifications -->
-            <div class="px-4 py-3 space-y-2.5">
+            <div id="notifications-section" class="px-4 py-3 space-y-2.5">
               <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.notificationsTitle') }}</p>
               <label class="flex items-center justify-between gap-3">
                 <span class="text-sm text-slate-300">{{ t('customerAccount.notifyOrderUpdates') }}</span>
@@ -1726,6 +1726,81 @@
                 >{{ t('customerAccount.notifyEnable') }}</button>
                 <span v-else class="shrink-0 text-[11px] font-semibold text-emerald-400">{{ t('customerAccount.notifyOn') }}</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Privacy & data section -->
+          <div class="ui-panel ui-reveal overflow-hidden p-0" style="--ui-delay: 120ms">
+            <div class="border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.privacyTitle') }}</p>
+            </div>
+
+            <!-- Export row -->
+            <div class="px-4 py-3 space-y-1.5">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.privacyExportTitle') }}</p>
+                  <p class="mt-0.5 text-[11px] leading-relaxed text-slate-500">{{ t('customerAccount.privacyExportHint') }}</p>
+                </div>
+                <button
+                  class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/50 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white disabled:opacity-50 ui-press"
+                  :disabled="exportingData"
+                  @click="downloadMyData"
+                >
+                  <svg v-if="exportingData" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0"><path d="M8 2v8M5 7l3 3 3-3M3 12h10"/></svg>
+                  {{ t('customerAccount.privacyExportBtn') }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Delete row -->
+            <div class="border-t border-slate-800/70 px-4 py-3 space-y-2.5">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-semibold text-red-300">{{ t('customerAccount.privacyDeleteTitle') }}</p>
+                  <p class="mt-0.5 text-[11px] leading-relaxed text-slate-500">{{ t('customerAccount.privacyDeleteHint') }}</p>
+                </div>
+                <button
+                  v-if="!erasureConfirmVisible"
+                  class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-500/8 px-3 py-1.5 text-[11px] font-semibold text-red-300 transition hover:border-red-500/60 hover:bg-red-500/15 ui-press"
+                  @click="erasureConfirmVisible = true"
+                >
+                  {{ t('customerAccount.privacyDeleteBtn') }}
+                </button>
+              </div>
+
+              <!-- Guard-blocked error -->
+              <p
+                v-if="erasureBlockedMsg"
+                class="text-[11px] leading-relaxed text-amber-400"
+                role="alert"
+              >{{ erasureBlockedMsg }}</p>
+
+              <!-- Inline confirm -->
+              <Transition name="ui-fade">
+                <div
+                  v-if="erasureConfirmVisible"
+                  class="rounded-xl border border-red-500/30 bg-red-500/6 p-3 space-y-2.5"
+                >
+                  <p class="text-[11px] leading-relaxed text-red-200">{{ t('customerAccount.privacyDeleteConfirmText') }}</p>
+                  <div class="flex gap-2">
+                    <button
+                      class="inline-flex items-center gap-1.5 rounded-lg border border-red-500/50 bg-red-500/12 px-3 py-1.5 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50 ui-press"
+                      :disabled="requestingErasure"
+                      @click="requestErasure"
+                    >
+                      <svg v-if="requestingErasure" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                      {{ t('customerAccount.privacyDeleteConfirmBtn') }}
+                    </button>
+                    <button
+                      class="rounded-lg border border-slate-700/60 px-3 py-1.5 text-[11px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                      :disabled="requestingErasure"
+                      @click="erasureConfirmVisible = false; erasureBlockedMsg = ''"
+                    >{{ t('common.cancel') }}</button>
+                  </div>
+                </div>
+              </Transition>
             </div>
           </div>
 
@@ -2617,6 +2692,55 @@ const handleLogout = async () => {
   lastRide.value = null;
   lastRideChecked.value = false;
   activeTab.value = 'overview';
+};
+
+// ── Privacy & data export ─────────────────────────────────────────────────────
+const exportingData = ref(false);
+const requestingErasure = ref(false);
+const erasureConfirmVisible = ref(false);
+const erasureBlockedMsg = ref('');
+
+const downloadMyData = async () => {
+  if (exportingData.value) return;
+  exportingData.value = true;
+  try {
+    const resp = await fetch('/api/customer/my-data/', { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('export-failed');
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kepoli-data-export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.show(t('customerAccount.privacyExportFailed'), 'error');
+  } finally {
+    exportingData.value = false;
+  }
+};
+
+const requestErasure = async () => {
+  if (requestingErasure.value) return;
+  requestingErasure.value = true;
+  erasureBlockedMsg.value = '';
+  try {
+    await api.post('/customer/request-erasure/');
+    await customerStore.logout();
+    toast.show(t('customerAccount.privacyDeleteDone'), 'success');
+    router.push({ name: 'home' });
+  } catch (err) {
+    if (err?.response?.status === 409) {
+      const errors = err.response.data?.errors || [];
+      erasureBlockedMsg.value = errors.join(' · ') || t('customerAccount.privacyDeleteBlocked');
+      erasureConfirmVisible.value = false;
+    } else {
+      toast.show(t('customerAccount.privacyDeleteFailed'), 'error');
+    }
+  } finally {
+    requestingErasure.value = false;
+    erasureConfirmVisible.value = false;
+  }
 };
 
 const onAuthenticated = (customer) => {

@@ -5070,6 +5070,19 @@ customerAccount: {
   tierProgressPts: "{current} / {next} pts to {tier}",
   birthdayLabel: "Birthday",
   birthdayHint: "We'll reward you with bonus points on your birthday.",
-  birthdaySaved: "Birthday saved."
+  birthdaySaved: "Birthday saved.",
+  privacyTitle: "Privacy & Data",
+  privacyExportTitle: "Download my data",
+  privacyExportHint: "Get a copy of your profile, orders, wallet history, and saved addresses.",
+  privacyExportBtn: "Download",
+  privacyDeleteTitle: "Delete my account",
+  privacyDeleteHint: "Anonymises your personal data permanently. Active orders or a non-zero wallet balance must be resolved first.",
+  privacyDeleteBtn: "Delete account",
+  privacyDeleteConfirmText: "This is irreversible. Your personal information will be permanently anonymised and you will be signed out.",
+  privacyDeleteConfirmBtn: "Yes, delete my account",
+  privacyDeleteDone: "Your account data has been anonymised.",
+  privacyExportFailed: "Could not export your data. Please try again.",
+  privacyDeleteFailed: "Could not delete your account. Please try again.",
+  privacyDeleteBlocked: "Your account cannot be deleted right now."
 }
 };

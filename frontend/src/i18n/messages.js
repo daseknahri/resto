@@ -5065,7 +5065,20 @@ export const messages = {
       tierProgressPts: "{pts} / {threshold} lifetime pts",
       birthdayLabel: "Birthday",
       birthdayHint: "Set your birthday to earn bonus points on your special day.",
-      birthdaySaved: "Birthday saved."
+      birthdaySaved: "Birthday saved.",
+      privacyTitle: "Privacy & Data",
+      privacyExportTitle: "Download my data",
+      privacyExportHint: "Get a copy of your profile, orders, wallet history, and saved addresses.",
+      privacyExportBtn: "Download",
+      privacyDeleteTitle: "Delete my account",
+      privacyDeleteHint: "Anonymises your personal data permanently. Active orders or a non-zero wallet balance must be resolved first.",
+      privacyDeleteBtn: "Delete account",
+      privacyDeleteConfirmText: "This is irreversible. Your personal information will be permanently anonymised and you will be signed out.",
+      privacyDeleteConfirmBtn: "Yes, delete my account",
+      privacyDeleteDone: "Your account data has been anonymised.",
+      privacyExportFailed: "Could not export your data. Please try again.",
+      privacyDeleteFailed: "Could not delete your account. Please try again.",
+      privacyDeleteBlocked: "Your account cannot be deleted right now."
     }
   },
   fr: {
@@ -10131,7 +10144,20 @@ export const messages = {
       tierProgressPts: "{pts} / {threshold} pts cumulés",
       birthdayLabel: "Anniversaire",
       birthdayHint: "Renseignez votre anniversaire pour gagner des points bonus ce jour-là.",
-      birthdaySaved: "Anniversaire enregistré."
+      birthdaySaved: "Anniversaire enregistré.",
+      privacyTitle: "Confidentialité & Données",
+      privacyExportTitle: "Télécharger mes données",
+      privacyExportHint: "Obtenez une copie de votre profil, commandes, historique portefeuille et adresses enregistrées.",
+      privacyExportBtn: "Télécharger",
+      privacyDeleteTitle: "Supprimer mon compte",
+      privacyDeleteHint: "Anonymise vos données personnelles définitivement. Les commandes actives ou un solde non nul doivent être résolus d'abord.",
+      privacyDeleteBtn: "Supprimer le compte",
+      privacyDeleteConfirmText: "Cette action est irréversible. Vos informations personnelles seront anonymisées définitivement et vous serez déconnecté(e).",
+      privacyDeleteConfirmBtn: "Oui, supprimer mon compte",
+      privacyDeleteDone: "Vos données personnelles ont été anonymisées.",
+      privacyExportFailed: "Impossible d'exporter vos données. Veuillez réessayer.",
+      privacyDeleteFailed: "Impossible de supprimer votre compte. Veuillez réessayer.",
+      privacyDeleteBlocked: "Votre compte ne peut pas être supprimé pour l'instant."
     }
   },
   ar: arabicMessages

@@ -5065,6 +5065,19 @@ customerAccount: {
   tierProgressPts: "{current} / {next} pts vers {tier}",
   birthdayLabel: "Date d anniversaire",
   birthdayHint: "Nous vous récompenserons avec des points bonus le jour de votre anniversaire.",
-  birthdaySaved: "Anniversaire enregistré."
+  birthdaySaved: "Anniversaire enregistré.",
+  privacyTitle: "Confidentialité & Données",
+  privacyExportTitle: "Télécharger mes données",
+  privacyExportHint: "Obtenez une copie de votre profil, commandes, historique portefeuille et adresses enregistrées.",
+  privacyExportBtn: "Télécharger",
+  privacyDeleteTitle: "Supprimer mon compte",
+  privacyDeleteHint: "Anonymise vos données personnelles définitivement. Les commandes actives ou un solde non nul doivent être résolus d'abord.",
+  privacyDeleteBtn: "Supprimer le compte",
+  privacyDeleteConfirmText: "Cette action est irréversible. Vos informations personnelles seront anonymisées définitivement et vous serez déconnecté(e).",
+  privacyDeleteConfirmBtn: "Oui, supprimer mon compte",
+  privacyDeleteDone: "Vos données personnelles ont été anonymisées.",
+  privacyExportFailed: "Impossible d'exporter vos données. Veuillez réessayer.",
+  privacyDeleteFailed: "Impossible de supprimer votre compte. Veuillez réessayer.",
+  privacyDeleteBlocked: "Votre compte ne peut pas être supprimé pour l'instant."
 }
 };
