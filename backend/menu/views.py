@@ -53,7 +53,7 @@ from tenancy.openstate import schedule_open_now
 
 from django_tenants.utils import schema_context
 
-from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price, happy_hour_payload
 from .tax import order_vat_fields
@@ -62,7 +62,9 @@ from .serializers import (
     DishOptionSerializer,
     DishSerializer,
     HappyHourSerializer,
+    IngredientSerializer,
     OptionGroupSerializer,
+    RecipeLineSerializer,
     SuperCategorySerializer,
     TableLinkSerializer,
 )
@@ -2704,6 +2706,30 @@ class PlaceOrderView(APIView):
                                 )
                             else:
                                 Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
+
+                # B3 Phase 2: deplete ingredient stock for recipe-linked ingredients.
+                # Runs inside the same atomic block so a failed checkout never leaves
+                # partial ingredient deductions. Negative stock is allowed (indicates
+                # variance / under-stocking for the owner to investigate).
+                _dish_qty_map: dict[int, int] = {}
+                for _item_d in order_items_data:
+                    _d = dishes_map[_item_d["dish_slug"]]
+                    if isinstance(_d.pk, int):
+                        _dish_qty_map[_d.pk] = _dish_qty_map.get(_d.pk, 0) + _item_d["qty"]
+                if _dish_qty_map:
+                    _recipe_lines = RecipeLine.objects.filter(
+                        dish_id__in=list(_dish_qty_map.keys())
+                    ).only("dish_id", "ingredient_id", "quantity")
+                    _ing_depletion: dict[int, Decimal] = {}
+                    for _rl in _recipe_lines:
+                        _delta = _rl.quantity * _dish_qty_map[_rl.dish_id]
+                        _ing_depletion[_rl.ingredient_id] = (
+                            _ing_depletion.get(_rl.ingredient_id, Decimal("0")) + _delta
+                        )
+                    for _ing_pk, _delta in _ing_depletion.items():
+                        Ingredient.objects.filter(pk=_ing_pk).update(
+                            stock_quantity=F("stock_quantity") - _delta
+                        )
 
                 # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create() so
                 # a failed increment never leaves a discounted order in the DB.
@@ -11446,3 +11472,183 @@ class OwnerCampaignView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+# ── B3 Phase 2: Ingredient inventory + recipe BOM ────────────────────────────
+
+from rest_framework.permissions import IsAuthenticated as _IsAuthenticated
+
+
+class OwnerIngredientListCreateView(APIView):
+    """GET /api/owner/ingredients/  — list active ingredients (owner only).
+    POST /api/owner/ingredients/ — create a new ingredient.
+    """
+
+    permission_classes = [_IsAuthenticated]
+
+    def get(self, request):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        qs = Ingredient.objects.filter(is_active=True)
+        return Response(IngredientSerializer(qs, many=True).data)
+
+    def post(self, request):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = IngredientSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class OwnerIngredientLowStockView(APIView):
+    """GET /api/owner/ingredients/low-stock/ — ingredients at or below their threshold."""
+
+    permission_classes = [_IsAuthenticated]
+
+    def get(self, request):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        qs = Ingredient.objects.filter(
+            is_active=True,
+            low_stock_threshold__isnull=False,
+            stock_quantity__lte=F("low_stock_threshold"),
+        )
+        return Response(IngredientSerializer(qs, many=True).data)
+
+
+class OwnerIngredientDetailView(APIView):
+    """GET/PATCH/DELETE /api/owner/ingredients/<pk>/"""
+
+    permission_classes = [_IsAuthenticated]
+
+    def _get(self, pk):
+        try:
+            return Ingredient.objects.get(pk=pk)
+        except Ingredient.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        ing = self._get(pk)
+        if ing is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(IngredientSerializer(ing).data)
+
+    def patch(self, request, pk):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        ing = self._get(pk)
+        if ing is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = IngredientSerializer(ing, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        ing = self._get(pk)
+        if ing is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        ing.is_active = False
+        ing.save(update_fields=["is_active", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OwnerIngredientAdjustView(APIView):
+    """POST /api/owner/ingredients/<pk>/adjust/
+
+    Body: { "delta": <number>, "note": "<optional reason>" }
+    Positive delta = receiving stock; negative delta = manual waste/count correction.
+    """
+
+    permission_classes = [_IsAuthenticated]
+
+    def post(self, request, pk):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            ing = Ingredient.objects.get(pk=pk, is_active=True)
+        except Ingredient.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            delta = Decimal(str(request.data.get("delta", 0)))
+        except Exception:
+            return Response({"detail": "Invalid delta value."}, status=status.HTTP_400_BAD_REQUEST)
+        if delta == Decimal("0"):
+            return Response({"detail": "Delta must be non-zero."}, status=status.HTTP_400_BAD_REQUEST)
+        Ingredient.objects.filter(pk=ing.pk).update(stock_quantity=F("stock_quantity") + delta)
+        ing.refresh_from_db()
+        return Response(IngredientSerializer(ing).data)
+
+
+class OwnerDishRecipeView(APIView):
+    """GET/POST /api/owner/dishes/<dish_id>/recipe/
+
+    Manage recipe lines (BOM) for a dish.
+    GET  — list all RecipeLine entries for this dish.
+    POST — create or upsert a recipe line (dish + ingredient pair is unique;
+           posting an existing pair updates the quantity).
+    DELETE per-line is handled via OwnerRecipeLineDetailView.
+    """
+
+    permission_classes = [_IsAuthenticated]
+
+    def get(self, request, dish_id):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            Dish.objects.get(pk=dish_id)
+        except Dish.DoesNotExist:
+            return Response({"detail": "Dish not found."}, status=status.HTTP_404_NOT_FOUND)
+        qs = RecipeLine.objects.filter(dish_id=dish_id).select_related("ingredient")
+        return Response(RecipeLineSerializer(qs, many=True).data)
+
+    def post(self, request, dish_id):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            dish = Dish.objects.get(pk=dish_id)
+        except Dish.DoesNotExist:
+            return Response({"detail": "Dish not found."}, status=status.HTTP_404_NOT_FOUND)
+        ingredient_id = request.data.get("ingredient")
+        try:
+            quantity = Decimal(str(request.data.get("quantity", 0)))
+        except Exception:
+            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity <= Decimal("0"):
+            return Response({"detail": "Quantity must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ing = Ingredient.objects.get(pk=ingredient_id, is_active=True)
+        except (Ingredient.DoesNotExist, TypeError, ValueError):
+            return Response({"detail": "Ingredient not found."}, status=status.HTTP_404_NOT_FOUND)
+        rl, created = RecipeLine.objects.update_or_create(
+            dish=dish,
+            ingredient=ing,
+            defaults={"quantity": quantity},
+        )
+        return Response(
+            RecipeLineSerializer(rl).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class OwnerRecipeLineDetailView(APIView):
+    """DELETE /api/owner/recipe-lines/<pk>/ — remove one ingredient from a recipe."""
+
+    permission_classes = [_IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            rl = RecipeLine.objects.get(pk=pk)
+        except RecipeLine.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        rl.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

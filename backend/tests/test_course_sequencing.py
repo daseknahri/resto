@@ -441,6 +441,7 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
         req.session = {}
         return req
 
+    @patch("menu.views.RecipeLine")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.DishOption.objects")
@@ -454,7 +455,7 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
     def test_place_order_snapshots_category_course(
         self, mock_gen, mock_hh, mock_lc, mock_promo,
         mock_profile_om, mock_order_om, mock_tx,
-        mock_dish_opt, mock_dish_om, mock_item_om,
+        mock_dish_opt, mock_dish_om, mock_item_om, mock_rl,
     ):
         # Category with course=2
         dish = _make_dish(slug="steak", name="Steak", price=Decimal("50.00"),

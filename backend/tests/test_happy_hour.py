@@ -608,6 +608,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
         req._dish = dish
         return req
 
+    @patch("menu.views.RecipeLine")
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Order.objects")
@@ -617,7 +618,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
     @patch("menu.pricing.HappyHour")
     def test_orderitem_created_with_discounted_unit_price(
         self, mock_hh, profile_mock, dish_mock, opt_mock,
-        order_mock, orderitem_mock, promo_mock,
+        order_mock, orderitem_mock, promo_mock, mock_rl,
     ):
         """OrderItem.create must receive the happy-hour-discounted unit_price, not dish.price."""
         # Profile
@@ -662,6 +663,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
             f"Expected discounted unit_price 80.00, got {call_kwargs['unit_price']}"
         )
 
+    @patch("menu.views.RecipeLine")
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Order.objects")
@@ -671,7 +673,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
     @patch("menu.pricing.HappyHour")
     def test_orderitem_unit_price_unchanged_when_no_active_rule(
         self, mock_hh, profile_mock, dish_mock, opt_mock,
-        order_mock, orderitem_mock, promo_mock,
+        order_mock, orderitem_mock, promo_mock, mock_rl,
     ):
         """Without an active happy-hour rule, unit_price equals dish.price."""
         prof = _profile()

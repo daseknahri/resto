@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, ComboComponent, Dish, DishOption, HappyHour, OptionGroup, SuperCategory, TableLink
+from .models import Category, ComboComponent, Dish, DishOption, HappyHour, Ingredient, OptionGroup, RecipeLine, SuperCategory, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
@@ -936,3 +936,30 @@ class HappyHourSerializer(serializers.ModelSerializer):
             from .models import Category as _Cat
             instance.categories.set(_Cat.objects.filter(id__in=cat_ids))
         return instance
+
+
+class IngredientSerializer(serializers.ModelSerializer):
+    is_low_stock = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Ingredient
+        fields = [
+            "id", "name", "unit", "stock_quantity", "low_stock_threshold",
+            "cost_per_unit", "is_active", "is_low_stock", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "is_low_stock"]
+
+    def get_is_low_stock(self, obj):
+        if obj.low_stock_threshold is None:
+            return False
+        return obj.stock_quantity <= obj.low_stock_threshold
+
+
+class RecipeLineSerializer(serializers.ModelSerializer):
+    ingredient_name = serializers.CharField(source="ingredient.name", read_only=True)
+    ingredient_unit = serializers.CharField(source="ingredient.unit", read_only=True)
+
+    class Meta:
+        model = RecipeLine
+        fields = ["id", "dish_id", "ingredient", "ingredient_name", "ingredient_unit", "quantity"]
+        read_only_fields = ["id", "dish_id", "ingredient_name", "ingredient_unit"]

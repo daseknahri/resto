@@ -170,7 +170,8 @@ class PlacementStationSnapshotTests(SimpleTestCase):
              patch("menu.views.LoyaltyConfig.objects") as lc_om, \
              patch("menu.views.get_all_active_hh_rules", return_value=[]), \
              patch("menu.views._generate_order_number", return_value="ORD-TEST"), \
-             patch("menu.views.TableLink.objects") as tl_om:
+             patch("menu.views.TableLink.objects") as tl_om, \
+             patch("menu.views.RecipeLine"):
 
             prof_om.filter.return_value.first.return_value = profile
             dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]

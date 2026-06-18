@@ -1269,3 +1269,82 @@ class CustomerNote(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"CustomerNote customer_id={self.customer_id}"
+
+
+class Ingredient(models.Model):
+    """Stock-tracked ingredient used in dish recipes.
+
+    B3 Phase 2: Owners define ingredients (flour, chicken breast, etc.) with
+    a unit and a per-unit cost.  When a RecipeLine links a dish to this
+    ingredient with a quantity, every confirmed order automatically depletes
+    stock_quantity by (recipe_line.quantity × ordered_qty) inside the
+    PlaceOrder / MarketplacePlaceOrder atomic transaction.
+    """
+
+    UNIT_CHOICES = [
+        ("g", "g"),
+        ("kg", "kg"),
+        ("ml", "ml"),
+        ("L", "L"),
+        ("unit", "unit"),
+        ("oz", "oz"),
+        ("lb", "lb"),
+        ("tsp", "tsp"),
+        ("tbsp", "tbsp"),
+    ]
+
+    name = models.CharField(max_length=120)
+    unit = models.CharField(max_length=8, choices=UNIT_CHOICES, default="unit")
+    stock_quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=Decimal("0.000"),
+        help_text="Current stock level in the ingredient's unit.",
+    )
+    low_stock_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Alert when stock_quantity falls at or below this value. null = no alert.",
+    )
+    cost_per_unit = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Cost per unit in the venue's default currency. Used for food-cost% on Z-report.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.unit})"
+
+
+class RecipeLine(models.Model):
+    """One ingredient line in a dish's recipe (bill of materials).
+
+    Quantity is measured in the Ingredient's unit.
+    Unique per (dish, ingredient) pair — use PATCH to change the quantity.
+    """
+
+    dish = models.ForeignKey(Dish, on_delete=models.CASCADE, related_name="recipe_lines")
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE, related_name="recipe_lines"
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        help_text="Amount of the ingredient consumed per one serving of this dish.",
+    )
+
+    class Meta:
+        unique_together = [("dish", "ingredient")]
+
+    def __str__(self) -> str:
+        return f"{self.dish.name}: {self.quantity} {self.ingredient.unit} {self.ingredient.name}"
