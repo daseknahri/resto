@@ -2088,9 +2088,9 @@ class AdminCustomerListView(APIView):
         qs = Customer.objects.all().order_by("-created_at")
         search = (request.query_params.get("search") or "").strip()
         if search:
-            qs = qs.filter(
-                Q(name__icontains=search) | Q(email__icontains=search) | Q(phone__icontains=search)
-            )
+            _digits = "".join(c for c in search if c.isdigit())
+            _phone_q = Q(phone_digits=_digits[-9:]) if len(_digits) >= 5 else Q(phone__icontains=search)
+            qs = qs.filter(Q(name__icontains=search) | Q(email__icontains=search) | _phone_q)
         if str(request.query_params.get("drivers_only") or "").lower() in ("1", "true"):
             qs = qs.filter(is_driver=True)
         if str(request.query_params.get("verified_only") or "").lower() in ("1", "true"):

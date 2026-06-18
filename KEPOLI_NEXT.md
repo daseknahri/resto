@@ -150,7 +150,7 @@ operator pick Kepoli over Toast/Square, and what lifts repeat revenue.**
 
 | # | Workstream | Effort | Source |
 |---|---|---|---|
-| B1 | **Email as a 2nd channel for win-back + campaigns.** Today the whole proactive retention motion is push-only (`send_winback_nudges.py:127`, `accounts/push.py:540`) → reaches only PWA-installed/push-granted users (tiny on iOS Safari). `Customer.email` is stored+indexed; email already sends order status. **Highest-leverage retention fix, zero new infra, no owner decision.** | M | CX lens |
+| B1 ✅ | **Email as a 2nd channel for win-back already shipped** — `send_winback_nudges.py` already has dual-channel delivery: `_send_nudge_email()` + `send_marketing_email()` + `email_by_id` dict built from `email_verified=True` customers; tries both push AND email, burns 90-day slot only if both fail. | M | CX lens |
 | B2 | **Repeat-business analytics panel.** Assemble the already-ingested funnel events (menu_view→dish_view→checkout_click→place_order_click) into stage drop-off + new-vs-returning revenue split + 30/60/90-day repeat rate. Data exists; only aggregation is missing (`menu/views.py:1266`). | L | CX lens |
 | B3 | **Ingredient/recipe inventory + food-cost %.** The single biggest "real operator back-office" gap — inventory stops at `Dish.stock_qty`. Phase it: (1) `cost_price` per dish + food-cost% report first; (2) full Ingredient/BOM + depletion + variance later. This is why a serious operator installs Toast/MarketMan today. | XL (phase it) | Restaurant lens |
 | B4 | **Labor module.** `Shift`/`Schedule` + clock-in/out (staff already auth on the waiter PWA) + labor% on dashboard/Z-report. Labor is the #1 controllable cost and there is *zero* labor data today. Reuses `handled_by_user_id`. | L | Restaurant lens |

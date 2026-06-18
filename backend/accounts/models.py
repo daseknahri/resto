@@ -13,6 +13,10 @@ class Customer(models.Model):
 
     # Phone is optional so Google-only customers can exist without a phone number.
     phone = models.CharField(max_length=30, unique=True, null=True, blank=True, db_index=True)
+    # Last 9 digits of phone, stripped of non-digit chars — powers btree-indexed
+    # exact-match search (avoids a full-table icontains scan on large customer sets).
+    # Auto-maintained by the save() override.
+    phone_digits = models.CharField(max_length=9, blank=True, default="", db_index=True)
     phone_verified = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
     # Google OAuth sub (unique identifier from Google's JWT). Null for phone-only customers.
@@ -107,6 +111,10 @@ class Customer(models.Model):
         if not self.referral_code:
             import uuid as _uuid
             self.referral_code = _uuid.uuid4().hex[:8].upper()
+        # Keep phone_digits in sync — used for btree-indexed search.
+        _raw = self.phone or ""
+        _digits = "".join(c for c in _raw if c.isdigit())
+        self.phone_digits = _digits[-9:] if _digits else ""
         super().save(*args, **kwargs)
 
 

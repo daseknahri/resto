@@ -10789,11 +10789,9 @@ class AdminWalletListView(APIView):
         if search:
             from django.db.models import Q
             # Customer holds its own name/email/phone (there is no linked User relation).
-            qs = qs.filter(
-                Q(name__icontains=search) |
-                Q(email__icontains=search) |
-                Q(phone__icontains=search)
-            )
+            _digits = "".join(c for c in search if c.isdigit())
+            _phone_q = Q(phone_digits=_digits[-9:]) if len(_digits) >= 5 else Q(phone__icontains=search)
+            qs = qs.filter(Q(name__icontains=search) | Q(email__icontains=search) | _phone_q)
 
         try:
             page = max(1, int(request.query_params.get("page") or 1))

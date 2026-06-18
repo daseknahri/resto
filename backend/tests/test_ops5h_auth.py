@@ -50,6 +50,7 @@ def _make_customer(**kwargs):
         is_driver_online=False, notify_order_updates=True,
         notify_review_prompts=True, notify_promotions=True,
         referral_code="ABCD1234", referral_reward_given=False,
+        phone_digits="261234567",
     )
     defaults.update(kwargs)
     c = SimpleNamespace(**defaults)
