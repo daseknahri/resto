@@ -2387,6 +2387,9 @@ stepCategories: {
   courseNone: "No course — fire immediately",
   courseN: "Course {n}",
   courseHint: "Items in this category are held until staff fires this course at the table.",
+  stationLabel: "Prep station",
+  stationPlaceholder: "e.g. bar, grill, cold (optional)",
+  stationHint: "Kitchen screens can filter by station — leave blank to show everywhere.",
 },
 stepDishes: {
   title: "Dishes",
@@ -4622,6 +4625,8 @@ kitchen: {
   elapsed: "elapsed",
   displayHeader: "Kitchen display header",
   stationFilterNav: "Station filters",
+  prepStationNav: "Filter by prep station",
+  prepStationAll: "All stations",
   search: "Search by order #, customer or table…",
   orderItems: "Order items",
   newOrderAlert: "New order!",

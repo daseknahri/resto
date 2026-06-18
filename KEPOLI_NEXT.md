@@ -171,7 +171,7 @@ one deliberate step at a time, never speculatively.**
 | # | Workstream | Effort | Source |
 |---|---|---|---|
 | C1 | **Auto-print on new order** via a local print agent / ESC-POS bridge. Closes "great kitchen screen" → "replaces my printer setup." | M | BACKLOG:22; Restaurant lens |
-| C2 | **Prep-station routing** (optional station tag on Category/Dish; split kitchen tickets per station). Non-breaking; independents ignore it. | M | Restaurant lens |
+| C2 ✅ | **Prep-station routing** (optional station tag on Category/Dish; split kitchen tickets per station). Non-breaking; independents ignore it. — **Shipped:** `Category.station` + `OrderItem.station` snapshot (migration 0066); `StepCategories.vue` station input; `OwnerKitchen.vue` per-station filter bar + item dimming + station chip; EN/FR/AR i18n; 4 snapshot tests in `test_station_snapshot.py`. | M | Restaurant lens |
 | C3 | **Loyalty depth** (tiers + birthday reward + first-order incentive), composing with the existing points ledger. | L | CX lens |
 | C4 | **Multi-branch** (location group over tenants + consolidated reporting + shared menu). The largest revenue-expansion lever AND the heaviest lift (django-tenants is one-schema-per-location). Sequence *after* B3/B4/B5 make a single location genuinely complete. | XL | BACKLOG:20; Restaurant lens |
 | C5 | **DB scaling ceiling:** PgBouncer (transaction pooling, mindful of `SET search_path`) + a read path for the heavy public marketplace. Revisit at ~50-100 tenants. | L | Scale lens |

@@ -107,6 +107,21 @@
       </button>
     </nav>
 
+    <!-- Prep station filter bar (only shown when station-tagged items exist) -->
+    <nav v-if="prepStationFilters.length > 1" class="kitchen-filter-bar" :aria-label="t('kitchen.prepStationNav')">
+      <button
+        v-for="f in prepStationFilters"
+        :key="f.value"
+        class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+        :class="prepStation === f.value ? 'kitchen-filter-btn--active' : ''"
+        :aria-pressed="prepStation === f.value"
+        @click="prepStation = f.value"
+      >
+        {{ f.label }}
+        <span v-if="f.count > 0" class="kitchen-filter-count" aria-hidden="true">{{ f.count }}</span>
+      </button>
+    </nav>
+
     <!-- Search -->
     <div class="px-3 pb-1 pt-0.5 sm:px-4">
       <div class="relative">
@@ -248,7 +263,7 @@
               v-else-if="item.id != null"
               type="button"
               class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2 -mx-2 transition-colors hover:bg-slate-700/30"
-              :class="[item.is_ready ? 'opacity-40 line-through' : '', isItemHeld(item, order) ? 'opacity-50' : '']"
+              :class="[item.is_ready ? 'opacity-40 line-through' : '', isItemHeld(item, order) ? 'opacity-50' : '', item.station && prepStation && item.station !== prepStation ? 'opacity-30' : '']"
               :title="t('kitchen.tapItemReady')"
               :aria-pressed="item.is_ready"
               @click="toggleItem(order, item)"
@@ -256,19 +271,30 @@
               <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
               <span class="kitchen-name font-medium">{{ item.dish_name }}</span>
               <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
-              <!-- Course chip for kitchen -->
-              <span
-                v-if="(item.course ?? 0) > 0 && !item.is_ready"
-                class="ms-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold leading-none"
-                :class="isItemHeld(item, order)
-                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                  : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-              >{{ isItemHeld(item, order) ? `${t('waiterPage.heldChip')} · ${t('waiterPage.courseChip', { n: item.course })}` : t('waiterPage.courseChip', { n: item.course }) }}</span>
-              <span v-else-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
-                <!-- Checkmark icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
-                  <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
-                </svg>
+              <!-- Right-side chips: station + course + checkmark -->
+              <span class="ms-auto shrink-0 flex items-center gap-1">
+                <!-- Station chip -->
+                <span
+                  v-if="item.station && !item.is_ready"
+                  class="rounded-full border px-1.5 py-0.5 text-[9px] font-bold leading-none"
+                  :class="prepStation && item.station !== prepStation
+                    ? 'border-slate-700/30 bg-transparent text-slate-600'
+                    : 'border-sky-500/40 bg-sky-500/10 text-sky-400'"
+                >{{ item.station }}</span>
+                <!-- Course chip -->
+                <span
+                  v-if="(item.course ?? 0) > 0 && !item.is_ready"
+                  class="rounded-full border px-1.5 py-0.5 text-[9px] font-bold leading-none"
+                  :class="isItemHeld(item, order)
+                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                    : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+                >{{ isItemHeld(item, order) ? `${t('waiterPage.heldChip')} · ${t('waiterPage.courseChip', { n: item.course })}` : t('waiterPage.courseChip', { n: item.course }) }}</span>
+                <!-- Checkmark when item ready -->
+                <span v-if="item.is_ready" class="text-emerald-400" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
+                  </svg>
+                </span>
               </span>
             </button>
             <template v-else>
@@ -548,6 +574,7 @@ const open86Board = () => {
 
 const isFullscreen = ref(false);
 const stationFilter = ref("all");
+const prepStation = ref("");
 
 // ── Sound toggle (task 4) ─────────────────────────────────────────────────────
 const KITCHEN_SOUND_KEY = "kitchen:sound";
@@ -597,6 +624,12 @@ const activeOrders = computed(() => {
   if (stationFilter.value !== "all") {
     orders = orders.filter((o) => o.fulfillment_type === stationFilter.value);
   }
+  if (prepStation.value) {
+    const ps = prepStation.value;
+    orders = orders.filter((o) =>
+      (o.items || []).some((i) => !i.is_voided && i.station === ps)
+    );
+  }
   const q = kitchenSearch.value.trim().toLowerCase();
   if (!q) return orders;
   return orders.filter((o) =>
@@ -630,6 +663,38 @@ watch(stationFilters, (filters) => {
   if (stationFilter.value === "all") return;
   const still = filters.find((f) => f.value === stationFilter.value);
   if (!still || still.count === 0) stationFilter.value = "all";
+});
+
+// Prep station filter: derives distinct station names from non-voided items in the
+// fulfillment-filtered pool. Only rendered when there are station-tagged items.
+const prepStationFilters = computed(() => {
+  let base = allActiveOrders.value;
+  if (stationFilter.value !== "all") {
+    base = base.filter((o) => o.fulfillment_type === stationFilter.value);
+  }
+  const stationSet = new Set();
+  for (const order of base) {
+    for (const item of order.items || []) {
+      if (!item.is_voided && item.station) stationSet.add(item.station);
+    }
+  }
+  if (!stationSet.size) return [];
+  const stations = [...stationSet].sort();
+  return [
+    { value: "", label: t("kitchen.prepStationAll"), count: base.length },
+    ...stations.map((s) => ({
+      value: s,
+      label: s,
+      count: base.filter((o) => (o.items || []).some((i) => !i.is_voided && i.station === s)).length,
+    })),
+  ];
+});
+
+// When the selected prep station disappears (all its orders completed), reset.
+watch(prepStationFilters, (filters) => {
+  if (!prepStation.value) return;
+  const still = filters.find((f) => f.value === prepStation.value);
+  if (!still || still.count === 0) prepStation.value = "";
 });
 
 // Elapsed time helpers — use status_updated_at when available, else created_at

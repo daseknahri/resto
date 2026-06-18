@@ -713,9 +713,13 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "is_published",
             "is_temporarily_disabled",
             "course",
+            "station",
             "dish_count",
             "dishes",
         ]
+
+    def validate_station(self, value):
+        return (value or "").strip()[:40]
 
     def validate_course(self, value):
         if value is None:

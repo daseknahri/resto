@@ -62,6 +62,16 @@ class Category(models.Model):
             "1–4 = starter → main → cheese → dessert). Dishes inherit this at order time."
         ),
     )
+    station = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text=(
+            "Optional prep station name (e.g. 'bar', 'grill', 'cold'). "
+            "Dishes in this category inherit the station at order placement time so the "
+            "kitchen screen can filter by station. Leave blank to show everywhere."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -718,6 +728,14 @@ class OrderItem(models.Model):
             "Course snapshot captured at order placement. 0 = fire immediately; "
             "1–4 = held until Order.fired_course reaches this value."
         ),
+    )
+    # Prep-station snapshot — mirrors Category.station at placement time.
+    # Empty string means "no station / show everywhere".
+    station = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Prep station snapshot from Category.station at order placement.",
     )
     # Combo snapshot — when the ordered dish is a combo, this captures the fixed
     # components at placement time so receipt/kitchen views can render sub-lines

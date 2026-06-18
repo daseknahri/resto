@@ -2309,8 +2309,10 @@ class PlaceOrderView(APIView):
                 {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                 for cc in dish.combo_components.all()
             ]
-            # Snapshot course from category at placement time (0 when category missing)
-            _course_snap = int(getattr(getattr(dish, "category", None), "course", 0) or 0)
+            # Snapshot course + station from category at placement time.
+            _cat = getattr(dish, "category", None)
+            _course_snap = int(getattr(_cat, "course", 0) or 0)
+            _station_snap = str(getattr(_cat, "station", "") or "")
             order_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -2321,6 +2323,7 @@ class PlaceOrderView(APIView):
                 "subtotal": subtotal,
                 "combo_components": _combo_snapshot,
                 "course": _course_snap,
+                "station": _station_snap,
             })
 
         # Collect dishes that track stock so we can decrement inside the transaction.
@@ -3758,6 +3761,7 @@ class StaffOrderListView(APIView):
                         "is_voided": i.is_voided,
                         "combo_components": i.combo_components,
                         "course": getattr(i, "course", 0),
+                        "station": getattr(i, "station", ""),
                     }
                     for i in order.items.all()
                 ],
@@ -4207,8 +4211,10 @@ class StaffAppendOrderItemsView(APIView):
                 {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                 for cc in dish.combo_components.all()
             ]
-            # Snapshot course from category at append time (0 when category missing)
-            _staff_course_snap = int(getattr(getattr(dish, "category", None), "course", 0) or 0)
+            # Snapshot course + station from category at append time.
+            _staff_cat = getattr(dish, "category", None)
+            _staff_course_snap = int(getattr(_staff_cat, "course", 0) or 0)
+            _staff_station_snap = str(getattr(_staff_cat, "station", "") or "")
             new_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -4220,6 +4226,7 @@ class StaffAppendOrderItemsView(APIView):
                 "is_ready": False,
                 "combo_components": _combo_snapshot,
                 "course": _staff_course_snap,
+                "station": _staff_station_snap,
             })
             _pk_to_slug[dish.pk] = dish.slug
             if dish.stock_qty is not None:

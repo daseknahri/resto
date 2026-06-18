@@ -2350,6 +2350,9 @@ stepCategories: {
   courseNone: "Aucun service — envoyer immediatement",
   courseN: "Service {n}",
   courseHint: "Les articles de cette categorie sont retenus jusqu'a ce que le personnel envoie ce service a la table.",
+  stationLabel: "Poste de préparation",
+  stationPlaceholder: "ex. bar, grill, froid (optionnel)",
+  stationHint: "Les écrans cuisine peuvent filtrer par poste — laisser vide pour afficher partout.",
 },
 stepDishes: {
   title: "Plats",
@@ -4633,6 +4636,8 @@ kitchen: {
   elapsed: "ecoule",
   displayHeader: "En-tete affichage cuisine",
   stationFilterNav: "Filtres de station",
+  prepStationNav: "Filtrer par poste de préparation",
+  prepStationAll: "Tous les postes",
   search: "Rechercher par n° de commande, client ou table…",
   orderItems: "Articles de la commande",
   newOrderAlert: "Nouvelle commande !",

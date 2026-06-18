@@ -269,6 +269,18 @@
                 </select>
                 <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
               </label>
+              <!-- Prep station -->
+              <label class="space-y-1 text-sm text-slate-300">
+                <span class="text-xs text-slate-400">{{ t("stepCategories.stationLabel") }}</span>
+                <input
+                  v-model="editingCategory.station"
+                  type="text"
+                  maxlength="40"
+                  class="ui-input"
+                  :placeholder="t('stepCategories.stationPlaceholder')"
+                />
+                <p class="text-[11px] text-slate-500">{{ t("stepCategories.stationHint") }}</p>
+              </label>
             </div>
           </div>
 
@@ -382,6 +394,18 @@
                 </select>
                 <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
               </label>
+              <!-- Prep station -->
+              <label class="space-y-1 text-sm text-slate-300">
+                <span class="text-xs text-slate-400">{{ t("stepCategories.stationLabel") }}</span>
+                <input
+                  v-model="quickCategory.station"
+                  type="text"
+                  maxlength="40"
+                  class="ui-input"
+                  :placeholder="t('stepCategories.stationPlaceholder')"
+                />
+                <p class="text-[11px] text-slate-500">{{ t("stepCategories.stationHint") }}</p>
+              </label>
             </div>
           </div>
           <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
@@ -465,6 +489,7 @@ const quickCategory = reactive({
   position: 0,
   is_published: true,
   course: 0,
+  station: "",
 });
 
 const maxTranslationLocales = computed(() => Math.max(0, Number(tenant.entitlements?.max_languages || 1) - 1));
@@ -510,6 +535,7 @@ const normalizeCategory = (cat = {}) => ({
   is_published: cat.is_published ?? true,
   is_temporarily_disabled: cat.is_temporarily_disabled ?? false,
   course: Number(cat.course) || 0,
+  station: String(cat.station || ""),
   dish_count: typeof cat.dish_count === "number" ? cat.dish_count : 0,
 });
 
@@ -717,6 +743,7 @@ const openQuickModal = () => {
   quickCategory.position = activeCategories.value.length;
   quickCategory.is_published = true;
   quickCategory.course = 0;
+  quickCategory.station = "";
   quickFieldLocales.name = defaultLocale.value;
   quickFieldLocales.description = defaultLocale.value;
   quickAddErrors.name = "";
@@ -750,6 +777,7 @@ const quickAdd = () => {
     position: orderedActiveCategories.value.length,
     is_published: quickCategory.is_published,
     course: Number(quickCategory.course) || 0,
+    station: String(quickCategory.station || "").trim().slice(0, 40),
   }));
   activeSuperCategoryId.value = String(quickCategory.super_category);
   renumberCategoriesForGroup(quickCategory.super_category);

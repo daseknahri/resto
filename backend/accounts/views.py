@@ -3833,8 +3833,10 @@ class MarketplacePlaceOrderView(APIView):
                         {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                         for cc in dish.combo_components.all()
                     ]
-                    # Snapshot course from category at placement time (0 when category missing)
-                    _mkt_course_snap = int(getattr(getattr(dish, "category", None), "course", 0) or 0)
+                    # Snapshot course + station from category at placement time.
+                    _mkt_cat = getattr(dish, "category", None)
+                    _mkt_course_snap = int(getattr(_mkt_cat, "course", 0) or 0)
+                    _mkt_station_snap = str(getattr(_mkt_cat, "station", "") or "")
                     order_items_data.append({
                         "dish_slug": dish.slug,
                         "dish_name": dish.name,
@@ -3845,6 +3847,7 @@ class MarketplacePlaceOrderView(APIView):
                         "subtotal": subtotal,
                         "combo_components": _mkt_combo_snapshot,
                         "course": _mkt_course_snap,
+                        "station": _mkt_station_snap,
                     })
                     for _cc_snap in _mkt_combo_snapshot:
                         _mkt_component_stock_updates.append(
