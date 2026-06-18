@@ -23,12 +23,45 @@
  *                         Only meaningful for kind === 'lens'.
  *   routeName   {string}  vue-router named route    (kind === 'route')
  *   accent      {string}  key into each surface's ACCENT_CLASSES map
+ *
+ * Use getServices(enabledVerticals) to get a status-adjusted list based on
+ * platform.enabled_verticals from the customer session.
  */
-export const SERVICES = [
-  { id: 'food',     icon: '🍽️', status: 'live',        kind: 'lens',  lens: 'food',  accent: 'amber'   },
-  { id: 'shops',    icon: '🛍️', status: 'live',        kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
-  { id: 'rides',    icon: '🚕', status: 'live',        kind: 'route', routeName: 'ride', accent: 'emerald' },
-  { id: 'pharmacy', icon: '💊', status: 'live',        kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
-  { id: 'courier',  icon: '📦', status: 'live',        kind: 'route', routeName: 'send-package', accent: 'sky'     },
-  { id: 'driver',   icon: '🏍️', status: 'live',        kind: 'route', routeName: 'driver',       accent: 'violet'  },
+
+const _DEFINITIONS = [
+  { id: 'food',     icon: '🍽️', kind: 'lens',  lens: 'food',  accent: 'amber'   },
+  { id: 'shops',    icon: '🛍️', kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
+  { id: 'rides',    icon: '🚕', kind: 'route', routeName: 'ride', accent: 'emerald' },
+  { id: 'pharmacy', icon: '💊', kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
+  { id: 'courier',  icon: '📦', kind: 'route', routeName: 'send-package', accent: 'sky'     },
+  { id: 'driver',   icon: '🏍️', kind: 'route', routeName: 'driver',       accent: 'violet'  },
 ];
+
+// Verticals that are always live regardless of the platform gate
+// (food, driver, pharmacy are core; shops is a lens, not a backend endpoint).
+const _ALWAYS_LIVE = new Set(['food', 'shops', 'pharmacy', 'driver']);
+
+/**
+ * Returns the service list with status adjusted for the platform's enabled_verticals.
+ * @param {string[]|null|undefined} enabledVerticals — platform.enabled_verticals from the session.
+ *   When null/undefined (platform not loaded), all services are returned as-is (no gate).
+ */
+export function getServices(enabledVerticals) {
+  const enabled = Array.isArray(enabledVerticals) ? new Set(enabledVerticals) : null;
+  return _DEFINITIONS.map((svc) => {
+    let live = true;
+    if (enabled && !_ALWAYS_LIVE.has(svc.id)) {
+      live = enabled.has(svc.id);
+    }
+    return { ...svc, status: live ? 'live' : 'coming_soon' };
+  });
+}
+
+// Static export — rides is coming_soon by default (backend excludes it from VERTICALS_ENABLED
+// default; it requires a separate licensed-car-driver supply). Use getServices(platform.enabled_verticals)
+// for a fully dynamic, server-driven list.
+const _STATIC_DISABLED = new Set(['rides']);
+export const SERVICES = _DEFINITIONS.map((svc) => ({
+  ...svc,
+  status: _STATIC_DISABLED.has(svc.id) ? 'coming_soon' : 'live',
+}));

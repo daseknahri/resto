@@ -762,6 +762,17 @@ PSP_STRIPE_SECRET_KEY = os.getenv("PSP_STRIPE_SECRET_KEY", "")
 PSP_STRIPE_WEBHOOK_SECRET = os.getenv("PSP_STRIPE_WEBHOOK_SECRET", "")
 PSP_SITE_URL = os.getenv("PSP_SITE_URL", PUBLIC_MENU_BASE_URL).rstrip("/")
 
+# ── Platform verticals gate ───────────────────────────────────────────────────
+# CSV of enabled platform verticals. "rides" is excluded from the default
+# because it requires a separate licensed-car-driver supply and carries live
+# security obligations while not operationally active. Set
+# DJANGO_VERTICALS_ENABLED=food,shops,pharmacy,courier,driver,rides in env
+# to re-enable the rides vertical.
+_verticals_raw = os.getenv("DJANGO_VERTICALS_ENABLED", "food,shops,pharmacy,courier,driver")
+VERTICALS_ENABLED: frozenset = frozenset(
+    v.strip().lower() for v in _verticals_raw.split(",") if v.strip()
+)
+
 ACTIVE_LOG_FORMATTER = "json" if LOG_FORMAT == "json" else "standard"
 
 LOGGING = {

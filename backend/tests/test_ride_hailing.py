@@ -15,7 +15,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, call
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
@@ -227,6 +227,7 @@ class RideServiceEstimateTests(SimpleTestCase):
 
 # ── RideCreateView ────────────────────────────────────────────────────────────────
 
+@override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class RideCreateViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
@@ -1751,6 +1752,7 @@ def _make_package_ride(pk=50, rider=None, driver=None, status_val="searching",
     return r
 
 
+@override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class PackageCreateViewTests(SimpleTestCase):
     """POST /api/rides/ with kind='package' — validation + creation."""
 
@@ -2261,6 +2263,7 @@ class PackageKindInHistoryAndAdminTests(SimpleTestCase):
 # ── Scheduled trips ───────────────────────────────────────────────────────────────
 
 
+@override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class ScheduledTripCreateTests(SimpleTestCase):
     """POST /api/rides/ with scheduled_for — validation + creation rules."""
 
@@ -2744,6 +2747,7 @@ class SweepScheduledReleaseTests(SimpleTestCase):
 # ── Part B: Package handover code tests ──────────────────────────────────────────
 
 
+@override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class PackageCodeGenerationTests(SimpleTestCase):
     """RideCreateView generates a 6-digit delivery_code for kind='package', blank for rides."""
 

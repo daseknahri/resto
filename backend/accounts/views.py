@@ -584,16 +584,19 @@ class CustomerSessionView(APIView):
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
-        psp_flag = {"psp_topup_enabled": bool(settings.PSP_TOPUP_ENABLED)}
+        platform_data = {
+            "psp_topup_enabled": bool(settings.PSP_TOPUP_ENABLED),
+            "enabled_verticals": sorted(settings.VERTICALS_ENABLED),
+        }
         customer_id = request.session.get("customer_id")
         if not customer_id:
-            return Response({"customer": None, "platform": psp_flag})
+            return Response({"customer": None, "platform": platform_data})
         try:
             customer = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
             request.session.pop("customer_id", None)
-            return Response({"customer": None, "platform": psp_flag})
-        return Response({"customer": _serialize_customer(customer), "platform": psp_flag})
+            return Response({"customer": None, "platform": platform_data})
+        return Response({"customer": _serialize_customer(customer), "platform": platform_data})
 
     def delete(self, request):
         request.session.pop("customer_id", None)

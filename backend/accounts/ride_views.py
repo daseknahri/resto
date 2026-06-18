@@ -51,7 +51,34 @@ from .throttles import (
     DriverJobAcceptThrottle,
     DriverStatusUpdateThrottle,
 )
+from django.conf import settings as _settings
 from sales.permissions import IsPlatformAdmin
+
+
+# ── Vertical gate ─────────────────────────────────────────────────────────────────
+
+def _vertical_gate(kind=None):
+    """Returns a 503 Response if the relevant vertical(s) are disabled, else None.
+
+    kind: 'ride', 'package', or None (check that at least one ride vertical is enabled).
+    """
+    enabled = getattr(_settings, "VERTICALS_ENABLED", frozenset())
+    if kind == RideRequest.Kind.RIDE and "rides" not in enabled:
+        return Response(
+            {"detail": "The rides vertical is not enabled.", "code": "vertical_disabled"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if kind == RideRequest.Kind.PACKAGE and "courier" not in enabled:
+        return Response(
+            {"detail": "The courier vertical is not enabled.", "code": "vertical_disabled"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if kind is None and "rides" not in enabled and "courier" not in enabled:
+        return Response(
+            {"detail": "No ride verticals are enabled.", "code": "vertical_disabled"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return None
 
 
 # ── Serialiser helper ─────────────────────────────────────────────────────────────
@@ -189,6 +216,9 @@ class RideEstimateView(APIView):
     throttle_classes = [RideEstimateThrottle]
 
     def post(self, request, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         from .ride_service import estimate_ride
 
         for field in ("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng"):
@@ -252,18 +282,23 @@ class RideCreateView(APIView):
         from django.utils.dateparse import parse_datetime
         from .ride_service import estimate_ride
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
-
-        # Resolve kind — reject unknown values rather than silently coercing,
-        # so client typos and future kinds surface instead of becoming rides.
-        kind = (request.data.get("kind") or "ride").strip().lower()
-        if kind not in ("ride", "package"):
+        # Resolve kind early so the gate can be kind-specific.
+        _raw_kind = (request.data.get("kind") or "ride").strip().lower()
+        if _raw_kind not in ("ride", "package"):
             return Response(
                 {"detail": "kind must be 'ride' or 'package'.", "code": "bad_kind"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        _kind_enum = RideRequest.Kind.RIDE if _raw_kind == "ride" else RideRequest.Kind.PACKAGE
+        if (gate := _vertical_gate(_kind_enum)) is not None:
+            return gate
+
+        rider, err = _get_rider(request)
+        if err:
+            return err
+
+        # kind already resolved and gated above.
+        kind = _raw_kind
 
         # Validate required geo fields
         for field in ("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng"):
@@ -436,6 +471,9 @@ class RideActiveView(APIView):
     authentication_classes = []
 
     def get(self, request, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         from datetime import timedelta
         rider, err = _get_rider(request)
         if err:
@@ -494,6 +532,9 @@ class RideCancelView(APIView):
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         rider, err = _get_rider(request)
         if err:
             return err
@@ -546,6 +587,9 @@ class RideRateView(APIView):
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         rider, err = _get_rider(request)
         if err:
             return err
@@ -606,6 +650,9 @@ class DriverRideListView(APIView):
     throttle_classes = [RideDriverThrottle]
 
     def get(self, request, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         driver, err = _get_driver(request)
         if err:
             return err
@@ -721,6 +768,9 @@ class DriverRideAcceptView(APIView):
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         driver, err = _get_driver(request)
         if err:
             return err
@@ -794,6 +844,9 @@ class DriverRideStatusView(APIView):
     throttle_classes = [DriverStatusUpdateThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         customer_id = request.session.get("customer_id")
         if not customer_id:
             return Response(
@@ -1073,6 +1126,9 @@ class DriverRateRideView(APIView):
     authentication_classes = []
 
     def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         customer_id = request.session.get("customer_id")
         if not customer_id:
             return Response(
@@ -1142,6 +1198,9 @@ class RideHistoryView(APIView):
     authentication_classes = []
 
     def get(self, request, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         rider, err = _get_rider(request)
         if err:
             return err
@@ -1192,6 +1251,9 @@ class DriverRideHistoryView(APIView):
     authentication_classes = []
 
     def get(self, request, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
         customer_id = request.session.get("customer_id")
         if not customer_id:
             return Response(
