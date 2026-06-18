@@ -147,6 +147,7 @@ def customer_order_milestone(order_number, tenant_id, event):
 _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
     "release_scheduled_orders",
     "send_predispatch_reminders",
+    "send_ride_predispatch_reminders",
     "check_car_doc_expiry",
     "send_review_prompts",
     "send_reservation_reminders",

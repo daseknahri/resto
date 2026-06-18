@@ -439,6 +439,71 @@ def send_predispatch_reminder_sync(customer_id, restaurant_name, order_number) -
 
 # ── Ride-hailing push helpers ────────────────────────────────────────────────────
 
+# Pre-dispatch reminder sent to the RIDER ~30 min before a SCHEDULED trip. {n} = minutes.
+_RIDE_PREDISPATCH_MESSAGES = {
+    "ride": {
+        "en": {"title": "Your ride is soon", "body": "Your scheduled ride starts in about {n} min — be ready at your pickup point."},
+        "fr": {"title": "Votre course arrive", "body": "Votre course demarre dans environ {n} min — soyez pret a votre point de depart."},
+        "ar": {"title": "ركوبك قريباً", "body": "رحلتك المجدولة ستبدأ خلال نحو {n} دقيقة — كن جاهزاً عند نقطة التقاطك."},
+    },
+    "package": {
+        "en": {"title": "Pickup coming up", "body": "Your package will be picked up in about {n} min — have it ready."},
+        "fr": {"title": "Enlevement proche", "body": "Votre colis sera enleve dans environ {n} min — tenez-le pret."},
+        "ar": {"title": "الاستلام قريباً", "body": "سيتم استلام طردك خلال نحو {n} دقيقة — جهّزه للتسليم."},
+    },
+}
+
+
+def send_ride_predispatch_reminder_sync(rider_id, kind, minutes_remaining) -> int:
+    """Send a pre-dispatch reminder to a rider ~30 min before their SCHEDULED trip.
+    SYNCHRONOUS; returns the number of pushes delivered.
+
+    kind              — "ride" or "package"
+    minutes_remaining — approximate minutes until scheduled_for (used in body copy)
+    """
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    if kind not in _RIDE_PREDISPATCH_MESSAGES:
+        kind = "ride"
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=rider_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=rider_id))
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    pool = _RIDE_PREDISPATCH_MESSAGES[kind]
+    if loc not in pool:
+        loc = "en"
+    msg = pool[loc]
+    title = msg["title"]
+    body = msg["body"].format(n=minutes_remaining)
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event=f"ride.predispatch_reminder.{kind}",
+            status="sent" if sent else "failed",
+            recipient=f"rider:{rider_id}", detail=kind,
+        )
+    except Exception:
+        pass
+    return sent
+
+
 _RIDE_OFFER_MESSAGES = {
     "en": {"title": "New ride request", "body": "A rider needs a car nearby — tap to view."},
     "fr": {"title": "Nouvelle demande de course", "body": "Un passager cherche une voiture — touchez pour voir."},

@@ -197,12 +197,17 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       deliveryVocab.js; revisit only if cafés need their own voice.
 
 ## Rides / courier
-- [ ] **Pre-dispatch reminder push** for scheduled trips ("your ride is in 30 min").
+- [x] **Pre-dispatch reminder push** for scheduled trips ("your ride is in 30 min").
+      SHIPPED — RideRequest.predispatch_reminder_sent_at (migration 0054); send_ride_predispatch_reminder_sync
+      EN/FR/AR (ride + package variants); send_ride_predispatch_reminders command sweeps 20–40 min window every
+      15 min via Beat; 14 tests.
 - [ ] **Courier fares share ride fares** — MVP decision (ride_views.py docstring);
       split into courier_* PlatformConfig fields when pricing diverges.
 - [ ] **ride_per_minute default 0** — enable/tune once live trip data exists.
-- [ ] **Car-doc expiry** — licence/insurance have no expiry date / re-verification
+- [x] **Car-doc expiry** — licence/insurance have no expiry date / re-verification
       cycle; admin approval is one-shot.
+      SHIPPED — driver_licence_expiry + driver_insurance_expiry DateFields (migration 0053);
+      check_car_doc_expiry command (expire de-approve + 12–14 day warning sweep, daily); 20 tests.
 - [x] **Admin PII-read audit logging — FULLY DONE** — AdminRideListView (OPS-5c) + now
       AdminDeliveryJobListView: added AdminPIIThrottle + log_admin_action(DELIVERY_JOB_PII_VIEWED).
       New AdminAuditLog.Actions.DELIVERY_JOB_PII_VIEWED (TextChoices, no migration needed).
@@ -890,11 +895,14 @@ live yet so none of this is actively harming, but it gates turning the email pro
       accounts/models.py:16; send_winback_nudges.py audience; menu/views.py:10461-10469). [scout B1]
       SHIPPED 3079e27 — email_verified=True added to winback audience, promo campaign audience, and
       per-customer campaign_email guard (accounts/push.py send_campaign_email_sync).
-- [ ] **No bounce / spam-complaint feedback loop / suppression list** — record_notification logs only SMTP
+- [x] **No bounce / spam-complaint feedback loop / suppression list** — record_notification logs only SMTP
       handoff; nothing ingests async bounces/FBL complaints or suppresses a dead/complaining address, so the
       same address is retried every campaign + every 90-day winback cycle. Add a CustomerEmailSuppression
       model fed by an ESP webhook + check it in every audience query. (needs the owner's ESP/webhook).
       [scout B1]
+      SHIPPED (C8) — CustomerEmailSuppression model (migration 0052); EmailSuppressionWebhookView (POST
+      /api/public/email/suppression/, Bearer-token auth); suppression checked in send_campaign_email_sync +
+      winback audience; 11 tests. Configure EMAIL_SUPPRESSION_WEBHOOK_SECRET in env to activate.
 - [x] **notify_promotions is a single GLOBAL cross-tenant opt-out** — one BooleanField on the shared
       Customer gates promos from ALL tenants; unsubscribing from one restaurant silently kills (or re-floods)
       every restaurant's promos. Consider per-(customer,tenant) opt-out for marketplace customers.

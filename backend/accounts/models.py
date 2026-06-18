@@ -1008,6 +1008,14 @@ class RideRequest(models.Model):
     scheduled_for = models.DateTimeField(null=True, blank=True, db_index=True)
     # Indexed: sweep rules (a)/(b) filter on dispatched_at every cycle.
     dispatched_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    predispatch_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Stamped when the ~30-min pre-dispatch reminder is sent to the rider. "
+            "Null = not yet sent. Used to prevent double-sending."
+        ),
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
