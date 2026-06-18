@@ -360,6 +360,62 @@
       </div>
     </section>
 
+    <!-- ── Referral programme card ──────────────────────────────────────────── -->
+    <section class="space-y-2 pb-2">
+      <div class="px-1">
+        <p class="ui-kicker">{{ t('referral.kicker') }}</p>
+      </div>
+      <div class="ui-panel ui-surface-lift p-4 space-y-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-white leading-snug">{{ t('referral.title') }}</p>
+            <p class="mt-1 text-xs leading-relaxed text-slate-400">{{ t('referral.explainer') }}</p>
+          </div>
+          <label class="relative inline-flex shrink-0 cursor-pointer items-center" :aria-label="t('referral.toggleLabel')">
+            <input
+              v-model="referralForm.enabled"
+              type="checkbox"
+              class="peer sr-only"
+              @change="saveReferral"
+            />
+            <div class="h-5 w-9 rounded-full border border-slate-600 bg-slate-800 transition peer-checked:border-[var(--color-secondary)] peer-checked:bg-[var(--color-secondary)]"></div>
+            <div class="absolute start-0.5 top-0.5 h-4 w-4 rounded-full bg-slate-400 shadow transition peer-checked:translate-x-4 rtl:peer-checked:-translate-x-4 peer-checked:bg-white"></div>
+          </label>
+        </div>
+
+        <template v-if="referralForm.enabled">
+          <div>
+            <label for="referral-points" class="block text-xs font-semibold text-slate-300">{{ t('referral.pointsLabel') }}</label>
+            <div class="mt-1.5 flex items-center gap-2">
+              <input
+                id="referral-points"
+                v-model.number="referralForm.reward_points"
+                type="number"
+                min="1"
+                max="9999"
+                class="w-24 rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                @change="saveReferral"
+              />
+              <span class="text-xs text-slate-500">{{ t('referral.pointsUnit') }}</span>
+            </div>
+            <p class="mt-1.5 text-[11px] text-slate-500">{{ t('referral.pointsHint') }}</p>
+          </div>
+        </template>
+
+        <div v-if="referralSaveError" class="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2 text-xs text-red-300" role="alert">
+          {{ referralSaveError }}
+        </div>
+
+        <button
+          class="ui-btn-primary w-full justify-center text-sm"
+          :disabled="referralSaving"
+          @click="saveReferral"
+        >
+          {{ referralSaving ? t('referral.saving') : t('referral.save') }}
+        </button>
+      </div>
+    </section>
+
     <!-- Happy Hour create/edit drawer -->
     <Teleport to="body">
       <div v-if="hhDrawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="hhDrawerOpen = false" @click.self="hhDrawerOpen = false">
@@ -1064,6 +1120,40 @@ const saveWinback = async () => {
     winbackSaveError.value = t('winback.saveFailed');
   } finally {
     winbackSaving.value = false;
+  }
+};
+
+// ── Referral programme ─────────────────────────────────────────────────────────
+
+const referralForm = reactive({
+  enabled: tenant.meta?.profile?.referral_enabled ?? false,
+  reward_points: tenant.meta?.profile?.referral_reward_points ?? 100,
+});
+const referralSaving = ref(false);
+const referralSaveError = ref('');
+
+const saveReferral = async () => {
+  referralSaveError.value = '';
+  const pts = Number(referralForm.reward_points);
+  if (!Number.isInteger(pts) || pts < 1 || pts > 9999) {
+    referralSaveError.value = t('referral.pointsInvalid');
+    return;
+  }
+  referralSaving.value = true;
+  try {
+    await api.patch('/profile/', {
+      referral_enabled: referralForm.enabled,
+      referral_reward_points: pts,
+    });
+    tenant.mergeProfile({
+      referral_enabled: referralForm.enabled,
+      referral_reward_points: pts,
+    });
+    toast.show(t('referral.saved'), 'success');
+  } catch {
+    referralSaveError.value = t('referral.saveFailed');
+  } finally {
+    referralSaving.value = false;
   }
 };
 

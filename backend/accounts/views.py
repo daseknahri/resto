@@ -409,6 +409,8 @@ def _serialize_customer(customer: Customer) -> dict:
         "notify_order_updates": bool(customer.notify_order_updates),
         "notify_review_prompts": bool(customer.notify_review_prompts),
         "notify_promotions": bool(customer.notify_promotions),
+        "referral_code": customer.referral_code or "",
+        "referral_reward_given": bool(customer.referral_reward_given),
     }
 
 
@@ -6170,6 +6172,82 @@ def _serialize_address(addr) -> dict:
         "lng": addr.lng,
         "created_at": addr.created_at.isoformat(),
     }
+
+
+# ── Referral ──────────────────────────────────────────────────────────────────
+
+class ReferralCodeLookupView(APIView):
+    """GET /api/referral/<code>/ — check whether a referral code is valid.
+
+    Returns {valid, referrer_name} without requiring authentication so the
+    frontend can show "You were referred by <name>" on the sign-up screen.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, code, *args, **kwargs):
+        from .models import Customer
+        try:
+            referrer = Customer.objects.only("name", "referral_code").get(
+                referral_code=code.upper()
+            )
+        except Customer.DoesNotExist:
+            return Response({"valid": False}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "valid": True,
+            "referrer_name": referrer.name or "",
+        })
+
+
+class CustomerLinkReferralView(APIView):
+    """POST /api/customer/link-referral/ — attach a referral code to the authenticated customer.
+
+    Body: {"code": "ABCD1234"}
+
+    Rules enforced here:
+    - Customer must be authenticated (phone/google/email session token).
+    - The code must belong to a *different* customer (no self-referrals).
+    - The customer must NOT already have a referred_by set.
+    - If the customer already made a paid order, linking is still allowed but the
+      reward won't fire again (referral_reward_given would already be True on their
+      next order check).
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        from .models import Customer
+        customer, err = _resolve_customer_from_request(request)
+        if err:
+            return err
+
+        code = (request.data.get("code") or "").strip().upper()
+        if not code:
+            return Response({"detail": "code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if customer.referred_by_id is not None:
+            return Response(
+                {"detail": "Referral already linked.", "code": "already_linked"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            referrer = Customer.objects.only("pk", "referral_code").get(referral_code=code)
+        except Customer.DoesNotExist:
+            return Response(
+                {"detail": "Invalid referral code.", "code": "code_invalid"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if referrer.pk == customer.pk:
+            return Response(
+                {"detail": "You cannot refer yourself.", "code": "self_referral"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        customer.referred_by = referrer
+        customer.save(update_fields=["referred_by"])
+        return Response({"detail": "Referral linked."})
 
 
 # ── Admin: delivery zone management ───────────────────────────────────────────

@@ -74,6 +74,26 @@ class Customer(models.Model):
         default=True,
         help_text="Receive occasional offers/announcements from restaurants you've ordered from.",
     )
+    # ── Referral programme ────────────────────────────────────────────────────
+    # referral_code: unique share code the customer gives to friends.
+    # Auto-populated on first save (see save() override below).
+    referral_code = models.CharField(
+        max_length=12, unique=True, null=True, blank=True, db_index=True,
+        help_text="Unique shareable code. Auto-generated; null until the customer record is first saved.",
+    )
+    # referred_by: which existing customer recruited this one.
+    # Cleared (SET_NULL) rather than cascaded if the referrer is ever deleted.
+    referred_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="referrals",
+        help_text="Customer who referred this one.",
+    )
+    # referral_reward_given: True once the referral reward has been issued for this
+    # customer (i.e., on their first qualifying paid order). Prevents double-credit.
+    referral_reward_given = models.BooleanField(
+        default=False,
+        help_text="Reward already issued for this customer being a referral — never re-issue.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +102,12 @@ class Customer(models.Model):
 
     def __str__(self) -> str:
         return self.name or self.phone or self.email or f"Customer #{self.pk}"
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            import uuid as _uuid
+            self.referral_code = _uuid.uuid4().hex[:8].upper()
+        super().save(*args, **kwargs)
 
 
 class WalletTransaction(models.Model):

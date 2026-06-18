@@ -296,6 +296,8 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "winback_inactive_weeks",
             "winback_message",
             "service_day_cutover_hour",
+            "referral_enabled",
+            "referral_reward_points",
         ]
         # Delivery PRICING + platform enrollment are a platform-admin concern (the
         # delivery network is separate), so the restaurant owner cannot edit them

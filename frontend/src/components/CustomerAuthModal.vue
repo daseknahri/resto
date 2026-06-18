@@ -289,6 +289,7 @@ const verifyOtp = async () => {
     });
     const customer = res.data.customer;
     customerStore.setCustomer(customer);
+    _linkPendingReferral();
     // First-time sign-up: no name yet → go to name setup step
     if (!customer.name) {
       _pendingCustomer = customer;
@@ -343,6 +344,21 @@ const backToPhone = () => {
   otpError.value = "";
 };
 
+// After any successful auth, silently link a pending referral code if one was
+// stored by App.vue when the user landed on the site via a referral link.
+const _linkPendingReferral = async () => {
+  let code;
+  try { code = localStorage.getItem("pending_referral_code"); } catch (e) { void e; }
+  if (!code) return;
+  try {
+    await api.post("/customer/link-referral/", { code });
+  } catch (e) {
+    void e; // Non-fatal — already linked or invalid code; swallow silently.
+  } finally {
+    try { localStorage.removeItem("pending_referral_code"); } catch (e) { void e; }
+  }
+};
+
 // ── Google One-Tap ─────────────────────────────────────────────────────────────
 let googleScriptEl = null;
 
@@ -351,6 +367,7 @@ const handleGoogleCredential = async (response) => {
   try {
     const res = await api.post("/customer/auth/google/", { credential: response.credential });
     customerStore.setCustomer(res.data.customer);
+    _linkPendingReferral();
     emit("authenticated", res.data.customer);
     emit("close");
   } catch (err) {

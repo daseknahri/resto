@@ -2784,6 +2784,29 @@ class PlaceOrderView(APIView):
                 except Exception:
                     pass  # Never fail the order due to loyalty errors
 
+                # Award referral reward on referee's first paid order
+                try:
+                    if (
+                        getattr(profile, "referral_enabled", False)
+                        and _linked_customer is not None
+                        and _linked_customer.referred_by_id is not None
+                        and not _linked_customer.referral_reward_given
+                    ):
+                        from accounts.models import Customer as _CustRef
+                        _ref_pts = int(getattr(profile, "referral_reward_points", 100) or 100)
+                        if _ref_pts > 0:
+                            # Credit the referee (this customer)
+                            _CustRef.objects.filter(pk=_linked_customer.pk).update(
+                                loyalty_points=models.F("loyalty_points") + _ref_pts,
+                                referral_reward_given=True,
+                            )
+                            # Credit the referrer
+                            _CustRef.objects.filter(pk=_linked_customer.referred_by_id).update(
+                                loyalty_points=models.F("loyalty_points") + _ref_pts,
+                            )
+                except Exception:
+                    pass  # Never fail the order due to referral errors
+
         except _OutOfStock as _e:
             return Response(
                 {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},

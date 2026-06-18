@@ -95,6 +95,13 @@ watch(
 );
 
 onMounted(async () => {
+  // Capture referral code from the URL and persist it so the auth modal can
+  // pick it up even if the user navigates before signing in.
+  const refParam = route.query.ref;
+  if (refParam && typeof refParam === "string" && /^[A-Z0-9]{6,12}$/i.test(refParam)) {
+    try { localStorage.setItem("pending_referral_code", refParam.toUpperCase()); } catch (e) { void e; }
+  }
+
   const isCustomerInterfaceRoute = route.matched.some(
     (record) => record.meta?.interface === "customer"
   );

@@ -503,6 +503,19 @@ class Profile(models.Model):
     )
     published_at = models.DateTimeField(null=True, blank=True)
 
+    # ── Referral programme settings ───────────────────────────────────────────
+    referral_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable the customer referral programme for this tenant.",
+    )
+    referral_reward_points = models.PositiveSmallIntegerField(
+        default=100,
+        help_text=(
+            "Loyalty points awarded to both the referrer AND the referee when the "
+            "referee completes their first paid order."
+        ),
+    )
+
     class Meta:
         indexes = [
             # The marketplace/directory list filters on these two flags on every

@@ -47,6 +47,8 @@ def _make_customer(**kwargs):
         notify_order_updates=True,
         notify_review_prompts=True,
         notify_promotions=True,
+        referral_code="ABCD1234",
+        referral_reward_given=False,
     )
     defaults.update(kwargs)
     c = SimpleNamespace(**defaults)

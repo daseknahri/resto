@@ -471,6 +471,31 @@
             </div>
           </div>
 
+          <!-- Referral programme card (only when the tenant has it enabled) -->
+          <div
+            v-if="referralEnabled && customerStore.customer?.referral_code"
+            class="ui-panel ui-reveal p-4 space-y-3"
+            style="--ui-delay: 280ms"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <p class="ui-kicker">{{ t('customerAccount.referralTitle') }}</p>
+              <span v-if="customerStore.customer?.referral_reward_given" class="rounded-full border border-emerald-500/40 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                {{ t('customerAccount.referralRewarded') }}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400">{{ t('customerAccount.referralHint', { points: referralRewardPoints }) }}</p>
+            <div class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5">
+              <code class="flex-1 font-mono text-sm font-bold tracking-widest text-[var(--color-secondary)]">{{ customerStore.customer.referral_code }}</code>
+              <button
+                class="ui-press shrink-0 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white"
+                :class="referralCopied ? 'border-emerald-500/50 bg-emerald-500/10 !text-emerald-300' : ''"
+                @click="copyReferralLink"
+              >
+                {{ referralCopied ? t('customerAccount.referralCopied') : t('customerAccount.referralCopy') }}
+              </button>
+            </div>
+          </div>
+
           <!-- Profile completeness nudge -->
           <div
             v-if="!customerStore.customer?.phone && !customerStore.customer?.email"
@@ -1908,6 +1933,33 @@ const walletBalance = computed(() => {
 
 // ── Loyalty ───────────────────────────────────────────────────────────────────
 const loyaltyPoints = computed(() => customerStore.customer?.loyalty_points || 0);
+
+// ── Referral ──────────────────────────────────────────────────────────────────
+const referralEnabled = computed(() => !!tenantStore.resolvedMeta?.profile?.referral_enabled);
+const referralRewardPoints = computed(() => tenantStore.resolvedMeta?.profile?.referral_reward_points || 100);
+const referralCopied = ref(false);
+let _referralCopyTimer = null;
+const copyReferralLink = async () => {
+  const code = customerStore.customer?.referral_code;
+  if (!code) return;
+  const link = `${window.location.origin}?ref=${code}`;
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {
+    // Fallback for non-secure contexts
+    const el = document.createElement("textarea");
+    el.value = link;
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  }
+  referralCopied.value = true;
+  clearTimeout(_referralCopyTimer);
+  _referralCopyTimer = setTimeout(() => { referralCopied.value = false; }, 2000);
+};
 const loyaltyConfig = ref(null);
 const redeemAmount = ref(0);
 const redeeming = ref(false);
