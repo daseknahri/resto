@@ -4978,6 +4978,102 @@ class StaffMergeOrdersView(APIView):
         return Response(_staff_order_payload(dest))
 
 
+def _shift_payload(shift):
+    """Serialise a Shift instance to a dict."""
+    return {
+        "id": shift.id,
+        "user_id": shift.user_id,
+        "user_name": shift.user_name,
+        "clock_in": shift.clock_in.isoformat(),
+        "clock_out": shift.clock_out.isoformat() if shift.clock_out else None,
+        "duration_hours": shift.duration_hours,
+        "hourly_rate": str(shift.hourly_rate) if shift.hourly_rate is not None else None,
+        "note": shift.note,
+    }
+
+
+class StaffClockInView(APIView):
+    """POST /api/staff/clock-in/
+
+    Record a clock-in for the authenticated staff member (owner or any staff
+    with perm_manage_orders).  Rejects with 409 if the user already has an open
+    shift in this tenant.
+
+    Body (optional):
+      { "note": str }
+
+    Response: the created Shift payload.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from menu.models import Shift as _Shift
+        from django.utils import timezone as _tz
+
+        user_id = request.user.id
+        if _Shift.objects.filter(user_id=user_id, clock_out__isnull=True).exists():
+            return Response(
+                {"detail": "You are already clocked in.", "code": "already_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        note = (request.data.get("note") or "").strip()[:200]
+        shift = _Shift.objects.create(
+            user_id=user_id,
+            user_name=request.user.get_full_name() or request.user.username or "",
+            clock_in=_tz.now(),
+            note=note,
+        )
+        return Response(_shift_payload(shift), status=status.HTTP_201_CREATED)
+
+
+class StaffClockOutView(APIView):
+    """POST /api/staff/clock-out/
+
+    Close the authenticated staff member's current open shift.
+    Returns 404 if no open shift exists.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from menu.models import Shift as _Shift
+        from django.utils import timezone as _tz
+
+        shift = _Shift.objects.filter(user_id=request.user.id, clock_out__isnull=True).first()
+        if not shift:
+            return Response({"detail": "No open shift found.", "code": "not_clocked_in"}, status=status.HTTP_404_NOT_FOUND)
+
+        shift.clock_out = _tz.now()
+        shift.save(update_fields=["clock_out", "updated_at"])
+        return Response(_shift_payload(shift))
+
+
+class StaffMyShiftView(APIView):
+    """GET /api/staff/my-shift/
+
+    Returns the authenticated user's currently open shift, or null if not clocked in.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from menu.models import Shift as _Shift
+
+        shift = _Shift.objects.filter(user_id=request.user.id, clock_out__isnull=True).first()
+        return Response(_shift_payload(shift) if shift else None)
+
+
 class StaffOrderPaymentView(APIView):
     """POST /api/staff/orders/<order_id>/payments/
 
@@ -7282,6 +7378,37 @@ class OwnerZReportView(APIView):
         # Therefore net_cash_position = collected.cash (cash is not reduced by wallet refunds).
         net_cash_position = collected_cash.quantize(Decimal("0.01"))
 
+        # ── Labor (shifts) in window ──────────────────────────────────────────
+        from menu.models import Shift as _Shift
+        shift_qs = _Shift.objects.filter(clock_in__gte=window_start, clock_in__lt=window_end).order_by("clock_in")
+        _CENT = Decimal("0.01")
+        labor_items = []
+        total_labor_hours = Decimal("0")
+        total_labor_cost = None
+        for sh in shift_qs:
+            h = sh.duration_hours  # None if shift still open
+            cost_str = None
+            if h is not None and sh.hourly_rate is not None:
+                cost_dec = (Decimal(str(round(h, 6))) * Decimal(str(sh.hourly_rate))).quantize(_CENT)
+                if total_labor_cost is None:
+                    total_labor_cost = Decimal("0")
+                total_labor_cost += cost_dec
+                cost_str = str(cost_dec)
+            if h is not None:
+                total_labor_hours += Decimal(str(round(h, 6)))
+            labor_items.append({
+                "user_name": sh.user_name,
+                "clock_in": sh.clock_in.isoformat(),
+                "clock_out": sh.clock_out.isoformat() if sh.clock_out else None,
+                "hours": round(h, 2) if h is not None else None,
+                "hourly_rate": str(sh.hourly_rate) if sh.hourly_rate is not None else None,
+                "labor_cost": cost_str,
+                "note": sh.note,
+            })
+        labor_pct = None
+        if total_labor_cost is not None and collected_total > 0:
+            labor_pct = str((total_labor_cost / collected_total * 100).quantize(_CENT))
+
         return {
             "window": {
                 "service_day": service_day_date.isoformat(),
@@ -7311,6 +7438,12 @@ class OwnerZReportView(APIView):
                 "total": str(tips_total),
             },
             "by_staff": by_staff,
+            "labor": {
+                "shifts": labor_items,
+                "total_hours": float(round(total_labor_hours, 2)),
+                "total_labor_cost": str(total_labor_cost.quantize(_CENT)) if total_labor_cost is not None else None,
+                "labor_pct": labor_pct,
+            },
             "net_cash_position": str(net_cash_position),
             "net": str((collected_total - refund_total).quantize(Decimal("0.01"))),
         }

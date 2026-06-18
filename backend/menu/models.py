@@ -328,6 +328,60 @@ class SectionServer(models.Model):
         unique_together = ("section", "user_id")
 
 
+class Shift(models.Model):
+    """A single work shift for a staff member, tracked by clock-in and clock-out.
+
+    Lives in the tenant schema (one restaurant's shifts never mix with another's).
+    ``user_id`` is a loose reference to accounts.User (public schema), matching
+    the Order.handled_by_user_id pattern to avoid a tenant→public cross-app FK.
+    ``user_name`` is snapshotted at clock-in for reports that outlive staff changes.
+
+    Labor cost is optional: only calculated when ``hourly_rate`` is non-null.
+    """
+
+    user_id = models.IntegerField(
+        db_index=True,
+        help_text="accounts.User pk of the staff member.",
+    )
+    user_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text="Name snapshot taken at clock-in for reporting.",
+    )
+    clock_in = models.DateTimeField(db_index=True)
+    clock_out = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Null while the shift is still open (not yet clocked out).",
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Optional hourly wage rate — used to compute labor cost on the Z-report.",
+    )
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-clock_in",)
+        indexes = [
+            models.Index(fields=("user_id", "clock_in"), name="menu_shift_user_clockin_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Shift({self.user_name or self.user_id}, {self.clock_in:%Y-%m-%d %H:%M})"
+
+    @property
+    def duration_hours(self):
+        """Decimal hours worked, or None if still open."""
+        if not self.clock_out:
+            return None
+        return (self.clock_out - self.clock_in).total_seconds() / 3600
+
+
 class WaiterCall(models.Model):
     """A dine-in customer's request for staff attention, raised from a table QR.
 

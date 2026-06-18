@@ -1988,6 +1988,15 @@ waiterPage: {
   mergeSuccess: "Orders merged.",
   mergeFailed: "Merge failed — please try again.",
   mergeSameOrder: "Source and destination cannot be the same.",
+  // Clock-in / clock-out (B4)
+  clockIn: "Clock in",
+  clockOut: "Clock out",
+  clockedIn: "Clocked in",
+  clockedInSince: "Since {time}",
+  clockInFailed: "Could not clock in — please try again.",
+  clockOutFailed: "Could not clock out — please try again.",
+  alreadyClockedIn: "You are already clocked in.",
+  notClockedIn: "You are not currently clocked in.",
 },
 ownerProfileSections: {
   brandContact: "Brand & contact",

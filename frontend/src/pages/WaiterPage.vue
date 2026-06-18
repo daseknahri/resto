@@ -77,6 +77,20 @@
         <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-600/50" aria-hidden="true" />
         <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
         <div class="flex shrink-0 items-center gap-2">
+          <!-- Clock-in / clock-out (B4) -->
+          <button
+            v-if="canManageOrders && !currentShift"
+            :disabled="clockBusy"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-sky-500/40 bg-sky-500/8 font-semibold text-sky-300 disabled:opacity-50"
+            @click="doClock('in')"
+          >{{ t('waiterPage.clockIn') }}</button>
+          <button
+            v-if="canManageOrders && currentShift"
+            :disabled="clockBusy"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-amber-500/40 bg-amber-500/8 font-semibold text-amber-300 disabled:opacity-50"
+            :title="currentShift?.clock_in ? t('waiterPage.clockedInSince', { time: formatDateTime(currentShift.clock_in) }) : ''"
+            @click="doClock('out')"
+          >{{ t('waiterPage.clockedIn') }} ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
           <button
             v-if="canManageOrders"
             class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 font-semibold text-[var(--color-secondary)]"
@@ -1438,6 +1452,42 @@ const loadTableStatuses = async () => {
   }
 };
 
+// ── Clock-in / clock-out (B4) ─────────────────────────────────────────────────
+const currentShift = ref(null);
+const clockBusy = ref(false);
+
+const loadMyShift = async () => {
+  try {
+    const { data } = await api.get('/staff/my-shift/');
+    currentShift.value = data || null;
+  } catch (e) {
+    void e;
+  }
+};
+
+const doClock = async (direction) => {
+  clockBusy.value = true;
+  try {
+    if (direction === 'in') {
+      const { data } = await api.post('/staff/clock-in/', {});
+      currentShift.value = data;
+    } else {
+      const { data } = await api.post('/staff/clock-out/', {});
+      currentShift.value = null;
+      void data;
+    }
+  } catch (e) {
+    void e;
+    toast.show(
+      direction === 'in' ? t('waiterPage.clockInFailed') : t('waiterPage.clockOutFailed'),
+      'error',
+      3000,
+    );
+  } finally {
+    clockBusy.value = false;
+  }
+};
+
 // Groups active table orders by table_label. Returns:
 //   { tableGroups: [{ tableKey, tableLabel, tableId, tableStatus, orders, totalOutstanding }], nonTableOrders }
 const tableGrouping = computed(() => {
@@ -2002,7 +2052,7 @@ onMounted(async () => {
     },
   });
 
-  const [initial] = await Promise.all([waiter.fetchOrders(), loadTableStatuses()]);
+  const [initial] = await Promise.all([waiter.fetchOrders(), loadTableStatuses(), loadMyShift()]);
   if (Array.isArray(initial)) prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
   document.addEventListener("visibilitychange", onVisible);
   pollTimer = setInterval(() => {

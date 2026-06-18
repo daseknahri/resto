@@ -297,6 +297,12 @@ def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
     mock_op_objs = MagicMock()
     mock_op_objs.filter.return_value = _make_empty_op_qs()
 
+    # Shift.objects: labor section (empty — lazy import inside _build_report).
+    shift_qs = MagicMock()
+    shift_qs.__iter__ = lambda s: iter([])
+    mock_shift_class = MagicMock()
+    mock_shift_class.objects.filter.return_value.order_by.return_value = shift_qs
+
     return [
         patch("menu.revenue.split_revenue_for_orders", mock_split),
         patch("menu.views.Order.objects", mock_order_objs),
@@ -305,6 +311,8 @@ def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
         # _build_report imports WalletTransaction lazily; patching the source module
         # intercepts the local import on every call (lazy imports re-bind on each call).
         patch("accounts.models.WalletTransaction", mock_wt_class),
+        # Shift is also imported lazily inside _build_report.
+        patch("menu.models.Shift", mock_shift_class),
     ]
 
 
@@ -329,7 +337,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
 
     def test_response_has_all_top_level_keys(self):
         patches = _z_report_patches()
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
@@ -340,7 +348,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
     def test_collected_cash_plus_wallet_equals_total(self):
         """collected.cash + collected.wallet must equal collected.total."""
         patches = _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"))
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -353,7 +361,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
     def test_refunds_predicate_wallet_only_basis(self):
         """refunds.basis must state that cash refunds are not tracked."""
         patches = _z_report_patches(refund_count=2, refund_total=Decimal("30.00"))
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         basis = resp.data["refunds"]["basis"]
@@ -362,14 +370,14 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
     def test_voids_list_shape(self):
         """voids.items must be a list (may be empty)."""
         patches = _z_report_patches()
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         self.assertIsInstance(resp.data["voids"]["items"], list)
 
     def test_window_section_has_service_day_and_cutover(self):
         patches = _z_report_patches()
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         w = resp.data["window"]
@@ -380,7 +388,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
     def test_net_cash_position_equals_collected_cash(self):
         """net_cash_position = collected.cash (no cash-refund ledger)."""
         patches = _z_report_patches(cash=Decimal("123.45"), wallet=Decimal("0.00"))
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         self.assertEqual(
@@ -425,6 +433,11 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         oi_qs = MagicMock()
         oi_qs.__iter__ = lambda s: iter([fake_item])
 
+        _void_shift_qs = MagicMock()
+        _void_shift_qs.__iter__ = lambda s: iter([])
+        _mock_shift_cls = MagicMock()
+        _mock_shift_cls.objects.filter.return_value.order_by.return_value = _void_shift_qs
+
         with (
             patch("menu.revenue.split_revenue_for_orders",
                   return_value={"cash": Decimal("0"), "wallet": Decimal("0")}),
@@ -432,6 +445,7 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
             patch("menu.views.OrderItem.objects") as mock_oi_objs,
             patch("menu.views.OrderPayment.objects") as mock_op_objs,
             patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", _mock_shift_cls),
         ):
             mock_order_objs.filter.return_value = order_qs
             mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
@@ -494,6 +508,11 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
         oi_qs = MagicMock()
         oi_qs.__iter__ = lambda s: iter([])
 
+        _rf_shift_qs = MagicMock()
+        _rf_shift_qs.__iter__ = lambda s: iter([])
+        _rf_shift_cls = MagicMock()
+        _rf_shift_cls.objects.filter.return_value.order_by.return_value = _rf_shift_qs
+
         with (
             patch("menu.revenue.split_revenue_for_orders",
                   return_value={"cash": Decimal("0"), "wallet": Decimal("0")}),
@@ -501,6 +520,7 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
             patch("menu.views.OrderItem.objects") as mock_oi_objs,
             patch("menu.views.OrderPayment.objects") as mock_op_objs,
             patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", _rf_shift_cls),
         ):
             mock_order_objs.filter.return_value = order_qs
             mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
