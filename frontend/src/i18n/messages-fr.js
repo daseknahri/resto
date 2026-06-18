@@ -1993,6 +1993,16 @@ waiterPage: {
   alreadyClockedIn: "Vous avez deja pointe votre arrivee.",
   notClockedIn: "Vous n'etes pas pointe actuellement.",
 },
+repeatAnalytics: {
+  title: "Fidelisation client",
+  repeatRate: "Taux de reachat",
+  repeatRateHint: "Clients ayant commande 2+ fois sur la periode",
+  newCustomers: "Nouveaux clients",
+  returning: "Fidelises",
+  newLabel: "Nouveaux",
+  revenueSplit: "Repartition CA — nouveaux vs. fidelises",
+  noData: "Aucune commande payee sur cette periode.",
+},
 ownerProfileSections: {
   brandContact: "Marque et contact",
   operations: "Operations",

@@ -1998,6 +1998,16 @@ waiterPage: {
   alreadyClockedIn: "You are already clocked in.",
   notClockedIn: "You are not currently clocked in.",
 },
+repeatAnalytics: {
+  title: "Repeat Business",
+  repeatRate: "Repeat rate",
+  repeatRateHint: "Customers who ordered 2+ times in this period",
+  newCustomers: "New customers",
+  returning: "Returning",
+  newLabel: "New",
+  revenueSplit: "Revenue split — new vs. returning",
+  noData: "No paid orders in this period.",
+},
 ownerProfileSections: {
   brandContact: "Brand & contact",
   operations: "Operations",

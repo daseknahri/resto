@@ -127,6 +127,9 @@
       </div>
     </article>
 
+    <!-- Repeat-business panel (B2) -->
+    <RepeatAnalyticsWidget :period="insightsPeriod" />
+
     <!-- Insights (owns the /owner/dashboard/ fetch) -->
     <OwnerDashboardInsights
       :period="insightsPeriod"
@@ -157,6 +160,7 @@ import AppIcon from "../components/AppIcon.vue";
 import BestSellersWidget from "../components/BestSellersWidget.vue";
 import RevenueBarChart from "../components/RevenueBarChart.vue";
 import OwnerDashboardInsights from "../components/OwnerDashboardInsights.vue";
+import RepeatAnalyticsWidget from "../components/RepeatAnalyticsWidget.vue";
 import OwnerDashboardRevenue from "../components/OwnerDashboardRevenue.vue";
 import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";

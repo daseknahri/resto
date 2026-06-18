@@ -1993,6 +1993,16 @@ export const messages = {
       alreadyClockedIn: "You are already clocked in.",
       notClockedIn: "You are not currently clocked in.",
     },
+    repeatAnalytics: {
+      title: "Repeat Business",
+      repeatRate: "Repeat rate",
+      repeatRateHint: "Customers who ordered 2+ times in this period",
+      newCustomers: "New customers",
+      returning: "Returning",
+      newLabel: "New",
+      revenueSplit: "Revenue split — new vs. returning",
+      noData: "No paid orders in this period.",
+    },
     ownerProfileSections: {
       brandContact: "Brand & contact",
       operations: "Operations",
@@ -6978,6 +6988,16 @@ export const messages = {
       clockOutFailed: "Impossible de pointer le depart — reessayez.",
       alreadyClockedIn: "Vous avez deja pointe votre arrivee.",
       notClockedIn: "Vous n'etes pas pointe actuellement.",
+    },
+    repeatAnalytics: {
+      title: "Fidelisation client",
+      repeatRate: "Taux de reachat",
+      repeatRateHint: "Clients ayant commande 2+ fois sur la periode",
+      newCustomers: "Nouveaux clients",
+      returning: "Fidelises",
+      newLabel: "Nouveaux",
+      revenueSplit: "Repartition CA — nouveaux vs. fidelises",
+      noData: "Aucune commande payee sur cette periode.",
     },
     ownerProfileSections: {
       brandContact: "Marque et contact",

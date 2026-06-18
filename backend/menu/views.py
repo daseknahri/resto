@@ -1347,6 +1347,100 @@ class OwnerAnalyticsExportView(APIView):
         return response
 
 
+class OwnerRepeatAnalyticsView(APIView):
+    """GET /api/owner/repeat-analytics/?days=30
+
+    Returns repeat-purchase metrics for the authenticated tenant owner:
+      - unique_paying: distinct customers who paid at least once in the window
+      - repeat_customers: customers with ≥2 paid orders in the window
+      - repeat_rate: repeat_customers / unique_paying × 100 (%)
+      - new_customers / returning_customers: segmented by whether they ordered
+        before the window start (returning) or not (new)
+      - new_revenue / returning_revenue: corresponding revenue totals
+      - total_revenue: all paid revenue in the window
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.db.models import Count, Sum
+        from django.utils import timezone as _tz
+        from decimal import Decimal as _D
+
+        try:
+            days = int(request.query_params.get("days", "30"))
+        except (TypeError, ValueError):
+            days = 30
+        days = max(7, min(90, days))
+
+        now = _tz.now()
+        window_start = now - timedelta(days=days)
+        _PAID = Order.PaymentStatus.PAID
+        _C = _D("0.01")
+
+        # Base: paid orders in window with an identified customer
+        in_window = Order.objects.filter(
+            payment_status=_PAID,
+            paid_at__gte=window_start,
+            paid_at__lte=now,
+            customer__isnull=False,
+        )
+
+        # Customers who paid BEFORE the window (they are "returning" in this window)
+        prior_cids = (
+            Order.objects.filter(
+                payment_status=_PAID,
+                paid_at__lt=window_start,
+                customer__isnull=False,
+            )
+            .values("customer_id")
+            .distinct()
+        )
+
+        # Returning segment: ordered before + in window
+        returning_agg = in_window.filter(customer_id__in=prior_cids).aggregate(
+            revenue=Sum("total"),
+            customers=Count("customer_id", distinct=True),
+        )
+
+        # New segment: first order ever is in this window
+        new_agg = in_window.exclude(customer_id__in=prior_cids).aggregate(
+            revenue=Sum("total"),
+            customers=Count("customer_id", distinct=True),
+        )
+
+        total_agg = in_window.aggregate(revenue=Sum("total"))
+        unique_paying = in_window.values("customer_id").distinct().count()
+
+        # Repeat rate: customers with ≥2 paid orders in window / all paying customers
+        repeat_customers = (
+            in_window.values("customer_id")
+            .annotate(_n=Count("id"))
+            .filter(_n__gte=2)
+            .count()
+        )
+        repeat_rate = round(repeat_customers / unique_paying * 100, 1) if unique_paying else 0.0
+
+        total_revenue = (_D(str(total_agg["revenue"] or "0"))).quantize(_C)
+        returning_revenue = (_D(str(returning_agg["revenue"] or "0"))).quantize(_C)
+        new_revenue = (_D(str(new_agg["revenue"] or "0"))).quantize(_C)
+
+        return Response({
+            "days": days,
+            "unique_paying": unique_paying,
+            "repeat_customers": repeat_customers,
+            "repeat_rate": repeat_rate,
+            "total_revenue": str(total_revenue),
+            "new_customers": new_agg["customers"] or 0,
+            "returning_customers": returning_agg["customers"] or 0,
+            "new_revenue": str(new_revenue),
+            "returning_revenue": str(returning_revenue),
+        })
+
+
 class OrderItemInputSerializer(serializers.Serializer):
     slug = serializers.SlugField(max_length=210)
     qty = serializers.IntegerField(min_value=1, max_value=99)
