@@ -5379,6 +5379,14 @@ class DriverStatusView(APIView):
             "driver_car_approved": bool(customer.driver_car_approved),
             "driver_licence_url": customer.driver_licence_url or "",
             "driver_insurance_url": customer.driver_insurance_url or "",
+            "driver_licence_expiry": (
+                customer.driver_licence_expiry.isoformat()
+                if customer.driver_licence_expiry else None
+            ),
+            "driver_insurance_expiry": (
+                customer.driver_insurance_expiry.isoformat()
+                if customer.driver_insurance_expiry else None
+            ),
             "driver_vehicle_type": customer.driver_vehicle_type or "",
         })
 
@@ -6416,6 +6424,14 @@ class AdminDriverListView(APIView):
                 "driver_licence_url": d.driver_licence_url or "",
                 "driver_insurance_url": d.driver_insurance_url or "",
                 "driver_car_approved": bool(d.driver_car_approved),
+                "driver_licence_expiry": (
+                    d.driver_licence_expiry.isoformat()
+                    if d.driver_licence_expiry else None
+                ),
+                "driver_insurance_expiry": (
+                    d.driver_insurance_expiry.isoformat()
+                    if d.driver_insurance_expiry else None
+                ),
                 "is_online": d.is_driver_online,
                 "driver_lat": d.driver_lat,
                 "driver_lng": d.driver_lng,

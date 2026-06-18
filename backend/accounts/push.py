@@ -692,3 +692,132 @@ def email_campaign_to_customer(customer_id, tenant_name, title, message, tenant_
     """Enqueue a campaign email to one customer. Never raises/blocks."""
     from accounts.tasks import enqueue, campaign_email
     enqueue(campaign_email, customer_id, tenant_name, title, message, tenant_id)
+
+
+# ── Driver car-doc expiry push helpers ───────────────────────────────────────
+
+# Warning sent when doc expires in WARN_WINDOW_MIN..WARN_WINDOW_MAX days. {d} = days.
+_DOC_EXPIRY_WARNING_MESSAGES = {
+    "en": {
+        "licence": {
+            "title": "Licence expires soon",
+            "body": "Your driving licence expires in {d} day(s) — upload a new one to keep accepting rides.",
+        },
+        "insurance": {
+            "title": "Insurance expires soon",
+            "body": "Your car insurance expires in {d} day(s) — upload a new one to keep accepting rides.",
+        },
+    },
+    "fr": {
+        "licence": {
+            "title": "Permis expire bientot",
+            "body": "Votre permis de conduire expire dans {d} jour(s) — telechargez-en un nouveau pour continuer.",
+        },
+        "insurance": {
+            "title": "Assurance expire bientot",
+            "body": "Votre assurance auto expire dans {d} jour(s) — telechargez-en une nouvelle pour continuer.",
+        },
+    },
+    "ar": {
+        "licence": {
+            "title": "رخصة القيادة ستنتهي قريباً",
+            "body": "رخصة قيادتك ستنتهي خلال {d} يوم — حمّل رخصة جديدة للاستمرار في قبول الركائب.",
+        },
+        "insurance": {
+            "title": "التأمين سينتهي قريباً",
+            "body": "تأمين سيارتك سينتهي خلال {d} يوم — حمّل وثيقة جديدة للاستمرار في العمل.",
+        },
+    },
+}
+
+# Sent when doc has already expired and the driver is de-approved.
+_DOC_EXPIRED_MESSAGES = {
+    "en": {
+        "licence": {
+            "title": "Licence expired",
+            "body": "Your driving licence has expired — your account has been de-approved. Upload a new licence to get re-approved.",
+        },
+        "insurance": {
+            "title": "Insurance expired",
+            "body": "Your car insurance has expired — your account has been de-approved. Upload new insurance to get re-approved.",
+        },
+    },
+    "fr": {
+        "licence": {
+            "title": "Permis expire",
+            "body": "Votre permis a expire — votre compte a ete desactive. Telechargez un nouveau permis pour etre reapprouve.",
+        },
+        "insurance": {
+            "title": "Assurance expiree",
+            "body": "Votre assurance a expire — votre compte a ete desactive. Telechargez une nouvelle assurance pour etre reapprouve.",
+        },
+    },
+    "ar": {
+        "licence": {
+            "title": "انتهت صلاحية الرخصة",
+            "body": "انتهت صلاحية رخصة قيادتك — تم إيقاف تفعيل حسابك. حمّل رخصة جديدة لإعادة التفعيل.",
+        },
+        "insurance": {
+            "title": "انتهى التأمين",
+            "body": "انتهى تأمين سيارتك — تم إيقاف تفعيل حسابك. حمّل وثيقة تأمين جديدة لإعادة التفعيل.",
+        },
+    },
+}
+
+
+def send_driver_doc_expiry_push_sync(driver_id, doc_kind, days_remaining) -> int:
+    """Send a doc-expiry push to one driver. SYNCHRONOUS; returns pushes delivered.
+
+    doc_kind      — "licence" or "insurance"
+    days_remaining — days until expiry; <= 0 sends the "already expired" message.
+    """
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    if doc_kind not in ("licence", "insurance"):
+        return 0
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=driver_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=driver_id))
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    if days_remaining <= 0:
+        pool = _DOC_EXPIRED_MESSAGES
+        event = f"driver.doc.expired.{doc_kind}"
+    else:
+        pool = _DOC_EXPIRY_WARNING_MESSAGES
+        event = f"driver.doc.expiry_warning.{doc_kind}"
+
+    if loc not in pool:
+        loc = "en"
+    msg = pool[loc][doc_kind]
+    title = msg["title"]
+    if days_remaining > 0:
+        body = msg["body"].format(d=days_remaining)
+    else:
+        body = msg["body"]
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/driver")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event=event,
+            status="sent" if sent else "failed",
+            recipient=f"driver:{driver_id}", detail=doc_kind,
+        )
+    except Exception:
+        pass
+    return sent

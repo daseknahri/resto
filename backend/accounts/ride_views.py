@@ -1046,10 +1046,12 @@ class DriverDocUploadView(APIView):
 
         if kind == "licence":
             driver.driver_licence_url = url
-            update_fields.append("driver_licence_url")
+            driver.driver_licence_expiry = None  # Old doc's expiry no longer applies
+            update_fields.extend(["driver_licence_url", "driver_licence_expiry"])
         else:
             driver.driver_insurance_url = url
-            update_fields.append("driver_insurance_url")
+            driver.driver_insurance_expiry = None  # Old doc's expiry no longer applies
+            update_fields.extend(["driver_insurance_url", "driver_insurance_expiry"])
 
         driver.save(update_fields=update_fields)
 
@@ -1396,7 +1398,27 @@ class AdminCarApprovalView(APIView):
             return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
 
         driver.driver_car_approved = approve
-        driver.save(update_fields=["driver_car_approved", "updated_at"])
+        update_fields = ["driver_car_approved", "updated_at"]
+
+        # Accept optional expiry dates (ISO YYYY-MM-DD) when approving.
+        if approve:
+            import datetime
+            for field, key in (
+                ("driver_licence_expiry", "licence_expiry"),
+                ("driver_insurance_expiry", "insurance_expiry"),
+            ):
+                raw = (request.data.get(key) or "").strip()
+                if raw:
+                    try:
+                        setattr(driver, field, datetime.date.fromisoformat(raw))
+                        update_fields.append(field)
+                    except ValueError:
+                        return Response(
+                            {"detail": f"Invalid date for {key}: {raw!r}. Use YYYY-MM-DD."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+        driver.save(update_fields=update_fields)
 
         action = (
             AdminAuditLog.Actions.DRIVER_APPROVED  # reuse closest action
@@ -1418,4 +1440,12 @@ class AdminCarApprovalView(APIView):
             "driver_car_approved": bool(driver.driver_car_approved),
             "driver_licence_url": driver.driver_licence_url or "",
             "driver_insurance_url": driver.driver_insurance_url or "",
+            "driver_licence_expiry": (
+                driver.driver_licence_expiry.isoformat()
+                if driver.driver_licence_expiry else None
+            ),
+            "driver_insurance_expiry": (
+                driver.driver_insurance_expiry.isoformat()
+                if driver.driver_insurance_expiry else None
+            ),
         })

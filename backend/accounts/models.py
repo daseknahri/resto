@@ -55,6 +55,16 @@ class Customer(models.Model):
     )
     driver_licence_url = models.URLField(blank=True)
     driver_insurance_url = models.URLField(blank=True)
+    driver_licence_expiry = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Expiry date of the uploaded driving licence. Admin-set when approving docs.",
+    )
+    driver_insurance_expiry = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Expiry date of the uploaded car insurance. Admin-set when approving docs.",
+    )
     driver_car_approved = models.BooleanField(
         default=False,
         help_text=(

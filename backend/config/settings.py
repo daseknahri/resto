@@ -283,6 +283,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 900.0,  # every 15 min — window is 35 min wide so every order is caught
         "args": ("send_predispatch_reminders",),
     },
+    "check-car-doc-expiry": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily
+        "args": ("check_car_doc_expiry",),
+    },
     "send-review-prompts": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 900.0,  # every 15 min
