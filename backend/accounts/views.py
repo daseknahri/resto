@@ -403,6 +403,8 @@ def _serialize_customer(customer: Customer) -> dict:
         "has_google": bool(customer.google_sub),
         "wallet_balance": str(customer.wallet_balance),
         "loyalty_points": customer.loyalty_points or 0,
+        "lifetime_loyalty_points": customer.lifetime_loyalty_points or 0,
+        "birthday": customer.birthday.isoformat() if customer.birthday else None,
         "locale": customer.locale or "en",
         "is_driver": bool(customer.is_driver),
         "is_driver_online": bool(customer.is_driver_online),
@@ -1132,6 +1134,26 @@ class CustomerProfileUpdateView(APIView):
                 customer.email = ""
                 customer.email_verified = False
                 update_fields.extend(["email", "email_verified"])
+
+        # C3: birthday field
+        if "birthday" in request.data:
+            raw_bday = (request.data.get("birthday") or "").strip()
+            if raw_bday == "":
+                customer.birthday = None
+                update_fields.append("birthday")
+            else:
+                from datetime import date as _date
+                try:
+                    parts = raw_bday.split("-")
+                    if len(parts) == 3:
+                        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                        parsed = _date(y, m, d)
+                        # Sanity: birth year must be plausible (1900-today)
+                        if 1900 <= parsed.year <= _date.today().year:
+                            customer.birthday = parsed
+                            update_fields.append("birthday")
+                except (ValueError, OverflowError):
+                    pass
 
         if len(update_fields) > 1:
             customer.save(update_fields=update_fields)
@@ -4284,19 +4306,63 @@ class MarketplacePlaceOrderView(APIView):
                         ):
                             raise _PrepayUnpaid()
 
-                        # Award loyalty points (parity with the direct checkout — the
-                        # marketplace path previously skipped this). Best-effort.
+                        # Award loyalty points (parity with the direct checkout). Best-effort.
                         try:
                             from menu.models import LoyaltyConfig as _LCfgEarn
                             _earn_cfg = _LCfgEarn.objects.filter(enabled=True).first()
                             if _earn_cfg and _linked_customer is not None:
-                                _pts = int(float(food_subtotal) * int(_earn_cfg.points_per_unit))
+                                from decimal import Decimal as _DloyMkt
+                                from django.db.models import F as _Fearn
+                                # C3: tier multiplier
+                                _mkt_lifetime = int(getattr(_linked_customer, "lifetime_loyalty_points", 0) or 0)
+                                if getattr(_earn_cfg, "tier_enabled", False):
+                                    _mg_thr = int(getattr(_earn_cfg, "tier_gold_threshold", 2000) or 2000)
+                                    _ms_thr = int(getattr(_earn_cfg, "tier_silver_threshold", 500) or 500)
+                                    if _mkt_lifetime >= _mg_thr:
+                                        _mkt_mul = _DloyMkt(str(getattr(_earn_cfg, "tier_gold_multiplier", "2.00") or "2.00"))
+                                    elif _mkt_lifetime >= _ms_thr:
+                                        _mkt_mul = _DloyMkt(str(getattr(_earn_cfg, "tier_silver_multiplier", "1.50") or "1.50"))
+                                    else:
+                                        _mkt_mul = _DloyMkt("1")
+                                else:
+                                    _mkt_mul = _DloyMkt("1")
+                                _pts = int(float(food_subtotal) * int(_earn_cfg.points_per_unit) * float(_mkt_mul))
                                 if _pts > 0:
-                                    from django.db.models import F as _Fearn
                                     Customer.objects.filter(pk=_linked_customer.pk).update(
-                                        loyalty_points=_Fearn("loyalty_points") + _pts
+                                        loyalty_points=_Fearn("loyalty_points") + _pts,
+                                        lifetime_loyalty_points=_Fearn("lifetime_loyalty_points") + _pts,
                                     )
                                     _Order.objects.filter(pk=order.pk).update(points_earned=_pts)
+                                # C3: first-order bonus
+                                _mkt_first_bonus = int(getattr(_earn_cfg, "first_order_bonus_points", 0) or 0)
+                                if _mkt_first_bonus > 0:
+                                    _mkt_prior = _Order.objects.filter(
+                                        customer_id=_linked_customer.pk,
+                                        payment_status=_Order.PaymentStatus.PAID,
+                                    ).exclude(pk=order.pk).count()
+                                    if _mkt_prior == 0:
+                                        Customer.objects.filter(pk=_linked_customer.pk).update(
+                                            loyalty_points=_Fearn("loyalty_points") + _mkt_first_bonus,
+                                            lifetime_loyalty_points=_Fearn("lifetime_loyalty_points") + _mkt_first_bonus,
+                                        )
+                                # C3: birthday bonus
+                                _mkt_bday_bonus = int(getattr(_earn_cfg, "birthday_bonus_points", 0) or 0)
+                                if _mkt_bday_bonus > 0:
+                                    from django.utils import timezone as _tzMkt
+                                    _mkt_today = _tzMkt.localtime(_tzMkt.now()).date()
+                                    _mkt_bday = getattr(_linked_customer, "birthday", None)
+                                    _mkt_yr = getattr(_linked_customer, "loyalty_birthday_rewarded_year", None)
+                                    if (
+                                        _mkt_bday is not None
+                                        and _mkt_bday.month == _mkt_today.month
+                                        and _mkt_bday.day == _mkt_today.day
+                                        and _mkt_yr != _mkt_today.year
+                                    ):
+                                        Customer.objects.filter(pk=_linked_customer.pk).update(
+                                            loyalty_points=_Fearn("loyalty_points") + _mkt_bday_bonus,
+                                            lifetime_loyalty_points=_Fearn("lifetime_loyalty_points") + _mkt_bday_bonus,
+                                            loyalty_birthday_rewarded_year=_mkt_today.year,
+                                        )
                         except Exception:
                             pass  # never fail the order over loyalty accounting
 

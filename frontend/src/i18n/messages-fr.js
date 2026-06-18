@@ -1234,6 +1234,20 @@ ownerLoyalty: {
   validationPPU: "Les points par unite doivent etre d au moins 1.",
   validationThreshold: "Le seuil minimum de rachat doit etre d au moins 1.",
   validationValue: "La valeur par point doit etre superieure a 0.",
+  tierSectionTitle: "Progression par niveau",
+  tierSectionHint: "Récompensez les clients fidèles avec des taux de points bonifiés à mesure qu ils accumulent des points.",
+  tierEnabledLabel: "Activer les niveaux (Bronze / Argent / Or)",
+  tierSilverThresholdLabel: "Seuil Argent (pts cumulés)",
+  tierGoldThresholdLabel: "Seuil Or (pts cumulés)",
+  tierSilverMultiplierLabel: "Multiplicateur Argent",
+  tierGoldMultiplierLabel: "Multiplicateur Or",
+  tierMultiplierSuffix: "× points gagnés",
+  bonusSectionTitle: "Événements bonus",
+  bonusSectionHint: "Attribuez des points supplémentaires lors de moments clés — laissez à 0 pour désactiver chaque événement.",
+  firstOrderBonusLabel: "Bonus première commande (pts)",
+  firstOrderBonusHint: "Attribué lors de la première commande d un client dans votre restaurant.",
+  birthdayBonusLabel: "Bonus anniversaire (pts)",
+  birthdayBonusHint: "Attribué quand un client avec une date d anniversaire enregistrée passe une commande le jour de son anniversaire.",
 },
 driver: {
   kicker: "Livraison",
@@ -5019,6 +5033,14 @@ customerAccount: {
   topUpLoading: "Redirection vers le paiement…",
   topUpSuccessMsg: "Rechargement effectué — votre solde sera mis à jour sous peu.",
   topUpCancelledMsg: "Paiement annulé.",
-  topUpError: "Impossible de démarrer le paiement. Veuillez réessayer."
+  topUpError: "Impossible de démarrer le paiement. Veuillez réessayer.",
+  tierBronze: "Bronze",
+  tierSilver: "Argent",
+  tierGold: "Or",
+  tierProgressLabel: "Progression de niveau",
+  tierProgressPts: "{current} / {next} pts vers {tier}",
+  birthdayLabel: "Date d anniversaire",
+  birthdayHint: "Nous vous récompenserons avec des points bonus le jour de votre anniversaire.",
+  birthdaySaved: "Anniversaire enregistré."
 }
 };

@@ -1133,6 +1133,36 @@ class LoyaltyConfig(models.Model):
         default="0.0100",
         help_text="Currency value of one loyalty point (e.g. 0.01 = 1 pt is worth $0.01).",
     )
+    # ── C3: Tier progression ─────────────────────────────────────────────────
+    tier_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable Bronze/Silver/Gold tier progression. Silver and Gold members earn points faster.",
+    )
+    tier_silver_threshold = models.PositiveIntegerField(
+        default=500,
+        help_text="Lifetime points required to reach Silver tier.",
+    )
+    tier_gold_threshold = models.PositiveIntegerField(
+        default=2000,
+        help_text="Lifetime points required to reach Gold tier.",
+    )
+    tier_silver_multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default="1.50",
+        help_text="Points-per-unit multiplier for Silver members (e.g. 1.5 = 50% bonus).",
+    )
+    tier_gold_multiplier = models.DecimalField(
+        max_digits=4, decimal_places=2, default="2.00",
+        help_text="Points-per-unit multiplier for Gold members (e.g. 2.0 = double points).",
+    )
+    # ── C3: Bonus events ─────────────────────────────────────────────────────
+    first_order_bonus_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Bonus points awarded on a customer's first order at this restaurant. 0 = disabled.",
+    )
+    birthday_bonus_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Bonus points awarded when a customer orders on their birthday. 0 = disabled.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

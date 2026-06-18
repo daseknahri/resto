@@ -41,6 +41,8 @@ def _make_customer(**kwargs):
         google_sub=None,
         wallet_balance=0,
         loyalty_points=0,
+        lifetime_loyalty_points=0,
+        birthday=None,
         locale="en",
         is_driver=False,
         is_driver_online=False,

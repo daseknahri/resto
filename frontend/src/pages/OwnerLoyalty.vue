@@ -210,6 +210,149 @@
           </div>
         </div>
 
+        <div class="border-t border-slate-700/40" />
+
+        <!-- Tier progression section -->
+        <div class="space-y-4">
+          <div class="space-y-0.5">
+            <p class="text-xs font-semibold text-slate-200">{{ t('ownerLoyalty.tierSectionTitle') }}</p>
+            <p class="text-[11px] text-slate-500 leading-relaxed">{{ t('ownerLoyalty.tierSectionHint') }}</p>
+          </div>
+
+          <!-- Enable tiers toggle -->
+          <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-3">
+            <p class="text-sm font-medium text-slate-200">{{ t('ownerLoyalty.tierEnabledLabel') }}</p>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="form.tier_enabled"
+              :aria-label="t('ownerLoyalty.tierEnabledLabel')"
+              class="ui-touch-target relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              :class="form.tier_enabled ? 'border-emerald-500/60 bg-emerald-500/30' : 'border-slate-600 bg-slate-800'"
+              @click="form.tier_enabled = !form.tier_enabled"
+            >
+              <span
+                class="absolute top-0.5 h-5 w-5 rounded-full transition-transform"
+                :class="form.tier_enabled ? 'translate-x-5 bg-emerald-400' : 'translate-x-0.5 bg-slate-500'"
+              />
+            </button>
+          </div>
+
+          <template v-if="form.tier_enabled">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <!-- Silver threshold -->
+              <div class="space-y-1.5">
+                <label for="loyalty-silver-thr" class="block text-xs font-semibold text-slate-300">
+                  {{ t('ownerLoyalty.tierSilverThresholdLabel') }}
+                </label>
+                <input
+                  id="loyalty-silver-thr"
+                  v-model.number="form.tier_silver_threshold"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="ui-input w-full tabular-nums"
+                />
+              </div>
+
+              <!-- Gold threshold -->
+              <div class="space-y-1.5">
+                <label for="loyalty-gold-thr" class="block text-xs font-semibold text-slate-300">
+                  {{ t('ownerLoyalty.tierGoldThresholdLabel') }}
+                </label>
+                <input
+                  id="loyalty-gold-thr"
+                  v-model.number="form.tier_gold_threshold"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="ui-input w-full tabular-nums"
+                />
+              </div>
+
+              <!-- Silver multiplier -->
+              <div class="space-y-1.5">
+                <label for="loyalty-silver-mul" class="block text-xs font-semibold text-slate-300">
+                  {{ t('ownerLoyalty.tierSilverMultiplierLabel') }}
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="loyalty-silver-mul"
+                    v-model="form.tier_silver_multiplier"
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    class="ui-input w-24 tabular-nums"
+                  />
+                  <span class="text-xs text-slate-400">{{ t('ownerLoyalty.tierMultiplierSuffix') }}</span>
+                </div>
+              </div>
+
+              <!-- Gold multiplier -->
+              <div class="space-y-1.5">
+                <label for="loyalty-gold-mul" class="block text-xs font-semibold text-slate-300">
+                  {{ t('ownerLoyalty.tierGoldMultiplierLabel') }}
+                </label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="loyalty-gold-mul"
+                    v-model="form.tier_gold_multiplier"
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    class="ui-input w-24 tabular-nums"
+                  />
+                  <span class="text-xs text-slate-400">{{ t('ownerLoyalty.tierMultiplierSuffix') }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="border-t border-slate-700/40" />
+
+        <!-- Bonus events section -->
+        <div class="space-y-4">
+          <div class="space-y-0.5">
+            <p class="text-xs font-semibold text-slate-200">{{ t('ownerLoyalty.bonusSectionTitle') }}</p>
+            <p class="text-[11px] text-slate-500 leading-relaxed">{{ t('ownerLoyalty.bonusSectionHint') }}</p>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <!-- First-order bonus -->
+            <div class="space-y-1.5">
+              <label for="loyalty-first-order-bonus" class="block text-xs font-semibold text-slate-300">
+                {{ t('ownerLoyalty.firstOrderBonusLabel') }}
+              </label>
+              <input
+                id="loyalty-first-order-bonus"
+                v-model.number="form.first_order_bonus_points"
+                type="number"
+                min="0"
+                step="1"
+                class="ui-input w-full tabular-nums"
+              />
+              <p class="text-[11px] leading-relaxed text-slate-500">{{ t('ownerLoyalty.firstOrderBonusHint') }}</p>
+            </div>
+
+            <!-- Birthday bonus -->
+            <div class="space-y-1.5">
+              <label for="loyalty-birthday-bonus" class="block text-xs font-semibold text-slate-300">
+                {{ t('ownerLoyalty.birthdayBonusLabel') }}
+              </label>
+              <input
+                id="loyalty-birthday-bonus"
+                v-model.number="form.birthday_bonus_points"
+                type="number"
+                min="0"
+                step="1"
+                class="ui-input w-full tabular-nums"
+              />
+              <p class="text-[11px] leading-relaxed text-slate-500">{{ t('ownerLoyalty.birthdayBonusHint') }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Preview card -->
         <div
           class="ui-section-band space-y-2 rounded-xl px-4 py-3.5"
@@ -274,6 +417,13 @@ const form = reactive({
   points_per_unit: 10,
   redeem_threshold: 100,
   points_value: '0.01',
+  tier_enabled: false,
+  tier_silver_threshold: 500,
+  tier_gold_threshold: 2000,
+  tier_silver_multiplier: '1.50',
+  tier_gold_multiplier: '2.00',
+  first_order_bonus_points: 0,
+  birthday_bonus_points: 0,
 });
 
 const previewEarn = computed(() => {
@@ -293,6 +443,13 @@ const applyConfig = (data) => {
   form.points_per_unit = data.points_per_unit;
   form.redeem_threshold = data.redeem_threshold;
   form.points_value = data.points_value;
+  form.tier_enabled = data.tier_enabled ?? false;
+  form.tier_silver_threshold = data.tier_silver_threshold ?? 500;
+  form.tier_gold_threshold = data.tier_gold_threshold ?? 2000;
+  form.tier_silver_multiplier = data.tier_silver_multiplier ?? '1.50';
+  form.tier_gold_multiplier = data.tier_gold_multiplier ?? '2.00';
+  form.first_order_bonus_points = data.first_order_bonus_points ?? 0;
+  form.birthday_bonus_points = data.birthday_bonus_points ?? 0;
   if (data.stats) stats.value = data.stats;
 };
 
@@ -336,6 +493,13 @@ const save = async () => {
       points_per_unit: Number(form.points_per_unit),
       redeem_threshold: Number(form.redeem_threshold),
       points_value: form.points_value,
+      tier_enabled: form.tier_enabled,
+      tier_silver_threshold: Number(form.tier_silver_threshold),
+      tier_gold_threshold: Number(form.tier_gold_threshold),
+      tier_silver_multiplier: form.tier_silver_multiplier,
+      tier_gold_multiplier: form.tier_gold_multiplier,
+      first_order_bonus_points: Number(form.first_order_bonus_points),
+      birthday_bonus_points: Number(form.birthday_bonus_points),
     });
     applyConfig(res.data);
     writeCache(LOYALTY_CACHE_KEY, res.data); // update cache with saved values

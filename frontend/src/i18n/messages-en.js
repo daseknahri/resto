@@ -1235,6 +1235,20 @@ ownerLoyalty: {
   validationPPU: "Points per unit must be at least 1.",
   validationThreshold: "Minimum points to redeem must be at least 1.",
   validationValue: "Value per point must be greater than 0.",
+  tierSectionTitle: "Tier Progression",
+  tierSectionHint: "Reward loyal customers with bonus earning rates as they accumulate lifetime points.",
+  tierEnabledLabel: "Enable tiers (Bronze / Silver / Gold)",
+  tierSilverThresholdLabel: "Silver threshold (lifetime pts)",
+  tierGoldThresholdLabel: "Gold threshold (lifetime pts)",
+  tierSilverMultiplierLabel: "Silver multiplier",
+  tierGoldMultiplierLabel: "Gold multiplier",
+  tierMultiplierSuffix: "× points earned",
+  bonusSectionTitle: "Bonus Events",
+  bonusSectionHint: "Award extra points on key moments — leave at 0 to disable each event.",
+  firstOrderBonusLabel: "First-order bonus (pts)",
+  firstOrderBonusHint: "Awarded on a customer's first order at your restaurant.",
+  birthdayBonusLabel: "Birthday bonus (pts)",
+  birthdayBonusHint: "Awarded when a customer with a birthday on file places an order on their birthday.",
 },
 driver: {
   kicker: "Delivery",
@@ -5024,6 +5038,14 @@ customerAccount: {
   topUpLoading: "Redirecting to payment…",
   topUpSuccessMsg: "Top-up processed — your balance will reflect shortly.",
   topUpCancelledMsg: "Payment cancelled.",
-  topUpError: "Could not start payment. Please try again."
+  topUpError: "Could not start payment. Please try again.",
+  tierBronze: "Bronze",
+  tierSilver: "Silver",
+  tierGold: "Gold",
+  tierProgressLabel: "Tier progress",
+  tierProgressPts: "{current} / {next} pts to {tier}",
+  birthdayLabel: "Birthday",
+  birthdayHint: "We'll reward you with bonus points on your birthday.",
+  birthdaySaved: "Birthday saved."
 }
 };

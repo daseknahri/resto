@@ -46,7 +46,8 @@ def _make_customer(**kwargs):
     defaults = dict(
         pk=1, id=1, name="Alice", email="alice@example.com", phone="+21261234567",
         phone_verified=True, email_verified=False, google_sub=None,
-        wallet_balance=0, loyalty_points=0, locale="en", is_driver=False,
+        wallet_balance=0, loyalty_points=0, lifetime_loyalty_points=0, birthday=None,
+        locale="en", is_driver=False,
         is_driver_online=False, notify_order_updates=True,
         notify_review_prompts=True, notify_promotions=True,
         referral_code="ABCD1234", referral_reward_given=False,

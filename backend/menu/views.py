@@ -2871,13 +2871,58 @@ class PlaceOrderView(APIView):
                 try:
                     _loyalty_cfg = LoyaltyConfig.objects.filter(enabled=True).first()
                     if _loyalty_cfg and _linked_customer is not None:
-                        _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit))
+                        from decimal import Decimal as _Dloy
+                        from accounts.models import Customer as _CustLoy
+                        # C3: tier multiplier based on customer's lifetime points
+                        _lifetime = int(getattr(_linked_customer, "lifetime_loyalty_points", 0) or 0)
+                        if getattr(_loyalty_cfg, "tier_enabled", False):
+                            _g_thr = int(getattr(_loyalty_cfg, "tier_gold_threshold", 2000) or 2000)
+                            _s_thr = int(getattr(_loyalty_cfg, "tier_silver_threshold", 500) or 500)
+                            if _lifetime >= _g_thr:
+                                _tier_mul = _Dloy(str(getattr(_loyalty_cfg, "tier_gold_multiplier", "2.00") or "2.00"))
+                            elif _lifetime >= _s_thr:
+                                _tier_mul = _Dloy(str(getattr(_loyalty_cfg, "tier_silver_multiplier", "1.50") or "1.50"))
+                            else:
+                                _tier_mul = _Dloy("1")
+                        else:
+                            _tier_mul = _Dloy("1")
+                        _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit) * float(_tier_mul))
                         if _pts > 0:
-                            from accounts.models import Customer as _CustM2
-                            _CustM2.objects.filter(pk=_linked_customer.pk).update(
-                                loyalty_points=models.F("loyalty_points") + _pts
+                            _CustLoy.objects.filter(pk=_linked_customer.pk).update(
+                                loyalty_points=models.F("loyalty_points") + _pts,
+                                lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _pts,
                             )
                             Order.objects.filter(pk=order.pk).update(points_earned=_pts)
+                        # C3: first-order bonus (tenant-scoped)
+                        _first_bonus = int(getattr(_loyalty_cfg, "first_order_bonus_points", 0) or 0)
+                        if _first_bonus > 0:
+                            _prior_paid = Order.objects.filter(
+                                customer_id=_linked_customer.pk,
+                                payment_status=Order.PaymentStatus.PAID,
+                            ).exclude(pk=order.pk).count()
+                            if _prior_paid == 0:
+                                _CustLoy.objects.filter(pk=_linked_customer.pk).update(
+                                    loyalty_points=models.F("loyalty_points") + _first_bonus,
+                                    lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _first_bonus,
+                                )
+                        # C3: birthday bonus (platform-wide, once per calendar year)
+                        _bday_bonus = int(getattr(_loyalty_cfg, "birthday_bonus_points", 0) or 0)
+                        if _bday_bonus > 0:
+                            from django.utils import timezone as _tzloy
+                            _today = _tzloy.localtime(_tzloy.now()).date()
+                            _bday = getattr(_linked_customer, "birthday", None)
+                            _rewarded_yr = getattr(_linked_customer, "loyalty_birthday_rewarded_year", None)
+                            if (
+                                _bday is not None
+                                and _bday.month == _today.month
+                                and _bday.day == _today.day
+                                and _rewarded_yr != _today.year
+                            ):
+                                _CustLoy.objects.filter(pk=_linked_customer.pk).update(
+                                    loyalty_points=models.F("loyalty_points") + _bday_bonus,
+                                    lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _bday_bonus,
+                                    loyalty_birthday_rewarded_year=_today.year,
+                                )
                 except Exception:
                     pass  # Never fail the order due to loyalty errors
 
@@ -9814,6 +9859,13 @@ class OwnerLoyaltyView(APIView):
             "points_per_unit": cfg.points_per_unit,
             "redeem_threshold": cfg.redeem_threshold,
             "points_value": str(cfg.points_value),
+            "tier_enabled": bool(getattr(cfg, "tier_enabled", False)),
+            "tier_silver_threshold": int(getattr(cfg, "tier_silver_threshold", 500) or 500),
+            "tier_gold_threshold": int(getattr(cfg, "tier_gold_threshold", 2000) or 2000),
+            "tier_silver_multiplier": str(getattr(cfg, "tier_silver_multiplier", "1.50") or "1.50"),
+            "tier_gold_multiplier": str(getattr(cfg, "tier_gold_multiplier", "2.00") or "2.00"),
+            "first_order_bonus_points": int(getattr(cfg, "first_order_bonus_points", 0) or 0),
+            "birthday_bonus_points": int(getattr(cfg, "birthday_bonus_points", 0) or 0),
             "updated_at": cfg.updated_at.isoformat(),
         }
         if include_stats:
@@ -9857,6 +9909,25 @@ class OwnerLoyaltyView(APIView):
                     cfg.points_value = val
             except (InvalidOperation, TypeError, ValueError):
                 pass
+        # C3: tier settings
+        if "tier_enabled" in data:
+            cfg.tier_enabled = bool(data["tier_enabled"])
+        for _tier_int_field in ("tier_silver_threshold", "tier_gold_threshold",
+                                "first_order_bonus_points", "birthday_bonus_points"):
+            if _tier_int_field in data:
+                try:
+                    cfg.__dict__[_tier_int_field] = max(0, int(data[_tier_int_field]))
+                    setattr(cfg, _tier_int_field, max(0, int(data[_tier_int_field])))
+                except (TypeError, ValueError):
+                    pass
+        for _tier_dec_field in ("tier_silver_multiplier", "tier_gold_multiplier"):
+            if _tier_dec_field in data:
+                try:
+                    val = _Dec(str(data[_tier_dec_field])).quantize(_Dec("0.01"))
+                    if val >= _Dec("1.00"):
+                        setattr(cfg, _tier_dec_field, val)
+                except (InvalidOperation, TypeError, ValueError):
+                    pass
         cfg.save()
         return Response(self._serialize(cfg))
 
@@ -9880,6 +9951,13 @@ class CustomerLoyaltyConfigView(APIView):
             "points_per_unit": cfg.points_per_unit,
             "redeem_threshold": cfg.redeem_threshold,
             "points_value": str(cfg.points_value),
+            "tier_enabled": bool(getattr(cfg, "tier_enabled", False)),
+            "tier_silver_threshold": int(getattr(cfg, "tier_silver_threshold", 500) or 500),
+            "tier_gold_threshold": int(getattr(cfg, "tier_gold_threshold", 2000) or 2000),
+            "tier_silver_multiplier": str(getattr(cfg, "tier_silver_multiplier", "1.50") or "1.50"),
+            "tier_gold_multiplier": str(getattr(cfg, "tier_gold_multiplier", "2.00") or "2.00"),
+            "first_order_bonus_points": int(getattr(cfg, "first_order_bonus_points", 0) or 0),
+            "birthday_bonus_points": int(getattr(cfg, "birthday_bonus_points", 0) or 0),
         })
 
 

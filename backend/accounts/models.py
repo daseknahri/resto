@@ -98,6 +98,24 @@ class Customer(models.Model):
         default=False,
         help_text="Reward already issued for this customer being a referral — never re-issue.",
     )
+    # ── Loyalty depth (C3) ───────────────────────────────────────────────────
+    # lifetime_loyalty_points: cumulative total ever earned (never decremented
+    # when points are redeemed). Used for tier progression — a customer who spends
+    # their points doesn't lose their tier status.
+    lifetime_loyalty_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Total loyalty points ever earned (never decremented). Used for tier calculation.",
+    )
+    birthday = models.DateField(
+        null=True, blank=True,
+        help_text="Customer's date of birth (YYYY-MM-DD). Day+month used for annual birthday reward.",
+    )
+    # Stores the calendar year the birthday bonus was last awarded.
+    # Prevents awarding the bonus twice in the same calendar year.
+    loyalty_birthday_rewarded_year = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Year the birthday loyalty bonus was last awarded. Guards against double-credit.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

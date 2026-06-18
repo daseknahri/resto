@@ -1096,10 +1096,32 @@
                   class="ms-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium tabular-nums text-indigo-400"
                   :title="t('customerAccount.loyaltyEquivHint')"
                 >≈ {{ loyaltyEquivCredit }}</span>
+                <span
+                  v-if="tierName"
+                  class="ms-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  :class="{
+                    'border border-amber-700/40 bg-amber-900/20 text-amber-600': tierName === t('customerAccount.tierBronze'),
+                    'border border-slate-400/30 bg-slate-500/10 text-slate-300': tierName === t('customerAccount.tierSilver'),
+                    'border border-yellow-500/40 bg-yellow-500/10 text-yellow-300': tierName === t('customerAccount.tierGold'),
+                  }"
+                >{{ tierName }}</span>
               </div>
             </div>
             <div class="p-4 space-y-3">
               <template v-if="loyaltyConfig?.enabled">
+                <!-- Tier progress bar (shown when tiers enabled and not yet at max) -->
+                <div v-if="tierProgress" class="space-y-1">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-slate-400">{{ t('customerAccount.tierProgressLabel') }}</span>
+                    <span class="tabular-nums text-slate-500">{{ t('customerAccount.tierProgressPts', { current: tierProgress.current, next: tierProgress.next, tier: tierProgress.tier }) }}</span>
+                  </div>
+                  <div class="h-1.5 overflow-hidden rounded-full bg-slate-800/80">
+                    <div
+                      class="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-700"
+                      :style="{ width: Math.min((tierProgress.current / tierProgress.next) * 100, 100) + '%' }"
+                    />
+                  </div>
+                </div>
                 <div v-if="loyaltyConfig.redeem_threshold > 0" class="space-y-1.5">
                   <div class="flex items-center justify-between text-[11px]">
                     <span class="text-slate-400">{{ t('customerAccount.loyaltyEarnRate', { pts: loyaltyConfig.points_per_unit }) }}</span>
@@ -1453,6 +1475,32 @@
                 </div>
                 <p v-if="emailError" id="customer-account-email-error" role="alert" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
               </div>
+            </div>
+
+            <!-- Birthday -->
+            <div class="px-4 py-3 space-y-1.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.birthdayLabel') }}</p>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="editableBirthday"
+                  type="date"
+                  max="2099-12-31"
+                  class="ui-input py-1.5 text-sm"
+                  :aria-label="t('customerAccount.birthdayLabel')"
+                  :disabled="savingBirthday"
+                />
+                <button
+                  v-if="editableBirthday !== (customerStore.customer?.birthday || '')"
+                  class="ui-btn-primary inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+                  :disabled="savingBirthday"
+                  :aria-busy="savingBirthday"
+                  @click="saveBirthday"
+                >
+                  <svg v-if="savingBirthday" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ savingBirthday ? t('customerAccount.saving') : t('common.save') }}
+                </button>
+              </div>
+              <p class="text-[11px] leading-relaxed text-slate-500">{{ t('customerAccount.birthdayHint') }}</p>
             </div>
           </div>
 
@@ -1988,6 +2036,46 @@ const walletBalance = computed(() => {
 
 // ── Loyalty ───────────────────────────────────────────────────────────────────
 const loyaltyPoints = computed(() => customerStore.customer?.loyalty_points || 0);
+const lifetimeLoyaltyPoints = computed(() => customerStore.customer?.lifetime_loyalty_points || 0);
+
+const tierName = computed(() => {
+  const cfg = loyaltyConfig.value;
+  if (!cfg?.tier_enabled) return null;
+  const lt = lifetimeLoyaltyPoints.value;
+  if (lt >= (cfg.tier_gold_threshold || 2000)) return t('customerAccount.tierGold');
+  if (lt >= (cfg.tier_silver_threshold || 500)) return t('customerAccount.tierSilver');
+  return t('customerAccount.tierBronze');
+});
+
+const tierProgress = computed(() => {
+  const cfg = loyaltyConfig.value;
+  if (!cfg?.tier_enabled) return null;
+  const lt = lifetimeLoyaltyPoints.value;
+  const goldThr = cfg.tier_gold_threshold || 2000;
+  const silverThr = cfg.tier_silver_threshold || 500;
+  if (lt >= goldThr) return null; // already at max tier
+  if (lt >= silverThr) {
+    return { current: lt, next: goldThr, tier: t('customerAccount.tierGold') };
+  }
+  return { current: lt, next: silverThr, tier: t('customerAccount.tierSilver') };
+});
+
+// ── Birthday ──────────────────────────────────────────────────────────────────
+const editableBirthday = ref(null);
+const savingBirthday = ref(false);
+
+const saveBirthday = async () => {
+  savingBirthday.value = true;
+  try {
+    const res = await api.patch('/customer/profile/', { birthday: editableBirthday.value || '' });
+    customerStore.setCustomer({ ...customerStore.customer, birthday: res.data.birthday });
+    toast.show(t('customerAccount.birthdaySaved'), 'success');
+  } catch {
+    toast.show(t('common.saveFailed'), 'error');
+  } finally {
+    savingBirthday.value = false;
+  }
+};
 
 // ── Referral ──────────────────────────────────────────────────────────────────
 const referralEnabled = computed(() => !!tenantStore.resolvedMeta?.profile?.referral_enabled);
@@ -2556,6 +2644,7 @@ watch(
     editableName.value = val?.name || '';
     selectedLocale.value = val?.locale || 'en';
     if (val?.id) localeConfigured.value = !!localStorage.getItem(`locale_set_${val.id}`);
+    editableBirthday.value = val?.birthday || '';
   },
   { immediate: true }
 );
