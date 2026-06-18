@@ -8,6 +8,7 @@ This migration:
   2. Backfills it from existing customer_phone values.
   3. Adds a btree index so exact-match phone searches hit the index.
 """
+from django.contrib.postgres.operations import AddIndexConcurrently
 from django.db import migrations, models
 
 
@@ -28,6 +29,12 @@ def backfill_phone_digits(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # atomic=False: AddIndexConcurrently requires running outside a transaction
+    # (CREATE INDEX CONCURRENTLY cannot run inside a transaction block). The
+    # RunPython backfill is safe non-transactionally — it does batched
+    # bulk_update calls and is idempotent (re-running produces the same digits).
+    atomic = False
+
     dependencies = [
         ("menu", "0061_orderitem_voided_by_user_id"),
     ]
@@ -47,7 +54,7 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(backfill_phone_digits, migrations.RunPython.noop),
-        migrations.AddIndex(
+        AddIndexConcurrently(
             model_name="order",
             index=models.Index(
                 fields=["customer_phone_digits"],
