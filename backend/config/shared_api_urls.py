@@ -96,6 +96,7 @@ from accounts.views import (
     SessionView,
     CustomerDataExportView,
     CustomerErasureRequestView,
+    EmailSuppressionWebhookView,
 )
 from config.api import health_view
 from menu.views import AdminWalletListView, AnalyticsEventIngestView
@@ -140,6 +141,7 @@ shared_api_urlpatterns = [
     path("api/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
     path("api/analytics/events/", AnalyticsEventIngestView.as_view(), name="analytics-events"),
     path("api/public/plans/", PublicPlanPricingView.as_view(), name="public-plan-pricing"),
+    path("api/public/email/suppression/", EmailSuppressionWebhookView.as_view(), name="email-suppression-webhook"),
     path("api/reservations/manage/<uuid:token>/", PublicReservationManageView.as_view(), name="reservation-manage"),
     path("api/customer/session/", CustomerSessionView.as_view(), name="customer-session"),
     path("api/customer/my-data/", CustomerDataExportView.as_view(), name="customer-my-data"),

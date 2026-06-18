@@ -1174,6 +1174,46 @@ class CustomerTenantOptOut(models.Model):
         return f"CustomerTenantOptOut customer={self.customer_id} tenant={self.tenant_id}"
 
 
+class CustomerEmailSuppression(models.Model):
+    """Hard-bounce / spam-complaint suppression list for outbound marketing email.
+
+    Fed by an ESP webhook (POST /api/public/email/suppression/). An email on this
+    list is excluded from every outbound marketing audience (win-back nudges,
+    owner campaigns) regardless of the customer's ``notify_promotions`` flag.
+
+    Lives in the public schema (accounts app) so every audience query can reach
+    it with a single cross-schema check.
+
+    Note: this table suppresses by EMAIL ADDRESS, not customer_id. An address
+    can bounce before or after a customer record is created, and the same address
+    might appear on multiple Customer rows (if a customer re-registers).
+    """
+
+    class Reason(models.TextChoices):
+        BOUNCE = "bounce", "Hard bounce"
+        COMPLAINT = "complaint", "Spam complaint"
+        MANUAL = "manual", "Manually suppressed"
+
+    email = models.EmailField(
+        unique=True,
+        db_index=True,
+        help_text="The suppressed email address (lower-cased by save).",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices, default=Reason.BOUNCE)
+    suppressed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    raw_event = models.JSONField(null=True, blank=True, help_text="Raw ESP webhook payload for audit.")
+
+    class Meta:
+        ordering = ("-suppressed_at",)
+
+    def save(self, *args, **kwargs):
+        self.email = self.email.lower().strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"CustomerEmailSuppression({self.email}, {self.reason})"
+
+
 class UserTOTPDevice(models.Model):
     """Per-user TOTP MFA device — lives in the public schema (accounts app).
 

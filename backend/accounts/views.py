@@ -7631,3 +7631,77 @@ class CustomerErasureRequestView(APIView):
 
         request.session.flush()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EmailSuppressionWebhookView(APIView):
+    """POST /api/public/email/suppression/ — ingest ESP bounce/complaint events.
+
+    Accepts a generic JSON payload describing a hard bounce or spam complaint,
+    and upserts a ``CustomerEmailSuppression`` row so the address is excluded
+    from all future marketing sends.
+
+    Authentication: Bearer token matching ``settings.EMAIL_SUPPRESSION_WEBHOOK_SECRET``.
+    If the secret is not configured the endpoint returns 403 (disabled). Set the
+    secret in your ESP's webhook configuration and in the env var.
+
+    Payload (minimal):
+        {"event": "bounce", "email": "user@example.com"}
+        {"event": "complained", "recipient": "user@example.com"}
+
+    Also accepts nested Mailgun-style payloads:
+        {"event-data": {"event": "bounced", "recipient": "user@example.com"}}
+
+    ``event`` → ``CustomerEmailSuppression.Reason`` mapping:
+        bounce / bounced / hard_bounce  → bounce
+        complained / complaint / spam   → complaint
+        anything else                   → manual
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    _EVENT_TO_REASON = {
+        "bounce": "bounce",
+        "bounced": "bounce",
+        "hard_bounce": "bounce",
+        "complained": "complaint",
+        "complaint": "complaint",
+        "spam": "complaint",
+    }
+
+    def post(self, request):
+        secret = getattr(settings, "EMAIL_SUPPRESSION_WEBHOOK_SECRET", "") or ""
+        if not secret:
+            return Response({"ok": False, "detail": "Webhook not configured."},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # Simple Bearer token authentication.
+        auth = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth.startswith("Bearer ") or auth[len("Bearer "):] != secret:
+            return Response({"ok": False}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            body = request.data
+        except Exception:
+            return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Support nested Mailgun-style: {"event-data": {...}}
+        if "event-data" in body:
+            body = body["event-data"]
+
+        email = (body.get("email") or body.get("recipient") or "").strip().lower()
+        if not email:
+            return Response({"ok": False, "detail": "No email address in payload."},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        raw_event_type = (body.get("event") or body.get("reason") or "").lower()
+        reason = self._EVENT_TO_REASON.get(raw_event_type, "manual")
+
+        from accounts.models import CustomerEmailSuppression
+        CustomerEmailSuppression.objects.update_or_create(
+            email=email,
+            defaults={"reason": reason, "raw_event": dict(body)},
+        )
+
+        logger.info("email_suppression: suppressed %s (reason=%s)", email, reason)
+        return Response({"ok": True, "email": email, "reason": reason})

@@ -164,13 +164,18 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> tuple[list
         # Step 3b: customers with a verified, non-empty email (email channel). B1 —
         # this broadens the audience beyond push-subscribed customers. email_verified
         # guards against bouncing to addresses that were entered but never confirmed.
+        # Hard-bounce / complaint suppression: exclude addresses on the global list.
+        from accounts.models import CustomerEmailSuppression
+        suppressed_emails = set(
+            CustomerEmailSuppression.objects.values_list("email", flat=True)
+        )
         email_by_id = {
             cid: email
             for cid, email in Customer.objects.filter(
                 id__in=opted_in,
                 email_verified=True,
             ).exclude(email="").values_list("id", "email")
-            if email
+            if email and email.lower() not in suppressed_emails
         }
 
         # Reachable on at least one channel — push OR email.

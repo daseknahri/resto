@@ -660,6 +660,11 @@ def send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id
     if not email:
         return 0
 
+    # Hard bounce / complaint suppression: skip if address is on the global list.
+    from .models import CustomerEmailSuppression
+    if CustomerEmailSuppression.objects.filter(email=email.lower()).exists():
+        return 0
+
     try:
         sent = send_marketing_email(
             email, title, message, tenant_name,
