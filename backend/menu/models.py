@@ -268,8 +268,24 @@ class TableSection(models.Model):
 
 
 class TableLink(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        OCCUPIED = "occupied", "Occupied"
+        DIRTY = "dirty", "Dirty"
+        RESERVED = "reserved", "Reserved"
+
     label = models.CharField(max_length=40)
     slug = models.SlugField(max_length=55, unique=True)
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    capacity = models.PositiveSmallIntegerField(
+        default=4,
+        help_text="Maximum number of covers this table can seat.",
+    )
     position = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     # Floor section this table belongs to — drives which waiter sees its orders.

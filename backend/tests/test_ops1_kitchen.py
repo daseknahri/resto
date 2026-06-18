@@ -369,11 +369,13 @@ class StaffTableListViewTests(SimpleTestCase):
         req.tenant = _tenant(tenant_id=tenant_id)
         return self.view(req)
 
-    def _make_table(self, pk, slug, label, section_name=None):
+    def _make_table(self, pk, slug, label, section_name=None, table_status="open", capacity=4):
         t = MagicMock()
         t.id = pk
         t.slug = slug
         t.label = label
+        t.status = table_status
+        t.capacity = capacity
         if section_name is not None:
             t.section = MagicMock()
             t.section.name = section_name
@@ -428,6 +430,8 @@ class StaffTableListViewTests(SimpleTestCase):
         self.assertEqual(row["slug"], "main-1")
         self.assertEqual(row["label"], "Main 1")
         self.assertEqual(row["section"], "Main Hall")
+        self.assertEqual(row["status"], "open")
+        self.assertEqual(row["capacity"], 4)
 
     @patch("menu.views.TableLink.objects")
     def test_response_shape_no_section(self, tl_om):

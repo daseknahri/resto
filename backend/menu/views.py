@@ -4758,10 +4758,224 @@ class StaffTableListView(APIView):
                 "slug": t.slug,
                 "label": t.label,
                 "section": t.section.name if t.section_id else None,
+                "status": t.status,
+                "capacity": t.capacity,
             }
             for t in tables
         ]
         return Response(data)
+
+
+class StaffTableStatusView(APIView):
+    """PATCH /api/staff/tables/<table_id>/status/
+
+    Let a waiter explicitly set a table's operational status.
+
+    Allowed values for `status`: "open", "dirty", "reserved".
+    "occupied" is rejected — the waiter app derives occupancy from active orders.
+
+    Auth: perm_manage_orders gate (same as all staff order views).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _ALLOWED = {TableLink.Status.OPEN, TableLink.Status.DIRTY, TableLink.Status.RESERVED}
+
+    def patch(self, request, table_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        new_status = (request.data.get("status") or "").strip().lower()
+        if new_status not in self._ALLOWED:
+            return Response(
+                {"detail": "status must be one of: open, dirty, reserved.", "code": "invalid_status"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            table = TableLink.objects.get(pk=table_id, is_active=True)
+        except TableLink.DoesNotExist:
+            return Response({"detail": "Table not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        table.status = new_status
+        table.save(update_fields=["status", "updated_at"])
+        return Response({"id": table.id, "slug": table.slug, "label": table.label, "status": table.status})
+
+
+class StaffTransferItemsView(APIView):
+    """POST /api/staff/orders/<src_order_id>/transfer-items/
+
+    Move a subset of non-voided items from one open table order to another.
+
+    Body:
+      { "item_ids": [int, ...], "dest_order_id": int }
+
+    Guards (409):
+      not_table        — either order is not fulfillment_type='table'
+      bad_status       — either order is in a terminal/paid status
+      already_paid     — source order is already marked PAID
+      no_items         — item_ids is empty
+      items_not_found  — one or more item_ids don't exist in src order (non-voided)
+
+    On success both orders are recalculated, saved, and broadcast. Responds with
+    the updated src payload. If all items are moved the src order is cancelled.
+    """
+
+    permission_classes = [IsAuthenticated]
+    _ACTIVE = {"pending", "confirmed", "preparing", "ready"}
+
+    def post(self, request, src_order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        item_ids = request.data.get("item_ids") or []
+        dest_order_id = request.data.get("dest_order_id")
+
+        if not item_ids:
+            return Response({"detail": "item_ids is required.", "code": "no_items"}, status=status.HTTP_400_BAD_REQUEST)
+        if not dest_order_id:
+            return Response({"detail": "dest_order_id is required.", "code": "no_dest"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction as _tx
+        from menu.models import OrderItem as _OI
+
+        with _tx.atomic():
+            try:
+                src = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=src_order_id)
+            except Order.DoesNotExist:
+                return Response({"detail": "Source order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if src.fulfillment_type != Order.FulfillmentType.TABLE:
+                return Response({"detail": "Source order is not a table order.", "code": "not_table"}, status=status.HTTP_409_CONFLICT)
+            if src.status not in self._ACTIVE:
+                return Response({"detail": "Source order status does not allow item transfer.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
+            if src.payment_status == Order.PaymentStatus.PAID:
+                return Response({"detail": "Source order is already paid.", "code": "already_paid"}, status=status.HTTP_409_CONFLICT)
+
+            try:
+                dest = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=dest_order_id)
+            except Order.DoesNotExist:
+                return Response({"detail": "Destination order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if dest.fulfillment_type != Order.FulfillmentType.TABLE:
+                return Response({"detail": "Destination order is not a table order.", "code": "not_table"}, status=status.HTTP_409_CONFLICT)
+            if dest.status not in self._ACTIVE:
+                return Response({"detail": "Destination order status does not allow item transfer.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
+
+            # Validate items belong to src and are non-voided
+            src_item_ids = {i.id for i in src.items.all() if not i.is_voided}
+            requested = set(int(x) for x in item_ids)
+            missing = requested - src_item_ids
+            if missing:
+                return Response({"detail": "Some items not found in source order.", "code": "items_not_found"}, status=status.HTTP_409_CONFLICT)
+
+            # Move items
+            _OI.objects.filter(pk__in=requested).update(order_id=dest.pk)
+
+            # Refresh and recalculate
+            src.refresh_from_db()
+            dest.refresh_from_db()
+            _recompute_order_totals(src)
+            _recompute_order_totals(dest)
+
+            remaining_active = [i for i in src.items.all() if not i.is_voided]
+            if not remaining_active:
+                src.status = Order.Status.CANCELLED
+                src.save(update_fields=["total", "status", "updated_at"])
+            else:
+                src.save(update_fields=["total", "updated_at"])
+            dest.save(update_fields=["total", "updated_at"])
+
+        try:
+            _broadcast_order_change(src)
+        except Exception:
+            pass
+        try:
+            _broadcast_order_change(dest)
+        except Exception:
+            pass
+
+        src.refresh_from_db()
+        return Response(_staff_order_payload(src))
+
+
+class StaffMergeOrdersView(APIView):
+    """POST /api/staff/orders/<dest_order_id>/merge/
+
+    Merge a source table order into a destination table order.
+
+    All non-voided items from the source are moved to the destination; the source
+    order is then cancelled (its total is zeroed). Discounts / tips on the source
+    order are NOT transferred — the destination's existing totals are unaffected
+    other than the additional food items.
+
+    Body: { "src_order_id": int }
+
+    Guards (409): same as StaffTransferItemsView (both must be table+active).
+    """
+
+    permission_classes = [IsAuthenticated]
+    _ACTIVE = {"pending", "confirmed", "preparing", "ready"}
+
+    def post(self, request, dest_order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        src_order_id = request.data.get("src_order_id")
+        if not src_order_id:
+            return Response({"detail": "src_order_id is required.", "code": "no_src"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction as _tx
+        from menu.models import OrderItem as _OI
+
+        with _tx.atomic():
+            try:
+                dest = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=dest_order_id)
+            except Order.DoesNotExist:
+                return Response({"detail": "Destination order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            try:
+                src = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=src_order_id)
+            except Order.DoesNotExist:
+                return Response({"detail": "Source order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if src.pk == dest.pk:
+                return Response({"detail": "Source and destination must be different orders.", "code": "same_order"}, status=status.HTTP_400_BAD_REQUEST)
+
+            for order, label in [(src, "Source"), (dest, "Destination")]:
+                if order.fulfillment_type != Order.FulfillmentType.TABLE:
+                    return Response({"detail": f"{label} order is not a table order.", "code": "not_table"}, status=status.HTTP_409_CONFLICT)
+                if order.status not in self._ACTIVE:
+                    return Response({"detail": f"{label} order status does not allow merge.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
+                if order.payment_status == Order.PaymentStatus.PAID:
+                    return Response({"detail": f"{label} order is already paid.", "code": "already_paid"}, status=status.HTTP_409_CONFLICT)
+
+            # Move all non-voided items from src → dest
+            active_src_item_ids = [i.id for i in src.items.all() if not i.is_voided]
+            if active_src_item_ids:
+                _OI.objects.filter(pk__in=active_src_item_ids).update(order_id=dest.pk)
+
+            # Cancel src (zero its total)
+            src.status = Order.Status.CANCELLED
+            src.total = Decimal("0")
+            src.save(update_fields=["status", "total", "updated_at"])
+
+            # Recalculate dest
+            dest.refresh_from_db()
+            _recompute_order_totals(dest)
+            dest.save(update_fields=["total", "updated_at"])
+
+        try:
+            _broadcast_order_change(src)
+        except Exception:
+            pass
+        try:
+            _broadcast_order_change(dest)
+        except Exception:
+            pass
+
+        dest.refresh_from_db()
+        return Response(_staff_order_payload(dest))
 
 
 class StaffOrderPaymentView(APIView):

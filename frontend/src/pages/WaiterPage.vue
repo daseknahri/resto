@@ -323,14 +323,40 @@
           class="space-y-2"
         >
           <!-- Table section header -->
-          <div class="flex items-center justify-between gap-2 px-1">
+          <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-sm font-bold text-slate-200 truncate">{{ group.tableLabel }}</span>
               <span class="text-[11px] text-slate-500">{{ t('waiterPage.tableOrders', { n: group.orders.length }) }}</span>
+              <!-- Table-state badge -->
+              <span
+                class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                :class="tableStatusBadgeClass(group.tableStatus)"
+              >{{ t(`waiterPage.tableStatus_${group.tableStatus}`) }}</span>
             </div>
-            <span class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
-              {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(group.totalOutstanding, group.orders[0]?.currency) }}
-            </span>
+            <div class="flex items-center gap-1.5">
+              <!-- Mark-dirty / mark-clean quick actions -->
+              <button
+                v-if="group.tableId && group.tableStatus !== 'dirty' && canManageOrders"
+                :disabled="markingTableId === group.tableId"
+                class="shrink-0 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-300 transition-colors hover:border-rose-400 disabled:opacity-50"
+                @click="markTableStatus(group, 'dirty')"
+              >{{ t('waiterPage.markDirty') }}</button>
+              <button
+                v-if="group.tableId && group.tableStatus === 'dirty' && canManageOrders"
+                :disabled="markingTableId === group.tableId"
+                class="shrink-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50"
+                @click="markTableStatus(group, 'open')"
+              >{{ t('waiterPage.markOpen') }}</button>
+              <button
+                v-if="group.tableId && group.tableStatus === 'open' && canManageOrders"
+                :disabled="markingTableId === group.tableId"
+                class="shrink-0 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] font-semibold text-violet-300 transition-colors hover:border-violet-400 disabled:opacity-50"
+                @click="markTableStatus(group, 'reserved')"
+              >{{ t('waiterPage.markReserved') }}</button>
+              <span class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
+                {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(group.totalOutstanding, group.orders[0]?.currency) }}
+              </span>
+            </div>
           </div>
           <!-- Orders within this table -->
           <div class="space-y-3 ps-2 border-s-2 border-slate-700/50">
@@ -507,6 +533,18 @@ class="min-w-0 flex-1 leading-snug"
                   class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
                   @click="openAppend(order)"
                 ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+                <!-- Transfer items -->
+                <button
+                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid' && order.items?.length"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                  @click="openTransfer(order)"
+                >{{ t('waiterPage.transferBtn') }}</button>
+                <!-- Merge another order into this one -->
+                <button
+                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-teal-500/40 bg-teal-500/10 px-3 py-2 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+                  @click="openMerge(order)"
+                >{{ t('waiterPage.mergeBtn') }}</button>
                 <button
                   class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
                   @click="openBill(order)"
@@ -1139,6 +1177,130 @@ class="min-w-0 flex-1 leading-snug"
       </div>
     </Transition>
   </Teleport>
+
+  <!-- Transfer-items modal (B5) -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 scale-95"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="transferModal"
+        class="fixed inset-0 z-[4100] flex items-end justify-center p-4 bg-black/70 sm:items-center"
+        @click.self="closeTransfer"
+        @keydown.esc="closeTransfer"
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          class="w-full max-w-md rounded-2xl bg-slate-900 shadow-2xl overflow-hidden"
+        >
+          <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
+            <h2 class="text-sm font-bold text-white">{{ t('waiterPage.transferTitle') }}</h2>
+            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" @click="closeTransfer">✕</button>
+          </div>
+          <div class="px-4 py-3 space-y-3 max-h-[60vh] overflow-y-auto">
+            <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.transferSelectItems') }}</p>
+            <div class="space-y-1">
+              <label
+                v-for="item in (transferSrcOrder?.items || []).filter(i => !i.is_voided)"
+                :key="item.id"
+                class="flex items-center gap-3 cursor-pointer rounded-xl px-3 py-2 transition-colors hover:bg-slate-800"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-indigo-500"
+                  :checked="transferSelectedIds.has(item.id)"
+                  @change="toggleTransferItem(item.id)"
+                />
+                <span class="flex-1 text-sm text-slate-200">{{ item.dish_name }}</span>
+                <span class="text-xs text-slate-400 tabular-nums">×{{ item.qty }}</span>
+              </label>
+            </div>
+            <div class="space-y-1">
+              <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.transferDestLabel') }}</p>
+              <select
+                v-model="transferDestId"
+                class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">{{ t('waiterPage.transferSelectDest') }}</option>
+                <option v-for="opt in transferDestOptions" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+              </select>
+            </div>
+            <p v-if="transferError" class="text-xs text-rose-400">{{ transferError }}</p>
+          </div>
+          <div class="flex gap-2 px-4 pt-2 pb-4">
+            <button
+              class="flex-1 rounded-xl border border-slate-700 py-2.5 text-sm text-slate-300 transition-colors hover:border-slate-500 focus-visible:outline-none"
+              @click="closeTransfer"
+            >{{ t('waiterPage.billClose') }}</button>
+            <button
+              :disabled="transferBusy"
+              class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none"
+              @click="submitTransfer"
+            >{{ transferBusy ? t('waiterPage.transferring') : t('waiterPage.transferConfirm') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- Merge-orders modal (B5) -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 scale-95"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="mergeModal"
+        class="fixed inset-0 z-[4100] flex items-end justify-center p-4 bg-black/70 sm:items-center"
+        @click.self="closeMerge"
+        @keydown.esc="closeMerge"
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          class="w-full max-w-sm rounded-2xl bg-slate-900 shadow-2xl overflow-hidden"
+        >
+          <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
+            <h2 class="text-sm font-bold text-white">{{ t('waiterPage.mergeTitle') }}</h2>
+            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" @click="closeMerge">✕</button>
+          </div>
+          <div class="px-4 py-4 space-y-3">
+            <div class="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400">
+              {{ t('waiterPage.mergeDestLabel') }}: <span class="font-semibold text-slate-200">#{{ mergeDestOrder?.order_number }} · {{ mergeDestOrder?.table_label }}</span>
+            </div>
+            <div class="space-y-1">
+              <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.mergeSrcLabel') }}</p>
+              <select
+                v-model="mergeSrcId"
+                class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="">{{ t('waiterPage.transferSelectDest') }}</option>
+                <option v-for="opt in mergeSrcOptions" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+              </select>
+            </div>
+            <p v-if="mergeError" class="text-xs text-rose-400">{{ mergeError }}</p>
+          </div>
+          <div class="flex gap-2 px-4 pt-0 pb-4">
+            <button
+              class="flex-1 rounded-xl border border-slate-700 py-2.5 text-sm text-slate-300 transition-colors hover:border-slate-500 focus-visible:outline-none"
+              @click="closeMerge"
+            >{{ t('waiterPage.billClose') }}</button>
+            <button
+              :disabled="mergeBusy"
+              class="flex-1 rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:opacity-50 focus-visible:outline-none"
+              @click="submitMerge"
+            >{{ mergeBusy ? t('waiterPage.merging') : t('waiterPage.mergeConfirm') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1260,8 +1422,24 @@ const voidItem = async (order, item) => {
 const TERMINAL_STATUSES = new Set(['cancelled', 'completed', 'delivered']);
 const ACTIVE_TABLE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
 
+// tableStatusMap: slug → { id, status, capacity } from GET /api/staff/tables/
+const tableStatusMap = ref(new Map());
+
+const loadTableStatuses = async () => {
+  try {
+    const { data } = await api.get('/staff/tables/');
+    const m = new Map();
+    for (const t of Array.isArray(data) ? data : []) {
+      m.set(t.slug, { id: t.id, status: t.status, capacity: t.capacity });
+    }
+    tableStatusMap.value = m;
+  } catch (e) {
+    void e;
+  }
+};
+
 // Groups active table orders by table_label. Returns:
-//   { tableGroups: [{ tableKey, tableLabel, orders, totalOutstanding }], nonTableOrders }
+//   { tableGroups: [{ tableKey, tableLabel, tableId, tableStatus, orders, totalOutstanding }], nonTableOrders }
 const tableGrouping = computed(() => {
   // Only group when activeTab is 'all' or one of the active status tabs and not 'recent'/'shift'.
   const src = visibleOrders.value;
@@ -1285,13 +1463,19 @@ const tableGrouping = computed(() => {
     }
   }
 
-  const tableGroups = [...tableMap.values()].map((g) => ({
-    ...g,
-    totalOutstanding: g.orders.reduce(
-      (sum, o) => sum + settleOutstanding(o),
-      0
-    ),
-  }));
+  const tableGroups = [...tableMap.values()].map((g) => {
+    const tInfo = tableStatusMap.value.get(g.tableKey) || {};
+    const dbStatus = tInfo.status || 'open';
+    // When DB says open but there are active orders, derive "occupied" for display.
+    const effectiveStatus = (dbStatus === 'open' && g.orders.length > 0) ? 'occupied' : dbStatus;
+    return {
+      ...g,
+      tableId: tInfo.id || null,
+      tableStatus: effectiveStatus,
+      tableCapacity: tInfo.capacity || 4,
+      totalOutstanding: g.orders.reduce((sum, o) => sum + settleOutstanding(o), 0),
+    };
+  });
 
   return { tableGroups, nonTableOrders };
 });
@@ -1299,6 +1483,142 @@ const tableGrouping = computed(() => {
 const showGrouped = computed(() =>
   activeTab.value !== 'recent' && activeTab.value !== 'shift' && tableGrouping.value.tableGroups.length > 0
 );
+
+// ── Table state badge helpers ──────────────────────────────────────────────────
+const tableStatusBadgeClass = (s) => {
+  if (s === 'occupied') return 'text-amber-300 border-amber-500/30 bg-amber-500/10';
+  if (s === 'dirty')    return 'text-rose-300  border-rose-500/30  bg-rose-500/10';
+  if (s === 'reserved') return 'text-violet-300 border-violet-500/30 bg-violet-500/10';
+  return 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'; // open
+};
+
+// ── Mark-table-status action ──────────────────────────────────────────────────
+const markingTableId = ref(null);
+
+const markTableStatus = async (group, newStatus) => {
+  if (!group.tableId) return;
+  markingTableId.value = group.tableId;
+  try {
+    await api.patch(`/staff/tables/${group.tableId}/status/`, { status: newStatus });
+    // Update local map immediately
+    const cur = tableStatusMap.value.get(group.tableKey) || { id: group.tableId, capacity: group.tableCapacity };
+    const updated = new Map(tableStatusMap.value);
+    updated.set(group.tableKey, { ...cur, status: newStatus });
+    tableStatusMap.value = updated;
+  } catch (e) {
+    void e;
+    toast.show(t('waiterPage.markStatusFailed'), 'error', 3000);
+  } finally {
+    markingTableId.value = null;
+  }
+};
+
+// ── Transfer-items modal ──────────────────────────────────────────────────────
+const transferModal = ref(false);
+const transferSrcOrder = ref(null);
+const transferSelectedIds = ref(new Set());
+const transferDestId = ref('');
+const transferBusy = ref(false);
+const transferError = ref('');
+
+const openTransfer = (order) => {
+  transferSrcOrder.value = order;
+  transferSelectedIds.value = new Set();
+  transferDestId.value = '';
+  transferError.value = '';
+  transferModal.value = true;
+};
+
+const closeTransfer = () => { transferModal.value = false; transferSrcOrder.value = null; };
+
+const toggleTransferItem = (itemId) => {
+  const s = new Set(transferSelectedIds.value);
+  if (s.has(itemId)) s.delete(itemId); else s.add(itemId);
+  transferSelectedIds.value = s;
+};
+
+// All active table orders except the source — candidates for item transfer destination
+const transferDestOptions = computed(() => {
+  const srcId = transferSrcOrder.value?.id;
+  const allGroups = tableGrouping.value.tableGroups;
+  const opts = [];
+  for (const g of allGroups) {
+    for (const o of g.orders) {
+      if (o.id !== srcId) opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
+    }
+  }
+  return opts;
+});
+
+const submitTransfer = async () => {
+  if (!transferSelectedIds.value.size) { transferError.value = t('waiterPage.transferNoItems'); return; }
+  if (!transferDestId.value) { transferError.value = t('waiterPage.transferNoDest'); return; }
+  transferBusy.value = true;
+  transferError.value = '';
+  try {
+    await api.post(`/staff/orders/${transferSrcOrder.value.id}/transfer-items/`, {
+      item_ids: [...transferSelectedIds.value],
+      dest_order_id: Number(transferDestId.value),
+    });
+    closeTransfer();
+    toast.show(t('waiterPage.transferSuccess'), 'success', 2500);
+    waiter.fetchOrders({ silent: true });
+  } catch (e) {
+    void e;
+    transferError.value = t('waiterPage.transferFailed');
+  } finally {
+    transferBusy.value = false;
+  }
+};
+
+// ── Merge-orders modal ────────────────────────────────────────────────────────
+const mergeModal = ref(false);
+const mergeDestOrder = ref(null);
+const mergeSrcId = ref('');
+const mergeBusy = ref(false);
+const mergeError = ref('');
+
+const openMerge = (order) => {
+  mergeDestOrder.value = order;
+  mergeSrcId.value = '';
+  mergeError.value = '';
+  mergeModal.value = true;
+};
+
+const closeMerge = () => { mergeModal.value = false; mergeDestOrder.value = null; };
+
+// All active table orders except the destination — candidates to merge IN
+const mergeSrcOptions = computed(() => {
+  const dstId = mergeDestOrder.value?.id;
+  const allGroups = tableGrouping.value.tableGroups;
+  const opts = [];
+  for (const g of allGroups) {
+    for (const o of g.orders) {
+      if (o.id !== dstId) opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
+    }
+  }
+  return opts;
+});
+
+const submitMerge = async () => {
+  if (!mergeSrcId.value) { mergeError.value = t('waiterPage.transferNoDest'); return; }
+  if (Number(mergeSrcId.value) === mergeDestOrder.value?.id) { mergeError.value = t('waiterPage.mergeSameOrder'); return; }
+  mergeBusy.value = true;
+  mergeError.value = '';
+  try {
+    await api.post(`/staff/orders/${mergeDestOrder.value.id}/merge/`, {
+      src_order_id: Number(mergeSrcId.value),
+    });
+    closeMerge();
+    toast.show(t('waiterPage.mergeSuccess'), 'success', 2500);
+    waiter.fetchOrders({ silent: true });
+  } catch (e) {
+    void e;
+    mergeError.value = t('waiterPage.mergeFailed');
+  } finally {
+    mergeBusy.value = false;
+  }
+};
 
 const showCharge = ref(false);
 const chargeContext = ref({ amount: '', orderNumber: '' });
@@ -1682,7 +2002,7 @@ onMounted(async () => {
     },
   });
 
-  const initial = await waiter.fetchOrders();
+  const [initial] = await Promise.all([waiter.fetchOrders(), loadTableStatuses()]);
   if (Array.isArray(initial)) prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
   document.addEventListener("visibilitychange", onVisible);
   pollTimer = setInterval(() => {
