@@ -585,6 +585,14 @@ class Order(models.Model):
             "the release sweep moves it to PENDING shortly before this time."
         ),
     )
+    predispatch_reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Stamped when the ~60-min pre-dispatch push reminder is sent to the customer. "
+            "Null = not yet sent. Used to prevent double-sending."
+        ),
+    )
     tip_amount = models.DecimalField(
         max_digits=8,
         decimal_places=2,

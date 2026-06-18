@@ -278,6 +278,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 300.0,  # every 5 min
         "args": ("release_scheduled_orders",),
     },
+    "send-predispatch-reminders": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 900.0,  # every 15 min — window is 35 min wide so every order is caught
+        "args": ("send_predispatch_reminders",),
+    },
     "send-review-prompts": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 900.0,  # every 15 min

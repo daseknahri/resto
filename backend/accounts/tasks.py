@@ -146,6 +146,7 @@ def customer_order_milestone(order_number, tenant_id, event):
 # new scheduled command means adding its name here too.
 _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
     "release_scheduled_orders",
+    "send_predispatch_reminders",
     "send_review_prompts",
     "send_reservation_reminders",
     "expire_charge_requests",

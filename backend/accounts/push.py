@@ -61,6 +61,13 @@ _REVIEW_MESSAGES = {
     "ar": {"title": "كيف كان {r}؟", "body": "اضغط لتقييم طلبك — لن يستغرق سوى لحظة."},
 }
 
+# Pre-dispatch reminder, sent ~60 min before a SCHEDULED order's scheduled_for time. {r} = restaurant.
+_PREDISPATCH_REMINDER_MESSAGES = {
+    "en": {"title": "Your order is coming up!", "body": "Your order from {r} is due soon — it's being prepared now."},
+    "fr": {"title": "Votre commande arrive !", "body": "Votre commande chez {r} est prévue bientôt — elle est en cours de préparation."},
+    "ar": {"title": "طلبك على وشك الجهوز!", "body": "طلبك من {r} موعده قريب — يتم تحضيره الآن."},
+}
+
 
 # New-delivery dispatch nudge, sent to online + free drivers. {r} = restaurant.
 _NEW_JOB_MESSAGES = {
@@ -370,6 +377,57 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
         from .notifications import record_notification
         record_notification(
             channel="push", event="review_prompt",
+            status="sent" if sent else "failed",
+            recipient=f"{sent}/{len(subs)} subs", detail=(restaurant_name or ""),
+            reference=str(order_number),
+        )
+    except Exception:
+        pass
+    return sent
+
+
+def send_predispatch_reminder_sync(customer_id, restaurant_name, order_number) -> int:
+    """Send a pre-dispatch reminder ~60 min before a SCHEDULED order's scheduled_for time.
+
+    Respects ``notify_order_updates``. Cross-schema: reads Customer + subscriptions from
+    the public schema. Returns the number of pushes delivered (0 = no subs / opted-out).
+    Deletes stale (gone) subscriptions as a side effect.
+    """
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=customer_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
+
+    if cust is not None and not getattr(cust, "notify_order_updates", True):
+        return 0
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    if loc not in _PREDISPATCH_REMINDER_MESSAGES:
+        loc = "en"
+    msg = _PREDISPATCH_REMINDER_MESSAGES[loc]
+    title = msg["title"]
+    body = msg["body"].format(r=restaurant_name or "the restaurant")
+    url = f"/orders/{order_number}"
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, url)
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event="predispatch_reminder",
             status="sent" if sent else "failed",
             recipient=f"{sent}/{len(subs)} subs", detail=(restaurant_name or ""),
             reference=str(order_number),
