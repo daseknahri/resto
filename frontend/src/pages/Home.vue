@@ -337,8 +337,9 @@
               {{ plan.available ? t("home.plans.planAvailable") : t("common.soon") }}
             </span>
           </div>
-          <!-- Pricing (config-driven from lib/pricing.js — owner sets real amounts there) -->
+          <!-- Pricing — live from /api/public/plans/ (owner sets in Django admin) -->
           <div class="mt-3 flex flex-wrap items-baseline gap-1.5">
+            <span v-if="plan.price" class="text-xs font-semibold text-slate-400">{{ plan.currency }}</span>
             <span v-if="plan.price" class="text-2xl font-bold tabular-nums text-white">{{ plan.price }}</span>
             <span v-else class="rounded-full border border-amber-500/40 bg-amber-500/8 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">{{ t("pricing.priceTodo") }}</span>
             <span v-if="plan.price" class="text-xs text-slate-500">/ {{ t("pricing.period." + plan.period) }}</span>
@@ -406,14 +407,14 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { SERVICES } from "../lib/services";
 import { BRAND_DOMAIN, DEMO_MENU_URL } from "../lib/brand";
-import { PRICING_PLANS } from "../lib/pricing";
+import { PRICING_PLANS, fetchPlanPricing } from "../lib/pricing";
 
 // Full literal Tailwind class strings per accent — never compute by string concat
 // so that the Tailwind scanner can reliably detect these classes.
@@ -433,9 +434,17 @@ const leadSuccess = ref(route.query.lead === "success");
 const brandDomain = BRAND_DOMAIN;
 const demoUrl = DEMO_MENU_URL;
 
+// Live pricing fetched from /api/public/plans/ — populated on mount.
+// Falls back to null (shows "Price TBD" badge) if the API is unreachable or unset.
+const livePricing = ref({});
+onMounted(async () => {
+  livePricing.value = await fetchPlanPricing();
+});
+
 /**
- * Merge i18n plan copy with pricing config from lib/pricing.js.
- * Price/period come from PRICING_PLANS (owner-configurable); all other copy is i18n.
+ * Merge i18n plan copy with live pricing from the backend.
+ * price_monthly comes from the DB (set by owner in Django admin).
+ * Falls back gracefully to null → "Price TBD" badge on the marketing page.
  */
 const plans = computed(() => [
   {
@@ -446,8 +455,9 @@ const plans = computed(() => [
     available: true,
     recommended: true,
     cta: t("home.plans.basic.cta"),
-    price: PRICING_PLANS.find((p) => p.code === "basic")?.price ?? null,
-    period: PRICING_PLANS.find((p) => p.code === "basic")?.period ?? "monthly",
+    price: livePricing.value["basic"]?.price_monthly ?? null,
+    currency: livePricing.value["basic"]?.currency ?? "MAD",
+    period: livePricing.value["basic"]?.billing_period ?? (PRICING_PLANS.find((p) => p.code === "basic")?.period ?? "monthly"),
   },
   {
     code: "growth",
@@ -457,8 +467,9 @@ const plans = computed(() => [
     available: false,
     recommended: false,
     cta: t("home.plans.growth.cta"),
-    price: PRICING_PLANS.find((p) => p.code === "growth")?.price ?? null,
-    period: PRICING_PLANS.find((p) => p.code === "growth")?.period ?? "monthly",
+    price: livePricing.value["growth"]?.price_monthly ?? null,
+    currency: livePricing.value["growth"]?.currency ?? "MAD",
+    period: livePricing.value["growth"]?.billing_period ?? (PRICING_PLANS.find((p) => p.code === "growth")?.period ?? "monthly"),
   },
   {
     code: "pro",
@@ -468,8 +479,9 @@ const plans = computed(() => [
     available: false,
     recommended: false,
     cta: t("home.plans.pro.cta"),
-    price: PRICING_PLANS.find((p) => p.code === "pro")?.price ?? null,
-    period: PRICING_PLANS.find((p) => p.code === "pro")?.period ?? "monthly",
+    price: livePricing.value["pro"]?.price_monthly ?? null,
+    currency: livePricing.value["pro"]?.currency ?? "MAD",
+    period: livePricing.value["pro"]?.billing_period ?? (PRICING_PLANS.find((p) => p.code === "pro")?.period ?? "monthly"),
   },
 ]);
 

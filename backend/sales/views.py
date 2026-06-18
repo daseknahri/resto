@@ -3223,3 +3223,29 @@ class PublicReservationManageView(APIView):
         except Exception:  # noqa: BLE001
             pass
         return Response(self._serialize(lead))
+
+
+class PublicPlanPricingView(APIView):
+    """
+    GET /api/public/plans/
+
+    Returns pricing data for all active plans — no authentication required.
+    Used by the marketing page (Home.vue) to show live prices set by the owner
+    in the Django admin. Returns price_monthly=null until the owner sets real amounts.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = []
+
+    def get(self, request):
+        plans = Plan.objects.filter(is_active=True).order_by("id").values(
+            "code", "price_monthly", "currency", "billing_period"
+        )
+        return Response([
+            {
+                "code": p["code"],
+                "price_monthly": str(p["price_monthly"]) if p["price_monthly"] is not None else None,
+                "currency": p["currency"] or "MAD",
+                "billing_period": p["billing_period"] or "monthly",
+            }
+            for p in plans
+        ])

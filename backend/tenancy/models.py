@@ -20,6 +20,19 @@ class Plan(models.Model):
         default=0,
         help_text="Maximum number of staff accounts allowed. 0 means unlimited.",
     )
+    # Pricing — set by the owner before going live; null = "price TBD" on the marketing page.
+    price_monthly = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Monthly subscription price shown on the marketing page. Leave null to display 'Price TBD'.",
+    )
+    currency = models.CharField(
+        max_length=10, default="MAD",
+        help_text="ISO 4217 currency code for price_monthly (e.g. MAD, USD, EUR).",
+    )
+    billing_period = models.CharField(
+        max_length=20, default="monthly",
+        help_text="Billing period shown on the marketing page (e.g. monthly, annually).",
+    )
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:

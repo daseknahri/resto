@@ -12,6 +12,7 @@ class PlanAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "can_checkout", "can_whatsapp_order")
     fieldsets = (
         (None, {"fields": ("name", "code", "description", "is_active")}),
+        ("Pricing", {"fields": ("price_monthly", "currency", "billing_period"), "description": "Set price_monthly to a value like 149.00 to show real prices on the marketing page. Leave null to show 'Price TBD'."}),
         ("Features", {"fields": ("can_checkout", "can_whatsapp_order", "max_languages")}),
         ("Limits (0 = unlimited)", {"fields": ("max_dishes", "max_staff_accounts")}),
     )

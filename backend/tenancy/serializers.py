@@ -55,6 +55,9 @@ class PlanSerializer(serializers.ModelSerializer):
             "can_whatsapp_order",
             "max_languages",
             "is_active",
+            "price_monthly",
+            "currency",
+            "billing_period",
         ]
 
     def get_tier_code(self, obj):

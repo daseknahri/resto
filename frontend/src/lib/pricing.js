@@ -1,34 +1,27 @@
 /**
  * Platform pricing scaffold — config-driven, owner-configurable.
  *
- * TODO owner: replace the placeholder amounts below with real prices before
- * going live. The "price" field is a string so you can write "Free",
- * "Contact us", or "49.00". The "period" field is an i18n key suffix
- * (e.g. "monthly" → t("pricing.period.monthly")).
+ * Prices come from the backend (GET /api/public/plans/) which the owner sets
+ * in the Django admin. The static PRICING_PLANS below define UI structure
+ * (recommended flag, period); price_monthly is populated live from the API.
  *
- * Each plan is also imported by Home.vue to drive the plan cards. Keeping
- * amounts here means ONE place to edit for the whole marketing site.
+ * Until the owner sets prices, the "price" field is null and the marketing
+ * page shows a "Price TBD" badge.
  */
 
 export const PRICING_PLANS = [
   {
     code: "basic",
-    // TODO owner: set price — e.g. "49.00" (MAD/month)
-    price: null,
     period: "monthly",
     recommended: true,
   },
   {
     code: "growth",
-    // TODO owner: set price — e.g. "149.00" (MAD/month)
-    price: null,
     period: "monthly",
     recommended: false,
   },
   {
     code: "pro",
-    // TODO owner: set price — contact sales or set a fixed amount
-    price: null,
     period: "monthly",
     recommended: false,
   },
@@ -37,5 +30,24 @@ export const PRICING_PLANS = [
 /** Convenience lookup by plan code */
 export const getPlanPricing = (code) =>
   PRICING_PLANS.find((p) => p.code === code) ?? null;
+
+/**
+ * Fetch live pricing from the backend.
+ * Returns a map of { code → { price_monthly, currency, billing_period } }.
+ * Falls back to an empty map on network error (marketing page degrades gracefully
+ * to "Price TBD" rather than breaking).
+ */
+export async function fetchPlanPricing() {
+  try {
+    const res = await fetch("/api/public/plans/", { credentials: "omit" });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return Object.fromEntries(
+      Array.isArray(data) ? data.map((p) => [p.code, p]) : []
+    );
+  } catch {
+    return {};
+  }
+}
 
 export default PRICING_PLANS;
