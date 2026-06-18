@@ -324,7 +324,13 @@
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.loyaltyTitle') }}</p>
-                <p class="mt-0.5 text-[10px]" :class="loyaltyPoints > 0 ? 'text-indigo-400' : 'text-slate-500'">
+                <p v-if="loyaltyConfig?.enabled && loyaltyConfig.redeem_threshold > 0 && loyaltyPoints >= loyaltyConfig.redeem_threshold" class="mt-0.5 text-[10px] font-semibold text-emerald-400">
+                  {{ t('customerAccount.loyaltyTileReady') }}
+                </p>
+                <p v-else-if="loyaltyConfig?.enabled && loyaltyConfig.redeem_threshold > 0" class="mt-0.5 text-[10px] text-indigo-400">
+                  {{ loyaltyPoints }} / {{ loyaltyConfig.redeem_threshold }} {{ t('customerAccount.loyaltyPts') }}
+                </p>
+                <p v-else class="mt-0.5 text-[10px]" :class="loyaltyPoints > 0 ? 'text-indigo-400' : 'text-slate-500'">
                   {{ loyaltyPoints }} {{ t('customerAccount.loyaltyPts') }}
                 </p>
               </div>
@@ -428,42 +434,46 @@
             >{{ t('customerAccount.overviewBookRide') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
           </div>
 
-          <!-- Most recent order -->
-          <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 240ms">
+          <!-- Re-order rail (last 3 orders) -->
+          <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-2.5" style="--ui-delay: 240ms">
             <div class="flex items-center justify-between gap-2">
-              <p class="ui-kicker">{{ t('customerAccount.overviewLastOrder') }}</p>
+              <p class="ui-kicker">{{ t('customerAccount.overviewRecentOrders') }}</p>
               <button class="ui-press inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">
                 {{ t('customerAccount.overviewViewAll') }}
                 <AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
               </button>
             </div>
-            <div class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs">
+            <div
+              v-for="ord in apiOrders.slice(0, 3)"
+              :key="ord.order_number"
+              class="flex items-center gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+            >
               <span
-                class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
                 :class="{
-                  'animate-pulse bg-amber-400': ACTIVE_STATUSES.has(apiOrders[0].status),
-                  'bg-emerald-400': apiOrders[0].status === 'completed',
-                  'bg-red-400': apiOrders[0].status === 'cancelled',
-                  'bg-slate-500': !ACTIVE_STATUSES.has(apiOrders[0].status) && apiOrders[0].status !== 'completed' && apiOrders[0].status !== 'cancelled',
+                  'animate-pulse bg-amber-400': ACTIVE_STATUSES.has(ord.status),
+                  'bg-emerald-400': ord.status === 'completed',
+                  'bg-red-400': ord.status === 'cancelled',
+                  'bg-slate-500': !ACTIVE_STATUSES.has(ord.status) && ord.status !== 'completed' && ord.status !== 'cancelled',
                 }"
               />
-              <div class="min-w-0 flex-1 space-y-1">
+              <div class="min-w-0 flex-1 space-y-0.5">
                 <div class="flex flex-wrap items-center gap-1.5">
                   <RouterLink
-                    :to="{ name: 'order-status', params: { orderNumber: apiOrders[0].order_number } }"
+                    :to="{ name: 'order-status', params: { orderNumber: ord.order_number } }"
                     class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
-                  >{{ t('customerAccount.orderNumber', { number: apiOrders[0].order_number }) }}</RouterLink>
-                  <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(apiOrders[0].status) }}</span>
+                  >{{ t('customerAccount.orderNumber', { number: ord.order_number }) }}</RouterLink>
+                  <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(ord.status) }}</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-slate-500">
-                  <span v-if="apiOrders[0].total" class="tabular-nums text-slate-400">{{ formatPrice(apiOrders[0].total) }}</span>
-                  <span v-if="apiOrders[0].created_at">{{ formatDate(apiOrders[0].created_at) }}</span>
+                  <span v-if="ord.total" class="tabular-nums text-slate-400">{{ formatPrice(ord.total) }}</span>
+                  <span v-if="ord.created_at">{{ formatDate(ord.created_at) }}</span>
                 </div>
               </div>
               <button
-                v-if="apiOrders[0].items?.length"
+                v-if="ord.items?.length"
                 class="ui-press shrink-0 inline-flex items-center gap-1 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
-                @click="reorder(apiOrders[0])"
+                @click="reorder(ord)"
               >
                 <AppIcon name="refresh" class="h-3 w-3" aria-hidden="true" />
                 {{ t('customerAccount.reorder') }}

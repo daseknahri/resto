@@ -4891,6 +4891,8 @@ customerAccount: {
   reviewsScoreExcellent: "Excellent!",
   overviewProfileSubtitle: "Info & Preferences",
   overviewLastOrder: "Last order",
+  overviewRecentOrders: "Recent orders",
+  loyaltyTileReady: "Ready to redeem!",
   overviewLastRide: "Last ride",
   overviewBookRide: "Book a ride",
   referralTitle: "Refer a friend",

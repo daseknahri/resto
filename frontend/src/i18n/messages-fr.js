@@ -4890,6 +4890,8 @@ customerAccount: {
   reviewsScoreExcellent: "Excellent !",
   overviewProfileSubtitle: "Infos & Preferences",
   overviewLastOrder: "Derniere commande",
+  overviewRecentOrders: "Commandes récentes",
+  loyaltyTileReady: "Prêt à échanger !",
   overviewLastRide: "Dernière course",
   overviewBookRide: "Réserver une course",
   referralTitle: "Parrainez un ami",
