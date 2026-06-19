@@ -23,6 +23,16 @@
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
               <CurrencySelector />
+              <!-- Driver-mode switch: only shown to users who are also drivers -->
+              <RouterLink
+                v-if="customerStore.customer?.is_driver"
+                to="/driver"
+                :aria-label="t('roleSwitch.driverMode')"
+                class="ui-touch-target ui-press inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/8 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+              >
+                <AppIcon name="truck" class="h-3 w-3" aria-hidden="true" />
+                <span class="hidden sm:inline">{{ t('roleSwitch.driverMode') }}</span>
+              </RouterLink>
               <!-- Color scheme toggle -->
               <button
                 class="ui-touch-target ui-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
@@ -149,11 +159,11 @@
           <RouterLink
             v-if="customerStore.customer?.is_driver"
             to="/driver"
-            :aria-label="t('landingLayout.navDrive')"
+            :aria-label="t('roleSwitch.driverMode')"
             class="ui-btn-outline ui-touch-target inline-flex items-center gap-1.5 border-emerald-500/40 px-3 py-1.5 text-[11px] text-emerald-200 hover:border-emerald-400/70"
           >
             <AppIcon name="truck" class="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{{ t('landingLayout.navDrive') }}</span>
+            <span>{{ t('roleSwitch.driverMode') }}</span>
           </RouterLink>
         </div>
       </div>

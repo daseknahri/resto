@@ -17,11 +17,14 @@ const LandingLayout = () => import("../layouts/LandingLayout.vue");
 const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
 const OwnerLayout = () => import("../layouts/OwnerLayout.vue");
 const WaiterLayout = () => import("../layouts/WaiterLayout.vue");
-// Chrome-less layout for standalone routes (auth, admin, 404): supplies the
+// Chrome-less layout for standalone routes (auth, 404): supplies the
 // single focusable <main id="main-content"> + skip-link those pages otherwise
 // lack, so the SPA focus guard (focusGuard.js, WCAG 2.4.3) has a landmark to
 // land on and keyboard users can skip to content.
 const PlainLayout = () => import("../layouts/PlainLayout.vue");
+// Admin chrome layout — persistent top nav bar for the 9 platform-admin routes,
+// with the same skip-link + focusable <main id="main-content"> a11y pattern.
+const AdminLayout = () => import("../layouts/AdminLayout.vue");
 
 const Home = () => import("../pages/Home.vue");
 const SuperAppHub = () => import("../pages/SuperAppHub.vue");
@@ -285,12 +288,31 @@ const routes = [
   // not for marketplace restaurant slugs like /order/my-restaurant.
   { path: "/order/:n([A-Z]+-[A-Z0-9]+)", redirect: (to) => ({ name: "order-status", params: { orderNumber: to.params.n } }) },
   { path: "/onboarding", redirect: { name: "onboarding" } },
+  // ── Admin routes — persistent nav chrome ──────────────────────────────────────
+  // AdminLayout provides the skip-link + focusable <main id="main-content"> a11y
+  // pattern AND a top nav bar with links to all 9 admin pages + sign-out. The 9
+  // admin routes are children here; auth/admin guards on each child are unchanged.
+  {
+    path: "/",
+    component: AdminLayout,
+    children: [
+      { path: "admin-console", name: "admin-console", component: AdminConsole, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-delivery-zones", name: "admin-delivery-zones", component: AdminDeliveryZones, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-drivers", name: "admin-drivers", component: AdminDrivers, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-analytics", name: "admin-analytics", component: AdminPlatformAnalytics, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-wallets", name: "admin-wallets", component: AdminWallet, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-customers", name: "admin-customers", component: AdminCustomers, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-delivery-jobs", name: "admin-delivery-jobs", component: AdminDeliveryJobs, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-rides", name: "admin-rides", component: AdminRides, meta: { requiresAuth: true, adminOnly: true } },
+      { path: "admin-flash-sales", name: "admin-flash-sales", component: AdminFlashSales, meta: { requiresAuth: true, adminOnly: true } },
+    ],
+  },
   // ── Standalone (chrome-less) routes ─────────────────────────────────────────
   // These render no header/nav, but are wrapped in PlainLayout so each exposes a
   // single focusable <main id="main-content"> landmark + a skip-link, matching
   // the full layouts. This keeps the SPA route-change focus guard (focusGuard.js,
   // WCAG 2.4.3) working uniformly and lets keyboard users skip to content.
-  // PlainLayout only adds the landmark + skip-link; auth/admin guards (driven by
+  // PlainLayout only adds the landmark + skip-link; auth guards (driven by
   // child-route meta) are unchanged.
   {
     path: "/",
@@ -303,15 +325,6 @@ const routes = [
       { path: "forgot-password", name: "forgot-password", component: ForgotPassword },
       { path: "reset-password", name: "reset-password", component: ResetPassword },
       { path: "unauthorized", name: "unauthorized", component: Unauthorized },
-      { path: "admin-console", name: "admin-console", component: AdminConsole, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-delivery-zones", name: "admin-delivery-zones", component: AdminDeliveryZones, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-drivers", name: "admin-drivers", component: AdminDrivers, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-analytics", name: "admin-analytics", component: AdminPlatformAnalytics, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-wallets", name: "admin-wallets", component: AdminWallet, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-customers", name: "admin-customers", component: AdminCustomers, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-delivery-jobs", name: "admin-delivery-jobs", component: AdminDeliveryJobs, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-rides", name: "admin-rides", component: AdminRides, meta: { requiresAuth: true, adminOnly: true } },
-      { path: "admin-flash-sales", name: "admin-flash-sales", component: AdminFlashSales, meta: { requiresAuth: true, adminOnly: true } },
       { path: "activate", name: "activate", component: Activate },
       // ── Catch-all 404 ─────────────────────────────────────────────────────────
       { path: ":pathMatch(.*)*", name: "not-found", component: NotFound },

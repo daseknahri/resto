@@ -209,6 +209,15 @@ onMounted(async () => {
   if (published.value) {
     highestCompleted.value = steps.length;
     canPublishStep.value = true;
+    // Re-entry guard: redirect a published tenant away from the wizard so
+    // they land on the owner dashboard instead of re-running setup.
+    // Only redirect when we can positively confirm published state; if the
+    // meta fetch failed (tenant.meta is null) we fall through and allow the
+    // wizard — conservative / non-breaking.
+    if (tenant.meta) {
+      await router.replace({ name: "owner-home" });
+      return;
+    }
   }
   restoreStep();
 });

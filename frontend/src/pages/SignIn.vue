@@ -197,6 +197,12 @@
               <RouterLink :to="forgotPasswordLink" class="ms-1 font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:underline">{{ t("signIn.resetHere") }}</RouterLink>
             </p>
           </div>
+
+          <!-- Customer hint — helps a consumer who landed on the wrong sign-in page -->
+          <p class="text-center text-xs text-slate-500">
+            {{ t("signIn.customerHint") }}
+            <RouterLink :to="{ name: 'customer-account' }" class="ms-1 font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:underline">{{ t("signIn.customerHintCta") }}</RouterLink>
+          </p>
         </template>
       </div>
     </div>

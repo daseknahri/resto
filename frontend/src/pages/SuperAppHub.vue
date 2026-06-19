@@ -108,6 +108,40 @@
       </div>
     </section>
 
+    <!-- ── PARTNER / OPEN YOUR BUSINESS CTA ────────────────────────────── -->
+    <!-- Distinct B2B invite — not a service tile, styled as an editorial strip
+         so it reads separately from the consumer grid above. -->
+    <section aria-labelledby="partner-strip-heading" class="ui-reveal">
+      <div class="ui-glass relative overflow-hidden rounded-3xl p-6 sm:p-8">
+        <!-- Subtle background accent -->
+        <div class="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-violet-400/10 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-8 -left-8 h-36 w-36 rounded-full bg-sky-400/8 blur-2xl" aria-hidden="true"></div>
+
+        <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <!-- Icon -->
+          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/10 text-2xl" aria-hidden="true">
+            🏪
+          </div>
+
+          <!-- Text -->
+          <div class="min-w-0 flex-1 space-y-1">
+            <p id="partner-strip-heading" class="ui-kicker text-violet-400">{{ t('superAppHub.partnerKicker') }}</p>
+            <h2 class="text-base font-semibold text-white sm:text-lg">{{ t('superAppHub.partnerTitle') }}</h2>
+            <p class="text-sm leading-relaxed text-slate-400">{{ t('superAppHub.partnerBody') }}</p>
+          </div>
+
+          <!-- CTA -->
+          <RouterLink
+            :to="{ name: 'lead' }"
+            class="inline-flex shrink-0 items-center gap-2 rounded-full border border-violet-500/40 bg-violet-500/10 px-5 py-2.5 text-sm font-semibold text-violet-200 transition-colors hover:border-violet-400/70 hover:bg-violet-500/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ui-press"
+          >
+            {{ t('superAppHub.partnerCta') }}
+            <AppIcon name="arrowRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" aria-hidden="true" />
+          </RouterLink>
+        </div>
+      </div>
+    </section>
+
     <!-- ── AUTH MODAL ────────────────────────────────────────────────────── -->
     <CustomerAuthModal
       v-if="showAuthModal"

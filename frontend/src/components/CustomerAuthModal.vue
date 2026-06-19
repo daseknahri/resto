@@ -29,7 +29,7 @@
           </button>
         </div>
 
-        <div class="space-y-4">
+        <div v-if="!showWelcome" class="space-y-4">
           <p class="ui-subtle">{{ t("customerAuth.description") }}</p>
 
           <!-- Google One-Tap (env-gated) -->
@@ -177,6 +177,13 @@
             <p class="flex-1 text-sm text-red-300">{{ generalError }}</p>
           </div>
         </div>
+        <div v-else class="space-y-4 py-4 text-center">
+          <h3 class="ui-display text-lg font-semibold text-white">{{ t("customerAuth.welcomeTitle", { platform: PLATFORM_NAME }) }}</h3>
+          <p class="ui-subtle">{{ t("customerAuth.welcomeBody") }}</p>
+          <button class="ui-btn-primary ui-press w-full px-4 py-2.5 text-sm" @click="dismissWelcome">
+            {{ t("customerAuth.welcomeExplore") }}
+          </button>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -194,6 +201,7 @@ import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCustomerStore } from "../stores/customer";
 import api from "../lib/api";
+import { PLATFORM_NAME } from "../lib/brand";
 
 defineProps({
   initialTab: { type: String, default: "phone" }, // kept for backward compat, ignored
@@ -221,6 +229,27 @@ const otpInputRef  = ref(null);
 const nameInputRef = ref(null);
 const dialogRef    = ref(null);
 const triggerEl    = ref(null);
+
+// First sign-in welcome (one-time). After the FIRST successful auth we show a
+// brief super-app welcome instead of closing immediately; a localStorage flag
+// makes it appear only once. Auth always completes first (we emit
+// "authenticated" before deciding), so the welcome never blocks sign-in. If a
+// parent closes the modal on "authenticated", the welcome simply doesn't show.
+const WELCOME_KEY = "kepoli.customer.welcomed";
+const showWelcome = ref(false);
+const _alreadyWelcomed = () => {
+  try { return localStorage.getItem(WELCOME_KEY) === "1"; } catch (e) { void e; return true; }
+};
+const finishAuth = (customer) => {
+  emit("authenticated", customer);
+  if (_alreadyWelcomed()) emit("close");
+  else showWelcome.value = true;
+};
+const dismissWelcome = () => {
+  try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { void e; }
+  showWelcome.value = false;
+  emit("close");
+};
 
 const trapFocus = (e) => {
   if (!dialogRef.value || e.key !== 'Tab') return;
@@ -297,8 +326,7 @@ const verifyOtp = async () => {
       await nextTick();
       nameInputRef.value?.focus();
     } else {
-      emit("authenticated", customer);
-      emit("close");
+      finishAuth(customer);
     }
   } catch (err) {
     const code   = err?.response?.data?.code;
@@ -322,20 +350,17 @@ const saveName = async () => {
   try {
     const res = await api.patch("/customer/profile/", { name: setupName.value });
     customerStore.setCustomer(res.data.customer);
-    emit("authenticated", res.data.customer);
-    emit("close");
+    finishAuth(res.data.customer);
   } catch {
     // Save failed — still close with the original customer
-    emit("authenticated", _pendingCustomer);
-    emit("close");
+    finishAuth(_pendingCustomer);
   } finally {
     savingName.value = false;
   }
 };
 
 const skipName = () => {
-  emit("authenticated", _pendingCustomer);
-  emit("close");
+  finishAuth(_pendingCustomer);
 };
 
 const backToPhone = () => {
@@ -368,8 +393,7 @@ const handleGoogleCredential = async (response) => {
     const res = await api.post("/customer/auth/google/", { credential: response.credential });
     customerStore.setCustomer(res.data.customer);
     _linkPendingReferral();
-    emit("authenticated", res.data.customer);
-    emit("close");
+    finishAuth(res.data.customer);
   } catch (err) {
     generalError.value = err?.response?.data?.detail || t("customerAuth.googleError");
   }

@@ -57,11 +57,11 @@
           <RouterLink
             v-if="customerStore.customer?.is_driver"
             to="/driver"
-            :aria-label="t('landingLayout.navDrive')"
-            class="ui-btn-outline ui-touch-target inline-flex items-center border-emerald-500/40 px-3 py-2 text-[11px] text-emerald-200 hover:border-emerald-400/70 sm:px-4 sm:text-sm"
+            :aria-label="t('roleSwitch.driverMode')"
+            class="ui-btn-outline ui-touch-target inline-flex items-center gap-1.5 border-emerald-500/40 px-3 py-2 text-[11px] text-emerald-200 hover:border-emerald-400/70 sm:px-4 sm:text-sm"
           >
-            <AppIcon name="truck" class="h-3.5 w-3.5 sm:me-1.5" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ t("landingLayout.navDrive") }}</span>
+            <AppIcon name="truck" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{{ t('roleSwitch.driverMode') }}</span>
           </RouterLink>
           <RouterLink
             v-if="customerStore.isAuthenticated"

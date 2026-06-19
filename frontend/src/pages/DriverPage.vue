@@ -125,20 +125,30 @@
         <AppIcon name="info" class="h-6 w-6 text-amber-300" aria-hidden="true" />
       </div>
       <div class="space-y-1.5">
-        <p class="text-base font-semibold text-slate-100">{{ t('driver.pendingTitle2') }}</p>
-        <p class="ui-subtle">{{ t('driver.pendingDesc') }}</p>
+        <p class="text-base font-semibold text-slate-100">{{ t('driver.pendingTitle') }}</p>
+        <p class="ui-subtle">{{ t('driver.pendingBody') }}</p>
       </div>
       <button
         class="ui-btn-outline ui-press px-5 py-2 text-sm"
         :disabled="busy"
         @click="fetchStatus"
       >
-        {{ t('driver.refresh') }}
+        {{ t('driver.pendingRefresh') }}
       </button>
     </div>
 
     <!-- Driver dashboard (approved) -->
     <template v-else>
+      <!-- First-approved welcome (one-time, dismissible) -->
+      <div v-if="!driverWelcomed" class="ui-panel space-y-3 border border-emerald-500/30 bg-emerald-900/10 p-4 ui-reveal">
+        <div class="space-y-1">
+          <p class="text-base font-semibold text-emerald-200">{{ t('driver.welcomeTitle') }}</p>
+          <p class="ui-subtle text-sm">{{ t('driver.welcomeBody') }}</p>
+        </div>
+        <button class="ui-btn-outline ui-press w-full px-4 py-2 text-sm" @click="dismissDriverWelcome">
+          {{ t('driver.welcomeDismiss') }}
+        </button>
+      </div>
       <!-- Online toggle — high prominence, the most critical driver control -->
       <div
         class="ui-panel flex items-center justify-between gap-3 p-4 ui-reveal"
@@ -1143,6 +1153,16 @@ const driverPush = useCustomerPush();
 
 const isDriver = ref(false);
 const approved = ref(false);
+
+// First-approved welcome (one-time, dismissible). Shows once after a driver is
+// approved; a localStorage flag suppresses it thereafter.
+const DRIVER_WELCOMED_KEY = 'kepoli.driver.welcomed';
+const driverWelcomed = ref(false);
+try { driverWelcomed.value = localStorage.getItem(DRIVER_WELCOMED_KEY) === '1'; } catch (e) { void e; driverWelcomed.value = true; }
+const dismissDriverWelcome = () => {
+  driverWelcomed.value = true;
+  try { localStorage.setItem(DRIVER_WELCOMED_KEY, '1'); } catch (e) { void e; }
+};
 const vehicle = ref('');
 const online = ref(false);
 const activeJob = ref(null);

@@ -79,13 +79,13 @@
             {{ t('waiterLayout.ownerView') }}
           </RouterLink>
 
-          <!-- Sign out -->
+          <!-- Sign out — always visible to all waiter/staff users -->
           <button
             class="flex h-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 px-2.5 text-xs text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
             type="button"
             @click="handleSignOut"
           >
-            {{ t('waiterLayout.signOut') }}
+            {{ t('common.signOut') }}
           </button>
         </div>
       </div>

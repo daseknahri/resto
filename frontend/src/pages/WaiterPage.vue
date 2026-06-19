@@ -1,5 +1,13 @@
 ﻿<template>
   <div class="space-y-4">
+    <!-- First-run welcome (one-time, dismissible) -->
+    <div v-if="!waiterFirstRunSeen" class="ui-reveal space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
+      <p class="text-sm font-semibold text-amber-100">{{ t('waiter.firstRunTitle') }}</p>
+      <p class="text-xs text-amber-200/80">{{ t('waiter.firstRunBody') }}</p>
+      <button class="ui-btn-primary ui-press px-4 py-1.5 text-xs" @click="dismissWaiterFirstRun">
+        {{ t('waiter.firstRunDismiss') }}
+      </button>
+    </div>
     <!-- Install-the-app banner (waiters work from the installed app) -->
     <div
       v-if="!isStandalone && !installDismissed"
@@ -1336,6 +1344,15 @@ import { useWakeLock } from "../composables/useWakeLock";
 const { t, formatDateTime, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
 const installDismissed = ref(false);
+
+// First-run welcome (one-time, dismissible).
+const WAITER_FIRSTRUN_KEY = "kepoli.waiter.firstRun";
+const waiterFirstRunSeen = ref(false);
+try { waiterFirstRunSeen.value = localStorage.getItem(WAITER_FIRSTRUN_KEY) === "1"; } catch (e) { void e; waiterFirstRunSeen.value = true; }
+const dismissWaiterFirstRun = () => {
+  waiterFirstRunSeen.value = true;
+  try { localStorage.setItem(WAITER_FIRSTRUN_KEY, "1"); } catch (e) { void e; }
+};
 const waiter = useWaiterStore();
 // Screen Wake Lock — prevents the waiter tablet from sleeping during service
 useWakeLock();

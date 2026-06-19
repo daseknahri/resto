@@ -3,7 +3,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "./useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { useMenuStore } from "../stores/menu";
-import { isPlatformAdminHost, isPlatformApiHost } from "../lib/runtimeHost";
+import { isPlatformAdminHost, isPlatformApiHost, isPlatformPublicHost } from "../lib/runtimeHost";
 import { PLATFORM_NAME } from "../lib/brand";
 
 // schema.org @type per business vertical (mirrors tenant store businessType
@@ -277,7 +277,14 @@ export const useSeoMeta = () => {
       const ogLocale = localeToOgLocale(locale);
       const tenantMeta = tenant.resolvedMeta || null;
       const profile = tenantMeta?.profile || {};
-      const tenantName = String(tenantMeta?.name || t("customerLayout.fallbackTenantName")).trim();
+      // On the platform public host (marketplace / hub / directory) there is no
+      // tenant — brand the title with the platform name (Kepoli), not the neutral
+      // tenant fallback. On a tenant subdomain whose meta merely failed to load we
+      // keep the neutral fallback so a tenant page is never rebranded as Kepoli.
+      const tenantNameFallback = isPlatformPublicHost()
+        ? PLATFORM_NAME
+        : t("customerLayout.fallbackTenantName");
+      const tenantName = String(tenantMeta?.name || tenantNameFallback).trim();
       const description =
         String(profile.description || "").trim() ||
         String(profile.tagline || "").trim() ||
