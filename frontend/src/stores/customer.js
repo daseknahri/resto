@@ -19,6 +19,11 @@ export const useCustomerStore = defineStore("customer", {
       !!(state.customer?.phone_verified || state.customer?.email_verified || state.customer?.has_google),
     /** Preferred locale for the customer (en/fr/ar). */
     locale: (state) => state.customer?.locale || "en",
+    /** Platform-enabled verticals (food/shops/pharmacy/rides/courier/driver). P4. */
+    enabledVerticals: (state) => state.platform?.enabled_verticals || [],
+    /** Whether a given vertical is enabled platform-wide. P4. */
+    isVerticalEnabled: (state) => (vertical) =>
+      (state.platform?.enabled_verticals || []).includes(vertical),
   },
 
   actions: {

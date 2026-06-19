@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { createMainContentFocusGuard } from "./focusGuard";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
+import { useCustomerStore } from "../stores/customer";
 import { useToastStore } from "../stores/toast";
 import { translate } from "../i18n/translate";
 import {
@@ -118,8 +119,8 @@ const routes = [
       // reachable on the platform public host (kepoli.app) — kept under
       // LandingLayout so the needsCustomerInterface guard never blocks them.
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "landing" } },
-      { path: "ride", name: "ride", component: RidePage, meta: { interface: "landing" } },
-      { path: "send-package", name: "send-package", component: SendPackagePage, meta: { interface: "landing" } },
+      { path: "ride", name: "ride", component: RidePage, meta: { interface: "landing", vertical: "rides" } },
+      { path: "send-package", name: "send-package", component: SendPackagePage, meta: { interface: "landing", vertical: "courier" } },
     ],
   },
   {
@@ -380,6 +381,22 @@ router.beforeEach(async (to) => {
     if (tenant.isBrowseOnlyPlan) {
       toast.show(translate("router.orderingDisabled"), "info");
       return { name: "menu" };
+    }
+  }
+
+  // P4: gate dedicated-vertical consumer routes (rides/courier) on the platform's
+  // enabled set. Fail-open: only redirect when we POSITIVELY know it's disabled
+  // (platform loaded + vertical absent), so a failed session fetch never blocks.
+  // Silent redirect to the hub, where the service already shows as coming-soon.
+  const gatedVertical = to.matched.map((r) => r.meta?.vertical).find(Boolean);
+  if (gatedVertical) {
+    const customer = useCustomerStore();
+    if (!customer.loaded && !customer.loading) {
+      try { await customer.fetchCustomer(); } catch { /* fail-open */ }
+    }
+    const enabled = customer.platform?.enabled_verticals;
+    if (Array.isArray(enabled) && !enabled.includes(gatedVertical)) {
+      return { name: "super-app-hub", replace: true };
     }
   }
 
