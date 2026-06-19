@@ -667,6 +667,74 @@ class CustomerServicesView(APIView):
         return Response({"services": services})
 
 
+class CustomerServiceProfilesView(APIView):
+    """GET / PATCH the customer's per-service notification preferences (P3).
+
+    GET returns prefs for every vertical, falling back to the customer's GLOBAL
+    ``notify_*`` flags where no per-service row exists (``customized: false``).
+    PATCH ``{vertical, notify_updates?, notify_promotions?}`` lazily creates the
+    row and updates it. The global flags remain the master switch (a per-vertical
+    False only adds suppression — see P2b). See KEPOLI_ACCOUNT_ARCHITECTURE.md L2.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        from .models import Customer, CustomerServiceProfile
+        from .verticals import ALL_VERTICALS
+
+        try:
+            cust = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            request.session.pop("customer_id", None)
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        profiles = {
+            p.vertical: p
+            for p in CustomerServiceProfile.objects.filter(customer_id=customer_id)
+        }
+        g_updates = bool(getattr(cust, "notify_order_updates", True))
+        g_promos = bool(getattr(cust, "notify_promotions", True))
+        out = {}
+        for v in ALL_VERTICALS:
+            p = profiles.get(v)
+            out[v] = {
+                "notify_updates": p.notify_updates if p else g_updates,
+                "notify_promotions": p.notify_promotions if p else g_promos,
+                "customized": p is not None,
+            }
+        return Response({"service_profiles": out})
+
+    def patch(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        from .models import CustomerServiceProfile
+        from .verticals import ALL_VERTICALS
+
+        vertical = (request.data.get("vertical") or "").strip().lower()
+        if vertical not in ALL_VERTICALS:
+            return Response({"detail": "Invalid vertical."}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = CustomerServiceProfile.get_or_create_for(customer_id, vertical)
+        fields = []
+        for key in ("notify_updates", "notify_promotions"):
+            if key in request.data:
+                setattr(profile, key, bool(request.data.get(key)))
+                fields.append(key)
+        if fields:
+            profile.save(update_fields=fields + ["updated_at"])
+        return Response({
+            "vertical": vertical,
+            "notify_updates": profile.notify_updates,
+            "notify_promotions": profile.notify_promotions,
+        })
+
+
 # ── Customer phone OTP ────────────────────────────────────────────────────────
 
 
@@ -968,16 +1036,21 @@ class CustomerMarketplaceOrdersView(APIView):
             return Response({"orders": [], "count": 0})
 
         from .models import CustomerOrderRef
+        from .verticals import ALL_VERTICALS
         PAGE_SIZE = 20
         try:
             page = max(1, int(request.query_params.get("page", 1)))
         except (ValueError, TypeError):
             page = 1
         offset = (page - 1) * PAGE_SIZE
+        qs = CustomerOrderRef.objects.filter(customer_id=customer_id)
+        # P3: optional per-service scoping. An invalid/blank vertical is ignored
+        # (returns the full cross-service history — the unscoped default).
+        vertical = (request.query_params.get("vertical") or "").strip().lower()
+        if vertical in ALL_VERTICALS:
+            qs = qs.filter(vertical=vertical)
         refs = list(
-            CustomerOrderRef.objects
-            .filter(customer_id=customer_id)
-            .order_by("-order_created_at")[offset:offset + PAGE_SIZE + 1]
+            qs.order_by("-order_created_at")[offset:offset + PAGE_SIZE + 1]
         )
         has_more = len(refs) > PAGE_SIZE
         refs = refs[:PAGE_SIZE]
@@ -991,6 +1064,7 @@ class CustomerMarketplaceOrdersView(APIView):
                     "fulfillment_type": r.fulfillment_type,
                     "total": str(r.total),
                     "currency": r.currency,
+                    "vertical": r.vertical or "",
                     "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
                     "items_snapshot": r.items_snapshot or [],
                 }
@@ -1811,12 +1885,38 @@ class CustomerWalletView(APIView):
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from django.conf import settings
+        from django.db.models import Sum
         from .models import WalletTransaction
-        txs = WalletTransaction.objects.filter(customer=customer).order_by("-created_at")[:50]
+        from .verticals import ALL_VERTICALS
+
+        txs_qs = WalletTransaction.objects.filter(customer=customer)
+        # P3: optional per-service scoping of the transaction list (the balance is
+        # always the single global pool). Invalid/blank vertical → full list.
+        vertical = (request.query_params.get("vertical") or "").strip().lower()
+        if vertical in ALL_VERTICALS:
+            txs_qs = txs_qs.filter(vertical=vertical)
+        txs = txs_qs.order_by("-created_at")[:50]
+
+        # Per-service spend breakdown (PAYMENT debits grouped by vertical) — the
+        # "spent on food / shops / rides" view. One global balance, sliced for display.
+        spend_by_vertical = {
+            row["vertical"]: str(row["total"])
+            for row in (
+                WalletTransaction.objects.filter(
+                    customer=customer, type=WalletTransaction.Type.PAYMENT
+                )
+                .exclude(vertical__isnull=True)
+                .values("vertical")
+                .annotate(total=Sum("amount"))
+            )
+            if row["vertical"]
+        }
+
         return Response({
             "balance": str(customer.wallet_balance),
             "phone_verified": bool(customer.phone_verified),
             "p2p_enabled": bool(getattr(settings, "WALLET_P2P_ENABLED", False)),
+            "spend_by_vertical": spend_by_vertical,
             "transactions": [
                 {
                     "id": tx.id,
@@ -1824,6 +1924,7 @@ class CustomerWalletView(APIView):
                     "amount": str(tx.amount),
                     "reference": tx.reference,
                     "note": tx.note,
+                    "vertical": tx.vertical or "",
                     "created_at": tx.created_at.isoformat(),
                 }
                 for tx in txs

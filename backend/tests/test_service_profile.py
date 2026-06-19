@@ -104,3 +104,53 @@ class TestCustomerServicesView(SimpleTestCase):
         self.assertEqual(svc["rides"]["count"], 0)
         self.assertTrue(svc["food"]["enabled"])
         self.assertFalse(svc["rides"]["enabled"])  # rides not in the enabled set
+
+
+class TestCustomerServiceProfilesView(SimpleTestCase):
+    """P3: read/update per-service notification preferences."""
+
+    def _req(self, customer_id=1, data=None):
+        req = MagicMock()
+        req.session = {"customer_id": customer_id} if customer_id else {}
+        req.data = data or {}
+        return req
+
+    def test_get_unauthenticated_401(self):
+        from accounts.views import CustomerServiceProfilesView
+
+        resp = CustomerServiceProfilesView().get(self._req(customer_id=None))
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("accounts.models.CustomerServiceProfile")
+    @patch("accounts.models.Customer")
+    def test_get_falls_back_to_global(self, mock_cust, mock_csp):
+        from accounts.views import CustomerServiceProfilesView
+
+        mock_cust.objects.get.return_value = MagicMock(
+            notify_order_updates=True, notify_promotions=False
+        )
+        mock_csp.objects.filter.return_value = []  # no per-service rows yet
+        resp = CustomerServiceProfilesView().get(self._req(1))
+        sp = resp.data["service_profiles"]
+        self.assertFalse(sp["food"]["customized"])
+        self.assertTrue(sp["food"]["notify_updates"])       # global default
+        self.assertFalse(sp["food"]["notify_promotions"])   # global default
+
+    def test_patch_invalid_vertical_400(self):
+        from accounts.views import CustomerServiceProfilesView
+
+        resp = CustomerServiceProfilesView().patch(self._req(1, {"vertical": "spaceport"}))
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("accounts.models.CustomerServiceProfile")
+    def test_patch_updates_profile(self, mock_csp):
+        from accounts.views import CustomerServiceProfilesView
+
+        profile = MagicMock(notify_updates=True, notify_promotions=True)
+        mock_csp.get_or_create_for.return_value = profile
+        resp = CustomerServiceProfilesView().patch(
+            self._req(1, {"vertical": "food", "notify_promotions": False})
+        )
+        self.assertFalse(profile.notify_promotions)
+        profile.save.assert_called_once()
+        self.assertEqual(resp.data["vertical"], "food")
