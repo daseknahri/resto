@@ -163,7 +163,12 @@ app is Django `backend/` + Vue `frontend/` via `docker-compose.coolify.yml` (man
       matching the backend default DATABASE_URL (user/pass/5432/resto) with healthcheck + named
       volume. Usage in file header: `docker compose -f docker-compose.dev.yml up -d` then pytest.
       CI continues to cover the DB tests via ci.yml; this makes them runnable locally too. [non-gated, S]
-- [ ] **R22 (P3) Load/stress harness (k6/locust)** — every scaling trigger (PgBouncer/workers/TTL) is an unmeasured guess.
+- [x] **R22 (P3) Load/stress harness (k6) — DONE** — infra/k6/load.js: three scenarios (smoke 2 VU×2 min,
+      ramp 0→VUS_RAMP→0 ~11 min, soak VUS_SOAK×SOAK_DURATION) covering 4 traffic groups (health 15%,
+      marketplace browse 35%, directory 15%, tenant menu load 35%). Per-route p95 thresholds (health <200ms,
+      meta <500ms, dishes <1s, marketplace <1.5s) + global <1% error gate. infra/k6/README.md: install,
+      quick-start, env vars, output guide, what-to-scale-when table, CI snippet. Configurable via
+      BASE_URL/TENANT_URL/MENU_SLUG/VUS_RAMP/VUS_SOAK/SOAK_DURATION env vars.
 - [x] **R23 (P3) Incident-response runbook — DONE (d20a02c)** — infra/INCIDENT_RUNBOOK.md: SEV1/2/3 + first-5-min
       triage + 8 grounded playbooks (deploy/rollback, DB restore, Redis, backup, migration, security, load, disk),
       links R1 scripts + MIGRATIONS.md, owner TODOs marked. All referenced paths/commands verified. **pytest.ini
