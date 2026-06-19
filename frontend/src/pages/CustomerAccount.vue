@@ -528,6 +528,20 @@
 
         <!-- ════════════ ORDERS TAB ════════════ -->
         <template v-else-if="activeTab === 'orders'">
+          <!-- Vertical filter chips -->
+          <div v-if="VERTICAL_FILTER_OPTIONS.length > 1" class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              v-for="opt in VERTICAL_FILTER_OPTIONS"
+              :key="opt.id"
+              type="button"
+              class="shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+              :class="selectedVertical === opt.id
+                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+              @click="selectVertical(opt.id)"
+            >{{ opt.label }}</button>
+          </div>
+
           <!-- Order history across all restaurants (marketplace index) -->
           <div v-if="marketplaceOrders.length" class="ui-panel ui-reveal overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
@@ -565,6 +579,7 @@
                           'text-slate-400': !ACTIVE_STATUSES.has(o.status) && o.status !== 'completed' && o.status !== 'cancelled',
                         }"
                       >{{ mktOrderStatus(o.status) }}</span>
+                      <span v-if="o.vertical" class="rounded-full border border-slate-700/40 bg-slate-800/50 px-1.5 py-0.5 text-[10px] text-slate-500">{{ VERTICAL_SVC_LABELS[o.vertical] || o.vertical }}</span>
                       <span class="text-[11px] text-slate-500">{{ formatDate(o.created_at) }}</span>
                     </div>
                   </RouterLink>
@@ -1081,6 +1096,27 @@
                 </li>
               </ul>
             </div>
+          </div>
+
+          <!-- Spend by vertical breakdown -->
+          <div
+            v-if="!loadingWallet && Object.keys(walletSpendByVertical).filter(v => parseFloat(walletSpendByVertical[v]) > 0).length"
+            class="ui-panel overflow-hidden p-0"
+          >
+            <div class="border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.spendByService') }}</p>
+            </div>
+            <ul class="divide-y divide-slate-800/60">
+              <li
+                v-for="(amount, vertical) in walletSpendByVertical"
+                v-show="parseFloat(amount) > 0"
+                :key="vertical"
+                class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+              >
+                <span class="text-slate-300">{{ VERTICAL_SVC_LABELS[vertical] || vertical }}</span>
+                <span class="tabular-nums font-semibold text-slate-200">{{ formatPrice(parseFloat(amount)) }}</span>
+              </li>
+            </ul>
           </div>
 
           <!-- Loyalty / Rewards -->
@@ -1729,6 +1765,73 @@
             </div>
           </div>
 
+          <!-- Per-service notification preferences -->
+          <div class="ui-panel ui-reveal overflow-hidden p-0" style="--ui-delay: 80ms">
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-3 border-b border-slate-800/70 px-4 py-3 text-start"
+              :aria-expanded="serviceProfilesOpen"
+              @click="serviceProfilesOpen = !serviceProfilesOpen; !serviceProfiles || Object.keys(serviceProfiles).length === 0 ? fetchServiceProfiles() : null"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.perServiceNotifs') }}</p>
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                class="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform"
+                :class="serviceProfilesOpen ? 'rotate-180' : ''"
+              ><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <Transition name="ui-expand">
+              <div v-if="serviceProfilesOpen" class="p-4 space-y-4">
+                <p class="text-[11px] leading-relaxed text-slate-500">{{ t('customerAccount.perServiceNotifsHint') }}</p>
+
+                <!-- Loading -->
+                <div v-if="loadingServiceProfiles" class="space-y-2">
+                  <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-xl bg-slate-800/50" />
+                </div>
+
+                <!-- Error -->
+                <p v-else-if="serviceProfilesError" class="text-xs text-red-400" role="alert">{{ t('customerAccount.perServiceLoadError') }}</p>
+
+                <!-- Per-vertical toggles -->
+                <div v-else class="space-y-4">
+                  <div
+                    v-for="vertical in customerStore.enabledVerticals.filter(v => v !== 'driver')"
+                    :key="vertical"
+                    class="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2"
+                  >
+                    <p class="text-xs font-semibold text-slate-300">{{ VERTICAL_SVC_LABELS[vertical] || vertical }}</p>
+                    <label class="flex items-center justify-between gap-3">
+                      <span class="text-xs text-slate-400">{{ t('customerAccount.notifOrderUpdates') }}</span>
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/40"
+                        :checked="serviceProfiles[vertical]?.notify_updates !== false"
+                        :disabled="savingServiceProfile === vertical"
+                        @change="saveServicePref(vertical, 'notify_updates', $event.target.checked)"
+                      />
+                    </label>
+                    <label class="flex items-center justify-between gap-3">
+                      <span class="text-xs text-slate-400">{{ t('customerAccount.notifPromotions') }}</span>
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/40"
+                        :checked="serviceProfiles[vertical]?.notify_promotions !== false"
+                        :disabled="savingServiceProfile === vertical"
+                        @change="saveServicePref(vertical, 'notify_promotions', $event.target.checked)"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
           <!-- Privacy & data section -->
           <div class="ui-panel ui-reveal overflow-hidden p-0" style="--ui-delay: 120ms">
             <div class="border-b border-slate-800/70 px-4 py-3">
@@ -1829,6 +1932,7 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
+import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -2515,6 +2619,7 @@ const fetchWallet = async () => {
     const res = await api.get('/customer/wallet/');
     walletTransactions.value = res.data.transactions || [];
     p2pEnabled.value = Boolean(res.data.p2p_enabled);
+    walletSpendByVertical.value = res.data.spend_by_vertical || {};
     if (res.data.balance !== undefined && customerStore.customer) {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }
@@ -2568,13 +2673,93 @@ const MKT_ORDER_STATUS = {
 };
 const mktOrderStatus = (s) => t(MKT_ORDER_STATUS[s] || 'orderStatus.statusPending');
 
-const fetchMarketplaceOrders = async () => {
+// ── Vertical filter for marketplace orders ────────────────────────────────────
+const selectedVertical = ref('');
+
+const VERTICAL_FILTER_OPTIONS = computed(() => {
+  const opts = [{ id: '', label: t('customerAccount.svcAll') }];
+  const map = {
+    [FOOD]:     t('customerAccount.svcFood'),
+    [SHOPS]:    t('customerAccount.svcShops'),
+    [PHARMACY]: t('customerAccount.svcPharmacy'),
+    [RIDES]:    t('customerAccount.svcRides'),
+    [COURIER]:  t('customerAccount.svcCourier'),
+  };
+  for (const v of customerStore.enabledVerticals) {
+    if (map[v]) opts.push({ id: v, label: map[v] });
+  }
+  return opts;
+});
+
+const fetchMarketplaceOrders = async (vertical = '') => {
   if (!customerStore.isAuthenticated) return;
   try {
-    const res = await api.get('/customer/orders/all/');
+    const params = vertical ? `?vertical=${vertical}` : '';
+    const res = await api.get(`/customer/orders/all/${params}`);
     marketplaceOrders.value = res.data.orders || [];
   } catch {
     marketplaceOrders.value = [];
+  }
+};
+
+const selectVertical = (v) => {
+  selectedVertical.value = v;
+  fetchMarketplaceOrders(v);
+};
+
+// ── Wallet spend-by-vertical ──────────────────────────────────────────────────
+const walletSpendByVertical = ref({});
+
+// ── Per-service notification preferences ─────────────────────────────────────
+const serviceProfiles = ref({});
+const loadingServiceProfiles = ref(false);
+const serviceProfilesError = ref(false);
+const serviceProfilesOpen = ref(false);
+const savingServiceProfile = ref(''); // vertical currently being saved
+
+const VERTICAL_SVC_LABELS = computed(() => ({
+  [FOOD]:     t('customerAccount.svcFood'),
+  [SHOPS]:    t('customerAccount.svcShops'),
+  [PHARMACY]: t('customerAccount.svcPharmacy'),
+  [RIDES]:    t('customerAccount.svcRides'),
+  [COURIER]:  t('customerAccount.svcCourier'),
+}));
+
+const fetchServiceProfiles = async () => {
+  if (!customerStore.isAuthenticated) return;
+  loadingServiceProfiles.value = true;
+  serviceProfilesError.value = false;
+  try {
+    const res = await api.get('/customer/service-profiles/');
+    serviceProfiles.value = res.data.service_profiles || {};
+  } catch {
+    serviceProfilesError.value = true;
+  } finally {
+    loadingServiceProfiles.value = false;
+  }
+};
+
+const saveServicePref = async (vertical, field, value) => {
+  if (savingServiceProfile.value) return;
+  savingServiceProfile.value = vertical;
+  // Optimistic update
+  if (serviceProfiles.value[vertical]) {
+    serviceProfiles.value[vertical][field] = value;
+  }
+  try {
+    const res = await api.patch('/customer/service-profiles/', { vertical, [field]: value });
+    if (serviceProfiles.value[vertical]) {
+      serviceProfiles.value[vertical].notify_updates = res.data.notify_updates;
+      serviceProfiles.value[vertical].notify_promotions = res.data.notify_promotions;
+    }
+  } catch {
+    // Revert optimistic update on failure
+    if (serviceProfiles.value[vertical]) {
+      serviceProfiles.value[vertical][field] = !value;
+    }
+    toast.show(t('customerAccount.prefSaveFailed'), 'error');
+  } finally {
+    savingServiceProfile.value = '';
   }
 };
 
@@ -2753,6 +2938,7 @@ const onAuthenticated = (customer) => {
   fetchReservations();
   fetchWallet();
   fetchLastRide();
+  fetchServiceProfiles();
 };
 
 const onPhoneAdded = (customer) => {
@@ -2784,6 +2970,7 @@ onMounted(async () => {
     fetchAddresses();
     pushCheckEnabled();
     fetchLastRide();
+    fetchServiceProfiles();
   }
 });
 </script>
