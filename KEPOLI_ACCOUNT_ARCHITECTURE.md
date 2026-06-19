@@ -1,6 +1,8 @@
 # Kepoli — Super-App Account Architecture & Roadmap
 
-> **Status:** PROPOSED (design phase — not yet implemented). Red-teamed against the live code.
+> **Status:** ✅ IMPLEMENTED (P0–P4 shipped; see `KEPOLI_NEXT.md` C13). Red-teamed against the
+> live code before build. Deferred (non-blocking): P3c reservation `Customer` FK; a dedicated
+> per-service route split (the order/wallet filters deliver the scoped views without it).
 > **Author:** architecture pass, grounded in a read-only map of the live code (2026-06-19).
 > **Relationship to other docs:** `KEPOLI_ARCHITECTURE.md` is the tenancy/super-app contract;
 > this is the **account/identity/data-scoping** contract under it. `KEPOLI_NEXT.md` is the
