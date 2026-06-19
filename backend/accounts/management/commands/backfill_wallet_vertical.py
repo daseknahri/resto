@@ -47,10 +47,26 @@ class Command(BaseCommand):
                 f"CASHOUT -> {DRIVER}: {n_cash} row(s){' (dry)' if dry_run else ''}"
             )
 
+            # 1b. Delivery EARNING (carries tenant_id) → driver. Ride/courier
+            #     EARNING has no tenant_id and stays null here (tagged explicitly
+            #     going forward).
+            earning_qs = WalletTransaction.objects.filter(
+                vertical__isnull=True,
+                type=WalletTransaction.Type.EARNING,
+                tenant_id__isnull=False,
+            )
+            n_earn = earning_qs.count()
+            if not dry_run:
+                earning_qs.update(vertical=DRIVER)
+            total += n_earn
+            self.stdout.write(
+                f"EARNING(delivery) -> {DRIVER}: {n_earn} row(s){' (dry)' if dry_run else ''}"
+            )
+
             # 2. Remaining tenant-attributed rows → the tenant's vertical.
             base = WalletTransaction.objects.filter(
                 vertical__isnull=True, tenant_id__isnull=False
-            ).exclude(type=WalletTransaction.Type.CASHOUT)
+            ).exclude(type__in=(WalletTransaction.Type.CASHOUT, WalletTransaction.Type.EARNING))
             tenant_ids = list(base.values_list("tenant_id", flat=True).distinct())
             bt_map = (
                 dict(

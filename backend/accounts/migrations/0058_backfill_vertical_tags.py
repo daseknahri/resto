@@ -48,15 +48,21 @@ def backfill(apps, schema_editor):
             vertical=_vertical_for_bt(bt_map.get(tid))
         )
 
-    # 2. WalletTransaction.vertical — null rows. CASHOUT -> driver; other
-    #    tenant-attributed rows -> the tenant's vertical; the rest stay null
+    # 2. WalletTransaction.vertical — null rows.
+    #    Driver wallet ops -> driver: CASHOUT (always) + delivery EARNING (which
+    #    carries tenant_id). Ride/courier EARNING has no tenant_id and stays null
+    #    here (going-forward it's tagged rides/courier explicitly). Other
+    #    tenant-attributed rows -> the tenant's vertical. The rest stay null
     #    (global: top-up, P2P transfer, adjustment).
     WalletTransaction.objects.filter(
         vertical__isnull=True, type="cashout"
     ).update(vertical="driver")
+    WalletTransaction.objects.filter(
+        vertical__isnull=True, type="earning", tenant_id__isnull=False
+    ).update(vertical="driver")
     base = WalletTransaction.objects.filter(
         vertical__isnull=True, tenant_id__isnull=False
-    ).exclude(type="cashout")
+    ).exclude(type__in=("cashout", "earning"))
     for tid in list(base.values_list("tenant_id", flat=True).distinct()):
         bt = bt_map.get(tid)
         if bt:

@@ -79,9 +79,10 @@ class TestCustomerServicesView(SimpleTestCase):
     @override_settings(
         VERTICALS_ENABLED=frozenset({"food", "shops", "pharmacy", "courier", "driver"})
     )
+    @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.CustomerOrderRef")
-    def test_summary_aggregates_orders_and_rides(self, mock_ref, mock_ride):
+    def test_summary_aggregates_orders_and_rides(self, mock_ref, mock_ride, mock_djob):
         from accounts.views import CustomerServicesView
 
         d1 = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
@@ -93,6 +94,7 @@ class TestCustomerServicesView(SimpleTestCase):
         mock_ride.objects.filter.return_value.values.return_value.annotate.return_value = [
             {"kind": "package", "count": 2, "last": d2},
         ]
+        mock_djob.objects.filter.return_value.aggregate.return_value = {"count": 0, "last": None}
 
         resp = CustomerServicesView().get(self._req(1))
         svc = resp.data["services"]
@@ -104,6 +106,23 @@ class TestCustomerServicesView(SimpleTestCase):
         self.assertEqual(svc["rides"]["count"], 0)
         self.assertTrue(svc["food"]["enabled"])
         self.assertFalse(svc["rides"]["enabled"])  # rides not in the enabled set
+
+    @override_settings(VERTICALS_ENABLED=frozenset({"food", "driver"}))
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.CustomerOrderRef")
+    def test_driver_count_from_delivered_jobs(self, mock_ref, mock_ride, mock_djob):
+        from accounts.views import CustomerServicesView
+
+        d = datetime.datetime(2026, 6, 5, tzinfo=datetime.timezone.utc)
+        mock_ref.objects.filter.return_value.exclude.return_value.values.return_value.annotate.return_value = []
+        mock_ride.objects.filter.return_value.values.return_value.annotate.return_value = []
+        mock_djob.objects.filter.return_value.aggregate.return_value = {"count": 5, "last": d}
+
+        resp = CustomerServicesView().get(self._req(1))
+        svc = resp.data["services"]
+        self.assertEqual(svc["driver"]["count"], 5)
+        self.assertEqual(svc["driver"]["last_activity"], d.isoformat())
 
 
 class TestCustomerServiceProfilesView(SimpleTestCase):
@@ -154,3 +173,26 @@ class TestCustomerServiceProfilesView(SimpleTestCase):
         self.assertFalse(profile.notify_promotions)
         profile.save.assert_called_once()
         self.assertEqual(resp.data["vertical"], "food")
+
+    @patch("accounts.models.SavedAddress")
+    @patch("accounts.models.CustomerServiceProfile")
+    def test_patch_default_address_validates_ownership(self, mock_csp, mock_addr):
+        from accounts.views import CustomerServiceProfilesView
+
+        profile = MagicMock(notify_updates=True, notify_promotions=True, default_address_id=None)
+        mock_csp.get_or_create_for.return_value = profile
+
+        # Address NOT owned by this customer → 400, nothing saved.
+        mock_addr.objects.filter.return_value.exists.return_value = False
+        resp = CustomerServiceProfilesView().patch(
+            self._req(1, {"vertical": "food", "default_address_id": 99})
+        )
+        self.assertEqual(resp.status_code, 400)
+        profile.save.assert_not_called()
+
+        # Address owned → set + persisted.
+        mock_addr.objects.filter.return_value.exists.return_value = True
+        CustomerServiceProfilesView().patch(
+            self._req(1, {"vertical": "food", "default_address_id": 7})
+        )
+        self.assertEqual(profile.default_address_id, 7)

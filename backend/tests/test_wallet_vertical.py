@@ -41,6 +41,8 @@ class TestBackfillWalletVertical(SimpleTestCase):
 
         cashout_qs = MagicMock()
         cashout_qs.count.return_value = 2
+        earning_qs = MagicMock()
+        earning_qs.count.return_value = 0
 
         base_qs = MagicMock()
         base_qs.exclude.return_value = base_qs  # .exclude(type=CASHOUT) chains on base
@@ -50,7 +52,7 @@ class TestBackfillWalletVertical(SimpleTestCase):
         base_qs.filter.return_value = tenant5_qs
 
         # First filter() call = CASHOUT rows; second filter() = the tenant-attributed base.
-        mock_wt.objects.filter.side_effect = [cashout_qs, base_qs]
+        mock_wt.objects.filter.side_effect = [cashout_qs, earning_qs, base_qs]
         mock_profile.objects.filter.return_value.values_list.return_value = [(5, "grocery")]
 
         out = self._run()
@@ -67,12 +69,14 @@ class TestBackfillWalletVertical(SimpleTestCase):
         mock_wt.Type.CASHOUT = "cashout"
         cashout_qs = MagicMock()
         cashout_qs.count.return_value = 0
+        earning_qs = MagicMock()
+        earning_qs.count.return_value = 0
         base_qs = MagicMock()
         base_qs.exclude.return_value = base_qs
         base_qs.values_list.return_value.distinct.return_value = [9]
         tenant9_qs = MagicMock()
         base_qs.filter.return_value = tenant9_qs
-        mock_wt.objects.filter.side_effect = [cashout_qs, base_qs]
+        mock_wt.objects.filter.side_effect = [cashout_qs, earning_qs, base_qs]
         # No business_type for tenant 9 → skipped (left NULL/global).
         mock_profile.objects.filter.return_value.values_list.return_value = []
 
@@ -87,16 +91,38 @@ class TestBackfillWalletVertical(SimpleTestCase):
         mock_wt.Type.CASHOUT = "cashout"
         cashout_qs = MagicMock()
         cashout_qs.count.return_value = 1
+        earning_qs = MagicMock()
+        earning_qs.count.return_value = 0
         base_qs = MagicMock()
         base_qs.exclude.return_value = base_qs
         base_qs.values_list.return_value.distinct.return_value = [3]
         tenant3_qs = MagicMock()
         tenant3_qs.count.return_value = 2
         base_qs.filter.return_value = tenant3_qs
-        mock_wt.objects.filter.side_effect = [cashout_qs, base_qs]
+        mock_wt.objects.filter.side_effect = [cashout_qs, earning_qs, base_qs]
         mock_profile.objects.filter.return_value.values_list.return_value = [(3, "restaurant")]
 
         out = self._run(dry_run=True)
         cashout_qs.update.assert_not_called()
         tenant3_qs.update.assert_not_called()
         self.assertIn("(dry)", out)
+
+    @patch("django_tenants.utils.schema_context")
+    @patch("tenancy.models.Profile")
+    @patch("accounts.models.WalletTransaction")
+    def test_delivery_earning_tagged_driver(self, mock_wt, mock_profile, mock_ctx):
+        self._ctx(mock_ctx)
+        mock_wt.Type.CASHOUT = "cashout"
+        mock_wt.Type.EARNING = "earning"
+        cashout_qs = MagicMock()
+        cashout_qs.count.return_value = 0
+        earning_qs = MagicMock()
+        earning_qs.count.return_value = 3  # delivery earnings to retag
+        base_qs = MagicMock()
+        base_qs.exclude.return_value = base_qs
+        base_qs.values_list.return_value.distinct.return_value = []
+        mock_wt.objects.filter.side_effect = [cashout_qs, earning_qs, base_qs]
+        mock_profile.objects.filter.return_value.values_list.return_value = []
+
+        self._run()
+        earning_qs.update.assert_called_once_with(vertical=V.DRIVER)

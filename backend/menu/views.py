@@ -5457,6 +5457,9 @@ class StaffOrderPaymentView(APIView):
                         tx_type=_WTx.Type.PAYMENT,
                         idempotency_key=f"orderpay:{_opc.schema_name}:{payment.id}",
                         reference=order.order_number,
+                        # C13: pass tenant_id so the wallet row auto-derives its
+                        # consumer vertical (food/shops/pharmacy) for spend views.
+                        tenant_id=getattr(getattr(_opc, "tenant", None), "id", None),
                     )
                     # Keep wallet_amount_paid consistent with dashboards
                     order.wallet_amount_paid = (
@@ -5720,10 +5723,14 @@ class OwnerDeliveryJobActionView(APIView):
                     return Response({"detail": "Nothing to pay this driver.", "code": "no_payout"}, status=status.HTTP_400_BAD_REQUEST)
                 from accounts.wallet_service import credit_wallet
                 from accounts.models import WalletTransaction as _WT
+                from accounts.verticals import DRIVER as _DRIVER
                 credit_wallet(
                     job.driver_id, job.driver_payout, tx_type=_WT.Type.EARNING,
                     idempotency_key=f"noshow:{job.id}", reference=f"noshow:{order.order_number}",
                     tenant_id=tenant.id, note="No-show payout", require_verified=False,
+                    # C13: a driver payout belongs to the driver vertical, NOT the
+                    # tenant's consumer vertical that tenant_id would auto-derive.
+                    vertical=_DRIVER,
                 )
                 if not job.resolution:
                     job.resolution = _DJob.Resolution.NOSHOW_PAID

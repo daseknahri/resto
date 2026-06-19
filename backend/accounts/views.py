@@ -626,8 +626,8 @@ class CustomerServicesView(APIView):
             return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
 
         from django.db.models import Count, Max
-        from accounts.models import CustomerOrderRef, RideRequest
-        from accounts.verticals import ALL_VERTICALS, vertical_for_ride_kind
+        from accounts.models import CustomerOrderRef, DeliveryJob, RideRequest
+        from accounts.verticals import ALL_VERTICALS, DRIVER, vertical_for_ride_kind
 
         enabled = set(settings.VERTICALS_ENABLED)
         agg = {v: {"count": 0, "last": None} for v in ALL_VERTICALS}
@@ -655,6 +655,13 @@ class CustomerServicesView(APIView):
             .annotate(count=Count("id"), last=Max("created_at"))
         ):
             _bump(vertical_for_ride_kind(row["kind"]), row["count"], row["last"])
+
+        # Driver (the earn side): delivered jobs where THIS customer drove.
+        drv = DeliveryJob.objects.filter(
+            driver_id=customer_id, status=DeliveryJob.Status.DELIVERED
+        ).aggregate(count=Count("id"), last=Max("delivered_at"))
+        if drv["count"]:
+            _bump(DRIVER, drv["count"], drv["last"])
 
         services = {
             v: {
@@ -705,6 +712,7 @@ class CustomerServiceProfilesView(APIView):
             out[v] = {
                 "notify_updates": p.notify_updates if p else g_updates,
                 "notify_promotions": p.notify_promotions if p else g_promos,
+                "default_address_id": (p.default_address_id if p else None),
                 "customized": p is not None,
             }
         return Response({"service_profiles": out})
@@ -726,12 +734,27 @@ class CustomerServiceProfilesView(APIView):
             if key in request.data:
                 setattr(profile, key, bool(request.data.get(key)))
                 fields.append(key)
+        # Per-service default address — must belong to THIS customer (IDOR guard);
+        # a falsy value clears it.
+        if "default_address_id" in request.data:
+            addr_id = request.data.get("default_address_id")
+            if not addr_id:
+                profile.default_address = None
+                fields.append("default_address")
+            else:
+                from .models import SavedAddress
+                if SavedAddress.objects.filter(id=addr_id, customer_id=customer_id).exists():
+                    profile.default_address_id = addr_id
+                    fields.append("default_address")
+                else:
+                    return Response({"detail": "Address not found."}, status=status.HTTP_400_BAD_REQUEST)
         if fields:
             profile.save(update_fields=fields + ["updated_at"])
         return Response({
             "vertical": vertical,
             "notify_updates": profile.notify_updates,
             "notify_promotions": profile.notify_promotions,
+            "default_address_id": profile.default_address_id,
         })
 
 
@@ -5890,6 +5913,7 @@ def _credit_driver_earnings(job) -> None:
         payout = _D(str(job.driver_payout or "0"))
         if payout <= 0:
             return
+        from accounts.verticals import DRIVER as _DRIVER
         credit_wallet(
             job.driver_id, payout,
             tx_type=_WT.Type.EARNING,
@@ -5898,6 +5922,9 @@ def _credit_driver_earnings(job) -> None:
             tenant_id=job.tenant_id,
             note="Delivery earning",
             require_verified=False,
+            # C13: a delivery payout is the driver vertical, NOT the originating
+            # tenant's consumer vertical that tenant_id would auto-derive.
+            vertical=_DRIVER,
         )
     except Exception:
         # Money failure: a driver's delivery payout was not credited. Swallowed so the

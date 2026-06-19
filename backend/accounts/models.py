@@ -1275,7 +1275,14 @@ class CustomerServiceProfile(models.Model):
 
     @classmethod
     def get_or_create_for(cls, customer_id, vertical):
-        """Lazily fetch (or create) the profile for (customer_id, vertical)."""
+        """Lazily fetch (or create) the profile for (customer_id, vertical).
+
+        Guards the vertical so a stray string can't create a junk row that would
+        then leak into the services/prefs responses."""
+        from .verticals import ALL_VERTICALS
+
+        if vertical not in ALL_VERTICALS:
+            raise ValueError(f"Unknown vertical: {vertical!r}")
         obj, _ = cls.objects.get_or_create(customer_id=customer_id, vertical=vertical)
         return obj
 
