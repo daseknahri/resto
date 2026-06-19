@@ -154,6 +154,13 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> tuple[list
         if not opted_in:
             return [], {}, set()
 
+        # Step 2c (P2): exclude customers who muted THIS vertical's promos
+        # (per-service notification preference; suppress-if-either).
+        from accounts.push import vertical_muted_customer_ids
+        opted_in -= vertical_muted_customer_ids(tenant_id)
+        if not opted_in:
+            return [], {}, set()
+
         # Step 3a: subscribed customers (push channel).
         subscribed = set(
             CustomerPushSubscription.objects.filter(

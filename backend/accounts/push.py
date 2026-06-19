@@ -656,6 +656,34 @@ def push_ride_event_to_rider(rider_id, event) -> None:
 
 # ── Owner campaign push ──────────────────────────────────────────────────────
 
+def vertical_muted_customer_ids(tenant_id) -> set:
+    """Customer ids who turned OFF promos for *tenant_id*'s vertical (P2).
+
+    A campaign/win-back from a tenant belongs to that tenant's vertical; a
+    customer with a ``CustomerServiceProfile`` for that vertical and
+    ``notify_promotions=False`` has muted this whole vertical's promos
+    (suppress-if-either — the global flag is still the master switch, filtered
+    separately). Returns the set of muted customer ids so the audience builders
+    can subtract them. Call from within the public schema. Empty set if the
+    vertical can't be resolved. Best-effort: never raises."""
+    if tenant_id is None:
+        return set()
+    try:
+        from .verticals import vertical_for_tenant_id
+        from .models import CustomerServiceProfile
+
+        vert = vertical_for_tenant_id(tenant_id)
+        if not vert:
+            return set()
+        return set(
+            CustomerServiceProfile.objects.filter(
+                vertical=vert, notify_promotions=False
+            ).values_list("customer_id", flat=True)
+        )
+    except Exception:
+        return set()
+
+
 def send_campaign_push_sync(customer_id, tenant_name, title, message, url) -> int:
     """Send a promotional campaign push to ONE customer. SYNCHRONOUS.
 

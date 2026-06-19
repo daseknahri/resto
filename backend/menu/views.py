@@ -11259,6 +11259,10 @@ class OwnerCampaignView(APIView):
         Isolation: orderer_ids come ONLY from this tenant's Order rows.
         """
         from accounts.models import Customer, CustomerPushSubscription
+        from accounts.push import vertical_muted_customer_ids
+        from django.db import connection as _conn
+
+        _tenant_id = getattr(getattr(_conn, "tenant", None), "id", None)
 
         # Step 1: all distinct customer_ids that have >= 1 order in this tenant.
         # We are already inside the tenant schema (request cycle), so no context switch.
@@ -11278,6 +11282,8 @@ class OwnerCampaignView(APIView):
                     notify_promotions=True,
                 ).values_list("id", flat=True)
             )
+            # P2: drop customers who muted THIS vertical's promos.
+            opted_in_ids -= vertical_muted_customer_ids(_tenant_id)
             if not opted_in_ids:
                 return []
 
@@ -11299,6 +11305,10 @@ class OwnerCampaignView(APIView):
         push subscription and an email appear in both audiences (dual-send).
         """
         from accounts.models import Customer
+        from accounts.push import vertical_muted_customer_ids
+        from django.db import connection as _conn
+
+        _tenant_id = getattr(getattr(_conn, "tenant", None), "id", None)
 
         all_orderer_ids = set(
             Order.objects.values_list("customer_id", flat=True)
@@ -11309,6 +11319,7 @@ class OwnerCampaignView(APIView):
             return {}
 
         with schema_context("public"):
+            _muted = vertical_muted_customer_ids(_tenant_id)
             return {
                 cid: email
                 for cid, email in Customer.objects.filter(
@@ -11316,7 +11327,7 @@ class OwnerCampaignView(APIView):
                     notify_promotions=True,
                     email_verified=True,
                 ).exclude(email="").values_list("id", "email")
-                if email
+                if email and cid not in _muted
             }
 
     def get(self, request, *args, **kwargs):
