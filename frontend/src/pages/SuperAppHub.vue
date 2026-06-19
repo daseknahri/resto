@@ -65,7 +65,7 @@
     <section aria-labelledby="services-heading">
       <h2 id="services-heading" class="sr-only">{{ t('home.verticalsTitle') }}</h2>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <template v-for="(svc, idx) in SERVICES" :key="svc.id">
+        <template v-for="(svc, idx) in services" :key="svc.id">
           <component
             :is="svc.status === 'live' ? 'RouterLink' : 'div'"
             v-bind="svc.status === 'live' ? { to: serviceRoute(svc) } : {}"
@@ -152,19 +152,23 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
-import { SERVICES } from '../lib/services';
+import { getServices } from '../lib/services';
 import { PLATFORM_NAME } from '../lib/brand';
 
 const { t } = useI18n();
 const customerStore = useCustomerStore();
 const showAuthModal = ref(false);
 const platformName = PLATFORM_NAME;
+
+// Status-adjust the service grid by the platform's enabled_verticals (P0).
+// Until the session loads, platform is null → getServices returns all as-is.
+const services = computed(() => getServices(customerStore.platform?.enabled_verticals));
 
 onMounted(() => {
   customerStore.fetchCustomer();

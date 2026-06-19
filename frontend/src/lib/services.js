@@ -28,18 +28,20 @@
  * platform.enabled_verticals from the customer session.
  */
 
+import { FOOD, SHOPS, PHARMACY, RIDES, COURIER, DRIVER } from './verticals';
+
 const _DEFINITIONS = [
-  { id: 'food',     icon: '🍽️', kind: 'lens',  lens: 'food',  accent: 'amber'   },
-  { id: 'shops',    icon: '🛍️', kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
-  { id: 'rides',    icon: '🚕', kind: 'route', routeName: 'ride', accent: 'emerald' },
-  { id: 'pharmacy', icon: '💊', kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
-  { id: 'courier',  icon: '📦', kind: 'route', routeName: 'send-package', accent: 'sky'     },
-  { id: 'driver',   icon: '🏍️', kind: 'route', routeName: 'driver',       accent: 'violet'  },
+  { id: FOOD,     icon: '🍽️', kind: 'lens',  lens: 'food',  accent: 'amber'   },
+  { id: SHOPS,    icon: '🛍️', kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
+  { id: RIDES,    icon: '🚕', kind: 'route', routeName: 'ride', accent: 'emerald' },
+  { id: PHARMACY, icon: '💊', kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
+  { id: COURIER,  icon: '📦', kind: 'route', routeName: 'send-package', accent: 'sky'     },
+  { id: DRIVER,   icon: '🏍️', kind: 'route', routeName: 'driver',       accent: 'violet'  },
 ];
 
 // Verticals that are always live regardless of the platform gate
 // (food, driver, pharmacy are core; shops is a lens, not a backend endpoint).
-const _ALWAYS_LIVE = new Set(['food', 'shops', 'pharmacy', 'driver']);
+const _ALWAYS_LIVE = new Set([FOOD, SHOPS, PHARMACY, DRIVER]);
 
 /**
  * Returns the service list with status adjusted for the platform's enabled_verticals.
