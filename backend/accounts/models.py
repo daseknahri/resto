@@ -1219,6 +1219,67 @@ class CustomerTenantOptOut(models.Model):
         return f"CustomerTenantOptOut customer={self.customer_id} tenant={self.tenant_id}"
 
 
+class CustomerServiceProfile(models.Model):
+    """Per-(customer, vertical) profile — the "account for each service" (P2).
+
+    A thin scoping record so each service surface (food / shops / pharmacy /
+    rides / courier / driver) can carry its own preferences without bloating the
+    global ``Customer`` row. Lazily created on first use; all fields
+    nullable/defaulted, so a MISSING row means "use the customer's global
+    defaults" (non-breaking).
+
+    Lives in the public schema (accounts app). See KEPOLI_ACCOUNT_ARCHITECTURE.md L2.
+    """
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="service_profiles",
+    )
+    vertical = models.CharField(
+        max_length=16,
+        db_index=True,
+        help_text="Consumer vertical this profile scopes (see accounts.verticals).",
+    )
+    # Per-service notification preferences. Default True (opt-out model). When no
+    # row exists, the customer's global Customer.notify_* booleans apply. The
+    # global flag stays the hard master switch — a per-vertical False only adds
+    # suppression for this vertical (suppress-if-either; never re-enables).
+    notify_updates = models.BooleanField(default=True)
+    notify_promotions = models.BooleanField(default=True)
+    # Default delivery/pickup address for THIS service (e.g. home for food, a
+    # different drop for courier). Null → fall back to the customer's last-used.
+    default_address = models.ForeignKey(
+        "SavedAddress",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("customer", "vertical"),
+                name="customerserviceprofile_customer_vertical_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("customer", "vertical"), name="cust_service_profile_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"CustomerServiceProfile customer={self.customer_id} vertical={self.vertical}"
+
+    @classmethod
+    def get_or_create_for(cls, customer_id, vertical):
+        """Lazily fetch (or create) the profile for (customer_id, vertical)."""
+        obj, _ = cls.objects.get_or_create(customer_id=customer_id, vertical=vertical)
+        return obj
+
+
 class CustomerEmailSuppression(models.Model):
     """Hard-bounce / spam-complaint suppression list for outbound marketing email.
 

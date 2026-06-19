@@ -84,6 +84,7 @@ class Command(BaseCommand):
             CustomerOrderRef,
             CustomerPushSubscription,
             CustomerRating,
+            CustomerServiceProfile,
             DeliveryJob,
             DriverCashoutRequest,
             DriverPayout,
@@ -294,11 +295,13 @@ class Command(BaseCommand):
                     notif_q2 |= _Q(recipient=val)
                 NotificationLog.objects.filter(notif_q2).update(recipient="")
 
-            # 1h. DELETE: CustomerPushSubscription, SavedAddress, WinbackNudge, CustomerRating.
+            # 1h. DELETE: CustomerPushSubscription, SavedAddress, WinbackNudge,
+            # CustomerRating, CustomerServiceProfile (per-service prefs).
             CustomerPushSubscription.objects.filter(customer_id=customer_id).delete()
             SavedAddress.objects.filter(customer_id=customer_id).delete()
             WinbackNudge.objects.filter(customer_id=customer_id).delete()
             CustomerRating.objects.filter(customer_id=customer_id).delete()
+            CustomerServiceProfile.objects.filter(customer_id=customer_id).delete()
 
         self.stdout.write("  Phase 1 (public schema): done")
 
