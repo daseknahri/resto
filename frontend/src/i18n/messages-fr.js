@@ -5102,6 +5102,7 @@ customerAccount: {
   svcRides: "Courses",
   svcCourier: "Coursier",
   spendByService: "Dépenses par service",
+  noOrdersInService: "Aucune commande dans ce service pour l'instant.",
   perServiceNotifs: "Notifications par service",
   perServiceNotifsHint: "Coupez les mises à jour ou promos d'un service précis. Ces réglages affinent vos paramètres globaux ci-dessus — ils ne réactivent jamais une désactivation globale.",
   notifOrderUpdates: "Mises à jour de commande",

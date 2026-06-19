@@ -600,6 +600,14 @@
             </ul>
           </div>
 
+          <!-- Filtered-empty: a service filter is active but returned no orders -->
+          <div
+            v-else-if="selectedVertical && !loadingMarketplaceOrders"
+            class="ui-panel ui-reveal p-5 text-center"
+          >
+            <p class="text-sm text-slate-400">{{ t('customerAccount.noOrdersInService') }}</p>
+          </div>
+
           <div class="ui-panel overflow-hidden p-0">
             <!-- Header -->
             <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
@@ -2662,6 +2670,7 @@ const loadMoreOrders = () => fetchOrders(ordersCurrentPage.value + 1);
 
 // Cross-restaurant order history (public marketplace index — works on any domain).
 const marketplaceOrders = ref([]);
+const loadingMarketplaceOrders = ref(false);
 const MKT_ORDER_STATUS = {
   pending: 'orderStatus.statusPending',
   confirmed: 'orderStatus.statusConfirmed',
@@ -2693,12 +2702,15 @@ const VERTICAL_FILTER_OPTIONS = computed(() => {
 
 const fetchMarketplaceOrders = async (vertical = '') => {
   if (!customerStore.isAuthenticated) return;
+  loadingMarketplaceOrders.value = true;
   try {
     const params = vertical ? `?vertical=${vertical}` : '';
     const res = await api.get(`/customer/orders/all/${params}`);
     marketplaceOrders.value = res.data.orders || [];
   } catch {
     marketplaceOrders.value = [];
+  } finally {
+    loadingMarketplaceOrders.value = false;
   }
 };
 

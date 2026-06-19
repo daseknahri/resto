@@ -5107,6 +5107,7 @@ customerAccount: {
   svcRides: "Rides",
   svcCourier: "Courier",
   spendByService: "Spending by service",
+  noOrdersInService: "No orders in this service yet.",
   perServiceNotifs: "Per-service notifications",
   perServiceNotifsHint: "Mute updates or promos for a single service. These only refine your global settings above — they never switch a global opt-out back on.",
   notifOrderUpdates: "Order updates",
