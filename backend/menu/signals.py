@@ -36,6 +36,23 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
     try:
         from accounts.models import CustomerOrderRef
 
+        # Derive the consumer vertical from this tenant's business_type (P1a).
+        # Profile is a shared (public-schema) model, so it's queryable by
+        # tenant_id from inside the tenant schema. Best-effort: blank on failure
+        # (the order index is never load-bearing for placement).
+        try:
+            from accounts.verticals import vertical_for_business_type
+            from tenancy.models import Profile as _Profile
+
+            _bt = (
+                _Profile.objects.filter(tenant_id=tenant_id)
+                .values_list("business_type", flat=True)
+                .first()
+            )
+            vertical = vertical_for_business_type(_bt)
+        except Exception:
+            vertical = ""
+
         # Build a compact items snapshot for re-order (slugs + prices).
         try:
             items_snap = [
@@ -63,6 +80,7 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
                 "currency": instance.currency or "MAD",
                 "order_created_at": instance.created_at,
                 "items_snapshot": items_snap,
+                "vertical": vertical,
             },
         )
     except Exception:

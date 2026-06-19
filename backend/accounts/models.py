@@ -288,6 +288,19 @@ class CustomerOrderRef(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     # Compact items snapshot for re-order: [{slug, name, qty, unit_price}]
     items_snapshot = models.JSONField(default=list, blank=True)
+    # Consumer vertical (food/shops/pharmacy/...) derived from the tenant's
+    # business_type at index time, so "my orders" can scope per service (P1a).
+    # Blank on legacy rows until the backfill runs. See accounts/verticals.py.
+    vertical = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "Consumer vertical (food/shops/pharmacy/...) derived from the "
+            "tenant's business_type at index time. Blank until backfilled (P1a)."
+        ),
+    )
 
     class Meta:
         ordering = ("-order_created_at",)
