@@ -606,6 +606,67 @@ class CustomerSessionView(APIView):
         return Response({"ok": True})
 
 
+class CustomerServicesView(APIView):
+    """Per-vertical activity summary for the signed-in customer (P2c).
+
+    For each vertical: whether it's enabled platform-wide, the customer's
+    activity count, and the last-activity timestamp. Powers the super-app hub's
+    per-service state ("continue where you left off") and the per-service account
+    sections. Kept OUT of the hot session payload (which already carries
+    ``enabled_verticals``) and fetched lazily by the hub/account. Cheap: two
+    indexed aggregation queries over public-schema indexes (CustomerOrderRef by
+    vertical, RideRequest by kind). See KEPOLI_ACCOUNT_ARCHITECTURE.md §5 / P2.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from django.db.models import Count, Max
+        from accounts.models import CustomerOrderRef, RideRequest
+        from accounts.verticals import ALL_VERTICALS, vertical_for_ride_kind
+
+        enabled = set(settings.VERTICALS_ENABLED)
+        agg = {v: {"count": 0, "last": None} for v in ALL_VERTICALS}
+
+        def _bump(vertical, count, last):
+            if vertical not in agg:
+                return
+            agg[vertical]["count"] += count
+            if last and (agg[vertical]["last"] is None or last > agg[vertical]["last"]):
+                agg[vertical]["last"] = last
+
+        # Order-backed verticals (food/shops/pharmacy) from the public order index.
+        for row in (
+            CustomerOrderRef.objects.filter(customer_id=customer_id)
+            .exclude(vertical="")
+            .values("vertical")
+            .annotate(count=Count("id"), last=Max("order_created_at"))
+        ):
+            _bump(row["vertical"], row["count"], row["last"])
+
+        # Ride / courier from RideRequest (rider + kind).
+        for row in (
+            RideRequest.objects.filter(rider_id=customer_id)
+            .values("kind")
+            .annotate(count=Count("id"), last=Max("created_at"))
+        ):
+            _bump(vertical_for_ride_kind(row["kind"]), row["count"], row["last"])
+
+        services = {
+            v: {
+                "enabled": v in enabled,
+                "count": agg[v]["count"],
+                "last_activity": agg[v]["last"].isoformat() if agg[v]["last"] else None,
+            }
+            for v in ALL_VERTICALS
+        }
+        return Response({"services": services})
+
+
 # ── Customer phone OTP ────────────────────────────────────────────────────────
 
 
