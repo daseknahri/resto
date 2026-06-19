@@ -22,6 +22,7 @@ from django.db import connection
 from tenancy.delivery_pricing import valid_coord, MAX_PLAUSIBLE_KM
 from tenancy.routing import road_distance_km
 from .models import PlatformConfig, WalletTransaction
+from .verticals import vertical_for_ride_kind
 from .wallet_service import debit_wallet, credit_wallet, InsufficientFunds
 
 _CENT = Decimal("0.01")
@@ -145,6 +146,7 @@ def _do_settle(ride) -> None:
             tx_type=WalletTransaction.Type.PAYMENT,
             idempotency_key=f"ride:{ride.id}",
             note=f"Ride #{ride.id}",
+            vertical=vertical_for_ride_kind(ride.kind),
         )
     except InsufficientFunds:
         # OPS-5g: EXPLICIT cash fallback — driver collects from the passenger. Record
@@ -201,4 +203,5 @@ def _do_settle(ride) -> None:
         reference=f"ride:{ride.id}",
         note=f"Ride #{ride.id} earnings",
         require_verified=False,
+        vertical=vertical_for_ride_kind(ride.kind),
     )

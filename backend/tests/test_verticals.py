@@ -5,6 +5,8 @@ See KEPOLI_ACCOUNT_ARCHITECTURE.md §3. No DB needed.
 """
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from django.test import SimpleTestCase, override_settings
 
 from accounts import verticals as V
@@ -63,3 +65,20 @@ class TestTaxonomyShape(SimpleTestCase):
             set(V.ALL_VERTICALS),
             {"food", "shops", "pharmacy", "rides", "courier", "driver"},
         )
+
+
+class TestVerticalForTenantId(SimpleTestCase):
+    def test_none_tenant_returns_none(self):
+        self.assertIsNone(V.vertical_for_tenant_id(None))
+        self.assertIsNone(V.vertical_for_tenant_id(0))
+
+    @patch("tenancy.models.Profile")
+    def test_resolves_business_type(self, mock_profile):
+        mock_profile.objects.filter.return_value.values_list.return_value.first.return_value = "pharmacy"
+        self.assertEqual(V.vertical_for_tenant_id(7), V.PHARMACY)
+
+    @patch("tenancy.models.Profile")
+    def test_missing_profile_returns_none(self, mock_profile):
+        # No Profile row for this tenant → None (caller tags the row global), NOT a guess.
+        mock_profile.objects.filter.return_value.values_list.return_value.first.return_value = None
+        self.assertIsNone(V.vertical_for_tenant_id(7))

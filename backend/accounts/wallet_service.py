@@ -112,7 +112,7 @@ def _require_active_tenant(tenant):
 @transaction.atomic
 def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
                   idempotency_key=None, reference="", tenant_id=None, note="", currency="MAD",
-                  require_verified=True):
+                  vertical=None, require_verified=True):
     """Add funds to a wallet. Returns the WalletTransaction (existing one on retry).
 
     ``require_verified`` enforces the no-verified-phone-no-wallet rule (default). Pass
@@ -137,6 +137,14 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
             raise WalletError("idempotency key collision: belongs to another customer")
         return existing
 
+    # P1b: tag the row's consumer vertical for per-service spend views. An explicit
+    # `vertical` (driver earnings/cashout, rides/courier) wins; otherwise derive it
+    # from the originating tenant. Done BEFORE the row lock so the lock hold stays
+    # short. Reporting metadata only — never affects the balance.
+    if vertical is None and tenant_id is not None:
+        from .verticals import vertical_for_tenant_id
+        vertical = vertical_for_tenant_id(tenant_id)
+
     cust = Customer.objects.select_for_update().get(pk=customer_id)
     if require_verified:
         _require_verified(cust)
@@ -154,13 +162,14 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
         tenant_id=tenant_id,
         note=note or "",
         currency=currency,
+        vertical=vertical,
     )
 
 
 @transaction.atomic
 def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
                  idempotency_key=None, reference="", tenant_id=None, note="",
-                 currency="MAD", allow_partial=False):
+                 currency="MAD", allow_partial=False, vertical=None):
     """Remove funds from a wallet.
 
     With allow_partial=False (default) a debit larger than the balance raises
@@ -186,6 +195,12 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
             )
             raise WalletError("idempotency key collision: belongs to another customer")
         return existing
+
+    # P1b: derive vertical from tenant_id (explicit wins) before the row lock.
+    # Reporting metadata only — never affects the charge/balance.
+    if vertical is None and tenant_id is not None:
+        from .verticals import vertical_for_tenant_id
+        vertical = vertical_for_tenant_id(tenant_id)
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
     balance = _money(cust.wallet_balance)
@@ -218,6 +233,7 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
         tenant_id=tenant_id,
         note=note or "",
         currency=currency,
+        vertical=vertical,
     )
 
 
@@ -275,7 +291,8 @@ def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_ke
 
 @transaction.atomic
 def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
-                         idempotency_key=None, reference="", note="", currency="MAD"):
+                         idempotency_key=None, reference="", note="", currency="MAD",
+                         vertical=None):
     """Move funds from a restaurant's float into a customer's wallet (prepaid distribution).
 
     Atomic double-entry posting: debits the restaurant float and credits the customer
@@ -309,6 +326,11 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
                 idempotency_key=f"{idempotency_key}:w"
             ).first()
         return existing, wallet_tx
+
+    # P1b: derive vertical from the originating tenant (explicit wins). Metadata only.
+    if vertical is None:
+        from .verticals import vertical_for_tenant_id
+        vertical = vertical_for_tenant_id(tenant_id)
 
     # Lock both rows in a stable order (tenant, then customer) to avoid deadlocks.
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
@@ -354,6 +376,7 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
         tenant_id=tenant_id,
         note=note or "",
         currency=currency,
+        vertical=vertical,
     )
     return float_tx, wallet_tx
 
@@ -434,6 +457,7 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
     out_tx = WalletTransaction.objects.create(
         customer=sender,
         type=WalletTransaction.Type.TRANSFER_OUT,
+        vertical=None,  # P2P gifts are global — no consumer vertical
         amount=amount,
         balance_after=new_sender,
         idempotency_key=idempotency_key or None,
@@ -444,6 +468,7 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
     in_tx = WalletTransaction.objects.create(
         customer=recipient,
         type=WalletTransaction.Type.TRANSFER_IN,
+        vertical=None,  # P2P gifts are global — no consumer vertical
         amount=amount,
         balance_after=new_recipient,
         idempotency_key=(f"{idempotency_key}:in" if idempotency_key else None),

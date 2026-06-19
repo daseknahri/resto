@@ -178,6 +178,7 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
     from django.utils import timezone
     from .models import DriverCashoutRequest, WalletTransaction
     from .wallet_service import debit_wallet, credit_tenant_float
+    from .verticals import DRIVER
 
     code = (code or "").strip()
     now = timezone.now()
@@ -221,6 +222,9 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             reference=f"cashout:{code}",
             tenant_id=tenant_id,
             note="Driver cash-out",
+            # Cash-out is a driver wallet op, not spend at this tenant's vertical —
+            # tag DRIVER explicitly so auto-derive (tenant_id) doesn't mislabel it.
+            vertical=DRIVER,
         )
         try:
             credit_tenant_float(

@@ -56,6 +56,30 @@ def vertical_for_ride_kind(kind) -> str:
     return COURIER if str(kind or "").strip().lower() == "package" else RIDES
 
 
+def vertical_for_tenant_id(tenant_id):
+    """Best-effort consumer vertical for a tenant by its ``Profile.business_type``.
+
+    Returns ``None`` when *tenant_id* is falsy or the business_type can't be
+    resolved — callers then tag the row ``None`` (global) rather than guessing.
+    ``Profile`` is a shared (public-schema) model keyed by ``tenant_id``, so this
+    query is schema-agnostic and cheap (single indexed lookup). Used by the wallet
+    service to auto-derive a transaction's vertical from the ``tenant_id`` it
+    already receives, so most order-payment call sites need no change."""
+    if not tenant_id:
+        return None
+    try:
+        from tenancy.models import Profile
+
+        bt = (
+            Profile.objects.filter(tenant_id=tenant_id)
+            .values_list("business_type", flat=True)
+            .first()
+        )
+    except Exception:
+        return None
+    return vertical_for_business_type(bt) if bt else None
+
+
 def enabled_verticals() -> frozenset:
     """The platform's currently enabled verticals (from ``settings.VERTICALS_ENABLED``)."""
     from django.conf import settings

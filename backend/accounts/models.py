@@ -181,6 +181,20 @@ class WalletTransaction(models.Model):
     idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=8, default="MAD")
+    # Consumer vertical (food/shops/pharmacy/rides/courier/driver) this money
+    # movement belongs to — REPORTING METADATA for per-service spend views only;
+    # the balance is one global pool (the wallet is never partitioned). Null for
+    # global rows (top-up, P2P transfer, admin adjustment). See accounts/verticals.py.
+    vertical = models.CharField(
+        max_length=16,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Consumer vertical this money movement belongs to (reporting only; "
+            "the balance stays one global pool). Null for global rows (P1b)."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
