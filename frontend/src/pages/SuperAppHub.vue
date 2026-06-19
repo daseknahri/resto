@@ -89,6 +89,11 @@
                   v-if="svc.status === 'coming_soon'"
                   class="rounded-full border border-slate-600/60 bg-slate-800/60 px-2 py-0.5 text-[10px] font-medium text-slate-400"
                 >{{ t('services.comingSoon') }}</span>
+                <span
+                  v-else-if="(serviceActivity[svc.id]?.count || 0) > 0"
+                  class="rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--color-secondary)]"
+                  aria-hidden="true"
+                >{{ serviceActivity[svc.id].count }}</span>
               </div>
               <p class="text-sm leading-relaxed text-slate-400">{{ t('services.' + svc.id + 'Desc') }}</p>
             </div>
@@ -160,6 +165,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { getServices } from '../lib/services';
 import { PLATFORM_NAME } from '../lib/brand';
+import api from '../lib/api';
 
 const { t } = useI18n();
 const customerStore = useCustomerStore();
@@ -170,8 +176,18 @@ const platformName = PLATFORM_NAME;
 // Until the session loads, platform is null → getServices returns all as-is.
 const services = computed(() => getServices(customerStore.platform?.enabled_verticals));
 
-onMounted(() => {
-  customerStore.fetchCustomer();
+// Per-service activity for hub personalization (P4): {vertical: {count, last_activity}}.
+const serviceActivity = ref({});
+
+onMounted(async () => {
+  await customerStore.fetchCustomer();
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const { data } = await api.get('/customer/services/');
+    serviceActivity.value = data.services || {};
+  } catch {
+    // best-effort personalization — ignore failures
+  }
 });
 
 // Full literal Tailwind class strings per accent — never computed by string concat
