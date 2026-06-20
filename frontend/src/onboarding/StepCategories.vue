@@ -22,7 +22,16 @@
         <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-300 shadow-lg shadow-black/20">
           <AppIcon name="info" class="h-5 w-5" aria-hidden="true" />
         </span>
-        <p class="relative z-10 text-sm text-amber-100">{{ t("stepCategories.addSuperCategoriesFirst") }}</p>
+        <p class="relative z-10 flex-1 text-sm text-amber-100">{{ t("stepCategories.addSuperCategoriesFirst") }}</p>
+        <button
+          type="button"
+          class="ui-btn-primary ui-press relative z-10 shrink-0 gap-2 px-4 py-2 text-sm"
+          :disabled="creatingGroup"
+          @click="createFirstGroup"
+        >
+          <AppIcon :name="creatingGroup ? 'refresh' : 'plus'" class="h-4 w-4" aria-hidden="true" />
+          {{ t("stepSuperCategories.add") }}
+        </button>
       </div>
 
       <template v-else>
@@ -715,6 +724,26 @@ const load = async () => {
     status.value = t("common.loadFailed");
   }
   syncActiveSuperCategory();
+};
+
+const creatingGroup = ref(false);
+// A scratch-start tenant reaches this step with zero groups and — unlike the
+// menu-builder's StepSuperCategories — no way to create one, which dead-ends
+// onboarding (no group → no category → no dish → canPublish never trips). Seed
+// a first group inline so the wizard can proceed; the owner renames/adds more in
+// the menu-builder. Named with the vocab term (Menu / Department / Aisle…).
+const createFirstGroup = async () => {
+  if (creatingGroup.value) return;
+  creatingGroup.value = true;
+  try {
+    await superCategoryApi.upsert({ name: groupSingular.value, position: 0, is_published: true });
+    await load();
+    toast.show(t("common.saved"), "success");
+  } catch (error) {
+    toast.show(error?.message || t("common.saveFailed"), "error");
+  } finally {
+    creatingGroup.value = false;
+  }
 };
 
 const openEditor = (localId) => {
