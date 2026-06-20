@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-kicker">{{ t("stepCategories.title") }}</p>
-          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("common.categories") }}</h2>
+          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ groupPlural }}</h2>
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" :disabled="saving || !superCategoryOptions.length" @click="saveAll">
@@ -13,7 +13,7 @@
           </button>
           <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" :disabled="!superCategoryOptions.length" @click="openQuickModal">
             <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
-            {{ t("stepCategories.addCategory") }}
+            {{ t("stepCategories.addCategory", { group: groupSingular }) }}
           </button>
         </div>
       </div>
@@ -39,7 +39,7 @@
           </label>
           <div class="min-w-0">
             <div class="ui-scroll-row">
-              <span class="ui-data-strip">{{ filteredCategories.length }} / {{ activeCategories.length }} {{ t("common.categories") }}</span>
+              <span class="ui-data-strip">{{ filteredCategories.length }} / {{ activeCategories.length }} {{ groupPlural }}</span>
               <span class="ui-data-strip">{{ activeSuperCategoryRecord?.name || '' }}</span>
             </div>
           </div>
@@ -66,7 +66,7 @@
           </div>
           <button v-if="!search" class="ui-btn-outline relative z-10 gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
             <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
-            {{ t("stepCategories.addCategory") }}
+            {{ t("stepCategories.addCategory", { group: groupSingular }) }}
           </button>
         </div>
       </li>
@@ -104,7 +104,7 @@
             tabindex="0"
             class="group/card min-w-0 flex-1 cursor-pointer text-start"
             :aria-label="props.standalone && cat.id
-              ? `${t('stepCategories.viewDishes')} — ${cat.name || t('stepCategories.categoryNamePlaceholder')}`
+              ? `${t('stepCategories.viewDishes', { item: itemPlural })} — ${cat.name || t('stepCategories.categoryNamePlaceholder')}`
               : `${t('common.edit')} ${cat.name || t('stepCategories.categoryNamePlaceholder')}`"
             @click="goToDishes(cat)"
             @keydown.enter.space.prevent="goToDishes(cat)"
@@ -172,7 +172,7 @@
         <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
-              <p class="ui-kicker">{{ t("common.categories") }}</p>
+              <p class="ui-kicker">{{ groupPlural }}</p>
               <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.editCategory") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
@@ -257,8 +257,8 @@
                   </select>
                 </label>
               </div>
-              <!-- Course sequencing -->
-              <label class="space-y-1 text-sm text-slate-300">
+              <!-- Course sequencing (restaurant only) -->
+              <label v-if="!isShop" class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.courseLabel") }}</span>
                 <select v-model.number="editingCategory.course" class="ui-input">
                   <option :value="0">{{ t("stepCategories.courseNone") }}</option>
@@ -269,8 +269,8 @@
                 </select>
                 <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
               </label>
-              <!-- Prep station -->
-              <label class="space-y-1 text-sm text-slate-300">
+              <!-- Prep station (restaurant only) -->
+              <label v-if="!isShop" class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.stationLabel") }}</span>
                 <input
                   v-model="editingCategory.station"
@@ -301,8 +301,8 @@
         <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
             <div class="space-y-1">
-              <p class="ui-kicker">{{ t("common.categories") }}</p>
-              <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+              <p class="ui-kicker">{{ groupPlural }}</p>
+              <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory", { group: groupSingular }) }}</h3>
             </div>
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeQuickModal">{{ t("common.close") }}</button>
           </div>
@@ -382,8 +382,8 @@
                   <option :value="false">{{ t("common.soon") }}</option>
                 </select>
               </div>
-              <!-- Course sequencing -->
-              <label class="space-y-1 text-sm text-slate-300">
+              <!-- Course sequencing (restaurant only) -->
+              <label v-if="!isShop" class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.courseLabel") }}</span>
                 <select v-model.number="quickCategory.course" class="ui-input">
                   <option :value="0">{{ t("stepCategories.courseNone") }}</option>
@@ -394,8 +394,8 @@
                 </select>
                 <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
               </label>
-              <!-- Prep station -->
-              <label class="space-y-1 text-sm text-slate-300">
+              <!-- Prep station (restaurant only) -->
+              <label v-if="!isShop" class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.stationLabel") }}</span>
                 <input
                   v-model="quickCategory.station"
@@ -412,7 +412,7 @@
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickModal">{{ t("common.close") }}</button>
             <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="quickAdd">
               <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
-              {{ t("stepCategories.addCategory") }}
+              {{ t("stepCategories.addCategory", { group: groupSingular }) }}
             </button>
           </div>
         </div>
@@ -442,6 +442,7 @@ import AppIcon from "../components/AppIcon.vue";
 import api from "../lib/api";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
@@ -453,6 +454,7 @@ const emit = defineEmits(["next", "back"]);
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isShop, groupSingular, groupPlural, itemPlural } = useVocabulary();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { confirm } = useConfirmModal();

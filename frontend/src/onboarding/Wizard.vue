@@ -7,7 +7,7 @@
           <div class="min-w-0">
             <p class="ui-kicker">{{ t("onboardingWizard.kicker") }}</p>
             <h1 class="ui-display text-2xl font-semibold leading-tight text-white md:text-3xl">
-              {{ t("onboardingWizard.title") }}
+              {{ t("onboardingWizard.title", { catalog }) }}
             </h1>
           </div>
           <div class="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -42,7 +42,7 @@
                 :aria-current="current === step.id ? 'step' : undefined"
                 :aria-disabled="!canNavigateTo(step.id) ? 'true' : undefined"
                 :disabled="!canNavigateTo(step.id)"
-                :aria-label="`${step.id}. ${t(step.titleKey)}`"
+                :aria-label="`${step.id}. ${stepTitle(step)}`"
                 :title="!canNavigateTo(step.id) ? t('onboardingWizard.stepLockedHint') : undefined"
                 :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
                 @click="goToStep(step.id)"
@@ -62,7 +62,7 @@
                       class="truncate font-semibold"
                       :class="current === step.id ? 'text-white' : 'text-slate-300'"
                     >
-                      {{ t(step.titleKey) }}
+                      {{ stepTitle(step) }}
                     </p>
                     <span
                       v-if="step.id < current || (published && step.id === steps.length)"
@@ -102,6 +102,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { steps } from "../onboarding/steps";
 import StepStart from "./StepStart.vue";
 import StepBrand from "./StepBrand.vue";
@@ -123,6 +124,7 @@ const published = ref(false);
 const tenant = useTenantStore();
 const router = useRouter();
 const { t } = useI18n();
+const { catalog, groupSingular, itemSingular } = useVocabulary();
 const mapping = {
   1: StepStart,
   2: StepBrand,
@@ -134,6 +136,17 @@ const mapping = {
 const currentComponent = computed(() => mapping[current.value]);
 const progressPct = computed(() => Math.round((current.value / steps.length) * 100));
 
+// Vocabulary-aware step title: categories step uses groupSingular, dishes step uses itemSingular.
+const stepTitle = (step) => {
+  if (step.titleKey === "onboardingWizard.steps.categories.title") {
+    return t(step.titleKey, { group: groupSingular.value });
+  }
+  if (step.titleKey === "onboardingWizard.steps.dishes.title") {
+    return t(step.titleKey, { item: itemSingular.value });
+  }
+  return t(step.titleKey);
+};
+
 // ── Step-change a11y: terse SR announcement + move focus to the new step ──────
 // Replaces the old broad aria-live on the step <main>, which re-read the entire
 // step (heading + every field) on each navigation.
@@ -141,7 +154,7 @@ const stepPanelRef = ref(null);
 const stepAnnouncement = computed(() => {
   const step = steps[current.value - 1];
   if (!step) return "";
-  return t("onboardingWizard.stepAnnounce", { n: current.value, total: steps.length, title: t(step.titleKey) });
+  return t("onboardingWizard.stepAnnounce", { n: current.value, total: steps.length, title: stepTitle(step) });
 });
 const stepStorageKey = computed(() => {
   const slug = tenant.meta?.slug || "tenant";

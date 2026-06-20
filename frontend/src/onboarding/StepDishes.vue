@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
-          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("common.dishes") }}</h2>
+          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ itemPlural }}</h2>
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="ui-btn-outline px-4 py-2 text-sm" type="button" :disabled="saving || hasActiveUploads" @click="saveAndNext">
@@ -19,13 +19,13 @@
             {{ t("stepDishes.bulkPriceAdjust") }}
           </button>
           <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="openQuickDishModal">
-            {{ t("stepDishes.addDishToCategory") }}
+            {{ t("stepDishes.addDishToCategory", { item: itemSingular }) }}
           </button>
         </div>
       </div>
       <div class="ui-scroll-row">
-        <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ t("common.dishes") }}</span>
-        <span class="ui-data-strip">{{ sortedCategoryOptions.length }} {{ t("common.categories") }}</span>
+        <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ itemPlural }}</span>
+        <span class="ui-data-strip">{{ sortedCategoryOptions.length }} {{ groupPlural }}</span>
         <span v-if="unassignedDishCount" class="ui-data-strip text-amber-200">{{ t("stepDishes.unassignedWarning", { count: unassignedDishCount }) }}</span>
       </div>
     </div>
@@ -61,7 +61,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
-          <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ t("common.dishes") }}</span>
+          <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ itemPlural }}</span>
           <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" @click="publishAllInCategory">
             {{ t("stepDishes.bulkPublish") }}
           </button>
@@ -110,10 +110,10 @@
             </div>
 
             <!-- Name + meta — the whole block opens the editor -->
-            <button type="button" class="min-w-0 flex-1 text-start" :aria-label="`${t('common.edit')} ${dish.name || t('stepDishes.dishNamePlaceholder')}`" @click="openDishEditor(dish.local_id)">
+            <button type="button" class="min-w-0 flex-1 text-start" :aria-label="`${t('common.edit')} ${dish.name || t('stepDishes.dishNamePlaceholder', { item: itemSingular })}`" @click="openDishEditor(dish.local_id)">
               <div class="flex items-center gap-1.5">
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
-                <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder") }}</h3>
+                <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder", { item: itemSingular }) }}</h3>
               </div>
               <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
                 <span class="font-semibold tabular-nums text-slate-300">{{ Number(dish.price || 0).toFixed(2) }}</span>
@@ -148,13 +148,13 @@
               </button>
               <button
                 class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-400 transition hover:border-slate-500 hover:text-white"
-                type="button" :aria-label="t('stepDishes.cloneDish')" :title="t('stepDishes.cloneDish')" @click="cloneDish(dish.local_id)"
+                type="button" :aria-label="t('stepDishes.cloneDish', { item: itemSingular })" :title="t('stepDishes.cloneDish', { item: itemSingular })" @click="cloneDish(dish.local_id)"
               >
                 <AppIcon name="copy" class="h-3.5 w-3.5" />
               </button>
               <button
                 class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
-                type="button" :aria-label="t('stepDishes.removeDish')" @click="removeDishByLocalId(dish.local_id)"
+                type="button" :aria-label="t('stepDishes.removeDish', { item: itemSingular })" @click="removeDishByLocalId(dish.local_id)"
               >
                 <AppIcon name="trash" class="h-3.5 w-3.5" />
               </button>
@@ -177,7 +177,7 @@
             </div>
           </div>
           <button v-if="!dishSearch" type="button" class="ui-btn-primary relative z-10 px-4 py-2 text-sm" @click="openQuickDishModal(activeCategoryId)">
-            {{ t("stepDishes.addDishToCategory") }}
+            {{ t("stepDishes.addDishToCategory", { item: itemSingular }) }}
           </button>
         </div>
       </div>
@@ -192,8 +192,8 @@
         <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" tabindex="-1" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
-              <p class="ui-kicker">{{ t("common.dishes") }}</p>
-              <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.editDish") }}</h3>
+              <p class="ui-kicker">{{ itemPlural }}</p>
+              <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.editDish", { item: itemSingular }) }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeDishEditor">{{ t("common.close") }}</button>
           </div>
@@ -209,7 +209,7 @@
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-xs text-slate-400">{{ t("stepDishes.dishNamePlaceholder") }}</p>
+                    <p class="text-xs text-slate-400">{{ t("stepDishes.dishNamePlaceholder", { item: itemSingular }) }}</p>
                     <div class="flex flex-wrap gap-1">
                       <button
                         v-for="locale in availableContentLocales"
@@ -238,8 +238,8 @@
                     :value="localizedDishFieldValue(editingDish, 'name', dishFieldLocales.name)"
                     class="ui-input"
                     :class="rowError(editingDish, 'name') ? 'border-red-400' : 'border-slate-700'"
-                    :placeholder="t('stepDishes.dishNamePlaceholder')"
-                    :aria-label="t('stepDishes.dishNamePlaceholder')"
+                    :placeholder="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
+                    :aria-label="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-invalid="rowError(editingDish, 'name') ? 'true' : undefined"
                     :aria-describedby="`step-dishes-name-error-${editingDish.local_id}`"
                     @input="setLocalizedDishFieldValue(editingDish, 'name', dishFieldLocales.name, $event.target.value)"
@@ -283,13 +283,13 @@
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishSlug") }}</p>
+                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishSlug", { item: itemSingular }) }}</p>
                   <input
                     v-model.trim="editingDish.slug"
                     type="text"
                     class="ui-input border-slate-700 font-mono text-sm"
-                    :placeholder="t('stepDishes.dishSlug')"
-                    :aria-label="t('stepDishes.dishSlug')"
+                    :placeholder="t('stepDishes.dishSlug', { item: itemSingular })"
+                    :aria-label="t('stepDishes.dishSlug', { item: itemSingular })"
                     :aria-invalid="rowError(editingDish, 'slug') ? 'true' : undefined"
                     :aria-describedby="`step-dishes-slug-error-${editingDish.local_id}`"
                     @input="clearRowError(editingDish.local_id, 'slug')"
@@ -898,8 +898,8 @@
         <div ref="quickDishDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" tabindex="-1" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
             <div class="space-y-1">
-              <p class="ui-kicker">{{ t("common.dishes") }}</p>
-              <h3 id="step-dishes-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+              <p class="ui-kicker">{{ itemPlural }}</p>
+              <h3 id="step-dishes-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory", { item: itemSingular }) }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickDishModal">{{ t("common.close") }}</button>
           </div>
@@ -924,7 +924,7 @@
                 </div>
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishNamePlaceholder") }}</p>
+                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishNamePlaceholder", { item: itemSingular }) }}</p>
                     <div class="flex flex-wrap gap-1">
                       <button
                         v-for="locale in availableContentLocales"
@@ -953,8 +953,8 @@
                     :value="localizedQuickDishFieldValue('name', quickDishFieldLocales.name)"
                     class="ui-input"
                     :class="quickDishErrors.name ? 'border-red-400' : ''"
-                    :placeholder="t('stepDishes.dishNamePlaceholder')"
-                    :aria-label="t('stepDishes.dishNamePlaceholder')"
+                    :placeholder="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
+                    :aria-label="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-invalid="quickDishErrors.name ? 'true' : undefined"
                     aria-describedby="step-dishes-quick-name-error"
                     @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value); quickDishErrors.name = ''"
@@ -1160,7 +1160,7 @@
 
           <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
-            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory", { item: itemSingular }) }}</button>
           </div>
         </div>
       </div>
@@ -1432,7 +1432,7 @@ const dishSearch = ref("");
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
 const tenant = useTenantStore();
-const { isShop } = useVocabulary();
+const { isShop, itemSingular, itemPlural, groupPlural } = useVocabulary();
 const { t } = useI18n();
 const { translating: dishTranslating, translateError: dishTranslateError, translateField } = useTranslate();
 const emit = defineEmits(["next", "back"]);

@@ -14,10 +14,10 @@
 
       <div class="flex flex-wrap gap-2">
         <span class="ui-chip tabular-nums">
-          {{ categoriesCount }} {{ t("common.categories").toLowerCase() }}
+          {{ categoriesCount }} {{ groupPlural.toLowerCase() }}
         </span>
         <span class="ui-chip tabular-nums">
-          {{ dishesCount }} {{ t("common.dishes").toLowerCase() }}
+          {{ dishesCount }} {{ itemPlural.toLowerCase() }}
         </span>
         <span
           class="ui-chip"
@@ -201,15 +201,15 @@
           </div>
         </div>
 
-        <!-- Auto-confirm reservations -->
-        <label for="sp-auto-confirm" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <!-- Auto-confirm reservations (restaurant only) -->
+        <label v-if="!isShop" for="sp-auto-confirm" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.autoConfirmReservations") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmReservationsHint") }}</p>
           </div>
           <input id="sp-auto-confirm" v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
-        <div v-if="form.auto_confirm_reservations" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
+        <div v-if="!isShop && form.auto_confirm_reservations" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
           <label for="sp-auto-confirm-min-hours" class="text-xs font-medium text-slate-300">{{ t("stepPublish.autoConfirmMinHours") }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -225,8 +225,8 @@
           <p class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursHint") }}</p>
         </div>
 
-        <!-- Reservation reminders -->
-        <label for="sp-reservation-reminders" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <!-- Reservation reminders (restaurant only) -->
+        <label v-if="!isShop" for="sp-reservation-reminders" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.reservationReminders") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.reservationRemindersHint") }}</p>
@@ -259,8 +259,8 @@
           </p>
         </div>
 
-        <!-- Reservation capacity settings -->
-        <div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
+        <!-- Reservation capacity settings (restaurant only) -->
+        <div v-if="!isShop" class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <div class="space-y-0.5">
             <p class="ui-section-kicker">{{ t("stepPublish.capacitySettings") }}</p>
             <p class="text-xs text-slate-500">{{ t("stepPublish.capacitySettingsHint") }}</p>
@@ -595,7 +595,7 @@
           :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
           @click="publish"
         >
-          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu") }}
+          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog: catalog.value }) }}
         </button>
         <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
           {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
@@ -603,7 +603,7 @@
         <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
           {{ t("stepPublish.launchSummary") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu") }}</RouterLink>
+        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu", { catalog: catalog.value }) }}</RouterLink>
         <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
         <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
       </div>
@@ -616,6 +616,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useToastStore } from "../stores/toast";
 import { categoryApi, dishApi, profileApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { useTenantStore } from "../stores/tenant";
 import { trackEvent } from "../lib/analytics";
 import ClosureDates from "../components/ClosureDates.vue";
@@ -630,6 +631,7 @@ const emit = defineEmits(["publish", "can-publish"]);
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t, formatDateTime } = useI18n();
+const { isShop, groupPlural, itemPlural, catalog } = useVocabulary();
 const publishing = ref(false);
 const savingStatus = ref(false);
 const savingTheme = ref(false);
@@ -751,8 +753,8 @@ const checks = computed(() => {
   const hasTheme = Boolean((p.logo_url || "").trim() || (p.hero_url || "").trim() || p.primary_color || p.secondary_color);
   const items = [
     { key: "brand", label: t("stepPublish.checkBrandContact"), ok: hasBrand },
-    { key: "categories", label: t("stepPublish.checkCategories", { count: categoriesCount.value }), ok: categoriesCount.value > 0 },
-    { key: "dishes", label: t("stepPublish.checkDishes", { count: dishesCount.value }), ok: dishesCount.value > 0 },
+    { key: "categories", label: t("stepPublish.checkCategories", { count: categoriesCount.value, group: groupPlural.value }), ok: categoriesCount.value > 0 },
+    { key: "dishes", label: t("stepPublish.checkDishes", { count: dishesCount.value, item: itemPlural.value }), ok: dishesCount.value > 0 },
     { key: "theme", label: t("stepPublish.checkTheme"), ok: hasTheme },
   ];
   if (isBrowseOnlyPlan.value) {
