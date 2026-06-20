@@ -194,13 +194,13 @@ const routes = [
         path: "tables",
         name: "owner-tables",
         component: OwnerTables,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner", requiresCapability: "tables" },
       },
       {
         path: "reservations",
         name: "owner-reservations",
         component: OwnerReservations,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner", requiresCapability: "reservations" },
       },
       {
         path: "orders",
@@ -236,7 +236,7 @@ const routes = [
         path: "kitchen",
         name: "owner-kitchen",
         component: OwnerKitchen,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner", requiresCapability: "kitchen" },
       },
       {
         path: "promotions",
@@ -381,6 +381,21 @@ router.beforeEach(async (to) => {
     if (tenant.isBrowseOnlyPlan) {
       toast.show(translate("router.orderingDisabled"), "info");
       return { name: "menu" };
+    }
+  }
+
+  // Capability-gated owner routes (tables / reservations / kitchen): a shop tenant
+  // (grocery/retail/pharmacy) must not reach a restaurant-only page by DIRECT URL,
+  // even though the nav already hides the link. Fail-open: only redirect when meta
+  // is loaded and the capability is positively false. Silent → the owner dashboard.
+  const requiresCapability = to.matched.map((r) => r.meta?.requiresCapability).find(Boolean);
+  if (requiresCapability) {
+    const tenant = useTenantStore();
+    if (!tenant.meta && !tenant.loading) {
+      await tenant.fetchMeta();
+    }
+    if (tenant.capabilities?.[requiresCapability] === false) {
+      return { name: "owner-home", replace: true };
     }
   }
 
