@@ -109,6 +109,13 @@ class OwnerWaiterCallListView(APIView):
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
     def get(self, request):
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(request, "tenant", None), "waiter"):
+            return Response(
+                {"detail": "Waiter features are not available for this business.",
+                 "code": "waiter_unavailable"},
+                status=403,
+            )
         calls = list(WaiterCall.objects.filter(status=WaiterCall.Status.PENDING).order_by("created_at"))
 
         from .views import _is_tenant_owner  # lazy import avoids a heavy module load cycle
@@ -128,6 +135,13 @@ class OwnerWaiterCallAcknowledgeView(APIView):
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
     def post(self, request, call_id):
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(request, "tenant", None), "waiter"):
+            return Response(
+                {"detail": "Waiter features are not available for this business.",
+                 "code": "waiter_unavailable"},
+                status=403,
+            )
         call = WaiterCall.objects.filter(pk=call_id).first()
         if call is None:
             return Response({"detail": "Not found.", "code": "not_found"}, status=404)

@@ -1681,6 +1681,15 @@ class OwnerReservationListView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        # Defense-in-depth: a shop tenant (no reservations capability) must not reach
+        # the owner reservation endpoints by direct API call, mirroring the create-path gate.
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(tenant, "reservations"):
+            return Response(
+                {"detail": "Reservations are not available for this business.",
+                 "code": "reservations_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         status_filter = (request.query_params.get("status") or "").strip().lower()
         if status_filter and status_filter not in OWNER_RESERVATION_STATUSES:
@@ -1771,6 +1780,13 @@ class OwnerReservationDetailView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(tenant, "reservations"):
+            return Response(
+                {"detail": "Reservations are not available for this business.",
+                 "code": "reservations_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = OwnerReservationUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -2199,6 +2215,15 @@ class OwnerReservationExportView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        # Defense-in-depth: a shop tenant (no reservations capability) must not reach
+        # the owner reservation endpoints by direct API call, mirroring the create-path gate.
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(tenant, "reservations"):
+            return Response(
+                {"detail": "Reservations are not available for this business.",
+                 "code": "reservations_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         status_filter = (request.query_params.get("status") or "").strip().lower()
         if status_filter and status_filter not in OWNER_RESERVATION_STATUSES:

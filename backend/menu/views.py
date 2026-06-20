@@ -789,6 +789,11 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
+        # Tables are restaurant-only; a shop tenant sees no table rows (and so cannot
+        # retrieve/update/delete them either — perform_create is separately gated).
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(self.request, "tenant", None), "tables"):
+            return TableLink.objects.none()
         return TableLink.objects.all().order_by("position", "label", "id")
 
     def perform_create(self, serializer):
