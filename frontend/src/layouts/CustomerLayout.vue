@@ -241,7 +241,10 @@ const navItems = computed(() => [
   { key: "info", icon: "info", label: t("customerLayout.navInfo"), to: { name: "customer-home" }, badge: "" },
   { key: "menu", icon: "menu", label: t("customerLayout.navMenu"), to: { name: "menu" }, badge: "" },
   { key: "cart", icon: "cart", label: t("customerLayout.navCart"), to: { name: "cart" }, badge: cart.count ? String(cart.count) : "" },
-  { key: "reserve", icon: "calendar", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" },
+  // Reservations are a restaurant-only capability — hide the tab for shops/pharmacies.
+  ...(tenant.capabilities.reservations !== false
+    ? [{ key: "reserve", icon: "calendar", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" }]
+    : []),
   { key: "account", icon: "user", label: t("customerLayout.navAccount"), to: { name: "customer-account" }, badge: customerStore.isAuthenticated ? "●" : "" },
 ]);
 

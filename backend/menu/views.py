@@ -2369,6 +2369,19 @@ class PlaceOrderView(APIView):
             # Use DB label as authoritative source; fall back to client-supplied label
             table_label = resolved_table.label or table_label
 
+        # Dine-in is a restaurant-only capability — also guard a bare
+        # fulfillment_type=table with NO table_slug (the check above only runs
+        # when a slug is supplied), so a direct API call can't open an
+        # uncollected dine-in tab at a shop/pharmacy.
+        if fulfillment_type == Order.FulfillmentType.TABLE:
+            _caps_dine = getattr(profile, "capabilities", None) or {}
+            if not _caps_dine.get("dine_in", True):
+                return Response(
+                    {"detail": "Dine-in ordering is not available for this business.",
+                     "code": "dine_in_unavailable"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         # Advance/scheduled order — validate the requested fulfilment time (pickup/delivery
         # only, future within the lead window, inside business hours). On success the order
         # is created as SCHEDULED (hidden from the kitchen until released) but paid now.
@@ -2401,6 +2414,14 @@ class PlaceOrderView(APIView):
 
         # Delivery orders require an authenticated, verified customer
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
+            # Enforce the tenant's delivery toggle at placement — the UI hides the
+            # option when off, but a direct API call must not bypass it.
+            if not getattr(profile, "delivery_enabled", True):
+                return Response(
+                    {"detail": "Delivery is not available for this business.",
+                     "code": "delivery_unavailable"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             if _linked_customer is None:
                 return Response(
                     {"detail": "Delivery orders require a signed-in account.", "code": "auth_required"},
@@ -4726,6 +4747,15 @@ class StaffFireCourseView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        # Course firing is a kitchen capability (shops have no kitchen). Gate it
+        # like the sibling ready endpoints; defaults to allowed for restaurants.
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(request, "tenant", None), "kitchen"):
+            return Response(
+                {"detail": "Kitchen features are not available for this business.",
+                 "code": "kitchen_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Quick existence check before acquiring the write lock — avoids a
         # lock wait on a non-existent row and gives a clean 404.

@@ -1328,8 +1328,12 @@ const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 // uses the shared server-authoritative verdict to agree with Menu/MenuSelect.
 const isRestaurantOpen = computed(() => isRestaurantOpenNow(meta.value?.profile));
 const tableLabelModel = computed(() => cart.tableLabel || '');
+// Dine-in (table) context only applies to businesses with the dine_in
+// capability. Without this gate, appending ?table= to a shop/pharmacy URL
+// would activate the dine-in flow (pay-at-table, no wallet debit) — so a
+// shop order could be placed with no payment collected.
 const isTableContextOrder = computed(() =>
-  Boolean(cart.tableSlug || cart.tableLabel)
+  Boolean(cart.tableSlug || cart.tableLabel) && tenant.capabilities.dine_in !== false
 );
 const isDelivery = computed(
   () => !isTableContextOrder.value && fulfillmentType.value === 'delivery'

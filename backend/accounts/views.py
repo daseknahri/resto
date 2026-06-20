@@ -3928,6 +3928,14 @@ class MarketplacePlaceOrderView(APIView):
                 if not profile or not profile.is_menu_published:
                     return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
+                # Enforce the tenant's delivery toggle at placement — the UI hides
+                # the option when off, but a direct API call must not bypass it.
+                if fulfillment_type == "delivery" and not getattr(profile, "delivery_enabled", True):
+                    return Response(
+                        {"detail": "Delivery is not available for this business.", "code": "delivery_unavailable"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
                 # Advance/scheduled order — may be placed while currently closed (it's for a
                 # future open slot); the time is validated against business hours below.
                 _wants_schedule = bool(request.data.get("scheduled_for"))
