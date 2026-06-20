@@ -65,6 +65,21 @@
         </button>
       </div>
 
+      <!-- Business-type lens — only shown when the directory spans >1 vertical -->
+      <div v-if="VERTICAL_OPTIONS.length" class="mt-2 flex flex-wrap gap-2">
+        <button
+          v-for="opt in VERTICAL_OPTIONS"
+          :key="opt.id"
+          type="button"
+          class="ui-press shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+          :class="selectedVertical === opt.id
+            ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+            : 'border-slate-700/70 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+          :aria-pressed="selectedVertical === opt.id"
+          @click="selectedVertical = opt.id"
+        >{{ opt.label }}</button>
+      </div>
+
       <!-- Loading: skeleton card grid -->
       <ul v-if="loading" :aria-label="t('directory.loading')" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
         <li
@@ -235,6 +250,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { verticalForBusinessType } from '../lib/verticals';
 
 const { t } = useI18n();
 
@@ -251,6 +267,19 @@ const searchQuery = ref('');
 const selectedCity = ref('');
 const selectedCuisine = ref('');
 const openOnly = ref(false);
+const selectedVertical = ref('');  // '' | 'food' | 'shops' | 'pharmacy'
+const _ALL_VERTICAL_OPTIONS = computed(() => [
+  { id: 'food', label: t('customerAccount.svcFood') },
+  { id: 'shops', label: t('customerAccount.svcShops') },
+  { id: 'pharmacy', label: t('customerAccount.svcPharmacy') },
+]);
+// Only surface the lens when the directory actually spans more than one vertical
+// (a restaurant-only city shows no chips). Reuses the per-service svc* labels.
+const VERTICAL_OPTIONS = computed(() => {
+  const present = new Set(restaurants.value.map((r) => verticalForBusinessType(r.business_type)));
+  const opts = _ALL_VERTICAL_OPTIONS.value.filter((o) => present.has(o.id));
+  return opts.length > 1 ? [{ id: '', label: t('customerAccount.svcAll') }, ...opts] : [];
+});
 
 // Show Load More only when there is more data AND the filtered list is non-empty
 // (or no client-side filter is active). Prevents the button appearing over an
@@ -260,6 +289,7 @@ const showLoadMore = computed(() => {
   const anyFilterActive = searchQuery.value.trim() !== ''
     || selectedCity.value !== ''
     || selectedCuisine.value !== ''
+    || selectedVertical.value !== ''
     || openOnly.value;
   return !anyFilterActive || filteredRestaurants.value.length > 0;
 });
@@ -284,6 +314,9 @@ const filteredRestaurants = computed(() => {
   }
   if (openOnly.value) {
     list = list.filter((r) => r.is_open);
+  }
+  if (selectedVertical.value) {
+    list = list.filter((r) => verticalForBusinessType(r.business_type) === selectedVertical.value);
   }
   // Open restaurants float to the top even when not filtering by open-only
   return [...list].sort((a, b) => (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0));
