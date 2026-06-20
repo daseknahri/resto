@@ -739,6 +739,11 @@
             <span class="flex-1 text-xs text-amber-200">{{ t('mktMenu.loyaltyRedeem', { points: loyaltyPoints }) }}</span>
             <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold tabular-nums text-amber-300">-{{ fmtPrice(loyaltyDiscount) }}</span>
           </label>
+          <!-- ── Loyalty earn projection ── -->
+          <p
+            v-if="loyaltyConfig?.enabled && loyaltyEarnProjection > 0"
+            class="text-[11px] text-violet-400/80 ps-1"
+          >{{ t('mktMenu.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
 
           <!-- Pay now (marketplace orders are pay-now) -->
           <div v-if="customerStore.isAuthenticated && orderTotal > 0" class="space-y-2">
@@ -1537,6 +1542,16 @@ const loyaltyDiscount = computed(() => {
 const orderTotal = computed(() =>
   Math.max(0, orderBaseTotal.value - flashSaleDiscount.value - loyaltyDiscount.value)
 );
+
+// Projected points earned on this order (mirrors backend: floor(subtotal * points_per_unit))
+const loyaltyEarnProjection = computed(() => {
+  if (!loyaltyConfig.value?.enabled) return 0;
+  const ppu = Number(loyaltyConfig.value.points_per_unit) || 0;
+  if (ppu <= 0) return 0;
+  const subtotal = Number(orderBaseTotal.value) || 0;
+  if (subtotal <= 0) return 0;
+  return Math.floor(subtotal * ppu);
+});
 
 // Marketplace orders are pay-now: settled in full from the wallet at checkout.
 const walletBalanceNum = computed(() => {

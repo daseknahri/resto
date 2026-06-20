@@ -125,6 +125,26 @@
       </button>
     </div>
 
+    <!-- ══ Order-again quick chip ══ -->
+    <!-- Shown when there's a recent order with items, not in browse-only mode, restaurant not showing its own active-order strip for the SAME order -->
+    <Transition name="ui-fade">
+      <div
+        v-if="quickReorderOrder && !isBrowseOnly"
+        class="mx-3 mt-3 flex items-center gap-2 rounded-2xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/6 px-3.5 py-2.5"
+        role="note"
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-[var(--color-secondary)]/70"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>
+        <p class="min-w-0 flex-1 truncate text-[12px] text-slate-300 leading-snug">
+          {{ quickReorderLabel }}
+        </p>
+        <button
+          type="button"
+          class="ui-press shrink-0 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/40"
+          @click="reorderItems(quickReorderOrder)"
+        >{{ t('menu.reorder') }}</button>
+      </div>
+    </Transition>
+
     <!-- ══ Sticky categories bar ══ -->
     <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav', { groupPlural })" class="ui-menu-category-nav sticky z-20" :style="{ top: headerOffset + 'px' }">
       <div class="relative">
@@ -494,6 +514,29 @@ const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
 const { groupPlural } = useVocabulary()
 
+// ── Quick-reorder chip near the top ──────────────────────────────────────────
+// Show the most-recent order (if not already shown as active-order strip) as a
+// compact one-tap "Order again" chip near the top of the menu.
+const quickReorderOrder = computed(() => {
+  const orders = cart.recentOrders || []
+  if (!orders.length) return null
+  const latest = orders[0]
+  if (!latest?.items?.length) return null
+  // If this order is already shown in the active-order tracking strip, skip it
+  // (both reference the same first order within the 2-hour window).
+  const age = latest?.created_at ? Date.now() - new Date(latest.created_at).getTime() : Infinity
+  if (age <= 7_200_000) return null   // the active-order strip is showing; don't double-show
+  return latest
+})
+
+const quickReorderLabel = computed(() => {
+  const order = quickReorderOrder.value
+  if (!order) return ''
+  const firstName = order.items[0]?.dish_name || order.items[0]?.name || ''
+  const extra = order.items.length > 1 ? ` +${order.items.length - 1}` : ''
+  return t('menu.orderAgainChip', { name: firstName, extra })
+})
+
 // ── Active order tracking strip ───────────────────────────────────────────────
 // Show a persistent "track your order" pill for 2 h after a checkout
 const activeOrderDismissed = ref(false)
@@ -762,7 +805,7 @@ watch(isSearchActive, (active) => {
 })
 
 // ── Reorder from recent orders ────────────────────────────────────────────────
-/** Add all items from a previous order back to the cart (best-effort — server validates at checkout). */
+/** Add all items from a previous order back to the cart, restoring fulfillment context. */
 const reorderItems = (order) => {
   if (!order?.items?.length) {
     toast.show(t('menu.reorderEmpty'), 'info')
@@ -780,7 +823,32 @@ const reorderItems = (order) => {
       option_labels: item.option_labels || [],
     })
   }
-  toast.show(t('menu.reorderAdded'), 'success')
+  // Restore fulfillment context from the order record (delivery address, type, coords).
+  // If the saved fulfillment type isn't available (e.g. delivery disabled), fall back silently.
+  const ft = order.fulfillment_type || ''
+  const profile = meta.value?.profile || {}
+  const deliveryEnabled = profile.delivery_enabled !== false
+  const resolvedFt = (ft === 'delivery' && !deliveryEnabled) ? 'pickup' : ft
+  if (resolvedFt) {
+    cart.persistFulfillmentContext({
+      fulfillment_type: resolvedFt,
+      delivery_address: order.delivery_address || '',
+      delivery_lat: order.delivery_lat ?? null,
+      delivery_lng: order.delivery_lng ?? null,
+    })
+  }
+  // Show a contextual banner toast
+  let contextLabel = ''
+  if (resolvedFt === 'delivery' && order.delivery_address) {
+    contextLabel = t('menu.reorderFulfillmentDelivery', { address: order.delivery_address.split(',')[0] || order.delivery_address })
+  } else if (resolvedFt === 'pickup' || (!resolvedFt && ft === 'delivery' && !deliveryEnabled)) {
+    contextLabel = t('menu.reorderFulfillmentPickup')
+  }
+  if (contextLabel) {
+    toast.show(t('menu.reorderWithFulfillment', { context: contextLabel }), 'success')
+  } else {
+    toast.show(t('menu.reorderAdded'), 'success')
+  }
 }
 
 // ── Sticky category nav ──────────────────────────────────────────────────────

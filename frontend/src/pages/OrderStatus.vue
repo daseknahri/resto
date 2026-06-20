@@ -804,6 +804,19 @@ const reorder = () => {
       option_labels: item.options?.map((o) => o.name).filter(Boolean) || [],
     });
   });
+  // Restore fulfillment context from the order so Cart.vue can pre-fill it.
+  const ft = orderData.value?.fulfillment_type || "";
+  const deliveryAddress = orderData.value?.delivery_address || "";
+  const deliveryLat = orderData.value?.delivery_lat ?? null;
+  const deliveryLng = orderData.value?.delivery_lng ?? null;
+  if (ft) {
+    cart.persistFulfillmentContext({
+      fulfillment_type: ft,
+      delivery_address: deliveryAddress,
+      delivery_lat: deliveryLat,
+      delivery_lng: deliveryLng,
+    });
+  }
   toast.show(t("orderStatus.reorderAdded"), "success");
   router.push({ name: "cart" });
 };

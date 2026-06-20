@@ -263,14 +263,47 @@ export const useCartStore = defineStore("cart", {
       this.items = [];
       this.persist();
     },
+    // Restore fulfillment context from a previous order (used by reorder flow).
+    // Consumers (Cart.vue) read fulfillment_type / delivery* from their own refs;
+    // this stores it in localStorage so Cart.vue can re-hydrate on mount.
+    persistFulfillmentContext({ fulfillment_type, delivery_address, delivery_lat, delivery_lng }) {
+      try {
+        const key = typeof window === "undefined" ? "cart:fulfillment" : `cart:fulfillment:${window.location.hostname}`;
+        localStorage.setItem(key, JSON.stringify({
+          fulfillment_type: String(fulfillment_type || ""),
+          delivery_address: String(delivery_address || ""),
+          delivery_lat: Number.isFinite(Number(delivery_lat)) ? Number(delivery_lat) : null,
+          delivery_lng: Number.isFinite(Number(delivery_lng)) ? Number(delivery_lng) : null,
+        }));
+      } catch { /* best-effort */ }
+    },
+    loadFulfillmentContext() {
+      try {
+        const key = typeof window === "undefined" ? "cart:fulfillment" : `cart:fulfillment:${window.location.hostname}`;
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        return {
+          fulfillment_type: String(parsed.fulfillment_type || ""),
+          delivery_address: String(parsed.delivery_address || ""),
+          delivery_lat: Number.isFinite(Number(parsed.delivery_lat)) ? Number(parsed.delivery_lat) : null,
+          delivery_lng: Number.isFinite(Number(parsed.delivery_lng)) ? Number(parsed.delivery_lng) : null,
+        };
+      } catch { return null; }
+    },
     // Save a completed order to the recent-orders list (max 5, deduplicated by order_number).
     // Call this BEFORE clearing the cart, passing the API response + current cart items.
-    pushRecentOrder({ order_number, total, currency, created_at, items }) {
+    pushRecentOrder({ order_number, total, currency, created_at, items, fulfillment_type, delivery_address, delivery_lat, delivery_lng }) {
       const entry = {
         order_number: String(order_number || ""),
         total: Number(total || 0),
         currency: String(currency || "MAD"),
         created_at: created_at || new Date().toISOString(),
+        fulfillment_type: typeof fulfillment_type === "string" ? fulfillment_type : "",
+        delivery_address: typeof delivery_address === "string" ? delivery_address.trim() : "",
+        delivery_lat: Number.isFinite(Number(delivery_lat)) ? Number(delivery_lat) : null,
+        delivery_lng: Number.isFinite(Number(delivery_lng)) ? Number(delivery_lng) : null,
         items: Array.isArray(items)
           ? items.map((item) => ({
               key: item.key || `${item.slug}::`,

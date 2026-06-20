@@ -761,6 +761,11 @@
             <span class="flex-1 text-xs text-amber-200">{{ t('cartPage.loyaltyRedeem', { points: loyaltyPoints }) }}</span>
             <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold tabular-nums text-amber-300">-{{ formatPrice(loyaltyDiscount) }}</span>
           </label>
+          <!-- ── Loyalty earn projection ── -->
+          <p
+            v-if="loyaltyConfig?.enabled && loyaltyEarnProjection > 0"
+            class="text-[11px] text-violet-400/80 ps-1"
+          >{{ t('cartPage.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
 
           <!-- ── Order summary breakdown ── -->
           <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
@@ -1287,6 +1292,16 @@ const loyaltyDiscount = computed(() => {
   const subtotal = Number(cart.total) || 0;
   const base = fulfillmentType.value === 'delivery' ? subtotal + deliveryFeeAmount.value : subtotal;
   return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, base));
+});
+
+// Projected points earned on this order (mirrors backend: floor(subtotal * points_per_unit))
+const loyaltyEarnProjection = computed(() => {
+  if (!loyaltyConfig.value?.enabled) return 0;
+  const ppu = Number(loyaltyConfig.value.points_per_unit) || 0;
+  if (ppu <= 0) return 0;
+  const subtotal = Number(cart.total) || 0;
+  if (subtotal <= 0) return 0;
+  return Math.floor(subtotal * ppu);
 });
 
 const orderGrandTotal = computed(() => {
@@ -2261,6 +2276,17 @@ const placeInAppOrder = async () => {
       currency: result.currency ?? currency.value,
       created_at: result.created_at ?? new Date().toISOString(),
       items: cart.items,
+      fulfillment_type: fulfillmentType.value,
+      delivery_address: deliveryAddress.value,
+      delivery_lat: deliveryLat.value,
+      delivery_lng: deliveryLng.value,
+    });
+    // Persist so next reorder can restore context
+    cart.persistFulfillmentContext({
+      fulfillment_type: fulfillmentType.value,
+      delivery_address: deliveryAddress.value,
+      delivery_lat: deliveryLat.value,
+      delivery_lng: deliveryLng.value,
     });
     cart.clear();
     // Persist the order number so the layout can show a "track order" banner
@@ -2313,6 +2339,16 @@ onMounted(() => {
   fetchSavedAddresses();
   fetchCodEligibility();
   fetchLoyaltyConfig();
+  // Restore fulfillment context from a prior reorder (written by Menu/OrderStatus reorderItems).
+  const savedCtx = cart.loadFulfillmentContext();
+  if (savedCtx?.fulfillment_type) {
+    fulfillmentType.value = savedCtx.fulfillment_type;
+    if (savedCtx.fulfillment_type === 'delivery') {
+      if (savedCtx.delivery_address) deliveryAddress.value = savedCtx.delivery_address;
+      if (savedCtx.delivery_lat !== null)  deliveryLat.value  = savedCtx.delivery_lat;
+      if (savedCtx.delivery_lng !== null)  deliveryLng.value  = savedCtx.delivery_lng;
+    }
+  }
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },
