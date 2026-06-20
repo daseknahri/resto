@@ -91,6 +91,38 @@
       </div>
     </header>
 
+    <!-- Waiter-call bell alerts — a table needs service. Section-filtered server-side. -->
+    <div v-if="waiterCallsPending.length" class="mx-auto w-full max-w-2xl px-3 pt-2">
+      <div role="alert" class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+        <div class="flex items-center gap-2 text-sm font-semibold text-amber-300">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+          </span>
+          {{ t('ownerLayout.waiterCallBannerTitle', { count: waiterCallsPending.length }) }}
+        </div>
+        <ul class="space-y-1.5 list-none p-0">
+          <li
+            v-for="call in waiterCallsPending"
+            :key="call.id"
+            class="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-slate-900/40 px-3 py-2"
+          >
+            <div class="min-w-0 text-sm">
+              <span class="font-semibold text-white">{{ call.table_label || t('ownerLayout.waiterCallTableUnknown') }}</span>
+              <span v-if="call.note" class="text-slate-300"> — {{ call.note }}</span>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15 ui-press ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              @click="acknowledgeWaiterCall(call.id)"
+            >
+              {{ t('ownerLayout.waiterCallAcknowledge') }}
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
     <!-- Page content -->
     <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
       <RouterView />
@@ -107,12 +139,22 @@ import { useOwnerTheme } from "../composables/useOwnerTheme";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useWaiterStore } from "../stores/waiter";
+import { useWaiterCalls } from "../composables/useWaiterCalls";
 
 const { t } = useI18n();
 const router = useRouter();
 const session = useSessionStore();
 const tenant = useTenantStore();
 const waiter = useWaiterStore();
+
+// Waiter-call bell alerts — a table pressed the QR "call waiter" bell. These were
+// previously visible ONLY to the owner; floor staff now see + acknowledge them here.
+// The list is section-filtered server-side, so a waiter sees only their own tables.
+const { pending: waiterCallsPending, load: loadWaiterCalls, acknowledge: acknowledgeWaiterCall } = useWaiterCalls();
+let _waiterCallsTimer = null;
+const _onWaiterCallsVisibility = () => {
+  if (document.visibilityState === "visible") loadWaiterCalls();
+};
 
 // Reuse the staff workspace theme (same ui-* primitives + light CSS as the owner area).
 const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();
@@ -128,10 +170,17 @@ const handleSignOut = async () => {
 onMounted(() => {
   activateTheme(); // paint the saved dark/light choice onto <html>
   waiter.setupConnectivityListeners();
+  loadWaiterCalls();
+  // Poll frequently — a bell-call is urgent; visibilitychange catches up instantly
+  // when the waiter switches back to the app.
+  _waiterCallsTimer = setInterval(loadWaiterCalls, 12000);
+  document.addEventListener("visibilitychange", _onWaiterCallsVisibility);
 });
 
 onUnmounted(() => {
   deactivateTheme(); // strip data-owner-theme so other areas stay un-themed
   waiter.teardownConnectivityListeners();
+  if (_waiterCallsTimer) clearInterval(_waiterCallsTimer);
+  document.removeEventListener("visibilitychange", _onWaiterCallsVisibility);
 });
 </script>
