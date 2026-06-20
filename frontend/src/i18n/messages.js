@@ -1364,6 +1364,11 @@ export const messages = {
       welcomeTitle: "You're approved — welcome aboard!",
       welcomeBody: "Go online to start receiving delivery offers. Earnings land in your wallet and you can cash out anytime.",
       welcomeDismiss: "Got it",
+      callRestaurant: "Call restaurant",
+      offerSecondsLeft: "{n}s left",
+      todayStrip: "Today: {deliveries_today} drops · {earned_today}",
+      goOnlineNextDrop: "Go online for the next drop",
+      goOnlineNextDropDismiss: "Dismiss",
     },
     driverDocs: {
       title: "Car documents",
@@ -6508,6 +6513,11 @@ export const messages = {
       welcomeTitle: "Vous etes approuve — bienvenue !",
       welcomeBody: "Passez en ligne pour commencer a recevoir des offres de livraison. Vos gains sont credites sur votre portefeuille et vous pouvez les retirer a tout moment.",
       welcomeDismiss: "Compris",
+      callRestaurant: "Appeler le restaurant",
+      offerSecondsLeft: "{n}s restantes",
+      todayStrip: "Aujourd'hui : {deliveries_today} livraisons · {earned_today}",
+      goOnlineNextDrop: "Passer en ligne pour la prochaine livraison",
+      goOnlineNextDropDismiss: "Ignorer",
     },
     driverDocs: {
       title: "Documents vehicule",

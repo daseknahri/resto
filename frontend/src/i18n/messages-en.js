@@ -1363,6 +1363,11 @@ driver: {
   welcomeTitle: "You're approved — welcome aboard!",
   welcomeBody: "Go online to start receiving delivery offers. Earnings land in your wallet and you can cash out anytime.",
   welcomeDismiss: "Got it",
+  callRestaurant: "Call restaurant",
+  offerSecondsLeft: "{n}s left",
+  todayStrip: "Today: {deliveries_today} drops · {earned_today}",
+  goOnlineNextDrop: "Go online for the next drop",
+  goOnlineNextDropDismiss: "Dismiss",
 },
 driverDocs: {
   title: "Car documents",

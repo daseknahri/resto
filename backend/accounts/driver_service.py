@@ -29,7 +29,9 @@ def _schema() -> str:
 
 
 def driver_earnings_summary(driver_id) -> dict:
-    """Return {earned, paid, owed, ride_earned, rides_completed} for a driver, as quantised Decimals."""
+    """Return {earned, paid, owed, ride_earned, rides_completed, earned_today, deliveries_today}
+    for a driver, as quantised Decimals."""
+    from django.utils import timezone as _tz
     from .models import DeliveryJob, DriverPayout, RideRequest, WalletTransaction
 
     earned = (
@@ -51,6 +53,16 @@ def driver_earnings_summary(driver_id) -> dict:
         driver_id=driver_id, status=RideRequest.Status.COMPLETED
     ).count()
 
+    # Today stats — delivery jobs delivered since midnight (server date).
+    today_start = _tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_qs = DeliveryJob.objects.filter(
+        driver_id=driver_id,
+        status=DeliveryJob.Status.DELIVERED,
+        delivered_at__gte=today_start,
+    )
+    earned_today_raw = today_qs.aggregate(s=Sum("driver_payout"))["s"] or Decimal("0")
+    deliveries_today = today_qs.count()
+
     earned = _money(earned)
     paid = _money(paid)
     return {
@@ -59,6 +71,8 @@ def driver_earnings_summary(driver_id) -> dict:
         "owed": _money(earned - paid),
         "ride_earned": _money(ride_earned_raw),
         "rides_completed": rides_completed,
+        "earned_today": _money(earned_today_raw),
+        "deliveries_today": deliveries_today,
     }
 
 

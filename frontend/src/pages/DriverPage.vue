@@ -282,6 +282,16 @@
         <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
       </div>
 
+      <!-- Today earnings strip — compact summary for a driver doing multiple drops in a day -->
+      <div
+        v-if="earnings && (online || earnings.deliveries_today > 0)"
+        class="ui-panel flex items-center gap-3 px-4 py-2.5 ui-reveal"
+      >
+        <span class="flex-1 text-xs font-medium text-slate-300">
+          {{ t('driver.todayStrip', { deliveries_today: earnings.deliveries_today, earned_today: fmtMoney(earnings.earned_today) }) }}
+        </span>
+      </div>
+
       <!-- Earnings summary -->
       <div v-if="earnings" class="ui-panel overflow-hidden p-0 ui-reveal">
         <div class="grid grid-cols-3 divide-x divide-slate-700/40">
@@ -442,6 +452,22 @@
               </div>
               <span class="shrink-0 text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
             </a>
+            <!-- Call the restaurant / merchant — lets the driver check if food is ready -->
+            <a
+              v-if="activeJob.restaurant_phone"
+              :href="`tel:${activeJob.restaurant_phone}`"
+              class="flex items-center gap-3 rounded-xl border border-amber-700/50 bg-amber-900/15 px-3 py-3 transition-colors hover:border-amber-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+              :aria-label="`${t('driver.callRestaurant')}: ${activeJob.restaurant_name || activeJob.restaurant_phone}`"
+            >
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                <AppIcon name="phone" class="h-4 w-4 text-amber-300" aria-hidden="true" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.callRestaurant') }}</p>
+                <p class="truncate text-sm text-slate-200" :title="activeJob.restaurant_name || activeJob.restaurant_phone || undefined">{{ activeJob.restaurant_name || activeJob.restaurant_phone }}</p>
+              </div>
+              <span class="shrink-0 text-xs font-semibold text-amber-300">{{ t('driver.call') }}</span>
+            </a>
           </div>
 
           <!-- What's in the order -->
@@ -556,10 +582,18 @@
               </div>
               <span class="shrink-0 text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(job.driver_payout) }}</span>
             </div>
-            <!-- Meta: distance, items, payment type -->
+            <!-- Meta: distance, items, payment type, offer countdown -->
             <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-slate-400">
               <span v-if="job.offered_to_me" class="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-semibold text-sky-300">
                 {{ t('driver.offeredToYou') }}
+              </span>
+              <!-- Offer countdown — amber when time is low, red when near zero -->
+              <span
+                v-if="job.offer_expires_at && offerSecondsLeft(job.offer_expires_at) > 0"
+                class="rounded-full px-2.5 py-0.5 font-semibold tabular-nums"
+                :class="offerSecondsLeft(job.offer_expires_at) <= 5 ? 'bg-red-500/20 text-red-300' : offerSecondsLeft(job.offer_expires_at) <= 10 ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700/60 text-slate-300'"
+              >
+                {{ t('driver.offerSecondsLeft', { n: offerSecondsLeft(job.offer_expires_at) }) }}
               </span>
               <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
                 <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
@@ -955,6 +989,32 @@
     </template>
   </div>
 
+  <!-- Post-delivery "Go online for the next drop" sticky CTA.
+       Only shown when the driver just completed a delivery, is now offline,
+       and has no active job. Dismissable. Does NOT change backend behaviour. -->
+  <Teleport to="body">
+    <div
+      v-if="showGoOnlineCta"
+      class="fixed bottom-0 inset-x-0 z-[1500] flex items-center gap-3 border-t border-emerald-500/30 bg-slate-950/95 px-4 py-3 backdrop-blur-sm safe-b"
+      role="status"
+      aria-live="polite"
+    >
+      <button
+        class="ui-btn-primary ui-touch-target flex-1 text-sm font-semibold shadow-lg shadow-emerald-900/40"
+        @click="handleGoOnlineCta"
+      >
+        {{ t('driver.goOnlineNextDrop') }}
+      </button>
+      <button
+        class="ui-press shrink-0 rounded-full p-2 text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        :aria-label="t('driver.goOnlineNextDropDismiss')"
+        @click="showGoOnlineCta = false"
+      >
+        <AppIcon name="close" class="h-5 w-5" aria-hidden="true" />
+      </button>
+    </div>
+  </Teleport>
+
   <!-- Release-ride confirm modal -->
   <Teleport to="body">
     <div
@@ -1240,6 +1300,23 @@ let pollTimer = null;
 let geoWatchId = null;
 let lastPositionSent = 0;
 
+// ── Item B: shared countdown clock for offer expiry chips ─────────────────────
+// A single 1-second interval keeps all chips in sync without N timers.
+const offerNow = ref(Date.now());
+let offerCountdownTimer = null;
+// Remaining seconds for an offer — computed against the shared clock.
+const offerSecondsLeft = (isoExpiry) => {
+  if (!isoExpiry) return 0;
+  return Math.max(0, Math.round((Date.parse(isoExpiry) - offerNow.value) / 1000));
+};
+
+// ── Item D: post-delivery "go online for next drop" sticky CTA ────────────────
+const showGoOnlineCta = ref(false);
+const handleGoOnlineCta = async () => {
+  showGoOnlineCta.value = false;
+  await toggleOnline();
+};
+
 const fmtMoney = (v) => {
   try {
     return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 })
@@ -1388,6 +1465,7 @@ const submitDeliveryCode = async () => {
       online.value = false;
       stopGeo();
       toast.show(t('driver.deliveredToast'), 'success');
+      showGoOnlineCta.value = true; // Item D: prompt the driver to go back online
       if (job && job.restaurant_slug) openCustomerRating(job);
       await fetchJobs();
       fetchEarnings();
@@ -1535,6 +1613,7 @@ const toggleOnline = async () => {
     const { data } = await api.patch('/driver/status/', { online: next });
     online.value = Boolean(data.is_driver_online);
     if (online.value) {
+      showGoOnlineCta.value = false; // dismiss the CTA once truly online
       startGeo();
       // Subscribe to web push so new jobs reach the driver even when backgrounded.
       driverPush.subscribe().catch(() => {});
@@ -1778,6 +1857,7 @@ const advance = async (toStatus, extra = {}) => {
       online.value = false; // backend takes the driver offline after delivery
       stopGeo();
       toast.show(t('driver.deliveredToast'), 'success');
+      showGoOnlineCta.value = true; // Item D: prompt the driver to go back online
       if (job && job.restaurant_slug) openCustomerRating(job);
       await fetchJobs();
       fetchEarnings(); // a completed delivery just added to earnings
@@ -1879,6 +1959,17 @@ onMounted(async () => {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.addEventListener('appinstalled', onAppInstalled);
   }
+  // Item B: start the shared 1-second countdown clock for offer expiry chips.
+  offerCountdownTimer = setInterval(() => {
+    offerNow.value = Date.now();
+    // Auto-remove offers whose countdown has elapsed so stale cards don't linger.
+    if (pendingJobs.value.length) {
+      pendingJobs.value = pendingJobs.value.filter(
+        (j) => !j.offer_expires_at || Date.parse(j.offer_expires_at) > Date.now(),
+      );
+    }
+  }, 1000);
+
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await fetchStatus();
@@ -1897,6 +1988,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer);
+  if (offerCountdownTimer) clearInterval(offerCountdownTimer); // Item B cleanup
   stopGeo();
   if (typeof window !== 'undefined') {
     window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);

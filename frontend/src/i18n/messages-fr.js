@@ -1362,6 +1362,11 @@ driver: {
   welcomeTitle: "Vous etes approuve — bienvenue !",
   welcomeBody: "Passez en ligne pour commencer a recevoir des offres de livraison. Vos gains sont credites sur votre portefeuille et vous pouvez les retirer a tout moment.",
   welcomeDismiss: "Compris",
+  callRestaurant: "Appeler le restaurant",
+  offerSecondsLeft: "{n}s restantes",
+  todayStrip: "Aujourd'hui : {deliveries_today} livraisons · {earned_today}",
+  goOnlineNextDrop: "Passer en ligne pour la prochaine livraison",
+  goOnlineNextDropDismiss: "Ignorer",
 },
 driverDocs: {
   title: "Documents vehicule",

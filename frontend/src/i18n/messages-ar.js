@@ -3251,6 +3251,11 @@ Object.assign(arabicMessages, {
     welcomeTitle: "تمت الموافقة — أهلاً بك!",
     welcomeBody: "انتقل إلى وضع الاتصال لبدء استقبال عروض التوصيل. تُضاف أرباحك مباشرةً إلى محفظتك ويمكنك سحبها في أي وقت.",
     welcomeDismiss: "فهمت",
+    callRestaurant: "اتصل بالمطعم",
+    offerSecondsLeft: "بقي {n} ث",
+    todayStrip: "اليوم: {deliveries_today} توصيل · {earned_today}",
+    goOnlineNextDrop: "الاتصال للتوصيل التالي",
+    goOnlineNextDropDismiss: "إغلاق",
   },
   driverDocs: {
     title: "وثائق السيارة",

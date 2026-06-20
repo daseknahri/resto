@@ -5342,6 +5342,16 @@ def _serialize_delivery_job(
     business_type: str = "restaurant",
 ) -> dict:
     _slug, _name = _tenant_slug_name(job.tenant_id)
+    # Merchant contact phone — lets the driver reach the restaurant when the
+    # food isn't ready. Looked up from the tenant's public Profile; falls back
+    # to "" when the profile is missing or the phone field is blank.
+    _restaurant_phone = ""
+    try:
+        from tenancy.models import Profile as _Profile
+        _prof = _Profile.objects.filter(tenant_id=job.tenant_id).values("phone").first()
+        _restaurant_phone = (_prof["phone"] or "") if _prof else ""
+    except Exception:
+        _restaurant_phone = ""
     data = {
         "id": job.id,
         "order_number": job.order_number,
@@ -5350,6 +5360,8 @@ def _serialize_delivery_job(
         # (the rate endpoint is keyed by ?restaurant=<slug>).
         "restaurant_slug": _slug,
         "restaurant_name": _name,
+        # Merchant phone — so the driver can call when the food isn't ready yet.
+        "restaurant_phone": _restaurant_phone,
         # Vertical type — lets the driver app customise wording/UX per business
         # (e.g. "at the store" vs "at the restaurant" vs no merchant stop for courier).
         "business_type": business_type,
@@ -6859,6 +6871,9 @@ class DriverEarningsView(APIView):
             # Ride-hailing earnings.
             "ride_earned": str(s["ride_earned"]),
             "rides_completed": s["rides_completed"],
+            # Today's delivery stats — driver daily UX strip.
+            "earned_today": str(s["earned_today"]),
+            "deliveries_today": s["deliveries_today"],
         })
 
 
