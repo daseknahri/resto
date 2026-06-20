@@ -19,7 +19,7 @@
           </svg>
         </p>
         <span class="sr-only" aria-live="polite">{{ loading ? t('common.loading') : updating ? t('bestSellers.updating') : '' }}</span>
-        <h2 class="text-sm font-semibold text-slate-50">{{ t('bestSellers.heading') }}</h2>
+        <h2 class="text-sm font-semibold text-slate-50">{{ t('bestSellers.heading', { items: itemPlural }) }}</h2>
       </div>
       <div role="radiogroup" class="ui-segmented shrink-0 max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
         <button
@@ -108,10 +108,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useVocabulary } from '../composables/useVocabulary';
 import api from '../lib/api';
 import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t, formatCurrency, currentLocale } = useI18n();
+const { itemPlural } = useVocabulary();
 
 const props = defineProps({
   period: { type: Number, default: 30 },

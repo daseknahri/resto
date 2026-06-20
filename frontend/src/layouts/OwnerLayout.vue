@@ -421,9 +421,8 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
-const { isShop: vocabIsShop, catalog: vocabCatalog } = useVocabulary();
-// Shops see "Catalog" in place of "Menu Builder" in the nav.
-const menuBuilderLabel = computed(() => (vocabIsShop.value ? vocabCatalog.value : t("ownerLayout.menuBuilder")));
+const { catalog: vocabCatalog } = useVocabulary();
+const menuBuilderLabel = computed(() => t("ownerLayout.menuBuilder", { catalog: vocabCatalog.value }));
 
 // ── Owner color scheme (dark / light) ─────────────────────────────────────────
 const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();
@@ -456,7 +455,7 @@ const showKitchen = computed(() => tenant.capabilities.kitchen !== false);
 const pendingOrdersCount = computed(() => order.orders.filter((o) => o.status === "pending").length);
 const activeWorkspaceLabel = computed(() => {
   const path = router.currentRoute.value.path || "";
-  if (path.startsWith("/owner/menu-builder")) return t("ownerLayout.menuBuilder");
+  if (path.startsWith("/owner/menu-builder")) return t("ownerLayout.menuBuilder", { catalog: vocabCatalog.value });
   if (path.startsWith("/owner/profile")) return t("common.profile");
   if (path.startsWith("/owner/tables")) return t("ownerLayout.tablesQr");
   if (path.startsWith("/owner/reservations")) return t("ownerLayout.reservations");

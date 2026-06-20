@@ -464,11 +464,13 @@
 import { computed, onMounted, ref } from 'vue'
 import api from '../lib/api'
 import { useI18n } from '../composables/useI18n'
+import { useVocabulary } from '../composables/useVocabulary'
 import { useTenantStore } from '../stores/tenant'
 import { useToastStore } from '../stores/toast'
 import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache'
 
 const { t, formatDateTime, currentLocale } = useI18n()
+const { itemPlural } = useVocabulary()
 const tenant = useTenantStore()
 const toast = useToastStore()
 
@@ -547,7 +549,7 @@ const usageLimits = computed(() => {
   if (maxDishes > 0 && usageDishes.value !== null) {
     rows.push({
       key: 'dishes',
-      label: t('ownerBilling.usageDishes'),
+      label: t('ownerBilling.usageDishes', { items: itemPlural.value }),
       current: usageDishes.value,
       limit: maxDishes,
       pct: Math.round((usageDishes.value / maxDishes) * 100),

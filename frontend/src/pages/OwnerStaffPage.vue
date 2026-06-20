@@ -224,14 +224,14 @@
                   class="flex items-center justify-between gap-4 px-3.5 py-3"
                 >
                   <div class="min-w-0">
-                    <p class="text-sm font-medium text-slate-200">{{ t(perm.labelKey) }}</p>
-                    <p class="text-xs text-slate-500 mt-0.5">{{ t(perm.descKey) }}</p>
+                    <p class="text-sm font-medium text-slate-200">{{ t(perm.labelKey, perm.params) }}</p>
+                    <p class="text-xs text-slate-500 mt-0.5">{{ t(perm.descKey, perm.params) }}</p>
                   </div>
                   <button
                     class="staff-toggle shrink-0"
                     :class="member.permissions[perm.key] ? 'staff-toggle-on' : 'staff-toggle-off'"
                     :disabled="savingId === member.id"
-                    :aria-label="t(perm.labelKey)"
+                    :aria-label="t(perm.labelKey, perm.params)"
                     role="switch"
                     :aria-checked="member.permissions[perm.key]"
                     @click="togglePerm(member, perm.key)"
@@ -280,39 +280,45 @@
 </template>
 
 <script setup>
-import { ref, onActivated, onMounted, reactive } from "vue";
+import { ref, onActivated, onMounted, reactive, computed } from "vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
 import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t, currentLocale } = useI18n();
+const { catalog, groupPlural, itemPlural } = useVocabulary();
 const toast = useToastStore();
 
 // ── Permission definitions ─────────────────────────────────────────────────────
-const permDefs = [
+const permDefs = computed(() => [
   {
     key: "manage_orders",
     labelKey: "ownerStaff.permManageOrders",
     descKey: "ownerStaff.permManageOrdersDesc",
+    params: {},
   },
   {
     key: "view_revenue",
     labelKey: "ownerStaff.permViewRevenue",
     descKey: "ownerStaff.permViewRevenueDesc",
+    params: {},
   },
   {
     key: "edit_menu",
     labelKey: "ownerStaff.permEditMenu",
     descKey: "ownerStaff.permEditMenuDesc",
+    params: { catalog: catalog.value, groups: groupPlural.value, items: itemPlural.value },
   },
   {
     key: "void_orders",
     labelKey: "ownerStaff.permVoidOrders",
     descKey: "ownerStaff.permVoidOrdersDesc",
+    params: {},
   },
-];
+]);
 
 const STAFF_CACHE_KEY = "owner.staff";
 const STAFF_TTL_MS = 5 * 60 * 1000; // 5 min

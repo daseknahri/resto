@@ -69,12 +69,12 @@
       </template>
       <template v-else>
         <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '0ms' }">
-          <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
+          <p class="ui-stat-label">{{ t("ownerHome.menuViews", { catalog }) }}</p>
           <p class="ui-stat-value tabular-nums text-slate-100">{{ counts.menu_view || 0 }}</p>
           <PeriodBadge :pct="menuViewsChange" />
         </div>
         <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '28ms' }">
-          <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
+          <p class="ui-stat-label">{{ t("ownerHome.dishViews", { item: itemSingular }) }}</p>
           <p class="ui-stat-value tabular-nums text-slate-100">{{ counts.dish_view || 0 }}</p>
           <PeriodBadge :pct="dishViewsChange" />
         </div>
@@ -215,7 +215,7 @@
         </div>
       </div>
       <div class="ui-admin-subcard space-y-2">
-        <h3 class="ui-kicker">{{ t("ownerHome.topDishes") }}</h3>
+        <h3 class="ui-kicker">{{ t("ownerHome.topDishes", { items: itemPlural }) }}</h3>
         <ul v-if="topDishes.length" class="space-y-2 text-sm text-slate-200">
           <li
             v-for="(item, idx) in topDishes"
@@ -241,11 +241,13 @@ import { computed, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import PeriodBadge from "./PeriodBadge.vue";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import api from "../lib/api";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
 
 const { t, formatNumber, formatCurrency } = useI18n();
+const { catalog, itemSingular, itemPlural } = useVocabulary();
 const toast = useToastStore();
 
 const PERIOD_OPTIONS = [7, 14, 30, 90];
@@ -347,7 +349,7 @@ const funnelSteps = computed(() => {
   const orders = f?.orders_placed ?? 0;
 
   const steps = [
-    { key: "menu", label: t("ownerHome.funnelMenuViews"), value: menuViews, barClass: "bg-slate-400/70", convRate: f?.cart_rate_pct ?? null },
+    { key: "menu", label: t("ownerHome.funnelMenuViews", { catalog: catalog.value }), value: menuViews, barClass: "bg-slate-400/70", convRate: f?.cart_rate_pct ?? null },
     { key: "cart", label: t("ownerHome.funnelCartViews"), value: cartViews, barClass: "bg-amber-400/70", convRate: f?.intent_rate_pct ?? null },
     { key: "intent", label: t("ownerHome.funnelOrderIntents"), value: intents, barClass: "bg-orange-400/70", convRate: f?.completion_rate_pct ?? null },
     { key: "orders", label: t("ownerHome.funnelOrdersPlaced"), value: orders, barClass: "bg-emerald-400/80", convRate: null },

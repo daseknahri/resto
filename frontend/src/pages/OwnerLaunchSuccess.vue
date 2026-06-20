@@ -32,7 +32,7 @@
               class="ui-stat-tile ui-reveal"
               :style="{ '--ui-delay': '40ms' }"
             >
-              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.publicUrl") }}</p>
+              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.publicUrl", { catalog }) }}</p>
               <p class="ui-stat-value truncate text-lg md:text-2xl" :title="menuHost">{{ menuHost }}</p>
               <p class="ui-stat-note truncate" :title="tenantName">{{ tenantName }}</p>
             </article>
@@ -58,7 +58,7 @@
         <!-- ── Right column: URL card + actions ── -->
         <div class="grid gap-3 self-start">
           <article class="ui-command-deck space-y-3">
-            <p class="ui-kicker">{{ t("ownerLaunchSuccess.publicUrl") }}</p>
+            <p class="ui-kicker">{{ t("ownerLaunchSuccess.publicUrl", { catalog }) }}</p>
             <p class="break-all text-sm font-semibold text-white md:text-base" :title="menuUrl">{{ menuUrl }}</p>
             <div class="grid gap-2 sm:grid-cols-2">
               <button
@@ -72,9 +72,9 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="ui-btn-outline ui-touch-target w-full justify-center px-4 py-2 text-sm"
-                :aria-label="t('ownerLaunchSuccess.openMenu')"
+                :aria-label="t('ownerLaunchSuccess.openMenu', { catalog })"
               >
-                {{ t("ownerLaunchSuccess.openMenu") }}
+                {{ t("ownerLaunchSuccess.openMenu", { catalog }) }}
               </a>
             </div>
           </article>
@@ -85,7 +85,7 @@
                 {{ t("ownerLaunchSuccess.goDashboard") }}
               </RouterLink>
               <RouterLink to="/owner/onboarding" class="ui-btn-outline ui-touch-target w-full justify-center">
-                {{ t("ownerLaunchSuccess.editMenu") }}
+                {{ t("ownerLaunchSuccess.editMenu", { catalog }) }}
               </RouterLink>
             </div>
           </article>
@@ -118,9 +118,9 @@
             target="_blank"
             rel="noopener noreferrer"
             class="ui-btn-outline ui-touch-target justify-center px-4 py-2 text-sm"
-            :aria-label="t('ownerLaunchSuccess.openMenu')"
+            :aria-label="t('ownerLaunchSuccess.openMenu', { catalog })"
           >
-            {{ t("ownerLaunchSuccess.openMenu") }}
+            {{ t("ownerLaunchSuccess.openMenu", { catalog }) }}
           </a>
         </div>
       </article>
@@ -136,7 +136,7 @@
             <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.nextActions") }}</p>
           </div>
           <div class="ui-admin-subcard">
-            <p class="font-semibold text-slate-100">{{ t("ownerLaunchSuccess.editMenu") }}</p>
+            <p class="font-semibold text-slate-100">{{ t("ownerLaunchSuccess.editMenu", { catalog }) }}</p>
             <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.launch") }}</p>
           </div>
           <div v-if="isPublished" class="ui-admin-subcard">
@@ -152,6 +152,7 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 import { BRAND_DOMAIN } from "../lib/brand";
@@ -159,6 +160,7 @@ import { BRAND_DOMAIN } from "../lib/brand";
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { t } = useI18n();
+const { catalog } = useVocabulary();
 const isPublished = computed(() => tenant.meta?.profile?.is_menu_published === true);
 const tenantName = computed(() => tenant.meta?.profile?.restaurant_name || tenant.meta?.name || t("ownerLaunchSuccess.defaultRestaurantName"));
 const activeActionsCount = computed(() => (isPublished.value ? 3 : 2));
