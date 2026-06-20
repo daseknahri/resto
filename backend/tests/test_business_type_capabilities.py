@@ -8,6 +8,9 @@ Pure unit tests (no DB): Profile is instantiated unsaved; .capabilities only
 reads self.business_type. Run with DJANGO_DEBUG=True.
 """
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 from django.test import SimpleTestCase
 
 from tenancy.models import Profile
@@ -77,3 +80,42 @@ class TenantCapabilityHelperTests(SimpleTestCase):
         # Missing tenant must not block (other guards handle auth/tenant presence).
         self.assertTrue(tenant_capability_enabled(None, "dine_in"))
         self.assertTrue(tenant_capability_enabled(None, "tables"))
+
+
+class CapabilityGateEnforcementTests(SimpleTestCase):
+    """The view-level guards that turn a disabled capability into a 403 / empty
+    queryset for a shop tenant. The decision logic is covered above; this locks in
+    that the guards actually FIRE (regression cover for the audit's API gates).
+    Pure unit tests — tenant_capability_enabled is patched, so no DB."""
+
+    def test_reservation_list_returns_403_for_a_shop(self):
+        from sales.views import OwnerReservationListView
+        req = SimpleNamespace(tenant=MagicMock(), query_params={})
+        with patch("tenancy.capabilities.tenant_capability_enabled", return_value=False):
+            resp = OwnerReservationListView().get(req)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data.get("code"), "reservations_unavailable")
+
+    def test_waiter_call_list_returns_403_for_a_shop(self):
+        from menu.waiter_views import OwnerWaiterCallListView
+        req = SimpleNamespace(tenant=MagicMock())
+        with patch("tenancy.capabilities.tenant_capability_enabled", return_value=False):
+            resp = OwnerWaiterCallListView().get(req)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data.get("code"), "waiter_unavailable")
+
+    def test_table_queryset_is_empty_for_a_shop(self):
+        from menu.views import TableLinkViewSet
+        vs = TableLinkViewSet()
+        vs.request = SimpleNamespace(tenant=MagicMock())
+        with patch("tenancy.capabilities.tenant_capability_enabled", return_value=False):
+            qs = vs.get_queryset()
+        self.assertTrue(qs.query.is_empty())  # none() — no rows, no DB hit
+
+    def test_table_queryset_passes_through_when_tables_enabled(self):
+        from menu.views import TableLinkViewSet
+        vs = TableLinkViewSet()
+        vs.request = SimpleNamespace(tenant=MagicMock())
+        with patch("tenancy.capabilities.tenant_capability_enabled", return_value=True):
+            qs = vs.get_queryset()
+        self.assertFalse(qs.query.is_empty())  # the real queryset, not the empty marker
