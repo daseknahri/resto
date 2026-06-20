@@ -557,7 +557,7 @@ class RideSettleCashFallbackTests(SimpleTestCase):
 
         ride = SimpleNamespace(
             id=43, payment_method="wallet", fare=Decimal("20.00"),
-            rider_id=10, driver_id=5, paid_with_wallet=True,
+            rider_id=10, driver_id=5, paid_with_wallet=True, kind="ride",
         )
         _do_settle(ride)
 
@@ -578,12 +578,13 @@ class RideSettleCashFallbackTests(SimpleTestCase):
         mock_cfg.get_solo.return_value = MagicMock(ride_commission_pct=Decimal("0"))
         ride = SimpleNamespace(
             id=44, payment_method="wallet", fare=Decimal("20.00"),
-            rider_id=10, driver_id=5, paid_with_wallet=False,
+            rider_id=10, driver_id=5, paid_with_wallet=False, kind="ride",
         )
         _do_settle(ride)
 
         mock_debit.assert_called_once()
         self.assertEqual(mock_debit.call_args[1]["idempotency_key"], "ride:44")
+        self.assertEqual(mock_debit.call_args[1]["vertical"], "rides")
         self.assertTrue(ride.paid_with_wallet)
         self.assertFalse(ride.cash_fallback)
         # payment_method unchanged on the happy path.

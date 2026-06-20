@@ -231,6 +231,7 @@ class FieldScrubMappingTests(SimpleTestCase):
              patch("accounts.models.RideRequest") as MockRR, \
              patch("accounts.models.DriverPayout") as MockDP, \
              patch("accounts.models.WalletChargeRequest") as MockWCR, \
+             patch("accounts.models.CustomerServiceProfile") as MockCSP, \
              patch("accounts.models.NotificationLog") as MockNL, \
              patch("tenancy.models.Tenant") as MockTenant, \
              patch("accounts.management.commands.erase_customer.transaction") as MockTx, \
@@ -243,7 +244,7 @@ class FieldScrubMappingTests(SimpleTestCase):
             MockCust.objects.filter.return_value = cust_filter_qs
 
             for m in [MockWT, MockTFT, MockCOR, MockCPS, MockSA, MockWN,
-                      MockCR, MockDJ, MockRR, MockDP, MockWCR, MockRTE, MockNL]:
+                      MockCR, MockDJ, MockRR, MockDP, MockWCR, MockRTE, MockNL, MockCSP]:
                 m.objects.filter.return_value = _make_zero_qs()
 
             MockTenant.objects.all.return_value = []
@@ -310,6 +311,7 @@ class IdempotencyUnitTests(SimpleTestCase):
              patch("accounts.models.RideRequest") as MockRR, \
              patch("accounts.models.DriverPayout") as MockDP, \
              patch("accounts.models.WalletChargeRequest") as MockWCR, \
+             patch("accounts.models.CustomerServiceProfile") as MockCSP, \
              patch("accounts.models.NotificationLog") as MockNL, \
              patch("tenancy.models.Tenant") as MockTenant, \
              patch("accounts.management.commands.erase_customer.transaction") as MockTx, \
@@ -322,7 +324,7 @@ class IdempotencyUnitTests(SimpleTestCase):
             MockCust.objects.filter.return_value = cust_filter_qs
 
             for m in [MockWT, MockTFT, MockCOR, MockCPS, MockSA, MockWN,
-                      MockCR, MockDJ, MockRR, MockDP, MockWCR, MockNL]:
+                      MockCR, MockDJ, MockRR, MockDP, MockWCR, MockNL, MockCSP]:
                 m.objects.filter.return_value = _make_zero_qs()
 
             MockTenant.objects.all.return_value = []

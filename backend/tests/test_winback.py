@@ -106,6 +106,8 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
 
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.values_list.return_value = []
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.values_list.return_value = []
         patches = [
             patch("menu.management.commands.send_winback_nudges.schema_context"),
             patch("menu.models.Order.objects", mock_order_qs),
@@ -113,8 +115,10 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
             patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs),
             patch("accounts.models.WinbackNudge.objects", mock_winback_qs),
             patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs),
+            patch("accounts.push.vertical_muted_customer_ids", return_value=set()),
+            patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs),
         ]
-        with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4], patches[5]:
+        with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7]:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
             result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=inactive_weeks, cap=cap)
@@ -208,10 +212,14 @@ class WinbackNoPushSubTests(SimpleTestCase):
 
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.values_list.return_value = []
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+             patch("accounts.push.vertical_muted_customer_ids", return_value=set()), \
+             patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -259,11 +267,15 @@ class WinbackDedupeTests(SimpleTestCase):
 
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.values_list.return_value = []
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+             patch("accounts.push.vertical_muted_customer_ids", return_value=set()), \
+             patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -281,11 +293,15 @@ class WinbackDedupeTests(SimpleTestCase):
 
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.values_list.return_value = []
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+             patch("accounts.push.vertical_muted_customer_ids", return_value=set()), \
+             patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -324,11 +340,15 @@ class WinbackCapTests(SimpleTestCase):
 
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.values_list.return_value = []
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.values_list.return_value = []
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+             patch("accounts.push.vertical_muted_customer_ids", return_value=set()), \
+             patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)

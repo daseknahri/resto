@@ -53,7 +53,7 @@ class RideSettlePaymentsLoggingTests(SimpleTestCase):
         return SimpleNamespace(
             id=77, rider_id=11, driver_id=22, payment_method="wallet",
             fare=Decimal("50.00"), paid_with_wallet=False, cash_fallback=False,
-            cash_fallback_note="",
+            cash_fallback_note="", kind="ride",
         )
 
     def test_unexpected_settle_failure_logs_to_payments_and_reraises(self):

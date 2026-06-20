@@ -112,11 +112,15 @@ def _build_audience_with(
 
     mock_optout_qs = MagicMock()
     mock_optout_qs.filter.return_value.values_list.return_value = []
+    mock_suppression_qs = MagicMock()
+    mock_suppression_qs.values_list.return_value = []
     with patch("menu.models.Order.objects", mock_order_qs), \
          patch("accounts.models.Customer.objects", mock_customer_qs), \
          patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
          patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
          patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+         patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
+         patch("accounts.push.vertical_muted_customer_ids", return_value=set()), \
          patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
         _ctx_mock(mock_ctx)
         return _build_audience(tenant_id=1, inactive_weeks=4, cap=cap)
@@ -327,8 +331,11 @@ class CampaignEmailSyncTests(SimpleTestCase):
         mock_customer.objects.filter.return_value.first.return_value = cust
         mock_optout_qs = MagicMock()
         mock_optout_qs.filter.return_value.exists.return_value = False
+        mock_suppression_qs = MagicMock()
+        mock_suppression_qs.filter.return_value.exists.return_value = False
         with patch("accounts.models.Customer", mock_customer), \
              patch("accounts.models.CustomerTenantOptOut.objects", mock_optout_qs), \
+             patch("accounts.models.CustomerEmailSuppression.objects", mock_suppression_qs), \
              patch("django_tenants.utils.schema_context") as mock_ctx, \
              patch("accounts.messaging.send_marketing_email", return_value=1) as mock_email, \
              patch("accounts.notifications.record_notification"):
