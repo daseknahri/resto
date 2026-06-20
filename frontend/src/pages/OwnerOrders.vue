@@ -206,8 +206,8 @@
         >{{ t("ownerOrders.tabHistory") }}</button>
       </div>
 
-      <!-- Batch action: confirm all pending (hidden when search/date filters are narrowing the view) -->
-      <div v-if="pendingOrdersList.length > 1 && !activeStatus && !searchQuery && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5" role="status">
+      <!-- Batch action: confirm all pending (always visible while 2+ pending orders exist) -->
+      <div v-if="pendingOrdersList.length > 1" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5" role="status">
         <span class="ui-live-dot shrink-0" aria-hidden="true"></span>
         <span class="min-w-0 flex-1 text-xs text-amber-200 tabular-nums">{{ pendingOrdersList.length }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
         <button

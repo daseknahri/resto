@@ -243,6 +243,7 @@
 
       <!-- Dish availability — pre-seeded with data from readiness to skip double-fetch -->
       <OwnerDashboardDishPanel
+        ref="dishPanelRef"
         :initial-sold-out-count="soldOutCount"
         :preloaded-dishes="preloadedDishesData"
       />
@@ -326,6 +327,29 @@
         <button class="ui-btn-outline ui-press col-span-2 w-full gap-2 px-4 py-2 text-xs sm:w-auto" @click="manualRefresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
+        </button>
+        <!-- High-frequency daily destinations: Kitchen, Z-Report, Availability -->
+        <RouterLink
+          v-if="showKitchen"
+          :to="{ name: 'owner-kitchen' }"
+          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+        >
+          <AppIcon name="menu" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.kitchen") }}
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'owner-z-report' }"
+          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+        >
+          <AppIcon name="receipt" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("zReport.navLabel") }}
+        </RouterLink>
+        <button
+          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+          @click="openAvailabilityPanel"
+        >
+          <AppIcon name="eye" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerHome.dishAvailability") }}
         </button>
       </div>
     </article>
@@ -451,6 +475,18 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const toast = useToastStore();
 const { t, formatNumber, currentLocale } = useI18n();
+
+// ── Capability gates ──────────────────────────────────────────────────────────
+const showKitchen = computed(() => tenant.capabilities.kitchen !== false);
+
+// ── Quick-action: open and scroll to the dish availability panel ──────────────
+const dishPanelRef = ref(null);
+const openAvailabilityPanel = () => {
+  dishPanelRef.value?.openAndScroll();
+  nextTick(() => {
+    dishPanelRef.value?.$el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+};
 
 // ── Ref to the deferred readiness component (for manual refresh) ──────────────
 const readinessRef = ref(null);

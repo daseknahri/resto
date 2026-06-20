@@ -314,4 +314,13 @@ const resetAll = async () => {
     resetting.value = false;
   }
 };
+
+// Exposed so OwnerHome can open + scroll to this panel via a template ref
+const openAndScroll = () => {
+  if (!open.value) {
+    open.value = true;
+    fetchDishes();
+  }
+};
+defineExpose({ openAndScroll });
 </script>
