@@ -1057,11 +1057,13 @@
           ref="codeFirstRef"
           v-model="codeInput"
           type="text"
-          class="ui-input text-center text-lg tracking-[0.3em] font-bold uppercase"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          class="ui-input text-center text-lg tracking-[0.3em] font-bold"
           :placeholder="t('driver.enterDeliveryCode')"
           :aria-label="t('driver.enterDeliveryCode')"
           autocomplete="one-time-code"
-          maxlength="10"
+          maxlength="6"
           @keydown.enter="submitDeliveryCode"
         />
         <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -1341,8 +1343,11 @@ const nextAction = computed(() => {
 });
 
 const mapsLink = (lat, lng, address) => {
-  if (lat != null && lng != null) return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || '')}`;
+  // Turn-by-turn navigation (dir/?destination=…) — opens the native Maps app on
+  // mobile and routes from the driver's current location. Coordinates beat the
+  // address string for accuracy when present.
+  if (lat != null && lng != null) return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address || '')}`;
 };
 
 const earnings = ref(null);
