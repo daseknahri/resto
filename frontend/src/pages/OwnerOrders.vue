@@ -302,6 +302,7 @@
           {{ t("ownerOrders.noOrdersYetStorefrontBtn") }}
         </a>
         <RouterLink
+          v-if="tenant.capabilities.tables !== false"
           to="/owner/tables"
           class="ui-btn-outline ui-touch-target justify-center px-4 py-2 text-sm"
         >

@@ -99,6 +99,7 @@
         </div>
 
         <RouterLink
+          v-if="tenant.capabilities.reservations !== false"
           :to="{ name: 'owner-reservations' }"
           class="ui-admin-subcard ui-reveal ui-surface-lift space-y-2 p-3"
           :class="todayNewReservations > 0 ? 'border-sky-500/30' : 'hover:border-slate-600'"

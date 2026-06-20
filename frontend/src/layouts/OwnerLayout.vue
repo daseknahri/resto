@@ -269,7 +269,7 @@
     </Transition>
 
     <!-- Waiter-call alerts — live via WebSocket, persistent until acknowledged -->
-    <div v-if="waiterCallsPending.length" class="mx-auto w-full max-w-7xl px-3 pt-2 sm:px-4">
+    <div v-if="showWaiter && waiterCallsPending.length" class="mx-auto w-full max-w-7xl px-3 pt-2 sm:px-4">
       <div role="alert" class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
         <div class="flex items-center gap-2 text-sm font-semibold text-amber-300">
           <span class="relative flex h-2.5 w-2.5">
@@ -714,10 +714,12 @@ onMounted(async () => {
   activateTheme(); // paint the saved dark/light choice onto <html>
   prefetchOwnerChunks();
   ownerRealtime.connect(); // instant order updates when WS is available (else polling)
-  loadWaiterCalls(); // seed any pending waiter calls (real-time keeps it live)
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }
+  // Only restaurants/cafés have a waiter view — don't seed/poll waiter calls for
+  // shops (capabilities are only reliable AFTER meta loads, so gate after the await).
+  if (showWaiter.value) loadWaiterCalls();
   if (typeof document !== "undefined") {
     document.addEventListener("pointerdown", onDocumentPointerDown);
     document.addEventListener("visibilitychange", onLayoutPageVisible);
