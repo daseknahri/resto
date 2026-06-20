@@ -2772,7 +2772,7 @@ class PlaceOrderView(APIView):
                         _promo_rows = Promotion.objects.filter(
                             pk=_best_promo.pk,
                             use_count__lt=_best_promo.max_uses,
-                        ).update(use_count=models.F("use_count") + 1)
+                        ).update(use_count=F("use_count") + 1)
                         if _promo_rows:
                             # The increment succeeded; recompute the denorm ONLY when this
                             # redemption JUST hit the cap. A capped promo can no longer be
@@ -2816,7 +2816,7 @@ class PlaceOrderView(APIView):
                     else:
                         # max_uses is None → unlimited → no cap to enforce
                         Promotion.objects.filter(pk=_best_promo.pk).update(
-                            use_count=models.F("use_count") + 1
+                            use_count=F("use_count") + 1
                         )
 
                 order_number = _generate_order_number()
@@ -2866,7 +2866,7 @@ class PlaceOrderView(APIView):
                     _ok = _CustL.objects.filter(
                         pk=_linked_customer.pk,
                         loyalty_points__gte=_loyalty_points_spent,
-                    ).update(loyalty_points=models.F("loyalty_points") - _loyalty_points_spent)
+                    ).update(loyalty_points=F("loyalty_points") - _loyalty_points_spent)
                     if not _ok:
                         raise _LoyaltyShort()
                 for item_data in order_items_data:
@@ -2941,8 +2941,8 @@ class PlaceOrderView(APIView):
                         _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit) * float(_tier_mul))
                         if _pts > 0:
                             _CustLoy.objects.filter(pk=_linked_customer.pk).update(
-                                loyalty_points=models.F("loyalty_points") + _pts,
-                                lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _pts,
+                                loyalty_points=F("loyalty_points") + _pts,
+                                lifetime_loyalty_points=F("lifetime_loyalty_points") + _pts,
                             )
                             Order.objects.filter(pk=order.pk).update(points_earned=_pts)
                         # C3: first-order bonus (tenant-scoped)
@@ -2954,8 +2954,8 @@ class PlaceOrderView(APIView):
                             ).exclude(pk=order.pk).count()
                             if _prior_paid == 0:
                                 _CustLoy.objects.filter(pk=_linked_customer.pk).update(
-                                    loyalty_points=models.F("loyalty_points") + _first_bonus,
-                                    lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _first_bonus,
+                                    loyalty_points=F("loyalty_points") + _first_bonus,
+                                    lifetime_loyalty_points=F("lifetime_loyalty_points") + _first_bonus,
                                 )
                         # C3: birthday bonus (platform-wide, once per calendar year)
                         _bday_bonus = int(getattr(_loyalty_cfg, "birthday_bonus_points", 0) or 0)
@@ -2971,8 +2971,8 @@ class PlaceOrderView(APIView):
                                 and _rewarded_yr != _today.year
                             ):
                                 _CustLoy.objects.filter(pk=_linked_customer.pk).update(
-                                    loyalty_points=models.F("loyalty_points") + _bday_bonus,
-                                    lifetime_loyalty_points=models.F("lifetime_loyalty_points") + _bday_bonus,
+                                    loyalty_points=F("loyalty_points") + _bday_bonus,
+                                    lifetime_loyalty_points=F("lifetime_loyalty_points") + _bday_bonus,
                                     loyalty_birthday_rewarded_year=_today.year,
                                 )
                 except Exception:
@@ -2991,12 +2991,12 @@ class PlaceOrderView(APIView):
                         if _ref_pts > 0:
                             # Credit the referee (this customer)
                             _CustRef.objects.filter(pk=_linked_customer.pk).update(
-                                loyalty_points=models.F("loyalty_points") + _ref_pts,
+                                loyalty_points=F("loyalty_points") + _ref_pts,
                                 referral_reward_given=True,
                             )
                             # Credit the referrer
                             _CustRef.objects.filter(pk=_linked_customer.referred_by_id).update(
-                                loyalty_points=models.F("loyalty_points") + _ref_pts,
+                                loyalty_points=F("loyalty_points") + _ref_pts,
                             )
                 except Exception:
                     pass  # Never fail the order due to referral errors
