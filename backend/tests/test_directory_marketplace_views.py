@@ -23,6 +23,7 @@ from accounts.views import (
     MarketplaceMenuView,
     MarketplacePlaceOrderView,
     MarketplaceOrderStatusView,
+    _apply_business_type_filter,
 )
 
 
@@ -1309,3 +1310,91 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", side_effect=Exception("crash")):
                 resp = self._get(params={"restaurant": "bistro"})
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ── Server-side ?business_type= filter (the marketplace/directory type lens) ────
+def _bt_request(business_type=None):
+    """Minimal stand-in for a DRF request — _apply_business_type_filter only reads
+    request.query_params.get('business_type')."""
+    params = {} if business_type is None else {"business_type": business_type}
+    return SimpleNamespace(query_params=params)
+
+
+def _all_leaves(q):
+    """Recursively collect (lookup, value) leaf tuples from a Q tree (robust to the
+    exact OR/AND nesting Django produces)."""
+    leaves = []
+    for child in q.children:
+        if isinstance(child, tuple):
+            leaves.append(child)
+        else:
+            leaves.extend(_all_leaves(child))
+    return leaves
+
+
+def _in_values(q):
+    for key, value in _all_leaves(q):
+        if key == "business_type__in":
+            return set(value)
+    return None
+
+
+def _has_leaf(q, key, value):
+    return (key, value) in _all_leaves(q)
+
+
+class BusinessTypeFilterTests(SimpleTestCase):
+    """_apply_business_type_filter — the server-side type lens that lets the
+    marketplace filter shops/pharmacies across the WHOLE table (pre-pagination)
+    instead of client-side over one loaded page. Regression cover for the
+    full-journey-review fix."""
+
+    def test_blank_param_returns_qs_unchanged(self):
+        qs = MagicMock()
+        self.assertIs(_apply_business_type_filter(qs, _bt_request(None)), qs)
+        qs.filter.assert_not_called()
+
+    def test_empty_string_returns_qs_unchanged(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request(""))
+        qs.filter.assert_not_called()
+
+    def test_single_shop_type_filters_in_without_blank_or(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request("pharmacy"))
+        qs.filter.assert_called_once()
+        q = qs.filter.call_args[0][0]
+        self.assertEqual(_in_values(q), {"pharmacy"})
+        # A non-restaurant lens must NOT pull in the blank/null legacy rows.
+        self.assertFalse(_has_leaf(q, "business_type__isnull", True))
+        self.assertFalse(_has_leaf(q, "business_type", ""))
+
+    def test_comma_separated_multi_type(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request("grocery,retail,bakery"))
+        self.assertEqual(_in_values(qs.filter.call_args[0][0]), {"grocery", "retail", "bakery"})
+
+    def test_restaurant_also_matches_blank_and_null_legacy_rows(self):
+        # Legacy profiles that never set a type render as "restaurant" → the food
+        # lens must OR-in business_type='' / isnull so they aren't dropped.
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request("restaurant,cafe"))
+        q = qs.filter.call_args[0][0]
+        self.assertEqual(_in_values(q), {"restaurant", "cafe"})
+        self.assertTrue(_has_leaf(q, "business_type__isnull", True))
+        self.assertTrue(_has_leaf(q, "business_type", ""))
+
+    def test_unknown_type_is_ignored(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request("spaceship"))
+        qs.filter.assert_not_called()
+
+    def test_known_and_junk_mixed_keeps_only_known(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request("pharmacy,spaceship"))
+        self.assertEqual(_in_values(qs.filter.call_args[0][0]), {"pharmacy"})
+
+    def test_case_and_whitespace_insensitive(self):
+        qs = MagicMock()
+        _apply_business_type_filter(qs, _bt_request(" Pharmacy , GROCERY "))
+        self.assertEqual(_in_values(qs.filter.call_args[0][0]), {"pharmacy", "grocery"})

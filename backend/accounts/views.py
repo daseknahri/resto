@@ -3168,6 +3168,7 @@ def _apply_business_type_filter(qs, request):
     types = {t.strip() for t in raw.split(",") if t.strip()} & _KNOWN_BUSINESS_TYPES
     if not types:
         return qs
+    from django.db.models import Q  # local import — matches this module's convention
     flt = Q(business_type__in=types)
     if "restaurant" in types:
         # Legacy rows that never set a type render as "restaurant" — include them.
