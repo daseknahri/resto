@@ -264,7 +264,7 @@ class DriverArrivedDispatchSourceTests(SimpleTestCase):
         # The driver-arrived side-effect is the LAST AT_RESTAURANT usage (the elif after
         # the lock). Take a window after it and assert the dispatch mechanism.
         last = src.rfind("DeliveryJob.Status.AT_RESTAURANT")
-        window = src[last:last + 800]
+        window = src[last:last + 1200]
         self.assertIn("Driver arrived", window, "found the driver-arrived branch")
         self.assertIn("enqueue(", window, "driver-arrived push goes through enqueue()")
         self.assertIn("web_push_tenant", window, "uses the existing web_push_tenant task")

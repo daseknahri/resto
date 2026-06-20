@@ -5890,6 +5890,10 @@ def _mark_order_out_for_delivery(job) -> None:
                 order.status = _O.Status.OUT_FOR_DELIVERY
                 order.status_updated_at = _tz.now()
                 order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                # Ping the customer's live order channel so the timeline updates
+                # in real time (web-push alone doesn't refresh an open page).
+                from menu.views import _broadcast_order_change
+                _broadcast_order_change(order)
     except Exception:
         pass
 
@@ -5986,6 +5990,9 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
             if fields:
                 fields.append("updated_at")
                 order.save(update_fields=fields)
+                # Ping the customer's live order channel (COMPLETED/PAID flip).
+                from menu.views import _broadcast_order_change
+                _broadcast_order_change(order)
     except Exception:
         logger.exception("Failed to complete delivered order %s", getattr(job, "order_number", "?"))
     # Driver earnings live in the public schema — credit outside the tenant context.
@@ -6173,13 +6180,19 @@ class DriverJobStatusUpdateView(APIView):
                 _tenant = _Tenant.objects.filter(pk=job.tenant_id).first()
                 if _tenant:
                     _driver_name = (customer.name or "Driver").strip()
+                    # Vertical-correct wording: a pharmacy/store owner shouldn't be
+                    # told the driver is "at your restaurant".
+                    _place = {
+                        "pharmacy": "pharmacy", "retail": "store",
+                        "grocery": "store", "bakery": "store",
+                    }.get((job.business_type or "").lower(), "restaurant")
                     # R14b: dispatch through the bounded enqueue pool (Celery when a
                     # broker is set) instead of a raw daemon thread. Same notification.
                     enqueue(
                         web_push_tenant,
                         _tenant.schema_name,
                         f"Driver arrived \U0001f6f5",
-                        f"{_driver_name} is at your restaurant — order #{job.order_number}",
+                        f"{_driver_name} is at your {_place} — order #{job.order_number}",
                         "/owner/orders",
                     )
             except Exception:

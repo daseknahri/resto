@@ -206,7 +206,13 @@ class TestSendRidePredispatchRemindersCommand(SimpleTestCase):
         mock_rr.objects.filter.return_value.select_related.return_value = [ride]
         mock_rr.Status.SCHEDULED = "scheduled"
         self._run()
-        mock_push.assert_called_once_with(ride.rider_id, "ride", 30)
+        # minutes = int((scheduled_for - now)/60); sub-second drift between the
+        # fixture's now and the command's now can truncate 30 -> 29, so allow both
+        # (this assertion was time-flaky before).
+        mock_push.assert_called_once()
+        _args = mock_push.call_args.args
+        self.assertEqual((_args[0], _args[1]), (ride.rider_id, "ride"))
+        self.assertIn(_args[2], (29, 30))
         ride.save.assert_called_once_with(update_fields=["predispatch_reminder_sent_at"])
         self.assertIsNotNone(ride.predispatch_reminder_sent_at)
 
