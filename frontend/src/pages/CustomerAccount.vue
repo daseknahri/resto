@@ -2687,12 +2687,14 @@ const selectedVertical = ref('');
 
 const VERTICAL_FILTER_OPTIONS = computed(() => {
   const opts = [{ id: '', label: t('customerAccount.svcAll') }];
+  // Order history is CustomerOrderRef-backed, which only ever holds order verticals
+  // (food/shops/pharmacy). Rides + courier live in RideRequest with their own history
+  // screens, so a ?vertical=rides query here returns nothing — including them would
+  // render phantom, always-empty filter tabs.
   const map = {
     [FOOD]:     t('customerAccount.svcFood'),
     [SHOPS]:    t('customerAccount.svcShops'),
     [PHARMACY]: t('customerAccount.svcPharmacy'),
-    [RIDES]:    t('customerAccount.svcRides'),
-    [COURIER]:  t('customerAccount.svcCourier'),
   };
   for (const v of customerStore.enabledVerticals) {
     if (map[v]) opts.push({ id: v, label: map[v] });

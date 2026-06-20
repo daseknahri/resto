@@ -3581,7 +3581,7 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
             lines.append("Your order is on its way!")
 
         if order.owner_note:
-            lines.append(f"\nNote from restaurant: {order.owner_note}")
+            lines.append(f"\nNote from the team: {order.owner_note}")
 
         lines += ["", f"— {tenant.name}"]
 
@@ -7001,8 +7001,11 @@ class OwnerOrderStatusUpdateView(APIView):
             if tenant:
                 _send_order_status_email(order, tenant, new_status)
 
-        # SMS notification — only when transitioning to "ready"
-        if new_status == Order.Status.READY and tenant:
+        # SMS notification — only when a PICKUP order becomes "ready". The copy says
+        # "come pick it up", which would mislead a delivery customer (for delivery the
+        # food is ready for the DRIVER, not the customer); delivery gets its own
+        # out-for-delivery push instead.
+        if new_status == Order.Status.READY and tenant and order.fulfillment_type == Order.FulfillmentType.PICKUP:
             try:
                 profile = tenant.profile
             except Exception:

@@ -3147,6 +3147,34 @@ def _parse_public_list_pagination(request):
     return page, page_size
 
 
+# Known business types for the public-listing ?business_type= filter. A blank/NULL
+# Profile.business_type historically renders as "restaurant", so the food lens must
+# include those legacy rows.
+_KNOWN_BUSINESS_TYPES = frozenset({"restaurant", "cafe", "bakery", "grocery", "retail", "pharmacy"})
+
+
+def _apply_business_type_filter(qs, request):
+    """Filter a public-listing queryset by ?business_type=a,b,c (server-side, pre-pagination).
+
+    The marketplace "Shops" / "Pharmacy" / "Restaurants" lenses must filter across the
+    WHOLE table, not client-side over one loaded page (a shop sorted past page 1 was
+    invisible under a type filter). Cache-safe: _public_list_cache_key hashes the full
+    querystring, so each business_type value caches independently. Absent/blank → no
+    filter (backward compatible with un-updated clients).
+    """
+    raw = (request.query_params.get("business_type") or "").strip().lower()
+    if not raw:
+        return qs
+    types = {t.strip() for t in raw.split(",") if t.strip()} & _KNOWN_BUSINESS_TYPES
+    if not types:
+        return qs
+    flt = Q(business_type__in=types)
+    if "restaurant" in types:
+        # Legacy rows that never set a type render as "restaurant" — include them.
+        flt |= Q(business_type__isnull=True) | Q(business_type="")
+    return qs.filter(flt)
+
+
 class DirectoryView(APIView):
     """GET /api/directory/ — public list of restaurants that opted in.
 
@@ -3177,6 +3205,7 @@ class DirectoryView(APIView):
             qs = qs.filter(city__icontains=city_q)
         if cuisine_q:
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
+        qs = _apply_business_type_filter(qs, request)
 
         # R9: page/page_size (backward-compatible — default page_size=100 = the old cap,
         # so a no-param request from the un-updated frontend still gets up to 100 rows).
@@ -3381,6 +3410,7 @@ class MarketplaceView(APIView):
             # when rating_avg was None or < min_rating.
             if min_rating is not None:
                 qs = qs.filter(rating_avg__gte=min_rating)
+            qs = _apply_business_type_filter(qs, request)
 
             # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
             # Build a mapping: tenant_id → set of flash_sale_ids they opted into.

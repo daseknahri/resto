@@ -11,9 +11,9 @@ logger = logging.getLogger("app.push")
 
 # Minimal locale-aware copy for the charge-approval nudge. {r} = restaurant, {a} = amount.
 _MESSAGES = {
-    "en": {"title": "{r}: approve charge", "body": "{a} MAD — tap to review.", "restaurant": "A restaurant"},
-    "fr": {"title": "{r} : approuver le debit", "body": "{a} MAD — touchez pour verifier.", "restaurant": "Un restaurant"},
-    "ar": {"title": "{r}: الموافقة على الخصم", "body": "{a} درهم — اضغط للمراجعة.", "restaurant": "مطعم"},
+    "en": {"title": "{r}: approve charge", "body": "{a} MAD — tap to review.", "restaurant": "A merchant"},
+    "fr": {"title": "{r} : approuver le debit", "body": "{a} MAD — touchez pour verifier.", "restaurant": "Un commercant"},
+    "ar": {"title": "{r}: الموافقة على الخصم", "body": "{a} درهم — اضغط للمراجعة.", "restaurant": "تاجر"},
 }
 
 
@@ -264,9 +264,9 @@ _MILESTONE_MESSAGES = {
         "ar": {"title": "تم التسليم", "body": "وصل طلبك من {r}. بالهناء!"},
     },
     "failed": {
-        "en": {"title": "Delivery problem", "body": "There was a problem delivering your {r} order — the restaurant is sorting it out."},
-        "fr": {"title": "Probleme de livraison", "body": "Un probleme est survenu avec votre commande {r} — le restaurant s'en occupe."},
-        "ar": {"title": "مشكلة في التوصيل", "body": "حدثت مشكلة في توصيل طلبك من {r} — المطعم يعالج الأمر."},
+        "en": {"title": "Delivery problem", "body": "There was a problem delivering your {r} order — we're on it."},
+        "fr": {"title": "Probleme de livraison", "body": "Un probleme est survenu avec votre commande {r} — nous nous en occupons."},
+        "ar": {"title": "مشكلة في التوصيل", "body": "حدثت مشكلة في توصيل طلبك من {r} — نحن نعالج الأمر."},
     },
 }
 

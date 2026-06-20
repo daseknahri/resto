@@ -873,21 +873,14 @@ const clearFilters = () => {
   router.replace({ query: q });
 };
 
-// Favourites + business-type filtering are client-side (favourites live in
-// localStorage; business_type is already in each result, so no refetch needed).
+// Favourites filter is client-side (data lives in localStorage).
+// Business-type filtering is now server-side via _buildParams() → no client
+// filter here, so the full paginated set is always visible.
 // Sort is also client-side — applied after filtering.
 const displayedRestaurants = computed(() => {
   let list = restaurants.value;
   if (showFavouritesOnly.value) {
     list = list.filter((r) => favourites.value.has(r.slug));
-  }
-  if (selectedBusinessType.value === 'shop') {
-    list = list.filter((r) => isShopBusiness(r));
-    if (selectedShopSubtype.value) {
-      list = list.filter((r) => r.business_type === selectedShopSubtype.value);
-    }
-  } else if (selectedBusinessType.value === 'food') {
-    list = list.filter((r) => !isShopBusiness(r));
   }
   // Apply sort (spread to avoid mutating the reactive array)
   if (sortBy.value === 'rating') {
@@ -949,6 +942,16 @@ const _buildParams = () => {
   if (openOnly.value) params.open = '1';
   if (selectedTags.value.length) params.tags = selectedTags.value.join(',');
   if (userLat.value != null) { params.lat = userLat.value; params.lng = userLng.value; }
+  // Server-side business_type filter — sent only when a lens is active so the
+  // backend paginates the correct subset before returning results.
+  if (selectedBusinessType.value === 'food') {
+    params.business_type = 'restaurant,cafe';
+  } else if (selectedBusinessType.value === 'shop') {
+    params.business_type = selectedShopSubtype.value
+      ? selectedShopSubtype.value
+      : SHOP_BUSINESS_TYPES.join(',');
+  }
+  // selectedBusinessType === '' → omit param entirely (backend returns all types)
   return params;
 };
 
@@ -1000,11 +1003,13 @@ const loadMoreRestaurants = async () => {
   }
 };
 
-// Debounced refetch when filters change
+// Debounced refetch when filters change (including business-type lens + sub-type
+// so the server re-fetches the correctly filtered + paginated set from page 1).
 let _debounce = null;
 watch(
   [searchQuery, selectedCity, selectedCuisine, selectedFulfillment,
-   selectedPriceTier, selectedMinRating, openOnly, selectedTags],
+   selectedPriceTier, selectedMinRating, openOnly, selectedTags,
+   selectedBusinessType, selectedShopSubtype],
   () => {
     clearTimeout(_debounce);
     _debounce = setTimeout(fetchRestaurants, 350);
