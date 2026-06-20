@@ -1135,6 +1135,17 @@ const form = reactive({
   customer_note: '',
 });
 
+// Keep the checkout contact fields pre-filled from the signed-in customer so a
+// daily customer never retypes name/phone. The menu-fetch pre-fill (below) only
+// runs once and only if the session is already resolved; this watcher also covers
+// an async session resolve and a mid-checkout sign-in. Only fills EMPTY fields, so
+// it never clobbers something the customer typed.
+watch(() => customerStore.customer, (c) => {
+  if (!c) return;
+  if (!form.customer_name) form.customer_name = c.name || '';
+  if (!form.customer_phone) form.customer_phone = c.phone || '';
+}, { immediate: true });
+
 // ── Saved addresses (signed-in customers) ────────────────────────────────────
 const mktSavedAddresses = ref([]);
 
@@ -1143,6 +1154,11 @@ const fetchMktSavedAddresses = async () => {
   try {
     const res = await api.get('/customer/addresses/');
     mktSavedAddresses.value = Array.isArray(res.data) ? res.data : [];
+    // Auto-select the most recent saved address for a delivery order so a repeat
+    // customer doesn't have to tap to pick it (they can still choose another).
+    if (form.fulfillment_type === 'delivery' && !form.delivery_address && mktSavedAddresses.value.length) {
+      applyMktSavedAddress(mktSavedAddresses.value[0]);
+    }
   } catch {
     // silent — address picker degrades gracefully to manual entry
   }
@@ -1153,6 +1169,14 @@ const applyMktSavedAddress = (addr) => {
   if (addr.lat != null) form.delivery_lat = addr.lat;
   if (addr.lng != null) form.delivery_lng = addr.lng;
 };
+
+// When the customer switches to delivery, auto-fill their most recent saved
+// address if they haven't picked one yet — one less tap for a daily delivery order.
+watch(() => form.fulfillment_type, (ft) => {
+  if (ft === 'delivery' && !form.delivery_address && mktSavedAddresses.value.length) {
+    applyMktSavedAddress(mktSavedAddresses.value[0]);
+  }
+});
 
 // Capture the customer's coordinates so the delivery fee can be priced by distance.
 const locatingMkt = ref(false);
