@@ -176,6 +176,17 @@ class DirectoryViewTests(SimpleTestCase):
             resp = self._get(params={"cuisine": "Italian"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
+    def test_business_type_filter_applied(self):
+        # View-level regression for the type lens: exercises the real get() path
+        # with ?business_type= (the helper is unit-tested separately).
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = _make_sliceable_qs([])
+            qs.__getitem__ = lambda s, k: []
+            resp = self._get(params={"business_type": "pharmacy"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
     def test_is_open_honors_schedule_like_marketplace(self):
         """CHANGE 3a: DirectoryView derives is_open via the schedule-aware rule, so a
         profile that is currently closed reports is_open=False — identical to
@@ -386,6 +397,14 @@ class MarketplaceViewTests(SimpleTestCase):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
             resp = self._with_flash_patches(self._get, params={"fulfillment": "delivery"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_business_type_filter_applied(self):
+        # View-level regression for the type lens: exercises the real get()/_build
+        # path with ?business_type= (the helper logic is unit-tested separately).
+        with patch("tenancy.models.Profile") as mock_p:
+            self._empty_qs_mock(mock_p)
+            resp = self._with_flash_patches(self._get, params={"business_type": "pharmacy"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_lat_lng_sort(self):
