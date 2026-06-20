@@ -2542,8 +2542,12 @@ class ScheduledTripActivePayloadTests(SimpleTestCase):
         self.assertEqual(resp.data["scheduled"][1]["id"], 31)
 
 
+@override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class SweepScheduledReleaseTests(SimpleTestCase):
-    """Rule (d) in sweep_ride_requests: release SCHEDULED trips when their time is near."""
+    """Rule (d) in sweep_ride_requests: release SCHEDULED trips when their time is near.
+
+    All verticals are enabled here so the rule-(d) vertical gate (skip releasing a
+    trip whose vertical was paused after booking) doesn't short-circuit the mock trip."""
 
     def _run_command(self):
         from accounts.management.commands.sweep_ride_requests import Command

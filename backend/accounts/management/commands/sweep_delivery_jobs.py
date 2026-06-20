@@ -22,6 +22,7 @@ from django.utils import timezone
 REDISPATCH_AFTER = timedelta(minutes=3)
 OWNER_ALERT_AFTER = timedelta(minutes=10)
 STALE_DRIVER_AFTER = timedelta(minutes=10)
+MAX_AUTO_REDISPATCH = 3  # match menu.views MAX_REDISPATCH — then escalate, don't loop forever
 _PUSH_THROTTLE_SECONDS = 170  # ~ one sweep interval, so re-push fires at most once per run
 
 
@@ -115,21 +116,39 @@ class Command(BaseCommand):
                 )
                 if j is None:
                     continue  # someone advanced/accepted it between the scan and the lock
-                j.driver = None
-                j.status = DeliveryJob.Status.SEARCHING
-                j.assigned_at = None
-                j.owner_alerted_at = None
-                j.redispatch_count = (j.redispatch_count or 0) + 1
-                # Fresh ranked-offer cascade for the re-opened job (any driver eligible again).
-                j.offered_to = None
-                j.offer_expires_at = None
-                j.declined_by = []
-                j.offer_round = 0
-                j.is_open_pool = False
-                j.save(update_fields=[
-                    "driver", "status", "assigned_at", "owner_alerted_at", "redispatch_count",
-                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
-                ])
+                # Cap auto-redispatch: after MAX_AUTO_REDISPATCH cycles, stop re-offering
+                # forever (driver-push spam + churn) and escalate to the owner ONCE for a
+                # manual reassign/refund instead.
+                capped = (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
+                first_escalation = False
+                if capped:
+                    if j.owner_alerted_at is None:
+                        j.owner_alerted_at = now
+                        j.save(update_fields=["owner_alerted_at"])
+                        first_escalation = True
+                else:
+                    j.driver = None
+                    j.status = DeliveryJob.Status.SEARCHING
+                    j.assigned_at = None
+                    j.owner_alerted_at = None
+                    j.redispatch_count = (j.redispatch_count or 0) + 1
+                    # Fresh ranked-offer cascade for the re-opened job (any driver eligible again).
+                    j.offered_to = None
+                    j.offer_expires_at = None
+                    j.declined_by = []
+                    j.offer_round = 0
+                    j.is_open_pool = False
+                    j.save(update_fields=[
+                        "driver", "status", "assigned_at", "owner_alerted_at", "redispatch_count",
+                        "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                    ])
+            if capped:
+                if first_escalation:
+                    alert_owner(job.tenant_id, job.order_number, "Delivery needs manual attention",
+                                f"Order #{job.order_number} couldn't be auto-re-assigned after "
+                                f"{MAX_AUTO_REDISPATCH} tries — please reassign or refund from Orders.")
+                    alerted += 1
+                continue
             offer_to_next_driver(job.id)
             alert_owner(job.tenant_id, job.order_number, "Driver dropped — re-assigning",
                         f"Order #{job.order_number}'s driver went offline; finding another.")

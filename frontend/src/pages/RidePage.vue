@@ -768,7 +768,10 @@ const requestRide = async () => {
   } catch (err) {
     const httpStatus = err?.response?.status;
     const code       = err?.response?.data?.code;
-    if (code === 'too_soon') {
+    if (code === 'vertical_disabled' || httpStatus === 503) {
+      // Deep-linked to a paused vertical (the hub gates the tile, but the URL is reachable).
+      errorMsg.value = t('services.comingSoon');
+    } else if (code === 'too_soon') {
       errorMsg.value = t('tripSchedule.tooSoon');
     } else if (code === 'too_far') {
       errorMsg.value = t('tripSchedule.tooFar');

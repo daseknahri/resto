@@ -55,10 +55,17 @@ class Command(BaseCommand):
         # A scheduled trip is released when scheduled_for <= now+10min.
         # We flip it to SEARCHING and set dispatched_at=now() so rules (a)/(b)
         # measure timeout from the release moment, not from created_at hours earlier.
+        from django.conf import settings as _settings
+        from accounts.verticals import vertical_for_ride_kind as _vert_for_kind
+        _enabled_verticals = set(getattr(_settings, "VERTICALS_ENABLED", frozenset()))
         for ride in RideRequest.objects.filter(
             status=RideRequest.Status.SCHEDULED,
             scheduled_for__lte=now + RELEASE_BEFORE,
         ):
+            # Don't dispatch a scheduled trip whose vertical was disabled after booking
+            # (e.g. courier paused) — it stays SCHEDULED until the vertical is back on.
+            if _vert_for_kind(ride.kind) not in _enabled_verticals:
+                continue
             with transaction.atomic():
                 r = (
                     RideRequest.objects.select_for_update()
