@@ -3765,6 +3765,9 @@ class MarketplaceMenuView(APIView):
         return Response({
             "slug": tenant.slug,
             "name": tenant.name,
+            # Vertical type so the marketplace menu page can use shop/pharmacy
+            # vocabulary (Catalog/Product) instead of restaurant nouns.
+            "business_type": getattr(profile, "business_type", "restaurant") or "restaurant",
             "tagline": profile.tagline or "",
             "logo_url": profile.logo_url or "",
             "cuisine_type": profile.cuisine_type or "",

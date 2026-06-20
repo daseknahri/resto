@@ -208,7 +208,7 @@
                   : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
                 @click="fulfillmentType = 'delivery'"
               >
-                <AppIcon name="table" class="h-3.5 w-3.5 shrink-0" />
+                <AppIcon name="truck" class="h-3.5 w-3.5 shrink-0" />
                 {{ t('cartPage.delivery') }}
                 <span v-if="fulfillmentType === 'delivery'" class="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
@@ -344,7 +344,7 @@
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
                     @click="openInAppMapPicker"
                   >
-                    <AppIcon name="table" class="h-3 w-3 shrink-0" />
+                    <AppIcon name="location" class="h-3 w-3 shrink-0" />
                     {{ t('cartPage.pickPinInApp') }}
                   </button>
                   <button
