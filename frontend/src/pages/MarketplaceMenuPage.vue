@@ -362,7 +362,7 @@
             v-if="!restaurant.super_categories?.length"
             class="ui-empty-state text-center space-y-1"
           >
-            <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty') }}</p>
+            <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty', { catalog }) }}</p>
             <p class="text-xs text-slate-400">{{ t('mktMenu.menuEmptyBody') }}</p>
           </div>
           <!-- No dishes pass the active allergen filter -->
@@ -1005,6 +1005,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
+import { useVocabulary } from '../composables/useVocabulary';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import api from '../lib/api';
@@ -1022,6 +1023,8 @@ const slug = route.params.slug;
 const loading = ref(true);
 const fetchError = ref(false);
 const restaurant = ref(null);
+
+const { catalog } = useVocabulary(() => restaurant.value?.business_type);
 
 // Returns an emoji placeholder icon appropriate for the restaurant's business_type.
 const businessIcon = (r) => {

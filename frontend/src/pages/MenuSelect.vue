@@ -91,7 +91,7 @@
           :style="{ '--ui-delay': `${Math.min(i, 6) * 50}ms` }"
           :aria-label="sc.is_temporarily_disabled
             ? `${sc.name} — ${t('menuSelect.unavailable')}`
-            : t('menuSelect.browseLinkLabel', { name: sc.name }) + ', ' + t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug) })"
+            : t('menuSelect.browseLinkLabel', { name: sc.name }) + ', ' + t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug), groupPlural })"
         >
           <!-- Card image area -->
           <div class="relative h-44 w-full overflow-hidden bg-slate-900 sm:h-48">
@@ -123,7 +123,7 @@
             <!-- Top-end: category count chip (RTL-safe) -->
             <div class="absolute end-3 top-3">
               <span class="rounded-full border border-slate-700/55 bg-slate-950/80 px-3 py-1 text-[11px] font-semibold tabular-nums text-slate-200 backdrop-blur-md">
-                {{ t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug) }) }}
+                {{ t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug), groupPlural }) }}
               </span>
             </div>
 
@@ -147,7 +147,7 @@
             <!-- CTA row -->
             <div class="flex items-center justify-between gap-2 pt-0.5">
               <span class="min-w-0 truncate text-[12px] tabular-nums text-slate-500">
-                {{ t('menuSelect.dishCount', { count: menuDishCount(sc.slug) }) }}
+                {{ t('menuSelect.dishCount', { count: menuDishCount(sc.slug), itemPlural }) }}
               </span>
               <span
                 class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-all duration-200"
@@ -182,6 +182,7 @@ import { computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useVocabulary } from '../composables/useVocabulary';
 import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
@@ -190,6 +191,7 @@ const menu = useMenuStore();
 const tenant = useTenantStore();
 const router = useRouter();
 const { currentLocale, t } = useI18n();
+const { groupPlural, itemPlural } = useVocabulary();
 
 // ── Tenant data ──────────────────────────────────────────────────────────────
 const meta = computed(() => tenant.resolvedMeta || null);

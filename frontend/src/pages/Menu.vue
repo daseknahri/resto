@@ -126,7 +126,7 @@
     </div>
 
     <!-- ══ Sticky categories bar ══ -->
-    <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav')" class="ui-menu-category-nav sticky z-20" :style="{ top: headerOffset + 'px' }">
+    <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav', { groupPlural })" class="ui-menu-category-nav sticky z-20" :style="{ top: headerOffset + 'px' }">
       <div class="relative">
         <div
           ref="pillRowEl"
@@ -159,7 +159,7 @@
               class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-widest"
               :data-active="catSheetOpen"
               :aria-expanded="catSheetOpen"
-              :aria-label="t('menu.allCategories')"
+              :aria-label="t('menu.allCategories', { groupPlural })"
               @click="catSheetOpen = !catSheetOpen"
             >···</button>
           </template>
@@ -474,6 +474,7 @@ import { useRoute } from 'vue-router'
 import AppIcon   from '../components/AppIcon.vue'
 import DishCard  from '../components/DishCard.vue'
 import { useI18n } from '../composables/useI18n'
+import { useVocabulary } from '../composables/useVocabulary'
 import { withImageFallback } from '../lib/images'
 import { trackEvent } from '../lib/analytics'
 import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours'
@@ -491,6 +492,7 @@ const toast          = useToastStore()
 const customerStore  = useCustomerStore()
 const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
+const { groupPlural } = useVocabulary()
 
 // ── Active order tracking strip ───────────────────────────────────────────────
 // Show a persistent "track your order" pill for 2 h after a checkout
