@@ -202,6 +202,42 @@
           </dl>
         </div>
 
+        <!-- Rate the courier (packages are RideRequests → same /rate/ endpoint) -->
+        <div v-if="!ratingDone" class="ui-panel ui-reveal p-4 space-y-3">
+          <p class="ui-kicker">{{ t('ridePage.rateTitle') }}</p>
+          <div class="flex justify-center gap-1" role="radiogroup" :aria-label="t('ridePage.rateTitle')">
+            <button
+              v-for="n in 5"
+              :key="n"
+              type="button"
+              role="radio"
+              class="ui-touch-target ui-press flex items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'"
+              :aria-label="`${n} star${n > 1 ? 's' : ''}`"
+              :aria-checked="ratingScore === n"
+              @click="ratingScore = n"
+            >
+              <AppIcon name="star" class="h-8 w-8" aria-hidden="true" />
+            </button>
+          </div>
+          <button
+            type="button"
+            class="ui-btn-primary ui-press w-full py-3 text-sm font-semibold disabled:opacity-50"
+            :disabled="!ratingScore || submittingRating"
+            @click="submitRating"
+          >
+            {{ submittingRating ? t('common.saving') : t('ridePage.rateCta') }}
+          </button>
+        </div>
+        <p
+          v-else
+          role="status"
+          class="flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 py-4 text-sm font-semibold text-emerald-300"
+        >
+          <AppIcon name="check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+          {{ t('ridePage.rated') }}
+        </p>
+
         <!-- Send another -->
         <button
           type="button"
@@ -613,6 +649,9 @@ const historyLoading = ref(false);
 // ── Active package polling ────────────────────────────────────────────────────
 // Holds the active trip only if kind === 'package'; ride trips are ignored here.
 const activePackage = ref(null);
+const ratingScore = ref(0);
+const submittingRating = ref(false);
+const ratingDone = ref(false);
 let pollTimer = null;
 
 // ── Derived ───────────────────────────────────────────────────────────────────
@@ -845,8 +884,23 @@ const cancelPackage = async () => {
 };
 
 // ── Reset to booking form ─────────────────────────────────────────────────────
+const submitRating = async () => {
+  if (!ratingScore.value || submittingRating.value || !activePackage.value?.id) return;
+  submittingRating.value = true;
+  try {
+    await api.post(`/rides/${activePackage.value.id}/rate/`, { rating: ratingScore.value });
+    ratingDone.value = true;
+  } catch {
+    // best-effort — a rating failure shouldn't block the flow
+  } finally {
+    submittingRating.value = false;
+  }
+};
+
 const resetForm = () => {
   activePackage.value  = null;
+  ratingScore.value    = 0;
+  ratingDone.value     = false;
   estimate.value       = null;
   showCancelled.value  = false;
   noDriverFound.value  = false;
