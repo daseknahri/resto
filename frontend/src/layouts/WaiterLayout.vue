@@ -140,6 +140,7 @@ import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useWaiterStore } from "../stores/waiter";
 import { useWaiterCalls } from "../composables/useWaiterCalls";
+import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -150,11 +151,23 @@ const waiter = useWaiterStore();
 // Waiter-call bell alerts — a table pressed the QR "call waiter" bell. These were
 // previously visible ONLY to the owner; floor staff now see + acknowledge them here.
 // The list is section-filtered server-side, so a waiter sees only their own tables.
-const { pending: waiterCallsPending, load: loadWaiterCalls, acknowledge: acknowledgeWaiterCall } = useWaiterCalls();
+const { pending: waiterCallsPending, load: loadWaiterCalls, acknowledge: acknowledgeWaiterCall, handleRealtime: _handleWaiterCallRealtime } = useWaiterCalls();
 let _waiterCallsTimer = null;
 const _onWaiterCallsVisibility = () => {
   if (document.visibilityState === "visible") loadWaiterCalls();
 };
+
+// Real-time: staff share the owner WS channel. order.* refreshes the order list
+// instantly (vs the ≤15s page poll); waiter.call* updates the bell-call banner the
+// moment a customer rings. The poll below stays as a fallback if the socket drops or
+// can't connect (useRealtimeChannel degrades gracefully).
+const _waiterRealtime = useOwnerRealtime((event, payload) => {
+  if (event === "waiter.call" || event === "waiter.call.ack") {
+    _handleWaiterCallRealtime(event, payload);
+  } else if (typeof event === "string" && event.startsWith("order")) {
+    waiter.fetchOrders({ silent: true });
+  }
+});
 
 // Reuse the staff workspace theme (same ui-* primitives + light CSS as the owner area).
 const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();
@@ -171,15 +184,17 @@ onMounted(() => {
   activateTheme(); // paint the saved dark/light choice onto <html>
   waiter.setupConnectivityListeners();
   loadWaiterCalls();
-  // Poll frequently — a bell-call is urgent; visibilitychange catches up instantly
-  // when the waiter switches back to the app.
-  _waiterCallsTimer = setInterval(loadWaiterCalls, 12000);
+  _waiterRealtime.connect();
+  // WS is primary; this poll is the fallback if the socket drops. visibilitychange
+  // catches up instantly when the waiter switches back to the app.
+  _waiterCallsTimer = setInterval(loadWaiterCalls, 30000);
   document.addEventListener("visibilitychange", _onWaiterCallsVisibility);
 });
 
 onUnmounted(() => {
   deactivateTheme(); // strip data-owner-theme so other areas stay un-themed
   waiter.teardownConnectivityListeners();
+  _waiterRealtime.disconnect();
   if (_waiterCallsTimer) clearInterval(_waiterCallsTimer);
   document.removeEventListener("visibilitychange", _onWaiterCallsVisibility);
 });
