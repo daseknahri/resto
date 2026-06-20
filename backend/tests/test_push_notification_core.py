@@ -7,7 +7,7 @@ Tests for menu/push.py core functions:
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 

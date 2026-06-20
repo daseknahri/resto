@@ -84,7 +84,6 @@ class LoginLockoutCounterLogicTests(SimpleTestCase):
         """cache.add is a no-op when the key already exists, so the TTL set on the
         first failure is NOT reset by later failures (fixed window, not sliding)."""
         from django.core.cache import cache
-        import time
         key = _login_fail_cache_key(21)
         # First failure — sets TTL.
         cache.add(key, 0, LOGIN_LOCK_SECONDS)

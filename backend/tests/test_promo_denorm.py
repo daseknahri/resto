@@ -206,7 +206,6 @@ class RecomputeTenantPromosTests(SimpleTestCase):
     def test_cap_filter_keeps_unlimited_and_uncapped_drops_capped(self):
         """End-to-end over a fake queryset: the cap filter keeps an unlimited and an
         uncapped promo and drops a capped one (capped = use_count >= max_uses)."""
-        from django.db.models import Q, F
         from menu import promos_denorm as mod
         from contextlib import contextmanager
         import sys

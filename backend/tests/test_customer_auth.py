@@ -8,7 +8,7 @@ CustomerProfileUpdateView, CustomerOrdersView, _serialize_customer.
 All tests are unit-level (SimpleTestCase + mocks — no real DB or cache I/O).
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status

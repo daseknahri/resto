@@ -7,7 +7,7 @@ All tests are SimpleTestCase (no DB). Verifies:
   • RideCreateView returns 503 for the matching kind when disabled.
   • CustomerSessionView platform dict includes enabled_verticals.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory

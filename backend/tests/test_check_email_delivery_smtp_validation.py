@@ -12,7 +12,6 @@ covering _validate_config cases not covered by test_check_email_delivery_command
 All tests use call_command + override_settings (no real network).
 """
 from io import StringIO
-from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError

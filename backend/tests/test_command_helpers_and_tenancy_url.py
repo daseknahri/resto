@@ -9,7 +9,7 @@ Unit tests for:
 
 All tests are unit-level (SimpleTestCase — no real DB).
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase

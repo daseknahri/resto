@@ -4,11 +4,11 @@ Tests for StaffOrderListView — the waiter-facing active-orders endpoint.
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIRequestFactory
 
 from menu.views import StaffOrderListView
 from menu.models import Order

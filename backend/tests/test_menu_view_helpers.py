@@ -11,7 +11,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
 

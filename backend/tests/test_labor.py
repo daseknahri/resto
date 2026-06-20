@@ -20,7 +20,6 @@ Covers:
 House style: SimpleTestCase + MagicMock, no real DB.
 """
 from datetime import datetime, timezone as _tz
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase

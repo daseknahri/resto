@@ -1,0 +1,25 @@
+# Backend lint gate — Pyflakes ("F") rules ONLY.
+#
+# This is the enforced backend equivalent of the frontend's eslint gate. It exists
+# because the backend previously had NO linter, which let real NameError bugs ship
+# undetected: `_apply_business_type_filter` used `Q` unimported (marketplace
+# ?business_type= → 500) and menu/views.py used `models.F(...)` with `models`
+# unimported (order promo/loyalty path → 500). Both are fixed; this gate stops the
+# class from recurring.
+#
+# We intentionally select ONLY "F" (Pyflakes: undefined names, undefined/unused
+# imports, f-strings without placeholders, redefinitions, unused locals) — NOT
+# ruff's broad default rule set, which would flag thousands of style nits unrelated
+# to correctness. Migrations are auto-generated and excluded.
+target-version = "py312"
+extend-exclude = ["**/migrations/**"]
+
+[lint]
+select = ["F"]
+# F841 (local variable assigned but never used) is deferred: it is the lowest-signal
+# F rule — dead locals, NOT the undefined-name/NameError class this gate exists to
+# catch — and the tree currently has ~27, several in tests with side-effecting RHS
+# that cannot be auto-removed safely. The bug-catching rules stay ON (F401 unused
+# import, F811 redefinition, F821 undefined name, F-string/format checks). Revisit
+# F841 with a dedicated cleanup pass.
+ignore = ["F841"]

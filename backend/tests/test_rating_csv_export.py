@@ -12,7 +12,6 @@ import csv
 import io
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
 

@@ -13,7 +13,7 @@ test_ops1_kitchen.py) and adjust the mock chain to include
 select_for_update().
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status

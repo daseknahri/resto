@@ -9,7 +9,7 @@ House style:
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status

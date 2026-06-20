@@ -13,11 +13,10 @@ All tests are SimpleTestCase (no database, no Redis).
 The Django cache backend and DRF internals are mocked.
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import User

@@ -1,8 +1,7 @@
 from django.test import SimpleTestCase
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
-from sales.models import Lead
 from sales.serializers import LeadSerializer
 from sales.services import provision_lead
 from tenancy.tiering import (

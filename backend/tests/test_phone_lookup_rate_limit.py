@@ -10,7 +10,7 @@ The method:
 All tests are unit-level (SimpleTestCase — cache is mocked via patch).
 """
 from types import SimpleNamespace
-from unittest.mock import patch, call
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 

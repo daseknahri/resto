@@ -14,7 +14,7 @@ Covers:
 Unit-level (SimpleTestCase — pure functions + mocks, no DB).
 """
 import datetime as dt_module
-from datetime import datetime, timezone
+from datetime import timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

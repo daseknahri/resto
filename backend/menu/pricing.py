@@ -48,7 +48,6 @@ from .models import HappyHour
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from .models import Dish
 
 
 def get_all_active_hh_rules() -> list:

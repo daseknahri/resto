@@ -7,9 +7,8 @@ Unit tests for private helper functions in menu/views.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from datetime import datetime, date, timedelta
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from datetime import datetime, date
+from unittest.mock import MagicMock
 
 import pytz
 from django.test import SimpleTestCase

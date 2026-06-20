@@ -22,10 +22,8 @@ same counter under a parallel "mfa_fail:u<pk>" key with identical semantics — 
 15-minute window starting at the first failure, using cache.add() + cache.incr().
 """
 
-import hashlib
 import logging
 import secrets as _secrets
-from datetime import timedelta
 
 import pyotp
 
@@ -475,7 +473,6 @@ class MFADisableView(APIView):
 
         # Audit log (best-effort; must not raise).
         try:
-            from sales.models import AdminAuditLog
             log_admin_action(
                 actor=user,
                 action="mfa_device_disabled",

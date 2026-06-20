@@ -29,9 +29,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, PropertyMock, ANY
+from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, RequestFactory
+from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
 
 
@@ -168,9 +168,7 @@ class TestStaffPlanLimit(SimpleTestCase):
         the local import binding via sys.modules so the `from .models import User`
         inside the method picks up the mock.
         """
-        import sys
         from accounts.views import OwnerStaffListCreateView
-        from rest_framework.response import Response
 
         view = OwnerStaffListCreateView()
         request = MagicMock()

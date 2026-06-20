@@ -7,7 +7,6 @@ Tests for tier-upgrade and lead-provision admin views:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

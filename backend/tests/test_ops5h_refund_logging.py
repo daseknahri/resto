@@ -23,7 +23,6 @@ House style: SimpleTestCase + MagicMock, no real DB.
 from __future__ import annotations
 
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.db import connection

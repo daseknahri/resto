@@ -29,12 +29,10 @@ House style: SimpleTestCase + mocks, no real DB.
 """
 from __future__ import annotations
 
-import os
 from io import StringIO
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, Mock, patch
 
-from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 

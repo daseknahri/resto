@@ -33,10 +33,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, RequestFactory
-from rest_framework.test import APIRequestFactory
 
 from menu.throttles import PlaceOrderThrottle
 from accounts.models import User
@@ -539,7 +538,6 @@ class TestPruneStaffMessages(SimpleTestCase):
     @patch("menu.management.commands.prune_staff_messages.timezone")
     def test_iterates_all_tenants_and_deletes(self, mock_tz, MockTenant, MockSM, mock_sc):
         """Per-tenant iteration: one schema_context call per tenant, delete per tenant."""
-        from accounts.management.commands.prune_notification_logs import Command as _NLCmd
         from menu.management.commands.prune_staff_messages import Command
         from datetime import datetime, timezone as _tz_module
 

@@ -16,11 +16,10 @@ All tests are SimpleTestCase + MagicMock — no DB.
 from datetime import datetime, time, timezone as _tz
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
-from rest_framework import status
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIRequestFactory
 
 from menu.pricing import (
     get_active_happy_hours,
@@ -716,12 +715,10 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
 
     def setUp(self):
         self.factory = APIRequestFactory()
-        from menu.views import StaffAppendOrderItemsView
         self.view = StaffAppendOrderItemsView.as_view()
 
     def _make_open_table_order(self):
         """Return a mock table order in an editable state with all Decimal fields set."""
-        from menu.models import Order
         o = MagicMock()
         o.id = 10
         o.pk = 10

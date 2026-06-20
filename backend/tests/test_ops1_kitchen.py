@@ -25,7 +25,7 @@ House style: SimpleTestCase + MagicMock, no real DB.
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch, call
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
@@ -532,7 +532,6 @@ class ChannelLayerConfigTests(SimpleTestCase):
 
     def test_settings_py_uses_redis_backend_string(self):
         """Verify the actual settings.py hardcodes the correct redis backend class name."""
-        import importlib
         import config.settings as s
         # The constant is embedded in the source; verify via module-level eval
         # without instantiating the layer (which requires a live Redis).

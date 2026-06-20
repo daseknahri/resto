@@ -346,7 +346,6 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         the view method directly and calling get() with a synthetic query_params dict.
         """
         from django.http import HttpResponse
-        from types import SimpleNamespace
 
         linked = [_linked_row(customer_id=1, order_count=3, days_ago=5)]
 

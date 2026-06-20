@@ -233,7 +233,6 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
 
     def _drive(self, *, still_approved):
         import accounts.models as am
-        from accounts.models import DeliveryJob
 
         customer = MagicMock(pk=5, id=5, name="Drv", is_driver_online=True)
 

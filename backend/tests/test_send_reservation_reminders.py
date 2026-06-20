@@ -9,7 +9,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 import io
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from django.core.management import call_command

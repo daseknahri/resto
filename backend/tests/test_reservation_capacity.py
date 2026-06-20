@@ -4,7 +4,7 @@ which backs the oversell-prevention fix. SimpleTestCase + mocks (no DB).
 """
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone

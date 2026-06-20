@@ -9,7 +9,6 @@ Tests for driver-related views:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -640,7 +639,6 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
             mock_dj.Status.PICKED_UP = "picked_up"
             mock_dj.Status.SEARCHING = "searching"
 
-            from django.utils import timezone as tz
             with patch("accounts.views._job_order_summaries", return_value={}):
                 req = self.factory.get("/api/driver/jobs/")
                 req.session = _session(customer_id=1)
@@ -659,7 +657,7 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
     def test_batch_business_types_single_db_query(self):
         """_batch_business_types must call Profile.objects.filter exactly once."""
         from accounts.views import _batch_business_types
-        from unittest.mock import patch, MagicMock, call
+        from unittest.mock import patch, MagicMock
 
         mock_qs = MagicMock()
         mock_qs.values_list.return_value = [(1, "grocery"), (2, "pharmacy")]

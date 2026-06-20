@@ -5,7 +5,6 @@ Tests for serializer utility functions in menu/serializers.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase

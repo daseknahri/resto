@@ -9,9 +9,9 @@ Tests for provisioning utility functions in sales/services.py:
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
 from sales.services import (
     mask_secret,

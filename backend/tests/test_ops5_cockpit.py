@@ -11,7 +11,7 @@ D. WS consumer: stranger rejected (no session + wrong delivery_code); owner acce
 All tests are SimpleTestCase (no DB) + MagicMock.
 """
 import sys
-from unittest.mock import MagicMock, patch, call, AsyncMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
@@ -376,7 +376,7 @@ class MediaCheckTests(SimpleTestCase):
     """_check_media probe logic."""
 
     def test_returns_ok_when_media_root_exists(self):
-        import tempfile, os
+        import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("django.conf.settings") as mock_settings:
                 mock_settings.MEDIA_ROOT = tmpdir

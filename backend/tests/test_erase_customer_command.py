@@ -27,7 +27,6 @@ from __future__ import annotations
 import io
 from contextlib import contextmanager
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -366,7 +365,6 @@ class TestEraseCustomerIntegration:
         assert Customer.objects.filter(pk=cid).exists(), "Customer row was deleted — must NOT be!"
 
     def test_pii_fields_blanked(self):
-        from accounts.models import Customer
         customer = self._make_customer(
             phone="+212600100002",
             email="pii@example.com",
@@ -383,7 +381,7 @@ class TestEraseCustomerIntegration:
         assert customer.email_verified is False
 
     def test_wallet_transaction_retained_note_blanked(self):
-        from accounts.models import Customer, WalletTransaction
+        from accounts.models import WalletTransaction
         customer = self._make_customer(phone="+212600100003", email="wt@example.com")
         tx = WalletTransaction.objects.create(
             customer=customer,
@@ -399,7 +397,7 @@ class TestEraseCustomerIntegration:
         assert tx.amount == Decimal("10.00")
 
     def test_saved_address_deleted(self):
-        from accounts.models import Customer, SavedAddress
+        from accounts.models import SavedAddress
         customer = self._make_customer(phone="+212600100004", email="sa@example.com")
         SavedAddress.objects.create(customer=customer, address="123 Main St")
         cid = customer.pk
@@ -407,7 +405,7 @@ class TestEraseCustomerIntegration:
         assert not SavedAddress.objects.filter(customer_id=cid).exists()
 
     def test_customer_push_subscription_deleted(self):
-        from accounts.models import Customer, CustomerPushSubscription
+        from accounts.models import CustomerPushSubscription
         customer = self._make_customer(phone="+212600100005", email="push@example.com")
         CustomerPushSubscription.objects.create(
             customer=customer,
@@ -420,7 +418,7 @@ class TestEraseCustomerIntegration:
         assert not CustomerPushSubscription.objects.filter(customer_id=cid).exists()
 
     def test_customer_rating_deleted(self):
-        from accounts.models import Customer, CustomerRating
+        from accounts.models import CustomerRating
         customer = self._make_customer(phone="+212600100006", email="cr@example.com")
         CustomerRating.objects.create(
             customer=customer,
@@ -434,7 +432,7 @@ class TestEraseCustomerIntegration:
         assert not CustomerRating.objects.filter(customer_id=cid).exists()
 
     def test_customer_order_ref_retained_fields_scrubbed(self):
-        from accounts.models import Customer, CustomerOrderRef
+        from accounts.models import CustomerOrderRef
         from django.utils import timezone
         customer = self._make_customer(phone="+212600100007", email="cor@example.com")
         ref = CustomerOrderRef.objects.create(
@@ -457,7 +455,6 @@ class TestEraseCustomerIntegration:
         assert ref.total == Decimal("25.00")
 
     def test_guard_refuses_nonzero_balance(self):
-        from accounts.models import Customer
         customer = self._make_customer(
             phone="+212600100008",
             email="balance@example.com",
@@ -467,7 +464,6 @@ class TestEraseCustomerIntegration:
             call_command("erase_customer", customer.pk, "--force-erase")
 
     def test_guard_bypass_with_force(self):
-        from accounts.models import Customer
         customer = self._make_customer(
             phone="+212600100009",
             email="bypass@example.com",
@@ -478,7 +474,6 @@ class TestEraseCustomerIntegration:
         assert customer.phone is None
 
     def test_dry_run_writes_nothing(self):
-        from accounts.models import Customer
         customer = self._make_customer(phone="+212600100010", email="dry@example.com")
         cid = customer.pk
         out = io.StringIO()
@@ -489,7 +484,6 @@ class TestEraseCustomerIntegration:
         assert "DRY-RUN" in out.getvalue()
 
     def test_audit_log_created_on_erase(self):
-        from accounts.models import Customer
         from sales.models import AdminAuditLog
         customer = self._make_customer(phone="+212600100011", email="audit@example.com")
         cid = customer.pk
@@ -503,7 +497,6 @@ class TestEraseCustomerIntegration:
         assert after_count == before_count + 1
 
     def test_audit_log_not_created_on_dry_run(self):
-        from accounts.models import Customer
         from sales.models import AdminAuditLog
         customer = self._make_customer(phone="+212600100012", email="nodry@example.com")
         cid = customer.pk
@@ -517,7 +510,6 @@ class TestEraseCustomerIntegration:
         assert after_count == before_count, "Audit log must NOT be written under --dry-run"
 
     def test_idempotent_reruns_cleanly(self):
-        from accounts.models import Customer
         customer = self._make_customer(phone="+212600100013", email="idm@example.com")
         cid = customer.pk
         call_command("erase_customer", cid, "--force-erase", "--force")
@@ -527,7 +519,7 @@ class TestEraseCustomerIntegration:
         assert customer.phone is None
 
     def test_notification_log_recipient_blanked(self):
-        from accounts.models import Customer, NotificationLog
+        from accounts.models import NotificationLog
         phone = "+212600100014"
         email = "notif@example.com"
         customer = self._make_customer(phone=phone, email=email)
@@ -542,7 +534,7 @@ class TestEraseCustomerIntegration:
         assert log.recipient == ""
 
     def test_winback_nudge_deleted(self):
-        from accounts.models import Customer, WinbackNudge
+        from accounts.models import WinbackNudge
         customer = self._make_customer(phone="+212600100015", email="wb@example.com")
         WinbackNudge.objects.create(tenant_id=1, customer_id=customer.pk)
         call_command("erase_customer", customer.pk, "--force-erase", "--force")

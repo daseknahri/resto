@@ -8,7 +8,7 @@ The command:
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from io import StringIO
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from django.core.management import call_command

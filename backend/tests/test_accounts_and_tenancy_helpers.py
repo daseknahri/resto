@@ -12,13 +12,12 @@ Unit tests for private helpers in accounts/views.py and tenancy/api.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
-from django.utils import timezone
 
 from accounts.views import (
     serialize_user_session,

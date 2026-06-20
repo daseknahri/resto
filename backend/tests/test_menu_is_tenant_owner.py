@@ -26,7 +26,6 @@ def _user(
     role="tenant_owner",
     tenant_id=1,
 ):
-    from accounts.models import User
 
     class Roles:
         TENANT_OWNER = "tenant_owner"

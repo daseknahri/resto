@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone as _tz
-from decimal import Decimal
 
 from django.conf import settings
 from django.core.cache import cache

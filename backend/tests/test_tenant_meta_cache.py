@@ -13,7 +13,7 @@ calls ``cache.delete_many`` via its own module-level import (tenancy.api.cache),
 so bust tests continue to patch ``tenancy.api.cache``.
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings

@@ -1,6 +1,6 @@
 """Tests for AdminPlatformSettingsView (platform-wide admin-editable settings). No DB."""
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status

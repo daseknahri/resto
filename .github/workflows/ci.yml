@@ -37,6 +37,17 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install -r requirements.txt
+      - name: Backend lint (ruff — Pyflakes F rules)
+        # Enforced backend equivalent of the frontend's eslint gate. Catches the
+        # undefined-name / NameError class that previously shipped undetected (a
+        # marketplace `Q` and 11 `models.F` uses, both fixed). Config in
+        # backend/ruff.toml selects ONLY the F (Pyflakes) rules to stay low-noise.
+        # ruff is a CI-only tool, installed inline like pip-audit below.
+        run: |
+          cd backend
+          . .venv/bin/activate
+          pip install ruff
+          ruff check .
       - name: CVE scan (pip-audit)
         # R6: fail the build on any known CVE in the pinned dependencies.
         # After the dep bumps this runs clean with no ignores. If a specific

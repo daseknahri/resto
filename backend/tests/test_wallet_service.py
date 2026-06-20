@@ -179,7 +179,7 @@ class TenantFloatTransferTests(TransactionTestCase):
         """OPS-5e: idempotency_key is a GLOBAL namespace on the shared-schema ledger.
         A key that resolves to ANOTHER tenant's float tx is a collision/attack, not a
         retry — refuse it (no silent no-op, no cross-tenant balance leak)."""
-        from tenancy.models import Plan, Tenant
+        from tenancy.models import Tenant
         # Tenant A funds + distributes under key "shared".
         credit_tenant_float(self.tenant.id, "100")
         transfer_to_customer(self.tenant.id, self.customer.id, "20", idempotency_key="shared")

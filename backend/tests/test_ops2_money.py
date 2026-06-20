@@ -16,8 +16,7 @@ Contracts covered:
 """
 from __future__ import annotations
 
-import io
-from datetime import date, datetime, timedelta, timezone as stdlib_tz
+from datetime import date, datetime, timezone as stdlib_tz
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch

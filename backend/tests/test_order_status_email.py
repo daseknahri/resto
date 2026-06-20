@@ -5,7 +5,7 @@ This function sends a plain-text status-change notification to the customer.
 All tests are unit-level (SimpleTestCase + mocks — no real DB, no real email).
 """
 from types import SimpleNamespace
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 

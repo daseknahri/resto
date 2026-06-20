@@ -19,7 +19,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 

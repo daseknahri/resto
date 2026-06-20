@@ -8,7 +8,7 @@ All tests are SimpleTestCase (no database).
 The Order and Rating ORM calls are mocked.
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status

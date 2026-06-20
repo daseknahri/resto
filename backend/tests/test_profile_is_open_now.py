@@ -25,7 +25,7 @@ All tests are unit-level (SimpleTestCase — ClosureDate DB call is mocked,
 datetime is patched so the tenant-local "now" is deterministic).
 """
 import datetime as dt_module
-from datetime import datetime, timezone
+from datetime import timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status as drf_status
@@ -594,7 +594,6 @@ class TestIndexPresence(SimpleTestCase):
         return {idx.name for idx in model._meta.indexes}
 
     def test_order_customer_phone_index(self):
-        from menu.models import Order
         self.assertIn(
             "order_customer_phone_idx",
             self._index_names(Order),
@@ -602,7 +601,6 @@ class TestIndexPresence(SimpleTestCase):
         )
 
     def test_order_status_paid_at_index(self):
-        from menu.models import Order
         self.assertIn(
             "order_status_paid_at_idx",
             self._index_names(Order),

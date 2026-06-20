@@ -61,7 +61,7 @@ def _send_one(endpoint: str, p256dh: str, auth: str, title: str, body: str, url:
         return "error"
 
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
 
         webpush(
             subscription_info={

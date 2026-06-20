@@ -24,8 +24,7 @@ from __future__ import annotations
 
 import io
 from datetime import datetime, timedelta, timezone as _tz
-from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 

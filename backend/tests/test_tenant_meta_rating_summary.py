@@ -8,7 +8,7 @@ The static method computes an aggregate over the Rating model:
 
 All tests are unit-level (SimpleTestCase — Rating.objects.aggregate is mocked).
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 

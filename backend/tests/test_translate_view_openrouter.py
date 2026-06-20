@@ -19,8 +19,6 @@ Tested branches:
 All tests are unit-level (SimpleTestCase — urlopen is mocked, no network).
 """
 import json
-from io import BytesIO
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings

@@ -6,7 +6,6 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 import json
 import logging
-import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

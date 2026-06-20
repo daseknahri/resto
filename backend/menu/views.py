@@ -55,7 +55,7 @@ from django_tenants.utils import schema_context
 
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
-from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price, happy_hour_payload
+from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
 from .tax import order_vat_fields
 from .serializers import (
     CategorySerializer,
@@ -2024,7 +2024,6 @@ def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str, t
     this must never block the customer-facing response.
     """
     import logging as _logging
-    import urllib.error as _urlerror
     import urllib.parse as _urlparse
     import urllib.request as _urlrequest
 
@@ -3939,7 +3938,6 @@ class StaffShiftSummaryView(APIView):
         # DurationField; Avg() over it gives the mean duration without materialising
         # all rows into Python.  The result is a timedelta (or None when no rows).
         from django.db.models import Avg, Count, DurationField, ExpressionWrapper, Sum
-        from django.db.models.functions import Coalesce
 
         agg = qs.aggregate(
             total_count=Count("id"),
@@ -4060,7 +4058,6 @@ def _staff_order_payload(order):
     computed from the payments ledger only; callers that need the legacy total
     can still read `wallet_amount_paid` directly from the order fields.
     """
-    from menu.models import OrderPayment as _OP
     _CENT = Decimal("0.01")
 
     # Payment ledger totals (R4)
@@ -4662,7 +4659,6 @@ class StaffVoidOrderItemView(APIView):
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
                 # Case B — UNPAID order: check if the ledger-plus-wallet now covers the
                 # reduced total and / or if wallet overpays the new total.
-                from menu.models import OrderPayment as _OP
                 ledger_paid = sum(
                     (Decimal(str(p.amount)) for p in order.payments.all()), Decimal("0")
                 )
@@ -9180,7 +9176,6 @@ class OwnerDataExportView(APIView):
         # ── Staff ────────────────────────────────────────────────────────────
         staff_data = []
         try:
-            from django.db import connection as _c
             from django_tenants.utils import schema_context
             with schema_context("public"):
                 from accounts.models import User as _User
@@ -9272,7 +9267,6 @@ class SlotAvailabilityView(APIView):
 
     def get(self, request):
         from datetime import date as date_cls
-        from django.db.models import Sum
         from django.utils import timezone as tz_utils
         from django_tenants.utils import get_public_schema_name, schema_context as _sc
 
@@ -9628,7 +9622,6 @@ class OwnerCustomerListView(APIView):
         rating_map = {}  # customer_id → avg_score
         if linked_customer_ids:
             try:
-                from django.db import connection as _conn
                 from accounts.models import CustomerRating
                 ratings = (
                     CustomerRating.objects
@@ -10184,7 +10177,6 @@ class PromoCodeCheckView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        from decimal import Decimal as _Dec
         code = str(request.query_params.get("code") or "").strip().upper()
         if not code:
             return Response({"valid": False, "detail": "No code provided."}, status=status.HTTP_400_BAD_REQUEST)
@@ -10268,7 +10260,6 @@ class OwnerMenuImportView(APIView):
 
         import io as _io
         from decimal import Decimal as _Dec, InvalidOperation
-        from django.utils.text import slugify as _slugify
 
         try:
             text = uploaded.read().decode("utf-8-sig")  # utf-8-sig strips BOM if present

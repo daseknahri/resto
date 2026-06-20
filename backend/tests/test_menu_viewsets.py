@@ -9,7 +9,7 @@ Tests for the menu ViewSets and their shared PublishAccessMixin logic:
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
@@ -18,7 +18,6 @@ from rest_framework.test import APIRequestFactory
 from accounts.models import User
 from menu.views import (
     CategoryViewSet,
-    DishOptionViewSet,
     DishViewSet,
     OptionGroupViewSet,
     SuperCategoryViewSet,

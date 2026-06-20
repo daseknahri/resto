@@ -10,7 +10,6 @@ Unit tests for the three validator methods in sales/serializers.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from rest_framework.exceptions import ValidationError

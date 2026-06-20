@@ -10,13 +10,12 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
 from django.utils import timezone
 
 from accounts.throttles import (
-    _IPThrottle as AccountsIPThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     ActivationThrottle,
@@ -25,7 +24,6 @@ from accounts.throttles import (
     CustomerOtpRequestThrottle,
 )
 from menu.throttles import (
-    _IPThrottle as MenuIPThrottle,
     OrderHandoffThrottle,
     CheckoutIntentThrottle,
     PlaceOrderThrottle,

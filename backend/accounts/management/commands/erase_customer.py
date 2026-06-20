@@ -24,7 +24,6 @@ that carry no Customer FK.
 """
 from __future__ import annotations
 
-import sys
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
@@ -86,7 +85,6 @@ class Command(BaseCommand):
             CustomerRating,
             CustomerServiceProfile,
             DeliveryJob,
-            DriverCashoutRequest,
             DriverPayout,
             NotificationLog,
             RideRequest,

@@ -11,7 +11,7 @@ import io
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
 
 # ══════════════════════════════════════════════════════════════════════════════

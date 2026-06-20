@@ -227,7 +227,7 @@ class LoginView(APIView):
         has_confirmed_device = False
         try:
             from django.db import OperationalError, ProgrammingError
-            from accounts.models import UserTOTPDevice  # noqa: avoid circular at module level
+            from accounts.models import UserTOTPDevice  # local import: avoid circular at module level
             has_confirmed_device = UserTOTPDevice.objects.filter(
                 user=user, confirmed=True
             ).exists()
@@ -982,7 +982,7 @@ class CustomerOrdersView(APIView):
             return Response({"orders": [], "count": 0})
 
         # Import Order + OrderItem from menu app — cross-app import is intentional here.
-        from menu.models import Order, OrderItem
+        from menu.models import Order
 
         PAGE_SIZE = 20
         try:
@@ -2827,8 +2827,6 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # re-exported here as thin aliases for any in-app reference; promo_is_active is the
 # one rule (it imports only stdlib, so this top-level import has no cross-app cycle).
 from menu.promos import (
-    promo_field as _promo_field,
-    coerce_date as _coerce_date,
     promo_is_active as _promo_is_active,
 )
 
@@ -3626,10 +3624,7 @@ class MarketplaceMenuView(APIView):
         try:
             with _sc(tenant.schema_name):
                 from menu.models import (
-                    SuperCategory as _SC,
-                    Category as _Cat,
                     Dish as _Dish,
-                    OptionGroup as _OG,
                 )
                 # Profile lives in tenancy.models, NOT menu.models — importing it from
                 # menu.models raised ImportError that the outer try/except swallowed into
@@ -5719,7 +5714,6 @@ class DriverJobListView(APIView):
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from .models import DeliveryJob
-        from django_tenants.utils import schema_context
 
         # Active job assigned to this driver
         active_jobs = list(
@@ -6222,7 +6216,7 @@ class DriverJobStatusUpdateView(APIView):
                     enqueue(
                         web_push_tenant,
                         _tenant.schema_name,
-                        f"Driver arrived \U0001f6f5",
+                        "Driver arrived \U0001f6f5",
                         f"{_driver_name} is at your {_place} — order #{job.order_number}",
                         "/owner/orders",
                     )

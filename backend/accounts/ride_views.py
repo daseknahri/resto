@@ -278,7 +278,6 @@ class RideCreateView(APIView):
 
     def post(self, request, *args, **kwargs):
         from datetime import timedelta
-        from decimal import Decimal
         from django.utils.dateparse import parse_datetime
         from .ride_service import estimate_ride
 

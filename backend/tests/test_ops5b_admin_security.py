@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
@@ -363,7 +363,6 @@ class TestAdminWriteAudits(SimpleTestCase):
         """
         from tenancy.api import OwnerDeletionRequestView
         from sales.models import AdminAuditLog
-        from accounts.models import User
 
         factory = APIRequestFactory()
         req = factory.post(
@@ -382,7 +381,6 @@ class TestAdminWriteAudits(SimpleTestCase):
         req.tenant.slug = "acme"
         req.tenant.name = "Acme"
 
-        from django.utils import timezone as _tz
         mock_now = MagicMock()
         mock_now.isoformat.return_value = "2026-06-14T00:00:00+00:00"
 
@@ -706,7 +704,6 @@ class TestPlanLimitLocking(SimpleTestCase):
     def test_staff_create_uses_select_for_update(self):
         """Staff limit check must call select_for_update() before counting."""
         from accounts.views import OwnerStaffListCreateView
-        from accounts.models import User
 
         tenant = MagicMock()
         tenant.id = 1
@@ -800,7 +797,6 @@ class TestBonusLedgerBalanceAfter(SimpleTestCase):
     def test_balance_after_matches_post_update_value(self, mock_cust_objs, mock_tx_objs):
         """balance_after must equal the value read AFTER the wallet update."""
         from accounts.views import AdminWalletBonusView
-        from decimal import Decimal
 
         def _vl_side(*args, **kwargs):
             if kwargs.get("flat"):

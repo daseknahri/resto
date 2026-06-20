@@ -420,7 +420,10 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 AUTH_USER_MODEL = "accounts.User"
 
-from .rest_framework import REST_FRAMEWORK  # noqa: E402
+# Defines the REST_FRAMEWORK Django setting (consumed by DRF, not by Python code in
+# this module) — so it reads as "unused" to a linter but removing it reverts DRF to
+# defaults and breaks auth/permissions/throttling. Keep the noqa.
+from .rest_framework import REST_FRAMEWORK  # noqa: F401, E402
 
 cors_origins = set(
     parse_csv_env(

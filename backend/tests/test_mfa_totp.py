@@ -20,8 +20,6 @@ Class B — DB-backed (pytest-django / TestCase, need Postgres in CI):
 All DB-backed tests skip gracefully when no Postgres is available (the 'errors'
 bucket in the local gate run — identical to all other DB tests in this project).
 """
-import hashlib
-import time
 from unittest.mock import MagicMock, patch
 
 import pyotp
@@ -294,7 +292,7 @@ class A5_TOTPReplayTests(SimpleTestCase):
     def test_verify_view_blocks_replay_via_mock(self):
         """MFAVerifyView rejects an already-used TOTP code (unit-level mock test)."""
         from unittest.mock import patch, MagicMock
-        from accounts.mfa_views import MFAVerifyView, _record_totp_used, _TOTP_REPLAY_TTL
+        from accounts.mfa_views import MFAVerifyView, _record_totp_used
         from django.core.cache import cache
         import pyotp as _pyotp
 

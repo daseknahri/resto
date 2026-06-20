@@ -10,10 +10,9 @@ All tests are SimpleTestCase (no DB) and verify:
   • CustomerProfileUpdateView accepts + validates birthday field
 """
 
-import json
 from datetime import date
-from unittest.mock import MagicMock, patch, PropertyMock
-from django.test import SimpleTestCase, override_settings
+from unittest.mock import MagicMock, patch
+from django.test import SimpleTestCase
 
 
 # ── Tier multiplier computation ───────────────────────────────────────────────

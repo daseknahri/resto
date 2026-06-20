@@ -231,8 +231,7 @@ def _patch_flash_sales(opted_rows=None, live_fs_objs=None):
     opted_rows: list of dicts like [{"tenant_id": 1, "flash_sale_id": 10}]
     live_fs_objs: list of mock PlatformFlashSale instances (each with .id, .is_active, .is_live())
     """
-    from contextlib import ExitStack
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock
 
     optin_mock = MagicMock()
     optin_mock.objects.values.return_value = opted_rows or []

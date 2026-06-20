@@ -13,9 +13,8 @@ Covered invariants:
 """
 
 import json
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
-from django.test import SimpleTestCase, RequestFactory, override_settings
+from django.test import SimpleTestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
 

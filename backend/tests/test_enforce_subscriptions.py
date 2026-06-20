@@ -98,7 +98,6 @@ class EnforceSubscriptionsTests(TransactionTestCase):
 
     def test_dry_run_changes_nothing(self):
         from sales.models import Subscription
-        from tenancy.models import Tenant
 
         tenant = _make_tenant("dryrun-resto", self.plan)
         Subscription.objects.create(

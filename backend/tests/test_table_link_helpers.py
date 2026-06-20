@@ -16,7 +16,7 @@ Unit tests for four pure-logic helpers on menu.views.TableLinkViewSet:
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
 

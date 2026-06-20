@@ -13,7 +13,7 @@ House-style rules:
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
@@ -282,7 +282,6 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         body executes, then supply a locked dish with stock_qty=0 so the _OutOfStock
         exception is raised and caught before any OrderItem.create call.
         """
-        from contextlib import contextmanager
 
         # transaction.atomic() as a plain passthrough (no real DB needed)
         class _FakeAtomic:

@@ -12,8 +12,7 @@
 All unit-level: SimpleTestCase + mocks, no real DB.
 """
 from decimal import Decimal
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
@@ -424,7 +423,6 @@ class SettleRideTests(SimpleTestCase):
     @patch("accounts.ride_service.PlatformConfig")
     def test_wallet_ride_uses_correct_idempotency_keys(self, mock_cfg, mock_debit, mock_credit):
         from accounts.ride_service import _do_settle
-        from accounts.models import WalletTransaction
 
         cfg = MagicMock()
         cfg.ride_commission_pct = Decimal("0")
@@ -886,7 +884,6 @@ class PerMinuteFareTests(SimpleTestCase):
         mock_cfg.get_solo.return_value = cfg
         result = estimate_ride(33.5, -7.6, 33.6, -7.7)
         # est_minutes = round(12 / 24 * 60) = 30
-        import math
         expected_minutes = int(round(12.0 / AVG_CITY_SPEED_KMH * 60))
         # fare = max(12, 8 + 3.5*12 + 1.0*30) = max(12, 80) = 80
         expected_fare = max(
@@ -1702,7 +1699,6 @@ class AdminAnalyticsRidesBlockTests(SimpleTestCase):
 
     def test_rides_aggregation_values(self):
         """Verify the rides block arithmetic: cash_paid = completed - wallet_paid."""
-        from rest_framework.response import Response as DRFResponse
 
         # Simulate what the view constructs for the rides block
         completed = 7
