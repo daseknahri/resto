@@ -480,12 +480,12 @@ class="min-w-0 flex-1 leading-snug"
                   <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                   <button
                     v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                    class="ui-press shrink-0 rounded p-0.5 text-slate-700 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                     :aria-label="t('waiterPage.voidItem')"
                     :disabled="voidingItemId === item.id"
                     @click.stop="voidItem(order, item)"
                   >
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
                   </button>
                 </li>
                 <!-- Combo sub-lines -->
@@ -703,12 +703,12 @@ class="min-w-0 flex-1 leading-snug"
                 <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                 <button
                   v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                  class="ui-press shrink-0 rounded p-0.5 text-slate-700 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                   :aria-label="t('waiterPage.voidItem')"
                   :disabled="voidingItemId === item.id"
                   @click.stop="voidItem(order, item)"
                 >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
                 </button>
               </li>
               <!-- Combo sub-lines -->
@@ -909,12 +909,12 @@ class="min-w-0 flex-1 leading-snug"
             <!-- Void affordance — only for non-voided items when waiter can manage orders -->
             <button
               v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-              class="ui-press shrink-0 rounded p-0.5 text-slate-700 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
               :aria-label="t('waiterPage.voidItem')"
               :disabled="voidingItemId === item.id"
               @click.stop="voidItem(order, item)"
             >
-              <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
             </button>
           </li>
         </ul>
