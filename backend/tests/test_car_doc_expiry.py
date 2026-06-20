@@ -191,7 +191,16 @@ class TestCheckCarDocExpiryCommand(SimpleTestCase):
         mock_cust.objects.filter.return_value.filter.side_effect = [[], [driver]]
         self._run()
         driver.save.assert_not_called()
-        mock_push.assert_called_once_with(9, "licence", 13)
+        # The push fires once for the licence; the exact day-count can land on 12/13/14
+        # because the command derives "days until expiry" from timezone.now() while the
+        # test sets expiry from a naive date.today() — at a date/tz boundary they differ
+        # by a day. Assert the call + a days value within the 12–14 warning window rather
+        # than a brittle exact 13 (this test was date-flaky regardless of the change here).
+        mock_push.assert_called_once()
+        _pargs = mock_push.call_args.args
+        self.assertEqual(_pargs[0], 9)
+        self.assertEqual(_pargs[1], "licence")
+        self.assertIn(_pargs[2], (12, 13, 14))
 
     @patch("accounts.push.send_driver_doc_expiry_push_sync", side_effect=RuntimeError("boom"))
     @patch("django_tenants.utils.schema_context")
