@@ -21,9 +21,16 @@ def _noop_atomic():
 
 
 class CreateCashoutTests(SimpleTestCase):
+    def setUp(self):
+        # create_cashout_request now locks the driver row inside transaction.atomic()
+        # (TOCTOU fix). Make atomic a no-op so these no-DB unit tests don't hit the DB.
+        self._atomic = patch("django.db.transaction.atomic", return_value=_noop_atomic())
+        self._atomic.start()
+        self.addCleanup(self._atomic.stop)
+
     @patch("accounts.models.Customer")
     def test_below_min_rejected(self, Cust):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+        Cust.objects.select_for_update.return_value.filter.return_value.first.return_value = SimpleNamespace(
             wallet_balance=Decimal("50"), driver_approved=True)
         with self.assertRaises(CashoutError) as ctx:
             create_cashout_request(1, "50")
@@ -31,7 +38,7 @@ class CreateCashoutTests(SimpleTestCase):
 
     @patch("accounts.models.Customer")
     def test_not_approved_rejected(self, Cust):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+        Cust.objects.select_for_update.return_value.filter.return_value.first.return_value = SimpleNamespace(
             wallet_balance=Decimal("150"), driver_approved=False)
         with self.assertRaises(CashoutError) as ctx:
             create_cashout_request(1, "120")
@@ -39,7 +46,7 @@ class CreateCashoutTests(SimpleTestCase):
 
     @patch("accounts.models.Customer")
     def test_amount_over_balance_rejected(self, Cust):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+        Cust.objects.select_for_update.return_value.filter.return_value.first.return_value = SimpleNamespace(
             wallet_balance=Decimal("120"), driver_approved=True)
         with self.assertRaises(CashoutError) as ctx:
             create_cashout_request(1, "200")
@@ -48,7 +55,7 @@ class CreateCashoutTests(SimpleTestCase):
     @patch("accounts.models.DriverCashoutRequest")
     @patch("accounts.models.Customer")
     def test_happy_path_creates_request(self, Cust, DCR):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+        Cust.objects.select_for_update.return_value.filter.return_value.first.return_value = SimpleNamespace(
             wallet_balance=Decimal("150"), driver_approved=True)
         DCR.objects.filter.return_value.exists.return_value = False  # code is unique + no pending
         DCR.objects.create.return_value = SimpleNamespace(id=1, amount=Decimal("120.00"), code="123456")

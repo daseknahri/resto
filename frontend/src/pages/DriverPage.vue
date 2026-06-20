@@ -1613,7 +1613,7 @@ const setVehicleType = async (vt) => {
   if (driverVehicleType.value === vt) return;
   busy.value = true;
   try {
-    await api.post('/driver/status/', { driver_vehicle_type: vt });
+    await api.patch('/driver/status/', { driver_vehicle_type: vt });
     driverVehicleType.value = vt;
     // Refresh rides — car gets offers, others won't
     if (vt === 'car') fetchRides();

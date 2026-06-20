@@ -6112,8 +6112,10 @@ class DriverJobStatusUpdateView(APIView):
                     job.code_attempts = (job.code_attempts or 0) + 1
                     _f = ["code_attempts"]
                     if job.code_attempts >= 5:
+                        # Lock for 5 min but DON'T reset the counter — resetting lets an
+                        # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
+                        # only on a correct code (the DELIVERED branch below).
                         job.code_locked_until = now + _td(minutes=5)
-                        job.code_attempts = 0
                         _f.append("code_locked_until")
                     job.save(update_fields=_f)
                     return Response(
@@ -6122,6 +6124,10 @@ class DriverJobStatusUpdateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
+                # Only an uploaded image URL is valid — reject non-http(s) schemes
+                # (javascript:/data:/internal) rather than storing them on the order.
+                if _proof_photo_url and not _proof_photo_url.lower().startswith(("http://", "https://")):
+                    _proof_photo_url = ""
 
             if new_status == DeliveryJob.Status.FAILED:
                 _reason = str(request.data.get("failure_reason") or "").strip()
@@ -6141,7 +6147,10 @@ class DriverJobStatusUpdateView(APIView):
                 update_fields.append("picked_up_at")
             elif new_status == DeliveryJob.Status.DELIVERED:
                 job.delivered_at = now
-                update_fields.append("delivered_at")
+                # Code verified correct → clear the brute-force guard for this job.
+                job.code_attempts = 0
+                job.code_locked_until = None
+                update_fields += ["delivered_at", "code_attempts", "code_locked_until"]
             elif new_status == DeliveryJob.Status.FAILED:
                 update_fields += ["failure_reason", "failure_note", "failed_at"]
             job.save(update_fields=update_fields)

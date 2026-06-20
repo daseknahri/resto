@@ -130,43 +130,48 @@ def create_cashout_request(driver_id, amount, *, ttl_seconds=CASHOUT_TTL_SECONDS
     from .models import Customer, DriverCashoutRequest
 
     amount = _money(amount)
-    cust = Customer.objects.filter(pk=driver_id).first()
-    if cust is None:
-        raise CashoutError("driver not found", code="not_found")
-    # Only approved drivers may extract cash (defense-in-depth; earning already requires approval).
-    if not getattr(cust, "driver_approved", False):
-        raise CashoutError("Your driver account isn't approved yet", code="not_approved")
-    balance = _money(cust.wallet_balance)
-    if balance < CASHOUT_MIN:
-        raise CashoutError(f"You need at least {CASHOUT_MIN} to cash out", code="below_min")
-    if amount <= 0 or amount > balance:
-        raise CashoutError("Enter an amount up to your balance", code="bad_amount")
-    # One live request at a time, so a driver can't hand out several codes against one balance.
-    if DriverCashoutRequest.objects.filter(
-        driver_id=driver_id,
-        status=DriverCashoutRequest.Status.PENDING,
-        expires_at__gt=timezone.now(),
-    ).exists():
-        raise CashoutError("You already have a pending cash-out — show or cancel it first",
-                           code="already_pending")
-
-    code = ""
-    for _ in range(12):
-        candidate = get_random_string(6, allowed_chars="0123456789")
-        if not DriverCashoutRequest.objects.filter(
-            code=candidate, status=DriverCashoutRequest.Status.PENDING
+    # Lock the driver's row so the "one live cash-out at a time" check + create are
+    # ATOMIC. Without the lock, two concurrent requests (double-tap / two tabs) can
+    # each pass the duplicate-pending check and mint two live codes against one
+    # balance (TOCTOU) — two tenants could then each redeem before the wallet debits.
+    with transaction.atomic():
+        cust = Customer.objects.select_for_update().filter(pk=driver_id).first()
+        if cust is None:
+            raise CashoutError("driver not found", code="not_found")
+        # Only approved drivers may extract cash (defense-in-depth; earning already requires approval).
+        if not getattr(cust, "driver_approved", False):
+            raise CashoutError("Your driver account isn't approved yet", code="not_approved")
+        balance = _money(cust.wallet_balance)
+        if balance < CASHOUT_MIN:
+            raise CashoutError(f"You need at least {CASHOUT_MIN} to cash out", code="below_min")
+        if amount <= 0 or amount > balance:
+            raise CashoutError("Enter an amount up to your balance", code="bad_amount")
+        # One live request at a time, so a driver can't hand out several codes against one balance.
+        if DriverCashoutRequest.objects.filter(
+            driver_id=driver_id,
+            status=DriverCashoutRequest.Status.PENDING,
+            expires_at__gt=timezone.now(),
         ).exists():
-            code = candidate
-            break
-    if not code:
-        raise CashoutError("could not allocate a code, try again", code="retry")
+            raise CashoutError("You already have a pending cash-out — show or cancel it first",
+                               code="already_pending")
 
-    return DriverCashoutRequest.objects.create(
-        driver_id=driver_id,
-        amount=amount,
-        code=code,
-        expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
-    )
+        code = ""
+        for _ in range(12):
+            candidate = get_random_string(6, allowed_chars="0123456789")
+            if not DriverCashoutRequest.objects.filter(
+                code=candidate, status=DriverCashoutRequest.Status.PENDING
+            ).exists():
+                code = candidate
+                break
+        if not code:
+            raise CashoutError("could not allocate a code, try again", code="retry")
+
+        return DriverCashoutRequest.objects.create(
+            driver_id=driver_id,
+            amount=amount,
+            code=code,
+            expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
+        )
 
 
 def confirm_cashout(code, *, tenant_id, actor_user_id=None):
@@ -219,7 +224,7 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             req.driver_id, req.amount,
             tx_type=WalletTransaction.Type.CASHOUT,
             idempotency_key=f"cashout:{req.id}",
-            reference=f"cashout:{code}",
+            reference=f"cashout:{req.id}",
             tenant_id=tenant_id,
             note="Driver cash-out",
             # Cash-out is a driver wallet op, not spend at this tenant's vertical —
@@ -231,7 +236,7 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
                 tenant_id, req.amount,
                 actor_user_id=actor_user_id,
                 idempotency_key=f"cashout:{req.id}:f",
-                reference=f"cashout:{code}",
+                reference=f"cashout:{req.id}",
                 note="Driver cash-out reimbursement",
             )
         except Exception:
