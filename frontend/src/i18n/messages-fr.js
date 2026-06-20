@@ -2020,6 +2020,13 @@ waiterPage: {
   clockOutFailed: "Impossible de pointer le depart — reessayez.",
   alreadyClockedIn: "Vous avez deja pointe votre arrivee.",
   notClockedIn: "Vous n'etes pas pointe actuellement.",
+  // Item A — tap-to-ready
+  markItemReady: "Marquer pret",
+  markItemNotReady: "Marquer non pret",
+  allReadyBtn: "Tout pret",
+  allReadyFailed: "Impossible de marquer tous les articles prets — reessayez.",
+  // Item C — needs-action tab
+  tabNeedsAction: "A traiter",
 },
 repeatAnalytics: {
   title: "Fidelisation client",

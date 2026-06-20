@@ -2022,6 +2022,11 @@ export const messages = {
       clockOutFailed: "Could not clock out — please try again.",
       alreadyClockedIn: "You are already clocked in.",
       notClockedIn: "You are not currently clocked in.",
+      markItemReady: "Mark ready",
+      markItemNotReady: "Mark not ready",
+      allReadyBtn: "All ready",
+      allReadyFailed: "Could not mark all items ready — please try again.",
+      tabNeedsAction: "Needs action",
     },
     repeatAnalytics: {
       title: "Repeat Business",
@@ -7161,6 +7166,11 @@ export const messages = {
       clockOutFailed: "Impossible de pointer le depart — reessayez.",
       alreadyClockedIn: "Vous avez deja pointe votre arrivee.",
       notClockedIn: "Vous n'etes pas pointe actuellement.",
+      markItemReady: "Marquer pret",
+      markItemNotReady: "Marquer non pret",
+      allReadyBtn: "Tout pret",
+      allReadyFailed: "Impossible de marquer tous les articles prets — reessayez.",
+      tabNeedsAction: "A traiter",
     },
     repeatAnalytics: {
       title: "Fidelisation client",

@@ -381,6 +381,32 @@ export const useWaiterStore = defineStore("waiter", {
     },
 
     // -------------------------------------------------------
+    // Bulk-ready — mark ALL items on an order ready in one call.
+    // Route: POST /api/staff/orders/<id>/items/ready-all/
+    // Optimistic: flip every non-voided item to is_ready=true; revert on failure.
+    // -------------------------------------------------------
+    async bulkItemsReady(orderId) {
+      const order = this.orders.find((o) => o.id === orderId);
+      if (!order) return false;
+      // Optimistic — save previous states so we can revert
+      const prev = (order.items || []).map((it) => ({ id: it.id, was: it.is_ready }));
+      for (const it of order.items || []) {
+        if (!it.is_voided) it.is_ready = true;
+      }
+      try {
+        await api.post(`/staff/orders/${orderId}/items/ready-all/`);
+        return true;
+      } catch {
+        // Revert optimistic changes
+        for (const p of prev) {
+          const it = order.items?.find((i) => i.id === p.id);
+          if (it) it.is_ready = p.was;
+        }
+        return false;
+      }
+    },
+
+    // -------------------------------------------------------
     // Flush the offline queue with exponential backoff + error classification.
     //
     // Error classification:

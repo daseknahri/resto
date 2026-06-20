@@ -2025,6 +2025,13 @@ waiterPage: {
   clockOutFailed: "Could not clock out — please try again.",
   alreadyClockedIn: "You are already clocked in.",
   notClockedIn: "You are not currently clocked in.",
+  // Item A — tap-to-ready
+  markItemReady: "Mark ready",
+  markItemNotReady: "Mark not ready",
+  allReadyBtn: "All ready",
+  allReadyFailed: "Could not mark all items ready — please try again.",
+  // Item C — needs-action tab
+  tabNeedsAction: "Needs action",
 },
 repeatAnalytics: {
   title: "Repeat Business",

@@ -464,6 +464,19 @@ class="min-w-0 flex-1 leading-snug"
                     v-if="item.is_voided"
                     class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
                   >{{ t('waiterPage.voidedBadge') }}</span>
+                  <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
+                  <button
+                    v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
+                    class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+                    :class="item.is_ready
+                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
+                      : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
+                    :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
+                    :aria-pressed="item.is_ready"
+                    @click.stop="doToggleItemReady(order, item)"
+                  >
+                    <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
+                  </button>
                   <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                   <button
                     v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
@@ -539,6 +552,13 @@ class="min-w-0 flex-1 leading-snug"
                   :disabled="firingCourseOrderId === order.id"
                   @click="fireCourse(order)"
                 >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+                <!-- All ready — bulk mark all items ready -->
+                <button
+                  v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  :disabled="allReadyBusyIds.has(order.id)"
+                  @click="doAllReady(order)"
+                >✓ {{ t('waiterPage.allReadyBtn') }}</button>
                 <button
                   v-if="canManageOrders && order.payment_status !== 'paid'"
                   class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -667,6 +687,19 @@ class="min-w-0 flex-1 leading-snug"
                   v-if="item.is_voided"
                   class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
                 >{{ t('waiterPage.voidedBadge') }}</span>
+                <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
+                <button
+                  v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
+                  class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+                  :class="item.is_ready
+                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
+                    : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
+                  :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
+                  :aria-pressed="item.is_ready"
+                  @click.stop="doToggleItemReady(order, item)"
+                >
+                  <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
+                </button>
                 <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                 <button
                   v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
@@ -742,6 +775,13 @@ class="min-w-0 flex-1 leading-snug"
                 :disabled="firingCourseOrderId === order.id"
                 @click="fireCourse(order)"
               >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+              <!-- All ready — bulk mark all items ready -->
+              <button
+                v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                :disabled="allReadyBusyIds.has(order.id)"
+                @click="doAllReady(order)"
+              >✓ {{ t('waiterPage.allReadyBtn') }}</button>
               <button
                 v-if="canManageOrders && order.payment_status !== 'paid'"
                 class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -852,6 +892,19 @@ class="min-w-0 flex-1 leading-snug"
               v-if="item.is_voided"
               class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
             >{{ t('waiterPage.voidedBadge') }}</span>
+            <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
+            <button
+              v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
+              class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+              :class="item.is_ready
+                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
+                : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
+              :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
+              :aria-pressed="item.is_ready"
+              @click.stop="doToggleItemReady(order, item)"
+            >
+              <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
+            </button>
             <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
             <!-- Void affordance — only for non-voided items when waiter can manage orders -->
             <button
@@ -921,6 +974,14 @@ class="min-w-0 flex-1 leading-snug"
             :disabled="firingCourseOrderId === order.id"
             @click="fireCourse(order)"
           >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+
+          <!-- All ready — bulk mark all items ready -->
+          <button
+            v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+            class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            :disabled="allReadyBusyIds.has(order.id)"
+            @click="doAllReady(order)"
+          >✓ {{ t('waiterPage.allReadyBtn') }}</button>
 
           <!-- Settle — opens a Cash / Wallet chooser, then marks paid (and closes
                a ready dine-in order). -->
@@ -1065,6 +1126,16 @@ class="min-w-0 flex-1 leading-snug"
             <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
               {{ t('waiterPage.splitAmount') }}
             </label>
+            <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
+            <div class="flex gap-1.5">
+              <button
+                v-for="n in [2, 3, 4, 5]"
+                :key="n"
+                type="button"
+                class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
+              >÷{{ n }}</button>
+            </div>
             <input
               :id="'settle-amount-' + settleChooser.id"
               v-model="splitAmount"
@@ -1446,6 +1517,28 @@ const voidItem = async (order, item) => {
     toast.show(t('waiterPage.voidFailed'), 'error');
   } finally {
     voidingItemId.value = null;
+  }
+};
+
+// ── Item readiness ─────────────────────────────────────────────────────────────
+// Statuses where it makes sense for a waiter to tick items ready (at the pass).
+const ITEM_READY_STATUSES = new Set(['confirmed', 'preparing', 'ready']);
+
+const allReadyBusyIds = ref(new Set());
+
+const doToggleItemReady = async (order, item) => {
+  if (!canManageOrders.value) return;
+  await waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+};
+
+const doAllReady = async (order) => {
+  if (allReadyBusyIds.value.has(order.id)) return;
+  allReadyBusyIds.value = new Set([...allReadyBusyIds.value, order.id]);
+  try {
+    const ok = await waiter.bulkItemsReady(order.id);
+    if (!ok) toast.show(t('waiterPage.allReadyFailed'), 'error');
+  } finally {
+    allReadyBusyIds.value = new Set([...allReadyBusyIds.value].filter((id) => id !== order.id));
   }
 };
 
@@ -1959,10 +2052,15 @@ const submitPasswordChange = async () => {
 };
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
-const activeTab = ref("all");
+const activeTab = ref("needs_action");
 const searchQuery = ref("");
 
+const needsActionOrders = computed(() =>
+  waiter.orders.filter((o) => o.status === "pending" || o.status === "ready")
+);
+
 const tabs = computed(() => [
+  { key: "needs_action", label: t("waiterPage.tabNeedsAction"), count: needsActionOrders.value.length },
   { key: "all", label: t("waiterPage.tabAll"), count: waiter.orders.length },
   { key: "pending", label: t("waiterPage.tabPending"), count: waiter.byStatus.pending.length },
   { key: "confirmed", label: t("waiterPage.tabConfirmed"), count: waiter.byStatus.confirmed.length },
@@ -1974,6 +2072,7 @@ const tabs = computed(() => [
 const visibleOrders = computed(() => {
   let orders;
   if (activeTab.value === "recent") orders = waiter.recentOrders;
+  else if (activeTab.value === "needs_action") orders = needsActionOrders.value;
   else if (activeTab.value === "all") orders = waiter.orders;
   else if (activeTab.value === "unpaid") orders = waiter.unpaidOrders;
   else orders = waiter.byStatus[activeTab.value] ?? [];
@@ -1996,7 +2095,7 @@ watch(activeTab, (tab) => {
 
 // Arrow-key navigation within the tablist (ARIA APG tab pattern).
 // Only moves focus — activation stays on click/Enter to match existing behavior.
-const _allTabKeys = ["all", "pending", "confirmed", "preparing", "ready", "unpaid", "recent", "shift"];
+const _allTabKeys = ["needs_action", "all", "pending", "confirmed", "preparing", "ready", "unpaid", "recent", "shift"];
 const _focusTabByKey = (key) => {
   const el = document.getElementById(`waiter-tab-${key}`);
   el?.focus();
