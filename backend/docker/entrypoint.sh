@@ -91,11 +91,14 @@ if [ "${USE_ASGI:-1}" = "1" ]; then
   exec uvicorn config.asgi:application \
     --host 0.0.0.0 \
     --port 8000 \
-    --workers "${GUNICORN_WORKERS:-3}" \
+    --workers "${GUNICORN_WORKERS:-$(( $(nproc) * 2 + 1 ))}" \
+    --loop uvloop \
+    --http httptools \
     --proxy-headers \
     --forwarded-allow-ips='172.16.0.0/12' \
     --timeout-keep-alive 75 \
-    --timeout-graceful-shutdown 30
+    --timeout-graceful-shutdown 30 \
+    --backlog 256
 else
   exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \

@@ -9,3 +9,10 @@ media/
 staticfiles/
 .env
 *.log
+tests/
+docs/
+*.md
+*.rst
+.git/
+# Re-include requirements.txt in case a future *.txt rule would exclude it.
+!requirements.txt

@@ -59,6 +59,13 @@ http {\n\
     default_type  application/octet-stream;\n\
     sendfile      on;\n\
     keepalive_timeout 65;\n\
+    server_tokens off;\n\
+    tcp_nopush on;\n\
+    tcp_nodelay on;\n\
+    open_file_cache max=1000 inactive=60s;\n\
+    open_file_cache_valid 30s;\n\
+    open_file_cache_min_uses 2;\n\
+    keepalive_requests 1000;\n\
 \n\
     # R13: redirect all nginx temp/cache dirs to /tmp so they are writable\n\
     # by the non-root nginx user (UID 101) without any volume mounts.\n\
