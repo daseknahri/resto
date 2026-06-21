@@ -188,3 +188,41 @@ def denormalize_closures_on_save(sender, instance, **kwargs):
 @receiver(post_delete, sender="menu.ClosureDate")
 def denormalize_closures_on_delete(sender, instance, **kwargs):
     _denormalize_current_tenant_closures()
+
+
+def _bust_section_names_cache():
+    """Clear the section_names cache entry for the current tenant.
+
+    Called whenever a TableSection or TableLink is saved or deleted so the
+    next StaffOrderListView poll rebuilds the slug→name dict. Best-effort:
+    a cache-backend error must never break the model save/delete.
+    """
+    from django.core.cache import cache as _cache
+
+    tenant = getattr(connection, "tenant", None)
+    schema = getattr(tenant, "schema_name", None) or "public"
+    key = f"section_names:{schema}"
+    try:
+        _cache.delete(key)
+    except Exception:
+        logger.exception("Failed to bust section_names cache for schema %s", schema)
+
+
+@receiver(post_save, sender="menu.TableSection")
+def bust_section_names_on_section_save(sender, instance, **kwargs):
+    _bust_section_names_cache()
+
+
+@receiver(post_delete, sender="menu.TableSection")
+def bust_section_names_on_section_delete(sender, instance, **kwargs):
+    _bust_section_names_cache()
+
+
+@receiver(post_save, sender="menu.TableLink")
+def bust_section_names_on_link_save(sender, instance, **kwargs):
+    _bust_section_names_cache()
+
+
+@receiver(post_delete, sender="menu.TableLink")
+def bust_section_names_on_link_delete(sender, instance, **kwargs):
+    _bust_section_names_cache()

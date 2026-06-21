@@ -39,12 +39,17 @@ app.use(router);
 const localeStore = useLocaleStore(pinia);
 localeStore.bootstrap();
 
-// Pre-load the active locale catalog so the first paint uses the right language.
-// EN is already bundled synchronously; for FR/AR this kicks off a parallel fetch
-// that resolves before or shortly after the first render without blocking mount.
-// Fire-and-forget: swallow a failed chunk fetch (the UI falls back to EN strings)
-// so it doesn't surface as an unhandledRejection / Sentry noise.
-ensureLocale(localeStore.current).catch(() => {});
+// Load EN (fallback) + the active locale in parallel before mount so:
+//   1. The EN fallback catalog is always in catalog.en before first paint —
+//      no raw translation-key strings are ever shown.
+//   2. AR/FR visitors see their language immediately without a locale-switch flash.
+// Both chunks are fetched in parallel; mount waits for both.
+// A failed chunk fetch (flaky network) is swallowed — EN alone is enough to
+// render the UI without raw keys, and the active locale can retry on next switch.
+await Promise.all([
+  ensureLocale("en"),
+  localeStore.current !== "en" ? ensureLocale(localeStore.current) : Promise.resolve(),
+]).catch(() => {});
 
 initSentry(app);
 app.mount("#app");

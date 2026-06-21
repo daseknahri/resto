@@ -310,6 +310,9 @@ class TableLink(models.Model):
 
     class Meta:
         ordering = ("position", "label", "id")
+        indexes = [
+            models.Index(fields=["section", "slug"], name="tablelink_section_slug_idx"),
+        ]
 
     def __str__(self) -> str:
         return self.label

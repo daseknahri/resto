@@ -28,10 +28,17 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Split vendor code from app code so browser caches them independently.
-        // vue/pinia/vue-router rarely change; axios/sentry less so.
-        manualChunks: {
-          'vendor-vue': ['vue', 'vue-router', 'pinia'],
-          'vendor-http': ['axios'],
+        // Function form lets us isolate large, stable packages (Sentry, Leaflet)
+        // into their own named chunks so app-code deploys don't bust their cache.
+        manualChunks(id) {
+          if (id.includes('/node_modules/@sentry/')) return 'vendor-sentry';
+          if (id.includes('/node_modules/leaflet/')) return 'vendor-leaflet';
+          if (
+            id.includes('/node_modules/vue/') ||
+            id.includes('/node_modules/vue-router/') ||
+            id.includes('/node_modules/pinia/')
+          ) return 'vendor-vue';
+          if (id.includes('/node_modules/axios/')) return 'vendor-http';
         },
       },
     },

@@ -340,6 +340,7 @@ class CustomerOrderRef(models.Model):
         ]
         indexes = [
             models.Index(fields=["customer", "-order_created_at"], name="order_ref_customer_recent_idx"),
+            models.Index(fields=["customer", "status", "-order_created_at"], name="ordref_cust_status_creat_idx"),
         ]
 
     def __str__(self) -> str:
@@ -935,6 +936,7 @@ class DeliveryJob(models.Model):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["status", "owner_alerted_at"]),
+            models.Index(fields=["driver", "status"], name="deliveryjob_driver_status_idx"),
         ]
 
     def __str__(self) -> str:
@@ -1110,6 +1112,7 @@ class RideRequest(models.Model):
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["driver", "status"]),
+            models.Index(fields=["rider", "kind", "status"], name="ridereq_rider_kind_status_idx"),
         ]
 
     def __str__(self) -> str:

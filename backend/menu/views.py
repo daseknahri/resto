@@ -4099,9 +4099,21 @@ class StaffOrderListView(APIView):
                 )
 
         # Section label per table slug, for display on the waiter cards.
-        section_name_by_slug = dict(
-            TableLink.objects.exclude(section__isnull=True).values_list("slug", "section__name")
-        )
+        # Cache the JOIN dict per tenant (TTL 60 s) — busted by TableSection/TableLink signals.
+        _tenant_schema = getattr(getattr(request, "tenant", None), "schema_name", None) or "public"
+        _sn_cache_key = f"section_names:{_tenant_schema}"
+        try:
+            section_name_by_slug = cache.get(_sn_cache_key)
+        except Exception:
+            section_name_by_slug = None
+        if section_name_by_slug is None:
+            section_name_by_slug = dict(
+                TableLink.objects.exclude(section__isnull=True).values_list("slug", "section__name")
+            )
+            try:
+                cache.set(_sn_cache_key, section_name_by_slug, 60)
+            except Exception:
+                pass  # cache failure is non-fatal
 
         # ── Materialise query once so we can batch-join delivery jobs ─────────
         order_objects = list(qs[:100])

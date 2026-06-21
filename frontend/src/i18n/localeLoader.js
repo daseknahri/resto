@@ -1,16 +1,15 @@
 /**
- * Reactive locale-message store with lazy-loading for non-default locales.
+ * Reactive locale-message store with lazy-loading for ALL locale catalogs.
  *
- * - EN is bundled synchronously (the default locale, needed on first paint).
- * - FR and AR are dynamically imported when first requested, so Vite splits
- *   them into separate chunks that are only fetched on locale switch.
- *
- * The verify-i18n scripts import messages.js directly (Node.js static import)
- * so they are unaffected by this change.
+ * - EN, FR, and AR are all dynamically imported so Vite splits each into its
+ *   own chunk. EN is no longer bundled into the entry chunk.
+ * - Callers that need the EN fallback in place before first paint (e.g. main.js)
+ *   must await ensureLocale('en') before app.mount().
+ * - The verify-i18n scripts import messages.js directly (Node.js static import)
+ *   so they are unaffected by this change.
  */
 
 import { reactive } from "vue";
-import enMessages from "./messages-en.js";
 import { DEFAULT_LOCALE } from "./config.js";
 
 // ---------------------------------------------------------------------------
@@ -71,10 +70,9 @@ const mergeLocaleInto = (target, source) => {
 /**
  * catalog holds the resolved (merged) message objects per locale code.
  * Using reactive() so that components re-render when a new locale loads.
+ * Starts empty — all locales (including EN) are loaded via ensureLocale().
  */
-export const catalog = reactive({
-  en: enMessages,
-});
+export const catalog = reactive({});
 
 /** Tracks in-flight or completed dynamic-import promises to avoid double-loading. */
 const loading = {};
@@ -90,13 +88,22 @@ export const ensureLocale = async (locale) => {
   if (loading[locale]) return loading[locale]; // in flight
 
   let promise;
-  if (locale === "fr") {
+  if (locale === "en") {
+    promise = import("./messages-en.js").then((mod) => {
+      catalog.en = mod.default;
+    });
+  } else if (locale === "fr") {
     promise = import("./messages-fr.js").then((mod) => {
       catalog[locale] = mod.default;
     });
   } else if (locale === "ar") {
-    promise = import("./messages-ar.js").then((mod) => {
-      catalog[locale] = mergeLocaleInto(cloneLocaleValue(enMessages), mod.default);
+    // AR is a merge of EN (base) + AR overrides. Ensure EN is loaded first so
+    // the clone source is available, then fetch AR in parallel.
+    promise = Promise.all([
+      ensureLocale("en"),
+      import("./messages-ar.js"),
+    ]).then(([, arMod]) => {
+      catalog[locale] = mergeLocaleInto(cloneLocaleValue(catalog.en), arMod.default);
     });
   } else {
     return; // unknown locale → EN fallback at call sites; nothing to load.
