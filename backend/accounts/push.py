@@ -518,8 +518,6 @@ def send_ride_predispatch_reminder_sync(rider_id, kind, minutes_remaining) -> in
     with schema_context("public"):
         cust = Customer.objects.filter(pk=rider_id).first()
         subs = list(CustomerPushSubscription.objects.filter(customer_id=rider_id))
-    if not subs:
-        return 0
 
     loc = (getattr(cust, "locale", "") or "en")
     pool = _RIDE_PREDISPATCH_MESSAGES[kind]
@@ -528,6 +526,20 @@ def send_ride_predispatch_reminder_sync(rider_id, kind, minutes_remaining) -> in
     msg = pool[loc]
     title = msg["title"]
     body = msg["body"].format(n=minutes_remaining)
+
+    # Durable inbox row mirroring the predispatch reminder push (written even with no subs).
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=rider_id, title=title, body=body, url="/",
+            type=f"ride.predispatch_reminder.{kind}",
+            vertical=("courier" if kind == "package" else "rides"),
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return 0
 
     gone, sent = [], 0
     for s in subs:
@@ -833,6 +845,18 @@ def send_campaign_push_sync(customer_id, tenant_name, title, message, url) -> in
         if cust is not None and not getattr(cust, "notify_promotions", True):
             return 0
         subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
+
+    # Durable inbox row mirroring the promo (opted-in only — opt-out returned above);
+    # seen even if the push is missed/denied.
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=customer_id, title=title, body=message, url=url or "",
+            type="campaign", vertical="general",
+        )
+    except Exception:
+        pass
+
     if not subs:
         return 0
 
