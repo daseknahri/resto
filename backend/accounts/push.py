@@ -551,6 +551,80 @@ def send_ride_predispatch_reminder_sync(rider_id, kind, minutes_remaining) -> in
     return sent
 
 
+# ── Recipient package-tracking SMS ───────────────────────────────────────────────
+# Sent to the RECIPIENT (who has no account) at dispatch and on collection. The SMS
+# body is locale-aware (best-effort: uses the SENDER's locale, since the recipient is
+# anonymous). {link} = absolute public /track/<token> URL.
+_RECIPIENT_TRACK_SMS = {
+    "dispatched": {
+        "en": "A package is on its way to you. Track it live here: {link}",
+        "fr": "Un colis vous est expedie. Suivez-le en direct ici : {link}",
+        "ar": "هناك طرد في طريقه إليك. تتبّعه مباشرة هنا: {link}",
+    },
+    "in_progress": {
+        "en": "Your courier has collected the package and is on the way. Track + show your code: {link}",
+        "fr": "Votre coursier a recupere le colis et arrive. Suivez + montrez votre code : {link}",
+        "ar": "استلم الساعي الطرد وهو في الطريق إليك. تتبّع واعرض رمزك: {link}",
+    },
+}
+
+
+def _recipient_track_link(token: str) -> str:
+    """Absolute public tracking URL for a recipient token. Server-authoritative host
+    (never the spoofable request Host), mirroring marketing-mail link building."""
+    from accounts.messaging import _brand_https_base
+    return f"{_brand_https_base()}/track/{token}"
+
+
+def send_recipient_track_sms_sync(ride_id, event) -> bool:
+    """SMS the package recipient their public tracking link. SYNCHRONOUS; best-effort.
+
+    event — "dispatched" (sent at create) or "in_progress" (sent on collection).
+    Returns True if an SMS was delivered. Never raises. Resolves the recipient phone,
+    token and sender locale from the public RideRequest row, then sends via the generic
+    menu.sms.send_sms (which records a NotificationLog row for every outcome).
+    """
+    from django_tenants.utils import schema_context
+    from menu.sms import send_sms
+    from .models import Customer, RideRequest
+
+    pool = _RECIPIENT_TRACK_SMS.get(event)
+    if not pool:
+        return False
+
+    with schema_context("public"):
+        ride = RideRequest.objects.filter(pk=ride_id).first()
+        if ride is None or ride.kind != RideRequest.Kind.PACKAGE:
+            return False
+        token = ride.recipient_track_token or ""
+        phone = ride.recipient_phone or ""
+        rider_locale = ""
+        if ride.rider_id:
+            rider_locale = (
+                Customer.objects.filter(pk=ride.rider_id)
+                .values_list("locale", flat=True)
+                .first()
+                or ""
+            )
+    if not token or not phone:
+        return False
+
+    loc = rider_locale if rider_locale in pool else "en"
+    body = pool[loc].format(link=_recipient_track_link(token))
+    return send_sms(
+        phone, body,
+        event=f"recipient.track.{event}",
+        reference=str(ride_id),
+        detail="package",
+    )
+
+
+def push_recipient_track_sms(ride_id, event) -> None:
+    """Enqueue the recipient-tracking SMS (dispatched | in_progress). Never raises/blocks."""
+    from accounts.tasks import enqueue, recipient_track_sms
+    enqueue(recipient_track_sms, ride_id, event)
+
+
 _RIDE_OFFER_MESSAGES = {
     "en": {"title": "New ride request", "body": "A rider needs a car nearby — tap to view."},
     "fr": {"title": "Nouvelle demande de course", "body": "Un passager cherche une voiture — touchez pour voir."},

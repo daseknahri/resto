@@ -592,6 +592,15 @@ class Order(models.Model):
             "Null = not yet sent. Used to prevent double-sending."
         ),
     )
+    sla_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Stamped when the server-side SLA-escalation push is sent to owner/manager "
+            "devices for an order left PENDING past Profile.pending_sla_minutes. "
+            "Null = not yet escalated. Used so each stale order escalates at most once."
+        ),
+    )
     tip_amount = models.DecimalField(
         max_digits=8,
         decimal_places=2,

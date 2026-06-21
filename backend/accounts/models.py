@@ -1068,6 +1068,17 @@ class RideRequest(models.Model):
     code_attempts = models.PositiveSmallIntegerField(default=0)
     code_locked_until = models.DateTimeField(null=True, blank=True)
 
+    # ── Recipient public-tracking token (migration 0061) ──────────────────────
+    # Generated at create time ONLY for kind='package' — an opaque, URL-safe,
+    # unguessable token (NOT sequential, NOT the pk). The recipient (who has no
+    # account) receives a tokenized public link (/track/<token>) by SMS at
+    # dispatch; the public no-auth track view resolves the trip by this token and
+    # returns a recipient-safe projection. Empty for rides. Indexed for O(1)
+    # lookup. Never exposed in driver/admin payloads.
+    recipient_track_token = models.CharField(
+        max_length=43, blank=True, default="", db_index=True
+    )
+
     class Meta:
         ordering = ("-created_at",)
         indexes = [

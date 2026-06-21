@@ -17,6 +17,7 @@ from accounts.ride_views import (
     DriverRateRideView,
     AdminRideListView,
     AdminCarApprovalView,
+    RecipientTrackView,
 )
 from accounts.mfa_views import (
     MFASetupView,
@@ -225,6 +226,7 @@ shared_api_urlpatterns = [
     path("api/rides/", RideCreateView.as_view(), name="ride-create"),
     path("api/rides/active/", RideActiveView.as_view(), name="ride-active"),
     path("api/rides/history/", RideHistoryView.as_view(), name="ride-history"),
+    path("api/track/<str:token>/", RecipientTrackView.as_view(), name="recipient-track"),
     path("api/rides/<int:ride_id>/cancel/", RideCancelView.as_view(), name="ride-cancel"),
     path("api/rides/<int:ride_id>/rate/", RideRateView.as_view(), name="ride-rate"),
     path("api/admin/rides/", AdminRideListView.as_view(), name="admin-ride-list"),

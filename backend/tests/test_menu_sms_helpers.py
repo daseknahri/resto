@@ -134,3 +134,51 @@ class NormalizePhoneTests(SimpleTestCase):
     def test_letters_stripped_entirely(self):
         """Letters are filtered out; only digits and '+' survive."""
         self.assertEqual(_normalize_phone("ABC12345678"), "+12345678")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# send_sms — generic transactional sender (best-effort, never raises)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SendSmsTests(SimpleTestCase):
+    """menu.sms.send_sms: generic body, non-raising, records every outcome."""
+
+    @patch("accounts.notifications.record_notification")
+    @patch("menu.sms._credentials", return_value=None)
+    def test_no_credentials_returns_false_and_records_skipped(self, _creds, mock_rec):
+        from menu.sms import send_sms
+        ok = send_sms("+212600000000", "hi", event="recipient.track.dispatched", reference="9")
+        self.assertFalse(ok)
+        self.assertEqual(mock_rec.call_args.kwargs["status"], "skipped")
+        self.assertEqual(mock_rec.call_args.kwargs["event"], "recipient.track.dispatched")
+
+    @patch("accounts.notifications.record_notification")
+    @patch("menu.sms._credentials", return_value=("AC", "tok", "+1555"))
+    def test_invalid_phone_returns_false_and_records_skipped(self, _creds, mock_rec):
+        from menu.sms import send_sms
+        ok = send_sms("123", "hi", event="recipient.track.dispatched")
+        self.assertFalse(ok)
+        self.assertEqual(mock_rec.call_args.kwargs["status"], "skipped")
+
+    @patch("accounts.notifications.record_notification")
+    @patch("menu.sms._credentials", return_value=("AC", "tok", "+1555"))
+    def test_success_posts_body_and_returns_true(self, _creds, mock_rec):
+        from menu.sms import send_sms
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.status_code = 201
+            ok = send_sms("+212600000000", "track: https://x/track/abc",
+                          event="recipient.track.dispatched", reference="9")
+        self.assertTrue(ok)
+        # body forwarded verbatim to Twilio
+        self.assertEqual(mock_post.call_args.kwargs["data"]["Body"], "track: https://x/track/abc")
+        self.assertEqual(mock_rec.call_args.kwargs["status"], "sent")
+
+    @patch("accounts.notifications.record_notification")
+    @patch("menu.sms._credentials", return_value=("AC", "tok", "+1555"))
+    def test_transient_failure_returns_false_without_raising(self, _creds, mock_rec):
+        """Unlike send_order_ready_sms, send_sms swallows provider errors (no retry)."""
+        from menu.sms import send_sms
+        with patch("requests.post", side_effect=RuntimeError("network down")):
+            ok = send_sms("+212600000000", "hi", event="recipient.track.in_progress")
+        self.assertFalse(ok)
+        self.assertEqual(mock_rec.call_args.kwargs["status"], "failed")

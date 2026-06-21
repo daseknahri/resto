@@ -4195,6 +4195,24 @@ class MarketplacePlaceOrderView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
 
+                # Busy-mode snooze parity with PlaceOrderView: reject ASAP orders
+                # while the owner has paused new online orders, returning the
+                # auto-resume time so the storefront can show a countdown. Advance
+                # orders (for a future slot) are unaffected.
+                from menu.views import (
+                    _orders_paused_now as _mkt_paused,
+                    _busy_extra_minutes_now as _mkt_busy_extra,
+                )
+                if not _wants_schedule and _mkt_paused(profile):
+                    return Response(
+                        {
+                            "detail": "We're not accepting new orders right now. Please try again shortly.",
+                            "code": "ordering_paused",
+                            "resume_at": profile.orders_paused_until.isoformat(),
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
                 # Validate the requested advance-fulfilment time (pickup/delivery only,
                 # future within the lead window, inside opening hours). Reuses the same
                 # helpers as the direct checkout for identical behaviour.
@@ -4659,6 +4677,18 @@ class MarketplacePlaceOrderView(APIView):
                             return Response({"detail": "Order could not be placed. Please try again."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
                         from menu.views import _generate_delivery_code as _gen_delivery_code
+                        # Busy-mode quote bump (parity with PlaceOrderView): stamp a
+                        # slower up-front estimate while the kitchen is slammed so the
+                        # customer sees the busy quote at checkout.
+                        _mkt_extra = _mkt_busy_extra(profile)
+                        _mkt_est_ready = None
+                        if _mkt_extra > 0:
+                            _mkt_base = getattr(profile, "default_prep_minutes", None) or 20
+                            try:
+                                _mkt_est_ready = int(_mkt_base) + _mkt_extra
+                            except (TypeError, ValueError):
+                                _mkt_est_ready = None
+
                         order = _Order.objects.create(
                             order_number=order_number,
                             status=_Order.Status.SCHEDULED if _is_scheduled else _Order.Status.PENDING,
@@ -4683,6 +4713,7 @@ class MarketplacePlaceOrderView(APIView):
                             applied_promotion_name=_applied_promo_name,
                             loyalty_discount=_loyalty_discount,
                             redeemed_loyalty_points=(_loyalty_points_spent or None),
+                            estimated_ready_minutes=_mkt_est_ready,
                             idempotency_key=_mkt_idem_key,
                         )
                         for item_data in order_items_data:

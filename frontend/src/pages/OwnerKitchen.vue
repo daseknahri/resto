@@ -46,6 +46,8 @@
         >
           {{ allDay ? t('kitchen.allDayHide') : t('kitchen.allDay') }}
         </button>
+        <!-- Busy mode: snooze new orders / slow-the-kitchen quote bump (shared sheet) -->
+        <BusyModeControl compact />
         <!-- 86 board button (contract 7) -->
         <button
           class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -524,6 +526,7 @@
 <script setup>
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
+import BusyModeControl from "../components/BusyModeControl.vue";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";

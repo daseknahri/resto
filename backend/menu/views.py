@@ -225,6 +225,52 @@ def _is_restaurant_currently_open(profile) -> bool:
     return bool(profile.is_open)
 
 
+# ── Busy mode / order throttling (Toast/Deliveroo parity) ───────────────────
+# An owner can SNOOZE new online orders for a set period with a TIMED auto-resume
+# (so ordering is never silently left off) and/or BUMP the quoted prep time while
+# slammed. Both are purely time-based — evaluated here at order-placement and
+# surfaced to the owner via a live countdown. Additive: when the fields are
+# null/0/past, these helpers are no-ops and ordering behaves exactly as before.
+
+
+def _orders_paused_now(profile) -> bool:
+    """True iff this tenant is currently snoozing NEW online orders.
+
+    Auto-resume is implicit: once ``orders_paused_until`` is in the past the
+    pause silently lifts with no cron. Never raises — a missing/garbage value
+    means "not paused" so a bad field can never wedge ordering shut.
+    """
+    until = getattr(profile, "orders_paused_until", None)
+    if not until:
+        return False
+    try:
+        return until > timezone.now()
+    except Exception:
+        return False
+
+
+def _busy_extra_minutes_now(profile) -> int:
+    """Extra minutes to add to the quoted ready/ETA while the kitchen is slammed.
+
+    Returns ``busy_extra_minutes`` only while ``busy_extra_until`` is still in the
+    future; once it passes (or either field is unset) the bump auto-clears and 0
+    is returned. Never raises — defaults to 0 on any bad value.
+    """
+    try:
+        extra = int(getattr(profile, "busy_extra_minutes", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    if extra <= 0:
+        return 0
+    until = getattr(profile, "busy_extra_until", None)
+    if not until:
+        return 0
+    try:
+        return extra if until > timezone.now() else 0
+    except Exception:
+        return 0
+
+
 # ── Advance / scheduled orders ──────────────────────────────────────────────
 # A customer may place a pickup/delivery order now for a future time. It is paid
 # up front (wallet), kept hidden from the kitchen as status=SCHEDULED, then moved
@@ -2349,6 +2395,21 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # Busy-mode snooze: while the owner has paused NEW online orders the kitchen
+        # is slammed, so reject ASAP orders with a clear, machine-readable reason +
+        # the auto-resume time (so the storefront can show 'Resuming in N min'). An
+        # ADVANCE/scheduled order is for a future slot and is unaffected — staff can
+        # still take pre-orders. Owner/admin preview placements bypass the snooze.
+        if not can_preview and not _wants_schedule and _orders_paused_now(profile):
+            return Response(
+                {
+                    "detail": "We're not accepting new orders right now. Please try again shortly.",
+                    "code": "ordering_paused",
+                    "resume_at": profile.orders_paused_until.isoformat(),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         # OPS-3 contract A: idempotency-key pre-check (before serializer so a
         # retry with a valid key never fails on a stale/missing items body).
         # The SPA mints a UUIDv4 when the checkout modal opens and clears it on
@@ -2966,6 +3027,21 @@ class PlaceOrderView(APIView):
                     if getattr(_ru, "role", None) in {_U.Roles.TENANT_OWNER, _U.Roles.TENANT_STAFF}:
                         _staff_creator_id = _ru.id
 
+                # Busy-mode quote bump: when the kitchen is slammed the owner adds
+                # +N min to quotes. We stamp an up-front estimate (default prep +
+                # bump) so the customer sees the slower quote at checkout rather
+                # than being surprised. Only applied when a bump is active — an
+                # un-busy order keeps the normal "no estimate until owner confirms"
+                # behaviour untouched.
+                _busy_extra = _busy_extra_minutes_now(profile)
+                _est_ready_at_placement = None
+                if _busy_extra > 0:
+                    _base_prep = getattr(profile, "default_prep_minutes", None) or 20
+                    try:
+                        _est_ready_at_placement = int(_base_prep) + _busy_extra
+                    except (TypeError, ValueError):
+                        _est_ready_at_placement = None
+
                 order = Order.objects.create(
                     order_number=order_number,
                     status=Order.Status.SCHEDULED if _is_scheduled else Order.Status.PENDING,
@@ -2991,6 +3067,7 @@ class PlaceOrderView(APIView):
                     applied_promotion_name=_best_promo.name if _best_promo else "",
                     loyalty_discount=_loyalty_discount,
                     redeemed_loyalty_points=(_loyalty_points_spent or None),
+                    estimated_ready_minutes=_est_ready_at_placement,
                     idempotency_key=_idem_key,
                 )
 

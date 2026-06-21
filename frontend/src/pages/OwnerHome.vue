@@ -137,6 +137,9 @@
         </div>
       </div>
 
+      <!-- Busy mode: snooze new orders (timed auto-resume) + slow-the-kitchen quote bump -->
+      <BusyModeControl />
+
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
       <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
@@ -525,6 +528,7 @@ import OwnerDashboardAlerts from "../components/OwnerDashboardAlerts.vue";
 import OwnerDashboardReadiness from "../components/OwnerDashboardReadiness.vue";
 import OwnerDashboardDishPanel from "../components/OwnerDashboardDishPanel.vue";
 import OwnerNextAction from "../components/OwnerNextAction.vue";
+import BusyModeControl from "../components/BusyModeControl.vue";
 import { useI18n } from "../composables/useI18n";
 import { useNowTicker } from "../composables/useNowTicker";
 import { upcomingOrders, minutesUntilScheduled } from "../lib/ownerLiveFocus";

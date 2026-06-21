@@ -111,3 +111,64 @@ def send_order_ready_sms(
         record_notification(channel="sms", event="order.ready", status="failed",
                             recipient=to_phone, detail=tenant_name, reference=str(order_number), error=str(exc), tenant_id=tenant_id)
         raise SmsProviderError(f"SMS network/provider error for order #{order_number}") from exc
+
+
+def send_sms(
+    phone: str,
+    body: str,
+    *,
+    event: str = "sms",
+    reference: str = "",
+    detail: str = "",
+    tenant_id=None,
+) -> bool:
+    """Send a generic transactional SMS to *phone* with an arbitrary *body*.
+
+    Best-effort and NON-raising: returns True on success, False on any failure
+    (missing credentials, invalid phone, transient Twilio/network error). Unlike
+    ``send_order_ready_sms`` this never raises ``SmsProviderError`` — callers
+    (e.g. the recipient package-tracking link) treat SMS as fire-and-forget and
+    must not have the request path retried/blocked on a provider hiccup. Every
+    outcome is recorded as a NotificationLog row via ``record_notification``.
+    """
+    from accounts.notifications import record_notification
+
+    creds = _credentials()
+    if creds is None:
+        logger.debug("SMS skipped: Twilio credentials not configured.")
+        record_notification(channel="sms", event=event, status="skipped",
+                            reference=str(reference), detail=detail, error="no credentials", tenant_id=tenant_id)
+        return False
+
+    to_phone = _normalize_phone(phone)
+    if not to_phone:
+        logger.warning("SMS skipped: invalid phone number %r.", phone)
+        record_notification(channel="sms", event=event, status="skipped",
+                            reference=str(reference), detail=detail, error="invalid phone", tenant_id=tenant_id)
+        return False
+
+    sid, token, from_num = creds
+    try:
+        import requests  # noqa: PLC0415
+
+        resp = requests.post(
+            _TWILIO_API.format(sid=sid),
+            auth=(sid, token),
+            data={"To": to_phone, "From": from_num, "Body": body},
+            timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            record_notification(channel="sms", event=event, status="sent",
+                                recipient=to_phone, reference=str(reference), detail=detail, tenant_id=tenant_id)
+            return True
+        logger.warning("SMS failed: Twilio returned %s — %s", resp.status_code, resp.text[:200])
+        record_notification(channel="sms", event=event, status="failed",
+                            recipient=to_phone, reference=str(reference), detail=detail,
+                            error=f"twilio {resp.status_code}", tenant_id=tenant_id)
+        return False
+    except Exception as exc:  # noqa: BLE001 — best-effort, never raise
+        logger.warning("SMS failed: %s", exc)
+        record_notification(channel="sms", event=event, status="failed",
+                            recipient=to_phone, reference=str(reference), detail=detail,
+                            error=str(exc), tenant_id=tenant_id)
+        return False

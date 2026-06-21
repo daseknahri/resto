@@ -544,6 +544,52 @@ class Profile(models.Model):
         ),
     )
 
+    # ── Busy mode / order throttling (Toast/Deliveroo parity) ─────────────────
+    # During a rush an owner can temporarily stop NEW online orders and/or bump
+    # the quoted prep time, with a TIMED auto-resume so ordering is never left
+    # silently off. Both are purely time-based: enforced at order-placement and
+    # surfaced via a live countdown in the owner UI. Additive / non-breaking —
+    # null/0 means normal operation.
+    orders_paused_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When set to a FUTURE time, new online orders are rejected with a "
+            "clear reason until this moment, then accepting auto-resumes. Null "
+            "or past = ordering open. Set via the owner Busy-mode control."
+        ),
+    )
+    busy_extra_minutes = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Extra minutes added to the quoted ready/ETA while the kitchen is "
+            "slammed (e.g. +10 / +20). Applied only while busy_extra_until is in "
+            "the future; 0 = no bump. Additive on top of the normal estimate."
+        ),
+    )
+    busy_extra_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Time-based expiry for busy_extra_minutes. When this passes the prep "
+            "bump auto-clears. Null or past = no bump regardless of minutes."
+        ),
+    )
+
+    # ── SLA escalation (used by the server-side SLA push agent) ───────────────
+    # Threshold (minutes) after which a still-'pending' order is considered to
+    # have breached the owner's confirm SLA and a push nudge is sent. Nullable so
+    # a sensible platform default applies when unset. Owned by the SLA agent; the
+    # field is declared here to keep the tenancy migration chain linear.
+    pending_sla_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Minutes a 'pending' order may wait before the server sends an SLA "
+            "escalation push to owner/manager devices. Null = platform default."
+        ),
+    )
+
     class Meta:
         indexes = [
             # The marketplace/directory list filters on these two flags on every

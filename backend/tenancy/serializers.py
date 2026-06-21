@@ -307,6 +307,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "referral_enabled",
             "referral_reward_points",
             "default_prep_minutes",
+            "orders_paused_until",
+            "busy_extra_minutes",
+            "busy_extra_until",
             "prep_eta_min",
             "prep_eta_max",
         ]

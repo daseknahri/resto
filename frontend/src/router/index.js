@@ -64,6 +64,7 @@ const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 const RidePage = () => import("../pages/RidePage.vue");
 const SendPackagePage = () => import("../pages/SendPackagePage.vue");
+const RecipientTrackPage = () => import("../pages/RecipientTrackPage.vue");
 const DriverPage = () => import("../pages/DriverPage.vue");
 const AdminCustomers = () => import("../pages/AdminCustomers.vue");
 const AdminDeliveryJobs = () => import("../pages/AdminDeliveryJobs.vue");
@@ -121,6 +122,8 @@ const routes = [
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "landing" } },
       { path: "ride", name: "ride", component: RidePage, meta: { interface: "landing", vertical: "rides" } },
       { path: "send-package", name: "send-package", component: SendPackagePage, meta: { interface: "landing", vertical: "courier" } },
+      // Public, no-auth recipient package tracking (tokenized link sent by SMS).
+      { path: "track/:token", name: "recipient-track", component: RecipientTrackPage, props: true, meta: { interface: "landing", vertical: "courier" } },
     ],
   },
   {

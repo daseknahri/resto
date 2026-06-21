@@ -93,6 +93,17 @@ def _generate_package_code() -> str:
     return str(secrets.randbelow(1_000_000)).zfill(6)
 
 
+def _generate_track_token() -> str:
+    """Return an opaque, URL-safe, unguessable token for recipient package tracking.
+
+    32 random bytes → ~43-char URL-safe base64 (no padding). Used as the public
+    /track/<token>/ key so a recipient with no account can follow a package; it is
+    not the pk and not sequential, so it cannot be enumerated.
+    """
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
 def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=False):
     """Serialize a RideRequest.
 
@@ -440,6 +451,8 @@ class RideCreateView(APIView):
                 package_note=package_note,
                 # Generate handover code for packages; rides get an empty string.
                 delivery_code=_generate_package_code() if kind == "package" else "",
+                # Opaque public-tracking token (recipient SMS link); rides get "".
+                recipient_track_token=_generate_track_token() if kind == "package" else "",
             )
 
         # Dispatch: only for immediate trips (scheduled trips wait for sweep rule d).
@@ -449,6 +462,16 @@ class RideCreateView(APIView):
                 push_new_ride_to_drivers(ride.id)
             except Exception:
                 pass
+            # Recipient tracking SMS: text the (account-less) recipient their public
+            # tracking link as soon as the package enters the search pool. Best-effort;
+            # never blocks/raises on the create path. Skipped for scheduled trips —
+            # they get it when the sweep releases them into SEARCHING (handled there).
+            if kind == "package":
+                try:
+                    from .push import push_recipient_track_sms
+                    push_recipient_track_sms(ride.id, "dispatched")
+                except Exception:
+                    pass
 
         return Response(_serialize_ride(ride), status=status.HTTP_201_CREATED)
 
@@ -940,7 +963,120 @@ class DriverRideStatusView(APIView):
 
             ride.save(update_fields=update_fields)
 
+        # Recipient tracking SMS on collection: when a package advances to in_progress
+        # (courier has it, driving to the recipient), text the recipient the "on the way"
+        # link reminding them to show their handover code. Best-effort, outside the txn.
+        if new_status == "in_progress" and ride.kind == RideRequest.Kind.PACKAGE:
+            try:
+                from .push import push_recipient_track_sms
+                push_recipient_track_sms(ride.id, "in_progress")
+            except Exception:
+                pass
+
         return Response(_serialize_ride(ride, include_driver_pii=True))
+
+
+# ── Public recipient package tracking ─────────────────────────────────────────────
+
+# Coarse city speed (km/h) for the client-free ETA estimate on the recipient page.
+_TRACK_ETA_SPEED_KMH = 25.0
+
+
+def _serialize_recipient_track(ride):
+    """Recipient-safe projection of a package trip resolved by its public token.
+
+    Deliberately MINIMAL — the recipient has no account and must see ONLY what a
+    parcel recipient should: the status, the courier's FIRST name + vehicle (no
+    phone, no surname, no GPS history), the live courier position once en route,
+    the pickup/drop labels, a coarse ETA, and the handover code (so they can read
+    it off their OWN screen instead of the sender relaying it). NEVER exposes the
+    sender's name/phone, fare, payment, ratings, the raw pk, or the token itself.
+    """
+    status_val = ride.status
+    courier = None
+    driver_lat = driver_lng = None
+    # Courier identity + live position only once a driver is assigned AND moving
+    # toward the recipient (accepted onward). Before that there is no courier to show.
+    if ride.driver_id and status_val in ("accepted", "arrived", "in_progress", "completed"):
+        drv = ride.driver
+        first_name = (drv.name or "").strip().split(" ")[0] if drv and drv.name else ""
+        courier = {
+            "first_name": first_name,
+            "vehicle": (drv.driver_vehicle or "") if drv else "",
+        }
+        # Live GPS only while the trip is in flight (not after completion).
+        if drv and status_val in ("accepted", "arrived", "in_progress"):
+            if valid_coord(drv.driver_lat, drv.driver_lng):
+                driver_lat = drv.driver_lat
+                driver_lng = drv.driver_lng
+
+    # Coarse ETA: courier → next waypoint (pickup before collection, drop after).
+    eta_minutes = None
+    if driver_lat is not None and driver_lng is not None:
+        if status_val == "in_progress":
+            tgt_lat, tgt_lng = ride.dropoff_lat, ride.dropoff_lng
+        else:
+            tgt_lat, tgt_lng = ride.pickup_lat, ride.pickup_lng
+        if valid_coord(tgt_lat, tgt_lng):
+            dist = haversine_km(driver_lat, driver_lng, tgt_lat, tgt_lng)
+            eta_minutes = max(1, round(dist / _TRACK_ETA_SPEED_KMH * 60))
+
+    data = {
+        "kind": ride.kind,
+        "status": status_val,
+        "recipient_name": ride.recipient_name or "",
+        "pickup_address": ride.pickup_address or "",
+        "dropoff_address": ride.dropoff_address or "",
+        "dropoff_lat": ride.dropoff_lat,
+        "dropoff_lng": ride.dropoff_lng,
+        "courier": courier,
+        "driver_lat": driver_lat,
+        "driver_lng": driver_lng,
+        "eta_minutes": eta_minutes,
+        "accepted_at": _ts(ride.accepted_at),
+        "arrived_at": _ts(ride.arrived_at),
+        "started_at": _ts(ride.started_at),
+        "completed_at": _ts(ride.completed_at),
+        "cancelled_at": _ts(ride.cancelled_at),
+    }
+    # Handover code: shown to the recipient on their own screen so they can present it
+    # to the courier — but only while the trip is live (not after completion/cancel).
+    if status_val not in ("completed", "cancelled"):
+        data["delivery_code"] = ride.delivery_code or ""
+    return data
+
+
+class RecipientTrackView(APIView):
+    """GET /api/track/<token>/ — PUBLIC, no-auth recipient package tracking.
+
+    Resolves a package trip by its opaque ``recipient_track_token`` and returns a
+    recipient-safe projection (see _serialize_recipient_track). No session, no PII
+    beyond what a parcel recipient should see. 404 for unknown/blank tokens or
+    non-package trips. The token is unguessable (32 random bytes) so enumeration
+    is infeasible; we still 404 uniformly to avoid leaking existence.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [RideDriverThrottle]
+
+    def get(self, request, token, *args, **kwargs):
+        if (gate := _vertical_gate(RideRequest.Kind.PACKAGE)) is not None:
+            return gate
+        token = (token or "").strip()
+        # Guard: never resolve a blank token to the first row with default "".
+        if not token or len(token) < 16:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        ride = (
+            RideRequest.objects.filter(
+                recipient_track_token=token, kind=RideRequest.Kind.PACKAGE
+            )
+            .select_related("driver")
+            .first()
+        )
+        if ride is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_serialize_recipient_track(ride))
 
 
 # ── Car-document upload ───────────────────────────────────────────────────────────

@@ -146,6 +146,7 @@ def customer_order_milestone(order_number, tenant_id, event):
 # new scheduled command means adding its name here too.
 _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
     "release_scheduled_orders",
+    "escalate_stale_pending_orders",
     "send_predispatch_reminders",
     "send_ride_predispatch_reminders",
     "check_car_doc_expiry",
@@ -215,6 +216,13 @@ def ride_notify_rider(rider_id, event):
     """Push a ride status event to the rider."""
     from accounts.push import notify_rider_sync
     notify_rider_sync(rider_id, event)
+
+
+@shared_task(name="accounts.tasks.recipient_track_sms", **_RETRY)
+def recipient_track_sms(ride_id, event):
+    """SMS the package recipient their public tracking link (dispatched | in_progress)."""
+    from accounts.push import send_recipient_track_sms_sync
+    send_recipient_track_sms_sync(ride_id, event)
 
 
 @shared_task(name="accounts.tasks.campaign_push", **_RETRY)

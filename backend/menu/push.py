@@ -146,3 +146,20 @@ def push_new_order(schema_name: str, order_number: str, customer_name: str, tota
     body = f"{name} — {total} {currency}"
     from accounts.tasks import enqueue, web_push_tenant
     enqueue(web_push_tenant, schema_name, title, body, "/owner/orders")
+
+
+def push_sla_escalation(schema_name: str, order_number: str, waited_minutes: int) -> None:
+    """
+    Send an SLA-escalation push to all subscribed owner/manager devices for a tenant
+    when an order has been left PENDING (unconfirmed) longer than the configured SLA.
+
+    Deep-links to OwnerOrders filtered to this order number (?q=…) so a single tap
+    lands the owner on the order that needs confirming. Enqueued like push_new_order
+    (Celery when a broker is configured, else a bounded inline thread) so it never
+    blocks the sweep.
+    """
+    title = f"Order #{order_number} still waiting"
+    body = f"Order #{order_number} has been waiting {waited_minutes} min — confirm it"
+    url = f"/owner/orders?q={order_number}"
+    from accounts.tasks import enqueue, web_push_tenant
+    enqueue(web_push_tenant, schema_name, title, body, url)
