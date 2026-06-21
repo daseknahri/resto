@@ -115,15 +115,13 @@ describe("DriverOfferModal", () => {
     expect(wrapper.emitted("pass")[0]).toEqual([42]);
   });
 
-  it("shows the enable-sound prompt until the driver enables it once", async () => {
+  it("no longer shows an in-modal enable-sound prompt; exposes enableSound() instead", () => {
+    // Wave 4 / ITEM 6: the one-time sound enable moved to DriverPage.toggleOnline so it
+    // runs inside the go-online user gesture. The modal just exposes enableSound().
     mountModal();
-    const enableBtn = findButton("driverOffer.enableSound");
-    expect(enableBtn).toBeTruthy();
-    enableBtn.click();
-    await wrapper.vm.$nextTick();
-    expect(localStorage.getItem("kepoli.driver.offerSound")).toBe("1");
-    // After enabling, the prompt is gone.
     expect(findButton("driverOffer.enableSound")).toBeUndefined();
+    wrapper.vm.enableSound();
+    expect(localStorage.getItem("kepoli.driver.offerSound")).toBe("1");
   });
 
   it("fires a haptic buzz when a new offer takes over the screen", async () => {

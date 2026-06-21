@@ -167,6 +167,29 @@
           :aria-label="t('sendPackage.courierAssigned')"
         />
 
+        <!-- Share tracking link — shown once a courier is assigned (accepted / arrived / in_progress) -->
+        <button
+          v-if="activePackage.recipient_track_token && ['accepted', 'arrived', 'in_progress'].includes(activePackage.status)"
+          type="button"
+          class="w-full rounded-2xl border border-sky-500/30 bg-sky-500/8 py-3 text-sm font-semibold text-sky-300 transition hover:bg-sky-500/15 ui-press"
+          @click="shareTrackingLink"
+        >
+          <span class="flex items-center justify-center gap-2">
+            <AppIcon name="share" class="h-4 w-4" aria-hidden="true" />
+            {{ t('sendPackage.shareTrackingLink') }}
+          </span>
+        </button>
+
+        <!-- Share toast (clipboard copied) -->
+        <p
+          v-if="shareToast"
+          role="status"
+          class="flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 py-3 text-sm font-semibold text-emerald-300"
+        >
+          <AppIcon name="check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+          {{ shareToast }}
+        </p>
+
         <!-- Cancel button (searching / accepted) — two-tap guard -->
         <button
           v-if="activePackage.status === 'searching' || activePackage.status === 'accepted'"
@@ -845,6 +868,36 @@ const activePackage = ref(null);
 const ratingScore = ref(0);
 const submittingRating = ref(false);
 const ratingDone = ref(false);
+// ── Share tracking link ───────────────────────────────────────────────────────
+const shareToast = ref('');
+let _shareToastTimer = null;
+const _showShareToast = (msg) => {
+  shareToast.value = msg;
+  clearTimeout(_shareToastTimer);
+  _shareToastTimer = setTimeout(() => { shareToast.value = ''; }, 3000);
+};
+
+const shareTrackingLink = async () => {
+  const token = activePackage.value?.recipient_track_token;
+  if (!token) return;
+  const url = `${window.location.origin}/track/${token}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ url, title: t('sendPackage.shareTrackingLinkTitle') });
+    } catch {
+      // user dismissed or share failed — silent (no toast needed)
+    }
+    return;
+  }
+  // Clipboard fallback
+  try {
+    await navigator.clipboard.writeText(url);
+    _showShareToast(t('sendPackage.shareTrackingLinkCopied'));
+  } catch {
+    _showShareToast(t('sendPackage.shareTrackingLinkFailed'));
+  }
+};
+
 // ── Optional courier tip (post-completion, once) ────────────────────────────────
 const TIP_PRESETS = [5, 10, 20];
 const tipPresets = TIP_PRESETS;
@@ -1515,6 +1568,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopPolling();
   clearCancelGuard();
+  clearTimeout(_shareToastTimer);
   destroyPickMap();
   destroyTrackingMap();
 });

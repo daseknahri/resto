@@ -184,6 +184,25 @@
             <span v-if="activeJob.items_count">{{ t('driver.itemsCount', { n: activeJob.items_count }) }}</span>
           </div>
 
+          <!-- Active address: one always-visible truncated line for the relevant destination.
+               Before pickup → pickup address (amber); after pickup → dropoff address (emerald). -->
+          <p
+            v-if="activeJob.status === 'picked_up' ? (activeJob.delivery_address || activeJob.delivery_lat) : (activeJob.pickup_address || activeJob.pickup_lat)"
+            class="flex items-center gap-1.5 truncate text-sm"
+            :title="activeJob.status === 'picked_up' ? activeJob.delivery_address : activeJob.pickup_address"
+          >
+            <span
+              class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+              :class="activeJob.status === 'picked_up' ? 'bg-emerald-500/15' : 'bg-amber-500/15'"
+              aria-hidden="true"
+            >
+              <AppIcon name="location" class="h-3 w-3" :class="activeJob.status === 'picked_up' ? 'text-emerald-300' : 'text-amber-300'" aria-hidden="true" />
+            </span>
+            <span class="truncate" :class="activeJob.status === 'picked_up' ? 'text-emerald-200' : 'text-amber-200'">
+              {{ activeJob.status === 'picked_up' ? (activeJob.delivery_address || t('driver.dropoff')) : (activeJob.pickup_address || t('driver.pickup')) }}
+            </span>
+          </p>
+
           <!-- Food-ready ETA (owner's prep estimate) — when to be at the restaurant -->
           <div
             v-if="activeReadyEta"
@@ -662,7 +681,8 @@
           <li
             v-for="(job, index) in pendingJobs"
             :key="job.id"
-            class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2.5"
+            class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2.5 transition-opacity duration-500"
+            :class="{ 'opacity-30 pointer-events-none': job.offer_expires_at && offerSecondsLeft(job.offer_expires_at) <= 2 }"
             :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
           >
             <!-- Job header row -->
@@ -1099,6 +1119,7 @@
        The inline pending list above stays as the fallback for open-pool offers.
        Accept/Pass reuse the existing accept(id) / decline(id) handlers. -->
   <DriverOfferModal
+    ref="offerModalRef"
     :offer="exclusiveOffer"
     :seconds-left="exclusiveOfferSeconds"
     :total-seconds="OFFER_WINDOW_SECONDS"
@@ -1248,6 +1269,42 @@
         <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
           <p class="text-sm text-red-300">{{ codeError }}</p>
         </div>
+
+        <!-- Photo fallback: driver can't get the code → take a photo instead -->
+        <div v-if="proofPhotoPreview" class="space-y-2">
+          <img :src="proofPhotoPreview" alt="" class="w-full rounded-xl object-cover" style="max-height:120px" />
+          <p class="text-[11px] text-slate-400">{{ t('driver.proofPhotoReady') }}</p>
+        </div>
+        <div v-else class="flex items-center gap-2">
+          <div class="flex-1 border-t border-slate-700/60" />
+          <span class="text-[11px] text-slate-500 shrink-0">{{ t('driver.proofPhotoOr') }}</span>
+          <div class="flex-1 border-t border-slate-700/60" />
+        </div>
+        <label
+          v-if="!proofPhotoPreview"
+          class="ui-touch-target flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600 py-2.5 text-xs text-slate-300 hover:border-slate-400 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-slate-400"
+          :class="{ 'opacity-50 pointer-events-none': codeSubmitting }"
+        >
+          <AppIcon name="camera" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+          {{ t('driver.leaveAtDoor') }}
+          <input
+            ref="proofPhotoInputRef"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            class="sr-only"
+            :disabled="codeSubmitting"
+            @change="onProofPhotoSelected"
+          />
+        </label>
+        <button
+          v-else
+          class="ui-touch-target w-full text-[11px] text-slate-400 hover:text-slate-200"
+          @click="clearProofPhoto"
+        >
+          {{ t('driver.proofPhotoRetake') }}
+        </button>
+
         <div class="flex items-center justify-end gap-2 pt-1">
           <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCodeModal">
             {{ t('common.cancel') }}
@@ -1255,7 +1312,7 @@
           <button
             class="ui-btn-primary ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
             style="min-height: 48px"
-            :disabled="!codeInput.trim() || codeSubmitting"
+            :disabled="(!codeInput.trim() && !proofPhotoFile) || codeSubmitting"
             :aria-busy="codeSubmitting"
             @click="submitDeliveryCode"
           >
@@ -1336,6 +1393,7 @@ const driverPush = useCustomerPush();
 
 const isDriver = ref(false);
 const approved = ref(false);
+const offerModalRef = ref(null); // template ref to DriverOfferModal (exposes enableSound)
 
 // ── Dashboard accordion state ──────────────────────────────────────────────────
 // Wallet + settings are collapsed by default so the home screen fits one view.
@@ -1618,35 +1676,76 @@ const codeInput = ref('');
 const codeError = ref('');
 const codeSubmitting = ref(false);
 const codeFirstRef = ref(null);
+const proofPhotoInputRef = ref(null);
+const proofPhotoFile = ref(null);   // File object selected by the camera
+const proofPhotoPreview = ref('');  // Object URL for the in-modal thumbnail
 let _codeReturnFocus = null;
 
+const clearProofPhoto = () => {
+  if (proofPhotoPreview.value) URL.revokeObjectURL(proofPhotoPreview.value);
+  proofPhotoFile.value = null;
+  proofPhotoPreview.value = '';
+  if (proofPhotoInputRef.value) proofPhotoInputRef.value.value = '';
+};
+
+const onProofPhotoSelected = (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  clearProofPhoto();
+  proofPhotoFile.value = file;
+  proofPhotoPreview.value = URL.createObjectURL(file);
+  // Clear the code input so only one proof path is active at a time.
+  codeInput.value = '';
+  codeError.value = '';
+};
+
 const closeCodeModal = () => {
+  clearProofPhoto();
   codeModalOpen.value = false;
   _codeReturnFocus?.focus();
   _codeReturnFocus = null;
 };
 
+const _afterDelivered = async (data, job) => {
+  closeCodeModal();
+  if (data.is_terminal) {
+    activeJob.value = null;
+    online.value = false;
+    stopGeo();
+    toast.show(t('driver.deliveredToast'), 'success');
+    showGoOnlineCta.value = true;
+    if (job && job.restaurant_slug) openCustomerRating(job);
+    await fetchJobs();
+    fetchEarnings();
+  } else {
+    activeJob.value = data;
+  }
+};
+
 const submitDeliveryCode = async () => {
   const code = codeInput.value.trim();
-  if (!code) { codeError.value = t('driver.enterDeliveryCode'); return; }
+  // Must have either a code or a proof photo.
+  if (!code && !proofPhotoFile.value) {
+    codeError.value = t('driver.enterDeliveryCode');
+    return;
+  }
   codeError.value = '';
   codeSubmitting.value = true;
   const job = activeJob.value;
   try {
-    const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: 'delivered', code });
-    closeCodeModal();
-    if (data.is_terminal) {
-      activeJob.value = null;
-      online.value = false;
-      stopGeo();
-      toast.show(t('driver.deliveredToast'), 'success');
-      showGoOnlineCta.value = true; // Item D: prompt the driver to go back online
-      if (job && job.restaurant_slug) openCustomerRating(job);
-      await fetchJobs();
-      fetchEarnings();
+    let data;
+    if (proofPhotoFile.value) {
+      // Photo path: multipart POST with the image; no code required.
+      const fd = new FormData();
+      fd.append('status', 'delivered');
+      fd.append('proof_photo', proofPhotoFile.value);
+      ({ data } = await api.patch(`/driver/jobs/${job.id}/status/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }));
     } else {
-      activeJob.value = data;
+      ({ data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: 'delivered', code }));
     }
+    await _afterDelivered(data, job);
   } catch (err) {
     const errCode = err?.response?.data?.code;
     codeError.value = errCode === 'bad_delivery_code'
@@ -1751,13 +1850,31 @@ const fetchJobs = async () => {
 };
 
 // Keep the job list fresh while the page is open (idempotent — never double-starts).
+// Adaptive interval: 5 s when there's an active job or ride (driver is mid-run and
+// needs low-latency status echoes), 15 s otherwise (idle browsing — saves battery).
+const POLL_ACTIVE_MS = 5000;
+const POLL_IDLE_MS = 15000;
+
 const pollTick = () => {
   fetchJobs();
   if (driverVehicleType.value === 'car') fetchRides();
 };
-const ensurePoll = () => {
-  if (!pollTimer) pollTimer = setInterval(pollTick, 15000);
+
+const _currentPollMs = () => (activeJob.value || activeRide.value ? POLL_ACTIVE_MS : POLL_IDLE_MS);
+
+const restartPoll = (intervalMs) => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  pollTimer = setInterval(pollTick, intervalMs);
 };
+
+const ensurePoll = () => {
+  if (!pollTimer) pollTimer = setInterval(pollTick, _currentPollMs());
+};
+
+// Whenever the active-job / active-ride state changes, re-tune the poll interval.
+watch([activeJob, activeRide], () => {
+  if (pollTimer) restartPoll(_currentPollMs());
+});
 
 const becomeDriver = async () => {
   errorMsg.value = '';
@@ -1780,6 +1897,8 @@ const becomeDriver = async () => {
   }
 };
 
+const SOUND_KEY = 'kepoli.driver.offerSound';
+
 const toggleOnline = async () => {
   errorMsg.value = '';
   busy.value = true;
@@ -1790,6 +1909,15 @@ const toggleOnline = async () => {
     if (online.value) {
       showGoOnlineCta.value = false; // dismiss the CTA once truly online
       startGeo();
+      // One-time sound unlock: call enableSound within this user-gesture context so
+      // the AudioContext is unblocked before the first offer arrives. This moves the
+      // prompt OUT of the offer modal (which now shows only Accept/Pass) and into
+      // the "go online" tap — a natural point where the driver is interacting.
+      try {
+        if (localStorage.getItem(SOUND_KEY) !== '1') {
+          offerModalRef.value?.enableSound?.();
+        }
+      } catch { /* storage unavailable — non-fatal */ }
       // Subscribe to web push so new jobs reach the driver even when backgrounded.
       driverPush.subscribe().catch(() => {});
       await fetchJobs();

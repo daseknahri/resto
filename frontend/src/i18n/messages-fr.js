@@ -894,6 +894,10 @@ sendPackage: {
   pickBothHint: "Definissez les deux adresses pour voir le tarif",
   rebookCta: "Reserver a nouveau",
   rebookAriaLabel: "Reserver a nouveau cette livraison",
+  shareTrackingLink: "Partager le lien de suivi",
+  shareTrackingLinkTitle: "Suivez votre colis",
+  shareTrackingLinkCopied: "Lien de suivi copie",
+  shareTrackingLinkFailed: "Impossible de copier le lien — veuillez le copier manuellement",
 },
 recipientTrack: {
   title: "Suivez votre colis",
@@ -1474,6 +1478,10 @@ driver: {
   settingsSection: "Paramètres chauffeur",
   walletSection: "Portefeuille",
   navigateTo: "Naviguer",
+  leaveAtDoor: "Laisser à la porte / prendre une photo",
+  proofPhotoOr: "ou",
+  proofPhotoReady: "Photo prise — appuyez sur Confirmer pour terminer la livraison.",
+  proofPhotoRetake: "Reprendre la photo",
 },
 driverOffer: {
   newOffer: "Nouvelle offre",

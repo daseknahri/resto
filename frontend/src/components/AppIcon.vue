@@ -259,6 +259,13 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M12 2l8 4v5c0 5-3.6 9.7-8 11-4.4-1.3-8-6-8-11V6l8-4z"],
   },
+  camera: {
+    viewBox: "0 0 24 24",
+    paths: [
+      "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z",
+      "M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+    ],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

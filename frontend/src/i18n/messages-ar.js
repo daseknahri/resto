@@ -3375,6 +3375,10 @@ Object.assign(arabicMessages, {
     settingsSection: "إعدادات السائق",
     walletSection: "المحفظة",
     navigateTo: "التنقل",
+    leaveAtDoor: "اترك عند الباب / التقط صورة",
+    proofPhotoOr: "أو",
+    proofPhotoReady: "تم التقاط الصورة — اضغط تأكيد لإتمام التوصيل.",
+    proofPhotoRetake: "إعادة التقاط",
   },
   driverOffer: {
     newOffer: "عرض جديد",
@@ -5100,6 +5104,10 @@ Object.assign(arabicMessages, {
     pickBothHint: "\u062d\u062f\u0651\u062f \u0643\u0644\u0627 \u0627\u0644\u0645\u0648\u0642\u0639\u064a\u0646 \u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0633\u0639\u0631",
     rebookCta: "\u062d\u062c\u0632 \u0645\u062c\u062f\u062f\u0627\u064b",
     rebookAriaLabel: "\u062d\u062c\u0632 \u0647\u0630\u0627 \u0627\u0644\u062a\u0648\u0635\u064a\u0644 \u0645\u062c\u062f\u062f\u0627\u064b",
+    shareTrackingLink: "\u0645\u0634\u0627\u0631\u0643\u0629 \u0631\u0627\u0628\u0637 \u0627\u0644\u062a\u062a\u0628\u0651\u0639",
+    shareTrackingLinkTitle: "\u062a\u062a\u0628\u0651\u0639 \u0637\u0631\u062f\u0643",
+    shareTrackingLinkCopied: "\u062a\u0645 \u0646\u0633\u062e \u0631\u0627\u0628\u0637 \u0627\u0644\u062a\u062a\u0628\u0651\u0639",
+    shareTrackingLinkFailed: "\u062a\u0639\u0630\u0651\u0631 \u0646\u0633\u062e \u0627\u0644\u0631\u0627\u0628\u0637 \u2014 \u064a\u0631\u062c\u0649 \u0646\u0633\u062e\u0647 \u064a\u062f\u0648\u064a\u0651\u0627\u064b",
   },
   recipientTrack: {
     title: "\u062a\u062a\u0628\u0651\u0639 \u0637\u0631\u062f\u0643",

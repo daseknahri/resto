@@ -16,6 +16,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.negotiation import BaseContentNegotiation
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import StaticHTMLRenderer
 
@@ -6419,6 +6420,8 @@ class DriverJobStatusUpdateView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [DriverStatusUpdateThrottle]
+    # Accept multipart so drivers can attach a proof photo (leave-at-door fallback).
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def patch(self, request, job_id, *args, **kwargs):
         from datetime import timedelta as _td
@@ -6469,34 +6472,53 @@ class DriverJobStatusUpdateView(APIView):
                          "code": "driver_not_approved"},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-                # Proof-of-delivery code, with a brute-force lockout.
-                if job.code_locked_until and job.code_locked_until > now:
-                    return Response(
-                        {"detail": "Too many incorrect codes — try again shortly.", "code": "code_locked"},
-                        status=status.HTTP_429_TOO_MANY_REQUESTS,
-                    )
-                _expected_code = _order_delivery_code(job)
-                _provided_code = str(request.data.get("code") or "").strip()
-                if _expected_code and _provided_code != _expected_code:
-                    job.code_attempts = (job.code_attempts or 0) + 1
-                    _f = ["code_attempts"]
-                    if job.code_attempts >= 5:
-                        # Lock for 5 min but DON'T reset the counter — resetting lets an
-                        # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
-                        # only on a correct code (the DELIVERED branch below).
-                        job.code_locked_until = now + _td(minutes=5)
-                        _f.append("code_locked_until")
-                    job.save(update_fields=_f)
-                    return Response(
-                        {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
-                         "code": "bad_delivery_code"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                # Photo proof: a driver who can't get the customer code can take a
+                # photo (leave-at-door). Handle the photo FIRST so its presence can
+                # bypass the code requirement. Pillow-validated, same rules as driver-docs.
                 _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
-                # Only an uploaded image URL is valid — reject non-http(s) schemes
-                # (javascript:/data:/internal) rather than storing them on the order.
                 if _proof_photo_url and not _proof_photo_url.lower().startswith(("http://", "https://")):
                     _proof_photo_url = ""
+                if not _proof_photo_url:
+                    _upload = request.FILES.get("proof_photo")
+                    if _upload:
+                        try:
+                            from .ride_views import _save_driver_doc_image
+                            _proof_photo_url = _save_driver_doc_image(_upload, request)
+                        except ValueError as _ve:
+                            return Response(
+                                {"detail": str(_ve), "code": "bad_proof_photo"},
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                        except Exception:
+                            logger.exception("proof_photo upload failed job_id=%s", job_id)
+                            # Non-fatal: proceed without a photo URL rather than blocking the delivery.
+                _has_photo = bool(_proof_photo_url)
+
+                # Proof-of-delivery code, with a brute-force lockout.
+                # Skip the code check when the driver provides a photo instead.
+                if not _has_photo:
+                    if job.code_locked_until and job.code_locked_until > now:
+                        return Response(
+                            {"detail": "Too many incorrect codes — try again shortly.", "code": "code_locked"},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS,
+                        )
+                    _expected_code = _order_delivery_code(job)
+                    _provided_code = str(request.data.get("code") or "").strip()
+                    if _expected_code and _provided_code != _expected_code:
+                        job.code_attempts = (job.code_attempts or 0) + 1
+                        _f = ["code_attempts"]
+                        if job.code_attempts >= 5:
+                            # Lock for 5 min but DON'T reset the counter — resetting lets an
+                            # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
+                            # only on a correct code (the DELIVERED branch below).
+                            job.code_locked_until = now + _td(minutes=5)
+                            _f.append("code_locked_until")
+                        job.save(update_fields=_f)
+                        return Response(
+                            {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
+                             "code": "bad_delivery_code"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
             if new_status == DeliveryJob.Status.FAILED:
                 _reason = str(request.data.get("failure_reason") or "").strip()

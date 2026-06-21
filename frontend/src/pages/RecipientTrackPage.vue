@@ -1,85 +1,87 @@
 <template>
-  <main class="mx-auto max-w-md px-4 py-6">
-    <h1 class="text-xl font-bold text-slate-900">{{ t('recipientTrack.title') }}</h1>
+  <main class="min-h-screen bg-slate-950 px-4 py-6">
+    <div class="mx-auto max-w-md">
+      <h1 class="text-xl font-bold text-slate-100">{{ t('recipientTrack.title') }}</h1>
 
-    <!-- Loading -->
-    <p v-if="loading" class="mt-6 text-sm text-slate-500">{{ t('recipientTrack.loading') }}</p>
+      <!-- Loading -->
+      <p v-if="loading" class="mt-6 text-sm text-slate-500">{{ t('recipientTrack.loading') }}</p>
 
-    <!-- Not found / expired -->
-    <div
-      v-else-if="notFound"
-      class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"
-    >
-      {{ t('recipientTrack.notFound') }}
-    </div>
-
-    <template v-else-if="track">
-      <p class="mt-1 text-sm text-slate-500">
-        {{ introText }}
-      </p>
-
-      <!-- Status banner -->
+      <!-- Not found / expired -->
       <div
-        class="mt-4 rounded-xl px-4 py-3 text-sm font-semibold"
-        :class="bannerClass"
+        v-else-if="notFound"
+        class="mt-6 rounded-xl border border-slate-700/60 bg-slate-900/60 p-4 text-sm text-slate-400"
       >
-        {{ statusLabel }}
-        <span v-if="track.eta_minutes && isLive" class="block text-xs font-normal opacity-90">
-          {{ t('recipientTrack.etaMinutes', { n: track.eta_minutes }) }}
-        </span>
+        {{ t('recipientTrack.notFound') }}
       </div>
 
-      <!-- Courier card -->
-      <div
-        v-if="track.courier"
-        class="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
-      >
+      <template v-else-if="track">
+        <p class="mt-1 text-sm text-slate-400">
+          {{ introText }}
+        </p>
+
+        <!-- Status banner -->
         <div
-          class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold"
+          class="mt-4 rounded-xl px-4 py-3 text-sm font-semibold"
+          :class="bannerClass"
         >
-          {{ courierInitial }}
+          {{ statusLabel }}
+          <span v-if="track.eta_minutes && isLive" class="block text-xs font-normal opacity-90">
+            {{ t('recipientTrack.etaMinutes', { n: track.eta_minutes }) }}
+          </span>
         </div>
-        <div>
-          <p class="text-xs uppercase tracking-wide text-slate-400">{{ t('recipientTrack.courierLabel') }}</p>
-          <p class="text-sm font-semibold text-slate-900">{{ track.courier.first_name || '—' }}</p>
-          <p v-if="track.courier.vehicle" class="text-xs text-slate-500">
-            {{ t('recipientTrack.vehicleLabel') }}: {{ track.courier.vehicle }}
+
+        <!-- Courier card -->
+        <div
+          v-if="track.courier"
+          class="mt-4 flex items-center gap-3 rounded-xl border border-slate-700/60 bg-slate-900/60 p-3"
+        >
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-full border border-sky-500/40 bg-sky-500/12 font-bold text-sky-300"
+          >
+            {{ courierInitial }}
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-500">{{ t('recipientTrack.courierLabel') }}</p>
+            <p class="text-sm font-semibold text-slate-100">{{ track.courier.first_name || '—' }}</p>
+            <p v-if="track.courier.vehicle" class="text-xs text-slate-400">
+              {{ t('recipientTrack.vehicleLabel') }}: {{ track.courier.vehicle }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Handover code -->
+        <div
+          v-if="track.delivery_code"
+          class="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/6 p-4 text-center"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wider text-sky-400">
+            {{ t('recipientTrack.codeTitle') }}
           </p>
+          <p class="mt-1 tabular-nums text-3xl font-bold tracking-[0.3em] text-white">
+            {{ track.delivery_code }}
+          </p>
+          <p class="mt-1 text-xs text-sky-300">{{ t('recipientTrack.codeHint') }}</p>
         </div>
-      </div>
 
-      <!-- Handover code -->
-      <div
-        v-if="track.delivery_code"
-        class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-center"
-      >
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-          {{ t('recipientTrack.codeTitle') }}
-        </p>
-        <p class="mt-1 tabular-nums text-3xl font-bold tracking-[0.3em] text-indigo-900">
-          {{ track.delivery_code }}
-        </p>
-        <p class="mt-1 text-xs text-indigo-700">{{ t('recipientTrack.codeHint') }}</p>
-      </div>
-
-      <!-- Live map -->
-      <div v-if="hasDriverPos" class="mt-4">
-        <p class="mb-1 text-xs uppercase tracking-wide text-slate-400">{{ t('recipientTrack.liveMap') }}</p>
-        <div ref="trackingMapEl" class="h-56 w-full overflow-hidden rounded-xl border border-slate-200"></div>
-      </div>
-
-      <!-- Addresses -->
-      <dl class="mt-4 space-y-2 text-sm">
-        <div v-if="track.pickup_address">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">{{ t('recipientTrack.fromLabel') }}</dt>
-          <dd class="text-slate-700">{{ track.pickup_address }}</dd>
+        <!-- Live map -->
+        <div v-if="hasDriverPos" class="mt-4">
+          <p class="mb-1 text-xs uppercase tracking-wide text-slate-500">{{ t('recipientTrack.liveMap') }}</p>
+          <div ref="trackingMapEl" class="h-56 w-full overflow-hidden rounded-xl border border-slate-800"></div>
         </div>
-        <div v-if="track.dropoff_address">
-          <dt class="text-xs uppercase tracking-wide text-slate-400">{{ t('recipientTrack.toLabel') }}</dt>
-          <dd class="text-slate-700">{{ track.dropoff_address }}</dd>
-        </div>
-      </dl>
-    </template>
+
+        <!-- Addresses -->
+        <dl class="mt-4 space-y-2 text-sm">
+          <div v-if="track.pickup_address">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('recipientTrack.fromLabel') }}</dt>
+            <dd class="text-slate-300">{{ track.pickup_address }}</dd>
+          </div>
+          <div v-if="track.dropoff_address">
+            <dt class="text-xs uppercase tracking-wide text-slate-500">{{ t('recipientTrack.toLabel') }}</dt>
+            <dd class="text-slate-300">{{ track.dropoff_address }}</dd>
+          </div>
+        </dl>
+      </template>
+    </div>
   </main>
 </template>
 
@@ -126,10 +128,10 @@ const statusLabel = computed(() => {
 
 const bannerClass = computed(() => {
   const s = track.value?.status;
-  if (s === 'completed') return 'bg-emerald-100 text-emerald-800';
-  if (s === 'cancelled') return 'bg-rose-100 text-rose-800';
-  if (s === 'in_progress') return 'bg-indigo-100 text-indigo-800';
-  return 'bg-slate-100 text-slate-700';
+  if (s === 'completed') return 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+  if (s === 'cancelled') return 'border border-rose-500/30 bg-rose-500/10 text-rose-300';
+  if (s === 'in_progress') return 'border border-violet-500/30 bg-violet-500/10 text-violet-300';
+  return 'border border-sky-500/30 bg-sky-500/8 text-sky-300';
 });
 
 const courierInitial = computed(() => {

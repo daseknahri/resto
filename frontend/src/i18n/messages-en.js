@@ -895,6 +895,10 @@ sendPackage: {
   pickBothHint: "Set both locations to see price",
   rebookCta: "Rebook",
   rebookAriaLabel: "Rebook this delivery",
+  shareTrackingLink: "Share tracking link",
+  shareTrackingLinkTitle: "Track your package",
+  shareTrackingLinkCopied: "Tracking link copied",
+  shareTrackingLinkFailed: "Couldn't copy link — please copy it manually",
 },
 recipientTrack: {
   title: "Track your package",
@@ -1475,6 +1479,10 @@ driver: {
   settingsSection: "Driver settings",
   walletSection: "Wallet",
   navigateTo: "Navigate",
+  leaveAtDoor: "Leave at door / take photo",
+  proofPhotoOr: "or",
+  proofPhotoReady: "Photo taken — tap Confirm to complete delivery.",
+  proofPhotoRetake: "Retake photo",
 },
 driverOffer: {
   newOffer: "New offer",

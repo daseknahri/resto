@@ -53,6 +53,15 @@
         <!-- Payout — the number that decides the tap -->
         <p class="text-3xl font-bold tabular-nums text-emerald-300">{{ fmtMoney(offer.driver_payout) }}</p>
 
+        <!-- Route mini-map: amber pickup → emerald dropoff, straight-line fitBounds -->
+        <div
+          v-if="hasCoords"
+          ref="miniMapEl"
+          class="w-full rounded-2xl overflow-hidden border border-slate-700/60"
+          style="height: 160px"
+          aria-hidden="true"
+        />
+
         <!-- Offer meta chips -->
         <div class="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-300">
           <span v-if="offer.restaurant_name" class="font-semibold text-slate-100">{{ offer.restaurant_name }}</span>
@@ -85,16 +94,9 @@
       </div>
 
       <!-- Actions: big full-width Accept, small Pass -->
+      <!-- The one-time enable-sound prompt has moved to toggleOnline() in DriverPage
+           so this modal shows only the core decision: Accept or Pass. -->
       <div class="w-full max-w-md space-y-3">
-        <!-- One-time enable-sound tap: browsers block autoplay until a user gesture. -->
-        <button
-          v-if="!soundEnabled"
-          class="ui-touch-target flex w-full items-center justify-center gap-2 rounded-xl border border-slate-600 py-2 text-xs text-slate-300 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          @click="enableSound"
-        >
-          🔔 {{ t('driverOffer.enableSound') }}
-        </button>
-
         <button
           class="ui-btn-primary w-full rounded-2xl py-4 text-lg font-bold shadow-lg shadow-emerald-900/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
           style="min-height: 56px"
@@ -118,7 +120,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { computed, nextTick, ref, watch, onBeforeUnmount } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 
@@ -155,6 +157,91 @@ const ringColorClass = computed(() => {
   if (props.secondsLeft <= 10) return 'text-amber-400';
   return 'text-emerald-400';
 });
+
+// ── Route mini-map ───────────────────────────────────────────────────────────
+// Lazy-loaded Leaflet — only fetches the bundle the first time an offer with
+// coordinates arrives. Mirrors the ensureLeaflet pattern from SendPackagePage.
+const miniMapEl = ref(null);
+let _leaflet = null;
+let _miniMap = null;
+
+const hasCoords = computed(() =>
+  props.offer?.pickup_lat != null && props.offer?.pickup_lng != null &&
+  props.offer?.delivery_lat != null && props.offer?.delivery_lng != null,
+);
+
+const ensureLeaflet = async () => {
+  if (_leaflet) return _leaflet;
+  const [{ default: L }, m2x, m, shadow] = await Promise.all([
+    import('leaflet'),
+    import('leaflet/dist/images/marker-icon-2x.png'),
+    import('leaflet/dist/images/marker-icon.png'),
+    import('leaflet/dist/images/marker-shadow.png'),
+  ]);
+  await import('leaflet/dist/leaflet.css');
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: m2x.default,
+    iconUrl: m.default,
+    shadowUrl: shadow.default,
+  });
+  _leaflet = L;
+  return L;
+};
+
+const destroyMiniMap = () => {
+  if (_miniMap) {
+    try { _miniMap.remove(); } catch { /* ignore */ }
+    _miniMap = null;
+  }
+};
+
+const buildMiniMap = async () => {
+  if (!miniMapEl.value || !hasCoords.value) return;
+  const { pickup_lat: plat, pickup_lng: plng, delivery_lat: dlat, delivery_lng: dlng } = props.offer;
+  try {
+    const L = await ensureLeaflet();
+    if (!miniMapEl.value) return; // modal may have closed during async init
+    destroyMiniMap();
+    _miniMap = L.map(miniMapEl.value, {
+      zoomControl: false, attributionControl: false,
+      dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_miniMap);
+
+    // Amber pickup pin
+    const amberIcon = L.divIcon({
+      className: '',
+      html: '<div style="width:12px;height:12px;border-radius:50%;background:#f59e0b;border:2px solid #fef3c7;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+    // Emerald dropoff pin
+    const emeraldIcon = L.divIcon({
+      className: '',
+      html: '<div style="width:12px;height:12px;border-radius:50%;background:#10b981;border:2px solid #d1fae5;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+
+    L.marker([plat, plng], { icon: amberIcon }).addTo(_miniMap);
+    L.marker([dlat, dlng], { icon: emeraldIcon }).addTo(_miniMap);
+    _miniMap.fitBounds([[plat, plng], [dlat, dlng]], { padding: [24, 24], maxZoom: 15 });
+  } catch { /* Leaflet load failure is non-fatal — map just doesn't render */ }
+};
+
+// Rebuild the map whenever a new offer arrives (different id or non-null → null transition).
+watch(
+  () => props.offer?.id,
+  async (id) => {
+    if (id != null && hasCoords.value) {
+      await nextTick(); // let Vue render the map div first
+      buildMiniMap();
+    } else {
+      destroyMiniMap();
+    }
+  },
+);
 
 // ── Sound + haptic ──────────────────────────────────────────────────────────
 // Autoplay is blocked until a user gesture, so the chime is gated behind a
@@ -198,6 +285,10 @@ const enableSound = () => {
   playChime(); // confirm it works (and unlock the audio context within the gesture)
 };
 
+// Expose so the parent (DriverPage) can call enableSound() during toggleOnline()
+// — a user-gesture context that unlocks the AudioContext before any offer arrives.
+defineExpose({ enableSound, soundEnabled });
+
 // Fire the alert each time a NEW offer takes over the screen (id changes).
 watch(
   () => props.offer?.id,
@@ -211,5 +302,6 @@ watch(
 
 onBeforeUnmount(() => {
   try { audioCtx?.close?.(); } catch (e) { void e; }
+  destroyMiniMap();
 });
 </script>

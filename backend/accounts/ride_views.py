@@ -174,10 +174,12 @@ def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=Fal
             getattr(ride.rider, "package_handover_milestone", False)
         ),
     }
-    # Handover code: only when the caller explicitly opts in (rider's own trip only).
-    # NEVER included in driver offer lists, driver active-trip, or admin payloads.
+    # Handover code + recipient track token: only when the caller explicitly opts in
+    # (rider's own trip only). NEVER included in driver offer lists, driver
+    # active-trip, or admin payloads.
     if include_delivery_code and ride.kind == RideRequest.Kind.PACKAGE:
         data["delivery_code"] = getattr(ride, "delivery_code", "") or ""
+        data["recipient_track_token"] = getattr(ride, "recipient_track_token", "") or ""
     return data
 
 
