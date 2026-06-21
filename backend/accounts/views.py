@@ -4689,9 +4689,31 @@ class MarketplacePlaceOrderView(APIView):
                             except (TypeError, ValueError):
                                 _mkt_est_ready = None
 
+                        # Auto-accept (Toast/Square parity): when the owner opted in,
+                        # routine marketplace orders (pickup/delivery) skip the manual
+                        # Confirm tap — created directly in CONFIRMED with a quoted prep
+                        # time. Scheduled/advance orders are excluded. Default OFF keeps
+                        # the manual-confirm flow.
+                        from menu.views import _auto_accept_now as _mkt_auto_accept_now
+                        _mkt_auto_accept = _mkt_auto_accept_now(
+                            profile, is_scheduled=_is_scheduled, fulfillment_type=fulfillment_type
+                        )
+                        if _mkt_auto_accept and _mkt_est_ready is None:
+                            _mkt_base = getattr(profile, "default_prep_minutes", None) or 20
+                            try:
+                                _mkt_est_ready = int(_mkt_base) + _mkt_extra
+                            except (TypeError, ValueError):
+                                _mkt_est_ready = None
+                        if _is_scheduled:
+                            _mkt_status = _Order.Status.SCHEDULED
+                        elif _mkt_auto_accept:
+                            _mkt_status = _Order.Status.CONFIRMED
+                        else:
+                            _mkt_status = _Order.Status.PENDING
+
                         order = _Order.objects.create(
                             order_number=order_number,
-                            status=_Order.Status.SCHEDULED if _is_scheduled else _Order.Status.PENDING,
+                            status=_mkt_status,
                             scheduled_for=_scheduled_for,
                             customer=_linked_customer,
                             customer_name=customer_name,

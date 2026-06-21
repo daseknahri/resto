@@ -668,3 +668,257 @@ class StaffOrderPayloadShapeTests(SimpleTestCase):
         order = _make_order(fired_course=1, items=[item])
         payload = _staff_order_payload(order)
         self.assertEqual(payload["fired_course"], 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WAITER-COURSING — per-line course override + initial fired_course at PLACEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PlacementCourseOverrideTests(SimpleTestCase):
+    """Verify PlaceOrderView honors a per-line `course` override + initial
+    `fired_course`, and that omitting both preserves today's behavior exactly.
+    """
+
+    def setUp(self):
+        from menu.views import PlaceOrderView
+        self.factory = APIRequestFactory()
+        self.view = PlaceOrderView.as_view()
+
+    def _run_place(self, items, extra_body=None, category_course=2):
+        """Drive PlaceOrderView to OrderItem.create with fully-mocked deps.
+        Returns (resp, item_create_mock, order_create_mock).
+        """
+        dish = _make_dish(slug="steak", name="Steak", price=Decimal("50.00"),
+                          category_course=category_course, pk=5)
+
+        body = {
+            "items": items,
+            "fulfillment_type": "table",
+            "table_slug": "t1",
+            "customer_name": "Bob",
+        }
+        if extra_body:
+            body.update(extra_body)
+
+        tenant = _tenant()
+        plan = MagicMock()
+        plan.can_checkout = True
+        plan.can_whatsapp_order = False
+        tenant.plan = plan
+
+        with patch("menu.views.RecipeLine"), \
+             patch("menu.views.OrderItem.objects") as item_om, \
+             patch("menu.views.Dish.objects") as dish_om, \
+             patch("menu.views.DishOption.objects") as dish_opt, \
+             patch("menu.views.transaction") as tx_mock, \
+             patch("menu.views.Order.objects") as order_om, \
+             patch("menu.views.Profile.objects") as profile_om, \
+             patch("menu.views.Promotion.objects") as promo_om, \
+             patch("menu.views.LoyaltyConfig.objects") as lc_om, \
+             patch("menu.views.get_all_active_hh_rules", return_value=[]), \
+             patch("menu.views._generate_order_number", return_value="ORD-TEST"), \
+             patch("menu.views.TableLink.objects") as tl_om:
+
+            profile = MagicMock()
+            profile.is_menu_published = True
+            profile.is_menu_temporarily_disabled = False
+            profile.is_ordering_enabled = True
+            profile.is_open = True
+            profile.business_hours_schedule = {}
+            profile.capabilities = {}
+            profile.lat = None
+            profile.lng = None
+            profile_om.filter.return_value.first.return_value = profile
+
+            dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
+            dish_om.select_for_update.return_value.filter.return_value = []
+            dish_opt.filter.return_value.select_related.return_value = []
+            promo_om.filter.return_value = []
+            lc_om.filter.return_value.first.return_value = None
+
+            class _FakeAtomic:
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+
+            tx_mock.atomic.return_value = _FakeAtomic()
+
+            created_order = _make_order()
+            order_om.create.return_value = created_order
+            item_om.create = MagicMock()
+
+            tl = MagicMock()
+            tl.label = "T1"
+            tl_om.filter.return_value.first.return_value = tl
+
+            req = self.factory.post("/api/place-order/", body, format="json")
+            u = _user()
+            u.tenant_id = tenant.id
+            force_authenticate(req, user=u)
+            req.tenant = tenant
+            req.session = {}
+            resp = self.view(req, order_id=None)
+
+        return resp, item_om.create, order_om.create
+
+    # ── Per-line override wins over the category snapshot ──────────────────────
+
+    def test_per_line_course_override_wins(self):
+        """An explicit per-line course=3 overrides the category snapshot (2)."""
+        resp, item_create, _ = self._run_place(
+            [{"slug": "steak", "qty": 1, "course": 3}], category_course=2,
+        )
+        self.assertTrue(item_create.called, getattr(resp, "data", None))
+        self.assertEqual(item_create.call_args[1].get("course"), 3)
+
+    def test_per_line_course_zero_override(self):
+        """course=0 explicitly forces 'fire immediately' even when category is 2."""
+        resp, item_create, _ = self._run_place(
+            [{"slug": "steak", "qty": 1, "course": 0}], category_course=2,
+        )
+        self.assertTrue(item_create.called, getattr(resp, "data", None))
+        self.assertEqual(item_create.call_args[1].get("course"), 0)
+
+    # ── DEFAULT-PRESERVING: no override → category snapshot (today's behavior) ─
+
+    def test_default_omitting_course_uses_category_snapshot(self):
+        """Omitting course → category snapshot is used (byte-for-byte today)."""
+        resp, item_create, _ = self._run_place(
+            [{"slug": "steak", "qty": 1}], category_course=2,
+        )
+        self.assertTrue(item_create.called, getattr(resp, "data", None))
+        self.assertEqual(item_create.call_args[1].get("course"), 2)
+
+    # ── Initial fired_course (Send-now / Hold at entry) ────────────────────────
+
+    def test_explicit_fired_course_passed_to_order_create(self):
+        """fired_course=4 ('Send now') is passed to Order.objects.create."""
+        resp, _, order_create = self._run_place(
+            [{"slug": "steak", "qty": 1, "course": 2}],
+            extra_body={"fired_course": 4},
+        )
+        self.assertTrue(order_create.called, getattr(resp, "data", None))
+        self.assertEqual(order_create.call_args[1].get("fired_course"), 4)
+
+    def test_default_no_fired_course_kw_when_omitted(self):
+        """DEFAULT-PRESERVING: omitting fired_course must NOT pass the kwarg, so the
+        model default (1) stands — identical to today."""
+        resp, _, order_create = self._run_place(
+            [{"slug": "steak", "qty": 1}],
+        )
+        self.assertTrue(order_create.called, getattr(resp, "data", None))
+        self.assertNotIn("fired_course", order_create.call_args[1])
+
+    def test_out_of_range_fired_course_ignored(self):
+        """A garbage fired_course (e.g. 9) is ignored — model default stands."""
+        resp, _, order_create = self._run_place(
+            [{"slug": "steak", "qty": 1}],
+            extra_body={"fired_course": 9},
+        )
+        self.assertTrue(order_create.called, getattr(resp, "data", None))
+        self.assertNotIn("fired_course", order_create.call_args[1])
+
+    def test_invalid_per_line_course_rejected_by_serializer(self):
+        """course=5 is out of the serializer's 0..4 range → 400 (never reaches create)."""
+        resp, item_create, _ = self._run_place(
+            [{"slug": "steak", "qty": 1, "course": 5}],
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(item_create.called)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WAITER-COURSING — per-line course override + send_now on APPEND
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AppendCourseOverrideTests(SimpleTestCase):
+    """Verify StaffAppendOrderItemsView honors a per-line `course` override and the
+    `send_now` toggle, with the default (omitted) preserving today's behavior.
+    """
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = StaffAppendOrderItemsView.as_view()
+        _patcher = patch("menu.views._can_access_order", return_value=True)
+        self._access_mock = _patcher.start()
+        self.addCleanup(_patcher.stop)
+
+    def _run_append(self, body, first_order=None):
+        """Drive the append view to OrderItem.create. Returns (resp, item_create, order)."""
+        dish = _make_dish(slug="steak", name="Steak", price=Decimal("50.00"),
+                          category_course=2, pk=5)
+        order = first_order if first_order is not None else _make_order(fired_course=1)
+        new_item = _make_item(item_id=902, dish_slug="steak", course=2)
+        second_order = _make_order(items=[new_item], fired_course=order.fired_course)
+
+        with patch("menu.views._broadcast_order_change"), \
+             patch("menu.views.OrderItem.objects") as item_om, \
+             patch("menu.views.DishOption.objects") as option_om, \
+             patch("menu.views.Dish.objects") as dish_om, \
+             patch("menu.views.transaction") as tx_mock, \
+             patch("menu.views.Order.objects") as order_om:
+
+            order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
+            order_om.prefetch_related.return_value.get.return_value = second_order
+
+            class _FakeAtomic:
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+
+            tx_mock.atomic.return_value = _FakeAtomic()
+            dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
+            dish_om.select_for_update.return_value.filter.return_value = [dish]
+            option_om.filter.return_value = []
+            item_om.create = MagicMock()
+
+            req = self.factory.post("/api/staff/orders/10/items/", body, format="json")
+            force_authenticate(req, user=_user())
+            req.tenant = _tenant()
+            resp = self.view(req, order_id=10)
+
+        return resp, item_om.create, order
+
+    def test_append_per_line_course_override_wins(self):
+        """Per-line course=3 overrides the category snapshot (2) on append."""
+        resp, item_create, _ = self._run_append(
+            {"items": [{"dish_slug": "steak", "qty": 1, "course": 3}]},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(item_create.call_args[1].get("course"), 3)
+
+    def test_append_default_uses_category_snapshot(self):
+        """DEFAULT-PRESERVING: omitting course → category snapshot (2)."""
+        resp, item_create, _ = self._run_append(
+            {"items": [{"dish_slug": "steak", "qty": 1}]},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(item_create.call_args[1].get("course"), 2)
+
+    def test_append_send_now_bumps_fired_course(self):
+        """send_now=True with an appended course-2 item bumps fired_course 1 → 2."""
+        order = _make_order(fired_course=1)
+        resp, _, order_ref = self._run_append(
+            {"items": [{"dish_slug": "steak", "qty": 1, "course": 2}], "send_now": True},
+            first_order=order,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(order_ref.fired_course, 2)
+
+    def test_append_default_hold_does_not_bump_fired_course(self):
+        """DEFAULT-PRESERVING: omitting send_now leaves fired_course untouched (held)."""
+        order = _make_order(fired_course=1)
+        resp, _, order_ref = self._run_append(
+            {"items": [{"dish_slug": "steak", "qty": 1, "course": 2}]},
+            first_order=order,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(order_ref.fired_course, 1)
+
+    def test_append_send_now_is_monotonic(self):
+        """send_now never lowers an already-higher fired_course (monotonic guard)."""
+        order = _make_order(fired_course=3)
+        resp, _, order_ref = self._run_append(
+            {"items": [{"dish_slug": "steak", "qty": 1, "course": 2}], "send_now": True},
+            first_order=order,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(order_ref.fired_course, 3)

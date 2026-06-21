@@ -33,8 +33,81 @@
       :aria-labelledby="'owner-profile-tab-' + activeTab"
       class="focus-visible:outline-none"
     >
+      <section
+        v-if="activeTab === 'orders'"
+        class="ui-workspace-stage ui-reveal space-y-5 p-4 sm:p-5"
+      >
+        <header class="space-y-1">
+          <h3 class="text-lg font-semibold text-white">{{ t("orderHandling.title") }}</h3>
+          <p class="text-sm text-white/60">{{ t("orderHandling.subtitle") }}</p>
+        </header>
+
+        <div class="flex items-start justify-between gap-4 rounded-2xl bg-white/5 p-4">
+          <div class="min-w-0 space-y-1">
+            <p class="text-sm font-medium text-white">{{ t("orderHandling.autoAcceptLabel") }}</p>
+            <p class="text-xs text-white/55">{{ t("orderHandling.autoAcceptHint") }}</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="autoAccept"
+            :aria-label="t('orderHandling.autoAcceptLabel')"
+            class="ui-touch-target shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors"
+            :class="autoAccept ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
+            :disabled="ohSaving"
+            @click="autoAccept = !autoAccept"
+          >
+            {{ autoAccept ? t("orderHandling.on") : t("orderHandling.off") }}
+          </button>
+        </div>
+
+        <div class="space-y-2 rounded-2xl bg-white/5 p-4">
+          <label for="oh-prep" class="block text-sm font-medium text-white">{{ t("orderHandling.prepLabel") }}</label>
+          <p class="text-xs text-white/55">{{ t("orderHandling.prepHint") }}</p>
+          <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press"
+              :disabled="ohSaving || prepMinutes <= 5"
+              :aria-label="t('orderHandling.prepDecrease')"
+              @click="prepMinutes = Math.max(5, prepMinutes - 5)"
+            >−</button>
+            <input
+              id="oh-prep"
+              v-model.number="prepMinutes"
+              type="number"
+              inputmode="numeric"
+              min="5"
+              max="180"
+              class="ui-input w-20 text-center"
+            />
+            <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
+            <button
+              type="button"
+              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press"
+              :disabled="ohSaving || prepMinutes >= 180"
+              :aria-label="t('orderHandling.prepIncrease')"
+              @click="prepMinutes = Math.min(180, prepMinutes + 5)"
+            >+</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <p v-if="ohStatus" class="text-sm text-white/70" role="status">{{ ohStatus }}</p>
+          <button
+            type="button"
+            class="ui-btn-primary ui-press ms-auto"
+            :disabled="ohSaving"
+            @click="saveOrderHandling"
+          >
+            {{ ohSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
+      </section>
+
       <component
         :is="activeComponent"
+        v-else
         class="ui-reveal"
         v-bind="activeComponentProps"
         @next="goNext"
@@ -46,11 +119,18 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick, watch } from "vue";
+import { computed, ref, nextTick, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import SecuritySettings from "../components/SecuritySettings.vue";
 import { useI18n } from "../composables/useI18n";
+import { useToastStore } from "../stores/toast";
+import { profileApi } from "../lib/onboardingApi";
+import {
+  isAutoAcceptOn,
+  clampPrepMinutes,
+  PREP_MINUTES_DEFAULT,
+} from "../lib/orderHandling";
 import StepBrand from "../onboarding/StepBrand.vue";
 import StepPublish from "../onboarding/StepPublish.vue";
 import StepTheme from "../onboarding/StepTheme.vue";
@@ -61,12 +141,19 @@ const route = useRoute();
 const router = useRouter();
 const tenant = useTenantStore();
 const { t } = useI18n();
+const toast = useToastStore();
 
 const tabs = computed(() => [
   {
     key: "profile",
     label: t("common.profile"),
     icon: "settings",
+    component: StepBrand,
+  },
+  {
+    key: "orders",
+    label: t("orderHandling.tabLabel"),
+    icon: "bell",
     component: StepBrand,
   },
   {
@@ -142,4 +229,49 @@ const goPrevious = () => {
 const handlePublish = () => {
   router.push({ name: "owner-launch" });
 };
+
+// ── Order handling (auto-accept + default prep time) ──────────────────────────
+// Self-contained settings block for the 'orders' tab. Loads the two Profile
+// fields, lets the owner toggle auto-accept and tune the default prep/quote
+// time, and saves via the same /profile/ endpoint as the brand form. Default
+// auto_accept_orders=false means existing tenants land here with the toggle OFF
+// and see no behaviour change unless they opt in.
+const autoAccept = ref(false);
+const prepMinutes = ref(PREP_MINUTES_DEFAULT);
+const ohSaving = ref(false);
+const ohStatus = ref("");
+
+const loadOrderHandling = () => {
+  const p = tenant.meta?.profile || {};
+  autoAccept.value = isAutoAcceptOn(p);
+  prepMinutes.value = clampPrepMinutes(p.default_prep_minutes);
+};
+
+const saveOrderHandling = async () => {
+  ohSaving.value = true;
+  ohStatus.value = "";
+  try {
+    const minutes = clampPrepMinutes(prepMinutes.value);
+    prepMinutes.value = minutes;
+    const saved = await profileApi.save({
+      auto_accept_orders: autoAccept.value,
+      default_prep_minutes: minutes,
+    });
+    tenant.mergeProfile(saved);
+    loadOrderHandling();
+    ohStatus.value = t("common.saved");
+    toast.show(t("orderHandling.saved"), "success");
+  } catch (e) {
+    ohStatus.value = t("common.saveFailed");
+    toast.show(e?.message || t("orderHandling.saveFailed"), "error");
+  } finally {
+    ohSaving.value = false;
+  }
+};
+
+onMounted(loadOrderHandling);
+watch(
+  () => tenant.meta?.profile,
+  () => loadOrderHandling(),
+);
 </script>

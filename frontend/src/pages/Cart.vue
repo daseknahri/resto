@@ -223,6 +223,34 @@
             </div>
             <p v-if="fieldErrors.fulfillment_type" id="cart-fulfillment-error" role="alert" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
+            <!-- ── Express checkout (opt-in: remember fulfillment + address + payment) ── -->
+            <div class="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.expressCheckoutTitle') }}</p>
+                  <p class="text-[11px] text-slate-400 mt-0.5">{{ t('cartPage.expressCheckoutHint') }}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  :aria-checked="expressCheckout"
+                  :aria-label="t('cartPage.expressCheckoutTitle')"
+                  class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                  :class="expressCheckout ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30' : 'border-slate-600 bg-slate-800'"
+                  @click="toggleExpressCheckout"
+                >
+                  <span
+                    class="absolute top-0.5 h-4 w-4 rounded-full transition-transform"
+                    :class="expressCheckout ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
+                  />
+                </button>
+              </div>
+              <p v-if="expressCheckout && expressApplied" class="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.expressCheckoutApplied') }}
+              </p>
+            </div>
+
             <!-- ── When: ASAP vs scheduled (pickup/delivery only) ── -->
             <div v-if="canSchedule" class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
               <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.whenTitle') }}</p>
@@ -1192,6 +1220,20 @@ const onEditLineSave = ({ oldKey, line }) => {
 };
 
 const fulfillmentType = ref('');
+// ── Express checkout (remember last fulfillment + address + payment) ──────────
+// Opt-in, default OFF, persisted per-host in the cart store. When ON, the last
+// successful order's fulfillment/address/payment are pre-applied on mount so a
+// repeat order is near-1-tap (still fully overridable below). When OFF, mount
+// behaves exactly as before — see onMounted / applyExpressCheckout.
+const expressCheckout = ref(cart.isExpressCheckoutEnabled());
+// Set true once we've pre-applied remembered context, to surface the
+// "Pre-filled from your last order" hint.
+const expressApplied = ref(false);
+const toggleExpressCheckout = () => {
+  expressCheckout.value = !expressCheckout.value;
+  cart.setExpressCheckoutEnabled(expressCheckout.value);
+  if (!expressCheckout.value) expressApplied.value = false;
+};
 // Advance/scheduled order — pickup & delivery may be placed now for a future time.
 const scheduleEnabled = ref(false);
 const scheduledFor = ref(''); // <input type="datetime-local"> value: "YYYY-MM-DDTHH:mm" (local)
@@ -2404,6 +2446,15 @@ const placeInAppOrder = async () => {
       delivery_lat: deliveryLat.value,
       delivery_lng: deliveryLng.value,
     });
+    // Express checkout: remember fulfillment + address + payment for next time.
+    // No-op unless the customer opted in (guarded inside the store action).
+    cart.persistExpressCheckout({
+      fulfillment_type: fulfillmentType.value,
+      delivery_address: deliveryAddress.value,
+      delivery_lat: deliveryLat.value,
+      delivery_lng: deliveryLng.value,
+      payment_method: paymentMethod.value,
+    });
     cart.clear();
     // Persist the order number so the layout can show a "track order" banner
     try {
@@ -2450,19 +2501,53 @@ const handleEscapeKey = (event) => {
   closeMapModal();
 };
 
-onMounted(() => {
+// Pre-apply the remembered express-checkout context. Returns true when it
+// applied something (so the reorder-context restore below is skipped to avoid a
+// conflicting double-apply). DEFAULT-OFF: loadExpressCheckout() returns null
+// unless the customer opted in, so this is a no-op for everyone else and the
+// reorder-context restore keeps today's exact behavior. The payment method is
+// applied separately (after COD eligibility resolves) in fetchCodEligibility's
+// caller below, since cash is only valid for eligible customers.
+const applyExpressCheckout = () => {
+  const ctx = cart.loadExpressCheckout();
+  if (!ctx || !ctx.fulfillment_type) return false;
+  fulfillmentType.value = ctx.fulfillment_type;
+  if (ctx.fulfillment_type === 'delivery') {
+    if (ctx.delivery_address) deliveryAddress.value = ctx.delivery_address;
+    if (ctx.delivery_lat !== null) deliveryLat.value = ctx.delivery_lat;
+    if (ctx.delivery_lng !== null) deliveryLng.value = ctx.delivery_lng;
+  }
+  expressApplied.value = true;
+  return true;
+};
+
+onMounted(async () => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
   fetchSavedAddresses();
-  fetchCodEligibility();
   fetchLoyaltyConfig();
-  // Restore fulfillment context from a prior reorder (written by Menu/OrderStatus reorderItems).
-  const savedCtx = cart.loadFulfillmentContext();
-  if (savedCtx?.fulfillment_type) {
-    fulfillmentType.value = savedCtx.fulfillment_type;
-    if (savedCtx.fulfillment_type === 'delivery') {
-      if (savedCtx.delivery_address) deliveryAddress.value = savedCtx.delivery_address;
-      if (savedCtx.delivery_lat !== null)  deliveryLat.value  = savedCtx.delivery_lat;
-      if (savedCtx.delivery_lng !== null)  deliveryLng.value  = savedCtx.delivery_lng;
+  // Express checkout (opt-in) takes precedence over the reorder-context restore.
+  const expressDidApply = applyExpressCheckout();
+  if (!expressDidApply) {
+    // Restore fulfillment context from a prior reorder (written by Menu/OrderStatus reorderItems).
+    const savedCtx = cart.loadFulfillmentContext();
+    if (savedCtx?.fulfillment_type) {
+      fulfillmentType.value = savedCtx.fulfillment_type;
+      if (savedCtx.fulfillment_type === 'delivery') {
+        if (savedCtx.delivery_address) deliveryAddress.value = savedCtx.delivery_address;
+        if (savedCtx.delivery_lat !== null)  deliveryLat.value  = savedCtx.delivery_lat;
+        if (savedCtx.delivery_lng !== null)  deliveryLng.value  = savedCtx.delivery_lng;
+      }
+    }
+  }
+  // COD eligibility resolves the valid payment methods; apply the remembered
+  // payment choice only after we know cash is allowed for this customer.
+  await fetchCodEligibility();
+  if (expressDidApply) {
+    const ctx = cart.loadExpressCheckout();
+    if (ctx?.payment_method === 'cash' && codEligible.value) {
+      paymentMethod.value = 'cash';
+    } else if (ctx?.payment_method === 'wallet') {
+      paymentMethod.value = 'wallet';
     }
   }
   trackEvent(

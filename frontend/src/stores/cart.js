@@ -329,6 +329,99 @@ export const useCartStore = defineStore("cart", {
         };
       } catch { return null; }
     },
+    // ── Express checkout (remember last fulfillment + address + payment) ────────
+    // Opt-in, per-host, localStorage-only. When the customer enables express
+    // checkout, the last successful order's fulfillment type, delivery address,
+    // and payment choice are remembered and pre-applied on the next cart mount
+    // so a repeat order is near-1-tap (always fully overridable in the form).
+    //
+    // BEHAVIOR-PRESERVING: this is DEFAULT OFF. loadExpressCheckout() returns
+    // null unless the customer has explicitly turned the toggle on, so an
+    // existing customer who never opts in sees exactly today's behavior.
+    expressCheckoutStorageKey() {
+      return typeof window === "undefined"
+        ? "cart:express"
+        : `cart:express:${window.location.hostname}`;
+    },
+    // Read the persisted preference + remembered context.
+    // Returns { enabled, fulfillment_type, delivery_address, delivery_lat,
+    // delivery_lng, payment_method } or null when storage is empty/unreadable.
+    // NOTE: this does NOT gate on `enabled` — callers decide. `enabled` is the
+    // source of truth for the toggle's checked state; the apply path checks it.
+    readExpressCheckout() {
+      try {
+        const raw = localStorage.getItem(this.expressCheckoutStorageKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        const ft = String(parsed.fulfillment_type || "");
+        const pm = String(parsed.payment_method || "");
+        // Guard against Number(null) === 0 — a stored null coord must stay null.
+        const num = (v) => (v === null || v === undefined || v === "" ? null
+          : Number.isFinite(Number(v)) ? Number(v) : null);
+        return {
+          enabled: parsed.enabled === true,
+          fulfillment_type: ft === "delivery" || ft === "pickup" ? ft : "",
+          delivery_address: String(parsed.delivery_address || ""),
+          delivery_lat: num(parsed.delivery_lat),
+          delivery_lng: num(parsed.delivery_lng),
+          payment_method: pm === "wallet" || pm === "cash" ? pm : "",
+        };
+      } catch {
+        return null;
+      }
+    },
+    // Returns the remembered context ONLY when express checkout is enabled,
+    // otherwise null. Cart.vue calls this on mount to decide whether to
+    // pre-apply — null means "do nothing, preserve today's behavior".
+    loadExpressCheckout() {
+      const data = this.readExpressCheckout();
+      if (!data || !data.enabled) return null;
+      return data;
+    },
+    // Whether the customer has opted into express checkout (toggle state).
+    isExpressCheckoutEnabled() {
+      return this.readExpressCheckout()?.enabled === true;
+    },
+    // Flip the opt-in toggle, preserving any already-remembered context.
+    setExpressCheckoutEnabled(enabled) {
+      try {
+        const existing = this.readExpressCheckout() || {};
+        localStorage.setItem(
+          this.expressCheckoutStorageKey(),
+          JSON.stringify({
+            enabled: enabled === true,
+            fulfillment_type: String(existing.fulfillment_type || ""),
+            delivery_address: String(existing.delivery_address || ""),
+            delivery_lat: existing.delivery_lat === null || existing.delivery_lat === undefined ? null : Number(existing.delivery_lat),
+            delivery_lng: existing.delivery_lng === null || existing.delivery_lng === undefined ? null : Number(existing.delivery_lng),
+            payment_method: String(existing.payment_method || ""),
+          }),
+        );
+      } catch { /* best-effort */ }
+    },
+    // Remember the just-placed order's context. Only writes the fulfillment/
+    // address/payment fields when express checkout is enabled; if disabled this
+    // is a no-op so a non-opted-in customer never accumulates remembered state.
+    persistExpressCheckout({ fulfillment_type, delivery_address, delivery_lat, delivery_lng, payment_method }) {
+      try {
+        const existing = this.readExpressCheckout();
+        if (!existing || !existing.enabled) return; // opt-in only
+        const ft = String(fulfillment_type || "");
+        const pm = String(payment_method || "");
+        localStorage.setItem(
+          this.expressCheckoutStorageKey(),
+          JSON.stringify({
+            enabled: true,
+            fulfillment_type: ft === "delivery" || ft === "pickup" ? ft : "",
+            delivery_address: ft === "delivery" ? String(delivery_address || "") : "",
+            delivery_lat: ft === "delivery" && Number.isFinite(Number(delivery_lat)) ? Number(delivery_lat) : null,
+            delivery_lng: ft === "delivery" && Number.isFinite(Number(delivery_lng)) ? Number(delivery_lng) : null,
+            payment_method: pm === "wallet" || pm === "cash" ? pm : "",
+          }),
+        );
+      } catch { /* best-effort */ }
+    },
     // ── Availability-safe reorder (unified code path) ──────────────────────────
     // Given a past order's lines, re-resolve each against the CURRENT menu via
     // POST /api/reorder-resolve/ and add only the still-available lines at their

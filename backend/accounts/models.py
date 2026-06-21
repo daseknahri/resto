@@ -88,6 +88,23 @@ class Customer(models.Model):
         default=True,
         help_text="Receive occasional offers/announcements from restaurants you've ordered from.",
     )
+    # ── Courier sender-handover opt-in (Wave 4 — Uber Connect parity) ─────────
+    # Off by default → existing senders/couriers see the unchanged package
+    # vocabulary ('Package picked up — on its way' for both arrived & in_progress
+    # and the generic ride-worded courier buttons). When a customer opts in, the
+    # package flow surfaces the distinct sender-side milestones: 'Courier arriving
+    # for pickup' (arrived) vs 'Package collected — on the way' (in_progress, the
+    # collected/handed-to-courier moment), and the courier's arrived→in_progress
+    # button reads 'Confirm pickup'. Behaviour-preserving: this only re-labels the
+    # SAME state machine; no transition or dispatch behaviour changes.
+    package_handover_milestone = models.BooleanField(
+        default=False,
+        help_text=(
+            "Opt-in: show the distinct sender-side 'collected / handed to courier' "
+            "package milestone and package-specific (non-ride) status vocabulary. "
+            "Off preserves today's collapsed 'picked up' labelling."
+        ),
+    )
     # ── Referral programme ────────────────────────────────────────────────────
     # referral_code: unique share code the customer gives to friends.
     # Auto-populated on first save (see save() override below).
@@ -1058,6 +1075,15 @@ class RideRequest(models.Model):
 
     # True once the wallet debit for this ride succeeded.
     paid_with_wallet = models.BooleanField(default=False)
+
+    # ── Optional post-completion courier tip (migration 0063) ─────────────────
+    # The SENDER (rider) may add an optional tip to the courier AFTER a package is
+    # delivered (status='completed'). The tip is debited from the sender's wallet
+    # and credited to the courier's wallet (reuses wallet_service, DRIVER vertical).
+    # Default 0 → no tip; existing trips are entirely unaffected. A non-zero value
+    # means the tip has been paid: the tip endpoint is idempotent (tip once) and
+    # refuses a second tip once this is > 0.
+    tip_amount = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     # ── Package proof-of-delivery handover code (migration 0040) ──────────────
     # Generated at create time ONLY for kind='package' (6 random digits, zero-padded).

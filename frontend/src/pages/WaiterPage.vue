@@ -1673,6 +1673,33 @@ const markTableStatus = async (group, newStatus) => {
   }
 };
 
+// ── Auto-dirty on settle-and-close (Wave 4 — table-turn parity) ────────────────
+// Sensible default: when a dine-in order settles & closes and no other active
+// order remains for its table, auto-mark the table 'dirty' so the floor turn is
+// tracked with zero extra taps. The waiter overrides via the existing
+// mark-clean (→ open) button. No-op (today's behavior) unless the table is
+// tracked in the table-state feature (has a tableId) — see store guard.
+const autoDirtyOnSettle = ref(true);
+
+const maybeAutoDirtyTable = async (order) => {
+  if (!autoDirtyOnSettle.value) return;
+  if (order?.fulfillment_type !== 'table' || !order?.table_label) return;
+  const key = order.table_label.trim().toLowerCase();
+  const tInfo = tableStatusMap.value.get(key);
+  const tableId = tInfo?.id || null;
+  if (!tableId) return; // table-state feature not in use for this table → no change
+  const dirtied = await waiter.autoDirtyTableIfEmpty(order, {
+    tableId,
+    enabled: autoDirtyOnSettle.value,
+  });
+  if (dirtied) {
+    // Reflect the new state locally so the floor badge flips to 'dirty' at once.
+    const updated = new Map(tableStatusMap.value);
+    updated.set(key, { ...tInfo, status: 'dirty' });
+    tableStatusMap.value = updated;
+  }
+};
+
 // ── Transfer-items modal ──────────────────────────────────────────────────────
 const transferModal = ref(false);
 const transferSrcOrder = ref(null);
@@ -2234,6 +2261,10 @@ const _finishSettle = async (order) => {
   // so the settle-intent key must be cleared here too on success.
   settleIntentKey.value = null;
   settleIntentOrderId.value = null;
+  if (res.completed) {
+    // Settle & close → auto-mark the table dirty when no checks remain.
+    await maybeAutoDirtyTable(order);
+  }
   if (res.completed && eligibleToRate) {
     openCustomerRating(order);
   } else if (res.completed) {
@@ -2266,6 +2297,7 @@ const payCash = async (order) => {
   settleIntentKey.value = null;
   settleIntentOrderId.value = null;
   if (data.completed) {
+    await maybeAutoDirtyTable(order);
     const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
     if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
   } else {
@@ -2291,6 +2323,7 @@ const payWallet = async (order) => {
     settleIntentKey.value = null;
     settleIntentOrderId.value = null;
     if (data.completed) {
+      await maybeAutoDirtyTable(order);
       const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
       if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
     } else {

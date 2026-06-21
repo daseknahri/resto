@@ -25,6 +25,7 @@ from accounts.ride_views import (
     RideHistoryView,
     RideCancelView,
     RideRateView,
+    RideTipView,
     DriverRideListView,
     DriverRideHistoryView,
     DriverRideAcceptView,
@@ -71,7 +72,8 @@ def _make_customer(pk=1, is_driver=False, driver_approved=False, is_driver_onlin
 
 def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
                fare=Decimal("15.00"), distance_km=2.5, payment_method="wallet",
-               paid_with_wallet=False, rider_driver_rating=None):
+               paid_with_wallet=False, rider_driver_rating=None,
+               tip_amount=Decimal("0"), kind="ride"):
     r = MagicMock()
     r.pk = pk
     r.id = pk
@@ -84,6 +86,7 @@ def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
     r.distance_km = distance_km
     r.payment_method = payment_method
     r.paid_with_wallet = paid_with_wallet
+    r.tip_amount = tip_amount
     r.rider_driver_rating = rider_driver_rating
     r.driver_rider_rating = None
     r.pickup_lat = 33.5
@@ -104,7 +107,7 @@ def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
     r.TERMINAL_STATUSES = {"completed", "cancelled"}
     r.is_terminal = status_val in {"completed", "cancelled"}
     # Courier MVP fields — default to ride values so existing tests need no changes
-    r.kind = "ride"
+    r.kind = kind
     r.recipient_name = ""
     r.recipient_phone = ""
     r.package_note = ""
@@ -531,6 +534,183 @@ class RideRateViewTests(SimpleTestCase):
         resp = self.view(req, ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "already_rated")
+
+
+# ── RideTipView ──────────────────────────────────────────────────────────────────
+
+class RideTipViewTests(SimpleTestCase):
+    """Sender tips the courier after a completed package, once, wallet→wallet."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideTipView.as_view()
+
+    def _post(self, ride_id, data, session=None):
+        req = self.factory.post(f"/api/rides/{ride_id}/tip/", data, format="json")
+        req.session = session or _session(customer_id=10)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.wallet_service.credit_wallet")
+    @patch("accounts.wallet_service.debit_wallet")
+    def test_successful_tip_debits_sender_credits_courier(
+        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10, wallet_balance=Decimal("100.00"))
+        driver = _make_customer(pk=2, is_driver=True)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver,
+                          kind="package")
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        req = self._post(ride_id=1, data={"amount": "10"}, session=_session(customer_id=10))
+        resp = self.view(req, ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["ok"])
+        # Debited the sender, credited the courier.
+        self.assertEqual(mock_debit.call_args.args[0], rider.id)
+        self.assertEqual(mock_credit.call_args.args[0], driver.id)
+        self.assertEqual(mock_debit.call_args.args[1], Decimal("10.00"))
+        self.assertEqual(mock_credit.call_args.args[1], Decimal("10.00"))
+        # DRIVER vertical on both ledger rows (courier earnings).
+        from accounts import verticals
+        self.assertEqual(mock_debit.call_args.kwargs["vertical"], verticals.DRIVER)
+        self.assertEqual(mock_credit.call_args.kwargs["vertical"], verticals.DRIVER)
+        # Persisted the tip on the ride.
+        self.assertEqual(ride.tip_amount, Decimal("10.00"))
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_tip_non_completed_returns_409(
+        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10)
+        driver = _make_customer(pk=2, is_driver=True)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="in_progress", rider=rider, driver=driver)
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_completed")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.wallet_service.credit_wallet")
+    @patch("accounts.wallet_service.debit_wallet")
+    def test_double_tip_returns_409_idempotent(
+        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10)
+        driver = _make_customer(pk=2, is_driver=True)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        # Already tipped → tip_amount > 0.
+        ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver,
+                          tip_amount=Decimal("5.00"))
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_tipped")
+        mock_debit.assert_not_called()
+        mock_credit.assert_not_called()
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_non_positive_tip_returns_400(
+        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        resp = self.view(self._post(1, {"amount": "0"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "bad_amount")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_oversized_tip_returns_400(
+        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        resp = self.view(self._post(1, {"amount": "100000"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "amount_too_large")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.wallet_service.credit_wallet")
+    @patch("accounts.wallet_service.debit_wallet")
+    def test_insufficient_funds_returns_402_no_credit(
+        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        from accounts.wallet_service import InsufficientFunds
+        rider = _make_customer(pk=10, wallet_balance=Decimal("1.00"))
+        driver = _make_customer(pk=2, is_driver=True)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_debit.side_effect = InsufficientFunds("nope")
+        ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver)
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(resp.data["code"], "insufficient_funds")
+        # Courier must NOT be credited when the sender debit failed.
+        mock_credit.assert_not_called()
+        # Tip stays at zero (never persisted).
+        self.assertEqual(ride.tip_amount, Decimal("0"))
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_no_courier_returns_409(
+        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+    ):
+        rider = _make_customer(pk=10)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=None)
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "no_courier")
+
+
+class RideTipDefaultPreservesBehaviourTests(SimpleTestCase):
+    """The tip feature is purely additive: a completed ride that is never tipped
+    serializes with tip_amount '0.00' and is otherwise byte-for-byte unchanged.
+    Existing senders see no behaviour change unless they explicitly tip."""
+
+    def test_serializer_default_tip_is_zero(self):
+        from accounts.ride_views import _serialize_ride
+        ride = _make_ride(pk=1, status_val="completed")
+        data = _serialize_ride(ride)
+        self.assertEqual(data["tip_amount"], "0")
+        # Default-off: no tip persisted, ride untouched.
+        self.assertEqual(ride.tip_amount, Decimal("0"))
 
 
 # ── PII gating — driver phone absent while SEARCHING ─────────────────────────────
@@ -3096,3 +3276,124 @@ class PackageCompletionCodeTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(ride.status, "completed")
+
+
+# ── Wave 4: Courier sender-side pickup handover ('collected' milestone) ───────────
+
+class PackageHandoverMilestoneSerializerTests(SimpleTestCase):
+    """_serialize_ride exposes the rider's package_handover_milestone opt-in.
+
+    Behaviour-preserving contract: the flag mirrors the rider's preference and
+    defaults False, so an existing (non-opted-in) sender/courier sees the
+    unchanged collapsed 'picked up' vocabulary. The flag is presentation-only —
+    it NEVER changes the state machine or any transition.
+    """
+
+    def test_flag_present_and_false_by_default(self):
+        """A rider who has NOT opted in → serialized flag is False (today's behaviour)."""
+        from accounts.ride_views import _serialize_ride
+        ride = _make_package_ride(pk=90)
+        ride.rider.package_handover_milestone = False  # explicit opt-out (default)
+        data = _serialize_ride(ride)
+        self.assertIn("package_handover_milestone", data)
+        self.assertIs(data["package_handover_milestone"], False)
+
+    def test_flag_true_when_rider_opted_in(self):
+        """A rider who opted in → serialized flag is True (distinct package vocabulary)."""
+        from accounts.ride_views import _serialize_ride
+        ride = _make_package_ride(pk=91)
+        ride.rider.package_handover_milestone = True
+        data = _serialize_ride(ride, include_driver_pii=True)
+        self.assertIs(data["package_handover_milestone"], True)
+
+    def test_flag_always_boolean_never_none(self):
+        """The flag must always be a plain bool so the FE gate is a simple check.
+
+        Even if the underlying attribute is missing (defensive getattr default),
+        the serialized value is a concrete False, never None/absent.
+        """
+        from accounts.ride_views import _serialize_ride
+        ride = _make_ride(pk=92)  # a ride (kind='ride')
+        # Simulate a rider object lacking the attribute entirely.
+        ride.rider = object()
+        data = _serialize_ride(ride)
+        self.assertIn("package_handover_milestone", data)
+        self.assertIs(data["package_handover_milestone"], False)
+
+
+class PackageHandoverTransitionTests(SimpleTestCase):
+    """DriverRideStatusView: the package arrived→in_progress 'confirm pickup' /
+    collected handover transition succeeds and stamps started_at — independent of
+    the opt-in flag (the flag only re-labels; it does not gate the transition)."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideStatusView.as_view()
+
+    def _post(self, ride_id, data, session=None):
+        req = self.factory.post(f"/api/driver/rides/{ride_id}/status/", data, format="json")
+        req.session = session or _session(customer_id=2)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def _make_arrived_package(self):
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        ride = _make_package_ride(pk=95, driver=driver, status_val="arrived")
+        ride.kind = "package"
+        return driver, ride
+
+    @patch("accounts.push.push_recipient_track_sms")
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_arrived_to_in_progress_confirm_pickup_succeeds(
+        self, mock_cust, mock_ride_objs, mock_tx, _throttle, _sms,
+    ):
+        """arrived→in_progress (the courier 'Confirm pickup' / collected milestone)
+        must succeed via the existing VALID_TRANSITIONS and stamp started_at."""
+        driver, ride = self._make_arrived_package()
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        import datetime as _dt
+        with patch("accounts.ride_views._tz") as mock_tz:
+            now = _dt.datetime(2026, 6, 10, 12, 0, 0, tzinfo=_dt.timezone.utc)
+            mock_tz.now.return_value = now
+            req = self._post(ride_id=95, data={"status": "in_progress"})
+            resp = self.view(req, ride_id=95)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "in_progress")
+        # started_at stamps the collection moment.
+        self.assertEqual(ride.started_at, now)
+
+    @patch("accounts.push.push_recipient_track_sms")
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_handover_transition_identical_regardless_of_optin(
+        self, mock_cust, mock_ride_objs, mock_tx, _throttle, _sms,
+    ):
+        """The transition must behave the same whether or not the rider opted in —
+        the flag is presentation-only and never gates the state machine."""
+        for opted_in in (False, True):
+            with self.subTest(opted_in=opted_in):
+                driver, ride = self._make_arrived_package()
+                ride.rider.package_handover_milestone = opted_in
+                mock_cust.get.return_value = driver
+                mock_tx.atomic.return_value = _noop_atomic()
+                mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+                import datetime as _dt
+                with patch("accounts.ride_views._tz") as mock_tz:
+                    mock_tz.now.return_value = _dt.datetime(
+                        2026, 6, 10, tzinfo=_dt.timezone.utc
+                    )
+                    req = self._post(ride_id=95, data={"status": "in_progress"})
+                    resp = self.view(req, ride_id=95)
+
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertEqual(ride.status, "in_progress")

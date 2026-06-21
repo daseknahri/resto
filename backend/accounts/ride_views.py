@@ -136,6 +136,10 @@ def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=Fal
         "dropoff_lng": ride.dropoff_lng,
         "payment_method": ride.payment_method,
         "paid_with_wallet": ride.paid_with_wallet,
+        # Optional post-completion courier tip (Wave 4). Always present; "0.00" until
+        # the sender tips. A non-zero value means the tip has already been paid, so
+        # the FE hides the tip card (tip-once).
+        "tip_amount": str(ride.tip_amount),
         # OPS-5g: explicit wallet→cash fallback markers (set in settle_ride when the
         # rider's balance was short at completion). In-memory only on a freshly-settled
         # ride; absent (→ False/"") on re-fetched rows, which is fine for the rider's
@@ -161,6 +165,14 @@ def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=Fal
         # The driver receives it via their own-trip serialization (include_driver_pii=True),
         # and the rider always sees it on their own trip regardless of status.
         "recipient_phone": ride.recipient_phone or "",
+        # Courier sender-handover opt-in (Wave 4). Mirrors the rider's preference so
+        # BOTH the sender's tracking card and the assigned courier's active panel can
+        # switch to the distinct 'collected / handed to courier' package vocabulary.
+        # Default False → unchanged labelling. Always present (never None) so the FE
+        # gate is a plain boolean check.
+        "package_handover_milestone": bool(
+            getattr(ride.rider, "package_handover_milestone", False)
+        ),
     }
     # Handover code: only when the caller explicitly opts in (rider's own trip only).
     # NEVER included in driver offer lists, driver active-trip, or admin payloads.
@@ -649,6 +661,133 @@ class RideRateView(APIView):
         return Response({"ok": True, "rating": rating})
 
 
+# Tip guardrails: a tip is optional, positive, and bounded so a fat-fingered or
+# malicious amount can't drain a wallet. Mirrors the courier-fare decimal scale.
+from decimal import Decimal as _Decimal, ROUND_HALF_UP as _ROUND_HALF_UP
+
+_TIP_MAX = _Decimal("1000.00")
+_TIP_CENT = _Decimal("0.01")
+
+
+class RideTipView(APIView):
+    """POST /api/rides/<id>/tip/ — sender adds an OPTIONAL tip to the courier.
+
+    Only the rider (sender) of a COMPLETED trip may tip, exactly once. The tip is
+    debited from the sender's wallet and credited to the courier's wallet (reusing
+    wallet_service, DRIVER vertical — same as delivery earnings). Idempotent: a row
+    with tip_amount already > 0 is refused (tip-once). Default state (no tip) leaves
+    every existing trip untouched.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [RideRequestThrottle]
+
+    def post(self, request, ride_id, *args, **kwargs):
+        if (gate := _vertical_gate(None)) is not None:
+            return gate
+
+        rider, err = _get_rider(request)
+        if err:
+            return err
+
+        # Parse + validate the amount BEFORE locking anything.
+        try:
+            amount = _Decimal(str(request.data.get("amount", "")).strip())
+        except Exception:
+            return Response(
+                {"detail": "Tip amount must be a number.", "code": "bad_amount"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        amount = amount.quantize(_TIP_CENT, rounding=_ROUND_HALF_UP)
+        if amount <= 0:
+            return Response(
+                {"detail": "Tip amount must be positive.", "code": "bad_amount"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if amount > _TIP_MAX:
+            return Response(
+                {"detail": "Tip amount is too large.", "code": "amount_too_large"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .wallet_service import (
+            credit_wallet,
+            debit_wallet,
+            InsufficientFunds,
+            WalletError,
+        )
+        from .models import WalletTransaction
+        from . import verticals
+
+        with _tx.atomic():
+            try:
+                ride = RideRequest.objects.select_for_update().get(pk=ride_id, rider=rider)
+            except RideRequest.DoesNotExist:
+                return Response({"detail": "Ride not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if ride.status != RideRequest.Status.COMPLETED:
+                return Response(
+                    {"detail": "Can only tip a completed trip.", "code": "not_completed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if ride.driver_id is None:
+                return Response(
+                    {"detail": "This trip has no courier to tip.", "code": "no_courier"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            # Idempotent tip-once: a non-zero tip means it was already paid.
+            if ride.tip_amount and ride.tip_amount > 0:
+                return Response(
+                    {"detail": "You have already tipped this trip.", "code": "already_tipped"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            idem = f"ridetip:{ride.id}"
+            # Debit the sender. InsufficientFunds → nothing moves; surface 402 so the
+            # FE can prompt a top-up. (No partial tip — a tip is all-or-nothing.)
+            try:
+                debit_wallet(
+                    rider.id,
+                    amount,
+                    tx_type=WalletTransaction.Type.PAYMENT,
+                    idempotency_key=f"{idem}:out",
+                    reference=f"ride:{ride.id}:tip",
+                    note=f"Tip for ride #{ride.id} courier",
+                    vertical=verticals.DRIVER,
+                )
+            except InsufficientFunds:
+                return Response(
+                    {"detail": "Wallet balance is insufficient for this tip.",
+                     "code": "insufficient_funds"},
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
+            except WalletError:
+                return Response(
+                    {"detail": "Could not process the tip.", "code": "wallet_error"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Credit the courier (full tip — tips are not commissioned). require_verified
+            # False mirrors delivery earnings: the courier shouldn't lose a tip over an
+            # unverified phone. DRIVER vertical → shows in courier earnings.
+            credit_wallet(
+                ride.driver_id,
+                amount,
+                tx_type=WalletTransaction.Type.EARNING,
+                idempotency_key=f"{idem}:in",
+                reference=f"ride:{ride.id}:tip",
+                note=f"Tip from sender for ride #{ride.id}",
+                require_verified=False,
+                vertical=verticals.DRIVER,
+            )
+
+            ride.tip_amount = amount
+            ride.save(update_fields=["tip_amount"])
+
+        return Response({"ok": True, "tip_amount": str(ride.tip_amount)})
+
+
 # ── Driver views ──────────────────────────────────────────────────────────────────
 
 
@@ -919,6 +1058,12 @@ class DriverRideStatusView(APIView):
                 ride.arrived_at = now
                 update_fields.append("arrived_at")
             elif new_status == "in_progress":
+                # For packages this arrived→in_progress step IS the sender-side
+                # 'collected / handed to courier' handover milestone: the courier
+                # has physically taken the parcel and is now driving to the
+                # recipient. started_at stamps the collection moment. (For rides it
+                # is the trip-start.) Transition itself is unchanged — only the
+                # surfaced vocabulary differs, gated by the rider's opt-in.
                 ride.started_at = now
                 update_fields.append("started_at")
             elif new_status == "completed":

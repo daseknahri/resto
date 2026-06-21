@@ -5,7 +5,17 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("ownerOrders.kicker") }}</p>
-          <h1 class="ui-display text-2xl font-bold tracking-tight text-white sm:text-3xl">{{ t("ownerOrders.title") }}</h1>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="ui-display text-2xl font-bold tracking-tight text-white sm:text-3xl">{{ t("ownerOrders.title") }}</h1>
+            <span
+              v-if="autoAcceptOn"
+              class="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-200"
+              :title="t('ownerOrders.autoAcceptingHint')"
+            >
+              <AppIcon name="check-circle" class="h-3 w-3" aria-hidden="true" />
+              {{ t("ownerOrders.autoAccepting") }}
+            </span>
+          </div>
           <p class="ui-subtle">{{ t("ownerOrders.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -1129,6 +1139,7 @@ import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
+import { isAutoAcceptOn } from "../lib/orderHandling";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live orders — polls and must mount & unmount normally).
@@ -1140,6 +1151,14 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { confirm } = useConfirmModal();
 const route = useRoute();
+
+// ── Auto-accept indicator ───────────────────────────────────────────────────
+// When the owner has opted into auto-accept, incoming orders are confirmed
+// without a tap. Surface a subtle header chip so staff know taps aren't
+// required. Defaults to false (no chip) for tenants who haven't opted in.
+const autoAcceptOn = computed(
+  () => isAutoAcceptOn(tenant.resolvedMeta?.profile)
+);
 
 // ── Menu URL (for empty-state CTA) ──────────────────────────────────────────
 const menuUrl = computed(() =>

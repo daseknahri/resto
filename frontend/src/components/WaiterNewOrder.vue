@@ -220,11 +220,58 @@
                 :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderItemNotePlaceholder')}`"
                 :placeholder="t('waiterPage.newOrderItemNotePlaceholder')"
               />
+              <!-- Per-line course picker (coursing at entry). Opt-in: shown only
+                   when the owner enabled coursing (any category carries a course). -->
+              <div
+                v-if="coursingEnabled"
+                class="ui-segmented w-full text-[10px]"
+                role="radiogroup"
+                :aria-label="`${item.dish_name} — ${t('waiterPage.courseLineLabel')}`"
+              >
+                <button
+                  class="ui-segmented-button flex-1 px-1 py-0.5"
+                  :data-active="(item.course || 0) === 0"
+                  role="radio"
+                  :aria-checked="String((item.course || 0) === 0)"
+                  @click="item.course = 0"
+                >{{ t('waiterPage.courseNone') }}</button>
+                <button
+                  v-for="n in 4"
+                  :key="n"
+                  class="ui-segmented-button flex-1 px-1 py-0.5"
+                  :data-active="(item.course || 0) === n"
+                  role="radio"
+                  :aria-checked="String((item.course || 0) === n)"
+                  :aria-label="t('waiterPage.courseN', { n })"
+                  @click="item.course = n"
+                >{{ t('waiterPage.courseChip', { n }) }}</button>
+              </div>
             </div>
           </div>
 
           <!-- Total + submit -->
           <div class="border-t border-slate-800 p-3 space-y-2">
+            <!-- Coursing: Send now / Hold for course (opt-in, shown only when the
+                 cart actually has a held course so today's flow is untouched). -->
+            <div v-if="coursingEnabled && hasHeldCourse" class="space-y-1">
+              <div class="ui-segmented w-full text-xs" role="radiogroup" :aria-label="t('waiterPage.coursingTitle')">
+                <button
+                  class="ui-segmented-button flex-1"
+                  :data-active="sendMode === 'send'"
+                  role="radio"
+                  :aria-checked="String(sendMode === 'send')"
+                  @click="sendMode = 'send'"
+                >{{ t('waiterPage.sendNow') }}</button>
+                <button
+                  class="ui-segmented-button flex-1"
+                  :data-active="sendMode === 'hold'"
+                  role="radio"
+                  :aria-checked="String(sendMode === 'hold')"
+                  @click="sendMode = 'hold'"
+                >{{ t('waiterPage.holdForCourse') }}</button>
+              </div>
+              <p v-if="sendMode === 'hold'" class="text-[10px] text-slate-500">{{ t('waiterPage.coursingHint') }}</p>
+            </div>
             <div v-if="cartItems.length" class="flex items-center justify-between text-sm font-semibold">
               <span class="text-slate-400">{{ t('waiterPage.newOrderTotal') }}</span>
               <span class="tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
@@ -452,6 +499,44 @@ const isSearching = computed(() => search.value.trim().length > 0);
 
 const allDishes = computed(() => Object.values(menu.dishes || {}).flat());
 
+// ── Coursing at entry (WAITER-COURSING) ──────────────────────────────────────
+// sendMode 'send' (default) = fire everything immediately (today's behavior);
+// 'hold' = keep held courses (course > 1) paced for later firing from the card.
+const sendMode = ref('send');
+
+// Map category slug → its course snapshot (0 = no course). Empty/absent course
+// keeps coursing off, so restaurants that never set a course see zero change.
+const categoryCourseBySlug = computed(() => {
+  const map = {};
+  for (const cat of (menu.categories || [])) {
+    map[cat.slug] = Number(cat.course || 0) || 0;
+  }
+  return map;
+});
+
+// Coursing UI is opt-in: only surfaces once the owner has assigned a course to at
+// least one category. Until then the per-line picker + Send/Hold toggle stay hidden
+// and payloads carry no course override — byte-for-byte today's flow.
+const coursingEnabled = computed(() =>
+  Object.values(categoryCourseBySlug.value).some((c) => c > 0)
+);
+
+// Resolve a dish's default course from whichever category list it lives in.
+const dishCourse = (slug) => {
+  for (const [catSlug, list] of Object.entries(menu.dishes || {})) {
+    if ((list || []).some((d) => d.slug === slug)) {
+      return categoryCourseBySlug.value[catSlug] || 0;
+    }
+  }
+  return 0;
+};
+
+// True when at least one cart line carries a course > 0 — only then is the
+// Send-now / Hold toggle meaningful (otherwise everything fires regardless).
+const hasHeldCourse = computed(() =>
+  cartItems.value.some((i) => (i.course || 0) > 0)
+);
+
 const searchResults = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return [];
@@ -566,6 +651,9 @@ const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, 
       options_label: options_label || '',
       qty: Math.min(99, qty),
       note: note || '',
+      // Default course = the dish's category snapshot (0 = no course). The waiter
+      // can override per line via the picker. Stays 0 for non-coursing menus.
+      course: dishCourse(dish_slug),
     });
   }
 };
@@ -685,7 +773,15 @@ const submit = async () => {
           qty: i.qty,
           note: i.note?.trim() || '',
           option_ids: i.option_ids || [],
+          // Only send a course override when coursing is enabled, so existing
+          // (non-coursing) tenants post an identical body to before.
+          ...(coursingEnabled.value ? { course: i.course || 0 } : {}),
         })),
+        // 'Send now' fires the appended items immediately; 'Hold' keeps held
+        // courses paced. Omitted entirely for non-coursing menus.
+        ...(coursingEnabled.value && hasHeldCourse.value
+          ? { send_now: sendMode.value === 'send' }
+          : {}),
       };
       await api.post(`/staff/orders/${props.appendToOrderId}/items/`, payload);
       toast.show(t('waiterPage.itemsAdded'), 'success');
@@ -724,6 +820,9 @@ const submit = async () => {
         qty: i.qty,
         note: i.note?.trim() || '',
         option_ids: i.option_ids || [],
+        // Per-line course override only when coursing is enabled — otherwise the
+        // body is identical to before and the backend uses the category snapshot.
+        ...(coursingEnabled.value ? { course: i.course || 0 } : {}),
       })),
       fulfillment_type: fulfillmentType.value,
       table_slug: resolvedSlug || undefined,
@@ -731,6 +830,12 @@ const submit = async () => {
       customer_name: customerName.value.trim(),
       customer_note: '',
       idempotency_key: orderPlacementKey.value,
+      // 'Send now' fires every course at once (fired_course=4); 'Hold' leaves the
+      // backend default (1) so courses 2..4 wait for an explicit fire. Sent only
+      // when a held course actually exists in the cart.
+      ...(coursingEnabled.value && hasHeldCourse.value && sendMode.value === 'send'
+        ? { fired_course: 4 }
+        : {}),
     };
     await api.post('/place-order/', payload);
     // Clear the key on confirmed success — the next order opened by this waiter

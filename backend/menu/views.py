@@ -271,6 +271,28 @@ def _busy_extra_minutes_now(profile) -> int:
         return 0
 
 
+def _auto_accept_now(profile, *, is_scheduled: bool, fulfillment_type) -> bool:
+    """Whether an incoming order should be auto-confirmed at placement.
+
+    True only when the owner has opted in (``auto_accept_orders``) AND the order
+    is a routine ASAP online order — pickup or delivery, not a future/scheduled
+    advance order (those release to the kitchen later) and not a dine-in TABLE
+    order. Default False (the flag's default) preserves the manual-confirm flow.
+    Never raises — any bad value yields False (manual confirm).
+    """
+    try:
+        if not bool(getattr(profile, "auto_accept_orders", False)):
+            return False
+        if is_scheduled:
+            return False
+        return str(fulfillment_type) in (
+            Order.FulfillmentType.PICKUP,
+            Order.FulfillmentType.DELIVERY,
+        )
+    except Exception:
+        return False
+
+
 # ── Advance / scheduled orders ──────────────────────────────────────────────
 # A customer may place a pickup/delivery order now for a future time. It is paid
 # up front (wallet), kept hidden from the kitchen as status=SCHEDULED, then moved
@@ -1504,6 +1526,14 @@ class OrderItemInputSerializer(serializers.Serializer):
         allow_empty=True,
         max_length=25,
     )
+    # Per-line course override for coursing-at-entry (WAITER-COURSING). OPTIONAL —
+    # when omitted/None the line falls back to the dish.category.course snapshot, so
+    # existing customers/clients that never send `course` keep today's behavior
+    # exactly (category snapshot → fire-on-placement for course 0/1). When supplied
+    # it must be 0 (no course / fire immediately) … 4 (dessert).
+    course = serializers.IntegerField(
+        min_value=0, max_value=4, required=False, allow_null=True,
+    )
 
 
 class OrderHandoffSerializer(serializers.Serializer):
@@ -2446,6 +2476,23 @@ class PlaceOrderView(APIView):
         validated = serializer.validated_data
         items_input = validated["items"]
 
+        # WAITER-COURSING: an OPTIONAL initial `fired_course` lets the entry surface
+        # choose Send-now vs Hold at placement. Order.fired_course defaults to 1
+        # (course 0/1 fire on placement, 2..4 held), which is exactly today's
+        # behavior — so when the client omits `fired_course` (every existing client)
+        # nothing changes. A waiter "Send now" passes 4 (fire everything); a "Hold"
+        # entry keeps lower-course items held by leaving the default. Clamped to the
+        # valid 1..4 range; anything outside falls back to the model default.
+        _initial_fired_course = None
+        _raw_fired = request.data.get("fired_course", None)
+        if _raw_fired is not None:
+            try:
+                _fc = int(_raw_fired)
+                if 1 <= _fc <= 4:
+                    _initial_fired_course = _fc
+            except (TypeError, ValueError):
+                _initial_fired_course = None
+
         slugs = [i["slug"] for i in items_input]
         all_option_ids = [oid for i in items_input for oid in i.get("option_ids", [])]
 
@@ -2514,8 +2561,16 @@ class PlaceOrderView(APIView):
                 for cc in dish.combo_components.all()
             ]
             # Snapshot course + station from category at placement time.
+            # WAITER-COURSING: a per-line `course` override (validated 0..4 by the
+            # serializer) takes precedence so a waiter can assign coursing at entry.
+            # When the line omits `course` (the default for every existing client)
+            # we fall back to the category snapshot — today's behavior, unchanged.
             _cat = getattr(dish, "category", None)
-            _course_snap = int(getattr(_cat, "course", 0) or 0)
+            _course_override = item_input.get("course", None)
+            if _course_override is not None:
+                _course_snap = int(_course_override)
+            else:
+                _course_snap = int(getattr(_cat, "course", 0) or 0)
             _station_snap = str(getattr(_cat, "station", "") or "")
             order_items_data.append({
                 "dish_slug": dish.slug,
@@ -3042,11 +3097,42 @@ class PlaceOrderView(APIView):
                     except (TypeError, ValueError):
                         _est_ready_at_placement = None
 
+                # Auto-accept (Toast/Square parity): when the owner has opted in,
+                # routine online orders (pickup/delivery) skip the manual-confirm
+                # tap — they are created directly in CONFIRMED with a quoted prep
+                # time stamped up-front. Scheduled/advance orders are excluded
+                # (they release to the kitchen later) and dine-in (TABLE) is
+                # untouched. Default OFF preserves the manual-confirm flow exactly.
+                _auto_accept = _auto_accept_now(
+                    profile, is_scheduled=_is_scheduled, fulfillment_type=fulfillment_type
+                )
+                if _auto_accept and _est_ready_at_placement is None:
+                    _base_prep = getattr(profile, "default_prep_minutes", None) or 20
+                    try:
+                        _est_ready_at_placement = int(_base_prep) + _busy_extra
+                    except (TypeError, ValueError):
+                        _est_ready_at_placement = None
+                if _is_scheduled:
+                    _initial_status = Order.Status.SCHEDULED
+                elif _auto_accept:
+                    _initial_status = Order.Status.CONFIRMED
+                else:
+                    _initial_status = Order.Status.PENDING
+
+                # Only pass fired_course when the entry surface explicitly chose an
+                # initial state; otherwise let the model default (1) stand so behavior
+                # is byte-for-byte identical to today for every existing client.
+                _fired_course_kw = (
+                    {"fired_course": _initial_fired_course}
+                    if _initial_fired_course is not None
+                    else {}
+                )
                 order = Order.objects.create(
                     order_number=order_number,
-                    status=Order.Status.SCHEDULED if _is_scheduled else Order.Status.PENDING,
+                    status=_initial_status,
                     scheduled_for=_scheduled_for,
                     handled_by_user_id=_staff_creator_id,
+                    **_fired_course_kw,
                     customer=_linked_customer,
                     customer_name=_customer_name,
                     customer_phone=_customer_phone,
@@ -4443,7 +4529,30 @@ class StaffAppendOrderItemsView(APIView):
                     option_ids.append(int(oid))
                 except (TypeError, ValueError):
                     pass
-            parsed.append({"slug": slug, "qty": qty, "note": note, "option_ids": option_ids})
+            # WAITER-COURSING: optional per-line course override (0..4). When absent
+            # or out of range we fall back to the category snapshot below — today's
+            # behavior, unchanged for every existing caller.
+            _line_course = None
+            _raw_line_course = entry.get("course", None)
+            if _raw_line_course is not None:
+                try:
+                    _lc = int(_raw_line_course)
+                    if 0 <= _lc <= 4:
+                        _line_course = _lc
+                except (TypeError, ValueError):
+                    _line_course = None
+            parsed.append({
+                "slug": slug, "qty": qty, "note": note,
+                "option_ids": option_ids, "course": _line_course,
+            })
+
+        # WAITER-COURSING: the append modal's "Send now / Hold for course" toggle.
+        # Default (False, or key omitted) = today's behavior: newly appended items at
+        # a held course (course > order.fired_course) naturally stay held until the
+        # waiter explicitly taps Fire Course N. "Send now" (True) bumps fired_course
+        # to cover the highest appended course so the new items fire immediately,
+        # reusing the existing monotonic guard (never lowers fired_course).
+        _send_now = bool(request.data.get("send_now", False))
 
         # ── Dish + option resolution (same criteria as PlaceOrderView) ────────
         slugs = [p["slug"] for p in parsed]
@@ -4519,9 +4628,15 @@ class StaffAppendOrderItemsView(APIView):
                 {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                 for cc in dish.combo_components.all()
             ]
-            # Snapshot course + station from category at append time.
+            # Snapshot course + station from category at append time. A per-line
+            # `course` override (validated 0..4 above) wins; otherwise the category
+            # snapshot — today's behavior — is used.
             _staff_cat = getattr(dish, "category", None)
-            _staff_course_snap = int(getattr(_staff_cat, "course", 0) or 0)
+            _line_course_override = p.get("course", None)
+            if _line_course_override is not None:
+                _staff_course_snap = int(_line_course_override)
+            else:
+                _staff_course_snap = int(getattr(_staff_cat, "course", 0) or 0)
             _staff_station_snap = str(getattr(_staff_cat, "station", "") or "")
             new_items_data.append({
                 "dish_slug": dish.slug,
@@ -4616,6 +4731,21 @@ class StaffAppendOrderItemsView(APIView):
 
                 for item_data in new_items_data:
                     OrderItem.objects.create(order=order, **item_data)
+
+                # WAITER-COURSING: "Send now" fires the appended items immediately by
+                # advancing fired_course to the highest appended course (monotonic —
+                # only ever raised, never lowered, mirroring StaffFireCourseView).
+                # Default (Hold) leaves fired_course untouched so the existing
+                # behavior is preserved exactly.
+                if _send_now:
+                    _max_appended_course = max(
+                        (int(d.get("course", 0) or 0) for d in new_items_data),
+                        default=0,
+                    )
+                    _cur_fired = int(getattr(order, "fired_course", 1) or 1)
+                    if _max_appended_course > _cur_fired:
+                        order.fired_course = _max_appended_course
+                        order.save(update_fields=["fired_course", "updated_at"])
 
                 # Reload items from DB so _recompute_order_totals sees the new rows
                 order = Order.objects.prefetch_related("items").get(pk=order_id)

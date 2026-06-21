@@ -772,7 +772,16 @@
               @click="advanceRide(activeRide.id, 'in_progress')"
             >
               <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ busy ? t('common.loading') : t('driverRides.startCta') }}
+              <!-- Sender-handover opt-in (Wave 4): for a package on a handover-enabled
+                   trip, this arrived→in_progress tap IS the 'collected / handed to
+                   courier' confirmation, so label it 'Confirm pickup'. Default (flag
+                   off) or a ride keeps the unchanged 'Start ride' wording; the
+                   transition is identical either way. -->
+              {{ busy
+                ? t('common.loading')
+                : (activeRide.kind === 'package' && activeRide.package_handover_milestone
+                    ? t('driverRides.confirmPickupCta')
+                    : t('driverRides.startCta')) }}
             </button>
             <!-- Package in_progress: inline code entry -->
             <template v-else-if="activeRide.status === 'in_progress' && activeRide.kind === 'package'">

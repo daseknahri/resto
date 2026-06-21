@@ -590,6 +590,22 @@ class Profile(models.Model):
         ),
     )
 
+    # ── Auto-accept (Toast/Square parity) ─────────────────────────────────────
+    # When enabled, incoming online orders skip the manual-confirm tap: they are
+    # created directly in CONFIRMED with a quoted prep time (default_prep_minutes,
+    # +busy bump) stamped at placement instead of sitting in 'pending' for an
+    # owner tap. Default False preserves today's manual-confirm behaviour exactly —
+    # existing tenants see no change unless they opt in. The owner can still
+    # see/override every order. Additive / non-breaking.
+    auto_accept_orders = models.BooleanField(
+        default=False,
+        help_text=(
+            "When True, new online (pickup/delivery) orders are auto-confirmed at "
+            "placement with a quoted prep time instead of requiring a manual "
+            "Confirm tap. False (default) keeps the manual-confirm flow."
+        ),
+    )
+
     class Meta:
         indexes = [
             # The marketplace/directory list filters on these two flags on every

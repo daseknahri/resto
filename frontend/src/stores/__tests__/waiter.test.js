@@ -438,4 +438,65 @@ describe("useWaiterStore", () => {
 
     expect(onPermError).toHaveBeenCalledOnce();
   });
+
+  // ── autoDirtyTableIfEmpty (Wave 4 — table-turn parity) ──────────────────────
+
+  it("autoDirtyTableIfEmpty PATCHes the table dirty when no active orders remain", async () => {
+    api.patch.mockResolvedValueOnce({ data: {} });
+    const store = useWaiterStore();
+    store.orders = []; // last order already removed by the settle path
+    const order = makeOrder(1, "ready"); // fulfillment_type "table", table_label "Table 1"
+
+    const dirtied = await store.autoDirtyTableIfEmpty(order, { tableId: 7, enabled: true });
+
+    expect(dirtied).toBe(true);
+    expect(api.patch).toHaveBeenCalledWith("/staff/tables/7/status/", { status: "dirty" });
+  });
+
+  it("autoDirtyTableIfEmpty does NOT fire when another active order remains on the table", async () => {
+    const store = useWaiterStore();
+    const settled = makeOrder(1, "ready");
+    const stillOpen = { ...makeOrder(2, "preparing"), table_label: "Table 1" };
+    store.orders = [stillOpen]; // same table_label still active
+
+    const dirtied = await store.autoDirtyTableIfEmpty(settled, { tableId: 7, enabled: true });
+
+    expect(dirtied).toBe(false);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  // DEFAULT-PRESERVING GUARD: with the table-state feature not in use (no
+  // tableId) OR explicitly disabled, the settle flow is unchanged — no PATCH.
+  it("autoDirtyTableIfEmpty is a no-op without a tableId (table-state feature not in use)", async () => {
+    const store = useWaiterStore();
+    store.orders = [];
+    const dirtied = await store.autoDirtyTableIfEmpty(makeOrder(1, "ready"), { tableId: null, enabled: true });
+    expect(dirtied).toBe(false);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("autoDirtyTableIfEmpty is a no-op when disabled (enabled: false preserves behavior)", async () => {
+    const store = useWaiterStore();
+    store.orders = [];
+    const dirtied = await store.autoDirtyTableIfEmpty(makeOrder(1, "ready"), { tableId: 7, enabled: false });
+    expect(dirtied).toBe(false);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("autoDirtyTableIfEmpty ignores non-table (pickup/delivery) orders", async () => {
+    const store = useWaiterStore();
+    store.orders = [];
+    const pickup = { ...makeOrder(1, "ready"), fulfillment_type: "pickup", table_label: null };
+    const dirtied = await store.autoDirtyTableIfEmpty(pickup, { tableId: 7, enabled: true });
+    expect(dirtied).toBe(false);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("autoDirtyTableIfEmpty swallows a failed PATCH and returns false (never breaks settle)", async () => {
+    api.patch.mockRejectedValueOnce(new Error("500"));
+    const store = useWaiterStore();
+    store.orders = [];
+    const dirtied = await store.autoDirtyTableIfEmpty(makeOrder(1, "ready"), { tableId: 7, enabled: true });
+    expect(dirtied).toBe(false);
+  });
 });

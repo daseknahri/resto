@@ -355,6 +355,46 @@ export const useWaiterStore = defineStore("waiter", {
     },
 
     // -------------------------------------------------------
+    // Auto-dirty on settle-and-close (Wave 4 — TouchBistro table-turn parity).
+    //
+    // After a dine-in order settles & closes (drops out of `this.orders`), if no
+    // other ACTIVE order remains for the same table_label, PATCH the table to
+    // 'dirty' so the floor view tracks the turn without a manual tap. Reuses the
+    // existing StaffTableStatusView endpoint (PATCH /staff/tables/<id>/status/).
+    //
+    // BEHAVIOR-PRESERVING: this is a no-op unless the caller passes both
+    //   enabled === true   (owner default; overridable) AND
+    //   tableId            (the table is tracked in the table-state feature).
+    // Tenants not using the table-state feature have no tableId for the label,
+    // so nothing happens and today's behavior is preserved.
+    //
+    // Returns true only when it actually PATCHed the table to dirty.
+    // Never throws — a failed auto-transition must not break the settle flow.
+    // -------------------------------------------------------
+    async autoDirtyTableIfEmpty(order, { tableId = null, enabled = true } = {}) {
+      if (!enabled || !tableId) return false;
+      if (!order || order.fulfillment_type !== "table" || !order.table_label) return false;
+
+      const key = order.table_label.trim().toLowerCase();
+      // Any remaining active dine-in order for the SAME table keeps it occupied.
+      const stillBusy = this.orders.some(
+        (o) =>
+          o.fulfillment_type === "table" &&
+          o.table_label &&
+          o.table_label.trim().toLowerCase() === key
+      );
+      if (stillBusy) return false;
+
+      try {
+        await api.patch(`/staff/tables/${tableId}/status/`, { status: "dirty" });
+        return true;
+      } catch {
+        // Best-effort only — the order is already settled; swallow the error.
+        return false;
+      }
+    },
+
+    // -------------------------------------------------------
     // Rate the customer — only the server who handled the order
     // (the backend enforces this via handled_by).
     // -------------------------------------------------------

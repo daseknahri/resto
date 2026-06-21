@@ -238,6 +238,73 @@
           {{ t('ridePage.rated') }}
         </p>
 
+        <!-- Tip the courier (optional, once) — only when a courier was assigned and
+             no tip has been paid yet. Hidden by default once tipped (tip-once). -->
+        <div
+          v-if="canTip && !tipDone"
+          class="ui-panel ui-reveal p-4 space-y-3"
+        >
+          <p class="ui-kicker">{{ t('sendPackage.tipTitle') }}</p>
+          <p class="text-xs text-slate-400">{{ t('sendPackage.tipHint') }}</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              v-for="preset in tipPresets"
+              :key="preset"
+              type="button"
+              class="ui-press rounded-xl border px-2 py-2.5 text-sm font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              :class="tipSelection === preset
+                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+                : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:text-slate-100'"
+              :aria-pressed="tipSelection === preset"
+              @click="selectTipPreset(preset)"
+            >
+              {{ formatPrice(preset) }}
+            </button>
+          </div>
+          <button
+            type="button"
+            class="ui-press w-full rounded-xl border px-2 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+            :class="tipSelection === 'custom'
+              ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+              : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:text-slate-100'"
+            :aria-pressed="tipSelection === 'custom'"
+            @click="tipSelection = 'custom'"
+          >
+            {{ t('sendPackage.tipCustom') }}
+          </button>
+          <label v-if="tipSelection === 'custom'" class="block">
+            <span class="sr-only">{{ t('sendPackage.tipCustomLabel') }}</span>
+            <input
+              v-model="tipCustomAmount"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.01"
+              class="ui-input w-full"
+              :placeholder="t('sendPackage.tipCustomLabel')"
+            />
+          </label>
+          <p v-if="tipError" role="alert" class="text-xs text-red-300">{{ tipError }}</p>
+          <button
+            type="button"
+            class="ui-btn-primary ui-press w-full py-3 text-sm font-semibold disabled:opacity-50"
+            :disabled="!resolvedTipAmount || submittingTip"
+            @click="submitTip"
+          >
+            {{ submittingTip
+              ? t('common.saving')
+              : t('sendPackage.tipCta', { amount: formatPrice(resolvedTipAmount || 0) }) }}
+          </button>
+        </div>
+        <p
+          v-else-if="tipDone"
+          role="status"
+          class="flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 py-4 text-sm font-semibold text-emerald-300"
+        >
+          <AppIcon name="check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+          {{ t('sendPackage.tipThanks') }}
+        </p>
+
         <!-- Send another -->
         <button
           type="button"
@@ -727,6 +794,14 @@ const activePackage = ref(null);
 const ratingScore = ref(0);
 const submittingRating = ref(false);
 const ratingDone = ref(false);
+// ── Optional courier tip (post-completion, once) ────────────────────────────────
+const TIP_PRESETS = [5, 10, 20];
+const tipPresets = TIP_PRESETS;
+const tipSelection = ref(null);      // a preset number, 'custom', or null
+const tipCustomAmount = ref('');
+const submittingTip = ref(false);
+const tipDone = ref(false);
+const tipError = ref('');
 let pollTimer = null;
 
 // ── Derived ───────────────────────────────────────────────────────────────────
@@ -739,6 +814,26 @@ const walletBalance = computed(() => {
 const walletInsufficient = computed(
   () => estimate.value != null && walletBalance.value < Number(estimate.value.fare),
 );
+
+// Tip is offered only when a courier was assigned to a completed trip and no tip
+// has been paid yet. tip_amount comes back as a string ("0.00" until tipped);
+// a positive value means it was already tipped → hide the card (tip-once).
+const canTip = computed(() => {
+  const pkg = activePackage.value;
+  if (!pkg || pkg.status !== 'completed') return false;
+  if (!pkg.driver) return false;
+  return Number(pkg.tip_amount || 0) <= 0;
+});
+
+// Resolve the selected tip into a positive number (or 0 when nothing valid is chosen).
+const resolvedTipAmount = computed(() => {
+  if (tipSelection.value === 'custom') {
+    const n = Number(tipCustomAmount.value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  const n = Number(tipSelection.value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
 
 const canEstimate = computed(
   () =>
@@ -775,11 +870,17 @@ const recentRecipientChips = computed(() => recentRecipients(allHistory.value, 4
 const recentDropoffChips    = computed(() => recentDropoffs(allHistory.value, 3));
 
 const packageStatusLabel = computed(() => {
+  // Sender-handover opt-in (Wave 4): when the rider has opted in, give 'arrived'
+  // and 'in_progress' DISTINCT package wording so the sender can tell 'courier is
+  // at my door to collect' from 'courier has my parcel and is driving to the
+  // recipient' (the collected / handed-to-courier milestone). Default (flag off)
+  // preserves today's behaviour: both states collapse to 'Package picked up'.
+  const handover = activePackage.value?.package_handover_milestone === true;
   switch (activePackage.value?.status) {
     case 'searching':   return t('sendPackage.searching');
     case 'accepted':    return t('sendPackage.courierAssigned');
-    case 'arrived':     return t('sendPackage.pickedUp');
-    case 'in_progress': return t('sendPackage.pickedUp');
+    case 'arrived':     return handover ? t('sendPackage.courierArrivingPickup') : t('sendPackage.pickedUp');
+    case 'in_progress': return handover ? t('sendPackage.onTheWay')              : t('sendPackage.pickedUp');
     case 'completed':   return t('sendPackage.delivered');
     case 'cancelled':   return t('sendPackage.cancelled');
     default:            return '';
@@ -1026,10 +1127,46 @@ const submitRating = async () => {
   }
 };
 
+const selectTipPreset = (preset) => {
+  tipSelection.value = preset;
+  tipError.value = '';
+};
+
+const submitTip = async () => {
+  const amount = resolvedTipAmount.value;
+  if (!amount || submittingTip.value || !activePackage.value?.id) return;
+  submittingTip.value = true;
+  tipError.value = '';
+  try {
+    await api.post(`/rides/${activePackage.value.id}/tip/`, { amount });
+    tipDone.value = true;
+    // Reflect the paid tip locally so the card stays hidden on the next poll.
+    if (activePackage.value) activePackage.value.tip_amount = String(amount);
+    // Refresh the wallet balance shown elsewhere (the tip was debited).
+    customerStore.fetchCustomer(true);
+  } catch (e) {
+    const code = e?.response?.data?.code;
+    if (code === 'insufficient_funds') {
+      tipError.value = t('sendPackage.tipInsufficient');
+    } else if (code === 'already_tipped') {
+      // Already tipped on the server — treat as success (idempotent).
+      tipDone.value = true;
+    } else {
+      tipError.value = t('sendPackage.tipError');
+    }
+  } finally {
+    submittingTip.value = false;
+  }
+};
+
 const resetForm = () => {
   activePackage.value  = null;
   ratingScore.value    = 0;
   ratingDone.value     = false;
+  tipSelection.value   = null;
+  tipCustomAmount.value = '';
+  tipDone.value        = false;
+  tipError.value       = '';
   estimate.value       = null;
   showCancelled.value  = false;
   noDriverFound.value  = false;
