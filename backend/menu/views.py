@@ -3562,8 +3562,12 @@ class CustomerOrderStatusView(APIView):
                     restaurant_feedback = None
 
         # Pull the receipt message + VAT settings from the tenant profile (safe fallbacks).
+        # Also expose the tenant's public contact phone so the customer can call the
+        # restaurant from the order-status page (this is the restaurant's own published
+        # phone, not the customer's PII, so it is safe to return on AllowAny).
         receipt_message = ""
         vat_fields = {}
+        tenant_phone = ""
         try:
             _profile = request.tenant.profile
             receipt_message = getattr(_profile, "receipt_message", "") or ""
@@ -3572,6 +3576,10 @@ class CustomerOrderStatusView(APIView):
             )
         except Exception:
             pass
+        try:
+            tenant_phone = getattr(request.tenant, "phone", "") or ""
+        except Exception:
+            tenant_phone = ""
 
         # Wallet self-pay — offer the signed-in order owner a one-tap "pay from
         # wallet" while the bill is still open (e.g. a dine-in tab). We surface
@@ -3685,6 +3693,10 @@ class CustomerOrderStatusView(APIView):
             "restaurant_feedback": restaurant_feedback,
             # Thank-you message written by the restaurant owner (shown for confirmed/ready/completed).
             "receipt_message": receipt_message,
+            # Restaurant's published contact phone — allows the customer to call when
+            # the order is being prepared. This is the tenant's own public number, not
+            # the customer's phone, so it is safe to include on this AllowAny endpoint.
+            "tenant_phone": tenant_phone,
             # VAT breakdown (empty/zero unless the owner set a VAT rate; prices are VAT-inclusive).
             **vat_fields,
         })

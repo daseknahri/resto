@@ -153,12 +153,42 @@
       </div>
     </Transition>
 
-    <!-- ══ Sticky categories bar ══ -->
+    <!-- ══ Sticky categories bar ══
+         Row 1: search input (always visible on first paint — most decision-relevant)
+         Row 2: category pills + "Filter" pill (allergens collapsed into it)
+         Net: 2 rows instead of 3, search visible without scrolling on 375px phone -->
     <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav', { groupPlural })" class="ui-menu-category-nav sticky z-20" :style="{ top: headerOffset + 'px' }">
-      <div class="relative">
+
+      <!-- Row 1: Search — always first so it's visible on first paint -->
+      <div class="px-3 py-2 sm:px-4">
+        <div class="relative flex items-center">
+          <span class="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5 14 14"/></svg>
+          </span>
+          <input
+            v-model="menuSearchQuery"
+            type="search"
+            :placeholder="t('menu.dishSearchPlaceholder')"
+            :aria-label="t('menu.search')"
+            class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
+          />
+          <button
+            v-if="isSearchActive"
+            type="button"
+            class="absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-500 transition-colors hover:text-slate-300"
+            :aria-label="t('menu.searchClear')"
+            @click="menuSearchQuery = ''"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Category pills + "Filter" pill (allergens) -->
+      <div class="relative border-t border-slate-800/40">
         <div
           ref="pillRowEl"
-          class="flex gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          class="flex gap-1.5 overflow-x-auto px-3 py-2 sm:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <button
             v-for="cat in visibleCategories"
@@ -180,6 +210,7 @@
               aria-hidden="true"
             >{{ filteredCountBySlug.get(cat.slug) ?? 0 }}</span>
           </button>
+
           <template v-if="isOverflowing">
             <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" aria-hidden="true" />
             <button
@@ -190,6 +221,28 @@
               :aria-label="t('menu.allCategories', { groupPlural })"
               @click="catSheetOpen = !catSheetOpen"
             >···</button>
+          </template>
+
+          <!-- "Filter" pill — collapses allergen strip into end of category row -->
+          <template v-if="availableAllergens.length">
+            <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" aria-hidden="true" />
+            <button
+              type="button"
+              :aria-pressed="allergenSheetOpen || selectedAllergenFilter.length > 0"
+              :aria-expanded="allergenSheetOpen"
+              :aria-label="t('menu.allergenFilter')"
+              class="ui-pill-nav inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
+              :data-active="allergenSheetOpen || selectedAllergenFilter.length > 0"
+              @click="allergenSheetOpen = !allergenSheetOpen"
+            >
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" class="h-3 w-3 shrink-0" aria-hidden="true"><path d="M2 4h10M4 7h6M6 10h2"/></svg>
+              {{ t('menu.filterPill') }}
+              <span
+                v-if="selectedAllergenFilter.length"
+                class="rounded-full bg-[var(--color-secondary)]/20 px-1.5 py-px text-[10px] font-bold tabular-nums leading-none text-[var(--color-secondary)]"
+                aria-hidden="true"
+              >{{ selectedAllergenFilter.length }}</span>
+            </button>
           </template>
         </div>
 
@@ -223,46 +276,30 @@
             </div>
           </div>
         </Transition>
-      </div>
 
-      <!-- Allergen strip -->
-      <div v-if="availableAllergens.length" role="group" :aria-label="t('menu.allergenFilter')" class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <span class="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('menu.freeFrom') }}</span>
-        <button
-          v-for="allergen in availableAllergens"
-          :key="allergen"
-          :aria-pressed="selectedAllergenFilter.includes(allergen)"
-          class="ui-touch-target shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors"
-          :class="selectedAllergenFilter.includes(allergen)
-            ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
-            : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
-          @click="toggleAllergenFilter(allergen)"
-        >{{ t(`menu.allergen_${allergen}`) }}</button>
-      </div>
-
-      <!-- Search strip -->
-      <div class="border-t border-slate-800/40 px-3 py-2">
-        <div class="relative flex items-center">
-          <span class="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5 14 14"/></svg>
-          </span>
-          <input
-            v-model="menuSearchQuery"
-            type="search"
-            :placeholder="t('menu.dishSearchPlaceholder')"
-            :aria-label="t('menu.search')"
-            class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
-          />
-          <button
-            v-if="isSearchActive"
-            type="button"
-            class="absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-500 transition-colors hover:text-slate-300"
-            :aria-label="t('menu.searchClear')"
-            @click="menuSearchQuery = ''"
+        <!-- Allergen sheet — slides out below the category row when "Filter" pill is tapped -->
+        <Transition name="cat-sheet">
+          <div
+            v-if="allergenSheetOpen && availableAllergens.length"
+            class="absolute left-0 right-0 top-full z-30 border-b border-slate-800/60 bg-slate-950/98 px-4 py-3 backdrop-blur-xl"
+            role="group"
+            :aria-label="t('menu.allergenFilter')"
           >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-          </button>
-        </div>
+            <p class="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('menu.freeFrom') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="allergen in availableAllergens"
+                :key="allergen"
+                :aria-pressed="selectedAllergenFilter.includes(allergen)"
+                class="ui-touch-target shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors"
+                :class="selectedAllergenFilter.includes(allergen)
+                  ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
+                  : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
+                @click="toggleAllergenFilter(allergen)"
+              >{{ t(`menu.allergen_${allergen}`) }}</button>
+            </div>
+          </div>
+        </Transition>
       </div>
     </nav>
 
@@ -617,6 +654,9 @@ const selectedSuperCategorySlug = ref('')
 const catSheetOpen      = ref(false)
 const catSheetEl        = ref(null)
 const catSheetTriggerEl = ref(null)
+
+// ── Allergen filter sheet (collapsed into "Filter" pill in the category row) ──
+const allergenSheetOpen = ref(false)
 
 watch(catSheetOpen, (open) => {
   if (open) nextTick(() => catSheetEl.value?.querySelector('button')?.focus())

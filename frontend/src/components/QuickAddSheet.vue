@@ -7,6 +7,17 @@
       aria-modal="true"
       aria-labelledby="qa-sheet-title"
     >
+      <!-- Hero image (4:3, object-cover) — keeps visual context when adding from a card -->
+      <div v-if="dish.image_url" class="relative w-full overflow-hidden rounded-t-3xl sm:rounded-t-2xl" style="aspect-ratio:4/3">
+        <img
+          :src="dish.image_url"
+          :alt="dish.name"
+          class="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+
       <!-- Header -->
       <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
         <div class="min-w-0">

@@ -3722,6 +3722,15 @@ class MarketplaceView(APIView):
                 if user_lat is not None and profile.lat and profile.lng:
                     distance_km = round(_haversine_km(user_lat, user_lng, profile.lat, profile.lng), 1)
 
+                # Prep-ETA range ("Ready in ~X–Y min") — derived without schema_context
+                # by using use_history=False (reads only profile.default_prep_minutes;
+                # no per-tenant order history query). Mirrors Uber Eats / Talabat card UX.
+                try:
+                    from menu.prep_eta import prep_eta_range as _mkt_list_prep_eta
+                    _list_eta_min, _list_eta_max = _mkt_list_prep_eta(profile, use_history=False)
+                except Exception:
+                    _list_eta_min, _list_eta_max = None, None
+
                 results.append({
                     "slug": tenant.slug,
                     "name": tenant.name,
@@ -3744,6 +3753,10 @@ class MarketplaceView(APIView):
                     "distance_km": distance_km,
                     "promo_badge": promo_badge,
                     "flash_sale_active": flash_sale_active,
+                    # Pre-order prep ETA range (kitchen-only; FE adds travel for delivery).
+                    # Computed without schema_context — uses the configured default only.
+                    "prep_eta_min": _list_eta_min,
+                    "prep_eta_max": _list_eta_max,
                     # Exposes schedule so the customer UI can compute "Opens at HH:MM"
                     "business_hours_schedule": profile.business_hours_schedule or {},
                     # Raw inputs for the post-cache live recompute (is_open + promo_badge +

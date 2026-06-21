@@ -304,26 +304,66 @@
         role="status"
       >{{ statusHint }}</p>
 
+      <!-- Contact restaurant escape hatch — shown only while preparing and tenant phone known -->
+      <div
+        v-if="orderData.status === 'preparing' && orderData.tenant_phone"
+        class="ui-reveal flex justify-center"
+        :style="{ '--ui-delay': '92ms' }"
+      >
+        <a
+          :href="`tel:${orderData.tenant_phone}`"
+          class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+          :aria-label="`${t('orderStatus.contactRestaurant')}: ${orderData.tenant_phone}`"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M2.3 2.3c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1L4.2 6.6A9.5 9.5 0 0 0 9.4 11.8l1.2-1.2c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1l-1 1c-1.2 1.2-6-1.2-8.4-3.6C2 8.7-.5 3.8.7 2.5l1-.3.6.1Z"/></svg>
+          {{ t('orderStatus.contactRestaurant') }}
+        </a>
+      </div>
+
       <!-- Restaurant message -->
       <div
         v-if="orderData.owner_note || orderData.estimated_ready_minutes"
         class="ui-panel ui-reveal border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5 space-y-2"
         :style="{ '--ui-delay': '84ms' }"
       >
-        <p v-if="orderData.estimated_ready_minutes" class="text-sm font-semibold text-emerald-200">
-          <template v-if="countdownSeconds !== null && countdownSeconds > 0">
-            ⏱ {{ t("orderStatus.estimatedReady", { minutes: Math.ceil(countdownSeconds / 60) }) }}
-            <span class="ms-1 font-mono text-xs font-normal text-emerald-300/70 tabular-nums">
-              ({{ Math.floor(countdownSeconds / 60) }}:{{ String(countdownSeconds % 60).padStart(2, "0") }})
-            </span>
-          </template>
-          <template v-else-if="countdownSeconds !== null && countdownSeconds <= 0">
-            ⏱ {{ t("orderStatus.readyAnyMoment") }}
-          </template>
-          <template v-else>
-            ⏱ {{ t("orderStatus.estimatedReady", { minutes: orderData.estimated_ready_minutes }) }}
-          </template>
-        </p>
+        <!-- ETA countdown ring + text -->
+        <div v-if="orderData.estimated_ready_minutes" class="flex items-center gap-3">
+          <!-- SVG ring: stroke-dashoffset encodes time-left visually -->
+          <svg
+            v-if="countdownSeconds !== null"
+            viewBox="0 0 40 40"
+            class="h-10 w-10 shrink-0 -rotate-90"
+            aria-hidden="true"
+          >
+            <!-- track -->
+            <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-900/60" />
+            <!-- progress arc — dasharray = circumference ≈ 100.53, dashoffset = remaining fraction -->
+            <circle
+              cx="20" cy="20" r="16" fill="none"
+              stroke="currentColor" stroke-width="3"
+              stroke-linecap="round"
+              class="text-emerald-400 transition-all duration-1000"
+              :style="{
+                strokeDasharray: '100.53',
+                strokeDashoffset: etaRingOffset,
+              }"
+            />
+          </svg>
+          <p class="text-sm font-semibold text-emerald-200">
+            <template v-if="countdownSeconds !== null && countdownSeconds > 0">
+              ⏱ {{ t("orderStatus.estimatedReady", { minutes: Math.ceil(countdownSeconds / 60) }) }}
+              <span class="ms-1 font-mono text-xs font-normal text-emerald-300/70 tabular-nums">
+                ({{ Math.floor(countdownSeconds / 60) }}:{{ String(countdownSeconds % 60).padStart(2, "0") }})
+              </span>
+            </template>
+            <template v-else-if="countdownSeconds !== null && countdownSeconds <= 0">
+              ⏱ {{ t("orderStatus.readyAnyMoment") }}
+            </template>
+            <template v-else>
+              ⏱ {{ t("orderStatus.estimatedReady", { minutes: orderData.estimated_ready_minutes }) }}
+            </template>
+          </p>
+        </div>
         <p v-if="orderData.owner_note" class="text-sm text-slate-200 leading-relaxed">
           <span class="ui-kicker block mb-1">{{ t("orderStatus.ownerNote") }}</span>
           {{ orderData.owner_note }}
@@ -863,6 +903,17 @@ const statusHint = computed(() => {
   if (s === 'preparing') return t('orderStatus.hintPreparing');
   if (s === 'out_for_delivery') return t('orderStatus.hintOutForDelivery');
   return null;
+});
+
+// ETA ring: stroke-dashoffset for a circle with r=16 (circumference ≈ 100.53).
+// Offset=0 → full ring (all time left); offset=100.53 → empty (no time left).
+const etaRingOffset = computed(() => {
+  const d = orderData.value;
+  if (!d?.estimated_ready_minutes || countdownSeconds.value == null) return 0;
+  const totalSecs = d.estimated_ready_minutes * 60;
+  if (totalSecs <= 0) return 100.53;
+  const remaining = Math.max(0, countdownSeconds.value);
+  return Math.round((1 - remaining / totalSecs) * 100.53 * 100) / 100;
 });
 
 const isStepDone = (stepValue) => {

@@ -82,11 +82,11 @@
       </div>
     </dl>
 
-    <!-- Live map: driver + destination -->
+    <!-- Live map: driver + pickup + destination -->
     <div
       v-show="hasDriverPos"
       ref="mapEl"
-      class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"
+      class="h-64 w-full overflow-hidden rounded-xl border border-slate-800"
       role="img"
       :aria-label="t('deliveryTracker.mapAriaLabel')"
     ></div>
@@ -274,7 +274,15 @@ const submitRating = async () => {
 
 // ── Live driver map (Leaflet, lazy-loaded) ──────────────────────────────────────
 const mapEl = ref(null);
-let _map = null, _driverMarker = null, _destMarker = null, _routeLine = null, _leaflet = null;
+let _map = null, _driverMarker = null, _destMarker = null, _pickupMarker = null, _routeLine = null, _leaflet = null;
+
+// Inline divIcon HTML helpers — no external image deps.
+const _driverIconHtml = () =>
+  `<div style="width:28px;height:28px;border-radius:50%;background:#34d399;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.5)"><svg viewBox="0 0 16 16" fill="#fff" style="width:14px;height:14px"><path d="M10.5 5.5H13l1.5 3H15v2h-1a1.5 1.5 0 0 1-3 0H5a1.5 1.5 0 0 1-3 0H1V7l2-1.5h7.5zm-1 1H4L2.5 7.5V9h.56A1.5 1.5 0 0 1 5 8.5a1.5 1.5 0 0 1 1.5 1.5h3A1.5 1.5 0 0 1 11 8.5a1.5 1.5 0 0 1 1.5 1.5h1V9h-.5L11.5 7H9.5v-.5z"/></svg></div>`;
+const _pickupIconHtml = () =>
+  `<div style="width:26px;height:26px;border-radius:50%;background:#f59e0b;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.5)"><svg viewBox="0 0 16 16" fill="#fff" style="width:13px;height:13px"><path d="M8 1a4.5 4.5 0 0 0-4.5 4.5c0 3.375 4.5 9.5 4.5 9.5s4.5-6.125 4.5-9.5A4.5 4.5 0 0 0 8 1zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg></div>`;
+const _destIconHtml = () =>
+  `<div style="width:22px;height:22px;border-radius:50%;background:#6366f1;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,.4)"><svg viewBox="0 0 16 16" fill="#fff" style="width:11px;height:11px"><path d="M8 1a4.5 4.5 0 0 0-4.5 4.5c0 3.375 4.5 9.5 4.5 9.5s4.5-6.125 4.5-9.5A4.5 4.5 0 0 0 8 1zm0 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg></div>`;
 
 const ensureLeaflet = async () => {
   if (_leaflet) return _leaflet;
@@ -296,22 +304,40 @@ const renderMap = async () => {
   if (!d || d.lat == null || d.lng == null || !mapEl.value) return;
   const L = await ensureLeaflet();
   const driverPos = [Number(d.lat), Number(d.lng)];
+  // Distinct divIcons: driver (green truck), pickup (amber pin), dest (indigo pin).
+  const _mkIcon = (html) => L.divIcon({ html, className: '', iconSize: null, iconAnchor: [14, 14] });
   if (!_map) {
     _map = L.map(mapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
     addTileLayer(L, _map);
   }
   if (!_driverMarker) {
-    _driverMarker = L.marker(driverPos).addTo(_map);
+    _driverMarker = L.marker(driverPos, { icon: _mkIcon(_driverIconHtml()) }).addTo(_map);
     if (_driverMarker.bindPopup) _driverMarker.bindPopup(t('deliveryTracker.title'));
   } else {
     _driverMarker.setLatLng(driverPos);
   }
 
-  const destLat = props.delivery?.delivery_lat, destLng = props.delivery?.delivery_lng;
+  // Pickup (restaurant) marker — shown when pickup coords are available on the job.
+  const pickupLat = props.delivery?.pickup_lat, pickupLng = props.delivery?.pickup_lng;
   const points = [driverPos];
+  if (pickupLat != null && pickupLng != null) {
+    const pickupPos = [Number(pickupLat), Number(pickupLng)];
+    if (!_pickupMarker) {
+      _pickupMarker = L.marker(pickupPos, { icon: _mkIcon(_pickupIconHtml()) }).addTo(_map);
+      if (_pickupMarker.bindPopup) _pickupMarker.bindPopup(t('deliveryTracker.from'));
+    } else {
+      _pickupMarker.setLatLng(pickupPos);
+    }
+    points.push(pickupPos);
+  } else if (_pickupMarker) {
+    _map.removeLayer(_pickupMarker);
+    _pickupMarker = null;
+  }
+
+  const destLat = props.delivery?.delivery_lat, destLng = props.delivery?.delivery_lng;
   if (destLat != null && destLng != null) {
     const destPos = [Number(destLat), Number(destLng)];
-    if (!_destMarker) _destMarker = L.marker(destPos, { opacity: 0.7 }).addTo(_map);
+    if (!_destMarker) _destMarker = L.marker(destPos, { icon: _mkIcon(_destIconHtml()) }).addTo(_map);
     else _destMarker.setLatLng(destPos);
     points.push(destPos);
   } else if (_destMarker) {
@@ -337,7 +363,7 @@ const renderMap = async () => {
     _routeLine = null;
   }
   const boundsPts = (linePts && linePts.length >= 2) ? linePts : points;
-  if (boundsPts.length > 1) _map.fitBounds(boundsPts, { padding: [30, 30], maxZoom: 15 });
+  if (boundsPts.length > 1) _map.fitBounds(boundsPts, { padding: [30, 30], maxZoom: 16 });
   else _map.setView(driverPos, 14);
   setTimeout(() => _map && _map.invalidateSize(), 0); // container just became visible
 };
@@ -363,6 +389,7 @@ onBeforeUnmount(() => {
     _map.remove();
     _map = null;
     _driverMarker = null;
+    _pickupMarker = null;
     _destMarker = null;
     _routeLine = null;
   }
