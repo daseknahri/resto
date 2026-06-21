@@ -767,6 +767,12 @@ class OrderItem(models.Model):
                 fields=["voided_at"],
                 name="menu_orderitem_voided_at_idx",
             ),
+            # Declared to match migration 0066's AddIndex — without it makemigrations
+            # wanted to DROP this (still-useful) prep-station filter index.
+            models.Index(
+                fields=["station"],
+                name="menu_orderitem_station_idx",
+            ),
         ]
 
     def __str__(self) -> str:
