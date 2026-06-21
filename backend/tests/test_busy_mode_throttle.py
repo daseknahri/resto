@@ -12,7 +12,6 @@ Covers:
 Unit-level (SimpleTestCase + mocks — no real DB).
 """
 from datetime import timedelta
-from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 

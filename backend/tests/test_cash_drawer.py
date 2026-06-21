@@ -7,11 +7,9 @@ Tests for the cash drawer feature:
 """
 from decimal import Decimal
 from datetime import datetime, timezone as _tz
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, TestCase
-from django.utils import timezone
+from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
 from rest_framework.request import Request as DRFRequest
 from rest_framework.parsers import JSONParser
@@ -110,7 +108,6 @@ class ComputeExpectedTotalTests(SimpleTestCase):
                 "pay_out": Decimal(str(pay_out_total)) if pay_out_total else None,
             }
             # Also need Q import in the view context; we just test the math here.
-            from django.db.models import Q
             result = _compute_expected_total(session, Decimal(str(cash_collected)))
         return result
 

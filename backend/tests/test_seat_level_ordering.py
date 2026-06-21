@@ -31,7 +31,7 @@ from menu.views import (
     StaffAppendOrderItemsView,
     _staff_order_payload,
 )
-from menu.models import Order, OrderItem
+from menu.models import Order
 from accounts.models import User
 
 
@@ -350,8 +350,6 @@ class TestAppendSeatField(SimpleTestCase):
         """When seat is omitted from item input, parsed seat should be 0."""
         # Test the parsing logic directly via a minimal request path using the
         # parsed dict construction — inline unit test for the parser fragment.
-        from menu.views import StaffAppendOrderItemsView as _SAV
-        import json
 
         factory = APIRequestFactory()
         # Construct a request body without 'seat'
