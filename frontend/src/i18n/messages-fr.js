@@ -23,6 +23,7 @@ common: {
   cart: "Panier",
   reserve: "Reserver",
   info: "Infos",
+  estimate: "Temps estimé",
   clear: "Effacer",
   close: "Fermer",
   save: "Enregistrer",
@@ -1367,6 +1368,16 @@ driver: {
   todayStrip: "Aujourd'hui : {deliveries_today} livraisons · {earned_today}",
   goOnlineNextDrop: "Passer en ligne pour la prochaine livraison",
   goOnlineNextDropDismiss: "Ignorer",
+  toPickupKm: "{km} km jusqu au retrait",
+  gpsStale: "GPS obsolète — vous pourriez manquer des offres",
+},
+driverOffer: {
+  newOffer: "Nouvelle offre",
+  title: "Offre de livraison",
+  accept: "Accepter la livraison",
+  pass: "Passer",
+  enableSound: "Activer le son des offres",
+  secondsUnit: "s",
 },
 driverDocs: {
   title: "Documents vehicule",
@@ -2852,6 +2863,7 @@ cartPage: {
   deliveryFeeDistance: "Livraison : {fee} · {km} km",
   deliveryFeeByDistance: "Indiquez votre adresse pour voir les frais de livraison (selon la distance).",
   deliveryFeeByDistanceShort: "Selon la distance",
+  etaDelivery: "Livraison ~{min}–{max} min",
   deliveryOutOfRange: "Cette adresse est hors de la zone de livraison (max {km} km).",
   deliveryOutOfRangeShort: "Adresse hors zone",
   saveOrderPrompt: "Connectez-vous pour sauvegarder vos commandes",
@@ -3016,6 +3028,7 @@ menu: {
   categoryNav: "Navigation par {groupPlural}",
   allergenFilter: "Filtrer par allergene",
   ratingLabel: "{avg} sur 5 ({count} avis)",
+  etaReadyIn: "Prêt dans ~{min}–{max} min",
   callWaiter: "Appeler un serveur",
   callingWaiter: "Appel…",
   waiterCalled: "Un serveur arrive 🛎️",
@@ -5149,5 +5162,9 @@ adminLayout: {
   rides: "Courses",
   flashSales: "Ventes flash",
   analytics: "Analytique",
+},
+realtime: {
+  live: "En direct",
+  reconnecting: "Reconnexion…",
 }
 };

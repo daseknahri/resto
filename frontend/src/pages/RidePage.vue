@@ -100,17 +100,20 @@
               <AppIcon name="truck" class="h-4 w-4" aria-hidden="true" />
             </span>
             <div class="min-w-0 flex-1">
-              <p
-                class="text-sm font-semibold"
-                :class="{
-                  'text-amber-300': activeRide.status === 'searching',
-                  'text-sky-300': activeRide.status === 'accepted',
-                  'text-violet-300': activeRide.status === 'arrived',
-                  'text-emerald-300': activeRide.status === 'in_progress',
-                }"
-              >
-                {{ rideStatusLabel }}
-              </p>
+              <div class="flex items-center gap-2">
+                <p
+                  class="text-sm font-semibold"
+                  :class="{
+                    'text-amber-300': activeRide.status === 'searching',
+                    'text-sky-300': activeRide.status === 'accepted',
+                    'text-violet-300': activeRide.status === 'arrived',
+                    'text-emerald-300': activeRide.status === 'in_progress',
+                  }"
+                >
+                  {{ rideStatusLabel }}
+                </p>
+                <ConnectionDot :state="connectionState" />
+              </div>
               <p v-if="activeRide.driver" class="mt-0.5 text-xs text-slate-400">
                 {{ activeRide.driver.name }}
                 <span v-if="activeRide.driver.driver_vehicle" class="ms-1 text-slate-500">· {{ activeRide.driver.driver_vehicle }}</span>
@@ -564,6 +567,7 @@ import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from '../components/AppIcon.vue';
+import ConnectionDot from '../components/ConnectionDot.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 
 const { t, formatPrice, currentLocale } = useI18n();
@@ -608,6 +612,15 @@ const historyLoading = ref(false);
 // ── Active ride polling ───────────────────────────────────────────────────────
 const activeRide = ref(null);
 let pollTimer = null;
+// Poll health → ConnectionDot. 'live' while the active-ride poll is succeeding;
+// 'connecting' after a failed poll or when the browser reports offline.
+const pollHealthy = ref(true);
+const connectionState = computed(() =>
+  pollHealthy.value &&
+  (typeof navigator === 'undefined' || navigator.onLine !== false)
+    ? 'live'
+    : 'connecting',
+);
 
 const walletBalance = computed(() => {
   const raw = customerStore.customer?.wallet_balance;
@@ -890,11 +903,13 @@ const fetchHistory = async () => {
 
 const startPolling = () => {
   stopPolling();
+  pollHealthy.value = true;
   pollTimer = setInterval(async () => {
     if (!activeRide.value?.id) { stopPolling(); return; }
     const prevStatus = activeRide.value.status;
     try {
       const res = await api.get('/rides/active/');
+      pollHealthy.value = true;
       const data = res.data;
       // Handle both { ride, scheduled } and legacy flat shape
       const rideData = (data && typeof data === 'object' && 'ride' in data)
@@ -927,7 +942,8 @@ const startPolling = () => {
         stopPolling();
       }
     } catch {
-      // ignore transient errors
+      // ignore transient errors, but surface them on the connection dot
+      pollHealthy.value = false;
     }
   }, 5000);
 };

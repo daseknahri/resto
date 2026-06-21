@@ -170,6 +170,7 @@
               <span class="ui-status-pill" :class="statusClass(orderData.status)">
                 {{ statusLabel(orderData.status) }}
               </span>
+              <ConnectionDot v-if="isLiveStatus" :state="realtimeState" show-label />
               <span v-if="orderData.fulfillment_type" class="ui-chip">{{ fulfillmentLabel(orderData) }}</span>
               <span v-if="orderData.can_cancel" class="ui-chip border-red-400/30 bg-red-500/8 text-red-300 text-[11px]">{{ t('orderStatus.cancelAvailable') }}</span>
             </div>
@@ -675,6 +676,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import ConnectionDot from "../components/ConnectionDot.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
@@ -1131,6 +1133,9 @@ const orderRealtime = useOrderRealtime(
     if (event === "status") fetchStatus();
   }
 );
+// Live-connection state for the ConnectionDot indicator. 'live' = WS open;
+// anything else (connecting/polling/idle) → amber "reconnecting" cue.
+const { connectionState: realtimeState } = orderRealtime;
 
 onMounted(() => {
   // Request notification permission proactively (non-blocking)

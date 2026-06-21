@@ -229,6 +229,11 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
     published_at = serializers.DateTimeField(read_only=True)
     is_open_now = serializers.SerializerMethodField()
     capabilities = serializers.SerializerMethodField()
+    # Pre-order prep ETA range ("Ready in ~X–Y min") surfaced on the menu header
+    # and at checkout. Read-only derived fields; the kitchen-prep portion only —
+    # the FE adds the delivery travel leg. See menu/prep_eta.py for the source.
+    prep_eta_min = serializers.SerializerMethodField()
+    prep_eta_max = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -301,6 +306,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "service_day_cutover_hour",
             "referral_enabled",
             "referral_reward_points",
+            "default_prep_minutes",
+            "prep_eta_min",
+            "prep_eta_max",
         ]
         # Delivery PRICING + platform enrollment are a platform-admin concern (the
         # delivery network is separate), so the restaurant owner cannot edit them
@@ -355,6 +363,24 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         schedule = getattr(obj, "business_hours_schedule", None)
         result = schedule_open_now(schedule, tenant_local_now(obj))
         return bool(obj.is_open) if result is None else result
+
+    def _prep_eta(self, obj):
+        """Cache and return the (min, max) prep ETA range for this profile."""
+        cached = getattr(self, "_prep_eta_cache", None)
+        if cached is None:
+            try:
+                from menu.prep_eta import prep_eta_range
+                cached = prep_eta_range(obj)
+            except Exception:
+                cached = (None, None)
+            self._prep_eta_cache = cached
+        return cached
+
+    def get_prep_eta_min(self, obj):
+        return self._prep_eta(obj)[0]
+
+    def get_prep_eta_max(self, obj):
+        return self._prep_eta(obj)[1]
 
     def validate_phone(self, value):
         cleaned = (value or "").strip()

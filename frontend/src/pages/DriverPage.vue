@@ -167,6 +167,11 @@
           </div>
           <p class="mt-0.5 text-xs text-slate-500">{{ online ? t('driver.onlineHint') : t('driver.offlineHint') }}</p>
           <p v-if="geoError" class="mt-1 text-xs text-amber-300" role="status">{{ geoError }}</p>
+          <!-- Stale-GPS warning: a stationary 'online' driver whose last fix is old
+               drops out of the rankable pool, so warn them to surface it. -->
+          <p v-else-if="online && gpsStale" class="mt-1 flex items-center gap-1 text-xs text-amber-300" role="status">
+            <AppIcon name="info" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{{ t('driver.gpsStale') }}
+          </p>
         </div>
         <button
           class="ui-press shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -499,10 +504,12 @@
             <span>{{ t('driver.codeReminder') }}</span>
           </div>
 
-          <!-- Advance status -->
+          <!-- Advance status — the single primary next-action in the active-job
+               flow; floored at 48px for a confident one-handed tap on a propped phone. -->
           <button
             v-if="nextAction"
-            class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
+            class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-base font-semibold"
+            style="min-height: 48px"
             :disabled="busy"
             :aria-busy="busy"
             @click="advance(nextAction.to)"
@@ -594,6 +601,11 @@
                 :class="offerSecondsLeft(job.offer_expires_at) <= 5 ? 'bg-red-500/20 text-red-300' : offerSecondsLeft(job.offer_expires_at) <= 10 ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700/60 text-slate-300'"
               >
                 {{ t('driver.offerSecondsLeft', { n: offerSecondsLeft(job.offer_expires_at) }) }}
+              </span>
+              <!-- Distance to the pickup (restaurant) from the driver's current GPS —
+                   parity with how ride offers surface "to pickup". Sky chip. -->
+              <span v-if="job.distance_to_pickup_km != null" class="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-0.5 font-semibold text-sky-300">
+                <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.toPickupKm', { km: job.distance_to_pickup_km }) }}
               </span>
               <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
                 <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
@@ -989,6 +1001,20 @@
     </template>
   </div>
 
+  <!-- Full-screen exclusive-offer takeover (sound + haptic + countdown ring).
+       Auto-opens whenever a delivery job is exclusively offered to THIS driver.
+       The inline pending list above stays as the fallback for open-pool offers.
+       Accept/Pass reuse the existing accept(id) / decline(id) handlers. -->
+  <DriverOfferModal
+    :offer="exclusiveOffer"
+    :seconds-left="exclusiveOfferSeconds"
+    :total-seconds="OFFER_WINDOW_SECONDS"
+    :busy="busy"
+    :fmt-money="fmtMoney"
+    @accept="accept"
+    @pass="decline"
+  />
+
   <!-- Post-delivery "Go online for the next drop" sticky CTA.
        Only shown when the driver just completed a delivery, is now offline,
        and has no active job. Dismissable. Does NOT change backend behaviour. -->
@@ -1134,7 +1160,8 @@
             {{ t('common.cancel') }}
           </button>
           <button
-            class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
+            class="ui-btn-primary ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
+            style="min-height: 48px"
             :disabled="!codeInput.trim() || codeSubmitting"
             :aria-busy="codeSubmitting"
             @click="submitDeliveryCode"
@@ -1201,6 +1228,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
+import DriverOfferModal from '../components/DriverOfferModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
@@ -1309,6 +1337,24 @@ const offerSecondsLeft = (isoExpiry) => {
   if (!isoExpiry) return 0;
   return Math.max(0, Math.round((Date.parse(isoExpiry) - offerNow.value) / 1000));
 };
+
+// ── Full-screen exclusive-offer takeover ──────────────────────────────────────
+// The takeover only fires for an offer EXCLUSIVELY offered to this driver with a
+// live deadline (offered_to_me + a future offer_expires_at). Open-pool offers keep
+// using the inline list (the fallback). Typical exclusive offer window in seconds —
+// sizes the countdown ring's "full" state at the start.
+const OFFER_WINDOW_SECONDS = 30;
+const exclusiveOffer = computed(() => {
+  if (activeJob.value) return null; // never take over while a job is in progress
+  return (
+    pendingJobs.value.find(
+      (j) => j.offered_to_me && j.offer_expires_at && offerSecondsLeft(j.offer_expires_at) > 0,
+    ) || null
+  );
+});
+const exclusiveOfferSeconds = computed(() =>
+  exclusiveOffer.value ? offerSecondsLeft(exclusiveOffer.value.offer_expires_at) : 0,
+);
 
 // ── Item D: post-delivery "go online for next drop" sticky CTA ────────────────
 const showGoOnlineCta = ref(false);
@@ -1926,11 +1972,44 @@ const submitCustomerRating = async () => {
 };
 
 // ── Geolocation ───────────────────────────────────────────────────────────────
-const sendPosition = (lat, lng) => {
+// Last fix we have on file — used by the heartbeat to re-post the same position so
+// a stationary "online" driver keeps a fresh driver_position_updated_at and stays
+// in the rankable pool (otherwise the dispatcher's freshness window drops them).
+let lastKnownPos = null; // { lat, lng }
+let lastPositionAckMs = 0; // when a /position/ POST last succeeded
+let gpsHeartbeatTimer = null;
+const gpsNow = ref(Date.now()); // reactive clock so the stale warning re-evaluates
+
+// A position fix is "stale" once the last successful post is older than 4 min —
+// the dispatcher's freshness window is ~5 min, so 4 min warns before they fall out.
+const GPS_STALE_MS = 4 * 60 * 1000;
+const gpsStale = computed(
+  () => lastPositionAckMs > 0 && gpsNow.value - lastPositionAckMs > GPS_STALE_MS,
+);
+
+const sendPosition = (lat, lng, { force = false } = {}) => {
   const nowMs = Date.now();
-  if (nowMs - lastPositionSent < 10000) return; // throttle to ~10s
+  if (!force && nowMs - lastPositionSent < 10000) return; // throttle to ~10s
   lastPositionSent = nowMs;
-  api.post('/driver/position/', { lat, lng }).catch(() => {});
+  lastKnownPos = { lat, lng };
+  api.post('/driver/position/', { lat, lng })
+    .then(() => { lastPositionAckMs = Date.now(); })
+    .catch(() => {});
+};
+
+// Heartbeat: even with no movement (watchPosition stays quiet when stationary),
+// re-post the last known fix every ~120s so the driver stays rankable while parked.
+const startGpsHeartbeat = () => {
+  if (gpsHeartbeatTimer) return;
+  gpsHeartbeatTimer = setInterval(() => {
+    gpsNow.value = Date.now();
+    if (online.value && lastKnownPos) {
+      sendPosition(lastKnownPos.lat, lastKnownPos.lng, { force: true });
+    }
+  }, 120000);
+};
+const stopGpsHeartbeat = () => {
+  if (gpsHeartbeatTimer) { clearInterval(gpsHeartbeatTimer); gpsHeartbeatTimer = null; }
 };
 
 const startGeo = () => {
@@ -1939,6 +2018,7 @@ const startGeo = () => {
     geoError.value = t('driver.geoUnavailable');
     return;
   }
+  startGpsHeartbeat();
   if (geoWatchId !== null) return;
   geoWatchId = navigator.geolocation.watchPosition(
     (pos) => { geoError.value = ''; sendPosition(pos.coords.latitude, pos.coords.longitude); },
@@ -1952,12 +2032,50 @@ const stopGeo = () => {
     navigator.geolocation.clearWatch(geoWatchId);
     geoWatchId = null;
   }
+  stopGpsHeartbeat();
+  lastKnownPos = null;
+  lastPositionAckMs = 0;
 };
+
+// ── Screen wake-lock during an active job ─────────────────────────────────────
+// A driver props the phone on a mount and never taps it for minutes between legs;
+// the screen must not sleep mid-job. Acquire a wake-lock while a delivery OR ride
+// is active and the driver is online; release on terminal/offline; re-acquire on
+// visibilitychange (the OS drops the lock when the tab is hidden).
+let wakeLock = null;
+const releaseWakeLock = async () => {
+  if (wakeLock) {
+    try { await wakeLock.release(); } catch (e) { void e; }
+    wakeLock = null;
+  }
+};
+const hasActiveWork = () => online.value && (activeJob.value != null || activeRide.value != null);
+const acquireWakeLock = async () => {
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+  if (wakeLock || !hasActiveWork()) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener?.('release', () => { wakeLock = null; });
+  } catch (e) { void e; /* user-agent may reject (battery saver) — graceful no-op */ }
+};
+const syncWakeLock = () => {
+  if (hasActiveWork()) acquireWakeLock();
+  else releaseWakeLock();
+};
+const onVisibilityChange = () => {
+  // Re-acquire when the tab becomes visible again (the lock is auto-dropped while hidden).
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') syncWakeLock();
+};
+// Keep the wake-lock in step with the active-work state.
+watch([activeJob, activeRide, online], syncWakeLock);
 
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.addEventListener('appinstalled', onAppInstalled);
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
   }
   // Item B: start the shared 1-second countdown clock for offer expiry chips.
   offerCountdownTimer = setInterval(() => {
@@ -1990,9 +2108,13 @@ onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer);
   if (offerCountdownTimer) clearInterval(offerCountdownTimer); // Item B cleanup
   stopGeo();
+  releaseWakeLock();
   if (typeof window !== 'undefined') {
     window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.removeEventListener('appinstalled', onAppInstalled);
+  }
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
   }
 });
 </script>

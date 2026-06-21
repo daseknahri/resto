@@ -94,6 +94,11 @@
                   <span class="tabular-nums">{{ restaurant.rating_average }}</span>
                   <span class="text-slate-500 tabular-nums">({{ restaurant.rating_count }})</span>
                 </span>
+                <!-- Pre-order prep ETA chip ('Ready in ~X–Y min') -->
+                <span v-if="prepEta" class="ui-chip flex items-center gap-1 text-sky-300" :title="t('common.estimate')">
+                  <AppIcon name="clock" class="h-3 w-3 shrink-0" aria-hidden="true" />
+                  {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
+                </span>
                 <span v-if="restaurant.cuisine_type" class="ui-chip">{{ restaurant.cuisine_type }}</span>
                 <span v-if="restaurant.city" class="ui-chip">{{ restaurant.city }}</span>
                 <span v-if="restaurant.delivery_enabled" class="ui-chip text-sky-300">
@@ -1573,6 +1578,16 @@ watch(codEligible, (ok) => {
 const prepayShortfall = computed(
   () => customerStore.isAuthenticated && orderTotal.value > 0 && !walletCoversTotal.value && !codChosen.value
 );
+
+// ── Pre-order prep ETA ('Ready in ~X–Y min') for the menu header ─────────────
+// Kitchen prep estimate shown BEFORE ordering (Uber Eats / Deliveroo pattern).
+// prep_eta_min/max come from the marketplace menu payload.
+const prepEta = computed(() => {
+  const lo = restaurant.value?.prep_eta_min;
+  const hi = restaurant.value?.prep_eta_max;
+  if (lo == null || hi == null) return null;
+  return { min: lo, max: hi };
+});
 
 const fmtPrice = (amount) => {
   const cur = restaurant.value?.currency || 'MAD';

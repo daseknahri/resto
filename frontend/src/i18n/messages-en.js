@@ -23,6 +23,7 @@ common: {
   cart: "Cart",
   reserve: "Reserve",
   info: "Info",
+  estimate: "Estimated time",
   clear: "Clear",
   close: "Close",
   edit: "Edit",
@@ -1368,6 +1369,16 @@ driver: {
   todayStrip: "Today: {deliveries_today} drops · {earned_today}",
   goOnlineNextDrop: "Go online for the next drop",
   goOnlineNextDropDismiss: "Dismiss",
+  toPickupKm: "{km} km to collect",
+  gpsStale: "GPS stale — you may miss offers",
+},
+driverOffer: {
+  newOffer: "New offer",
+  title: "Delivery offer",
+  accept: "Accept delivery",
+  pass: "Pass",
+  enableSound: "Enable offer sound",
+  secondsUnit: "sec",
 },
 driverDocs: {
   title: "Car documents",
@@ -2889,6 +2900,7 @@ cartPage: {
   deliveryFeeDistance: "Delivery: {fee} · {km} km",
   deliveryFeeByDistance: "Set your address to see the delivery fee (priced by distance).",
   deliveryFeeByDistanceShort: "By distance",
+  etaDelivery: "Delivery ~{min}–{max} min",
   deliveryOutOfRange: "This address is outside the delivery area (max {km} km).",
   deliveryOutOfRangeShort: "Address out of range",
   saveOrderPrompt: "Sign in to save your order history",
@@ -3053,6 +3065,7 @@ menu: {
   categoryNav: "{groupPlural} navigation",
   allergenFilter: "Filter by allergen",
   ratingLabel: "{avg} out of 5 ({count} ratings)",
+  etaReadyIn: "Ready in ~{min}–{max} min",
   callWaiter: "Call waiter",
   callingWaiter: "Calling…",
   waiterCalled: "A staff member is on the way 🛎️",
@@ -5154,5 +5167,9 @@ adminLayout: {
   rides: "Rides",
   flashSales: "Flash sales",
   analytics: "Analytics",
+},
+realtime: {
+  live: "Live",
+  reconnecting: "Reconnecting…",
 }
 };

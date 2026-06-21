@@ -723,3 +723,43 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
                 data = _serialize_delivery_job(job)
 
         self.assertEqual(data.get("business_type"), "restaurant")
+
+    def test_serialize_delivery_job_distance_to_pickup_null_without_driver_gps(self):
+        """No driver coords supplied → distance_to_pickup_km is None (field present)."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=7, status_val="searching", tenant_id=12)
+        job.pickup_lat = 33.5
+        job.pickup_lng = -7.6
+        with patch("accounts.views._tenant_slug_name", return_value=("cafe", "The Cafe")):
+            with patch("accounts.views._job_distance_km", return_value=None):
+                data = _serialize_delivery_job(job)
+
+        self.assertIn("distance_to_pickup_km", data)
+        self.assertIsNone(data["distance_to_pickup_km"])
+
+    def test_serialize_delivery_job_distance_to_pickup_computed_with_driver_gps(self):
+        """Driver coords + job pickup coords → a rounded straight-line km is returned."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=8, status_val="searching", tenant_id=13)
+        job.pickup_lat = 33.5731
+        job.pickup_lng = -7.5898
+        with patch("accounts.views._tenant_slug_name", return_value=("cafe", "The Cafe")):
+            with patch("accounts.views._job_distance_km", return_value=None):
+                data = _serialize_delivery_job(
+                    job, driver_lat=33.5650, driver_lng=-7.6100,
+                )
+
+        self.assertIsNotNone(data["distance_to_pickup_km"])
+        self.assertIsInstance(data["distance_to_pickup_km"], float)
+        self.assertGreater(data["distance_to_pickup_km"], 0)
+
+    def test_pickup_distance_km_none_when_pickup_coords_missing(self):
+        """_pickup_distance_km returns None if the pickup has no coordinates."""
+        from accounts.views import _pickup_distance_km
+
+        job = _make_job(pk=9, status_val="searching")
+        job.pickup_lat = None
+        job.pickup_lng = None
+        self.assertIsNone(_pickup_distance_km(33.5, -7.6, job))

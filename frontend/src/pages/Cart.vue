@@ -804,6 +804,18 @@
               <span class="text-sm font-bold text-slate-200 tracking-tight">{{ t('cartPage.total') }}</span>
               <span class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
             </div>
+            <!-- Pre-order ETA: a time estimate shown BEFORE the customer pays -->
+            <div
+              v-if="checkoutEta && !deliveryOutOfRange"
+              class="flex items-center gap-1.5 pt-1 text-sky-300"
+            >
+              <AppIcon name="clock" class="h-3.5 w-3.5 shrink-0" />
+              <span class="font-medium">
+                {{ checkoutEta.type === 'delivery'
+                  ? t('cartPage.etaDelivery', { min: checkoutEta.min, max: checkoutEta.max })
+                  : t('menu.etaReadyIn', { min: checkoutEta.min, max: checkoutEta.max }) }}
+              </span>
+            </div>
           </div>
 
           <!-- Payment-timing note: pickup/delivery pay now, dine-in pays at the table -->
@@ -1211,6 +1223,36 @@ const deliveryDistanceKm = computed(() => {
   // Approximate the road distance the driver drives (× road factor), matching
   // backend tenancy/routing.road_distance_km so the previewed fee lines up.
   return d == null ? null : Math.round(d * ROAD_FACTOR * 10) / 10;
+});
+
+// ── Pre-order ETA at checkout ('Ready in ~X–Y min' / 'Delivery ~X–Y min') ─────
+// Mirrors Uber Eats / Deliveroo: show a time estimate BEFORE the customer pays.
+// prep_eta_min/max come from the restaurant profile (rolling avg of recent
+// orders → configured default → platform default). For delivery we add the
+// travel leg using the SAME road-distance + average-speed the backend
+// tenancy/routing._eta_minutes uses, so the quoted range lines up with reality.
+const AVG_SPEED_KMH = 22; // matches backend tenancy/routing.AVG_SPEED_KMH
+const prepEtaRange = computed(() => {
+  const lo = meta.value?.profile?.prep_eta_min;
+  const hi = meta.value?.profile?.prep_eta_max;
+  if (lo == null || hi == null) return null;
+  return { min: Number(lo), max: Number(hi) };
+});
+// Travel minutes for the chosen delivery address (floored at 1), or 0 when unknown.
+const deliveryTravelMin = computed(() => {
+  const km = deliveryDistanceKm.value;
+  if (km == null || km <= 0) return 0;
+  return Math.max(1, Math.round((km / AVG_SPEED_KMH) * 60));
+});
+// The combined range shown at checkout. For delivery, prep + travel.
+const checkoutEta = computed(() => {
+  const base = prepEtaRange.value;
+  if (!base) return null;
+  if (fulfillmentType.value === 'delivery') {
+    const travel = deliveryTravelMin.value;
+    return { type: 'delivery', min: base.min + travel, max: base.max + travel };
+  }
+  return { type: 'pickup', min: base.min, max: base.max };
 });
 
 // True when the chosen address is beyond the restaurant's max delivery radius.

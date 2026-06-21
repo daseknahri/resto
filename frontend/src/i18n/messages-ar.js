@@ -19,6 +19,7 @@ const arabicMessages = {
     "cart": "السلة",
     "reserve": "احجز",
     "info": "معلومات",
+    "estimate": "الوقت المقدّر",
     "clear": "مسح",
     "close": "إغلاق",
     "saveAndNext": "حفظ ومتابعة",
@@ -1298,6 +1299,7 @@ const arabicMessages = {
     "categoryNav": "التنقل بين {groupPlural}",
     "allergenFilter": "تصفية حسب مسبب الحساسية",
     "ratingLabel": "{avg} من 5 ({count} تقييم)",
+    "etaReadyIn": "جاهز خلال ~{min}–{max} دقيقة",
     "callWaiter": "نادِ النادل",
     "callingWaiter": "جارٍ الاتصال…",
     "waiterCalled": "النادل في الطريق إليك 🛎️",
@@ -2005,6 +2007,7 @@ const arabicMessages = {
     "deliveryFeeDistance": "التوصيل: {fee} · {km} كم",
     "deliveryFeeByDistance": "أدخل عنوانك لعرض رسوم التوصيل (تُحسب حسب المسافة).",
     "deliveryFeeByDistanceShort": "حسب المسافة",
+    "etaDelivery": "التوصيل ~{min}–{max} دقيقة",
     "deliveryOutOfRange": "هذا العنوان خارج منطقة التوصيل (الحد الأقصى {km} كم).",
     "deliveryOutOfRangeShort": "العنوان خارج النطاق",
     "free": "مجاني",
@@ -3256,6 +3259,16 @@ Object.assign(arabicMessages, {
     todayStrip: "اليوم: {deliveries_today} توصيل · {earned_today}",
     goOnlineNextDrop: "الاتصال للتوصيل التالي",
     goOnlineNextDropDismiss: "إغلاق",
+    toPickupKm: "{km} كم إلى الاستلام",
+    gpsStale: "إشارة GPS قديمة — قد تفوتك العروض",
+  },
+  driverOffer: {
+    newOffer: "عرض جديد",
+    title: "عرض توصيل",
+    accept: "قبول التوصيل",
+    pass: "تخطّي",
+    enableSound: "تفعيل صوت العروض",
+    secondsUnit: "ث",
   },
   driverDocs: {
     title: "وثائق السيارة",
@@ -4892,6 +4905,10 @@ Object.assign(arabicMessages, {
     rides: "\u0627\u0644\u0631\u062d\u0644\u0627\u062a",
     flashSales: "\u062a\u062e\u0641\u064a\u0636\u0627\u062a \u0641\u0644\u0627\u0634",
     analytics: "\u0627\u0644\u062a\u062d\u0644\u064a\u0644\u0627\u062a",
+  },
+  realtime: {
+    live: "\u0645\u0628\u0627\u0634\u0631",
+    reconnecting: "\u062c\u0627\u0631\u064d \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0627\u062a\u0635\u0627\u0644\u2026",
   },
 });
 export default arabicMessages;

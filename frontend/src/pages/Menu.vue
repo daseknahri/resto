@@ -67,6 +67,14 @@
             <span class="font-semibold text-amber-200">{{ ratingSummary.average !== null ? ratingSummary.average.toFixed(1) : '' }}</span>
             <span class="text-amber-400/60 text-[10px]">({{ ratingSummary.count }})</span>
           </span>
+          <span
+            v-if="prepEta"
+            class="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-200 backdrop-blur-sm"
+            :title="t('common.estimate')"
+          >
+            <AppIcon name="clock" class="h-3 w-3 shrink-0 text-sky-300/80" aria-hidden="true" />
+            {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
+          </span>
         </div>
       </div>
     </header>
@@ -619,6 +627,17 @@ const menuTheme        = computed(() => profile.value?.menu_theme || 'dark')
 const isBrowseOnly     = computed(() => tenant.isBrowseOnlyPlan === true)
 const ratingSummary    = computed(() => meta.value?.rating_summary || null)
 const recentReviews    = computed(() => meta.value?.recent_reviews  || [])
+
+// ── Pre-order prep ETA ('Ready in ~X–Y min') ─────────────────────────────────
+// Kitchen prep estimate surfaced on the menu header BEFORE ordering, mirroring
+// Uber Eats / Deliveroo. The backend exposes prep_eta_min/max on the profile
+// (rolling avg of recent orders → configured default → platform default).
+const prepEta = computed(() => {
+  const lo = profile.value?.prep_eta_min
+  const hi = profile.value?.prep_eta_max
+  if (lo == null || hi == null) return null
+  return { min: lo, max: hi }
+})
 
 // ── Reviews carousel keyboard reach ───────────────────────────────────────────
 // The carousel hides its scrollbar, so it isn't reachable by mouse-drag for

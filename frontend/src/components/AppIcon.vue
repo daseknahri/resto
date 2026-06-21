@@ -80,6 +80,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M7 3v4", "M17 3v4", "M4 8h16", "M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1"],
   },
+  clock: {
+    viewBox: "0 0 24 24",
+    paths: ["M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20", "M12 7v5l3 2"],
+  },
   settings: {
     viewBox: "0 0 24 24",
     paths: [

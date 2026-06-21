@@ -528,6 +528,21 @@ class Profile(models.Model):
             "referee completes their first paid order."
         ),
     )
+    # ── Pre-order ETA ───────────────────────────────────────────────────────
+    # Default kitchen prep time (minutes) used to quote a pre-order ETA on the
+    # menu header and at checkout BEFORE the customer commits. It is the fallback
+    # when there isn't yet enough recent order history to compute a rolling
+    # average prep time. Nullable: when null a sensible platform default (~20)
+    # is used. Additive / non-breaking.
+    default_prep_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Typical kitchen prep time in minutes, used to quote a pre-order ETA "
+            "('Ready in ~X–Y min') on the menu and at checkout. Falls back to the "
+            "rolling average of recent orders, then to a platform default when blank."
+        ),
+    )
 
     class Meta:
         indexes = [

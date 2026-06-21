@@ -3761,6 +3761,14 @@ class MarketplaceMenuView(APIView):
                 cod_enabled = bool(getattr(profile, "cod_enabled", False))
                 cod_eligible = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
 
+                # Pre-order prep ETA range ("Ready in ~X–Y min") for the menu
+                # header + checkout. Computed inside the tenant schema so the
+                # rolling-average-of-recent-orders source can run. Falls back to
+                # the configured default / platform default when there's no
+                # history. Travel time for delivery is added on the FE.
+                from menu.prep_eta import prep_eta_range as _mkt_prep_eta_range
+                _mkt_prep_min, _mkt_prep_max = _mkt_prep_eta_range(profile)
+
         except Exception as exc:
             logger.exception("MarketplaceMenuView error for slug=%s: %s", slug, exc)
             return Response({"detail": "Could not load menu.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3817,6 +3825,9 @@ class MarketplaceMenuView(APIView):
             "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
             "cod_enabled": cod_enabled,
             "cod_eligible": cod_eligible,
+            # Pre-order prep ETA range (kitchen prep only; FE adds travel for delivery).
+            "prep_eta_min": _mkt_prep_min,
+            "prep_eta_max": _mkt_prep_max,
             "loyalty": loyalty_cfg_data,
             "flash_sale": flash_sale_info,
             "rating_average": rating_average,
@@ -5336,10 +5347,30 @@ def _batch_business_types(tenant_ids) -> dict:
         return {}
 
 
+def _pickup_distance_km(driver_lat, driver_lng, job):
+    """Straight-line km from the driver's current GPS fix → the pickup (restaurant),
+    or None when either coordinate is missing. Mirrors how ride offers surface
+    ``distance_to_pickup_km`` so a driver can judge an offer before accepting."""
+    if (
+        driver_lat is not None and driver_lng is not None
+        and job.pickup_lat is not None and job.pickup_lng is not None
+    ):
+        try:
+            return round(
+                _haversine_km(driver_lat, driver_lng, job.pickup_lat, job.pickup_lng),
+                1,
+            )
+        except Exception:
+            return None
+    return None
+
+
 def _serialize_delivery_job(
     job,
     include_driver_position: bool = False,
     business_type: str = "restaurant",
+    driver_lat=None,
+    driver_lng=None,
 ) -> dict:
     _slug, _name = _tenant_slug_name(job.tenant_id)
     # Merchant contact phone — lets the driver reach the restaurant when the
@@ -5375,6 +5406,10 @@ def _serialize_delivery_job(
         # Straight-line distance the driver covers (restaurant → customer), so the
         # job card can show "how far" before/after accepting.
         "distance_km": _job_distance_km(job),
+        # Straight-line distance from the driver's current GPS → the pickup, so an
+        # offer card can show "how far to collect" (parity with ride offers). Only
+        # populated when the polling driver has a fresh position fix passed in.
+        "distance_to_pickup_km": _pickup_distance_km(driver_lat, driver_lng, job),
         "delivery_fee": str(job.delivery_fee),
         "driver_payout": str(job.driver_payout),
         "platform_commission": str(job.platform_commission),
@@ -5786,11 +5821,24 @@ class DriverJobListView(APIView):
 
         # PENDING jobs: enough to decide (size, total, cash-or-prepaid, distance) but
         # never the customer's name/phone until the driver accepts.
+        # Driver GPS → pickup distance is shown on offer cards (parity with ride
+        # offers), but only when this driver's position fix is fresh (otherwise a
+        # stale, far-away "distance to collect" would mislead).
+        from datetime import timedelta as _timedelta
+        _drv_lat = _drv_lng = None
+        _pos_at = getattr(customer, "driver_position_updated_at", None)
+        if (
+            customer.driver_lat is not None and customer.driver_lng is not None
+            and _pos_at is not None and _pos_at >= _now - _timedelta(seconds=300)
+        ):
+            _drv_lat, _drv_lng = customer.driver_lat, customer.driver_lng
         _pending_sum = _summaries_by_tenant(pending_jobs, False)
         pending_serialized = []
         for j in pending_jobs:
             _bt = _biz_types.get(j.tenant_id, "restaurant")
-            d = _serialize_delivery_job(j, business_type=_bt)
+            d = _serialize_delivery_job(
+                j, business_type=_bt, driver_lat=_drv_lat, driver_lng=_drv_lng,
+            )
             d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
             # Is this job exclusively offered to *this* driver right now? (drives the
             # "offered to you" badge + the decline button in the app).
