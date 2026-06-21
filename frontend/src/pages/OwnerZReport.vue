@@ -285,6 +285,53 @@
         </Transition>
       </div>
 
+
+      <!-- Cash drawer reconciliation card (additive — hidden when no sessions exist) -->
+      <div
+        v-if="drawerSessions.length"
+        class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 px-4 py-3 space-y-3 print:border-slate-300 print:bg-white"
+      >
+        <p class="text-sm font-semibold text-slate-200 print:text-black">{{ t("shiftClose.cashSection") }}</p>
+        <div
+          v-for="sess in drawerSessions"
+          :key="sess.id"
+          class="rounded-xl border px-3.5 py-3 space-y-2"
+          :class="sess.status === 'open' ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/60 bg-slate-950/30'"
+        >
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-xs font-semibold text-slate-200 print:text-black">
+              {{ sess.status === 'open' ? t('cashDrawer.statusOpen') : t('cashDrawer.statusClosed') }}
+              <span class="ms-1.5 text-[10px] font-normal text-slate-500">{{ fmtWindowTime(sess.opened_at) }}</span>
+            </p>
+            <span
+              v-if="sess.status === 'closed' && sess.over_short !== null"
+              class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+              :class="Number(sess.over_short) > 0
+                ? 'bg-emerald-500/20 text-emerald-300 print:bg-emerald-50 print:text-emerald-700'
+                : Number(sess.over_short) < 0
+                  ? 'bg-red-500/20 text-red-300 print:bg-red-50 print:text-red-700'
+                  : 'bg-sky-500/15 text-sky-300 print:bg-sky-50 print:text-sky-700'"
+            >
+              {{ Number(sess.over_short) > 0 ? '+' : '' }}{{ fmtMoney(sess.over_short) }} {{ t('cashDrawer.overShort') }}
+            </span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <p class="text-[10px] text-slate-500 print:text-slate-400">{{ t('cashDrawer.openingFloat') }}</p>
+              <p class="font-semibold tabular-nums text-slate-200 print:text-black">{{ fmtMoney(sess.opening_float) }}</p>
+            </div>
+            <div v-if="sess.status === 'closed'">
+              <p class="text-[10px] text-slate-500 print:text-slate-400">{{ t('cashDrawer.expectedTotal') }}</p>
+              <p class="font-semibold tabular-nums text-slate-200 print:text-black">{{ fmtMoney(sess.expected_total) }}</p>
+            </div>
+            <div v-if="sess.status === 'closed'">
+              <p class="text-[10px] text-slate-500 print:text-slate-400">{{ t('cashDrawer.countedTotal') }}</p>
+              <p class="font-semibold tabular-nums text-slate-200 print:text-black">{{ fmtMoney(sess.counted_total) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Empty state when no report yet and not loading -->
@@ -314,6 +361,9 @@ const exporting = ref(false);
 const error = ref("");
 const voidsExpanded = ref(true);
 const laborExpanded = ref(true);
+
+// Drawer sessions for the selected service day (additive — empty = no card shown)
+const drawerSessions = ref([]);
 
 // Default date = today in ISO format
 const todayIso = computed(() => new Date().toISOString().slice(0, 10));
@@ -346,6 +396,28 @@ const formatWindowTime = (iso) => {
   }
 };
 
+// Short time formatter for drawer transaction timestamps
+const fmtWindowTime = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+};
+
+// Fetch drawer sessions for the selected service day (default-preserving: empty = hidden)
+const fetchDrawerSessions = async () => {
+  try {
+    const params = {};
+    if (selectedDate.value) params.date = selectedDate.value;
+    const { data } = await api.get("/owner/drawer/history/", { params, timeout: 5000 }).catch(() => null);
+    drawerSessions.value = data?.sessions ?? [];
+  } catch {
+    drawerSessions.value = [];
+  }
+};
+
 const fetchReport = async () => {
   if (loading.value) return;
   loading.value = true;
@@ -353,8 +425,11 @@ const fetchReport = async () => {
   try {
     const params = {};
     if (selectedDate.value) params.date = selectedDate.value;
-    const { data } = await api.get("/owner/z-report/", { params });
-    report.value = data;
+    const [reportResp] = await Promise.all([
+      api.get("/owner/z-report/", { params }),
+      fetchDrawerSessions(),
+    ]);
+    report.value = reportResp.data;
     voidsExpanded.value = true;
   } catch (err) {
     error.value = err?.response?.data?.detail || t("zReport.loadFailed");

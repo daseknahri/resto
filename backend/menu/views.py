@@ -53,9 +53,10 @@ from tenancy.openstate import schedule_open_now
 
 from django_tenants.utils import schema_context
 
-from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
+from .revenue import split_revenue_for_orders
 from .tax import order_vat_fields
 from .serializers import (
     CategorySerializer,
@@ -2572,6 +2573,16 @@ class PlaceOrderView(APIView):
             else:
                 _course_snap = int(getattr(_cat, "course", 0) or 0)
             _station_snap = str(getattr(_cat, "station", "") or "")
+            # SEAT-ORDERING: optional per-line seat number (0 = unassigned; default).
+            # Only meaningful for dine-in/table orders.  Omitting the field preserves
+            # today's behavior exactly (seat 0 = one bill / no split-by-seat).
+            _seat_raw = item_input.get("seat", None)
+            _seat_snap = 0
+            if _seat_raw is not None:
+                try:
+                    _seat_snap = max(0, int(_seat_raw))
+                except (TypeError, ValueError):
+                    _seat_snap = 0
             order_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -2583,6 +2594,7 @@ class PlaceOrderView(APIView):
                 "combo_components": _combo_snapshot,
                 "course": _course_snap,
                 "station": _station_snap,
+                "seat": _seat_snap,
             })
 
         # Collect dishes that track stock so we can decrement inside the transaction.
@@ -4415,6 +4427,7 @@ def _staff_order_payload(order):
                 "is_voided": i.is_voided,
                 "combo_components": i.combo_components,
                 "course": getattr(i, "course", 0),
+                "seat": getattr(i, "seat", 0),
             }
             for i in _items
         ],
@@ -4541,9 +4554,17 @@ class StaffAppendOrderItemsView(APIView):
                         _line_course = _lc
                 except (TypeError, ValueError):
                     _line_course = None
+            # SEAT-ORDERING: optional per-line seat number (0 = unassigned; default).
+            _raw_line_seat = entry.get("seat", None)
+            _line_seat = 0
+            if _raw_line_seat is not None:
+                try:
+                    _line_seat = max(0, int(_raw_line_seat))
+                except (TypeError, ValueError):
+                    _line_seat = 0
             parsed.append({
                 "slug": slug, "qty": qty, "note": note,
-                "option_ids": option_ids, "course": _line_course,
+                "option_ids": option_ids, "course": _line_course, "seat": _line_seat,
             })
 
         # WAITER-COURSING: the append modal's "Send now / Hold for course" toggle.
@@ -4650,6 +4671,7 @@ class StaffAppendOrderItemsView(APIView):
                 "combo_components": _combo_snapshot,
                 "course": _staff_course_snap,
                 "station": _staff_station_snap,
+                "seat": p.get("seat", 0),
             })
             _pk_to_slug[dish.pk] = dish.slug
             if dish.stock_qty is not None:
@@ -5906,6 +5928,105 @@ class StaffOrderPaymentView(APIView):
             pass
 
         return Response(_staff_order_payload(order), status=status.HTTP_201_CREATED)
+
+
+class StaffSeatSplitView(APIView):
+    """GET /api/staff/orders/<order_id>/seat-split/
+
+    Returns a read-only grouping of the order's non-voided items by seat number,
+    together with each seat's subtotal.  Used by the WaiterPage "Split by seat"
+    settle mode to let the waiter settle each cover individually.
+
+    Response shape:
+      {
+        "order_id": int,
+        "currency": str,
+        "seats": [
+          {
+            "seat": int,            # 0 = unassigned
+            "items": [
+              {
+                "id": int,
+                "dish_name": str,
+                "qty": int,
+                "unit_price": str,
+                "subtotal": str,
+                "note": str,
+                "options": list
+              }
+            ],
+            "subtotal": str         # sum of item.subtotal for this seat
+          }
+        ]
+      }
+
+    Seats are returned in ascending order (seat 0 last, as it is the catch-all).
+    Only non-voided items are included.  If every item has seat=0, the response
+    has a single seat-0 bucket — identical to today's one-bill behaviour.
+
+    Auth: same _can_edit_tenant_order gate as all staff order views.
+    Guards:
+      not_found   (404) — order does not exist
+      not_table   (409) — fulfillment_type != table (seat split only applies to dine-in)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = (
+            Order.objects
+            .prefetch_related("items")
+            .filter(pk=order_id)
+            .first()
+        )
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_access_order(request, order):
+            return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        if order.fulfillment_type != Order.FulfillmentType.TABLE:
+            return Response(
+                {"detail": "Seat split only applies to table orders.", "code": "not_table"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Group non-voided items by seat
+        seat_map: dict = {}
+        for item in order.items.all():
+            if item.is_voided:
+                continue
+            seat_num = getattr(item, "seat", 0) or 0
+            if seat_num not in seat_map:
+                seat_map[seat_num] = {"seat": seat_num, "items": [], "subtotal": Decimal("0")}
+            seat_map[seat_num]["items"].append({
+                "id": item.id,
+                "dish_name": item.dish_name,
+                "qty": item.qty,
+                "unit_price": str(item.unit_price),
+                "subtotal": str(item.subtotal),
+                "note": item.note,
+                "options": item.options,
+            })
+            seat_map[seat_num]["subtotal"] += Decimal(str(item.subtotal))
+
+        # Sort: assigned seats first (ascending), unassigned (0) last
+        assigned = sorted([s for s in seat_map.values() if s["seat"] > 0], key=lambda s: s["seat"])
+        unassigned = [s for s in seat_map.values() if s["seat"] == 0]
+        seats = assigned + unassigned
+
+        # Stringify subtotals
+        for s in seats:
+            s["subtotal"] = str(s["subtotal"].quantize(Decimal("0.01")))
+
+        return Response({
+            "order_id": order.id,
+            "currency": order.currency,
+            "seats": seats,
+        })
 
 
 class OwnerDriverCashoutLookupView(APIView):
@@ -12043,3 +12164,307 @@ class OwnerRecipeLineDetailView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         rl.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Cash Drawer (Toast/Square parity) ─────────────────────────────────────────
+
+
+def _drawer_session_dict(session):
+    """Serialize a DrawerSession for API responses."""
+    return {
+        "id": session.id,
+        "status": session.status,
+        "opened_by_name": session.opened_by_name,
+        "opening_float": str(session.opening_float),
+        "opened_at": session.opened_at.isoformat(),
+        "closed_at": session.closed_at.isoformat() if session.closed_at else None,
+        "closed_by_name": session.closed_by_name,
+        "counted_total": str(session.counted_total) if session.counted_total is not None else None,
+        "expected_total": str(session.expected_total) if session.expected_total is not None else None,
+        "over_short": str(session.over_short) if session.over_short is not None else None,
+        "note": session.note,
+    }
+
+
+def _drawer_transaction_dict(tx):
+    return {
+        "id": tx.id,
+        "kind": tx.kind,
+        "amount": str(tx.amount),
+        "reason": tx.reason,
+        "recorded_by_name": tx.recorded_by_name,
+        "at": tx.at.isoformat(),
+    }
+
+
+def _compute_expected_total(session, cash_collected):
+    """Compute the expected total for a DrawerSession at close time.
+
+    expected = opening_float
+               + cash_collected (cash orders paid while session was open)
+               + sum(pay-in amounts) - sum(pay-out amounts)
+    """
+    from django.db.models import Sum as _Sum, Q as _Q
+
+    movement_agg = DrawerTransaction.objects.filter(session=session).aggregate(
+        pay_in=_Sum("amount", filter=_Q(kind=DrawerTransaction.Kind.PAY_IN)),
+        pay_out=_Sum("amount", filter=_Q(kind=DrawerTransaction.Kind.PAY_OUT)),
+    )
+    pay_in = Decimal(str(movement_agg["pay_in"] or 0))
+    pay_out = Decimal(str(movement_agg["pay_out"] or 0))
+    return (
+        Decimal(str(session.opening_float))
+        + cash_collected
+        + pay_in
+        - pay_out
+    ).quantize(Decimal("0.01"))
+
+
+class DrawerCurrentView(APIView):
+    """GET /api/owner/drawer/current/
+
+    Returns the currently-open DrawerSession (if any) plus its transactions.
+    Returns 204 when no drawer is open so the frontend can default-preserve
+    behaviour for tenants who never use the drawer.
+
+    Auth: owner only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
+        if session is None:
+            return Response({"open": False, "session": None})
+
+        txs = DrawerTransaction.objects.filter(session=session).order_by("at", "id")
+        return Response({
+            "open": True,
+            "session": _drawer_session_dict(session),
+            "transactions": [_drawer_transaction_dict(t) for t in txs],
+        })
+
+
+class DrawerOpenView(APIView):
+    """POST /api/owner/drawer/open/
+
+    Open a new drawer session with an optional opening float.
+    400 if a session is already open.
+
+    Body: { "opening_float": "100.00", "note": "" }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        if DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).exists():
+            return Response(
+                {"detail": "A drawer session is already open.", "code": "already_open"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        opening_float_raw = request.data.get("opening_float", "0")
+        try:
+            opening_float = Decimal(str(opening_float_raw)).quantize(Decimal("0.01"))
+            if opening_float < 0:
+                raise ValueError("negative")
+        except Exception:
+            return Response(
+                {"detail": "opening_float must be a non-negative number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = (request.data.get("note") or "").strip()[:300]
+        user = request.user
+        user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
+
+        session = DrawerSession.objects.create(
+            opened_by_user_id=user.id,
+            opened_by_name=user_name,
+            opening_float=opening_float,
+            opened_at=timezone.now(),
+            status=DrawerSession.Status.OPEN,
+            note=note,
+        )
+        return Response(_drawer_session_dict(session), status=status.HTTP_201_CREATED)
+
+
+class DrawerTransactionView(APIView):
+    """POST /api/owner/drawer/transaction/
+
+    Record a pay-in or pay-out against the currently open drawer session.
+    404 if no session is open.
+
+    Body: { "kind": "pay_in"|"pay_out", "amount": "25.00", "reason": "Milk supplier" }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
+        if session is None:
+            return Response(
+                {"detail": "No drawer session is currently open.", "code": "no_open_session"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        kind = (request.data.get("kind") or "").strip()
+        if kind not in (DrawerTransaction.Kind.PAY_IN, DrawerTransaction.Kind.PAY_OUT):
+            return Response(
+                {"detail": "kind must be 'pay_in' or 'pay_out'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        amount_raw = request.data.get("amount", "0")
+        try:
+            amount = Decimal(str(amount_raw)).quantize(Decimal("0.01"))
+            if amount <= 0:
+                raise ValueError("non-positive")
+        except Exception:
+            return Response(
+                {"detail": "amount must be a positive number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = (request.data.get("reason") or "").strip()[:200]
+        user = request.user
+        user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
+
+        tx = DrawerTransaction.objects.create(
+            session=session,
+            kind=kind,
+            amount=amount,
+            reason=reason,
+            recorded_by_user_id=user.id,
+            recorded_by_name=user_name,
+            at=timezone.now(),
+        )
+        return Response(_drawer_transaction_dict(tx), status=status.HTTP_201_CREATED)
+
+
+class DrawerCloseView(APIView):
+    """POST /api/owner/drawer/close/
+
+    Blind-count close: submit the physical count WITHOUT knowing the expected
+    amount first. The view computes expected = opening_float + cash_collected
+    since session open + pay-ins − pay-outs, then records over/short.
+
+    Body: { "counted_total": "345.00", "note": "" }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        session = DrawerSession.objects.select_for_update().filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
+        if session is None:
+            return Response(
+                {"detail": "No drawer session is currently open.", "code": "no_open_session"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        counted_raw = request.data.get("counted_total")
+        if counted_raw is None:
+            return Response(
+                {"detail": "counted_total is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            counted_total = Decimal(str(counted_raw)).quantize(Decimal("0.01"))
+            if counted_total < 0:
+                raise ValueError("negative")
+        except Exception:
+            return Response(
+                {"detail": "counted_total must be a non-negative number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = (request.data.get("note") or "").strip()[:300]
+        user = request.user
+        user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
+        now = timezone.now()
+
+        # Cash collected = cash payments on completed orders paid since the drawer was opened.
+        # Reuses the same split_revenue_for_orders helper used by the Z-report so the
+        # cash figure is always consistent between the drawer close and the Z-report.
+        collected_qs = Order.objects.filter(
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            paid_at__gte=session.opened_at,
+            paid_at__lte=now,
+        )
+        split = split_revenue_for_orders(collected_qs)
+        cash_collected = split["cash"]
+
+        expected_total = _compute_expected_total(session, cash_collected)
+        over_short = (counted_total - expected_total).quantize(Decimal("0.01"))
+
+        with transaction.atomic():
+            session.status = DrawerSession.Status.CLOSED
+            session.closed_at = now
+            session.closed_by_user_id = user.id
+            session.closed_by_name = user_name
+            session.counted_total = counted_total
+            session.expected_total = expected_total
+            session.over_short = over_short
+            if note:
+                session.note = note
+            session.save(update_fields=[
+                "status", "closed_at", "closed_by_user_id", "closed_by_name",
+                "counted_total", "expected_total", "over_short", "note", "updated_at",
+            ])
+
+        return Response(_drawer_session_dict(session))
+
+
+class DrawerHistoryView(APIView):
+    """GET /api/owner/drawer/history/?date=YYYY-MM-DD
+
+    Returns closed (and open) drawer sessions for a service day.
+    Used by the Z-report reconciliation card and the shift-close handover.
+    When ``date`` is omitted, returns the current service day's sessions.
+
+    Auth: owner only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        profile = getattr(getattr(request, "tenant", None), "profile", None)
+        if profile is None:
+            return Response({"detail": "Tenant profile not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_param = (request.query_params.get("date") or "").strip() or None
+        window_start, window_end = service_day_window(profile, date=date_param)
+
+        sessions = DrawerSession.objects.filter(
+            opened_at__gte=window_start,
+            opened_at__lt=window_end,
+        ).order_by("-opened_at")
+
+        result = []
+        for sess in sessions:
+            txs = DrawerTransaction.objects.filter(session=sess).order_by("at", "id")
+            result.append({
+                **_drawer_session_dict(sess),
+                "transactions": [_drawer_transaction_dict(t) for t in txs],
+            })
+
+        return Response({"sessions": result, "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+        }})

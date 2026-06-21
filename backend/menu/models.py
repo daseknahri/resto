@@ -753,6 +753,20 @@ class OrderItem(models.Model):
         default="",
         help_text="Prep station snapshot from Category.station at order placement.",
     )
+    # Seat-level ordering — captures which seat (cover) ordered this item at a
+    # dine-in table.  0 = unassigned (default; today's behavior; one-bill flow).
+    # 1..N = seat number set by the waiter at placement/append time.
+    # Used by the "split by seat" settle mode: items are grouped per seat and
+    # each seat's subtotal can be settled individually.
+    # Additive & default-preserving: existing rows carry 0, every API caller that
+    # omits the field gets 0, and seat-0 behaves identically to today.
+    seat = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Which seat (cover) ordered this item. 0 = unassigned / one bill. "
+            "Set by the waiter at placement or append time for split-by-seat billing."
+        ),
+    )
     # Combo snapshot — when the ordered dish is a combo, this captures the fixed
     # components at placement time so receipt/kitchen views can render sub-lines
     # even if the combo definition changes later. Empty list for non-combo dishes.
@@ -1370,3 +1384,147 @@ class RecipeLine(models.Model):
 
     def __str__(self) -> str:
         return f"{self.dish.name}: {self.quantity} {self.ingredient.unit} {self.ingredient.name}"
+
+
+# ── Cash Drawer ───────────────────────────────────────────────────────────────
+
+
+class DrawerSession(models.Model):
+    """A single cash-drawer shift session (Toast/Square parity).
+
+    An owner opens the drawer with an opening float, records pay-ins/pay-outs
+    during the day, and closes it with a blind count (no peeking at the expected
+    amount first). The system then computes expected = opening_float + cash
+    collected since open and records the over/short variance.
+
+    Default-preserving: tenants that never open a drawer have no rows here and
+    see no change in any existing behaviour.
+
+    Status lifecycle:
+      open  →  closed
+    Only one session may be OPEN at a time (enforced in the view).
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        CLOSED = "closed", "Closed"
+
+    # Loose reference to accounts.User (public schema) — avoids cross-schema FK.
+    opened_by_user_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="accounts.User pk of the owner/staff who opened the drawer.",
+    )
+    opened_by_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text="Display-name snapshot taken at open time.",
+    )
+    opening_float = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Cash placed in the drawer before service begins (float/seed money).",
+    )
+    opened_at = models.DateTimeField(db_index=True)
+    status = models.CharField(
+        max_length=8,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    closed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the drawer was closed (blind count submitted).",
+    )
+    closed_by_user_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="accounts.User pk of the owner/staff who closed the drawer.",
+    )
+    closed_by_name = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+    # Blind-count close: the closer counts bills/coins and enters the total
+    # WITHOUT seeing the expected amount first.
+    counted_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Physical count entered by the closer (blind — before seeing expected).",
+    )
+    # Computed at close time and stored for fast Z-report reads.
+    # expected = opening_float + sum(cash payments since opened_at) + sum(pay-in amounts) - sum(pay-out amounts)
+    expected_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Expected drawer balance computed at close: float + cash sales + pay-ins − pay-outs.",
+    )
+    # over_short = counted_total − expected_total (positive = over, negative = short)
+    over_short = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Variance: counted − expected. Positive = overage, negative = shortage.",
+    )
+    note = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-opened_at",)
+        indexes = [
+            models.Index(fields=("status", "opened_at"), name="menu_drawer_status_opened_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"DrawerSession(opened={self.opened_at:%Y-%m-%d %H:%M}, status={self.status})"
+
+
+class DrawerTransaction(models.Model):
+    """A manual cash movement against an open DrawerSession.
+
+    ``kind`` = pay_in  → cash added to drawer (e.g. paid petty-cash in)
+    ``kind`` = pay_out → cash removed from drawer (e.g. paid supplier)
+
+    These affect the expected total at close:
+      expected += sum(pay_in.amount) − sum(pay_out.amount)
+    """
+
+    class Kind(models.TextChoices):
+        PAY_IN = "pay_in", "Pay-in"
+        PAY_OUT = "pay_out", "Pay-out"
+
+    session = models.ForeignKey(
+        DrawerSession,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    kind = models.CharField(max_length=8, choices=Kind.choices, db_index=True)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Positive value. Direction is determined by ``kind``.",
+    )
+    reason = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Free-text reason for this cash movement (e.g. 'Milk supplier', 'Petty cash').",
+    )
+    recorded_by_user_id = models.IntegerField(null=True, blank=True)
+    recorded_by_name = models.CharField(max_length=150, blank=True)
+    at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("at", "id")
+
+    def __str__(self) -> str:
+        return f"DrawerTransaction({self.kind} {self.amount} @ {self.at:%H:%M})"

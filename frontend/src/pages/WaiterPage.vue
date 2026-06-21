@@ -1415,49 +1415,91 @@ class="min-w-0 flex-1 leading-snug"
               <span class="shrink-0 tabular-nums text-slate-400">{{ fmtOrderPrice((item.subtotal ?? item.unit_price * item.qty), settleChooser.currency) }}</span>
             </li>
           </ul>
-          <!-- Split-payment amount input -->
-          <div class="space-y-1">
-            <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
-              {{ t('waiterPage.splitAmount') }}
-            </label>
-            <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
-            <div class="flex gap-1.5">
-              <button
-                v-for="n in [2, 3, 4, 5]"
-                :key="n"
-                type="button"
-                class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
-              >÷{{ n }}</button>
+          <!-- Split-by-seat toggle (only for dine-in/table orders with seat data) -->
+          <div
+            v-if="settleChooser.fulfillment_type === 'table'"
+            class="flex items-center gap-1.5"
+          >
+            <button
+              type="button"
+              class="ui-press ui-touch-target flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500/60"
+              :class="splitBySeatMode
+                ? 'border-violet-500/60 bg-violet-500/15 text-violet-300'
+                : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
+              @click="splitBySeatMode = !splitBySeatMode; if (splitBySeatMode) loadSeatGroups(settleChooser)"
+            >{{ t('waiterPage.splitBySeat') }}</button>
+          </div>
+
+          <!-- Seat-split view -->
+          <template v-if="splitBySeatMode">
+            <div v-if="seatGroupsLoading" class="space-y-1.5">
+              <div v-for="i in 2" :key="i" class="ui-skeleton h-10 rounded-lg" />
             </div>
-            <input
-              :id="'settle-amount-' + settleChooser.id"
-              v-model="splitAmount"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              min="0.01"
-              :max="settleOutstanding(settleChooser)"
-              class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
-            />
-            <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-              @click="payCash(settleChooser)"
-            >
-              <span class="text-2xl" aria-hidden="true">💵</span>
-              <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
-            </button>
-            <button
-              class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-              @click="payWallet(settleChooser)"
-            >
-              <span class="text-2xl" aria-hidden="true">💳</span>
-              <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
-            </button>
-          </div>
+            <div v-else-if="seatGroupsError" class="text-xs text-red-400">{{ seatGroupsError }}</div>
+            <div v-else-if="seatGroups.length" class="space-y-1.5">
+              <div
+                v-for="seat in seatGroups"
+                :key="seat.seat"
+                class="flex items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-semibold text-slate-200">{{ seatGroupLabel(seat) }}</p>
+                  <p class="text-[10px] text-slate-500">{{ seat.items.length }} {{ seat.items.length === 1 ? 'item' : 'items' }}</p>
+                </div>
+                <button
+                  class="ui-press ui-touch-target shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+                  @click="payCashForSeat(settleChooser, seat)"
+                >{{ t('waiterPage.payCash') }}</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Standard amount input (hidden when seat-split mode is on) -->
+          <template v-else>
+            <div class="space-y-1">
+              <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
+                {{ t('waiterPage.splitAmount') }}
+              </label>
+              <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
+              <div class="flex gap-1.5">
+                <button
+                  v-for="n in [2, 3, 4, 5]"
+                  :key="n"
+                  type="button"
+                  class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                  @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
+                >÷{{ n }}</button>
+              </div>
+              <input
+                :id="'settle-amount-' + settleChooser.id"
+                v-model="splitAmount"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0.01"
+                :max="settleOutstanding(settleChooser)"
+                class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
+              />
+              <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                @click="payCash(settleChooser)"
+              >
+                <span class="text-2xl" aria-hidden="true">💵</span>
+                <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
+              </button>
+              <button
+                class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                @click="payWallet(settleChooser)"
+              >
+                <span class="text-2xl" aria-hidden="true">💳</span>
+                <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
+              </button>
+            </div>
+          </template>
+
           <button
             class="ui-press ui-touch-target w-full px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
             @click="settleChooser = null"
@@ -2251,6 +2293,64 @@ const chargeContext = ref({ amount: '', orderNumber: '' });
 const settleChooser = ref(null);        // order awaiting a cash/wallet choice
 const settleIntentKey = ref(null);      // idempotency key minted when the chooser opens
 const pendingWalletSettle = ref(null);  // order being settled via the wallet charge sheet
+
+// ── Split-by-seat state ────────────────────────────────────────────────────────
+// splitBySeatMode: when true the settle chooser shows per-seat groupings instead
+// of the standard amount input. Switches back to false on close or full settle.
+const splitBySeatMode = ref(false);
+const seatGroups = ref([]);      // [{seat, items, subtotal}] from GET seat-split
+const seatGroupsLoading = ref(false);
+const seatGroupsError = ref('');
+
+const loadSeatGroups = async (order) => {
+  if (!order) return;
+  seatGroupsLoading.value = true;
+  seatGroupsError.value = '';
+  try {
+    const { data } = await api.get(`/staff/orders/${order.id}/seat-split/`);
+    seatGroups.value = data.seats || [];
+  } catch {
+    seatGroupsError.value = t('waiterPage.splitHint'); // fallback to hint text
+    seatGroups.value = [];
+  } finally {
+    seatGroupsLoading.value = false;
+  }
+};
+
+// Human-readable label for a seat group in the settle chooser
+const seatGroupLabel = (seat) => {
+  if (!settleChooser.value) return '';
+  const currency = settleChooser.value.currency;
+  const amount = fmtOrderPrice(seat.subtotal, currency);
+  return seat.seat === 0
+    ? t('waiterPage.seatUnassignedSubtotal', { amount })
+    : t('waiterPage.seatSubtotal', { n: seat.seat, amount });
+};
+
+// Pay cash for a specific seat's subtotal (uses the existing split-bill path).
+const payCashForSeat = async (order, seat) => {
+  const amount = parseFloat(seat.subtotal);
+  if (!amount || amount <= 0) return;
+  const intentKey = settleIntentKey.value;
+  settleChooser.value = null;
+  splitBySeatMode.value = false;
+  const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount, intentKey);
+  if (!data) {
+    if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
+    toast.show(t('waiterPage.markPaidFailed'), 'error');
+    return;
+  }
+  settleIntentKey.value = null;
+  settleIntentOrderId.value = null;
+  if (data.completed) {
+    await maybeAutoDirtyTable(order);
+    const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
+    if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
+  } else {
+    toast.show(t('waiterPage.partialPaid', { left: fmtOrderPrice(data.outstanding, order.currency) }), 'success');
+  }
+};
+
 // If the backend provides `outstanding` (new ledger), use it; otherwise fall back to total-wallet.
 const settleOutstanding = (order) => {
   if (order.outstanding !== undefined && order.outstanding !== null)
@@ -2391,6 +2491,10 @@ watch(settleChooser, async (val) => {
   if (val) {
     // Pre-fill with the full outstanding amount; the user can edit it down.
     splitAmount.value = settleOutstanding(val).toFixed(2);
+    // Reset seat-split mode and groups when a (new) order opens the chooser.
+    splitBySeatMode.value = false;
+    seatGroups.value = [];
+    seatGroupsError.value = '';
     // Mint a fresh idempotency key when the chooser opens for a NEW order.
     // Reuse the existing key when reopening for the SAME order after a failed/
     // timed-out attempt — so the backend can deduplicate and never double-record.
@@ -2403,6 +2507,8 @@ watch(settleChooser, async (val) => {
     settleDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
     document.addEventListener('keydown', trapSettleFocus);
   } else {
+    splitBySeatMode.value = false;
+    seatGroups.value = [];
     document.removeEventListener('keydown', trapSettleFocus);
   }
 });

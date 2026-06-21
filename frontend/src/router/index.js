@@ -60,6 +60,7 @@ const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OwnerZReport = () => import("../pages/OwnerZReport.vue");
+const OwnerShiftClose = () => import("../pages/OwnerShiftClose.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 const RidePage = () => import("../pages/RidePage.vue");
@@ -269,6 +270,12 @@ const routes = [
         path: "z-report",
         name: "owner-z-report",
         component: OwnerZReport,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "shift-close",
+        name: "owner-shift-close",
+        component: OwnerShiftClose,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
     ],

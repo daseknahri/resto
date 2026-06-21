@@ -140,6 +140,48 @@
       <!-- Busy mode: snooze new orders (timed auto-resume) + slow-the-kitchen quote bump -->
       <BusyModeControl />
 
+      <!-- Cash drawer card — only rendered once drawer data has loaded; tenants
+           who never open a drawer see nothing (default-preserving). -->
+      <div
+        v-if="drawerLoaded"
+        class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition-colors"
+        :class="drawerOpen
+          ? 'border-emerald-500/30 bg-emerald-500/5'
+          : 'border-slate-700/50 bg-slate-950/30'"
+        role="region"
+        :aria-label="t('cashDrawer.cardTitle')"
+      >
+        <div class="min-w-0 space-y-0.5">
+          <p class="text-xs font-semibold" :class="drawerOpen ? 'text-emerald-200' : 'text-slate-400'">
+            {{ drawerOpen ? t('cashDrawer.statusOpen') : t('cashDrawer.statusClosed') }}
+          </p>
+          <p v-if="drawerOpen && drawerSession" class="text-[11px] text-slate-500 tabular-nums">
+            {{ t('cashDrawer.openingFloat') }}: {{ fmtDrawerMoney(drawerSession.opening_float) }}
+          </p>
+          <p v-else-if="!drawerOpen" class="text-[11px] text-slate-600">
+            {{ t('cashDrawer.noSession') }}
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <RouterLink
+            :to="{ name: 'owner-shift-close' }"
+            class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors"
+          >
+            {{ t('shiftClose.navLabel') }}
+          </RouterLink>
+          <button
+            v-if="!drawerOpen"
+            type="button"
+            class="ui-touch-target inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/50 px-3 py-1 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            :disabled="openingDrawer"
+            @click="handleOpenDrawer"
+          >
+            <svg v-if="openingDrawer" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ openingDrawer ? t('common.loading') : t('cashDrawer.openDrawer') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
       <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
@@ -902,6 +944,62 @@ const formatTimeAgo = (iso) => {
   return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short" }).format(new Date(iso));
 };
 
+// ── Cash drawer (default-preserving) ─────────────────────────────────────────
+// drawerLoaded starts false; once the /current/ call returns we show the card.
+// Tenants who never open a drawer get {open: false} → the card stays hidden
+// until the first open, so existing UX is unchanged.
+const drawerLoaded = ref(false);
+const drawerOpen = ref(false);
+const drawerSession = ref(null);
+const openingDrawer = ref(false);
+
+const fmtDrawerMoney = (val) => {
+  const n = Number(val) || 0;
+  const curr = order.orders.find((o) => o.currency)?.currency || "MAD";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: curr, minimumFractionDigits: 2 }).format(n);
+  } catch {
+    return `${curr} ${n.toFixed(2)}`;
+  }
+};
+
+const fetchDrawerState = async () => {
+  try {
+    const { data } = await api.get("/owner/drawer/current/", { timeout: 5000 });
+    drawerOpen.value = data.open === true;
+    drawerSession.value = data.session || null;
+    // Only show the card if the drawer has ever been used OR is currently open.
+    // A fresh tenant (no session) gets open:false + session:null → card stays hidden.
+    if (drawerOpen.value || drawerSession.value) {
+      drawerLoaded.value = true;
+    }
+  } catch {
+    // Silently ignore — the drawer card simply won't appear (no regression).
+  }
+};
+
+const handleOpenDrawer = async () => {
+  if (openingDrawer.value) return;
+  openingDrawer.value = true;
+  try {
+    const { data } = await api.post("/owner/drawer/open/", { opening_float: "0.00" });
+    drawerOpen.value = true;
+    drawerSession.value = data;
+    drawerLoaded.value = true;
+    toast.show(t("cashDrawer.openSuccess"), "success");
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code === "already_open") {
+      // Race condition: another tab opened it — just refresh the state.
+      await fetchDrawerState();
+    } else {
+      toast.show(err?.response?.data?.detail || t("cashDrawer.openError"), "error");
+    }
+  } finally {
+    openingDrawer.value = false;
+  }
+};
+
 // ── Copy URL ──────────────────────────────────────────────────────────────────
 const copied = ref(false);
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
@@ -953,6 +1051,7 @@ onMounted(async () => {
   nextTick(() => {
     void fetchRatings();
     void fetchTodayReservations();
+    void fetchDrawerState();
   });
 
   // 3. Background poll setup

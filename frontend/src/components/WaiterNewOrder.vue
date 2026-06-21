@@ -220,6 +220,23 @@
                 :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderItemNotePlaceholder')}`"
                 :placeholder="t('waiterPage.newOrderItemNotePlaceholder')"
               />
+              <!-- Per-line seat picker. Only surfaces for dine-in/table context.
+                   Default 0 = unassigned → one-bill behavior preserved for tenants
+                   that never touch this (opt-in, zero friction on today's flow). -->
+              <div
+                v-if="isDineIn"
+                class="flex items-center gap-1.5"
+              >
+                <span class="text-[10px] text-slate-500 shrink-0">{{ t('waiterPage.seatPickerLabel') }}:</span>
+                <select
+                  v-model="item.seat"
+                  class="flex-1 rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-[var(--color-secondary)]/60"
+                  :aria-label="`${item.dish_name} — ${t('waiterPage.seatPickerLabel')}`"
+                >
+                  <option :value="0">{{ t('waiterPage.seatUnassigned') }}</option>
+                  <option v-for="n in 8" :key="n" :value="n">{{ n }}</option>
+                </select>
+              </div>
               <!-- Per-line course picker (coursing at entry). Opt-in: shown only
                    when the owner enabled coursing (any category carries a course). -->
               <div
@@ -499,6 +516,14 @@ const isSearching = computed(() => search.value.trim().length > 0);
 
 const allDishes = computed(() => Object.values(menu.dishes || {}).flat());
 
+// ── Seat-level ordering ───────────────────────────────────────────────────────
+// Seat picker is only meaningful for dine-in/table orders. For new orders the
+// fulfillmentType toggle controls this; for append mode we're always appending
+// to a table order (the backend enforces that guard), so we always show it.
+const isDineIn = computed(() =>
+  fulfillmentType.value === 'table' || Boolean(props.appendToOrderId)
+);
+
 // ── Coursing at entry (WAITER-COURSING) ──────────────────────────────────────
 // sendMode 'send' (default) = fire everything immediately (today's behavior);
 // 'hold' = keep held courses (course > 1) paced for later firing from the card.
@@ -654,6 +679,10 @@ const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, 
       // Default course = the dish's category snapshot (0 = no course). The waiter
       // can override per line via the picker. Stays 0 for non-coursing menus.
       course: dishCourse(dish_slug),
+      // Default seat = 0 (unassigned). The waiter can override per line via the
+      // seat picker (only shown for dine-in/table context). Seat 0 = one bill,
+      // today's behavior — preserved for any tenant not using seat-level ordering.
+      seat: 0,
     });
   }
 };
@@ -776,6 +805,9 @@ const submit = async () => {
           // Only send a course override when coursing is enabled, so existing
           // (non-coursing) tenants post an identical body to before.
           ...(coursingEnabled.value ? { course: i.course || 0 } : {}),
+          // Only send seat when the picker was shown (dine-in context). Seat 0
+          // = unassigned; omitting it entirely also defaults to 0 on the backend.
+          ...(isDineIn.value && (i.seat || 0) > 0 ? { seat: i.seat } : {}),
         })),
         // 'Send now' fires the appended items immediately; 'Hold' keeps held
         // courses paced. Omitted entirely for non-coursing menus.
@@ -823,6 +855,8 @@ const submit = async () => {
         // Per-line course override only when coursing is enabled — otherwise the
         // body is identical to before and the backend uses the category snapshot.
         ...(coursingEnabled.value ? { course: i.course || 0 } : {}),
+        // Only send seat for table orders with a non-zero seat assigned.
+        ...(isDineIn.value && (i.seat || 0) > 0 ? { seat: i.seat } : {}),
       })),
       fulfillment_type: fulfillmentType.value,
       table_slug: resolvedSlug || undefined,
