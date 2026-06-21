@@ -195,6 +195,10 @@
 
     <!-- App-wide: surfaces a pending wallet-charge approval on any customer page. -->
     <ChargeApprovalWatcher />
+
+    <!-- Global live-order/ride/package status bar: shows a slim persistent pill
+         above the bottom nav whenever the customer has an in-progress activity. -->
+    <GlobalLiveStatusBar />
   </div>
 </template>
 
@@ -207,6 +211,7 @@ import { PLATFORM_NAME } from "../lib/brand";
 import AppIcon from "../components/AppIcon.vue";
 import ChargeApprovalWatcher from "../components/ChargeApprovalWatcher.vue";
 import CurrencySelector from "../components/CurrencySelector.vue";
+import GlobalLiveStatusBar from "../components/GlobalLiveStatusBar.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import NotificationBell from "../components/NotificationBell.vue";
 import { useI18n } from "../composables/useI18n";

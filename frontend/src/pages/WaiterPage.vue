@@ -113,6 +113,19 @@
           >
             + {{ t('waiterPage.newOrderBtn') }}
           </button>
+          <!-- Floor / List view toggle -->
+          <button
+            v-if="activeTab !== 'shift' && activeTab !== 'recent'"
+            class="ui-state-chip ui-press ui-touch-target shrink-0"
+            :data-active="floorView"
+            :aria-pressed="floorView"
+            :aria-label="floorView ? t('waiterPage.listViewToggle') : t('waiterPage.floorViewToggle')"
+            @click="floorView = !floorView"
+          >
+            <svg v-if="!floorView" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+            <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><path fill-rule="evenodd" d="M2 3.5A.5.5 0 0 1 2.5 3h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 3.5Zm0 4A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7.5Zm0 4A.5.5 0 0 1 2.5 11h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 11.5Z" clip-rule="evenodd"/></svg>
+            {{ floorView ? t('waiterPage.listViewToggle') : t('waiterPage.tabFloor') }}
+          </button>
         </div>
       </div>
     </div>
@@ -132,6 +145,287 @@
           class="ui-input ps-8 text-sm placeholder:text-slate-600"
         />
       </label>
+    </Transition>
+
+    <!-- ══════════════════════════════════════════════════════════
+         FLOOR MAP VIEW — responsive tile grid (Toast/TouchBistro parity)
+         Shown when floorView=true, not on shift/recent tabs.
+    ════════════════════════════════════════════════════════════ -->
+    <Transition name="fade">
+      <div
+        v-if="floorView && activeTab !== 'shift' && activeTab !== 'recent'"
+        class="space-y-3"
+        role="region"
+        :aria-label="t('waiterPage.tabFloor')"
+      >
+        <!-- Section filter -->
+        <div v-if="floorSections.length > 1" class="flex items-center gap-2 overflow-x-auto pb-0.5" style="scrollbar-width:none">
+          <button
+            class="ui-state-chip ui-press ui-touch-target shrink-0 text-xs"
+            :data-active="!floorSectionFilter"
+            @click="floorSectionFilter = ''"
+          >{{ t('waiterPage.floorAllSections') }}</button>
+          <button
+            v-for="sec in floorSections"
+            :key="sec"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 text-xs"
+            :data-active="floorSectionFilter === sec"
+            @click="floorSectionFilter = sec"
+          >{{ sec }}</button>
+        </div>
+
+        <!-- Empty state: no tables at all -->
+        <div v-if="filteredFloorTiles.length === 0" class="ui-empty-state py-10 text-center">
+          <p class="text-3xl" aria-hidden="true">🪑</p>
+          <p class="mt-3 text-sm font-semibold text-slate-100">{{ t('waiterPage.floorEmpty') }}</p>
+        </div>
+
+        <!-- Table tile grid -->
+        <div
+          v-else
+          class="grid gap-3"
+          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))"
+        >
+          <button
+            v-for="tile in filteredFloorTiles"
+            :key="tile.tableKey"
+            class="ui-press ui-touch-target relative flex min-h-[120px] flex-col items-start gap-1 overflow-hidden rounded-2xl border p-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            :class="floorTileClass(tile.tableStatus)"
+            :aria-label="t('waiterPage.floorTileAriaLabel', { label: tile.tableLabel, status: t(`waiterPage.tableStatus_${tile.tableStatus}`) })"
+            :aria-pressed="expandedFloorTable === tile.tableKey"
+            @click="toggleFloorTile(tile)"
+          >
+            <!-- Status dot -->
+            <span
+              class="absolute end-2.5 top-2.5 h-2.5 w-2.5 rounded-full"
+              :class="floorDotClass(tile.tableStatus)"
+              aria-hidden="true"
+            />
+
+            <!-- Table label -->
+            <span class="pe-4 text-base font-bold leading-tight text-white">{{ tile.tableLabel }}</span>
+
+            <!-- Capacity badge -->
+            <span v-if="tile.tableCapacity" class="text-[10px] text-slate-400 tabular-nums">{{ t('waiterPage.floorCapacity', { n: tile.tableCapacity }) }}</span>
+
+            <!-- Status label -->
+            <span
+              class="mt-auto rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+              :class="tableStatusBadgeClass(tile.tableStatus)"
+            >{{ t(`waiterPage.tableStatus_${tile.tableStatus}`) }}</span>
+
+            <!-- Outstanding + elapsed (when occupied) -->
+            <template v-if="tile.orders.length > 0">
+              <span class="tabular-nums text-xs font-bold text-white">
+                {{ fmtOrderPrice(tile.totalOutstanding, tile.orders[0]?.currency) }}
+              </span>
+              <span
+                v-if="tile.longestElapsedLabel"
+                class="rounded-full border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums"
+                :class="tile.longestElapsedClass"
+              >{{ tile.longestElapsedLabel }}</span>
+            </template>
+            <span v-else class="text-[10px] text-slate-500">{{ t('waiterPage.floorNoOrders') }}</span>
+
+            <!-- Expand indicator -->
+            <span
+              v-if="tile.orders.length > 0"
+              class="absolute bottom-2 end-2 text-[10px] text-slate-400 transition-transform"
+              :class="expandedFloorTable === tile.tableKey ? 'rotate-180' : ''"
+              aria-hidden="true"
+            >▾</span>
+          </button>
+        </div>
+
+        <!-- Expanded floor tile — shows the table's order group inline -->
+        <Transition name="fade">
+          <section
+            v-if="expandedFloorTable && expandedFloorTileData"
+            :key="expandedFloorTable"
+            class="space-y-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3"
+          >
+            <!-- Expanded header with same table-group action buttons as the list view -->
+            <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-sm font-bold text-slate-200 truncate">{{ expandedFloorTileData.tableLabel }}</span>
+                <span class="text-[11px] text-slate-500">{{ t('waiterPage.tableOrders', { n: expandedFloorTileData.orders.length }) }}</span>
+                <span
+                  class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                  :class="tableStatusBadgeClass(expandedFloorTileData.tableStatus)"
+                >{{ t(`waiterPage.tableStatus_${expandedFloorTileData.tableStatus}`) }}</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button
+                  v-if="expandedFloorTileData.tableId && expandedFloorTileData.tableStatus !== 'dirty' && canManageOrders"
+                  :disabled="markingTableId === expandedFloorTileData.tableId"
+                  class="shrink-0 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-300 transition-colors hover:border-rose-400 disabled:opacity-50"
+                  @click="markTableStatus(expandedFloorTileData, 'dirty')"
+                >{{ t('waiterPage.markDirty') }}</button>
+                <button
+                  v-if="expandedFloorTileData.tableId && expandedFloorTileData.tableStatus === 'dirty' && canManageOrders"
+                  :disabled="markingTableId === expandedFloorTileData.tableId"
+                  class="shrink-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50"
+                  @click="markTableStatus(expandedFloorTileData, 'open')"
+                >{{ t('waiterPage.markOpen') }}</button>
+                <button
+                  v-if="expandedFloorTileData.tableId && expandedFloorTileData.tableStatus === 'open' && canManageOrders"
+                  :disabled="markingTableId === expandedFloorTileData.tableId"
+                  class="shrink-0 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] font-semibold text-violet-300 transition-colors hover:border-violet-400 disabled:opacity-50"
+                  @click="markTableStatus(expandedFloorTileData, 'reserved')"
+                >{{ t('waiterPage.markReserved') }}</button>
+                <span v-if="expandedFloorTileData.orders.length > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
+                  {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(expandedFloorTileData.totalOutstanding, expandedFloorTileData.orders[0]?.currency) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Order cards for this table (same markup as list view) -->
+            <div class="space-y-3 ps-2 border-s-2 border-slate-700/50">
+              <!-- Empty-table quick-start: "New order for this table" -->
+              <div v-if="expandedFloorTileData.orders.length === 0 && canManageOrders" class="py-4 text-center">
+                <button
+                  class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+                  @click="showNewOrder = true"
+                >+ {{ t('waiterPage.floorNewOrder') }}</button>
+              </div>
+              <article
+                v-for="(order, index) in expandedFloorTileData.orders"
+                :key="order.id"
+                class="ui-surface-lift ui-reveal overflow-hidden rounded-2xl border transition-colors"
+                :class="statusCardClass(order.status)"
+                :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              >
+                <!-- Card header -->
+                <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
+                      {{ orderHeadline(order) }}
+                    </p>
+                    <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+                      <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
+                      <span aria-hidden="true" class="text-slate-600">·</span>
+                      <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
+                      <template v-if="order.customer_name">
+                        <span aria-hidden="true" class="text-slate-600">·</span>
+                        <span>{{ order.customer_name }}</span>
+                      </template>
+                    </p>
+                  </div>
+                  <span
+                    class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                    :class="statusChipClass(order.status)"
+                  >{{ t(`waiterPage.status_${order.status}`) }}</span>
+                </div>
+                <!-- Items -->
+                <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
+                  <li
+                    v-for="(item, idx) in order.items"
+                    :key="idx"
+                    class="flex items-start gap-2.5 py-0.5 text-sm"
+                    :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
+                  >
+                    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums" :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">{{ item.qty }}</span>
+                    <span class="min-w-0 flex-1 leading-snug" :class="[item.is_voided ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">{{ item.dish_name }}</span>
+                    <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
+                    <span
+                      v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                      class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
+                      :class="isItemHeld(item, order) ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+                    >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
+                    <span v-if="item.is_voided" class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none">{{ t('waiterPage.voidedBadge') }}</span>
+                    <button
+                      v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
+                      class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+                      :class="item.is_ready ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400' : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
+                      :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
+                      :aria-pressed="item.is_ready"
+                      @click.stop="doToggleItemReady(order, item)"
+                    ><span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span></button>
+                    <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
+                    <button
+                      v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                      class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+                      :aria-label="t('waiterPage.voidItem')"
+                      :disabled="voidingItemId === item.id"
+                      @click.stop="voidItem(order, item)"
+                    ><svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg></button>
+                  </li>
+                </ul>
+                <!-- Notes row -->
+                <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
+                  <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400"><span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span><span>{{ order.customer_note }}</span></p>
+                  <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90"><span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span><span>{{ order.owner_note }}</span></p>
+                </div>
+                <!-- ETA + total -->
+                <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">{{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}</span>
+                    <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
+                    <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" :class="order.payment_status === 'paid' ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300' : 'border-amber-500/30 bg-amber-500/12 text-amber-300'">{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+                  </div>
+                </div>
+                <!-- Action footer (full — same as list view) -->
+                <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+                  <button
+                    v-if="canManageOrders && waiter.nextStatus(order)"
+                    class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
+                    :disabled="waiter.updatingOrderIds.has(order.id)"
+                    :aria-busy="waiter.updatingOrderIds.has(order.id)"
+                    @click="advance(order.id)"
+                  >
+                    <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg></span>
+                    <span v-else>{{ actionLabel(order) }}</span>
+                  </button>
+                  <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+                  <button
+                    v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                    :disabled="firingCourseOrderId === order.id"
+                    @click="fireCourse(order)"
+                  >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+                  <button
+                    v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    :disabled="allReadyBusyIds.has(order.id)"
+                    @click="doAllReady(order)"
+                  >✓ {{ t('waiterPage.allReadyBtn') }}</button>
+                  <button
+                    v-if="canManageOrders && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    :disabled="waiter.updatingOrderIds.has(order.id)"
+                    @click="settleChooser = order"
+                  ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
+                  <button
+                    v-if="order.customer_id && order.handled_by_me"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                    @click="openCustomerRating(order)"
+                  ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
+                  <button
+                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+                    @click="openAppend(order)"
+                  ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+                  <button
+                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid' && order.items?.length"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                    @click="openTransfer(order)"
+                  >{{ t('waiterPage.transferBtn') }}</button>
+                  <button
+                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-teal-500/40 bg-teal-500/10 px-3 py-2 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+                    @click="openMerge(order)"
+                  >{{ t('waiterPage.mergeBtn') }}</button>
+                  <button
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
+                    @click="openBill(order)"
+                  ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+                </div>
+              </article>
+            </div>
+          </section>
+        </Transition>
+      </div>
     </Transition>
 
     <!-- New Order modal (normal mode) -->
@@ -177,7 +471,7 @@
 
     <!-- Loading skeleton (orders only) -->
     <div
-      v-if="activeTab !== 'shift' && (activeTab === 'recent' ? waiter.recentLoading : waiter.loading)"
+      v-if="!floorView && activeTab !== 'shift' && (activeTab === 'recent' ? waiter.recentLoading : waiter.loading)"
       :id="`waiter-panel-${activeTab}`"
       class="space-y-3"
       role="tabpanel"
@@ -195,7 +489,7 @@
 
     <!-- Error (orders only) -->
     <div
-      v-else-if="activeTab !== 'shift' && waiter.error"
+      v-else-if="!floorView && activeTab !== 'shift' && waiter.error"
       :id="`waiter-panel-${activeTab}`"
       role="tabpanel"
       :aria-labelledby="`waiter-tab-${activeTab}`"
@@ -209,7 +503,7 @@
 
     <!-- Empty state (orders only) -->
     <div
-      v-else-if="activeTab !== 'shift' && visibleOrders.length === 0"
+      v-else-if="!floorView && activeTab !== 'shift' && visibleOrders.length === 0"
       :id="`waiter-panel-${activeTab}`"
       role="tabpanel"
       :aria-labelledby="`waiter-tab-${activeTab}`"
@@ -331,7 +625,7 @@
 
     <!-- Order cards (with optional table grouping) -->
     <div
-      v-else-if="activeTab !== 'shift'"
+      v-else-if="!floorView && activeTab !== 'shift'"
       :id="`waiter-panel-${activeTab}`"
       role="tabpanel"
       :aria-labelledby="`waiter-tab-${activeTab}`"
@@ -1560,6 +1854,151 @@ const loadTableStatuses = async () => {
   } catch (e) {
     void e;
   }
+};
+
+// ── Floor map view ────────────────────────────────────────────────────────────
+// View-mode toggle: false = list (default), true = floor grid
+const floorView = ref(false);
+// Which tile is currently expanded (shows its orders inline) — tableKey string or null
+const expandedFloorTable = ref(null);
+// Section filter for the floor tiles
+const floorSectionFilter = ref('');
+
+// Reset expanded tile and section filter when leaving floor view or changing tabs
+watch([floorView, activeTab], () => {
+  expandedFloorTable.value = null;
+  floorSectionFilter.value = '';
+});
+
+// All floor tiles: tables from tableStatusMap augmented with order data.
+// Also includes tables that have active orders even if not yet in tableStatusMap
+// (e.g. first load before /staff/tables/ resolves).
+const allFloorTiles = computed(() => {
+  // Build from tableStatusMap (explicit table records)
+  const tilesMap = new Map();
+  for (const [key, info] of tableStatusMap.value.entries()) {
+    tilesMap.set(key, {
+      tableKey: key,
+      tableLabel: key, // will be overridden by orderGroup label if available
+      tableId: info.id,
+      tableStatus: info.status || 'open',
+      tableCapacity: info.capacity || 0,
+      tableSection: info.section || '',
+      orders: [],
+      totalOutstanding: 0,
+      longestElapsedLabel: null,
+      longestElapsedClass: '',
+    });
+  }
+
+  // Merge in order groups from tableGrouping computed
+  for (const group of tableGrouping.value.tableGroups) {
+    const key = group.tableKey;
+    if (!tilesMap.has(key)) {
+      // Table has active orders but wasn't in tableStatusMap — include it
+      tilesMap.set(key, {
+        tableKey: key,
+        tableLabel: group.tableLabel,
+        tableId: group.tableId,
+        tableStatus: group.tableStatus,
+        tableCapacity: group.tableCapacity || 0,
+        tableSection: '',
+        orders: group.orders,
+        totalOutstanding: group.totalOutstanding,
+        longestElapsedLabel: null,
+        longestElapsedClass: '',
+      });
+    } else {
+      const tile = tilesMap.get(key);
+      tile.tableLabel = group.tableLabel || key;
+      tile.tableId = group.tableId || tile.tableId;
+      // Effective status: override with group status (occupied/dirty/reserved)
+      tile.tableStatus = group.tableStatus;
+      tile.tableCapacity = group.tableCapacity || tile.tableCapacity;
+      tile.orders = group.orders;
+      tile.totalOutstanding = group.totalOutstanding;
+    }
+  }
+
+  // Compute longest elapsed for each tile
+  const tiles = [...tilesMap.values()];
+  for (const tile of tiles) {
+    // Fallback: if tableLabel is just the key (slug), title-case it
+    if (tile.tableLabel === tile.tableKey) {
+      tile.tableLabel = tile.tableKey.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+    if (tile.orders.length > 0) {
+      let maxMinutes = 0;
+      let worstOrder = null;
+      for (const order of tile.orders) {
+        const m = orderElapsedMinutes(order);
+        if (m !== null && m > maxMinutes) {
+          maxMinutes = m;
+          worstOrder = order;
+        }
+      }
+      if (worstOrder) {
+        tile.longestElapsedLabel = orderElapsedLabel(worstOrder);
+        tile.longestElapsedClass = orderElapsedClass(worstOrder);
+      }
+    }
+  }
+
+  // Sort: occupied first, then reserved, then open, then dirty; within each by label
+  const ORDER = { occupied: 0, reserved: 1, open: 2, dirty: 3 };
+  tiles.sort((a, b) => {
+    const diff = (ORDER[a.tableStatus] ?? 4) - (ORDER[b.tableStatus] ?? 4);
+    if (diff !== 0) return diff;
+    return a.tableLabel.localeCompare(b.tableLabel);
+  });
+
+  return tiles;
+});
+
+// Unique sections from all floor tiles (for the section filter row)
+const floorSections = computed(() => {
+  const secs = new Set();
+  for (const tile of allFloorTiles.value) {
+    if (tile.tableSection) secs.add(tile.tableSection);
+  }
+  return [...secs].sort();
+});
+
+// Filtered tiles by selected section
+const filteredFloorTiles = computed(() => {
+  if (!floorSectionFilter.value) return allFloorTiles.value;
+  return allFloorTiles.value.filter((t) => t.tableSection === floorSectionFilter.value);
+});
+
+// Data for the currently-expanded floor tile (used by the expanded panel)
+const expandedFloorTileData = computed(() =>
+  expandedFloorTable.value
+    ? allFloorTiles.value.find((t) => t.tableKey === expandedFloorTable.value) ?? null
+    : null
+);
+
+// Tap on a floor tile: toggle expansion. If it has no orders, open "New Order"
+const toggleFloorTile = (tile) => {
+  if (expandedFloorTable.value === tile.tableKey) {
+    expandedFloorTable.value = null;
+  } else {
+    expandedFloorTable.value = tile.tableKey;
+  }
+};
+
+// ── Floor tile style helpers ───────────────────────────────────────────────────
+const floorTileClass = (status) => {
+  if (status === 'occupied') return 'border-amber-500/40 bg-amber-500/8 hover:border-amber-400/60';
+  if (status === 'dirty')    return 'border-rose-500/40 bg-rose-500/8 hover:border-rose-400/60';
+  if (status === 'reserved') return 'border-violet-500/40 bg-violet-500/8 hover:border-violet-400/60';
+  return 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400/50'; // open
+};
+
+const floorDotClass = (status) => {
+  if (status === 'occupied') return 'bg-amber-400';
+  if (status === 'dirty')    return 'bg-rose-400';
+  if (status === 'reserved') return 'bg-violet-400';
+  return 'bg-emerald-400'; // open
 };
 
 // ── Clock-in / clock-out (B4) ─────────────────────────────────────────────────
