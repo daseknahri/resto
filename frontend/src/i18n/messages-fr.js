@@ -256,6 +256,8 @@ customerLayout: {
   trackOrderDismiss: "Fermer le suivi",
   installApp: "Installer l'app",
   toggleColorScheme: "Changer le theme",
+  switchToLightMode: "Passer en mode clair",
+  switchToDarkMode: "Passer en mode sombre",
   viewCart: "Voir le panier",
   cartItems: "{count} articles",
   findMyOrder: "Retrouver ma commande",
@@ -273,7 +275,8 @@ notifications: {
   timeNow: "A l'instant",
   timeMinutes: "il y a {n} min",
   timeHours: "il y a {n} h",
-  timeDays: "il y a {n} j"
+  timeDays: "il y a {n} j",
+  inboxAriaLabel: "Boite de notifications"
 },
 customerFlow: {
   title: "Parcours client",

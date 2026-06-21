@@ -21,19 +21,27 @@
       >{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
     </button>
 
-    <div v-if="open" class="absolute end-0 top-full z-50 mt-2">
+    <div
+      v-if="open"
+      ref="inboxEl"
+      role="dialog"
+      :aria-label="t('notifications.inboxAriaLabel')"
+      aria-modal="false"
+      class="absolute end-0 top-full z-50 mt-2"
+    >
       <NotificationInbox @update-unread="onUpdateUnread" @close="close" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
 import api from "../lib/api";
 import AppIcon from "./AppIcon.vue";
 import NotificationInbox from "./NotificationInbox.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCustomerStore } from "../stores/customer";
+import { useFocusTrap } from "../composables/useFocusTrap";
 
 const { t } = useI18n();
 const customerStore = useCustomerStore();
@@ -41,7 +49,11 @@ const customerStore = useCustomerStore();
 const open = ref(false);
 const unreadCount = ref(0);
 const rootEl = ref(null);
+const inboxEl = ref(null);
 let pollTimer = null;
+let _bellTrigger = null; // button that opened the dropdown — focus is restored on close
+
+useFocusTrap(inboxEl, open);
 
 const POLL_MS = 60000; // poll the cheap count-only endpoint every 60s while signed in
 
@@ -63,11 +75,18 @@ const onUpdateUnread = (n) => {
 };
 
 const toggle = () => {
+  if (!open.value) _bellTrigger = document.activeElement;
   open.value = !open.value;
+  if (!open.value) {
+    nextTick(() => _bellTrigger?.focus());
+    _bellTrigger = null;
+  }
 };
 
 const close = () => {
   open.value = false;
+  nextTick(() => _bellTrigger?.focus());
+  _bellTrigger = null;
 };
 
 const onDocClick = (e) => {

@@ -138,21 +138,13 @@
       <!-- Footer: quantity + add -->
       <div class="flex items-center gap-3 px-4 pt-3" style="padding-bottom: calc(var(--safe-bottom) + 1rem)">
         <div class="ui-qty-control inline-flex shrink-0 items-center rounded-full border p-1">
-          <button
-            class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
-            :aria-label="t('dishPage.decreaseQuantity')"
-            @click="qty = Math.max(1, qty - 1)"
-          >
+          <QtyStepperButton :aria-label="t('dishPage.decreaseQuantity')" @click="qty = Math.max(1, qty - 1)">
             <AppIcon name="minus" class="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </QtyStepperButton>
           <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite" :aria-label="`${t('dishPage.qty')}: ${qty}`">{{ qty }}</span>
-          <button
-            class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
-            :aria-label="t('dishPage.increaseQuantity')"
-            @click="qty = Math.min(99, qty + 1)"
-          >
+          <QtyStepperButton :aria-label="t('dishPage.increaseQuantity')" @click="qty = Math.min(99, qty + 1)">
             <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          </QtyStepperButton>
         </div>
         <button
           class="ui-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold disabled:opacity-50"
@@ -169,6 +161,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AppIcon from './AppIcon.vue';
+import QtyStepperButton from './QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useToastStore } from '../stores/toast';

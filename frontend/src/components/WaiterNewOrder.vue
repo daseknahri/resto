@@ -187,7 +187,7 @@
                 <template v-else>
                   <span v-if="cartQty(dish.slug)" class="tabular-nums rounded-full bg-[var(--color-secondary)]/15 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-secondary)]">×{{ cartQty(dish.slug) }}</span>
                   <button
-                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md text-slate-500 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 disabled:pointer-events-none"
+                    class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md text-slate-500 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 disabled:pointer-events-none"
                     :disabled="!dish.is_available"
                     :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
                     @click="addDish(dish)"
@@ -228,13 +228,13 @@
                 <!-- Qty controls -->
                 <div class="flex items-center gap-1 shrink-0" role="group" :aria-label="`${item.dish_name} ${t('waiterPage.newOrderQtyLabel')}`">
                   <button
-                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                    class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.decreaseQuantity')"
                     @click="decrement(item.line_key)"
                   >−</button>
                   <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100" aria-live="polite" :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderQtyLabel')}: ${item.qty}`">{{ item.qty }}</span>
                   <button
-                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                    class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.increaseQuantity')"
                     @click="increment(item.line_key)"
                   >+</button>

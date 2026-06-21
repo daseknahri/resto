@@ -220,6 +220,8 @@ const arabicMessages = {
     "trackOrderDismiss": "إغلاق متتبع الطلب",
     "installApp": "تثبيت التطبيق",
     "toggleColorScheme": "تغيير المظهر",
+    "switchToLightMode": "التبديل إلى الوضع الفاتح",
+    "switchToDarkMode": "التبديل إلى الوضع الداكن",
     "viewCart": "عرض السلة",
     "cartItems": "{count} عناصر",
     "findMyOrder": "ابحث عن طلبي",
@@ -237,7 +239,8 @@ const arabicMessages = {
     "timeNow": "الآن",
     "timeMinutes": "قبل {n} دقيقة",
     "timeHours": "قبل {n} ساعة",
-    "timeDays": "قبل {n} يوم"
+    "timeDays": "قبل {n} يوم",
+    "inboxAriaLabel": "صندوق الإشعارات"
   },
   "customerFlow": {
     "title": "رحلة الضيف",

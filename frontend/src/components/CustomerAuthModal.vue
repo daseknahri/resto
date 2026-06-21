@@ -10,7 +10,6 @@
         aria-modal="true"
         aria-labelledby="customer-auth-dialog-title"
         class="ui-auth-card ui-reveal max-h-[92vh] w-full overflow-y-auto"
-        @keydown.esc="$emit('close')"
       >
         <!-- Header — negative margins bleed to card edge since ui-auth-card provides p-6 -->
         <div class="-mx-6 -mt-6 mb-2 flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-3">
@@ -252,6 +251,8 @@ const dismissWelcome = () => {
 };
 
 const trapFocus = (e) => {
+  // Escape closes the modal from anywhere on the page (WCAG 2.1 §4.1.3 / ARIA dialog pattern)
+  if (e.key === 'Escape') { e.preventDefault(); emit('close'); return; }
   if (!dialogRef.value || e.key !== 'Tab') return;
   const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
   if (!focusable.length) return;

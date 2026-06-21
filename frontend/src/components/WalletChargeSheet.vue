@@ -84,83 +84,97 @@
         </div>
       </template>
 
-      <!-- Step 2a: waiting for the customer to approve an above-threshold charge -->
-      <template v-else-if="awaiting">
-        <div class="ui-panel space-y-3 p-4 text-center" role="status">
-          <!-- Pulse indicator (reduced-motion safe) -->
-          <div
-            class="mx-auto h-8 w-8 animate-pulse rounded-full bg-slate-600"
-            aria-hidden="true"
-          />
-          <p class="text-sm font-semibold text-slate-100 tabular-nums">
-            {{ t('walletCharge.awaitingTitle', { amount: fmtMoney(awaiting.amount) }) }}
-          </p>
-          <p class="ui-subtle text-xs">
-            {{ t('walletCharge.awaitingHint', { name: customer.name || customer.phone }) }}
-          </p>
+      <!-- Steps 2a / 2b: once a customer is resolved, keep a persistent live
+           region in the DOM so the "awaiting approval" status is announced by
+           screen readers the instant it appears (aria-live must be present
+           *before* text changes for the announcement to fire). -->
+      <template v-else-if="customer">
+        <!-- Persistent status live region (always in DOM when customer is set) -->
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          :class="awaiting ? 'ui-panel space-y-3 p-4 text-center' : 'sr-only'"
+        >
+          <template v-if="awaiting">
+            <!-- Pulse indicator (reduced-motion safe) -->
+            <div
+              class="mx-auto h-8 w-8 animate-pulse rounded-full bg-slate-600"
+              aria-hidden="true"
+            />
+            <p class="text-sm font-semibold text-slate-100 tabular-nums">
+              {{ t('walletCharge.awaitingTitle', { amount: fmtMoney(awaiting.amount) }) }}
+            </p>
+            <p class="ui-subtle text-xs">
+              {{ t('walletCharge.awaitingHint', { name: customer.name || customer.phone }) }}
+            </p>
+          </template>
         </div>
+
+        <!-- Cancel button only shown while awaiting approval -->
         <button
+          v-if="awaiting"
           class="ui-btn-outline ui-press ui-touch-target w-full text-sm"
           :aria-label="t('walletCharge.cancelRequest')"
           @click="cancelAwaiting"
         >
           {{ t('common.cancel') }}
         </button>
-      </template>
 
-      <!-- Step 2b: charge the resolved customer -->
-      <template v-else>
-        <!-- Customer info card -->
-        <div class="ui-panel flex items-center gap-3 p-3">
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-semibold text-slate-100">{{ customer.name || customer.phone }}</p>
-            <p class="text-xs text-slate-400">
-              {{ t('walletCharge.balance') }}:
-              <span class="font-semibold tabular-nums text-emerald-400">{{ fmtMoney(customer.wallet_balance) }}</span>
-            </p>
+        <!-- Step 2b: charge the resolved customer (no pending approval) -->
+        <template v-if="!awaiting">
+          <!-- Customer info card -->
+          <div class="ui-panel flex items-center gap-3 p-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-slate-100">{{ customer.name || customer.phone }}</p>
+              <p class="text-xs text-slate-400">
+                {{ t('walletCharge.balance') }}:
+                <span class="font-semibold tabular-nums text-emerald-400">{{ fmtMoney(customer.wallet_balance) }}</span>
+              </p>
+            </div>
           </div>
-        </div>
 
-        <!-- Amount field -->
-        <label class="block space-y-1" :for="'wc-amount'">
-          <span class="ui-kicker">{{ t('walletCharge.amount') }}</span>
-          <input
-            id="wc-amount"
-            v-model="amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            class="ui-input w-full text-sm tabular-nums"
-            :placeholder="t('walletCharge.amountPlaceholder')"
-          />
-        </label>
+          <!-- Amount field -->
+          <label class="block space-y-1" :for="'wc-amount'">
+            <span class="ui-kicker">{{ t('walletCharge.amount') }}</span>
+            <input
+              id="wc-amount"
+              v-model="amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="ui-input w-full text-sm tabular-nums"
+              :placeholder="t('walletCharge.amountPlaceholder')"
+            />
+          </label>
 
-        <!-- Error -->
-        <div
-          v-if="error"
-          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
-          role="alert"
-        >
-          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
-          <p class="flex-1 text-sm text-red-300">{{ error }}</p>
-        </div>
-
-        <!-- Actions -->
-        <div class="flex gap-2">
-          <button
-            class="ui-btn-outline ui-press ui-touch-target px-4 text-sm"
-            @click="reset"
+          <!-- Error -->
+          <div
+            v-if="error"
+            class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+            role="alert"
           >
-            {{ t('walletCharge.back') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:opacity-50"
-            :disabled="charging || !amount"
-            @click="charge"
-          >
-            {{ charging ? t('common.loading') : t('walletCharge.charge') }}
-          </button>
-        </div>
+            <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+            <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-2">
+            <button
+              class="ui-btn-outline ui-press ui-touch-target px-4 text-sm"
+              @click="reset"
+            >
+              {{ t('walletCharge.back') }}
+            </button>
+            <button
+              class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:opacity-50"
+              :disabled="charging || !amount"
+              @click="charge"
+            >
+              {{ charging ? t('common.loading') : t('walletCharge.charge') }}
+            </button>
+          </div>
+        </template>
       </template>
     </div>
   </div>

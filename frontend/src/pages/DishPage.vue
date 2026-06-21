@@ -352,7 +352,7 @@
           </p>
         </div>
         <!-- price block -->
-        <div class="shrink-0 text-right">
+        <div class="shrink-0 text-end">
           <p class="text-base font-extrabold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(totalWithOptions) }}</p>
           <p v-if="qty > 1" class="text-[11px] tabular-nums text-slate-500">{{ qty }} × {{ formatPrice(unitPriceWithOptions) }}</p>
         </div>
@@ -361,9 +361,9 @@
       <!-- Row 2: qty stepper + share + add button -->
       <div class="mt-3 flex items-center gap-2">
         <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
-          <button class="ui-press h-8 w-8 rounded-full text-base font-bold text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
+          <QtyStepperButton :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</QtyStepperButton>
           <input v-model.number="qty" type="number" min="1" max="99" aria-valuemin="1" aria-valuemax="99" class="w-10 border-0 bg-transparent text-center text-sm font-semibold text-slate-100 focus:outline-none" :aria-label="t('dishPage.qty')" />
-          <button class="ui-press h-8 w-8 rounded-full text-base font-bold text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
+          <QtyStepperButton :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</QtyStepperButton>
         </span>
         <button
           class="ui-share-btn shrink-0 rounded-xl border border-slate-700/60 bg-slate-800/50 p-2.5 text-slate-400 transition-colors hover:text-slate-200"
@@ -392,6 +392,7 @@ import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import DishImage from '../components/DishImage.vue';
+import QtyStepperButton from '../components/QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import { useMenuStore } from '../stores/menu';

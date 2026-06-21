@@ -257,6 +257,8 @@ customerLayout: {
   trackOrderDismiss: "Dismiss order tracker",
   installApp: "Install app",
   toggleColorScheme: "Toggle color scheme",
+  switchToLightMode: "Switch to light mode",
+  switchToDarkMode: "Switch to dark mode",
   viewCart: "View cart",
   cartItems: "{count} items",
   findMyOrder: "Find my order",
@@ -274,7 +276,8 @@ notifications: {
   timeNow: "Just now",
   timeMinutes: "{n} min ago",
   timeHours: "{n} h ago",
-  timeDays: "{n} d ago"
+  timeDays: "{n} d ago",
+  inboxAriaLabel: "Notifications inbox"
 },
 customerFlow: {
   title: "Guest journey",

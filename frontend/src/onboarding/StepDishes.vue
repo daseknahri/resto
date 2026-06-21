@@ -1298,15 +1298,15 @@
                 <thead class="sticky top-0 bg-slate-900/90">
                   <tr class="text-left text-xs text-slate-400">
                     <th class="px-3 py-2">{{ t("stepDishes.bulkPriceColItem") }}</th>
-                    <th class="px-3 py-2 text-right">{{ t("stepDishes.bulkPriceColBefore") }}</th>
-                    <th class="px-3 py-2 text-right">{{ t("stepDishes.bulkPriceColAfter") }}</th>
+                    <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColBefore") }}</th>
+                    <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColAfter") }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-700/50">
                   <tr v-for="item in bulkPricePreview" :key="item.id" class="text-slate-300">
                     <td class="max-w-[180px] truncate px-3 py-2">{{ item.name }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums text-slate-400">{{ item.old_price }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{{ item.new_price }}</td>
+                    <td class="px-3 py-2 text-end tabular-nums text-slate-400">{{ item.old_price }}</td>
+                    <td class="px-3 py-2 text-end tabular-nums font-medium text-emerald-400">{{ item.new_price }}</td>
                   </tr>
                 </tbody>
               </table>

@@ -70,7 +70,7 @@
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden pl-4 pr-3.5 py-3.5"
+          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden ps-4 pe-3.5 py-3.5"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <!-- left accent bar -->
@@ -88,24 +88,16 @@
             </div>
             <!-- Stepper pill -->
             <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
-              <button
-                class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors select-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
-                :aria-label="t('cartPage.decreaseQuantity')"
-                @click="cart.decrement(item.key)"
-              >
+              <QtyStepperButton :aria-label="t('cartPage.decreaseQuantity')" @click="cart.decrement(item.key)">
                 <span class="text-base leading-none" aria-hidden="true">−</span>
-              </button>
+              </QtyStepperButton>
               <span class="w-7 text-center text-sm font-bold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
-              <button
-                class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors select-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
-                :aria-label="t('cartPage.increaseQuantity')"
-                @click="cart.increment(item.key)"
-              >
+              <QtyStepperButton :aria-label="t('cartPage.increaseQuantity')" @click="cart.increment(item.key)">
                 <span class="text-base leading-none" aria-hidden="true">+</span>
-              </button>
+              </QtyStepperButton>
             </div>
             <!-- Subtotal + edit/remove -->
-            <div class="shrink-0 min-w-[4.5rem] text-right">
+            <div class="shrink-0 min-w-[4.5rem] text-end">
               <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
               <div class="mt-1 flex items-center justify-end gap-1.5">
                 <button
@@ -154,7 +146,7 @@
                 {{ formatPrice(orderGrandTotal) }}
               </p>
             </div>
-            <div class="text-right text-[11px] text-slate-500 space-y-0.5">
+            <div class="text-end text-[11px] text-slate-500 space-y-0.5">
               <p class="font-medium text-slate-400">{{ itemCountLabel(cart.count) }}</p>
               <p v-if="fulfillmentType" class="capitalize text-slate-400">
                 {{ fulfillmentType === 'delivery' ? t('cartPage.delivery') : t('cartPage.pickup') }}
@@ -1056,6 +1048,7 @@ import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
+import QtyStepperButton from '../components/QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';

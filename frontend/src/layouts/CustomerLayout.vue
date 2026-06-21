@@ -39,8 +39,7 @@
               <button
                 class="ui-touch-target ui-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                 type="button"
-                :aria-label="t('customerLayout.toggleColorScheme')"
-                :aria-pressed="colorScheme === 'system'"
+                :aria-label="colorScheme === 'dark' ? t('customerLayout.switchToLightMode') : t('customerLayout.switchToDarkMode')"
                 @click="toggleColorScheme"
               >
                 <svg v-if="colorScheme === 'dark'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
@@ -293,7 +292,17 @@ const tenantNotice = computed(() => {
 // ── Color scheme ─────────────────────────────────────────────────────────────
 let _mqDark = null
 const colorScheme = ref(
-  (() => { try { return localStorage.getItem('ui-color-scheme') || 'dark' } catch { return 'dark' } })()
+  (() => {
+    try {
+      const stored = localStorage.getItem('ui-color-scheme');
+      if (stored) return stored; // returning-user: honour their stored choice
+      // First visit: seed from OS preference; fall back to 'dark'
+      const osLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      return osLight ? 'system' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  })()
 )
 
 const applyColorScheme = () => {

@@ -129,7 +129,7 @@
                 </label>
                 <div class="flex items-center gap-0.5">
                   <button
-                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+                    class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:opacity-40"
                     :disabled="savingId === dish.id || (dish.stock_qty !== null && dish.stock_qty <= 0)"
                     :aria-label="`-1 ${dish.name}`"
                     @click="adjustStock(dish, -1)"
@@ -158,7 +158,7 @@
                     @keydown.enter="$event.target.blur()"
                   />
                   <button
-                    class="ui-press flex h-6 w-7 items-center justify-center rounded-md border border-slate-700/60 text-[10px] font-semibold text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+                    class="ui-press flex h-6 w-7 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700/60 text-[10px] font-semibold text-slate-400 transition hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:opacity-40"
                     :disabled="savingId === dish.id"
                     :aria-label="`+10 ${dish.name}`"
                     @click="adjustStock(dish, 10)"
@@ -398,7 +398,7 @@
             <!-- Stock adjust -->
             <div class="flex shrink-0 items-center gap-1">
               <button
-                class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+                class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:opacity-40"
                 :disabled="ingSavingId === ing.id"
                 :aria-label="`-1 ${ing.name}`"
                 @click="ingAdjust(ing, -1)"
@@ -412,7 +412,7 @@
                 {{ Number(ing.stock_quantity).toFixed(ing.stock_quantity % 1 === 0 ? 0 : 2) }}
               </span>
               <button
-                class="ui-press flex h-6 w-7 items-center justify-center rounded-md border border-slate-700/60 text-[10px] font-semibold text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+                class="ui-press flex h-6 w-7 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-md border border-slate-700/60 text-[10px] font-semibold text-slate-400 transition hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:opacity-40"
                 :disabled="ingSavingId === ing.id"
                 :aria-label="`+10 ${ing.name}`"
                 @click="ingAdjust(ing, 10)"
@@ -443,14 +443,14 @@
               </svg>
               <template v-else>
                 <button
-                  class="ui-press flex h-7 w-7 items-center justify-center rounded-lg border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-white"
+                  class="ui-press flex h-7 w-7 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-lg border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
                   :aria-label="`${t('common.edit')} ${ing.name}`"
                   @click="ingToggleEdit(ing)"
                 >
                   <AppIcon name="edit" class="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
                 <button
-                  class="ui-press flex h-7 w-7 items-center justify-center rounded-lg border border-red-500/30 text-red-400/70 transition hover:border-red-500/50 hover:text-red-400"
+                  class="ui-press flex h-7 w-7 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-lg border border-red-500/30 text-red-400/70 transition hover:border-red-500/50 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
                   :aria-label="`${t('common.delete')} ${ing.name}`"
                   @click="ingDelete(ing)"
                 >
@@ -614,7 +614,7 @@
               <div class="flex items-center gap-2">
                 <span class="text-xs tabular-nums text-slate-300">× {{ Number(line.quantity) }}</span>
                 <button
-                  class="ui-press flex h-6 w-6 items-center justify-center rounded-lg border border-red-500/30 text-red-400/70 transition hover:border-red-500/50 hover:text-red-400 disabled:opacity-40"
+                  class="ui-press flex h-6 w-6 min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-lg border border-red-500/30 text-red-400/70 transition hover:border-red-500/50 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-40"
                   :disabled="recDeletingLineId === line.id"
                   :aria-label="`${t('common.delete')} ${line.ingredient_name}`"
                   @click="recDeleteLine(line)"

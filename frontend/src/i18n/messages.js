@@ -258,6 +258,8 @@ export const messages = {
       trackOrderDismiss: "Dismiss order tracker",
       installApp: "Install app",
       toggleColorScheme: "Toggle color scheme",
+      switchToLightMode: "Switch to light mode",
+      switchToDarkMode: "Switch to dark mode",
       viewCart: "View cart",
       cartItems: "{count} items",
       findMyOrder: "Find my order",
@@ -275,7 +277,8 @@ export const messages = {
       timeNow: "Just now",
       timeMinutes: "{n} min ago",
       timeHours: "{n} h ago",
-      timeDays: "{n} d ago"
+      timeDays: "{n} d ago",
+      inboxAriaLabel: "Notifications inbox"
     },
     customerFlow: {
       title: "Guest journey",
@@ -5769,6 +5772,8 @@ export const messages = {
       trackOrderDismiss: "Fermer le suivi",
       installApp: "Installer l'app",
       toggleColorScheme: "Changer le theme",
+      switchToLightMode: "Passer en mode clair",
+      switchToDarkMode: "Passer en mode sombre",
       viewCart: "Voir le panier",
       cartItems: "{count} articles",
       findMyOrder: "Retrouver ma commande",
@@ -5786,7 +5791,8 @@ export const messages = {
       timeNow: "A l'instant",
       timeMinutes: "il y a {n} min",
       timeHours: "il y a {n} h",
-      timeDays: "il y a {n} j"
+      timeDays: "il y a {n} j",
+      inboxAriaLabel: "Boite de notifications"
     },
     customerFlow: {
       title: "Parcours client",

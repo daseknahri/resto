@@ -682,10 +682,12 @@ body[dir="rtl"] .ui-section-kicker {
 
   .ui-input {
     @apply w-full rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 transition focus:outline-none;
+    min-height: 2.75rem;
   }
 
   .ui-textarea {
     @apply w-full rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 transition focus:outline-none;
+    min-height: 2.75rem;
   }
 
   .ui-kicker,
