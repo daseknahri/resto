@@ -274,10 +274,10 @@
             </span>
           </div>
           <div class="flex shrink-0 flex-col items-end gap-2">
-            <!-- Elapsed timer badge -->
+            <!-- Elapsed timer badge (amber ≥10m, red ≥20m from created_at) -->
             <span
               class="rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums"
-              :class="elapsedBadgeClass(elapsedMinutes(order), order.status)"
+              :class="elapsedBadgeClass(elapsedMinutes(order))"
               :aria-label="elapsedLabel(order)"
             >{{ elapsedLabel(order) }}</span>
             <!-- Status chip -->
@@ -789,24 +789,22 @@ watch(prepStationFilters, (filters) => {
   if (!still || still.count === 0) prepStation.value = "";
 });
 
-// Elapsed time helpers — use status_updated_at when available, else created_at
+// Elapsed time helpers — always measure from order created_at so the badge
+// shows total time the customer has been waiting, regardless of status transitions.
 const elapsedMinutes = (order) => {
-  const base = order.status_updated_at || order.created_at;
-  return Math.floor((tickerNow.value - new Date(base).getTime()) / 60_000);
+  return Math.floor((tickerNow.value - new Date(order.created_at).getTime()) / 60_000);
 };
 
-const elapsedBadgeClass = (minutes, status) => {
-  if (status === "preparing" && minutes > 15) return "border-amber-500/50 bg-amber-500/15 text-amber-300";
+const elapsedBadgeClass = (minutes) => {
   if (minutes >= 20) return "border-red-500/50 bg-red-500/15 text-red-300";
   if (minutes >= 10) return "border-amber-500/50 bg-amber-500/15 text-amber-300";
   return "border-slate-600/60 bg-slate-700/40 text-slate-400";
 };
 
-// Elapsed badge label — uses orderFlow.elapsed / orderFlow.overdue keys
+// Elapsed badge label — shows minutes since order was placed.
 const elapsedLabel = (order) => {
   const m = elapsedMinutes(order);
-  if (order.status === "preparing" && m > 15) return t("orderFlow.overdue", { m });
-  return t("orderFlow.elapsed", { m });
+  return t("kitchen.elapsedFromOrder", { m });
 };
 
 // ── Clock ─────────────────────────────────────────────────────────────────────

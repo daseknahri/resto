@@ -285,8 +285,8 @@
               <div v-if="expandedFloorTileData.orders.length === 0 && canManageOrders" class="py-4 text-center">
                 <button
                   class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm"
-                  @click="showNewOrder = true"
-                >+ {{ t('waiterPage.floorNewOrder') }}</button>
+                  @click="openNewOrderForTable(expandedFloorTileData)"
+                >+ {{ t('waiterPage.newOrderForTable', { label: expandedFloorTileData.tableLabel }) }}</button>
               </div>
               <article
                 v-for="(order, index) in expandedFloorTileData.orders"
@@ -364,62 +364,59 @@
                     <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" :class="order.payment_status === 'paid' ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300' : 'border-amber-500/30 bg-amber-500/12 text-amber-300'">{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
                   </div>
                 </div>
-                <!-- Action footer (full — same as list view) -->
-                <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+                <!-- Action footer — primary CTA + compact secondaries + overflow -->
+                <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+                  <!-- Primary: advance status -->
                   <button
                     v-if="canManageOrders && waiter.nextStatus(order)"
-                    class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
                     :disabled="waiter.updatingOrderIds.has(order.id)"
                     :aria-busy="waiter.updatingOrderIds.has(order.id)"
                     @click="advance(order.id)"
                   >
-                    <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg></span>
+                    <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg></span>
                     <span v-else>{{ actionLabel(order) }}</span>
                   </button>
-                  <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+                  <!-- Primary: settle (when no further advance) -->
                   <button
-                    v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                    :disabled="firingCourseOrderId === order.id"
-                    @click="fireCourse(order)"
-                  >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-                  <button
-                    v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                    :disabled="allReadyBusyIds.has(order.id)"
-                    @click="doAllReady(order)"
-                  >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-                  <button
-                    v-if="canManageOrders && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    v-else-if="canManageOrders && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                     :disabled="waiter.updatingOrderIds.has(order.id)"
                     @click="settleChooser = order"
                   ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-                  <button
-                    v-if="order.customer_id && order.handled_by_me"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                    @click="openCustomerRating(order)"
-                  ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
-                  <button
-                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
-                    @click="openAppend(order)"
-                  ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-                  <button
-                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid' && order.items?.length"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-                    @click="openTransfer(order)"
-                  >{{ t('waiterPage.transferBtn') }}</button>
-                  <button
-                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-teal-500/40 bg-teal-500/10 px-3 py-2 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
-                    @click="openMerge(order)"
-                  >{{ t('waiterPage.mergeBtn') }}</button>
-                  <button
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
-                    @click="openBill(order)"
-                  ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+                  <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+                  <!-- Secondary row: settle (when advance exists) + add items + all-ready/fire + overflow -->
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
+                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                      :disabled="waiter.updatingOrderIds.has(order.id)"
+                      @click="settleChooser = order"
+                    ><span aria-hidden="true">💵</span></button>
+                    <button
+                      v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
+                      @click="openAppend(order)"
+                    ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+                    <button
+                      v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
+                      :disabled="firingCourseOrderId === order.id"
+                      @click="fireCourse(order)"
+                    >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+                    <button
+                      v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                      :disabled="allReadyBusyIds.has(order.id)"
+                      @click="doAllReady(order)"
+                    >✓ {{ t('waiterPage.allReadyBtn') }}</button>
+                    <button
+                      class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
+                      :aria-label="t('common.more')"
+                      @click="overflowOrder = order"
+                    >…</button>
+                  </div>
                 </div>
               </article>
             </div>
@@ -431,7 +428,9 @@
     <!-- New Order modal (normal mode) -->
     <WaiterNewOrder
       v-if="showNewOrder"
-      @close="showNewOrder = false"
+      :default-table-slug="newOrderDefaultTableSlug"
+      :default-table-label="newOrderDefaultTableLabel"
+      @close="closeNewOrder"
       @placed="onOrderPlaced"
     />
 
@@ -672,6 +671,12 @@
               <span class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
                 {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(group.totalOutstanding, group.orders[0]?.currency) }}
               </span>
+              <!-- New order for this table (shown on the group header for quick re-ordering) -->
+              <button
+                v-if="canManageOrders"
+                class="shrink-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:border-emerald-400"
+                @click="openNewOrderForTable(group)"
+              >+ {{ t('waiterPage.floorNewOrder') }}</button>
             </div>
           </div>
           <!-- Orders within this table -->
@@ -823,68 +828,58 @@ class="min-w-0 flex-1 leading-snug"
                   {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
                 </p>
               </div>
-              <!-- Action footer -->
-              <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+              <!-- Action footer — primary CTA + compact secondaries + overflow -->
+              <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
                 <button
                   v-if="canManageOrders && waiter.nextStatus(order)"
-                  class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
                   :disabled="waiter.updatingOrderIds.has(order.id)"
                   :aria-busy="waiter.updatingOrderIds.has(order.id)"
                   @click="advance(order.id)"
                 >
-                  <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true">
+                  <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                   </span>
                   <span v-else>{{ actionLabel(order) }}</span>
                 </button>
-                <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-                <!-- Fire course button -->
                 <button
-                  v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                  :disabled="firingCourseOrderId === order.id"
-                  @click="fireCourse(order)"
-                >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-                <!-- All ready — bulk mark all items ready -->
-                <button
-                  v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                  :disabled="allReadyBusyIds.has(order.id)"
-                  @click="doAllReady(order)"
-                >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-                <button
-                  v-if="canManageOrders && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  v-else-if="canManageOrders && order.payment_status !== 'paid'"
+                  class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   :disabled="waiter.updatingOrderIds.has(order.id)"
                   @click="settleChooser = order"
                 ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-                <button
-                  v-if="order.customer_id && order.handled_by_me"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                  @click="openCustomerRating(order)"
-                ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
-                <button
-                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
-                  @click="openAppend(order)"
-                ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-                <!-- Transfer items -->
-                <button
-                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid' && order.items?.length"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-                  @click="openTransfer(order)"
-                >{{ t('waiterPage.transferBtn') }}</button>
-                <!-- Merge another order into this one -->
-                <button
-                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-teal-500/40 bg-teal-500/10 px-3 py-2 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
-                  @click="openMerge(order)"
-                >{{ t('waiterPage.mergeBtn') }}</button>
-                <button
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
-                  @click="openBill(order)"
-                ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+                <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                    :disabled="waiter.updatingOrderIds.has(order.id)"
+                    @click="settleChooser = order"
+                  ><span aria-hidden="true">💵</span></button>
+                  <button
+                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
+                    @click="openAppend(order)"
+                  ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+                  <button
+                    v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
+                    :disabled="firingCourseOrderId === order.id"
+                    @click="fireCourse(order)"
+                  >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+                  <button
+                    v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                    :disabled="allReadyBusyIds.has(order.id)"
+                    @click="doAllReady(order)"
+                  >✓ {{ t('waiterPage.allReadyBtn') }}</button>
+                  <button
+                    class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
+                    :aria-label="t('common.more')"
+                    @click="overflowOrder = order"
+                  >…</button>
+                </div>
               </div>
             </article>
           </div>
@@ -1046,51 +1041,58 @@ class="min-w-0 flex-1 leading-snug"
                 {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
               </p>
             </div>
-            <!-- Action footer -->
-            <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+            <!-- Action footer — primary CTA + compact secondaries + overflow -->
+            <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
               <button
                 v-if="canManageOrders && waiter.nextStatus(order)"
-                class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
                 :disabled="waiter.updatingOrderIds.has(order.id)"
                 :aria-busy="waiter.updatingOrderIds.has(order.id)"
                 @click="advance(order.id)"
               >
-                <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true">
+                <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                 </span>
                 <span v-else>{{ actionLabel(order) }}</span>
               </button>
-              <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-              <!-- Fire course button -->
               <button
-                v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                :disabled="firingCourseOrderId === order.id"
-                @click="fireCourse(order)"
-              >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-              <!-- All ready — bulk mark all items ready -->
-              <button
-                v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :disabled="allReadyBusyIds.has(order.id)"
-                @click="doAllReady(order)"
-              >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-              <button
-                v-if="canManageOrders && order.payment_status !== 'paid'"
-                class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                v-else-if="canManageOrders && order.payment_status !== 'paid'"
+                class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                 :disabled="waiter.updatingOrderIds.has(order.id)"
                 @click="settleChooser = order"
               ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-              <button
-                v-if="order.customer_id && order.handled_by_me"
-                class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                @click="openCustomerRating(order)"
-              ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
-              <button
-                class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
-                @click="openBill(order)"
-              ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+              <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                  :disabled="waiter.updatingOrderIds.has(order.id)"
+                  @click="settleChooser = order"
+                ><span aria-hidden="true">💵</span></button>
+                <button
+                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
+                  @click="openAppend(order)"
+                ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+                <button
+                  v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
+                  :disabled="firingCourseOrderId === order.id"
+                  @click="fireCourse(order)"
+                >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+                <button
+                  v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+                  :disabled="allReadyBusyIds.has(order.id)"
+                  @click="doAllReady(order)"
+                >✓ {{ t('waiterPage.allReadyBtn') }}</button>
+                <button
+                  class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
+                  :aria-label="t('common.more')"
+                  @click="overflowOrder = order"
+                >…</button>
+              </div>
             </div>
           </article>
         </div>
@@ -1244,67 +1246,58 @@ class="min-w-0 flex-1 leading-snug"
           </p>
         </div>
 
-        <!-- Action footer -->
-        <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+        <!-- Action footer — primary CTA + compact secondaries + overflow -->
+        <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
           <button
             v-if="canManageOrders && waiter.nextStatus(order)"
-            class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
             @click="advance(order.id)"
           >
-            <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true">
+            <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
             </span>
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
-          <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-
-          <!-- Fire course button -->
           <button
-            v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-            :disabled="firingCourseOrderId === order.id"
-            @click="fireCourse(order)"
-          >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-
-          <!-- All ready — bulk mark all items ready -->
-          <button
-            v-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-            :disabled="allReadyBusyIds.has(order.id)"
-            @click="doAllReady(order)"
-          >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-
-          <!-- Settle — opens a Cash / Wallet chooser, then marks paid (and closes
-               a ready dine-in order). -->
-          <button
-            v-if="canManageOrders && order.payment_status !== 'paid'"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            v-else-if="canManageOrders && order.payment_status !== 'paid'"
+            class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             @click="settleChooser = order"
           ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-
-          <!-- Rate the customer — only the server who handled this order -->
-          <button
-            v-if="order.customer_id && order.handled_by_me"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-            @click="openCustomerRating(order)"
-          ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
-
-          <!-- Add items button — table orders only, active statuses, not paid -->
-          <button
-            v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
-            @click="openAppend(order)"
-          ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-
-          <!-- Bill button -->
-          <button
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
-            @click="openBill(order)"
-          ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+          <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+          <div class="flex items-center gap-1.5">
+            <button
+              v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
+              class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+              :disabled="waiter.updatingOrderIds.has(order.id)"
+              @click="settleChooser = order"
+            ><span aria-hidden="true">💵</span></button>
+            <button
+              v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+              class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
+              @click="openAppend(order)"
+            ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
+            <button
+              v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+              class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
+              :disabled="firingCourseOrderId === order.id"
+              @click="fireCourse(order)"
+            >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
+            <button
+              v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
+              class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+              :disabled="allReadyBusyIds.has(order.id)"
+              @click="doAllReady(order)"
+            >✓ {{ t('waiterPage.allReadyBtn') }}</button>
+            <button
+              class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
+              :aria-label="t('common.more')"
+              @click="overflowOrder = order"
+            >…</button>
+          </div>
         </div>
 
       </article>
@@ -1446,10 +1439,16 @@ class="min-w-0 flex-1 leading-snug"
                   <p class="text-xs font-semibold text-slate-200">{{ seatGroupLabel(seat) }}</p>
                   <p class="text-[10px] text-slate-500">{{ seat.items.length }} {{ seat.items.length === 1 ? 'item' : 'items' }}</p>
                 </div>
-                <button
-                  class="ui-press ui-touch-target shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                  @click="payCashForSeat(settleChooser, seat)"
-                >{{ t('waiterPage.payCash') }}</button>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <button
+                    class="ui-press ui-touch-target shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
+                    @click="payCashForSeat(settleChooser, seat)"
+                  >{{ t('waiterPage.payCash') }}</button>
+                  <button
+                    class="ui-press ui-touch-target shrink-0 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2.5 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                    @click="payWalletForSeat(settleChooser, seat)"
+                  >{{ t('waiterPage.payWalletForSeat') }}</button>
+                </div>
               </div>
             </div>
           </template>
@@ -1758,6 +1757,117 @@ class="min-w-0 flex-1 leading-snug"
       </div>
     </Transition>
   </Teleport>
+
+  <!-- Overflow action sheet (transfer / merge / bill — thumb-reach) -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="overflowOrder"
+        class="fixed inset-0 z-[4150] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm"
+        @click.self="overflowOrder = null"
+        @keydown.esc="overflowOrder = null"
+      >
+        <div
+          class="ui-panel w-full max-w-sm space-y-2 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+            #{{ overflowOrder.order_number }} · {{ orderHeadline(overflowOrder) }}
+          </p>
+          <!-- Transfer items -->
+          <button
+            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid' && overflowOrder.items?.length"
+            class="ui-press ui-touch-target flex w-full items-center gap-3 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none"
+            @click="openTransfer(overflowOrder); overflowOrder = null"
+          >{{ t('waiterPage.transferBtn') }}</button>
+          <!-- Merge into… -->
+          <button
+            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid'"
+            class="ui-press ui-touch-target flex w-full items-center gap-3 rounded-xl border border-teal-500/40 bg-teal-500/10 px-4 py-3 text-sm font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none"
+            @click="openMerge(overflowOrder); overflowOrder = null"
+          >{{ t('waiterPage.mergeBtn') }}</button>
+          <!-- Bill / receipt -->
+          <button
+            class="ui-press ui-touch-target flex w-full items-center gap-3 rounded-xl border border-slate-600/70 bg-slate-800/50 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:border-slate-500 focus-visible:outline-none"
+            @click="openBill(overflowOrder); overflowOrder = null"
+          ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
+          <button
+            class="ui-press ui-touch-target w-full px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
+            @click="overflowOrder = null"
+          >{{ t('common.cancel') }}</button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- Void-reason bottom sheet -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="voidSheet"
+        class="fixed inset-0 z-[4200] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+        @click.self="voidSheet = null"
+        @keydown.esc="voidSheet = null"
+      >
+        <div
+          class="ui-panel w-full max-w-sm space-y-3 p-4"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('waiterPage.voidItem')"
+        >
+          <div>
+            <p class="ui-kicker">{{ t('waiterPage.voidItem') }}</p>
+            <p class="mt-0.5 text-xs font-semibold text-slate-200 truncate">{{ voidSheet.item.dish_name }}</p>
+            <p class="mt-1 text-[11px] text-slate-400">{{ t('waiterPage.voidReasonSheet') }}</p>
+          </div>
+          <!-- Preset chips -->
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="key in VOID_PRESETS"
+              :key="key"
+              class="ui-press rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+              :class="voidPickedPreset === key
+                ? 'border-red-500/60 bg-red-500/15 text-red-300'
+                : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
+              @click="voidPickedPreset = key"
+            >{{ t(`waiterPage.${key}`) }}</button>
+          </div>
+          <!-- Free-text for "Other" -->
+          <input
+            v-if="voidPickedPreset === 'voidReasonOther'"
+            v-model="voidCustomReason"
+            type="text"
+            maxlength="120"
+            class="ui-input w-full text-sm"
+            :placeholder="t('waiterPage.voidReasonOtherPlaceholder')"
+            autofocus
+          />
+          <div class="flex items-center justify-end gap-2 pt-1">
+            <button
+              class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
+              @click="voidSheet = null"
+            >{{ t('common.cancel') }}</button>
+            <button
+              class="ui-press ui-touch-target rounded-xl border border-red-500/50 bg-red-500/15 px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-50"
+              :disabled="!!voidingItemId"
+              @click="submitVoid"
+            >{{ t('waiterPage.voidItem') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1768,7 +1878,6 @@ import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { useSessionStore } from "../stores/session";
-import { usePromptModal } from "../composables/usePromptModal";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 import api from "../lib/api";
@@ -1802,12 +1911,35 @@ const canManageOrders = computed(() => session.canManageOrders);
 const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 const showNewOrder = ref(false);
+// When opening new-order from a floor tile, pre-seed these so the waiter
+// doesn't have to re-pick the table. Both reset to '' on close.
+const newOrderDefaultTableSlug = ref('');
+const newOrderDefaultTableLabel = ref('');
 // Append mode: { id, order_number } of the order to append items to, or null.
 const appendOrder = ref(null);
-const { prompt } = usePromptModal();
+// Overflow action sheet — opens when waiter taps "…" on a card footer.
+const overflowOrder = ref(null); // order object whose overflow sheet is open
+
+// Open "New order" pre-seeded for the given floor tile
+const openNewOrderForTable = (tile) => {
+  newOrderDefaultTableSlug.value = tile.tableKey || '';
+  newOrderDefaultTableLabel.value = tile.tableLabel || '';
+  showNewOrder.value = true;
+};
+
+const closeNewOrder = () => {
+  showNewOrder.value = false;
+  newOrderDefaultTableSlug.value = '';
+  newOrderDefaultTableLabel.value = '';
+};
 
 // Void item
 const voidingItemId = ref(null);
+// Void-reason bottom sheet state
+const voidSheet = ref(null);  // { order, item } when the sheet is open, else null
+const voidCustomReason = ref('');
+const VOID_PRESETS = ['voidReasonWrongItem', 'voidReasonChangedMind', 'voidReasonKitchenError', 'voidReasonComp', 'voidReasonOther'];
+const voidPickedPreset = ref('');  // key of selected preset, or '' for none
 
 // Fire course
 const firingCourseOrderId = ref(null);
@@ -1864,17 +1996,25 @@ const onAppended = () => {
   waiter.fetchOrders({ silent: true });
 };
 
-const voidItem = async (order, item) => {
+const voidItem = (order, item) => {
   if (voidingItemId.value) return;
-  const reason = await prompt({
-    title: t('waiterPage.voidItem'),
-    placeholder: t('waiterPage.voidReasonPrompt'),
-    required: false,
-  });
-  if (reason === null) return; // cancelled
+  voidPickedPreset.value = '';
+  voidCustomReason.value = '';
+  voidSheet.value = { order, item };
+};
+
+const submitVoid = async () => {
+  if (!voidSheet.value) return;
+  const { order, item } = voidSheet.value;
+  const reason = voidPickedPreset.value === 'voidReasonOther'
+    ? voidCustomReason.value.trim()
+    : voidPickedPreset.value
+      ? t(`waiterPage.${voidPickedPreset.value}`)
+      : '';
+  voidSheet.value = null;
   voidingItemId.value = item.id;
   try {
-    await api.post(`/staff/orders/${order.id}/items/${item.id}/void/`, { reason: reason.trim() });
+    await api.post(`/staff/orders/${order.id}/items/${item.id}/void/`, { reason });
     toast.show(t('waiterPage.itemVoided'), 'success');
     await waiter.fetchOrders({ silent: true });
   } catch {
@@ -2366,6 +2506,32 @@ const payCashForSeat = async (order, seat) => {
   const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount, intentKey);
   if (!data) {
     if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
+    toast.show(t('waiterPage.markPaidFailed'), 'error');
+    return;
+  }
+  settleIntentKey.value = null;
+  settleIntentOrderId.value = null;
+  if (data.completed) {
+    await maybeAutoDirtyTable(order);
+    const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
+    if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
+  } else {
+    toast.show(t('waiterPage.partialPaid', { left: fmtOrderPrice(data.outstanding, order.currency) }), 'success');
+  }
+};
+
+// Pay via wallet for a specific seat's subtotal — mirrors payCashForSeat.
+// Fixes split-by-seat under the wallet-only model where cash is not accepted.
+const payWalletForSeat = async (order, seat) => {
+  const amount = parseFloat(seat.subtotal);
+  if (!amount || amount <= 0) return;
+  const intentKey = settleIntentKey.value;
+  settleChooser.value = null;
+  splitBySeatMode.value = false;
+  const { data, errorCode } = await waiter.postPayment(order.id, 'wallet', amount, intentKey);
+  if (!data) {
+    if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
+    if (errorCode === 'insufficient_wallet') { toast.show(t('waiterPage.insufficientWallet'), 'error'); return; }
     toast.show(t('waiterPage.markPaidFailed'), 'error');
     return;
   }

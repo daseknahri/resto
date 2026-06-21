@@ -57,6 +57,41 @@
       </div>
     </header>
 
+    <!-- Close shift card (shown when an open drawer session exists) -->
+    <section
+      v-if="openDrawerSession"
+      class="mx-4 ui-workspace-stage ui-reveal rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3 print:hidden"
+    >
+      <div class="space-y-1">
+        <p class="text-sm font-semibold text-amber-200">{{ t("zReport.closeDrawerTitle") }}</p>
+        <p class="text-xs text-slate-400">{{ t("zReport.closeDrawerDescription") }}</p>
+      </div>
+      <div class="flex items-end gap-3 flex-wrap">
+        <div class="flex-1 min-w-36 space-y-1">
+          <label class="block text-xs text-slate-400">{{ t("zReport.closeDrawerCountLabel") }}</label>
+          <input
+            v-model="closeDrawerCounted"
+            type="number"
+            min="0"
+            step="0.01"
+            class="ui-input w-full text-sm"
+            placeholder="0.00"
+            :disabled="closingDrawer"
+          />
+        </div>
+        <button
+          type="button"
+          class="ui-btn-primary shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-sm"
+          :disabled="closingDrawer || !closeDrawerCounted"
+          @click="closeShiftAndPrint"
+        >
+          <svg v-if="closingDrawer" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          <AppIcon v-else name="print" class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ closingDrawer ? t("zReport.closeDrawerBusy") : t("zReport.closeDrawerBtn") }}
+        </button>
+      </div>
+    </section>
+
     <!-- Error -->
     <div v-if="error" role="alert" class="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
       {{ error }}
@@ -364,6 +399,33 @@ const laborExpanded = ref(true);
 
 // Drawer sessions for the selected service day (additive — empty = no card shown)
 const drawerSessions = ref([]);
+
+// Close-shift inline state
+const closingDrawer = ref(false);
+const closeDrawerCounted = ref("");
+
+// The open drawer session, if any, for this service day
+const openDrawerSession = computed(() =>
+  drawerSessions.value.find((s) => s.status === "open") ?? null
+);
+
+const closeShiftAndPrint = async () => {
+  const counted = parseFloat(closeDrawerCounted.value);
+  if (isNaN(counted) || counted < 0) return;
+  closingDrawer.value = true;
+  try {
+    await api.post("/owner/drawer/close/", { counted_total: counted.toFixed(2) });
+    toast.show(t("zReport.closeDrawerSuccess"), "success");
+    closeDrawerCounted.value = "";
+    // Refresh the full report + drawer state after close
+    await fetchReport();
+    window.print();
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t("cashDrawer.closeError"), "error");
+  } finally {
+    closingDrawer.value = false;
+  }
+};
 
 // Default date = today in ISO format
 const todayIso = computed(() => new Date().toISOString().slice(0, 10));

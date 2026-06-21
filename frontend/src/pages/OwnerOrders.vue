@@ -84,7 +84,7 @@
         </div>
       </div>
 
-      <!-- Search + date filter row -->
+      <!-- Search + filter trigger row -->
       <div class="flex flex-wrap items-center gap-2">
         <input
           v-model.trim="searchQuery"
@@ -95,80 +95,31 @@
           :placeholder="t('ownerOrders.searchPlaceholder')"
           @input="searchQuery = $event.target.value"
         />
-        <div class="flex flex-wrap gap-1">
-          <button
-            v-for="d in dateTabs"
-            :key="d.value"
-            type="button"
-            :aria-pressed="activeDateFilter === d.value"
-            class="ui-state-chip ui-press"
-            :data-active="activeDateFilter === d.value || undefined"
-            @click="activeDateFilter = d.value"
-          >
-            {{ d.label }}
-          </button>
-        </div>
-        <!-- Custom date-range inputs — shown only when the Custom chip is active -->
-        <div v-if="activeDateFilter === 'custom'" class="flex flex-wrap items-center gap-1.5">
-          <label class="text-xs text-slate-400" :for="'ord-date-from'">{{ t('ownerOrders.dateFrom') }}</label>
-          <input
-            id="ord-date-from"
-            v-model="customDateFrom"
-            type="date"
-            class="ui-input py-1 text-xs"
-            :max="customDateTo || undefined"
-          />
-          <label class="text-xs text-slate-400" :for="'ord-date-to'">{{ t('ownerOrders.dateTo') }}</label>
-          <input
-            id="ord-date-to"
-            v-model="customDateTo"
-            type="date"
-            class="ui-input py-1 text-xs"
-            :min="customDateFrom || undefined"
-          />
-        </div>
+        <!-- Filter sheet trigger -->
+        <button
+          type="button"
+          class="ui-press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+          :class="activeFilterCount > 0
+            ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+            : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+          :aria-expanded="filterSheetOpen"
+          :aria-label="t('ownerOrders.filterBtn')"
+          @click="filterSheetOpen = true"
+        >
+          <AppIcon name="filter" class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ t('ownerOrders.filterBtn') }}
+          <span
+            v-if="activeFilterCount > 0"
+            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)]/20 px-1 py-0.5 text-[10px] font-bold tabular-nums leading-none"
+          >{{ activeFilterCount }}</span>
+        </button>
+        <!-- Clear all filters -->
         <button
           v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType || customDateFrom || customDateTo || activePaymentStatus"
           class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
           :aria-label="t('ownerOrders.clearFilters')"
           @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
         >✕</button>
-      </div>
-
-      <!-- Fulfillment-type filter chips (only rendered when 2+ types exist in the order list) -->
-      <div v-if="fulfillmentTabs.length" class="flex flex-wrap items-center gap-1">
-        <span class="me-1 shrink-0 text-[11px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('ownerOrders.fulfillmentFilter') }}</span>
-        <button
-          v-for="tab in fulfillmentTabs"
-          :key="tab.value"
-          type="button"
-          :aria-pressed="activeFulfillmentType === tab.value"
-          class="ui-state-chip ui-press"
-          :data-active="activeFulfillmentType === tab.value || undefined"
-          @click="activeFulfillmentType = tab.value"
-        >
-          {{ tab.label }}
-        </button>
-      </div>
-
-      <!-- Payment status filter chips -->
-      <div class="flex flex-wrap items-center gap-1">
-        <span class="me-1 shrink-0 text-[11px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('ownerOrders.paymentFilter') }}</span>
-        <button
-          v-for="p in paymentStatusTabs"
-          :key="p.value"
-          type="button"
-          :aria-pressed="activePaymentStatus === p.value"
-          class="ui-state-chip ui-press"
-          :data-active="activePaymentStatus === p.value || undefined"
-          @click="activePaymentStatus = p.value"
-        >
-          {{ p.label }}
-          <span
-            v-if="p.count > 0"
-            class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
-          >{{ p.count }}</span>
-        </button>
       </div>
 
       <!-- Status filter tabs: horizontal scroll on mobile (keeps the order list in view),
@@ -1126,6 +1077,236 @@
         </div>
       </div>
     </div>
+
+    <!-- ── FILTER SHEET — bottom drawer for fulfillment / payment / date filters ── -->
+    <Teleport to="body">
+      <Transition name="ui-fade">
+        <div
+          v-if="filterSheetOpen"
+          class="fixed inset-0 z-[2200] flex items-end justify-center"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('ownerOrders.filterSheetTitle')"
+          @keydown.esc="filterSheetOpen = false"
+        >
+          <!-- Backdrop -->
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" @click="filterSheetOpen = false" />
+          <!-- Panel -->
+          <div class="relative z-10 w-full max-w-lg rounded-t-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col max-h-[80dvh]">
+            <!-- Handle + header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 shrink-0">
+              <h2 class="text-base font-bold text-white">{{ t('ownerOrders.filterSheetTitle') }}</h2>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="activeFilterCount > 0"
+                  class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+                  @click="activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
+                >{{ t('ownerOrders.clearFilters') }}</button>
+                <button
+                  class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:text-slate-200"
+                  :aria-label="t('common.close')"
+                  @click="filterSheetOpen = false"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <!-- Filter content -->
+            <div class="overflow-y-auto flex-1 px-4 py-4 space-y-5">
+              <!-- Date filter -->
+              <div class="space-y-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.dateAll') }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="d in dateTabs"
+                    :key="d.value"
+                    type="button"
+                    :aria-pressed="activeDateFilter === d.value"
+                    class="ui-state-chip ui-press"
+                    :data-active="activeDateFilter === d.value || undefined"
+                    @click="activeDateFilter = d.value"
+                  >{{ d.label }}</button>
+                </div>
+                <!-- Custom date-range inputs -->
+                <div v-if="activeDateFilter === 'custom'" class="flex flex-wrap items-center gap-1.5 pt-1">
+                  <label class="text-xs text-slate-400" for="fs-date-from">{{ t('ownerOrders.dateFrom') }}</label>
+                  <input id="fs-date-from" v-model="customDateFrom" type="date" class="ui-input py-1 text-xs" :max="customDateTo || undefined" />
+                  <label class="text-xs text-slate-400" for="fs-date-to">{{ t('ownerOrders.dateTo') }}</label>
+                  <input id="fs-date-to" v-model="customDateTo" type="date" class="ui-input py-1 text-xs" :min="customDateFrom || undefined" />
+                </div>
+              </div>
+
+              <!-- Fulfillment-type filter (only when 2+ types in the order list) -->
+              <div v-if="fulfillmentTabs.length" class="space-y-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.fulfillmentFilter') }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="tab in fulfillmentTabs"
+                    :key="tab.value"
+                    type="button"
+                    :aria-pressed="activeFulfillmentType === tab.value"
+                    class="ui-state-chip ui-press"
+                    :data-active="activeFulfillmentType === tab.value || undefined"
+                    @click="activeFulfillmentType = tab.value"
+                  >{{ tab.label }}</button>
+                </div>
+              </div>
+
+              <!-- Payment status filter -->
+              <div class="space-y-2">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.paymentFilter') }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="p in paymentStatusTabs"
+                    :key="p.value"
+                    type="button"
+                    :aria-pressed="activePaymentStatus === p.value"
+                    class="ui-state-chip ui-press"
+                    :data-active="activePaymentStatus === p.value || undefined"
+                    @click="activePaymentStatus = p.value"
+                  >
+                    {{ p.label }}
+                    <span
+                      v-if="p.count > 0"
+                      class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
+                    >{{ p.count }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- Apply / close -->
+            <div class="border-t border-slate-800 px-4 py-3 shrink-0">
+              <button
+                class="ui-btn-primary w-full py-2.5 text-sm font-semibold"
+                @click="filterSheetOpen = false"
+              >{{ t('common.close') }}</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── 86 BOARD MODAL — dish availability (opens from floating button) ───── -->
+    <Teleport to="body">
+      <Transition name="ui-fade">
+        <div
+          v-if="orders86BoardOpen"
+          class="fixed inset-0 z-[2200] flex items-end justify-center sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('kitchen.eightySixTitle')"
+          @keydown.esc="orders86BoardOpen = false"
+        >
+          <!-- Backdrop -->
+          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" @click="orders86BoardOpen = false" />
+          <!-- Panel -->
+          <div class="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col max-h-[85dvh]">
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 shrink-0">
+              <h2 class="text-base font-bold text-white">
+                {{ t('kitchen.eightySixTitle') }}
+                <span v-if="orders86SoldOutCount > 0" class="ms-2 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-300 tabular-nums">{{ orders86SoldOutCount }}</span>
+              </h2>
+              <button
+                class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:text-slate-200"
+                :aria-label="t('common.close')"
+                @click="orders86BoardOpen = false"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+                </svg>
+              </button>
+            </div>
+            <!-- Search -->
+            <div class="px-4 pt-3 pb-2 shrink-0">
+              <div class="relative">
+                <svg class="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
+                </svg>
+                <input
+                  v-model.trim="orders86Search"
+                  type="search"
+                  autofocus
+                  class="w-full rounded-xl border border-slate-700 bg-slate-800/70 py-2.5 ps-9 pe-4 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  :placeholder="t('kitchen.eightySixSearch')"
+                  :aria-label="t('kitchen.eightySixSearch')"
+                />
+              </div>
+              <!-- Reset all available -->
+              <div v-if="orders86SoldOutCount > 0" class="mt-2 flex justify-end">
+                <button
+                  class="ui-press rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
+                  :disabled="orders86Resetting"
+                  @click="orders86ResetAll"
+                >{{ orders86Resetting ? t('common.loading') : t('ownerHome.resetAllAvailable') }}</button>
+              </div>
+            </div>
+            <!-- List -->
+            <div class="overflow-y-auto flex-1 px-4 pb-4">
+              <div v-if="orders86Fetching" class="space-y-2 pt-1">
+                <div v-for="i in 6" :key="i" class="flex animate-pulse items-center justify-between gap-2 rounded-xl px-2 py-3">
+                  <div class="h-4 w-36 rounded bg-slate-700/60" />
+                  <div class="h-9 w-24 rounded-xl bg-slate-700/40" />
+                </div>
+              </div>
+              <div v-else-if="!orders86Filtered.length" class="py-8 text-center text-sm text-slate-500">{{ t('kitchen.eightySixEmpty') }}</div>
+              <ul v-else role="list" class="list-none space-y-1 pt-1">
+                <li
+                  v-for="dish in orders86Filtered"
+                  :key="dish.id"
+                  class="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-800/50"
+                  :class="!dish.is_available ? 'opacity-70' : ''"
+                >
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium text-slate-100">{{ dish.name }}</p>
+                    <p class="truncate text-[11px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
+                  </div>
+                  <button
+                    role="switch"
+                    class="ui-press shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 min-w-[5.5rem] text-center"
+                    :class="dish.is_available
+                      ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
+                      : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
+                    :disabled="orders86TogglingId === dish.id"
+                    :aria-checked="dish.is_available"
+                    :aria-busy="orders86TogglingId === dish.id"
+                    :aria-label="`${dish.name} — ${dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')}`"
+                    @click="orders86Toggle(dish)"
+                  >
+                    {{ orders86TogglingId === dish.id ? '…' : (dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')) }}
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── FLOATING 86 BOARD BUTTON ── -->
+    <Teleport to="body">
+      <Transition name="ui-fade">
+        <button
+          v-if="!orders86BoardOpen && !filterSheetOpen && !trackModal.open"
+          type="button"
+          class="ui-press fixed bottom-6 end-4 z-[2000] inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :class="orders86SoldOutCount > 0
+            ? 'border-red-500/50 bg-red-950 text-red-300 shadow-red-900/40'
+            : 'border-slate-700 bg-slate-900 text-slate-300 shadow-slate-900/60'"
+          :aria-label="t('ownerOrders.eightySixBoardBtn')"
+          @click="open86BoardFromOrders"
+        >
+          <span aria-hidden="true" class="text-base font-black leading-none">86</span>
+          {{ t('ownerOrders.eightySixBoardBtn') }}
+          <span
+            v-if="orders86SoldOutCount > 0"
+            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500/20 px-1 py-0.5 text-[10px] font-bold tabular-nums leading-none text-red-300"
+          >{{ orders86SoldOutCount }}</span>
+        </button>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -1145,6 +1326,7 @@ import { useTenantStore } from "../stores/tenant";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { isAutoAcceptOn } from "../lib/orderHandling";
+import { bustCache } from "../lib/staleCache";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live orders — polls and must mount & unmount normally).
@@ -1176,6 +1358,121 @@ const copyMenuUrl = async () => {
   } catch {
     toast.show(t("ownerTables.copyFailed"), "error");
   }
+};
+
+// ── Filter sheet (bottom drawer for fulfillment / payment / date filters) ──────
+const filterSheetOpen = ref(false);
+
+// Count of non-default filter values so the trigger chip shows a badge.
+const activeFilterCount = computed(() => {
+  let n = 0;
+  if (activeDateFilter.value !== "all") n++;
+  if (activeFulfillmentType.value) n++;
+  if (activePaymentStatus.value) n++;
+  return n;
+});
+
+// ── 86 Board (dish availability) modal — opened from floating button ───────────
+const orders86BoardOpen = ref(false);
+const orders86Dishes = ref([]);
+const orders86Fetching = ref(false);
+const orders86Search = ref("");
+const orders86TogglingId = ref(null);
+const orders86Resetting = ref(false);
+
+const orders86SoldOutCount = computed(
+  () => orders86Dishes.value.filter((d) => d.is_published && !d.is_available).length
+);
+
+const orders86Filtered = computed(() => {
+  const q = orders86Search.value.toLowerCase();
+  const list = [...orders86Dishes.value]
+    .filter((d) => d.is_published)
+    .sort((a, b) => {
+      if (!a.is_available && b.is_available) return -1;
+      if (a.is_available && !b.is_available) return 1;
+      return 0;
+    });
+  if (!q) return list;
+  return list.filter(
+    (d) =>
+      (d.name || "").toLowerCase().includes(q) ||
+      (d.category_name || "").toLowerCase().includes(q)
+  );
+});
+
+const orders86Fetch = async () => {
+  if (orders86Fetching.value) return;
+  orders86Fetching.value = true;
+  try {
+    const { data } = await api.get("/dishes/", { timeout: 6000 });
+    orders86Dishes.value = Array.isArray(data) ? data : [];
+  } catch {
+    toast.show(t("ownerHome.noDishesLoaded"), "error");
+  } finally {
+    orders86Fetching.value = false;
+  }
+};
+
+const orders86Toggle = async (dish) => {
+  if (orders86TogglingId.value === dish.id) return;
+  orders86TogglingId.value = dish.id;
+  const newVal = !dish.is_available;
+  try {
+    await api.patch(`/dishes/${dish.id}/`, { is_available: newVal });
+    dish.is_available = newVal;
+    bustCache("menu.categories");
+  } catch (err) {
+    const status = err?.response?.status;
+    toast.show(status === 403 ? t("kitchen.eightySixToggleFailed403") : t("kitchen.eightySixToggleFailed"), "error");
+  } finally {
+    orders86TogglingId.value = null;
+  }
+};
+
+const orders86ResetAll = async () => {
+  if (orders86Resetting.value) return;
+  orders86Resetting.value = true;
+  try {
+    const { data } = await api.post("/owner/dishes/reset-availability/");
+    orders86Dishes.value.forEach((d) => {
+      if (d.is_published && !d.is_available) d.is_available = true;
+      if (d.stock_qty === 0) d.stock_qty = null;
+    });
+    bustCache("menu.categories");
+    const count = data?.restored ?? 0;
+    toast.show(
+      count > 0 ? t("ownerHome.resetAvailabilityDone", { count }) : t("ownerHome.resetAvailabilityNone"),
+      "success"
+    );
+  } catch {
+    toast.show(t("ownerHome.resetAvailabilityFailed"), "error");
+  } finally {
+    orders86Resetting.value = false;
+  }
+};
+
+// Open the 86 board; auto-open when sold-out items exist on first load.
+const open86BoardFromOrders = () => {
+  orders86BoardOpen.value = true;
+  orders86Search.value = "";
+  orders86Fetch();
+};
+
+// Seed the sold-out count once the order list loads (for the floating button badge).
+// Uses a lightweight check: fetch dish list once on mount, then rely on toggle state.
+const _orders86Seeded = ref(false);
+const seed86Count = async () => {
+  if (_orders86Seeded.value || orders86Dishes.value.length) return;
+  _orders86Seeded.value = true;
+  try {
+    const { data } = await api.get("/dishes/", { timeout: 6000 });
+    orders86Dishes.value = Array.isArray(data) ? data : [];
+    // Auto-open panel if there are sold-out items (spec: default open when soldOutCount>0)
+    if (orders86SoldOutCount.value > 0) {
+      orders86BoardOpen.value = true;
+    }
+  } catch { /* non-critical — badge stays at 0 */ }
 };
 
 // ── Tab: "active" (hot poll) | "history" (paginated terminal orders) ──────────
@@ -1914,6 +2211,10 @@ onMounted(async () => {
   await requestNotificationPermission();
   const initial = await order.fetchOrders();
   checkForNewOrders(Array.isArray(initial) ? initial : order.orders);
+
+  // Seed the 86 board dish list so the floating button shows the correct sold-out count.
+  // Non-blocking: runs after initial order fetch so it never delays the order list.
+  void seed86Count();
 
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onPageVisible);

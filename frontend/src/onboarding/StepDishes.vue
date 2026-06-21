@@ -77,25 +77,26 @@
             v-for="(dish, index) in activeCategoryDishesFiltered"
             :key="dish.local_id"
             class="ui-surface-lift ui-reveal group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
-            :class="dish.is_published ? '' : 'opacity-70'"
+            :class="[dish.is_published ? '' : 'opacity-70', dragOverId === dish.local_id ? 'border-brand-secondary/60 bg-brand-secondary/5' : '']"
             :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 68px' }"
+            draggable="true"
+            @dragstart="onDishDragStart(dish.local_id, $event)"
+            @dragover.prevent="dragOverId = dish.local_id"
+            @dragleave="dragOverId = null"
+            @drop.prevent="onDishDrop(dish.local_id)"
+            @dragend="dragOverId = null; draggingDishId = null"
           >
-            <!-- Reorder: stacked chevrons -->
-            <div class="flex shrink-0 flex-col">
-              <button
-                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
-                type="button" :disabled="!canMoveDishUp(dish.local_id)" :aria-label="t('common.moveUp')"
-                @click="moveDish(dish.local_id, -1)"
-              >
-                <AppIcon name="chevronUp" class="h-4 w-4" />
-              </button>
-              <button
-                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
-                type="button" :disabled="!canMoveDishDown(dish.local_id)" :aria-label="t('common.moveDown')"
-                @click="moveDish(dish.local_id, 1)"
-              >
-                <AppIcon name="chevronDown" class="h-4 w-4" />
-              </button>
+            <!-- Reorder: drag handle -->
+            <div
+              class="flex shrink-0 cursor-grab items-center justify-center rounded px-0.5 text-slate-500 transition hover:text-slate-300 active:cursor-grabbing"
+              :aria-label="t('stepDishes.dragToReorder')"
+              title="Drag to reorder"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" fill="currentColor" class="h-4 w-4 shrink-0" aria-hidden="true">
+                <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
+                <circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>
+                <circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/>
+              </svg>
             </div>
 
             <!-- Thumbnail (placeholder when no image) -->
@@ -109,20 +110,44 @@
               <AppIcon name="cart" class="h-4 w-4" />
             </div>
 
-            <!-- Name + meta — the whole block opens the editor -->
-            <button type="button" class="min-w-0 flex-1 text-start" :aria-label="`${t('common.edit')} ${dish.name || t('stepDishes.dishNamePlaceholder', { item: itemSingular })}`" @click="openDishEditor(dish.local_id)">
-              <div class="flex items-center gap-1.5">
-                <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
-                <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder", { item: itemSingular }) }}</h3>
-              </div>
+            <!-- Name + meta — the whole block opens the editor except the inline price badge -->
+            <div class="min-w-0 flex-1">
+              <button type="button" class="w-full text-start" :aria-label="`${t('common.edit')} ${dish.name || t('stepDishes.dishNamePlaceholder', { item: itemSingular })}`" @click="openDishEditor(dish.local_id)">
+                <div class="flex items-center gap-1.5">
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
+                  <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder", { item: itemSingular }) }}</h3>
+                </div>
+              </button>
               <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
-                <span class="font-semibold tabular-nums text-slate-300">{{ Number(dish.price || 0).toFixed(2) }}</span>
+                <!-- Inline price badge: tap to edit, blur/enter to commit -->
+                <span
+                  v-if="inlinePriceEditId !== dish.local_id"
+                  class="cursor-pointer rounded border border-transparent px-1 font-semibold tabular-nums text-slate-300 transition hover:border-slate-600 hover:bg-slate-800"
+                  :title="t('stepDishes.tapToEditPrice')"
+                  role="button"
+                  :aria-label="t('stepDishes.tapToEditPrice')"
+                  @click.stop="startInlinePriceEdit(dish)"
+                >{{ Number(dish.price || 0).toFixed(2) }}</span>
+                <input
+                  v-else
+                  ref="inlinePriceInputRef"
+                  v-model.number="inlinePriceValue"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="w-20 rounded border border-brand-secondary/60 bg-slate-900 px-1 py-0.5 text-xs font-semibold tabular-nums text-white outline-none focus:border-brand-secondary"
+                  :aria-label="t('stepDishes.pricePlaceholder')"
+                  @blur="commitInlinePrice(dish)"
+                  @keydown.enter.prevent="commitInlinePrice(dish)"
+                  @keydown.escape.prevent="inlinePriceEditId = null"
+                  @click.stop
+                />
                 <span v-if="Array.isArray(dish.options) && dish.options.length">· {{ dish.options.length }} {{ t("stepDishes.variantsTitle") }}</span>
                 <span v-if="dish.option_groups?.length" class="text-sky-300">· {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
                 <span v-if="dish.combo_components?.length" class="rounded-full border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">{{ t("combos.badge") }}</span>
                 <span v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">· {{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(" · ") }}</span>
               </div>
-            </button>
+            </div>
 
             <!-- Inline actions: publish switch · edit · delete -->
             <div class="flex shrink-0 items-center gap-1.5">
@@ -1465,6 +1490,55 @@ const quickDishModalOpen = ref(false);
 const quickDishDialogRef = ref(null);
 const quickDishNameInputRef = ref(null);
 
+// Drag-to-reorder state
+const draggingDishId = ref(null);
+const dragOverId = ref(null);
+
+const onDishDragStart = (localId, evt) => {
+  draggingDishId.value = localId;
+  if (evt.dataTransfer) {
+    evt.dataTransfer.effectAllowed = "move";
+    evt.dataTransfer.setData("text/plain", String(localId));
+  }
+};
+
+const onDishDrop = (targetLocalId) => {
+  const sourceId = draggingDishId.value;
+  dragOverId.value = null;
+  draggingDishId.value = null;
+  if (!sourceId || sourceId === targetLocalId) return;
+  const ordered = [...orderedActiveCategoryDishes.value];
+  const fromIdx = ordered.findIndex((d) => String(d.local_id) === String(sourceId));
+  const toIdx = ordered.findIndex((d) => String(d.local_id) === String(targetLocalId));
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = ordered.splice(fromIdx, 1);
+  ordered.splice(toIdx, 0, moved);
+  ordered.forEach((dish, i) => { dish.position = i; });
+};
+
+// Inline price edit state
+const inlinePriceEditId = ref(null);
+const inlinePriceValue = ref(0);
+const inlinePriceInputRef = ref(null);
+
+const startInlinePriceEdit = async (dish) => {
+  inlinePriceEditId.value = dish.local_id;
+  inlinePriceValue.value = Number(dish.price || 0);
+  await nextTick();
+  if (inlinePriceInputRef.value) {
+    const el = Array.isArray(inlinePriceInputRef.value) ? inlinePriceInputRef.value[0] : inlinePriceInputRef.value;
+    el?.focus();
+    el?.select();
+  }
+};
+
+const commitInlinePrice = (dish) => {
+  if (inlinePriceEditId.value !== dish.local_id) return;
+  const val = parseFloat(inlinePriceValue.value);
+  dish.price = isNaN(val) || val < 0 ? dish.price : val;
+  inlinePriceEditId.value = null;
+};
+
 useFocusTrap(dishEditorDialogRef, dishEditorModalOpen);
 useFocusTrap(quickDishDialogRef, quickDishModalOpen);
 const quickDishErrors = reactive({ category: "", name: "" });
@@ -1579,23 +1653,6 @@ const orderedActiveCategoryDishes = computed(() =>
   )
 );
 
-const canMoveDishUp = (localId) =>
-  orderedActiveCategoryDishes.value.findIndex((dish) => String(dish.local_id) === String(localId)) > 0;
-const canMoveDishDown = (localId) => {
-  const index = orderedActiveCategoryDishes.value.findIndex((dish) => String(dish.local_id) === String(localId));
-  return index > -1 && index < orderedActiveCategoryDishes.value.length - 1;
-};
-
-const moveDish = (localId, direction) => {
-  const ordered = [...orderedActiveCategoryDishes.value];
-  const index = ordered.findIndex((dish) => String(dish.local_id) === String(localId));
-  const targetIndex = index + direction;
-  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
-  [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
-  ordered.forEach((dish, orderedIndex) => {
-    dish.position = orderedIndex;
-  });
-};
 const syncActiveCategory = () => {
   if (!sortedCategoryOptions.value.length) {
     activeCategoryId.value = "";

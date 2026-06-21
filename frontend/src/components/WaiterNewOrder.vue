@@ -117,6 +117,14 @@
             role="group"
             :aria-label="t('waiterPage.newOrderCategoryLabel')"
           >
+            <!-- Recent/Popular virtual pill — only shown when there is frequency data -->
+            <button
+              v-if="recentDishes.length > 0"
+              class="ui-chip shrink-0 border-amber-500/40 text-amber-300"
+              :data-active="activeCat === RECENT_SLUG"
+              :aria-pressed="activeCat === RECENT_SLUG"
+              @click="selectCat(RECENT_SLUG)"
+            >{{ t('waiterPage.recentPopularCat') }}</button>
             <button
               v-for="cat in categories"
               :key="cat.slug"
@@ -137,30 +145,58 @@
               <p class="text-sm font-semibold text-slate-100">{{ t('waiterPage.noResults') }}</p>
             </div>
 
-            <button
+            <div
               v-for="(dish, index) in displayedDishes"
               :key="dish.slug"
-              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-2 rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 text-left transition-colors hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5"
+              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-2 rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 transition-colors"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-              :disabled="!dish.is_available"
-              :class="!dish.is_available ? 'cursor-not-allowed opacity-40' : ''"
-              @click="addDish(dish)"
+              :class="!dish.is_available ? 'cursor-not-allowed opacity-40' : 'hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5'"
             >
-              <div class="min-w-0">
+              <!-- Left: name + hint — tappable to add/customize -->
+              <button
+                class="min-w-0 flex-1 text-left disabled:pointer-events-none"
+                :disabled="!dish.is_available"
+                @click="addDish(dish)"
+              >
                 <p class="truncate text-sm font-medium text-slate-100">{{ dish.name }}</p>
                 <p v-if="dishHasOptions(dish)" class="truncate text-[10px] font-medium text-[var(--color-secondary)]">{{ t('waiterPage.newOrderHasOptions') }}</p>
                 <p v-else-if="dish.description" class="truncate text-[10px] text-slate-500">{{ dish.description }}</p>
-              </div>
+              </button>
+              <!-- Right: price + inline stepper (no-options, in-cart) or add icon -->
               <div class="flex shrink-0 items-center gap-2 text-end">
                 <div>
                   <p class="tabular-nums text-xs font-semibold text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</p>
-                  <span v-if="cartQty(dish.slug)" class="tabular-nums rounded-full bg-[var(--color-secondary)]/15 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-secondary)]">
-                    ×{{ cartQty(dish.slug) }}
-                  </span>
                 </div>
-                <AppIcon :name="dishHasOptions(dish) ? 'chevronRight' : 'plus'" class="h-4 w-4 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
+                <!-- Inline stepper — only for no-options dishes already in cart -->
+                <template v-if="!dishHasOptions(dish) && cartQty(dish.slug) > 0 && dish.is_available">
+                  <div class="flex items-center gap-0.5" role="group" :aria-label="`${dish.name} ${t('waiterPage.newOrderQtyLabel')}`">
+                    <button
+                      class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                      :aria-label="t('dishPage.decreaseQuantity')"
+                      @click.stop="decrement(dish.slug)"
+                    >−</button>
+                    <span class="w-5 tabular-nums text-center text-xs font-bold text-[var(--color-secondary)]" aria-live="polite">{{ cartQty(dish.slug) }}</span>
+                    <button
+                      class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] hover:border-[var(--color-secondary)] text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                      :aria-label="t('dishPage.increaseQuantity')"
+                      @click.stop="addDish(dish)"
+                    >+</button>
+                  </div>
+                </template>
+                <!-- Add icon / chevron for options dishes or dish not yet in cart -->
+                <template v-else>
+                  <span v-if="cartQty(dish.slug)" class="tabular-nums rounded-full bg-[var(--color-secondary)]/15 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-secondary)]">×{{ cartQty(dish.slug) }}</span>
+                  <button
+                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md text-slate-500 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 disabled:pointer-events-none"
+                    :disabled="!dish.is_available"
+                    :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
+                    @click="addDish(dish)"
+                  >
+                    <AppIcon :name="dishHasOptions(dish) ? 'chevronRight' : 'plus'" class="h-4 w-4 rtl:scale-x-[-1]" aria-hidden="true" />
+                  </button>
+                </template>
               </div>
-            </button>
+            </div>
           </div>
         </div>
 
@@ -443,6 +479,9 @@ const props = defineProps({
   // and emits 'appended' instead of 'placed'.
   appendToOrderId: { type: Number, default: null },
   appendOrderNumber: { type: [Number, String], default: null },
+  // Pre-select a table when opening from a floor tile tap.
+  defaultTableSlug: { type: String, default: '' },
+  defaultTableLabel: { type: String, default: '' },
 });
 
 const emit = defineEmits(['close', 'placed', 'appended']);
@@ -503,6 +542,38 @@ const custQty = ref(1);
 const custNote = ref('');
 
 let searchTimer = null;
+
+// ── Recent/Popular virtual category ──────────────────────────────────────────
+// Tracks add frequency: { [slug]: count }. Stored in localStorage so "Popular"
+// improves across sessions. Capped at top-5 slugs in the virtual pill.
+const FREQ_KEY = 'kepoli.waiter.dishFreq';
+const RECENT_SLUG = '__recent__';
+
+const loadFreq = () => {
+  try { return JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); } catch { return {}; }
+};
+const bumpFreq = (slug) => {
+  try {
+    const freq = loadFreq();
+    freq[slug] = (freq[slug] || 0) + 1;
+    localStorage.setItem(FREQ_KEY, JSON.stringify(freq));
+  } catch { void 0; }
+};
+
+const top5Slugs = computed(() => {
+  const freq = loadFreq();
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([s]) => s);
+});
+
+const recentDishes = computed(() => {
+  const slugs = top5Slugs.value;
+  if (!slugs.length) return [];
+  const all = allDishes.value;
+  return slugs.map((s) => all.find((d) => d.slug === s)).filter(Boolean);
+});
 
 // ── Derived ───────────────────────────────────────────────────────────────────
 const categories = computed(() => menu.categories || []);
@@ -573,6 +644,7 @@ const searchResults = computed(() => {
 
 const catDishes = computed(() => {
   if (!activeCat.value) return [];
+  if (activeCat.value === RECENT_SLUG) return recentDishes.value;
   return menu.dishes[activeCat.value] || [];
 });
 
@@ -651,6 +723,8 @@ const custRequiredUnmet = computed(() => {
 // ── Actions ───────────────────────────────────────────────────────────────────
 const selectCat = (slug) => {
   activeCat.value = slug;
+  // Virtual recent category — no network fetch needed
+  if (slug === RECENT_SLUG) return;
   // Lazy-load if needed
   if (!menu.dishes[slug]?.length) {
     loadingDishes.value = true;
@@ -662,6 +736,7 @@ const selectCat = (slug) => {
 
 // Add a fully-specified line to the cart (merging same dish + same options).
 const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, qty, note }) => {
+  bumpFreq(dish_slug);
   const key = lineKey(dish_slug, option_ids);
   const existing = cartItems.value.find((i) => i.line_key === key);
   if (existing) {
@@ -913,6 +988,12 @@ onUnmounted(() => document.removeEventListener('keydown', trapFocus));
 onMounted(async () => {
   document.addEventListener('keydown', trapFocus);
   dialogRef.value?.querySelector(FOCUSABLE_SEL)?.focus();
+  // Seed table from prop (floor tile tap) before the dropdown loads
+  if (props.defaultTableSlug && !props.appendToOrderId) {
+    tableSlug.value = props.defaultTableSlug;
+    tableLabel.value = props.defaultTableLabel || props.defaultTableSlug;
+    fulfillmentType.value = 'table';
+  }
   // Load tables for the dropdown (parallel with categories fetch)
   loadTables();
   if (!categories.value.length) {

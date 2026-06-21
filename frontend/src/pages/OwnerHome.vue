@@ -59,6 +59,15 @@
         @skip="skipNextAction"
       />
 
+      <!-- Opt-out link: shown only in focus mode so the owner can reveal the full dashboard -->
+      <div v-if="focusMode" class="flex justify-start">
+        <button
+          type="button"
+          class="ui-press inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 rounded"
+          @click="toggleFocusMode"
+        >{{ t('ownerHome.focusDefaultOptOut') }}</button>
+      </div>
+
       <!-- Open / Closed — the first thing an owner checks: are we taking orders? -->
       <div
         class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition-colors"
@@ -164,10 +173,10 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <RouterLink
-            :to="{ name: 'owner-shift-close' }"
+            :to="{ name: 'owner-z-report' }"
             class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors"
           >
-            {{ t('shiftClose.navLabel') }}
+            {{ t('zReport.navLabel') }}
           </RouterLink>
           <button
             v-if="!drawerOpen"
@@ -839,9 +848,17 @@ const releaseUpcoming = async (o) => {
 };
 
 // ── Focus mode: single next-action surface for a solo owner ───────────────────
+// Defaults ON for new accounts (no explicit preference stored yet) so the
+// simplified action-first UI is the first thing a new owner sees. Once the
+// owner toggles it off via the chip or the opt-out link, that choice is persisted.
 const FOCUS_KEY = typeof window === "undefined" ? "owner:focus" : `owner:focus:${window.location.hostname}`;
 const focusMode = ref((() => {
-  try { return localStorage.getItem(FOCUS_KEY) === "on"; } catch { return false; }
+  try {
+    const stored = localStorage.getItem(FOCUS_KEY);
+    // null → never explicitly set → default ON (new owner experience)
+    if (stored === null) return true;
+    return stored === "on";
+  } catch { return true; }
 })());
 const toggleFocusMode = () => {
   focusMode.value = !focusMode.value;

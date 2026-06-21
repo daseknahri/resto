@@ -60,7 +60,7 @@ const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OwnerZReport = () => import("../pages/OwnerZReport.vue");
-const OwnerShiftClose = () => import("../pages/OwnerShiftClose.vue");
+// OwnerShiftClose is preserved as a file but its route now redirects to owner-z-report.
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 const RidePage = () => import("../pages/RidePage.vue");
@@ -275,8 +275,8 @@ const routes = [
       {
         path: "shift-close",
         name: "owner-shift-close",
-        component: OwnerShiftClose,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+        // Redirect bookmarks/old links to the merged Z-report + close-shift page.
+        redirect: { name: "owner-z-report" },
       },
     ],
   },
