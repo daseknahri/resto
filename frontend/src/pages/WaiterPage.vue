@@ -1454,49 +1454,77 @@ class="min-w-0 flex-1 leading-snug"
             </div>
           </template>
 
-          <!-- Standard amount input (hidden when seat-split mode is on) -->
+          <!-- Standard settle controls (hidden when seat-split mode is on) -->
           <template v-else>
-            <div class="space-y-1">
-              <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
-                {{ t('waiterPage.splitAmount') }}
-              </label>
-              <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
-              <div class="flex gap-1.5">
-                <button
-                  v-for="n in [2, 3, 4, 5]"
-                  :key="n"
-                  type="button"
-                  class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                  @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
-                >÷{{ n }}</button>
+            <!-- Primary CTA: Cash full amount — one tap -->
+            <button
+              class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-4 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+              @click="payCash(settleChooser)"
+            >
+              <span class="text-xl" aria-hidden="true">💵</span>
+              <span class="text-base font-bold">{{ t('waiterPage.cashFull', { amount: fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency) }) }}</span>
+            </button>
+            <!-- Secondary CTA: Wallet — equally prominent -->
+            <button
+              class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-4 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+              @click="payWallet(settleChooser)"
+            >
+              <span class="text-xl" aria-hidden="true">💳</span>
+              <span class="text-base font-bold">{{ t('waiterPage.payWalletMethod') }}</span>
+            </button>
+            <!-- Collapsible split section -->
+            <div class="rounded-lg border border-slate-700/60 bg-slate-800/40">
+              <button
+                type="button"
+                class="ui-press ui-touch-target flex w-full items-center justify-between px-3 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-200 focus-visible:outline-none"
+                :aria-expanded="splitSectionOpen"
+                @click="splitSectionOpen = !splitSectionOpen"
+              >
+                <span>{{ t('waiterPage.splitSection') }}</span>
+                <span class="text-slate-500 transition-transform" :class="splitSectionOpen ? 'rotate-180' : ''">▾</span>
+              </button>
+              <div v-if="splitSectionOpen" class="space-y-2 px-3 pb-3">
+                <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
+                  {{ t('waiterPage.splitAmount') }}
+                </label>
+                <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
+                <div class="flex gap-1.5">
+                  <button
+                    v-for="n in [2, 3, 4, 5]"
+                    :key="n"
+                    type="button"
+                    class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                    @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
+                  >÷{{ n }}</button>
+                </div>
+                <input
+                  :id="'settle-amount-' + settleChooser.id"
+                  v-model="splitAmount"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0.01"
+                  :max="settleOutstanding(settleChooser)"
+                  class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
+                />
+                <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                    @click="payCash(settleChooser)"
+                  >
+                    <span class="text-xl" aria-hidden="true">💵</span>
+                    <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
+                  </button>
+                  <button
+                    class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-3 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                    @click="payWallet(settleChooser)"
+                  >
+                    <span class="text-xl" aria-hidden="true">💳</span>
+                    <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
+                  </button>
+                </div>
               </div>
-              <input
-                :id="'settle-amount-' + settleChooser.id"
-                v-model="splitAmount"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0.01"
-                :max="settleOutstanding(settleChooser)"
-                class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
-              />
-              <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <button
-                class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                @click="payCash(settleChooser)"
-              >
-                <span class="text-2xl" aria-hidden="true">💵</span>
-                <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
-              </button>
-              <button
-                class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                @click="payWallet(settleChooser)"
-              >
-                <span class="text-2xl" aria-hidden="true">💳</span>
-                <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
-              </button>
             </div>
           </template>
 
@@ -2298,6 +2326,7 @@ const pendingWalletSettle = ref(null);  // order being settled via the wallet ch
 // splitBySeatMode: when true the settle chooser shows per-seat groupings instead
 // of the standard amount input. Switches back to false on close or full settle.
 const splitBySeatMode = ref(false);
+const splitSectionOpen = ref(false); // collapsed "Split amount" accordion in the settle sheet
 const seatGroups = ref([]);      // [{seat, items, subtotal}] from GET seat-split
 const seatGroupsLoading = ref(false);
 const seatGroupsError = ref('');
@@ -2493,6 +2522,7 @@ watch(settleChooser, async (val) => {
     splitAmount.value = settleOutstanding(val).toFixed(2);
     // Reset seat-split mode and groups when a (new) order opens the chooser.
     splitBySeatMode.value = false;
+    splitSectionOpen.value = false;
     seatGroups.value = [];
     seatGroupsError.value = '';
     // Mint a fresh idempotency key when the chooser opens for a NEW order.
@@ -2508,6 +2538,7 @@ watch(settleChooser, async (val) => {
     document.addEventListener('keydown', trapSettleFocus);
   } else {
     splitBySeatMode.value = false;
+    splitSectionOpen.value = false;
     seatGroups.value = [];
     document.removeEventListener('keydown', trapSettleFocus);
   }

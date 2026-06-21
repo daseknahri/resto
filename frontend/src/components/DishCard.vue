@@ -373,10 +373,9 @@ const needsDetailPage = computed(() => {
   return hasRequiredGroups || hasRequiredOptions
 })
 
-// Quick-add sheet handles the common case (a few option groups); complex dishes
-// (more than 3 groups) still get the full detail page.
+// Quick-add sheet handles all option-group depths (it scrolls via max-h + overflow-y-auto).
 const showQuickAdd = ref(false)
-const useQuickAdd = computed(() => needsDetailPage.value && (props.dish.option_groups || []).length <= 3)
+const useQuickAdd = computed(() => needsDetailPage.value)
 
 // ── Cart integration ────────────────────────────────────────────────────────
 /** Stable line key for a simple (no-option) cart entry */

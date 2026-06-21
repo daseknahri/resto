@@ -1002,30 +1002,21 @@
           </span>
         </div>
 
-        <!-- Action buttons -->
+        <!-- Primary action row -->
         <div class="flex flex-wrap items-center gap-2 pt-0.5">
           <template v-if="o.status === 'scheduled'">
             <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
               {{ t("ownerOrders.releaseNow") }}
-            </button>
-            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
-              {{ t("ownerOrders.cancel") }}
             </button>
           </template>
           <template v-else-if="o.status === 'pending'">
             <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
               {{ t("ownerOrders.confirm") }}
             </button>
-            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
-              {{ t("ownerOrders.cancel") }}
-            </button>
           </template>
           <template v-else-if="o.status === 'confirmed'">
             <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'preparing')">
               {{ t("ownerOrders.startPreparing") }}
-            </button>
-            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
-              {{ t("ownerOrders.cancel") }}
             </button>
           </template>
           <template v-else-if="o.status === 'preparing'">
@@ -1093,6 +1084,20 @@
             <span v-if="settlingOrderId === o.id" class="inline-block animate-spin h-3 w-3 border border-emerald-300 border-t-transparent rounded-full" aria-hidden="true" />
             <span v-else aria-hidden="true">💵</span>
             {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
+          </button>
+        </div>
+
+        <!-- Destructive actions row — separated visually to prevent fat-finger cancels -->
+        <div
+          v-if="['scheduled','pending','confirmed'].includes(o.status)"
+          class="flex items-center gap-2 border-t border-slate-700/40 pt-2 mt-1"
+        >
+          <button
+            class="ui-btn-outline ui-press border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:border-red-500/60 hover:text-red-300"
+            :disabled="order.updatingOrderId === o.id"
+            @click="updateStatus(o, 'cancelled')"
+          >
+            {{ t("ownerOrders.cancel") }}
           </button>
         </div>
       </article>

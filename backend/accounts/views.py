@@ -3947,11 +3947,12 @@ class MarketplaceMenuView(APIView):
                     )
 
                 # Rating summary + recent reviews for social proof on the menu page.
-                from django.db.models import Avg as _Avg, Count as _Cnt
+                # PERF-QW5: Read from denormalized Profile.rating_avg / rating_count
+                # (kept in sync by menu.Rating post_save/post_delete signals) instead of
+                # issuing a per-request cross-schema aggregate query.
+                rating_average = round(float(profile.rating_avg), 1) if profile.rating_avg is not None else None
+                rating_count = profile.rating_count or 0
                 from menu.models import Rating as _Rating
-                _ragg = _Rating.objects.aggregate(avg=_Avg("score"), cnt=_Cnt("id"))
-                rating_average = round(float(_ragg["avg"]), 1) if _ragg["avg"] else None
-                rating_count = _ragg["cnt"]
                 recent_reviews = [
                     {
                         "score": r.score,

@@ -111,7 +111,25 @@
           </div>
         </div>
         <!-- Actions -->
-        <div class="flex shrink-0 gap-2">
+        <div class="flex shrink-0 items-start gap-2">
+          <!-- Active toggle -->
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="promo.is_active"
+            :aria-label="t('ownerPromotions.toggleActiveAriaLabel', { name: promo.name })"
+            :disabled="togglingId === promo.id"
+            class="ui-press mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 disabled:opacity-50"
+            :class="promo.is_active
+              ? 'border-emerald-500/60 bg-emerald-500/80'
+              : 'border-slate-600/60 bg-slate-700/50'"
+            @click="togglePromoActive(promo)"
+          >
+            <span
+              class="pointer-events-none mx-0.5 h-3.5 w-3.5 rounded-full shadow transition-transform"
+              :class="promo.is_active ? 'translate-x-4 bg-white' : 'translate-x-0 bg-slate-400'"
+            />
+          </button>
           <!-- Duplicate -->
           <button
             type="button"
@@ -804,6 +822,7 @@ watch(drawerOpen, async (open) => {
 onBeforeUnmount(() => document.removeEventListener('keydown', trapDrawerFocus));
 const submitting = ref(false);
 const deletingId = ref(null);
+const togglingId = ref(null);
 const drawerError = ref('');
 const { confirm } = useConfirmModal();
 
@@ -870,6 +889,22 @@ const openCreate = () => {
   resetForm();
   drawerError.value = '';
   drawerOpen.value = true;
+};
+
+const togglePromoActive = async (promo) => {
+  if (togglingId.value === promo.id) return;
+  togglingId.value = promo.id;
+  // Optimistic update
+  promo.is_active = !promo.is_active;
+  try {
+    await api.patch(`/owner/promotions/${promo.id}/`, { is_active: promo.is_active });
+  } catch {
+    // Revert on error
+    promo.is_active = !promo.is_active;
+    toast.show(t('ownerPromotions.toggleActiveFailed'), 'error');
+  } finally {
+    togglingId.value = null;
+  }
 };
 
 const openEdit = (promo) => {

@@ -190,7 +190,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 const FOCUSABLE = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -343,6 +343,14 @@ const verifyOtp = async () => {
     verifying.value = false;
   }
 };
+
+// Auto-submit OTP once the customer has typed all 6 digits — no extra tap needed.
+// The Verify button stays visible for paste / retry flows.
+watch(otpCode, (val) => {
+  if (step.value === 'verify' && val.length === 6 && !verifying.value) {
+    verifyOtp();
+  }
+});
 
 const saveName = async () => {
   if (!setupName.value || savingName.value) return;

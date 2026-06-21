@@ -18,9 +18,9 @@
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] shadow-sm shadow-[var(--color-secondary)]/10'
                 : 'border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
               :aria-pressed="insightsPeriod === d"
-              :aria-label="d + ' ' + t('ownerAnalytics.daysSuffix')"
+              :aria-label="d === 1 ? t('ownerAnalytics.periodToday') : d + ' ' + t('ownerAnalytics.daysSuffix')"
               @click="insightsPeriod = d"
-            >{{ d }}d</button>
+            >{{ d === 1 ? t('ownerAnalytics.periodToday') : d + 'd' }}</button>
           </div>
           <!-- Export CSV -->
           <button
@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import AppIcon from "../components/AppIcon.vue";
@@ -177,8 +177,11 @@ const order = useOrderStore();
 const tenant = useTenantStore();
 const { t, formatNumber } = useI18n();
 
-const PERIOD_OPTIONS = [7, 14, 30, 90];
-const insightsPeriod = ref(30);
+const PERIOD_OPTIONS = [1, 7, 14, 30, 90];
+const LS_PERIOD_KEY = "owner.analytics.period";
+const _storedPeriod = Number(localStorage.getItem(LS_PERIOD_KEY));
+const insightsPeriod = ref(PERIOD_OPTIONS.includes(_storedPeriod) ? _storedPeriod : 7);
+watch(insightsPeriod, (val) => { localStorage.setItem(LS_PERIOD_KEY, String(val)); });
 const insightsLoading = ref(true);
 const insightsUpdating = ref(false);
 const revenueSummary = ref(null);

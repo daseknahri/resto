@@ -273,8 +273,8 @@ const tabs = computed(() => [
 
 const validTabKeys = computed(() => tabs.value.map((tab) => tab.key));
 const activeTab = computed(() => {
-  const tab = String(route.query.tab || "super-categories").toLowerCase();
-  return validTabKeys.value.includes(tab) ? tab : "super-categories";
+  const tab = String(route.query.tab || "dishes").toLowerCase();
+  return validTabKeys.value.includes(tab) ? tab : "dishes";
 });
 const activeTabConfig = computed(() => tabs.value.find((tab) => tab.key === activeTab.value) || tabs.value[0]);
 const activeComponent = computed(() => activeTabConfig.value.component);

@@ -2525,7 +2525,8 @@ onMounted(async () => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
   fetchSavedAddresses();
   fetchLoyaltyConfig();
-  // Express checkout (opt-in) takes precedence over the reorder-context restore.
+  // Express checkout (opt-in, or auto-on for returning customers) takes
+  // precedence over the reorder-context restore.
   const expressDidApply = applyExpressCheckout();
   if (!expressDidApply) {
     // Restore fulfillment context from a prior reorder (written by Menu/OrderStatus reorderItems).
@@ -2537,6 +2538,10 @@ onMounted(async () => {
         if (savedCtx.delivery_lat !== null)  deliveryLat.value  = savedCtx.delivery_lat;
         if (savedCtx.delivery_lng !== null)  deliveryLng.value  = savedCtx.delivery_lng;
       }
+      // When express is auto-enabled for a returning customer and we just
+      // applied their saved context via the fulfillment fallback, surface the
+      // "Pre-filled from your last order" hint so they know what happened.
+      if (expressCheckout.value) expressApplied.value = true;
     }
   }
   // COD eligibility resolves the valid payment methods; apply the remembered

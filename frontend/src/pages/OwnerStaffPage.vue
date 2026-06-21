@@ -85,6 +85,29 @@
         >
           {{ copied ? t("ownerStaff.credentialsCopied") : t("ownerStaff.credentialsCopy") }}
         </button>
+        <a
+          :href="shareWhatsAppHref"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ui-btn-outline inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold ui-press"
+          :aria-label="t('ownerStaff.shareWhatsApp')"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-emerald-400">
+            <path d="M10 2a8 8 0 0 0-6.93 12.02L2 18l4.12-1.04A8 8 0 1 0 10 2zm0 14.5a6.46 6.46 0 0 1-3.3-.91l-.24-.14-2.45.62.64-2.38-.15-.25A6.5 6.5 0 1 1 10 16.5zm3.56-4.87c-.19-.1-1.14-.56-1.32-.63-.17-.07-.3-.1-.43.1-.13.19-.5.62-.62.75-.11.12-.22.14-.41.05-.19-.1-.81-.3-1.54-.96-.57-.51-.95-1.14-1.06-1.33-.11-.19-.01-.29.08-.38.09-.08.19-.21.28-.31.1-.1.13-.18.2-.3.06-.12.03-.23-.02-.32-.05-.1-.43-1.04-.59-1.42-.15-.37-.31-.32-.43-.33h-.36c-.12 0-.32.05-.49.23-.17.18-.64.63-.64 1.54 0 .9.65 1.78.74 1.9.1.12 1.28 1.95 3.1 2.74.43.19.77.3 1.03.38.43.14.83.12 1.14.07.35-.05 1.07-.44 1.22-.86.15-.43.15-.8.1-.87-.04-.07-.17-.12-.36-.21z"/>
+          </svg>
+          {{ t("ownerStaff.shareWhatsApp") }}
+        </a>
+        <a
+          :href="shareMailtoHref"
+          class="ui-btn-outline inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold ui-press"
+          :aria-label="t('ownerStaff.shareEmail')"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-slate-400">
+            <path d="M2.003 5.884 10 9.882l7.997-3.998A2 2 0 0 0 16 4H4a2 2 0 0 0-1.997 1.884z"/>
+            <path d="m18 8.118-8 4-8-4V14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.118z"/>
+          </svg>
+          {{ t("ownerStaff.shareEmail") }}
+        </a>
         <button
           class="ui-btn-outline px-4 py-2 text-xs font-semibold ui-press"
           @click="newCredentials = null; copied = false"
@@ -522,6 +545,28 @@ const removeStaff = async (member) => {
     removingId.value = null;
   }
 };
+
+// ── Share credentials ──────────────────────────────────────────────────────────
+const _staffLoginUrl = `${window.location.origin}/signin`;
+const shareWhatsAppHref = computed(() => {
+  if (!newCredentials.value) return '#';
+  const text = t('ownerStaff.shareCredentialsText', {
+    email: newCredentials.value.email,
+    password: newCredentials.value.temp_password,
+    url: _staffLoginUrl,
+  });
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+});
+const shareMailtoHref = computed(() => {
+  if (!newCredentials.value) return '#';
+  const subject = encodeURIComponent(t('ownerStaff.shareEmailSubject'));
+  const body = encodeURIComponent(t('ownerStaff.shareCredentialsText', {
+    email: newCredentials.value.email,
+    password: newCredentials.value.temp_password,
+    url: _staffLoginUrl,
+  }));
+  return `mailto:${encodeURIComponent(newCredentials.value.email)}?subject=${subject}&body=${body}`;
+});
 
 // ── Copy credentials ───────────────────────────────────────────────────────────
 const copyCredentials = async () => {

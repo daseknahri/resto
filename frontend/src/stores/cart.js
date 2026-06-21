@@ -380,8 +380,20 @@ export const useCartStore = defineStore("cart", {
       return data;
     },
     // Whether the customer has opted into express checkout (toggle state).
+    // Returns true when:
+    //   (a) the customer explicitly opted in (enabled === true in express store), OR
+    //   (b) the customer is returning and has saved fulfillment context in either
+    //       the express store or the reorder/fulfillment store — auto-enable so a
+    //       repeat order is near-1-tap by default.
+    // Returns false only for a true first-ever visitor (no saved context anywhere)
+    // so their form stays blank, preserving existing behavior.
     isExpressCheckoutEnabled() {
-      return this.readExpressCheckout()?.enabled === true;
+      const data = this.readExpressCheckout();
+      if (data?.enabled === true) return true; // explicit opt-in
+      // Check whether there is any saved fulfillment context to auto-apply.
+      const hasSavedExpressContext = Boolean(data?.fulfillment_type);
+      const hasFulfillmentContext = Boolean(this.loadFulfillmentContext()?.fulfillment_type);
+      return hasSavedExpressContext || hasFulfillmentContext;
     },
     // Flip the opt-in toggle, preserving any already-remembered context.
     setExpressCheckoutEnabled(enabled) {

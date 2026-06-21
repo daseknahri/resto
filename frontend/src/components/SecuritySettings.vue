@@ -227,7 +227,6 @@
 
 <script setup>
 import { nextTick, onMounted, ref } from "vue";
-import QRCode from "qrcode";
 import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 
@@ -273,6 +272,7 @@ const extractError = (err, fallback) => {
 const generateQr = async (uri) => {
   if (!uri) return;
   try {
+    const { default: QRCode } = await import("qrcode");
     qrDataUrl.value = await QRCode.toDataURL(uri, { width: 160, margin: 1 });
   } catch {
     qrDataUrl.value = "";

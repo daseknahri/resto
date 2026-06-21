@@ -37,10 +37,6 @@
             <AppIcon name="download" class="owner-res-icon" />
             {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
           </button>
-          <button class="ui-btn-outline ui-press hidden justify-center px-4 py-2 text-sm sm:inline-flex" :disabled="loading" @click="applyFilters">
-            <AppIcon name="filter" class="owner-res-icon" />
-            {{ t("common.apply") }}
-          </button>
         </div>
       </div>
     </header>
@@ -54,7 +50,7 @@
           enterkeyhint="search"
           :aria-label="t('ownerReservations.searchPlaceholder')"
           :placeholder="t('ownerReservations.searchPlaceholder')"
-          @keyup.enter="applyFilters"
+          @input="onSearchInput"
         />
         <label class="text-xs text-slate-400">
           {{ t("ownerReservations.statusFilter") }}
@@ -75,19 +71,11 @@
             <AppIcon name="close" class="owner-res-icon" />
             {{ t("common.clear") }}
           </button>
-          <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
-            <AppIcon name="filter" class="owner-res-icon" />
-            {{ t("common.apply") }}
-          </button>
         </div>
         <div class="flex items-center gap-2 md:hidden">
           <button class="ui-btn-outline flex-1 justify-center px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
             <AppIcon name="close" class="owner-res-icon" />
             {{ t("common.clear") }}
-          </button>
-          <button class="ui-btn-primary flex-1 justify-center px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
-            <AppIcon name="filter" class="owner-res-icon" />
-            {{ t("common.apply") }}
           </button>
         </div>
       </div>
@@ -1162,6 +1150,12 @@ const toggleFailedRetryQueue = async () => {
   reminderFilter.value = reminderFilter.value === "failed" ? "" : "failed";
   page.value = 1;
   await fetchReservations();
+};
+
+let _searchDebounceTimer = null;
+const onSearchInput = () => {
+  clearTimeout(_searchDebounceTimer);
+  _searchDebounceTimer = setTimeout(() => applyFilters(), 300);
 };
 
 const applyFilters = async () => {
