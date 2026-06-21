@@ -191,7 +191,9 @@
           </div>
 
           <!-- ── Fulfillment selector ── -->
-          <div v-else class="space-y-3">
+          <!-- Auth-first: guests on non-table orders see the sign-in CTA here
+               instead of filling an address/note/tip that they can't submit. -->
+          <div v-else-if="customerStore.isAuthenticated" class="space-y-3">
             <div :class="['grid gap-2', deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1']">
               <!-- Pickup pill -->
               <button
@@ -375,6 +377,9 @@
                 </button>
 
                 <!-- Secondary actions -->
+                <!-- Progressive disclosure: "More location options" and the clear
+                     button appear only once a pin/URL is set. This collapses three
+                     competing entry methods into one default GPS path. -->
                 <div class="flex flex-wrap gap-1.5">
                   <button
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
@@ -384,6 +389,7 @@
                     {{ t('cartPage.pickPinInApp') }}
                   </button>
                   <button
+                    v-if="hasLocationCoords || deliveryLocationUrl"
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
                     :aria-expanded="showMoreLocationOptions || !!deliveryLocationUrl"
                     @click="showMoreLocationOptions = !showMoreLocationOptions"
@@ -530,7 +536,23 @@
               </div>
 
             </div><!-- /delivery form -->
-          </div><!-- /fulfillment -->
+          </div><!-- /fulfillment (authenticated) -->
+
+          <!-- ── Guest sign-in wall (non-table, unauthenticated) ── -->
+          <div v-else class="rounded-xl border border-amber-500/40 bg-amber-500/8 p-4 space-y-3">
+            <div>
+              <p class="text-sm font-semibold text-amber-300">{{ t('cartPage.orderAuthRequired') }}</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">{{ t('cartPage.orderAuthBody') }}</p>
+            </div>
+            <button class="ui-btn-primary w-full justify-center" @click="showAuthModal = true">
+              <AppIcon name="user" class="h-3.5 w-3.5" />
+              {{ t('cartPage.deliveryAuthButton') }}
+            </button>
+          </div>
+
+          <!-- ── Note / Tip / Promo / Payment — hidden for unauthenticated guests
+               on non-table orders; the sign-in wall above is the sole CTA. ── -->
+          <template v-if="isTableContextOrder || customerStore.isAuthenticated">
 
           <!-- ── Note ── -->
           <label class="block space-y-1">
@@ -738,6 +760,8 @@
             </p>
           </div>
 
+          </template><!-- /auth-gated note+tip+promo+payment -->
+
           <!-- ── Sign-in nudge (table orders) ── -->
           <div
             v-if="isTableContextOrder && !customerStore.isAuthenticated && !tableNudgeDismissed"
@@ -766,26 +790,17 @@
             </button>
           </div>
 
-          <!-- ── Auth gate (non-table orders) ── -->
-          <template v-if="!isTableContextOrder">
-            <div v-if="!customerStore.isAuthenticated" class="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-2">
-              <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.orderAuthRequired') }}</p>
-              <p class="text-[11px] text-slate-400">{{ t('cartPage.orderAuthBody') }}</p>
-              <button class="ui-btn-primary w-full justify-center" @click="showAuthModal = true">
-                <AppIcon name="user" class="h-3.5 w-3.5" />
-                {{ t('cartPage.deliveryAuthButton') }}
-              </button>
+          <!-- ── Auth status (non-table, authenticated) ── -->
+          <!-- Guest case is handled by the sign-in wall inside the fulfillment block. -->
+          <template v-if="!isTableContextOrder && customerStore.isAuthenticated">
+            <div v-if="isDelivery && !customerStore.isVerified" class="rounded-xl border border-amber-500/40 bg-amber-500/8 px-3 py-2 space-y-1">
+              <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
+              <button class="text-[11px] text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
             </div>
-            <template v-else>
-              <div v-if="isDelivery && !customerStore.isVerified" class="rounded-xl border border-amber-500/40 bg-amber-500/8 px-3 py-2 space-y-1">
-                <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
-                <button class="text-[11px] text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
-              </div>
-              <div v-else class="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs text-emerald-300">
-                <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
-                {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
-              </div>
-            </template>
+            <div v-else class="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs text-emerald-300">
+              <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+              {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+            </div>
           </template>
 
           <!-- ── Loyalty redemption ── -->
@@ -1070,15 +1085,16 @@ const tableNudgeDismissed = ref(false);
 const useWallet = ref(false);
 
 // ── Tip ──────────────────────────────────────────────────────────────────────
+// 0% is placed last so drivers benefit from the positive default (10%).
 const TIP_OPTIONS = [
-  { value: 0,        label: '0%' },
   { value: 5,        label: '5%' },
   { value: 10,       label: '10%' },
   { value: 15,       label: '15%' },
   { value: 20,       label: '20%' },
   { value: 'custom', label: '…' },
+  { value: 0,        label: '0%' },
 ];
-const tipPercent    = ref(0);
+const tipPercent    = ref(10);
 const customTipInput = ref('');
 
 const tipAmount = computed(() => {
@@ -1916,7 +1932,10 @@ const useCurrentLocation = () => {
         return;
       }
       setLocationCoordinates(lat, lng);
-      // Always replace the URL with the fresh GPS coordinates
+      // GPS-first: pre-seed the map with the GPS point and open the picker so
+      // the customer can confirm / drag the pin before committing.
+      // The URL + coords are stored so if they dismiss the map without confirming
+      // the pin the GPS fix is still usable.
       deliveryLocationUrl.value = `https://maps.google.com/?q=${deliveryLat.value},${deliveryLng.value}`;
       clearFieldError('delivery_location_url');
       waitingForPaste.value = false;
@@ -1927,6 +1946,8 @@ const useCurrentLocation = () => {
       });
       locationError.value = '';
       locating.value = false;
+      // Auto-open the in-app map picker pre-centred on the GPS point (ITEM 3).
+      openInAppMapPicker();
     },
     (err) => {
       if (err?.code === 1) {

@@ -152,15 +152,18 @@
           :aria-label="t('ridePage.driverAssigned')"
         />
 
-        <!-- Cancel button (searching / accepted) -->
+        <!-- Cancel button (searching / accepted) — two-tap guard -->
         <button
           v-if="activeRide.status === 'searching' || activeRide.status === 'accepted'"
           type="button"
-          class="w-full rounded-2xl border border-red-500/30 bg-red-500/8 py-3 text-sm font-semibold text-red-300 transition hover:bg-red-500/15 ui-press disabled:opacity-50"
+          class="w-full rounded-2xl border py-3 text-sm font-semibold transition ui-press disabled:opacity-50"
+          :class="cancelConfirming
+            ? 'border-red-500/60 bg-red-500/18 text-red-200'
+            : 'border-red-500/30 bg-red-500/8 text-red-300 hover:bg-red-500/15'"
           :disabled="cancelling"
           @click="cancelRide"
         >
-          {{ cancelling ? t('common.loading') : t('ridePage.cancelCta') }}
+          {{ cancelling ? t('common.loading') : (cancelConfirming ? t('ridePage.cancelConfirmCta') : t('ridePage.cancelCta')) }}
         </button>
       </div>
 
@@ -249,6 +252,7 @@
       <!-- ══════════════════════════ BOOKING FORM ══════════════════════════ -->
       <div
         v-else
+        ref="formTopEl"
         class="px-3 pb-28 space-y-3"
       >
         <!-- No-driver-found notice (system cancel detected by polling) -->
@@ -379,118 +383,131 @@
           <p v-else class="text-[11px] text-slate-500">{{ t("ridePage.dropoffMapHint") }}</p>
         </section>
 
-        <!-- ── Estimate ── -->
-        <button
-          type="button"
-          class="ui-btn-primary ui-press w-full py-3 text-sm font-semibold disabled:opacity-50"
-          :disabled="!canEstimate || estimating"
-          @click="getEstimate"
-        >
-          {{ estimating ? t('common.loading') : t('ridePage.estimateCta') }}
-        </button>
-
-        <!-- Estimate result -->
-        <div
-          v-if="estimate"
-          class="ui-panel ui-reveal p-4 space-y-3 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.distanceLabel') }}</p>
-              <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ estimate.distance_km }} km</p>
-            </div>
-            <div v-if="estimate.duration_min" class="text-center">
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.durationLabel') }}</p>
-              <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ t('ridePage.durationValue', { min: estimate.duration_min }) }}</p>
-            </div>
-            <div class="text-end">
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.fareLabel') }}</p>
-              <p class="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(estimate.fare) }}</p>
-            </div>
-          </div>
-
-          <!-- Payment toggle -->
-          <div class="flex rounded-xl border border-slate-700/60 overflow-hidden text-sm font-semibold" role="group" :aria-label="`${t('ridePage.payWallet')} / ${t('ridePage.payCash')}`">
-            <button
-              type="button"
-              class="flex-1 py-2.5 transition-colors"
-              :class="paymentMethod === 'wallet' ? 'bg-[var(--color-secondary)] text-slate-950' : 'bg-slate-900/40 text-slate-400 hover:text-slate-200'"
-              :disabled="walletInsufficient"
-              @click="paymentMethod = 'wallet'"
-            >
-              {{ t('ridePage.walletShort') }}
-            </button>
-            <button
-              type="button"
-              class="flex-1 py-2.5 transition-colors"
-              :class="paymentMethod === 'cash' ? 'bg-slate-200 text-slate-950' : 'bg-slate-900/40 text-slate-400 hover:text-slate-200'"
-              @click="paymentMethod = 'cash'"
-            >
-              {{ t('ridePage.cashShort') }}
-            </button>
-          </div>
-
-          <p
-            v-if="walletInsufficient && paymentMethod === 'wallet'"
-            role="alert"
-            class="flex items-center gap-1.5 text-xs text-amber-300"
-          >
-            <AppIcon name="info" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {{ t('ridePage.insufficientWallet') }}
-          </p>
-
-          <!-- ── Schedule for later ── -->
-          <div class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
-            <div class="flex items-center justify-between gap-3">
-              <p class="text-xs font-semibold text-slate-300">{{ t('tripSchedule.toggle') }}</p>
-              <button
-                type="button"
-                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-                :class="scheduleEnabled ? 'bg-[var(--color-secondary)]' : 'bg-slate-700'"
-                :aria-pressed="scheduleEnabled"
-                :aria-label="t('tripSchedule.toggle')"
-                @click="scheduleEnabled = !scheduleEnabled"
-              >
-                <span
-                  class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform duration-200"
-                  :class="scheduleEnabled ? 'translate-x-4' : 'translate-x-0'"
-                />
-              </button>
-            </div>
-            <template v-if="scheduleEnabled">
-              <p class="text-[11px] text-slate-500">{{ t('tripSchedule.hint') }}</p>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="space-y-0.5">
-                  <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.dateLabel') }}</label>
-                  <input
-                    v-model="scheduleDate"
-                    type="date"
-                    :min="minScheduleDate"
-                    class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
-                    :aria-label="t('tripSchedule.dateLabel')"
-                  />
-                </div>
-                <div class="space-y-0.5">
-                  <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.timeLabel') }}</label>
-                  <input
-                    v-model="scheduleTime"
-                    type="time"
-                    class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
-                    :aria-label="t('tripSchedule.timeLabel')"
-                  />
-                </div>
+        <!-- ── Fare estimate (auto-computed) + payment + request ── -->
+        <div class="ui-panel ui-reveal p-4 space-y-3">
+          <!-- Inline fare row — shown once estimate resolves; skeleton while loading -->
+          <div class="flex items-center justify-between gap-4 min-h-[48px]">
+            <template v-if="estimating">
+              <!-- Loading skeleton -->
+              <div class="flex-1 space-y-1">
+                <div class="h-2.5 w-16 animate-pulse rounded bg-slate-800" />
+                <div class="h-5 w-10 animate-pulse rounded bg-slate-800" />
               </div>
+              <div class="space-y-1">
+                <div class="h-2.5 w-14 animate-pulse rounded bg-slate-800" />
+                <div class="h-5 w-12 animate-pulse rounded bg-slate-800" />
+              </div>
+              <div class="space-y-1 text-end">
+                <div class="h-2.5 w-16 animate-pulse rounded bg-slate-800" />
+                <div class="h-6 w-16 animate-pulse rounded bg-slate-800" />
+              </div>
+            </template>
+            <template v-else-if="estimate">
+              <div>
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.distanceLabel') }}</p>
+                <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ estimate.distance_km }} km</p>
+              </div>
+              <div v-if="estimate.duration_min" class="text-center">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.durationLabel') }}</p>
+                <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ t('ridePage.durationValue', { min: estimate.duration_min }) }}</p>
+              </div>
+              <div class="text-end">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.fareLabel') }}</p>
+                <p class="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(estimate.fare) }}</p>
+              </div>
+            </template>
+            <template v-else>
+              <p class="text-xs text-slate-500">{{ canEstimate ? t('ridePage.estimatingHint') : t('ridePage.pickBothHint') }}</p>
             </template>
           </div>
 
-          <!-- Request button -->
+          <!-- Payment toggle — only visible once estimate resolved -->
+          <template v-if="estimate">
+            <div class="flex rounded-xl border border-slate-700/60 overflow-hidden text-sm font-semibold" role="group" :aria-label="`${t('ridePage.payWallet')} / ${t('ridePage.payCash')}`">
+              <button
+                type="button"
+                class="flex-1 py-2.5 transition-colors"
+                :class="paymentMethod === 'wallet' ? 'bg-[var(--color-secondary)] text-slate-950' : 'bg-slate-900/40 text-slate-400 hover:text-slate-200'"
+                :disabled="walletInsufficient"
+                @click="paymentMethod = 'wallet'"
+              >
+                {{ t('ridePage.walletShort') }}
+              </button>
+              <button
+                type="button"
+                class="flex-1 py-2.5 transition-colors"
+                :class="paymentMethod === 'cash' ? 'bg-slate-200 text-slate-950' : 'bg-slate-900/40 text-slate-400 hover:text-slate-200'"
+                @click="paymentMethod = 'cash'"
+              >
+                {{ t('ridePage.cashShort') }}
+              </button>
+            </div>
+
+            <p
+              v-if="walletInsufficient && paymentMethod === 'wallet'"
+              role="alert"
+              class="flex items-center gap-1.5 text-xs text-amber-300"
+            >
+              <AppIcon name="info" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {{ t('ridePage.insufficientWallet') }}
+            </p>
+
+            <!-- ── Schedule for later ── -->
+            <div class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-xs font-semibold text-slate-300">{{ t('tripSchedule.toggle') }}</p>
+                <button
+                  type="button"
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+                  :class="scheduleEnabled ? 'bg-[var(--color-secondary)]' : 'bg-slate-700'"
+                  :aria-pressed="scheduleEnabled"
+                  :aria-label="t('tripSchedule.toggle')"
+                  @click="scheduleEnabled = !scheduleEnabled"
+                >
+                  <span
+                    class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform duration-200"
+                    :class="scheduleEnabled ? 'translate-x-4' : 'translate-x-0'"
+                  />
+                </button>
+              </div>
+              <template v-if="scheduleEnabled">
+                <p class="text-[11px] text-slate-500">{{ t('tripSchedule.hint') }}</p>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="space-y-0.5">
+                    <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.dateLabel') }}</label>
+                    <input
+                      v-model="scheduleDate"
+                      type="date"
+                      :min="minScheduleDate"
+                      class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
+                      :aria-label="t('tripSchedule.dateLabel')"
+                    />
+                  </div>
+                  <div class="space-y-0.5">
+                    <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.timeLabel') }}</label>
+                    <input
+                      v-model="scheduleTime"
+                      type="time"
+                      class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
+                      :aria-label="t('tripSchedule.timeLabel')"
+                    />
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Single request CTA — disabled until estimate resolves -->
           <button
             type="button"
             class="ui-btn-primary ui-press w-full py-3 text-sm font-semibold disabled:opacity-50"
-            :disabled="requesting || (paymentMethod === 'wallet' && walletInsufficient)"
+            :disabled="!canEstimate || estimating || !estimate || requesting || (paymentMethod === 'wallet' && walletInsufficient)"
             @click="requestRide"
           >
-            {{ requesting ? t('common.loading') : (scheduleEnabled ? t('tripSchedule.scheduledBadge') : t('ridePage.requestCta')) }}
+            <span v-if="requesting">{{ t('common.loading') }}</span>
+            <span v-else-if="estimating">{{ t('ridePage.estimatingHint') }}</span>
+            <span v-else-if="!estimate">{{ canEstimate ? t('ridePage.estimatingHint') : t('ridePage.requestCta') }}</span>
+            <span v-else>{{ scheduleEnabled ? t('tripSchedule.scheduledBadge') : t('ridePage.requestCta') }}</span>
           </button>
         </div>
 
@@ -579,6 +596,17 @@
                 <AppIcon name="star" class="h-3.5 w-3.5" aria-hidden="true" />
                 <span class="text-[11px] font-semibold tabular-nums">{{ ride.rider_driver_rating }}</span>
               </span>
+
+              <!-- Rebook — completed rides only -->
+              <button
+                v-if="ride.status === 'completed'"
+                type="button"
+                class="shrink-0 rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-2.5 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/15 ui-press"
+                :aria-label="t('ridePage.rebookAriaLabel')"
+                @click="rebookRide(ride)"
+              >
+                {{ t('ridePage.rebookCta') }}
+              </button>
             </li>
           </ul>
         </section>
@@ -593,7 +621,10 @@
       </div>
 
     </template>
-  </div>
+
+  <!-- Push-permission priming (self-gated; triggered post-request) -->
+  <PushPrimingSheet ref="pushPrimingSheet" />
+</div>
 </template>
 
 <script setup>
@@ -605,9 +636,13 @@ import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from '../components/AppIcon.vue';
 import ConnectionDot from '../components/ConnectionDot.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import PushPrimingSheet from '../components/PushPrimingSheet.vue';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
+
+// ── Push priming sheet ────────────────────────────────────────────────────────
+const pushPrimingSheet = ref(null);
 
 // ── Auth modal ────────────────────────────────────────────────────────────────
 const showAuthModal = ref(false);
@@ -671,9 +706,25 @@ const ratingScore     = ref(0);
 const submittingRating = ref(false);
 const ratingDone      = ref(false);
 
+// ── Cancel guard ─────────────────────────────────────────────────────────────
+const cancelConfirming = ref(false);
+let _cancelGuardTimer = null;
+const armCancelGuard = () => {
+  cancelConfirming.value = true;
+  clearTimeout(_cancelGuardTimer);
+  _cancelGuardTimer = setTimeout(() => { cancelConfirming.value = false; }, 3000);
+};
+const clearCancelGuard = () => {
+  cancelConfirming.value = false;
+  clearTimeout(_cancelGuardTimer);
+};
+
 // ── Cancelled state ───────────────────────────────────────────────────────────
 const showCancelled   = ref(false);
 const noDriverFound   = ref(false);  // system-cancelled (no driver accepted)
+
+// ── Form top anchor (used by Rebook) ──────────────────────────────────────────
+const formTopEl = ref(null);
 
 // ── Ride history ──────────────────────────────────────────────────────────────
 const rideHistory    = ref([]);
@@ -847,6 +898,8 @@ const requestRide = async () => {
     } else {
       activeRide.value = res.data;
       startPolling();
+      // High-intent moment — prime for push notifications
+      nextTick(() => pushPrimingSheet.value?.maybeShow?.());
     }
   } catch (err) {
     const httpStatus = err?.response?.status;
@@ -892,6 +945,11 @@ const cancelScheduled = async (tripId) => {
 // ── Cancel ────────────────────────────────────────────────────────────────────
 const cancelRide = async () => {
   if (!activeRide.value?.id) return;
+  if (!cancelConfirming.value) {
+    armCancelGuard();
+    return;
+  }
+  clearCancelGuard();
   cancelling.value = true;
   try {
     await api.post(`/rides/${activeRide.value.id}/cancel/`);
@@ -936,8 +994,48 @@ const resetForm = () => {
   scheduleEnabled.value = false;
   scheduleDate.value    = '';
   scheduleTime.value    = '';
+  clearCancelGuard();
   destroyTrackingMap();
   fetchHistory();
+};
+
+// ── Rebook from history ───────────────────────────────────────────────────────
+const rebookRide = (ride) => {
+  // Clear active/completed state first
+  activeRide.value    = null;
+  estimate.value      = null;
+  ratingScore.value   = 0;
+  ratingDone.value    = false;
+  showCancelled.value = false;
+  noDriverFound.value = false;
+  errorMsg.value      = '';
+  scheduleEnabled.value = false;
+  clearCancelGuard();
+  // Pre-fill addresses
+  pickupAddress.value  = ride.pickup_address  || '';
+  dropoffAddress.value = ride.dropoff_address || '';
+  // Pre-fill coords if the history record carries them
+  const pLat = Number(ride.pickup_lat);
+  const pLng = Number(ride.pickup_lng);
+  if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
+    pickupLatLng.value = { lat: pLat, lng: pLng };
+  } else {
+    pickupLatLng.value = null;
+  }
+  const dLat = Number(ride.dropoff_lat);
+  const dLng = Number(ride.dropoff_lng);
+  if (Number.isFinite(dLat) && Number.isFinite(dLng)) {
+    dropoffLatLng.value = { lat: dLat, lng: dLng };
+    nextTick(() => {
+      if (_pickMap) ensureDropoffMarker(dLat, dLng);
+    });
+  } else {
+    dropoffLatLng.value = null;
+  }
+  // Scroll to top of form
+  nextTick(() => {
+    formTopEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 };
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -1134,6 +1232,18 @@ watch(
   (auth) => { if (auth) nextTick(initPickMap); },
 );
 
+// ── Auto-estimate: fire in background when both coordinates are available ──────
+watch(
+  () => [pickupLatLng.value, dropoffLatLng.value],
+  ([pickup, dropoff]) => {
+    if (pickup && dropoff && !activeRide.value) {
+      // Clear stale estimate so the request button re-disables while refreshing
+      estimate.value = null;
+      getEstimate();
+    }
+  },
+);
+
 onMounted(async () => {
   // Check for in-progress ride immediately
   if (customerStore.isAuthenticated) {
@@ -1151,6 +1261,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopPolling();
+  clearCancelGuard();
   destroyPickMap();
   destroyTrackingMap();
 });

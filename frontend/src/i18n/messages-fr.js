@@ -836,6 +836,11 @@ ridePage: {
   historyTitle: "Courses passees",
   historyEmpty: "Aucune course pour le moment — reservez votre premiere ci-dessus.",
   noDriverFound: "Aucun conducteur trouve cette fois — votre course a ete annulee. Reessayez dans quelques minutes.",
+  cancelConfirmCta: "Appuyez a nouveau pour annuler",
+  estimatingHint: "Calcul du tarif…",
+  pickBothHint: "Definissez les deux adresses pour voir le tarif",
+  rebookCta: "Reserver a nouveau",
+  rebookAriaLabel: "Reserver a nouveau cette course",
 },
 sendPackage: {
   kicker: "Kepoli Courier",
@@ -883,6 +888,11 @@ sendPackage: {
   tipThanks: "Merci — votre pourboire a ete envoye au coursier.",
   tipInsufficient: "Le solde de votre portefeuille est trop faible pour ce pourboire.",
   tipError: "Impossible d'envoyer le pourboire. Reessayez.",
+  cancelConfirmCta: "Appuyez a nouveau pour annuler",
+  estimatingHint: "Calcul du tarif…",
+  pickBothHint: "Definissez les deux adresses pour voir le tarif",
+  rebookCta: "Reserver a nouveau",
+  rebookAriaLabel: "Reserver a nouveau cette livraison",
 },
 recipientTrack: {
   title: "Suivez votre colis",

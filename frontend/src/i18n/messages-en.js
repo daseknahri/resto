@@ -837,6 +837,11 @@ ridePage: {
   historyTitle: "Past rides",
   historyEmpty: "No rides yet — book your first one above.",
   noDriverFound: "No driver found this time — your ride was cancelled. Try again in a few minutes.",
+  cancelConfirmCta: "Tap again to cancel",
+  estimatingHint: "Calculating fare…",
+  pickBothHint: "Set both locations to see fare",
+  rebookCta: "Rebook",
+  rebookAriaLabel: "Rebook this ride",
 },
 sendPackage: {
   kicker: "Kepoli Courier",
@@ -884,6 +889,11 @@ sendPackage: {
   tipThanks: "Thanks — your tip was sent to the courier.",
   tipInsufficient: "Your wallet balance is too low for this tip.",
   tipError: "Couldn't send the tip. Please try again.",
+  cancelConfirmCta: "Tap again to cancel",
+  estimatingHint: "Calculating price…",
+  pickBothHint: "Set both locations to see price",
+  rebookCta: "Rebook",
+  rebookAriaLabel: "Rebook this delivery",
 },
 recipientTrack: {
   title: "Track your package",
