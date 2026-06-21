@@ -104,14 +104,22 @@
                 <span class="text-base leading-none" aria-hidden="true">+</span>
               </button>
             </div>
-            <!-- Subtotal + remove -->
+            <!-- Subtotal + edit/remove -->
             <div class="shrink-0 min-w-[4.5rem] text-right">
               <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
-              <button
-                class="mt-1 px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
-                :aria-label="`${t('cartPage.remove')} ${item.name}`"
-                @click="cart.remove(item.key)"
-              >{{ t('cartPage.remove') }}</button>
+              <div class="mt-1 flex items-center justify-end gap-1.5">
+                <button
+                  v-if="isLineEditable(item)"
+                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-[var(--color-secondary)] transition-colors focus-visible:text-[var(--color-secondary)] focus:outline-none rounded-md"
+                  :aria-label="`${t('cartPage.editItem')} ${item.name}`"
+                  @click="openEditLine(item)"
+                >{{ t('cartPage.editItem') }}</button>
+                <button
+                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
+                  :aria-label="`${t('cartPage.remove')} ${item.name}`"
+                  @click="cart.remove(item.key)"
+                >{{ t('cartPage.remove') }}</button>
+              </div>
             </div>
           </div>
         </article>
@@ -924,6 +932,22 @@
       @authenticated="onCustomerAuthenticated"
     />
 
+    <!-- Edit a cart line in place: re-open the quick-add sheet pre-filled -->
+    <Teleport to="body">
+      <QuickAddSheet
+        v-if="editingLine"
+        :dish="editingLine.dish"
+        :currency="editingLine.currency"
+        mode="edit"
+        :edit-key="editingLine.key"
+        :initial-option-ids="editingLine.optionIds"
+        :initial-qty="editingLine.qty"
+        :initial-note="editingLine.note"
+        @save="onEditLineSave"
+        @close="editingLine = null"
+      />
+    </Teleport>
+
     <Teleport to="body">
       <div
         v-if="showMapModal"
@@ -988,6 +1012,7 @@ import {
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
@@ -1116,6 +1141,55 @@ const unavailableSlugs = ref([]);
 const unavailableNames = computed(() =>
   unavailableSlugs.value.map((slug) => cart.items.find((i) => i.slug === slug)?.name || slug)
 );
+
+// ── Edit a cart line in place ────────────────────────────────────────────────
+// Build a slug→dish lookup from whatever the menu store has loaded so we can
+// re-open the QuickAddSheet seeded with the full dish (option groups + options).
+const dishBySlug = computed(() => {
+  const map = {};
+  for (const list of Object.values(menu.dishes || {})) {
+    if (!Array.isArray(list)) continue;
+    for (const d of list) {
+      if (d?.slug && !map[d.slug]) map[d.slug] = d;
+    }
+  }
+  return map;
+});
+
+// A line is editable when we can find its dish definition AND that dish has any
+// customizable options. Note-only lines are still editable so the diner can
+// change their special instructions.
+const isLineEditable = (item) => {
+  const dish = dishBySlug.value[item?.slug];
+  if (!dish) return false;
+  const hasOptions = (dish.options?.length || 0) > 0 || (dish.option_groups?.length || 0) > 0;
+  return hasOptions || (item?.option_ids?.length || 0) > 0;
+};
+
+const editingLine = ref(null); // { key, dish, currency, optionIds, qty, note }
+
+const openEditLine = async (item) => {
+  let dish = dishBySlug.value[item?.slug];
+  // If the menu isn't loaded yet (cold cart load), fetch categories then retry.
+  if (!dish) {
+    try { await menu.fetchCategories?.(); } catch { /* best-effort */ }
+    dish = dishBySlug.value[item?.slug];
+  }
+  if (!dish) { toast.show(t('cartPage.editUnavailable'), 'error'); return; }
+  editingLine.value = {
+    key: item.key,
+    dish,
+    currency: item.currency || dish.currency || '',
+    optionIds: Array.isArray(item.option_ids) ? [...item.option_ids] : [],
+    qty: Number(item.qty) > 0 ? Number(item.qty) : 1,
+    note: typeof item.note === 'string' ? item.note : '',
+  };
+};
+
+const onEditLineSave = ({ oldKey, line }) => {
+  cart.replaceLine(oldKey, line);
+  editingLine.value = null;
+};
 
 const fulfillmentType = ref('');
 // Advance/scheduled order — pickup & delivery may be placed now for a future time.

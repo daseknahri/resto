@@ -312,6 +312,24 @@
             <AppIcon name="location" class="h-3.5 w-3.5 text-[var(--color-secondary)]" aria-hidden="true" />
             {{ t('ridePage.pickupLabel') }}
           </p>
+          <!-- Saved-address chips (Home/Work etc.) — reuse food-checkout saved addresses -->
+          <div v-if="savedAddresses.length" class="space-y-1.5">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('sendPackage.savedAddresses') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="addr in savedAddresses"
+                :key="`pickup-${addr.id}`"
+                type="button"
+                class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-300 transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/5 ui-press"
+                :aria-label="t('sendPackage.fillForPickup')"
+                @click="applySavedAddress(addr, 'pickup')"
+              >
+                <AppIcon name="location" class="h-3 w-3 shrink-0 text-[var(--color-secondary)]" aria-hidden="true" />
+                <span v-if="addr.label" class="font-medium text-slate-200">{{ addr.label }}</span>
+                <span class="truncate text-slate-400" :title="addr.address">{{ addr.label ? '' : addr.address }}</span>
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             class="w-full inline-flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-sm text-slate-300 transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/5 ui-press"
@@ -341,6 +359,41 @@
             <AppIcon name="location" class="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
             {{ t('ridePage.dropoffLabel') }}
           </p>
+          <!-- Saved-address chips for drop-off -->
+          <div v-if="savedAddresses.length" class="space-y-1.5">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('sendPackage.savedAddresses') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="addr in savedAddresses"
+                :key="`dropoff-${addr.id}`"
+                type="button"
+                class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-300 transition hover:border-sky-400/40 hover:bg-sky-400/5 ui-press"
+                :aria-label="t('sendPackage.fillForDropoff')"
+                @click="applySavedAddress(addr, 'dropoff')"
+              >
+                <AppIcon name="location" class="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
+                <span v-if="addr.label" class="font-medium text-slate-200">{{ addr.label }}</span>
+                <span class="truncate text-slate-400" :title="addr.address">{{ addr.label ? '' : addr.address }}</span>
+              </button>
+            </div>
+          </div>
+          <!-- Recent drop-off chips (derived from package history) -->
+          <div v-if="recentDropoffChips.length" class="space-y-1.5">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('sendPackage.recentDropoffs') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="(d, i) in recentDropoffChips"
+                :key="`recent-drop-${i}`"
+                type="button"
+                class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-300 transition hover:border-sky-400/40 hover:bg-sky-400/5 ui-press"
+                :aria-label="t('sendPackage.fillForDropoff')"
+                @click="applyRecentDropoff(d)"
+              >
+                <AppIcon name="clock" class="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+                <span class="truncate text-slate-300" :title="d.address">{{ d.address }}</span>
+              </button>
+            </div>
+          </div>
           <input
             v-model="dropoffAddress"
             type="text"
@@ -368,6 +421,24 @@
             <AppIcon name="user" class="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
             {{ t('sendPackage.recipientLabel') }}
           </p>
+          <!-- Recent recipients — 1-tap re-fill of name + phone from past packages -->
+          <div v-if="recentRecipientChips.length" class="space-y-1.5">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('sendPackage.recentRecipients') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="(r, i) in recentRecipientChips"
+                :key="`recent-rcpt-${i}`"
+                type="button"
+                class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-300 transition hover:border-sky-400/40 hover:bg-sky-400/5 ui-press"
+                :aria-label="t('sendPackage.useRecipient', { name: r.name || r.phone })"
+                @click="applyRecipient(r)"
+              >
+                <AppIcon name="user" class="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
+                <span class="font-medium text-slate-200">{{ r.name || r.phone }}</span>
+                <span v-if="r.name && r.phone" class="truncate text-slate-500">· {{ r.phone }}</span>
+              </button>
+            </div>
+          </div>
           <input
             v-model="recipientName"
             type="text"
@@ -606,6 +677,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
+import { recentRecipients, recentDropoffs } from '../lib/recentRecipients';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 
@@ -645,6 +717,9 @@ const scheduledTrips   = ref([]);   // kind==='package' items from active endpoi
 // ── Package history ───────────────────────────────────────────────────────────
 const allHistory     = ref([]);
 const historyLoading = ref(false);
+
+// ── Saved addresses (reuse food-checkout saved-address endpoint) ───────────────
+const savedAddresses = ref([]);
 
 // ── Active package polling ────────────────────────────────────────────────────
 // Holds the active trip only if kind === 'package'; ride trips are ignored here.
@@ -694,6 +769,10 @@ const fmtScheduledFor = (iso) => {
 const packageHistory = computed(
   () => allHistory.value.filter((r) => r.kind === 'package'),
 );
+
+// Recent recipients + drop-offs derived client-side from package history (no backend call).
+const recentRecipientChips = computed(() => recentRecipients(allHistory.value, 4));
+const recentDropoffChips    = computed(() => recentDropoffs(allHistory.value, 3));
 
 const packageStatusLabel = computed(() => {
   switch (activePackage.value?.status) {
@@ -752,6 +831,53 @@ const useMyLocation = () => {
     },
     { timeout: 8000 },
   );
+};
+
+// ── Saved-address + recent re-fill ─────────────────────────────────────────────
+const fetchSavedAddresses = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/customer/addresses/');
+    savedAddresses.value = Array.isArray(res.data) ? res.data : [];
+  } catch {
+    // best-effort; the chips simply won't render
+  }
+};
+
+// Fill pickup OR drop-off from a saved address. `target` is 'pickup' | 'dropoff'.
+const applySavedAddress = (addr, target) => {
+  // Number(null) === 0 — guard so a coord-less saved address doesn't drop a (0,0) pin.
+  const lat = addr?.lat == null || addr.lat === '' ? NaN : Number(addr.lat);
+  const lng = addr?.lng == null || addr.lng === '' ? NaN : Number(addr.lng);
+  const hasPos = Number.isFinite(lat) && Number.isFinite(lng);
+  if (target === 'pickup') {
+    pickupAddress.value = addr.address || '';
+    if (hasPos) {
+      pickupLatLng.value = { lat, lng };
+      if (_pickMap) ensurePickupMarker(lat, lng);
+    }
+  } else {
+    dropoffAddress.value = addr.address || '';
+    if (hasPos) {
+      dropoffLatLng.value = { lat, lng };
+      ensureDropoffMarker(lat, lng);
+    }
+  }
+};
+
+// Fill drop-off from a recent package's drop-off address.
+const applyRecentDropoff = (d) => {
+  dropoffAddress.value = d.address || '';
+  if (d.lat != null && d.lng != null) {
+    dropoffLatLng.value = { lat: d.lat, lng: d.lng };
+    ensureDropoffMarker(d.lat, d.lng);
+  }
+};
+
+// Fill recipient name + phone from a recent recipient.
+const applyRecipient = (r) => {
+  recipientName.value = r.name || '';
+  recipientPhone.value = r.phone || '';
 };
 
 // ── Estimate ──────────────────────────────────────────────────────────────────
@@ -1044,6 +1170,18 @@ const ensurePickupMarker = (lat, lng) => {
   }
 };
 
+// Place/move the drop-off pin on the pick-map and recenter (used by chips + click).
+const ensureDropoffMarker = (lat, lng) => {
+  if (!_pickMap || !_leaflet) return;
+  const pos = [lat, lng];
+  if (!_dropoffMarker) {
+    _dropoffMarker = _leaflet.marker(pos).addTo(_pickMap);
+  } else {
+    _dropoffMarker.setLatLng(pos);
+  }
+  _pickMap.setView(pos, 14);
+};
+
 const initPickMap = async () => {
   if (!pickMapEl.value) return;
   const L = await ensureLeaflet();
@@ -1115,6 +1253,7 @@ onMounted(async () => {
       nextTick(initPickMap);
     }
     fetchHistory();
+    fetchSavedAddresses();
   }
 });
 

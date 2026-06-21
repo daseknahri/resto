@@ -1958,6 +1958,143 @@ class CheckoutIntentView(OrderHandoffView):
         )
 
 
+class ReorderResolveView(OrderHandoffView):
+    """POST /api/reorder-resolve/ — availability-safe reorder resolution.
+
+    Given the lines of a *past* order (each {slug, option_ids?}), re-resolve every
+    line against the CURRENT menu so the client can build an already-valid cart:
+
+      * availability uses the SAME query as PlaceOrderView (is_published, is_available,
+        category published & not temporarily disabled) — inherited via
+        OrderHandoffView._fetch_dishes — so a reorder never adds an item that would
+        be rejected at checkout.
+      * current_price is the live unit price WITH happy-hour applied and the still-valid
+        selected options' price_delta added on top (matching checkout pricing exactly).
+      * current_option_ids (and current_option_ids_valid) tell the client which of the
+        previously-chosen options are still valid for the dish, so stale options are
+        dropped rather than triggering a 400 at pay time.
+
+    This endpoint is read-only: it resolves and prices, it never places an order.
+    Unknown / unpublished / unavailable slugs come back with available=false (they are
+    not an error — the client greys them out and skips them).
+    """
+
+    throttle_classes = [CheckoutIntentThrottle]
+
+    class _LineSerializer(serializers.Serializer):
+        slug = serializers.CharField(max_length=255)
+        option_ids = serializers.ListField(
+            child=serializers.IntegerField(min_value=1),
+            required=False,
+            default=list,
+            max_length=50,
+        )
+
+    def post(self, request, *args, **kwargs):
+        tenant = self._tenant()
+        if tenant is None:
+            return Response({"detail": "Tenant not resolved.", "code": "tenant_missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = self._profile_for_tenant(tenant)
+        if profile is None:
+            return Response(
+                {"detail": "Restaurant profile not configured.", "code": "profile_missing"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Accept either {"items": [{slug, option_ids}]} (preferred) or the
+        # blueprint shorthand {"slugs": [...], "option_ids": [...]} where option_ids
+        # is a flat pool shared across all slugs. Normalise both into `lines`.
+        raw_items = request.data.get("items")
+        lines = []
+        if isinstance(raw_items, list):
+            ser = self._LineSerializer(data=raw_items, many=True)
+            if not ser.is_valid():
+                return Response({"detail": "Invalid items.", "code": "invalid_items", "errors": ser.errors}, status=status.HTTP_400_BAD_REQUEST)
+            lines = list(ser.validated_data)
+        else:
+            slugs_in = request.data.get("slugs")
+            pool = request.data.get("option_ids") or []
+            if not isinstance(slugs_in, list) or not slugs_in:
+                return Response({"detail": "Provide items or slugs.", "code": "invalid_items"}, status=status.HTTP_400_BAD_REQUEST)
+            pool_ids = [int(o) for o in pool if str(o).isdigit()]
+            lines = [{"slug": str(s), "option_ids": list(pool_ids)} for s in slugs_in if str(s).strip()]
+
+        if not lines:
+            return Response({"detail": "Provide items or slugs.", "code": "invalid_items"}, status=status.HTTP_400_BAD_REQUEST)
+        if len(lines) > 100:
+            lines = lines[:100]
+
+        can_preview = self._can_preview_unpublished(tenant)
+        slugs = [str(line["slug"]).strip() for line in lines]
+        all_option_ids = sorted({int(o) for line in lines for o in line.get("option_ids", [])})
+
+        dishes_by_slug = self._fetch_dishes(slugs, can_preview=can_preview)
+        options_by_id = self._fetch_options(all_option_ids, can_preview=can_preview)
+
+        # Compute happy-hour rules ONCE (same source PlaceOrderView uses).
+        try:
+            active_happy_hours = get_all_active_hh_rules()
+        except Exception:
+            active_happy_hours = []
+
+        resolved = []
+        any_unavailable = False
+        any_options_dropped = False
+        for line in lines:
+            slug = str(line["slug"]).strip()
+            requested_oids = list(dict.fromkeys(int(o) for o in line.get("option_ids", [])))
+            dish = dishes_by_slug.get(slug)
+            if dish is None:
+                any_unavailable = True
+                resolved.append({
+                    "slug": slug,
+                    "name": "",
+                    "available": False,
+                    "current_price": None,
+                    "currency": None,
+                    "requested_option_ids": requested_oids,
+                    "current_option_ids": [],
+                    "current_option_ids_valid": len(requested_oids) == 0,
+                })
+                continue
+
+            base_price, _ = effective_unit_price(dish, active_happy_hours)
+            valid_oids = []
+            options_total = Decimal("0")
+            for oid in requested_oids:
+                opt = options_by_id.get(oid)
+                opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
+                if opt is None or opt_dish_slug != dish.slug:
+                    continue  # stale option — silently dropped (re-resolved against live menu)
+                valid_oids.append(oid)
+                options_total += Decimal(str(opt.price_delta))
+
+            options_valid = len(valid_oids) == len(requested_oids)
+            if not options_valid:
+                any_options_dropped = True
+            current_price = (base_price + options_total).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            resolved.append({
+                "slug": dish.slug,
+                "name": dish.name,
+                "available": True,
+                "current_price": str(current_price),
+                "currency": dish.currency or "MAD",
+                "requested_option_ids": requested_oids,
+                "current_option_ids": valid_oids,
+                "current_option_ids_valid": options_valid,
+            })
+
+        return Response(
+            {
+                "items": resolved,
+                "any_unavailable": any_unavailable,
+                "any_options_dropped": any_options_dropped,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 # ---------------------------------------------------------------------------
 # In-app order management
 # ---------------------------------------------------------------------------

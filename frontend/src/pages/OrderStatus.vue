@@ -681,7 +681,7 @@ import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderRealtime } from "../composables/useOrderRealtime";
-import { useCartStore } from "../stores/cart";
+import { useReorder } from "../composables/useReorder";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
@@ -692,11 +692,11 @@ const props = defineProps({
 });
 
 const router = useRouter();
-const cart = useCartStore();
 const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
 const toast = useToastStore();
 const { t, formatPrice, formatDateTime, currentLocale } = useI18n();
+const { reorderFromOrder } = useReorder();
 
 const showAuthModal = ref(false);
 
@@ -789,38 +789,16 @@ const stopCountdown = () => {
 };
 
 // ── Re-order ──────────────────────────────────────────────────────────────────
-const reorder = () => {
-  const items = orderData.value?.items;
-  if (!items?.length) return;
-  items.forEach((item) => {
-    if (!item.dish_slug) return;
-    cart.add({
-      key: `${item.dish_slug}::`,
-      slug: item.dish_slug,
-      name: item.dish_name,
-      price: Number(item.unit_price || 0),
-      currency: item.currency || orderData.value.currency,
-      qty: item.qty,
-      note: item.note || "",
-      option_ids: [],
-      option_labels: item.options?.map((o) => o.name).filter(Boolean) || [],
-    });
-  });
-  // Restore fulfillment context from the order so Cart.vue can pre-fill it.
-  const ft = orderData.value?.fulfillment_type || "";
-  const deliveryAddress = orderData.value?.delivery_address || "";
-  const deliveryLat = orderData.value?.delivery_lat ?? null;
-  const deliveryLng = orderData.value?.delivery_lng ?? null;
-  if (ft) {
-    cart.persistFulfillmentContext({
-      fulfillment_type: ft,
-      delivery_address: deliveryAddress,
-      delivery_lat: deliveryLat,
-      delivery_lng: deliveryLng,
-    });
+// Unified, availability-safe path (useReorder): re-resolves each line against the
+// live menu (drops sold-out items, refreshes prices, drops stale options) and
+// restores fulfillment context — identical to the Menu.vue reorder.
+const reorder = async () => {
+  if (!orderData.value?.items?.length) return;
+  const result = await reorderFromOrder(orderData.value);
+  // Only navigate to the cart if at least one line made it in.
+  if (result.added > 0) {
+    router.push({ name: "cart" });
   }
-  toast.show(t("orderStatus.reorderAdded"), "success");
-  router.push({ name: "cart" });
 };
 
 // The visible flow differs by fulfillment type: pickup ends at "Picked up",

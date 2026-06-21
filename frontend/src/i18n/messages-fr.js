@@ -105,6 +105,13 @@ toast: {
     warning: "Avis :"
   }
 },
+reorder: {
+  added: "Articles ajoutes a votre panier",
+  empty: "Rien a recommander.",
+  someUnavailable: "Certains articles ne sont plus disponibles et ont ete ignores : {names}",
+  allUnavailable: "Ces articles ne sont plus disponibles.",
+  priceUpdated: "Certains prix ont ete mis a jour selon le menu du jour."
+},
 errorBoundary: {
   kicker: "ERREUR",
   title: "Une erreur est survenue",
@@ -838,6 +845,12 @@ sendPackage: {
   handoverCodeTitle: "Code de remise",
   handoverCodeHint: "Partagez ce code avec le destinataire — le livreur en a besoin pour confirmer la livraison.",
   codeLabel: "Code",
+  savedAddresses: "Adresses enregistrees",
+  recentRecipients: "Destinataires recents",
+  recentDropoffs: "Livraisons recentes",
+  fillForPickup: "Definir comme collecte",
+  fillForDropoff: "Definir comme livraison",
+  useRecipient: "Envoyer a {name}",
 },
 tripSchedule: {
   toggle: "Planifier pour plus tard",
@@ -2728,6 +2741,8 @@ cartPage: {
   decreaseQuantity: "Diminuer la quantite",
   increaseQuantity: "Augmenter la quantite",
   remove: "Supprimer",
+  editItem: "Modifier",
+  editUnavailable: "Cet article ne peut pas etre modifie pour le moment.",
   tableQrOrder: "Commande via QR table",
   tableContextDetected: "Contexte table detecte : {table}.",
   optionalNoteOnly: "Le nom et la note sont tous deux optionnels pour les commandes a table.",
@@ -2920,6 +2935,10 @@ dishPage: {
   increaseQuantity: "Augmenter la quantite",
   browseOnlyPlan: "Offre navigation seule",
   addToCart: "Ajouter au panier",
+  saveChanges: "Enregistrer",
+  changesSaved: "Article mis a jour",
+  specialInstructions: "Instructions speciales (facultatif)",
+  instructionsPlaceholder: "ex. sans oignons, plus epice",
   addContactToOrder: "Ajouter (contact requis)",
   restaurantClosed: "Restaurant ferme",
   shareViaWhatsApp: "Partager via WhatsApp",
@@ -4745,6 +4764,12 @@ kitchen: {
   eightySixToggleFailed403: "Permission menu requise pour modifier la disponibilite.",
   eightySixToggleFailed: "Impossible de modifier la disponibilite — reessayez.",
   eightySixOpen: "Ouvrir le tableau 86",
+  allDay: "Cumul jour",
+  allDayHide: "Tickets",
+  allDayTitle: "Cumul des preparations du jour",
+  allDayEmpty: "Plus rien a preparer.",
+  allDayCount: "{n} a preparer",
+  includeHeld: "Inclure en attente",
 },
 stepSuperCategories: {
   title: "Groupes de menu",

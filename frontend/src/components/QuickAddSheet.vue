@@ -109,8 +109,23 @@
         </div>
       </div>
 
+      <!-- Special instructions (per-item note carried to the kitchen) -->
+      <div class="border-t border-slate-800 px-4 pt-3">
+        <label class="block space-y-1">
+          <span class="text-[11px] text-slate-400">{{ t('dishPage.specialInstructions') }}</span>
+          <textarea
+            v-model.trim="specialInstructions"
+            rows="2"
+            maxlength="140"
+            class="ui-textarea text-sm"
+            :placeholder="t('dishPage.instructionsPlaceholder')"
+            :aria-label="t('dishPage.specialInstructions')"
+          ></textarea>
+        </label>
+      </div>
+
       <!-- Footer: quantity + add -->
-      <div class="flex items-center gap-3 border-t border-slate-800 p-4" style="padding-bottom: calc(var(--safe-bottom) + 1rem)">
+      <div class="flex items-center gap-3 px-4 pt-3" style="padding-bottom: calc(var(--safe-bottom) + 1rem)">
         <div class="ui-qty-control inline-flex shrink-0 items-center rounded-full border p-1">
           <button
             class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
@@ -133,7 +148,7 @@
           :disabled="hasRequiredMissing"
           @click="add"
         >
-          {{ t('dishPage.addToCart') }} · {{ formatPrice(totalWithOptions) }}
+          {{ isEditMode ? t('dishPage.saveChanges') : t('dishPage.addToCart') }} · {{ formatPrice(totalWithOptions) }}
         </button>
       </div>
     </div>
@@ -150,8 +165,21 @@ import { useToastStore } from '../stores/toast';
 const props = defineProps({
   dish: { type: Object, required: true },
   currency: { type: String, default: '' },
+  // ── Edit-in-place mode ──────────────────────────────────────────────────────
+  // When `mode === 'edit'`, the sheet re-opens seeded with an existing cart
+  // line's selections (initialOptionIds/initialQty/initialNote). Saving emits
+  // `save` with the rebuilt line + the original key so the caller can call
+  // cart.replaceLine(editKey, line) instead of add(). `editKey` is the original
+  // cart line key being edited.
+  mode: { type: String, default: 'add' },           // 'add' | 'edit'
+  editKey: { type: String, default: '' },
+  initialOptionIds: { type: Array, default: () => [] },
+  initialQty: { type: Number, default: 1 },
+  initialNote: { type: String, default: '' },
 });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'save']);
+
+const isEditMode = computed(() => props.mode === 'edit');
 
 const { t, formatPrice } = useI18n();
 const cart = useCartStore();
@@ -201,6 +229,8 @@ onBeforeUnmount(() => {
 const groupSelections = ref({});   // { [groupId]: optionId | optionId[] }
 const selectedOptionIds = ref([]); // ungrouped/legacy options
 const qty = ref(1);
+// Per-item special instructions ("no onions"), carried onto the order line.
+const specialInstructions = ref('');
 
 const groupIsSelected = (groupId, optionId) => {
   const sel = groupSelections.value[groupId];
@@ -226,16 +256,57 @@ const groupSelectedCount = (groupId) => {
   return Array.isArray(sel) ? sel.length : sel != null ? 1 : 0;
 };
 
-// Pre-select required defaults exactly like DishPage: all required flat options, plus the
-// first option of each required group — so the diner can add in one tap, then change.
-(props.dish.options || []).forEach((opt) => {
-  if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) selectedOptionIds.value.push(opt.id);
-});
-(props.dish.option_groups || []).forEach((group) => {
-  if (group.min_select > 0 && group.options?.length && groupSelectedCount(group.id) === 0) {
-    groupSelections.value = { ...groupSelections.value, [group.id]: [group.options[0].id] };
-  }
-});
+// Set of every selectable option id on this dish, used to seed edit mode safely.
+const allOptionIds = new Set([
+  ...(props.dish.options || []).map((o) => o.id),
+  ...(props.dish.option_groups || []).flatMap((g) => (g.options || []).map((o) => o.id)),
+]);
+
+if (isEditMode.value) {
+  // ── Seed from the existing cart line ──────────────────────────────────────
+  qty.value = Number(props.initialQty) > 0 ? Math.min(99, Math.floor(Number(props.initialQty))) : 1;
+  const seedIds = (Array.isArray(props.initialOptionIds) ? props.initialOptionIds : [])
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x) && x > 0 && allOptionIds.has(x));
+  const seedSet = new Set(seedIds);
+  // Restore ungrouped/legacy options.
+  (props.dish.options || []).forEach((opt) => {
+    if (seedSet.has(opt.id)) selectedOptionIds.value.push(opt.id);
+  });
+  // Restore grouped options (respecting max_select per group).
+  (props.dish.option_groups || []).forEach((group) => {
+    const chosen = (group.options || []).filter((o) => seedSet.has(o.id)).map((o) => o.id);
+    if (chosen.length) {
+      const capped = group.max_select > 0 ? chosen.slice(0, group.max_select) : chosen;
+      groupSelections.value = { ...groupSelections.value, [group.id]: capped };
+    }
+  });
+  // The stored note may be the auto-generated options summary from a previous
+  // add() ("Options: …") rather than a user instruction — don't pre-fill that.
+  const note = String(props.initialNote || '').trim();
+  const optionsPrefix = `${t('dishPage.options')}:`;
+  if (note && !note.startsWith(optionsPrefix)) specialInstructions.value = note.slice(0, 140);
+  // Backfill any required selections the seed didn't cover (defensive).
+  (props.dish.options || []).forEach((opt) => {
+    if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) selectedOptionIds.value.push(opt.id);
+  });
+  (props.dish.option_groups || []).forEach((group) => {
+    if (group.min_select > 0 && group.options?.length && groupSelectedCount(group.id) === 0) {
+      groupSelections.value = { ...groupSelections.value, [group.id]: [group.options[0].id] };
+    }
+  });
+} else {
+  // Pre-select required defaults exactly like DishPage: all required flat options, plus the
+  // first option of each required group — so the diner can add in one tap, then change.
+  (props.dish.options || []).forEach((opt) => {
+    if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) selectedOptionIds.value.push(opt.id);
+  });
+  (props.dish.option_groups || []).forEach((group) => {
+    if (group.min_select > 0 && group.options?.length && groupSelectedCount(group.id) === 0) {
+      groupSelections.value = { ...groupSelections.value, [group.id]: [group.options[0].id] };
+    }
+  });
+}
 
 const allSelectedOptionIdsSorted = computed(() => {
   const grouped = Object.values(groupSelections.value)
@@ -272,17 +343,34 @@ const hasRequiredMissing = computed(() => hasUngroupedRequiredMissing.value || h
 const add = () => {
   if (hasRequiredMissing.value) { toast.show(t('dishPage.selectRequiredOptionsFirst'), 'error'); return; }
   const optionSig = allSelectedOptionIdsSorted.value.join(',');
-  cart.add({
-    key: `${props.dish.slug}::${optionSig}`,
+  // The line note is the user's free-text special instructions (carried to the
+  // kitchen). Options are surfaced separately via option_labels, so the note
+  // stays a clean per-item instruction. Fold the instructions into the key so
+  // two same-option lines with different notes remain distinct.
+  const note = (specialInstructions.value || '').trim().slice(0, 140);
+  const noteSig = note.toLowerCase();
+  const line = {
+    key: `${props.dish.slug}::${optionSig}::${noteSig}`,
     slug: props.dish.slug,
     name: props.dish.name,
     price: Number(unitPriceWithOptions.value),
     currency: props.dish.currency || props.currency,
     qty: qty.value > 0 ? qty.value : 1,
-    note: selectedOptionNote.value,
+    // Keep the readable options summary appended after any user instruction so
+    // the kitchen still sees the chosen options when there is no separate
+    // option_labels render (back-compat with note-only surfaces).
+    note: note || selectedOptionNote.value,
     option_ids: allSelectedOptionIdsSorted.value,
     option_labels: selectedOptionObjects.value.map((o) => o.name),
-  });
+  };
+  if (isEditMode.value) {
+    emit('save', { oldKey: props.editKey, line });
+    try { navigator.vibrate?.(12); } catch { /* not supported */ }
+    toast.show(t('dishPage.changesSaved'), 'success');
+    emit('close');
+    return;
+  }
+  cart.add(line);
   try { navigator.vibrate?.(12); } catch { /* not supported */ }
   toast.show(t('dishPage.addedToCart'), 'success');
   emit('close');

@@ -259,6 +259,43 @@ export const useCartStore = defineStore("cart", {
       this.items = this.items.filter((i) => i.key !== lineKey);
       this.persist();
     },
+    // Replace an existing cart line (identified by oldKey) with a fully
+    // re-customized line. Used by the "edit a cart line in place" flow: the
+    // QuickAddSheet re-opens seeded with the line's current options/qty/note,
+    // and on save we swap the old line for the new one. If the edited line's
+    // computed key collides with another existing line (same slug+options+note),
+    // the quantities merge — exactly like add() — so editing never produces two
+    // identical lines. The replacement preserves the line's position when the
+    // key is unchanged; otherwise it lands where add() would put it.
+    replaceLine(oldKey, newItem) {
+      const normalized = normalizeCartItem(newItem);
+      if (!normalized.slug) return;
+      const oldIndex = this.items.findIndex((i) => i.key === oldKey);
+      if (oldIndex === -1) {
+        // Old line vanished (e.g. cleared in another tab) — fall back to add().
+        this.add(newItem);
+        return;
+      }
+      // Does the edited line collide with a DIFFERENT existing line?
+      const collisionIndex = this.items.findIndex(
+        (i, idx) => idx !== oldIndex && i.key === normalized.key,
+      );
+      if (collisionIndex !== -1) {
+        // Merge qty into the colliding line, drop the old line.
+        const target = this.items[collisionIndex];
+        target.qty = clampQty(target.qty + normalized.qty);
+        target.note = normalized.note;
+        target.option_ids = normalized.option_ids;
+        target.option_labels = normalized.option_labels;
+        target.price = normalized.price;
+        target.currency = normalized.currency;
+        this.items.splice(oldIndex, 1);
+      } else {
+        // No collision — replace in place, keeping the line's position.
+        this.items.splice(oldIndex, 1, normalized);
+      }
+      this.persist();
+    },
     clear() {
       this.items = [];
       this.persist();
@@ -291,6 +328,106 @@ export const useCartStore = defineStore("cart", {
           delivery_lng: Number.isFinite(Number(parsed.delivery_lng)) ? Number(parsed.delivery_lng) : null,
         };
       } catch { return null; }
+    },
+    // ── Availability-safe reorder (unified code path) ──────────────────────────
+    // Given a past order's lines, re-resolve each against the CURRENT menu via
+    // POST /api/reorder-resolve/ and add only the still-available lines at their
+    // current price (dropping stale options). This is the single source of truth
+    // for reorder — both Menu.vue and OrderStatus.vue call it through useReorder.
+    //
+    // `lines` is an array of past order items in any of the shapes the app stores
+    // them (recentOrders entries, server-history items, OrderStatus items):
+    //   { slug | dish_slug, name | dish_name, qty, note, option_ids[] | options[] }
+    //
+    // Returns { added, skipped, priceChanged, ok } so the caller can toast.
+    // Network/availability failures degrade gracefully (returns ok:false, adds nothing).
+    async reorderFromOrder(lines, apiClient) {
+      const normalizedLines = (Array.isArray(lines) ? lines : [])
+        .map((raw) => {
+          const slug = String(raw?.slug || raw?.dish_slug || "").trim();
+          if (!slug) return null;
+          // option_ids may be a flat array, or derived from an options snapshot [{id,...}]
+          let optionIds = Array.isArray(raw?.option_ids) ? raw.option_ids : [];
+          if (!optionIds.length && Array.isArray(raw?.options)) {
+            optionIds = raw.options.map((o) => o?.id).filter((v) => v != null);
+          }
+          // Original snapshot unit price (recentOrders uses `price`, server/OrderStatus
+          // history uses `unit_price`) — used only to detect a price change vs. today.
+          const origPriceRaw = raw?.price ?? raw?.unit_price;
+          const origPrice = Number(origPriceRaw);
+          return {
+            slug,
+            name: String(raw?.name || raw?.dish_name || "").trim(),
+            qty: clampQty(raw?.qty ?? 1),
+            note: typeof raw?.note === "string" ? raw.note : "",
+            orig_price: Number.isFinite(origPrice) ? origPrice : null,
+            option_ids: normalizeOptionIds(optionIds),
+            // Keep the original option labels so an available line keeps readable
+            // option text even though the server only returns price + validity.
+            option_labels: Array.isArray(raw?.option_labels)
+              ? raw.option_labels
+              : (Array.isArray(raw?.options) ? raw.options.map((o) => o?.name).filter(Boolean) : []),
+          };
+        })
+        .filter(Boolean);
+
+      if (!normalizedLines.length) {
+        return { added: 0, skipped: [], priceChanged: false, ok: true };
+      }
+
+      let resolvedMap = {};
+      let anyOptionsDropped = false;
+      try {
+        const payload = {
+          items: normalizedLines.map((l) => ({ slug: l.slug, option_ids: l.option_ids })),
+        };
+        const { data } = await apiClient.post("/reorder-resolve/", payload);
+        anyOptionsDropped = Boolean(data?.any_options_dropped);
+        // Build a slug→resolution map. If the same slug appears twice, the
+        // resolution is identical (availability + base price are per-dish), so a
+        // last-wins map is correct; option validity is recomputed per line below.
+        for (const r of Array.isArray(data?.items) ? data.items : []) {
+          if (r?.slug) resolvedMap[r.slug] = r;
+        }
+      } catch {
+        // Resolver unreachable — fail safe: add nothing rather than adding stale items.
+        return { added: 0, skipped: [], priceChanged: false, ok: false };
+      }
+
+      let added = 0;
+      let priceChanged = false;
+      const skipped = [];
+      for (const line of normalizedLines) {
+        const res = resolvedMap[line.slug];
+        if (!res || !res.available) {
+          skipped.push(line.name || line.slug);
+          continue;
+        }
+        const currentPrice = Number(res.current_price);
+        const validOptionIds = Array.isArray(res.current_option_ids) ? res.current_option_ids : line.option_ids;
+        if (Number.isFinite(currentPrice)) {
+          this.add({
+            slug: line.slug,
+            name: line.name || res.name || line.slug,
+            price: currentPrice,
+            currency: res.currency || "MAD",
+            qty: line.qty,
+            note: line.note,
+            option_ids: validOptionIds,
+            option_labels: line.option_labels,
+          });
+          added += 1;
+          // Detect a price drift vs. the order snapshot (ignores option-only deltas
+          // since orig_price already included the original options' price_delta).
+          if (line.orig_price != null && Math.abs(line.orig_price - currentPrice) > 0.001) {
+            priceChanged = true;
+          }
+        } else {
+          skipped.push(line.name || line.slug);
+        }
+      }
+      if (anyOptionsDropped) priceChanged = true;
+      return { added, skipped, priceChanged, ok: true };
     },
     // Save a completed order to the recent-orders list (max 5, deduplicated by order_number).
     // Call this BEFORE clearing the cart, passing the API response + current cart items.

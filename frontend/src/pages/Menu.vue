@@ -503,6 +503,7 @@ import AppIcon   from '../components/AppIcon.vue'
 import DishCard  from '../components/DishCard.vue'
 import { useI18n } from '../composables/useI18n'
 import { useVocabulary } from '../composables/useVocabulary'
+import { useReorder } from '../composables/useReorder'
 import { withImageFallback } from '../lib/images'
 import { trackEvent } from '../lib/analytics'
 import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours'
@@ -521,6 +522,7 @@ const customerStore  = useCustomerStore()
 const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
 const { groupPlural } = useVocabulary()
+const { reorderFromOrder, hydrateServerHistory } = useReorder()
 
 // ── Quick-reorder chip near the top ──────────────────────────────────────────
 // Show the most-recent order (if not already shown as active-order strip) as a
@@ -824,51 +826,10 @@ watch(isSearchActive, (active) => {
 })
 
 // ── Reorder from recent orders ────────────────────────────────────────────────
-/** Add all items from a previous order back to the cart, restoring fulfillment context. */
-const reorderItems = (order) => {
-  if (!order?.items?.length) {
-    toast.show(t('menu.reorderEmpty'), 'info')
-    return
-  }
-  for (const item of order.items) {
-    cart.add({
-      slug:          item.slug,
-      name:          item.dish_name || item.name,
-      price:         item.price,
-      currency:      item.currency,
-      qty:           item.qty || 1,
-      note:          item.note || '',
-      option_ids:    item.option_ids || [],
-      option_labels: item.option_labels || [],
-    })
-  }
-  // Restore fulfillment context from the order record (delivery address, type, coords).
-  // If the saved fulfillment type isn't available (e.g. delivery disabled), fall back silently.
-  const ft = order.fulfillment_type || ''
-  const profile = meta.value?.profile || {}
-  const deliveryEnabled = profile.delivery_enabled !== false
-  const resolvedFt = (ft === 'delivery' && !deliveryEnabled) ? 'pickup' : ft
-  if (resolvedFt) {
-    cart.persistFulfillmentContext({
-      fulfillment_type: resolvedFt,
-      delivery_address: order.delivery_address || '',
-      delivery_lat: order.delivery_lat ?? null,
-      delivery_lng: order.delivery_lng ?? null,
-    })
-  }
-  // Show a contextual banner toast
-  let contextLabel = ''
-  if (resolvedFt === 'delivery' && order.delivery_address) {
-    contextLabel = t('menu.reorderFulfillmentDelivery', { address: order.delivery_address.split(',')[0] || order.delivery_address })
-  } else if (resolvedFt === 'pickup' || (!resolvedFt && ft === 'delivery' && !deliveryEnabled)) {
-    contextLabel = t('menu.reorderFulfillmentPickup')
-  }
-  if (contextLabel) {
-    toast.show(t('menu.reorderWithFulfillment', { context: contextLabel }), 'success')
-  } else {
-    toast.show(t('menu.reorderAdded'), 'success')
-  }
-}
+// Unified, availability-safe path (useReorder): re-resolves every line against the
+// live menu (dropping sold-out items, refreshing prices), restores fulfillment
+// context, and toasts. Shared verbatim with OrderStatus.vue.
+const reorderItems = (order) => reorderFromOrder(order, { profile: profile.value })
 
 // ── Sticky category nav ──────────────────────────────────────────────────────
 // The customer layout renders a sticky header (.ui-header, top:0) whose height
@@ -1002,6 +963,9 @@ onMounted(async () => {
   await resolveTableContext()
   if (!menuCategories.value.length) await menu.fetchCategories()
   fetchLoyaltyConfig()  // non-blocking — teaser fades in when data arrives
+  // Server-source reorder history so "Order again" survives a device switch /
+  // cleared storage (merges account-bound orders into cart.recentOrders).
+  hydrateServerHistory()  // non-blocking, best-effort
 
   syncSelection()
 

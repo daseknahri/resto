@@ -105,6 +105,13 @@ toast: {
     warning: "Notice:"
   }
 },
+reorder: {
+  added: "Items added to your cart",
+  empty: "Nothing to reorder.",
+  someUnavailable: "Some items are no longer available and were skipped: {names}",
+  allUnavailable: "Those items are no longer available.",
+  priceUpdated: "Some prices were updated to today's menu."
+},
 errorBoundary: {
   kicker: "ERROR",
   title: "Something went wrong",
@@ -839,6 +846,12 @@ sendPackage: {
   handoverCodeTitle: "Handover code",
   handoverCodeHint: "Share this code with the recipient — the courier needs it to confirm delivery.",
   codeLabel: "Code",
+  savedAddresses: "Saved addresses",
+  recentRecipients: "Recent recipients",
+  recentDropoffs: "Recent drop-offs",
+  fillForPickup: "Set as pickup",
+  fillForDropoff: "Set as drop-off",
+  useRecipient: "Send to {name}",
 },
 tripSchedule: {
   toggle: "Schedule for later",
@@ -2765,6 +2778,8 @@ cartPage: {
   decreaseQuantity: "Decrease quantity",
   increaseQuantity: "Increase quantity",
   remove: "Remove",
+  editItem: "Edit",
+  editUnavailable: "This item can't be edited right now.",
   tableQrOrder: "Table QR order",
   tableContextDetected: "Table context detected: {table}.",
   optionalNoteOnly: "Name and note are both optional for table orders.",
@@ -2958,6 +2973,10 @@ dishPage: {
   increaseQuantity: "Increase quantity",
   browseOnlyPlan: "Browse-only plan",
   addToCart: "Add to cart",
+  saveChanges: "Save changes",
+  changesSaved: "Item updated",
+  specialInstructions: "Special instructions (optional)",
+  instructionsPlaceholder: "e.g. no onions, extra spicy",
   addContactToOrder: "Add (contact to order)",
   restaurantClosed: "Restaurant closed",
   shareViaWhatsApp: "Share via WhatsApp",
@@ -4731,6 +4750,12 @@ kitchen: {
   eightySixToggleFailed403: "Menu permission required to change availability.",
   eightySixToggleFailed: "Couldn't update availability — please try again.",
   eightySixOpen: "Open 86 board",
+  allDay: "All-day",
+  allDayHide: "Tickets",
+  allDayTitle: "All-day prep counts",
+  allDayEmpty: "Nothing left to prep.",
+  allDayCount: "{n} to make",
+  includeHeld: "Include held",
 },
 orderStatus: {
   kicker: "Order tracking",

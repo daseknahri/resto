@@ -106,6 +106,13 @@ export const messages = {
         warning: "Notice:"
       }
     },
+    reorder: {
+      added: "Items added to your cart",
+      empty: "Nothing to reorder.",
+      someUnavailable: "Some items are no longer available and were skipped: {names}",
+      allUnavailable: "Those items are no longer available.",
+      priceUpdated: "Some prices were updated to today's menu."
+    },
     errorBoundary: {
       kicker: "ERROR",
       title: "Something went wrong",
@@ -840,6 +847,12 @@ export const messages = {
       handoverCodeTitle: "Handover code",
       handoverCodeHint: "Share this code with the recipient — the courier needs it to confirm delivery.",
       codeLabel: "Code",
+      savedAddresses: "Saved addresses",
+      recentRecipients: "Recent recipients",
+      recentDropoffs: "Recent drop-offs",
+      fillForPickup: "Set as pickup",
+      fillForDropoff: "Set as drop-off",
+      useRecipient: "Send to {name}",
     },
     tripSchedule: {
       toggle: "Schedule for later",
@@ -2760,6 +2773,8 @@ export const messages = {
       decreaseQuantity: "Decrease quantity",
       increaseQuantity: "Increase quantity",
       remove: "Remove",
+      editItem: "Edit",
+      editUnavailable: "This item can't be edited right now.",
       tableQrOrder: "Table QR order",
       tableContextDetected: "Table context detected: {table}.",
       optionalNoteOnly: "Name and note are both optional for table orders.",
@@ -2953,6 +2968,10 @@ export const messages = {
       increaseQuantity: "Increase quantity",
       browseOnlyPlan: "Browse-only plan",
       addToCart: "Add to cart",
+      saveChanges: "Save changes",
+      changesSaved: "Item updated",
+      specialInstructions: "Special instructions (optional)",
+      instructionsPlaceholder: "e.g. no onions, extra spicy",
       addContactToOrder: "Add (contact to order)",
       restaurantClosed: "Restaurant closed",
       shareViaWhatsApp: "Share via WhatsApp",
@@ -4726,6 +4745,12 @@ export const messages = {
       eightySixToggleFailed403: "Menu permission required to change availability.",
       eightySixToggleFailed: "Couldn't update availability — please try again.",
       eightySixOpen: "Open 86 board",
+      allDay: "All-day",
+      allDayHide: "Tickets",
+      allDayTitle: "All-day prep counts",
+      allDayEmpty: "Nothing left to prep.",
+      allDayCount: "{n} to make",
+      includeHeld: "Include held",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -5272,6 +5297,13 @@ export const messages = {
         error: "Erreur :",
         warning: "Avis :"
       }
+    },
+    reorder: {
+      added: "Articles ajoutes a votre panier",
+      empty: "Rien a recommander.",
+      someUnavailable: "Certains articles ne sont plus disponibles et ont ete ignores : {names}",
+      allUnavailable: "Ces articles ne sont plus disponibles.",
+      priceUpdated: "Certains prix ont ete mis a jour selon le menu du jour."
     },
     errorBoundary: {
       kicker: "ERREUR",
@@ -6006,6 +6038,12 @@ export const messages = {
       handoverCodeTitle: "Code de remise",
       handoverCodeHint: "Partagez ce code avec le destinataire — le livreur en a besoin pour confirmer la livraison.",
       codeLabel: "Code",
+      savedAddresses: "Adresses enregistrees",
+      recentRecipients: "Destinataires recents",
+      recentDropoffs: "Livraisons recentes",
+      fillForPickup: "Definir comme collecte",
+      fillForDropoff: "Definir comme livraison",
+      useRecipient: "Envoyer a {name}",
     },
     tripSchedule: {
       toggle: "Planifier pour plus tard",
@@ -7894,6 +7932,8 @@ export const messages = {
       decreaseQuantity: "Diminuer la quantite",
       increaseQuantity: "Augmenter la quantite",
       remove: "Supprimer",
+      editItem: "Modifier",
+      editUnavailable: "Cet article ne peut pas etre modifie pour le moment.",
       tableQrOrder: "Commande via QR table",
       tableContextDetected: "Contexte table detecte : {table}.",
       optionalNoteOnly: "Le nom et la note sont tous deux optionnels pour les commandes a table.",
@@ -8086,6 +8126,10 @@ export const messages = {
       increaseQuantity: "Augmenter la quantite",
       browseOnlyPlan: "Offre navigation seule",
       addToCart: "Ajouter au panier",
+      saveChanges: "Enregistrer",
+      changesSaved: "Article mis a jour",
+      specialInstructions: "Instructions speciales (facultatif)",
+      instructionsPlaceholder: "ex. sans oignons, plus epice",
       addContactToOrder: "Ajouter (contact requis)",
       restaurantClosed: "Restaurant ferme",
       shareViaWhatsApp: "Partager via WhatsApp",
@@ -9911,6 +9955,12 @@ export const messages = {
       eightySixToggleFailed403: "Permission menu requise pour modifier la disponibilite.",
       eightySixToggleFailed: "Impossible de modifier la disponibilite — reessayez.",
       eightySixOpen: "Ouvrir le tableau 86",
+      allDay: "Cumul jour",
+      allDayHide: "Tickets",
+      allDayTitle: "Cumul des preparations du jour",
+      allDayEmpty: "Plus rien a preparer.",
+      allDayCount: "{n} a preparer",
+      includeHeld: "Inclure en attente",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

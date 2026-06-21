@@ -36,6 +36,16 @@
           role="status"
           aria-live="polite"
         >{{ t("kitchen.pollingMode") }}</span>
+        <!-- All-day prep-counts toggle (aggregate item view) -->
+        <button
+          class="kitchen-fs-btn ui-press px-2.5 text-[11px] font-bold uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :class="allDay ? 'kitchen-filter-btn--active' : ''"
+          :aria-pressed="allDay"
+          :aria-label="allDay ? t('kitchen.allDayHide') : t('kitchen.allDay')"
+          @click="allDay = !allDay"
+        >
+          {{ allDay ? t('kitchen.allDayHide') : t('kitchen.allDay') }}
+        </button>
         <!-- 86 board button (contract 7) -->
         <button
           class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -161,6 +171,42 @@
         <div class="m-4 mt-auto h-10 rounded-xl bg-slate-700/40" />
       </div>
     </div>
+
+    <!-- All-day aggregate prep counts (toggle) -->
+    <section
+      v-else-if="allDay"
+      class="kitchen-allday"
+      :aria-label="t('kitchen.allDayTitle')"
+    >
+      <div class="kitchen-allday-head">
+        <h2 class="kitchen-allday-title">{{ t('kitchen.allDayTitle') }}</h2>
+        <!-- Include-held toggle -->
+        <button
+          type="button"
+          class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :class="includeHeld ? 'kitchen-filter-btn--active' : ''"
+          :aria-pressed="includeHeld"
+          @click="includeHeld = !includeHeld"
+        >{{ t('kitchen.includeHeld') }}</button>
+      </div>
+      <div v-if="!allDayItems.length" class="kitchen-empty" role="status" aria-live="polite">
+        <p class="text-xl font-bold tracking-tight text-slate-200">{{ t('kitchen.allDayEmpty') }}</p>
+      </div>
+      <ul v-else role="list" class="kitchen-allday-list">
+        <li
+          v-for="row in allDayItems"
+          :key="row.key"
+          class="kitchen-allday-row"
+        >
+          <span class="kitchen-allday-qty tabular-nums" :aria-label="t('kitchen.allDayCount', { n: row.qty })">×{{ row.qty }}</span>
+          <span class="kitchen-allday-name">{{ row.name }}</span>
+          <span
+            v-if="row.station"
+            class="ms-auto shrink-0 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[11px] font-bold text-sky-400"
+          >{{ row.station }}</span>
+        </li>
+      </ul>
+    </section>
 
     <!-- All-clear -->
     <div v-else-if="!activeOrders.length" class="kitchen-empty" role="status" aria-live="polite">
@@ -576,6 +622,14 @@ const isFullscreen = ref(false);
 const stationFilter = ref("all");
 const prepStation = ref("");
 
+// ── All-day aggregate view (KDS prep counts) ──────────────────────────────────
+// Toggle that swaps the per-ticket card grid for an aggregated "Burger ×14"
+// rollup of how many of EACH item the kitchen still needs to make right now.
+const allDay = ref(false);
+// Include held (un-fired course) items in the totals (off by default — held
+// items aren't being cooked yet, so the prep line usually excludes them).
+const includeHeld = ref(false);
+
 // ── Sound toggle (task 4) ─────────────────────────────────────────────────────
 const KITCHEN_SOUND_KEY = "kitchen:sound";
 const kitchenSoundOn = ref((() => {
@@ -636,6 +690,33 @@ const activeOrders = computed(() => {
     (o.order_number || "").toLowerCase().includes(q) ||
     (o.customer_name || "").toLowerCase().includes(q) ||
     (o.table_label || "").toLowerCase().includes(q)
+  );
+});
+
+// All-day aggregate: sum qty of non-voided, not-yet-ready items across the
+// currently filtered active orders, grouped by dish name (+ station so two
+// stations cooking the same dish stay distinct). Held-course items are excluded
+// unless includeHeld is on. Sorted by qty desc, then name. Pure derivation —
+// reuses the same station / prep-station filtering as the card grid.
+const allDayItems = computed(() => {
+  const ps = prepStation.value;
+  const groups = new Map();
+  for (const order of activeOrders.value) {
+    for (const item of order.items || []) {
+      if (item.is_voided || item.is_ready) continue;
+      if (ps && item.station && item.station !== ps) continue;
+      if (!includeHeld.value && isItemHeld(item, order)) continue;
+      const qty = Number(item.qty) || 0;
+      if (qty <= 0) continue;
+      const station = item.station || "";
+      const key = item.dish_name + String.fromCharCode(124) + station;
+      const existing = groups.get(key);
+      if (existing) existing.qty += qty;
+      else groups.set(key, { key, name: item.dish_name, station, qty });
+    }
+  }
+  return [...groups.values()].sort(
+    (a, b) => b.qty - a.qty || a.name.localeCompare(b.name)
   );
 });
 
@@ -1300,5 +1381,65 @@ const djChipLabel = (dj) => {
 .kitchen-filter-btn--active .kitchen-filter-count {
   background: rgba(245, 158, 11, 0.25);
   color: rgb(251, 191, 36);
+}
+
+/* All-day aggregate view */
+.kitchen-allday {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.75rem;
+}
+
+.kitchen-allday-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.kitchen-allday-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: rgb(226, 232, 240);
+}
+
+.kitchen-allday-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kitchen-allday-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  background: rgba(15, 23, 42, 0.65);
+  padding: 0.75rem 1.1rem;
+}
+
+.kitchen-allday-qty {
+  flex-shrink: 0;
+  min-width: 3.5rem;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: rgb(251, 191, 36);
+}
+
+.kitchen-allday-name {
+  min-width: 0;
+  word-break: break-word;
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  color: rgb(226, 232, 240);
 }
 </style>
