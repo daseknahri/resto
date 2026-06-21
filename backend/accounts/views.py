@@ -395,6 +395,32 @@ class PasswordResetConfirmView(APIView):
 # ── Customer auth helpers ──────────────────────────────────────────────────────
 
 
+def _customer_owns_tenant(customer: Customer) -> bool:
+    """Read-only: does this consumer identity also own/work a tenant?
+
+    Customers (consumer identity, public schema) and Users (owner/staff identity)
+    are separate tables. A person can hold both — they signed up as a customer AND
+    run a restaurant. We surface that overlap to the super-app role switcher so the
+    same identity can hop to the Manage surface without a fresh login prompt.
+
+    The link is established by a VERIFIED, shared email: only when the customer has
+    verified their email do we trust an email match against a User row. This is
+    additive and conservative — a false positive would merely show a "Manage" tab
+    that lands on the owner login, and an unverified email can never claim a tenant.
+    """
+    if not (getattr(customer, "email", "") and getattr(customer, "email_verified", False)):
+        return False
+    try:
+        from accounts.models import User
+
+        return User.objects.filter(
+            email__iexact=customer.email,
+            tenant__isnull=False,
+        ).exists()
+    except Exception:  # noqa: BLE001 — never let a role hint break the session payload
+        return False
+
+
 def _serialize_customer(customer: Customer) -> dict:
     return {
         "id": customer.pk,
@@ -410,7 +436,14 @@ def _serialize_customer(customer: Customer) -> dict:
         "birthday": customer.birthday.isoformat() if customer.birthday else None,
         "locale": customer.locale or "en",
         "is_driver": bool(customer.is_driver),
+        # driver_approved gates going online / accepting jobs — the role switcher
+        # uses it to decide whether to offer the "Drive" mode as ready vs pending.
+        "driver_approved": bool(getattr(customer, "driver_approved", False)),
         "is_driver_online": bool(customer.is_driver_online),
+        # Cross-identity role hints (additive, read-only) for the super-app role
+        # switcher: does the same identity own/work a tenant? See _customer_owns_tenant.
+        "has_tenant": _customer_owns_tenant(customer),
+        "is_staff": _customer_owns_tenant(customer),
         "notify_order_updates": bool(customer.notify_order_updates),
         "notify_review_prompts": bool(customer.notify_review_prompts),
         "notify_promotions": bool(customer.notify_promotions),
@@ -672,6 +705,183 @@ class CustomerServicesView(APIView):
             for v in ALL_VERTICALS
         }
         return Response({"services": services})
+
+
+class CustomerActiveItemsView(APIView):
+    """Active, resumable activity for the signed-in customer (super-app resume rail).
+
+    Returns the in-progress items a customer can jump straight back into from the
+    super-app hub's "Continue where you left off" rail:
+
+      - ``orders``  — non-terminal marketplace orders (food/shops/pharmacy) from the
+                      public CustomerOrderRef index, most-recent first.
+      - ``ride``    — the single most-recent non-terminal passenger ride, if any.
+      - ``package`` — the single most-recent non-terminal courier package, if any.
+
+    Read-only and additive: powers ONLY the resume rail. Kept out of the hot session
+    payload. Cheap — three indexed lookups over public-schema indexes. Mirrors the
+    active-status set used by CustomerAccount's live-order banner.
+    """
+
+    permission_classes = [AllowAny]
+
+    # Order statuses that are still in-flight (mirror of the FE ACTIVE_STATUSES set).
+    _ACTIVE_ORDER_STATUSES = ("pending", "confirmed", "preparing", "ready", "out_for_delivery")
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from .models import CustomerOrderRef, RideRequest
+
+        # Active marketplace orders (cap at 5 — the rail only renders the top few).
+        orders = [
+            {
+                "order_number": r.order_number,
+                "restaurant_name": r.restaurant_name,
+                "restaurant_slug": r.restaurant_slug,
+                "status": r.status,
+                "fulfillment_type": r.fulfillment_type,
+                "total": str(r.total),
+                "currency": r.currency,
+                "vertical": r.vertical or "",
+                "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+            }
+            for r in (
+                CustomerOrderRef.objects.filter(
+                    customer_id=customer_id,
+                    status__in=self._ACTIVE_ORDER_STATUSES,
+                ).order_by("-order_created_at")[:5]
+            )
+        ]
+
+        terminal = list(RideRequest.TERMINAL_STATUSES)
+
+        def _ride_payload(kind):
+            r = (
+                RideRequest.objects.filter(rider_id=customer_id, kind=kind)
+                .exclude(status__in=terminal)
+                .order_by("-created_at")
+                .first()
+            )
+            if not r:
+                return None
+            return {
+                "id": r.pk,
+                "kind": r.kind,
+                "status": r.status,
+                "pickup_address": r.pickup_address,
+                "dropoff_address": r.dropoff_address,
+                "fare": str(r.fare),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+
+        return Response({
+            "orders": orders,
+            "ride": _ride_payload(RideRequest.Kind.RIDE),
+            "package": _ride_payload(RideRequest.Kind.PACKAGE),
+        })
+
+
+def _serialize_notification(n):
+    """Shape one CustomerNotification row for the inbox API / FE."""
+    return {
+        "id": n.id,
+        "type": n.type or "",
+        "vertical": n.vertical or "general",
+        "title": n.title,
+        "body": n.body or "",
+        "url": n.url or "",
+        "is_read": n.read_at is not None,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+    }
+
+
+class CustomerNotificationsView(APIView):
+    """GET /api/customer/notifications/ — the signed-in customer's in-app inbox.
+
+    Returns the most-recent persisted notifications (cross-vertical: order updates,
+    ride/courier milestones, wallet/charge events, review prompts) plus an
+    ``unread_count``. This is the durable source of truth that backs the header bell —
+    a missed/denied Web Push is still here. Read-only; cheap (one indexed slice + one
+    indexed count over public-schema indexes). Paginated by an opaque ``before`` id
+    cursor (newest-first). ``?count_only=1`` skips the list for the badge poll.
+    """
+
+    permission_classes = [AllowAny]
+
+    PAGE_SIZE = 30
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from .models import CustomerNotification
+
+        unread_count = CustomerNotification.objects.filter(
+            customer_id=customer_id, read_at__isnull=True
+        ).count()
+
+        # Lightweight badge poll: skip the list payload entirely.
+        if str(request.query_params.get("count_only", "")).strip() in ("1", "true", "yes"):
+            return Response({"unread_count": unread_count})
+
+        qs = CustomerNotification.objects.filter(customer_id=customer_id)
+        before = request.query_params.get("before")
+        if before:
+            try:
+                qs = qs.filter(id__lt=int(before))
+            except (TypeError, ValueError):
+                pass
+
+        rows = list(qs.order_by("-created_at", "-id")[: self.PAGE_SIZE + 1])
+        has_more = len(rows) > self.PAGE_SIZE
+        rows = rows[: self.PAGE_SIZE]
+
+        return Response({
+            "notifications": [_serialize_notification(n) for n in rows],
+            "unread_count": unread_count,
+            "has_more": has_more,
+            "next_before": rows[-1].id if (has_more and rows) else None,
+        })
+
+
+class CustomerNotificationsMarkReadView(APIView):
+    """POST /api/customer/notifications/mark-read/ — mark the customer's notifications read.
+
+    Body: ``{"ids": [1,2,3]}`` marks those specific rows; an empty/absent ``ids`` marks
+    ALL of the customer's unread notifications (the "mark all read" / open-inbox action).
+    Always scoped to the signed-in customer, so a customer can never touch another's rows.
+    Returns the updated ``unread_count``.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from django.utils import timezone
+        from .models import CustomerNotification
+
+        qs = CustomerNotification.objects.filter(customer_id=customer_id, read_at__isnull=True)
+
+        ids = request.data.get("ids") if isinstance(request.data, dict) else None
+        if ids:
+            try:
+                id_list = [int(x) for x in ids][:200]
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid ids."}, status=status.HTTP_400_BAD_REQUEST)
+            qs = qs.filter(id__in=id_list)
+
+        marked = qs.update(read_at=timezone.now())
+        unread_count = CustomerNotification.objects.filter(
+            customer_id=customer_id, read_at__isnull=True
+        ).count()
+        return Response({"marked": marked, "unread_count": unread_count})
 
 
 class CustomerServiceProfilesView(APIView):

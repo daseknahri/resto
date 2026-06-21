@@ -142,3 +142,74 @@ class CustomerWalletViewTests(SimpleTestCase):
         resp = self._get(session=_session(customer_id=4))
         self.assertIsInstance(resp.data["balance"], str)
         self.assertEqual(resp.data["balance"], "123.45")
+
+    # ── ?vertical= filter ───────────────────────────────────────────────────────
+
+    def _get_with_vertical(self, vertical, session=None):
+        req = self.factory.get("/api/customer/wallet/", {"vertical": vertical})
+        req.user = MagicMock(is_authenticated=False)
+        req.session = session or _session()
+        return self.view(req)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_valid_vertical_scopes_transaction_list(self, mock_cust_objs, mock_tx_objs):
+        """?vertical=food applies a secondary .filter(vertical='food') on the tx list."""
+        customer = _make_customer(customer_id=8, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        base_qs = mock_tx_objs.filter.return_value  # .filter(customer=...)
+        tx = _make_tx(tx_id=11, tx_type="payment", amount="12.00")
+        base_qs.filter.return_value.order_by.return_value.__getitem__.return_value = [tx]
+
+        resp = self._get_with_vertical("food", session=_session(customer_id=8))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # The second .filter (on the customer-scoped queryset) must carry vertical=.
+        base_qs.filter.assert_any_call(vertical="food")
+        self.assertEqual(len(resp.data["transactions"]), 1)
+        self.assertEqual(resp.data["transactions"][0]["id"], 11)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_vertical_filter_is_case_insensitive(self, mock_cust_objs, mock_tx_objs):
+        """?vertical=FOOD is normalised to lowercase before filtering."""
+        customer = _make_customer(customer_id=9, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        base_qs = mock_tx_objs.filter.return_value
+        base_qs.filter.return_value.order_by.return_value.__getitem__.return_value = []
+
+        resp = self._get_with_vertical("FOOD", session=_session(customer_id=9))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        base_qs.filter.assert_any_call(vertical="food")
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_invalid_vertical_is_ignored(self, mock_cust_objs, mock_tx_objs):
+        """An unknown ?vertical= value falls back to the unfiltered list (no extra filter)."""
+        customer = _make_customer(customer_id=10, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        base_qs = mock_tx_objs.filter.return_value
+        base_qs.order_by.return_value.__getitem__.return_value = []
+
+        resp = self._get_with_vertical("not-a-vertical", session=_session(customer_id=10))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # No secondary vertical filter should have been applied to the tx list.
+        for call in base_qs.filter.call_args_list:
+            self.assertNotIn("vertical", call.kwargs)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_blank_vertical_returns_full_list(self, mock_cust_objs, mock_tx_objs):
+        """A blank ?vertical= must not scope the list (treated as 'all')."""
+        customer = _make_customer(customer_id=12, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        base_qs = mock_tx_objs.filter.return_value
+        base_qs.order_by.return_value.__getitem__.return_value = []
+
+        resp = self._get_with_vertical("", session=_session(customer_id=12))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for call in base_qs.filter.call_args_list:
+            self.assertNotIn("vertical", call.kwargs)

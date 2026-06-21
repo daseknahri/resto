@@ -670,6 +670,9 @@
     @close="showAuthModal = false"
     @authenticated="showAuthModal = false"
   />
+
+  <!-- Push-permission priming soft-ask (self-gated; triggered post-checkout) -->
+  <PushPrimingSheet ref="pushPrimingSheet" />
 </template>
 
 <script setup>
@@ -679,6 +682,7 @@ import AppIcon from "../components/AppIcon.vue";
 import ConnectionDot from "../components/ConnectionDot.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
+import PushPrimingSheet from "../components/PushPrimingSheet.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderRealtime } from "../composables/useOrderRealtime";
 import { useReorder } from "../composables/useReorder";
@@ -699,6 +703,8 @@ const { t, formatPrice, formatDateTime, currentLocale } = useI18n();
 const { reorderFromOrder } = useReorder();
 
 const showAuthModal = ref(false);
+// Push-permission priming soft-ask — triggered post-checkout (high-intent moment).
+const pushPrimingSheet = ref(null);
 
 // ── Just-placed celebration banner ────────────────────────────────────────────
 const showJustPlacedBanner = ref(false);
@@ -1127,6 +1133,10 @@ onMounted(() => {
     if (lastNum === props.orderNumber && (Date.now() - lastAt) < 60000) {
       showJustPlacedBanner.value = true;
       _justPlacedTimer = setTimeout(() => { showJustPlacedBanner.value = false; }, 5000);
+      // High-intent moment: just placed this order → soft-ask for push permission.
+      // The sheet self-gates (supported + permission==='default' + push enabled +
+      // not recently dismissed) and only fires the real OS prompt on accept.
+      pushPrimingSheet.value?.maybeShow?.();
     }
   } catch { /* storage unavailable */ }
   fetchStatus();

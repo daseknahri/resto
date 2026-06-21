@@ -23,6 +23,8 @@
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
               <CurrencySelector />
+              <!-- Persistent in-app notification inbox (bell + unread badge) -->
+              <NotificationBell />
               <!-- Driver-mode switch: only shown to users who are also drivers -->
               <RouterLink
                 v-if="customerStore.customer?.is_driver"
@@ -206,6 +208,7 @@ import AppIcon from "../components/AppIcon.vue";
 import ChargeApprovalWatcher from "../components/ChargeApprovalWatcher.vue";
 import CurrencySelector from "../components/CurrencySelector.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
+import NotificationBell from "../components/NotificationBell.vue";
 import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useCustomerPush } from "../composables/useCustomerPush";

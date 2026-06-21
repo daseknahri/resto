@@ -18,6 +18,14 @@
             {{ t('superAppHub.heroSubtitle') }}
           </p>
 
+          <!-- Contextual greeting — only when signed in. -->
+          <p v-if="customerStore.isAuthenticated" class="text-base font-semibold text-white md:text-lg">
+            {{ greeting }}
+          </p>
+
+          <!-- Role switcher — Order / Drive / Manage for identities that hold them. -->
+          <RoleSwitcher v-if="customerStore.isAuthenticated" current="order" class="w-fit" />
+
           <!-- AUTH state -->
           <div class="flex flex-wrap items-center gap-3 pt-1">
             <template v-if="customerStore.isAuthenticated">
@@ -60,6 +68,34 @@
         </div>
       </div>
     </div>
+
+    <!-- ── RESUME RAIL — "Continue where you left off" ──────────────────── -->
+    <section
+      v-if="customerStore.isAuthenticated && hasResumable"
+      aria-labelledby="resume-heading"
+      class="ui-reveal space-y-3"
+    >
+      <h2 id="resume-heading" class="ui-kicker">{{ t('superAppHub.resumeTitle') }}</h2>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <RouterLink
+          v-for="card in resumeCards"
+          :key="card.key"
+          :to="card.to"
+          class="ui-glass ui-press flex items-center gap-3.5 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+        >
+          <div
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl"
+            :class="ACCENT_CLASSES[card.accent]?.tile ?? 'border border-slate-600/40 bg-slate-700/20'"
+            aria-hidden="true"
+          >{{ card.icon }}</div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-semibold text-white">{{ card.title }}</p>
+            <p class="truncate text-xs text-slate-400">{{ card.subtitle }}</p>
+          </div>
+          <AppIcon name="arrowRight" class="h-4 w-4 shrink-0 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
+        </RouterLink>
+      </div>
+    </section>
 
     <!-- ── SERVICE LAUNCHER GRID ─────────────────────────────────────────── -->
     <section aria-labelledby="services-heading">
@@ -161,33 +197,111 @@ import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import RoleSwitcher from '../components/RoleSwitcher.vue';
 import { useI18n } from '../composables/useI18n';
+import { useCustomerActivity } from '../composables/useCustomerActivity';
 import { useCustomerStore } from '../stores/customer';
 import { getServices } from '../lib/services';
 import { PLATFORM_NAME } from '../lib/brand';
-import api from '../lib/api';
 
 const { t } = useI18n();
 const customerStore = useCustomerStore();
 const showAuthModal = ref(false);
 const platformName = PLATFORM_NAME;
 
-// Status-adjust the service grid by the platform's enabled_verticals (P0).
-// Until the session loads, platform is null → getServices returns all as-is.
-const services = computed(() => getServices(customerStore.platform?.enabled_verticals));
+// Shared activity aggregator — powers the per-service grid state, the usage-sorted
+// ordering, and the "Continue where you left off" resume rail.
+const {
+  serviceActivity,
+  activeItems,
+  topVerticals,
+  hasResumable,
+  load: loadActivity,
+} = useCustomerActivity();
 
-// Per-service activity for hub personalization (P4): {vertical: {count, last_activity}}.
-const serviceActivity = ref({});
+// Status-adjust the service grid by the platform's enabled_verticals (P0), then
+// float the verticals the customer actually uses to the top (usage order desc),
+// keeping the definition order as a stable secondary sort for the rest.
+const services = computed(() => {
+  const list = getServices(customerStore.platform?.enabled_verticals);
+  const order = topVerticals.value;
+  if (!order.length) return list;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return [...list]
+    .map((svc, i) => ({ svc, i }))
+    .sort((a, b) => {
+      const ra = rank.has(a.svc.id) ? rank.get(a.svc.id) : Number.MAX_SAFE_INTEGER;
+      const rb = rank.has(b.svc.id) ? rank.get(b.svc.id) : Number.MAX_SAFE_INTEGER;
+      return ra !== rb ? ra - rb : a.i - b.i;
+    })
+    .map((x) => x.svc);
+});
+
+// ── Contextual greeting ─────────────────────────────────────────────────────
+// Time-of-day greeting using the signed-in customer's display name.
+const greeting = computed(() => {
+  const h = new Date().getHours();
+  const slot = h < 12 ? 'greetingMorning' : h < 18 ? 'greetingAfternoon' : 'greetingEvening';
+  return t('superAppHub.' + slot, { name: customerStore.displayName });
+});
+
+// ── Resume rail cards ───────────────────────────────────────────────────────
+// Build a small ordered list of resumable cards (active order(s), ride, package).
+const RIDE_ACTIVE_LABEL = {
+  scheduled: 'tripSchedule.statusScheduled',
+  searching: 'adminRides.statusSearching',
+  accepted: 'adminRides.statusAccepted',
+  arrived: 'adminRides.statusArrived',
+  in_progress: 'adminRides.statusInProgress',
+};
+const rideStatusLabel = (s) => (RIDE_ACTIVE_LABEL[s] ? t(RIDE_ACTIVE_LABEL[s]) : s);
+
+const resumeCards = computed(() => {
+  const cards = [];
+  for (const o of activeItems.value.orders || []) {
+    cards.push({
+      key: 'order-' + o.order_number,
+      kind: 'order',
+      icon: '🍽️',
+      accent: 'amber',
+      title: t('superAppHub.resumeOrderTitle', { name: o.restaurant_name || '' }),
+      subtitle: t('superAppHub.resumeOrderSub', { number: o.order_number }),
+      to: o.restaurant_slug
+        ? { name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } }
+        : { name: 'order-status', params: { orderNumber: o.order_number } },
+    });
+  }
+  const ride = activeItems.value.ride;
+  if (ride) {
+    cards.push({
+      key: 'ride-' + ride.id,
+      kind: 'ride',
+      icon: '🚕',
+      accent: 'emerald',
+      title: t('superAppHub.resumeRideTitle'),
+      subtitle: ride.dropoff_address || rideStatusLabel(ride.status),
+      to: { name: 'ride' },
+    });
+  }
+  const pkg = activeItems.value.package;
+  if (pkg) {
+    cards.push({
+      key: 'pkg-' + pkg.id,
+      kind: 'package',
+      icon: '📦',
+      accent: 'sky',
+      title: t('superAppHub.resumePackageTitle'),
+      subtitle: pkg.dropoff_address || rideStatusLabel(pkg.status),
+      to: { name: 'send-package' },
+    });
+  }
+  return cards.slice(0, 3);
+});
 
 onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
-  try {
-    const { data } = await api.get('/customer/services/');
-    serviceActivity.value = data.services || {};
-  } catch {
-    // best-effort personalization — ignore failures
-  }
+  await loadActivity();
 });
 
 // Full literal Tailwind class strings per accent — never computed by string concat

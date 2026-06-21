@@ -1052,6 +1052,23 @@
             <div class="border-b border-slate-800/70 px-4 py-3">
               <p class="ui-kicker">{{ t('customerAccount.walletTransactions') }}</p>
             </div>
+            <!-- Per-vertical filter chips (server-side ?vertical= filter) -->
+            <div
+              v-if="WALLET_FILTER_OPTIONS.length > 1"
+              class="flex gap-2 overflow-x-auto border-b border-slate-800/70 px-4 py-2.5 scrollbar-none"
+            >
+              <button
+                v-for="opt in WALLET_FILTER_OPTIONS"
+                :key="opt.id"
+                type="button"
+                class="shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                :class="walletVertical === opt.id
+                  ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+                :aria-pressed="walletVertical === opt.id"
+                @click="selectWalletVertical(opt.id)"
+              >{{ opt.label }}</button>
+            </div>
             <div class="p-4 space-y-2">
               <div v-if="loadingWallet" class="space-y-2">
                 <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-xl bg-slate-800/50" />
@@ -1070,41 +1087,114 @@
               </div>
               <div v-else-if="!walletTransactions.length" class="ui-empty-state text-center p-5 space-y-2">
                 <AppIcon name="tag" class="mx-auto h-7 w-7 text-slate-600" aria-hidden="true" />
-                <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.walletNoTransactions') }}</p>
+                <p class="text-sm font-semibold text-slate-300">{{ walletVertical ? t('customerAccount.walletNoTransactionsFiltered') : t('customerAccount.walletNoTransactions') }}</p>
               </div>
               <ul v-else class="space-y-1.5">
-                <li
-                  v-for="tx in walletTransactions"
-                  :key="tx.id"
-                  class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
-                >
-                  <div class="flex items-center gap-2.5">
-                    <div
-                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                      :class="tx.type === 'loyalty' ? 'bg-indigo-500/12' : tx.type === 'bonus' ? 'bg-violet-500/12' : isOutflow(tx) ? 'bg-red-500/12' : 'bg-emerald-500/12'"
-                    >
-                      <!-- Loyalty / bonus: star icon -->
-                      <svg v-if="tx.type === 'loyalty' || tx.type === 'bonus'" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" class="h-3.5 w-3.5" :class="tx.type === 'loyalty' ? 'text-indigo-400' : 'text-violet-400'"><path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/></svg>
-                      <!-- Outflow: arrow up -->
-                      <svg v-else-if="isOutflow(tx)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-red-400"><path d="M8 13V3M5 6l3-3 3 3"/></svg>
-                      <!-- Inflow: arrow down -->
-                      <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-emerald-400"><path d="M8 3v10M5 10l3 3 3-3"/></svg>
+                <template v-for="(group, gi) in walletTransactionGroups" :key="group.key">
+                  <!-- Date group header -->
+                  <li
+                    :class="gi > 0 ? 'pt-2' : ''"
+                    class="px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+                  >{{ group.label }}</li>
+                  <li
+                    v-for="tx in group.items"
+                    :key="tx.id"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="t('customerAccount.walletViewReceipt')"
+                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs transition-colors hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                    @click="openWalletReceipt(tx)"
+                    @keyup.enter="openWalletReceipt(tx)"
+                    @keyup.space.prevent="openWalletReceipt(tx)"
+                  >
+                    <div class="flex items-center gap-2.5">
+                      <div
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                        :class="tx.type === 'loyalty' ? 'bg-indigo-500/12' : tx.type === 'bonus' ? 'bg-violet-500/12' : isOutflow(tx) ? 'bg-red-500/12' : 'bg-emerald-500/12'"
+                      >
+                        <!-- Loyalty / bonus: star icon -->
+                        <svg v-if="tx.type === 'loyalty' || tx.type === 'bonus'" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" class="h-3.5 w-3.5" :class="tx.type === 'loyalty' ? 'text-indigo-400' : 'text-violet-400'"><path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/></svg>
+                        <!-- Outflow: arrow up -->
+                        <svg v-else-if="isOutflow(tx)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-red-400"><path d="M8 13V3M5 6l3-3 3 3"/></svg>
+                        <!-- Inflow: arrow down -->
+                        <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-emerald-400"><path d="M8 3v10M5 10l3 3 3-3"/></svg>
+                      </div>
+                      <div class="min-w-0 space-y-0.5">
+                        <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
+                        <p class="text-[11px] text-slate-500">
+                          <span v-if="tx.vertical" class="me-1 text-slate-400">{{ VERTICAL_SVC_LABELS[tx.vertical] || tx.vertical }} ·</span><span v-if="tx.note" class="me-1 text-slate-400">{{ tx.note }} ·</span>{{ formatDate(tx.created_at) }}
+                        </p>
+                      </div>
                     </div>
-                    <div class="min-w-0 space-y-0.5">
-                      <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
-                      <p class="text-[11px] text-slate-500">
-                        <span v-if="tx.note" class="me-1 text-slate-400">{{ tx.note }} ·</span>{{ formatDate(tx.created_at) }}
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    class="shrink-0 font-semibold tabular-nums"
-                    :class="isOutflow(tx) ? 'text-red-300' : 'text-emerald-300'"
-                  >{{ formatPrice(tx.amount) }}</span>
-                </li>
+                    <span
+                      class="shrink-0 font-semibold tabular-nums"
+                      :class="isOutflow(tx) ? 'text-red-300' : 'text-emerald-300'"
+                    >{{ formatPrice(tx.amount) }}</span>
+                  </li>
+                </template>
               </ul>
             </div>
           </div>
+
+          <!-- Transaction receipt / detail sheet -->
+          <Teleport to="body">
+            <div
+              v-if="walletReceipt"
+              class="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+              role="dialog"
+              aria-modal="true"
+              :aria-label="t('customerAccount.walletReceiptTitle')"
+              @click.self="walletReceipt = null"
+            >
+              <div class="ui-panel w-full max-w-sm space-y-4 rounded-b-none rounded-t-2xl p-5 sm:rounded-2xl">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.walletReceiptTitle') }}</p>
+                  <button
+                    type="button"
+                    class="rounded-lg p-1 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                    :aria-label="t('common.close')"
+                    @click="walletReceipt = null"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true" class="h-4 w-4"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                  </button>
+                </div>
+                <div class="flex flex-col items-center gap-1 py-1">
+                  <span
+                    class="text-2xl font-black tabular-nums"
+                    :class="isOutflow(walletReceipt) ? 'text-red-300' : 'text-emerald-300'"
+                  >{{ isOutflow(walletReceipt) ? '−' : '+' }}{{ formatPrice(walletReceipt.amount) }}</span>
+                  <span class="text-xs font-medium text-slate-400">{{ txLabel(walletReceipt) }}</span>
+                </div>
+                <dl class="space-y-2 border-t border-slate-800/70 pt-3 text-xs">
+                  <div class="flex items-center justify-between gap-3">
+                    <dt class="text-slate-500">{{ t('customerAccount.walletReceiptType') }}</dt>
+                    <dd class="font-medium text-slate-300">{{ t(TX_LABEL_MAP[walletReceipt.type] || 'customerAccount.walletTxFallback') }}</dd>
+                  </div>
+                  <div v-if="walletReceipt.vertical" class="flex items-center justify-between gap-3">
+                    <dt class="text-slate-500">{{ t('customerAccount.walletReceiptService') }}</dt>
+                    <dd class="font-medium text-slate-300">{{ VERTICAL_SVC_LABELS[walletReceipt.vertical] || walletReceipt.vertical }}</dd>
+                  </div>
+                  <div v-if="walletReceipt.reference" class="flex items-center justify-between gap-3">
+                    <dt class="text-slate-500">{{ t('customerAccount.walletReceiptReference') }}</dt>
+                    <dd class="font-mono text-slate-300">{{ walletReceipt.reference }}</dd>
+                  </div>
+                  <div v-if="walletReceipt.note" class="flex items-start justify-between gap-3">
+                    <dt class="shrink-0 text-slate-500">{{ t('customerAccount.walletReceiptNote') }}</dt>
+                    <dd class="text-end text-slate-300">{{ walletReceipt.note }}</dd>
+                  </div>
+                  <div class="flex items-center justify-between gap-3">
+                    <dt class="text-slate-500">{{ t('customerAccount.walletReceiptDate') }}</dt>
+                    <dd class="text-slate-300">{{ formatDateTime(walletReceipt.created_at) }}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  class="w-full rounded-xl border border-slate-700 py-2.5 text-sm font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100"
+                  @click="walletReceipt = null"
+                >{{ t('common.close') }}</button>
+              </div>
+            </div>
+          </Teleport>
 
           <!-- Spend by vertical breakdown -->
           <div
@@ -1941,6 +2031,7 @@ import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
+import { groupWalletTransactionsByDate } from '../lib/walletHistory';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -2624,7 +2715,10 @@ const fetchWallet = async () => {
   loadingWallet.value = true;
   walletError.value = false;
   try {
-    const res = await api.get('/customer/wallet/');
+    // ?vertical= scopes ONLY the transaction list; balance + spend-by-vertical
+    // stay global (one wallet pool). Blank/all → unfiltered list.
+    const params = walletVertical.value ? `?vertical=${encodeURIComponent(walletVertical.value)}` : '';
+    const res = await api.get(`/customer/wallet/${params}`);
     walletTransactions.value = res.data.transactions || [];
     p2pEnabled.value = Boolean(res.data.p2p_enabled);
     walletSpendByVertical.value = res.data.spend_by_vertical || {};
@@ -2723,6 +2817,60 @@ const selectVertical = (v) => {
 
 // ── Wallet spend-by-vertical ──────────────────────────────────────────────────
 const walletSpendByVertical = ref({});
+
+// ── Wallet transaction per-vertical filter + receipt sheet ────────────────────
+// Selected vertical filter for the wallet tx list (''=all). Server-side ?vertical=.
+const walletVertical = ref('');
+
+// Filter chips: "All" + every enabled vertical that a WalletTransaction can carry
+// (food/shops/pharmacy from orders, rides/courier from trips). Unlike the orders
+// tab, wallet tx DO span rides/courier, so we include them here.
+const WALLET_FILTER_OPTIONS = computed(() => {
+  const opts = [{ id: '', label: t('customerAccount.svcAll') }];
+  const map = {
+    [FOOD]:     t('customerAccount.svcFood'),
+    [SHOPS]:    t('customerAccount.svcShops'),
+    [PHARMACY]: t('customerAccount.svcPharmacy'),
+    [RIDES]:    t('customerAccount.svcRides'),
+    [COURIER]:  t('customerAccount.svcCourier'),
+  };
+  for (const v of customerStore.enabledVerticals) {
+    if (map[v]) opts.push({ id: v, label: map[v] });
+  }
+  return opts;
+});
+
+const selectWalletVertical = (v) => {
+  if (walletVertical.value === v) return;
+  walletVertical.value = v;
+  fetchWallet();
+};
+
+// Group the (already date-sorted, newest-first) tx list into Today / Yesterday /
+// month buckets so a long history reads as a dated ledger rather than a flat wall.
+const walletTransactionGroups = computed(() =>
+  groupWalletTransactionsByDate(walletTransactions.value, {
+    t: (k) => t(k === 'today' ? 'customerAccount.walletGroupToday' : 'customerAccount.walletGroupYesterday'),
+    formatMonth: (d) => {
+      try {
+        return new Intl.DateTimeFormat(currentLocale.value, { month: 'long', year: 'numeric' }).format(d);
+      } catch { return `${d.getFullYear()}-${d.getMonth()}`; }
+    },
+  }),
+);
+
+// Receipt / detail sheet — the tapped transaction (or null when closed).
+const walletReceipt = ref(null);
+const openWalletReceipt = (tx) => { walletReceipt.value = tx; };
+
+const formatDateTime = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso));
+  } catch { return iso; }
+};
 
 // ── Per-service notification preferences ─────────────────────────────────────
 const serviceProfiles = ref({});

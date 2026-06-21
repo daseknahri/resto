@@ -55,3 +55,42 @@ def record_notification(
         )
     except Exception:  # noqa: BLE001 — auditing must never break the caller
         logger.debug("record_notification failed (non-fatal)", exc_info=True)
+
+
+def create_customer_notification(
+    *,
+    customer_id,
+    title: str,
+    body: str = "",
+    url: str = "",
+    type: str = "",  # noqa: A002 — mirrors the model field name
+    vertical: str = "general",
+) -> None:
+    """Persist ONE customer-facing inbox row mirroring an outbound push event.
+
+    Called alongside ``record_notification`` at the customer push call-sites in
+    accounts.push so a missed/denied/backgrounded Web Push is no longer lost — the
+    inbox is the durable, deep-linkable source of truth (Careem/Grab pattern), push is
+    just the delivery channel. Same title/body/url as the push.
+
+    Writes in the PUBLIC schema (the model lives there, like CustomerPushSubscription) so
+    it is correct off the request path. Best-effort: any failure is swallowed so it can
+    never break (or slow to breaking) the notification path it instruments.
+    """
+    if not customer_id or not title:
+        return
+    try:
+        from django_tenants.utils import schema_context
+        from .models import CustomerNotification
+
+        with schema_context("public"):
+            CustomerNotification.objects.create(
+                customer_id=int(customer_id),
+                title=str(title)[:160],
+                body=str(body)[:400],
+                url=str(url)[:300],
+                type=str(type)[:40],
+                vertical=str(vertical or "general")[:12],
+            )
+    except Exception:  # noqa: BLE001 — the inbox must never break the caller
+        logger.debug("create_customer_notification failed (non-fatal)", exc_info=True)

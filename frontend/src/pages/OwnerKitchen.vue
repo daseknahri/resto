@@ -249,6 +249,13 @@
             >
               <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
             </span>
+            <!-- Due-soon badge — a scheduled order now inside its prep window -->
+            <span
+              v-if="kitchenDueSoon(order)"
+              class="mt-1 ms-1 inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300 motion-safe:animate-pulse"
+            >
+              <span aria-hidden="true">⏱</span> {{ t('kitchen.dueSoon') }}
+            </span>
             <!-- Delivery job status chip — kitchen staff visibility -->
             <span
               v-if="order.fulfillment_type === 'delivery' && order.delivery_job"
@@ -521,6 +528,7 @@ import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { useNowTicker } from "../composables/useNowTicker";
+import { isDueSoon } from "../lib/ownerLiveFocus";
 import { chipClass as statusChipClass } from "../lib/orderStatusMeta";
 import { useWakeLock } from "../composables/useWakeLock";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
@@ -1091,6 +1099,10 @@ const formatScheduledFor = (iso) => {
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
+
+// A scheduled advance order is "due soon" once it enters its prep window (or its
+// fire time has passed) — the line should start it now. Drives the DUE SOON badge.
+const kitchenDueSoon = (order) => Boolean(order.scheduled_for) && isDueSoon(order, tickerNow.value);
 
 const actionLabel = (order) => ({
   pending: t("kitchen.actionAccept"),

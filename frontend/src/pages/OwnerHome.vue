@@ -35,8 +35,29 @@
         <div class="ui-scroll-row mt-0.5">
           <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
           <span class="ui-chip">{{ planModeLabel }}</span>
+          <!-- Focus mode: surface the single most-important next action for a solo owner -->
+          <button
+            type="button"
+            class="ui-chip ui-press inline-flex items-center gap-1 transition-colors"
+            :class="focusMode ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
+            :aria-pressed="focusMode"
+            @click="toggleFocusMode"
+          >
+            <span aria-hidden="true">🎯</span>
+            {{ focusMode ? t('ownerHome.focusOn') : t('ownerHome.focusOff') }}
+          </button>
         </div>
       </div>
+
+      <!-- ── FOCUS MODE: one prominent next-action card for the solo owner ──── -->
+      <OwnerNextAction
+        v-if="focusMode"
+        :orders="focusOrders"
+        :sold-out-count="soldOutCount"
+        :busy="focusBusy"
+        @act="handleNextAction"
+        @skip="skipNextAction"
+      />
 
       <!-- Open / Closed — the first thing an owner checks: are we taking orders? -->
       <div
@@ -398,6 +419,49 @@
         </div>
       </div>
 
+      <!-- Upcoming / advance orders strip — scheduled or near-due pre-orders so a
+           pre-ordered lunch isn't invisible until it's late. -->
+      <div v-if="upcoming.length" class="space-y-2">
+        <p class="ui-kicker inline-flex items-center gap-1.5">
+          <span aria-hidden="true">🗓️</span>{{ t("ownerHome.upcomingTitle") }}
+        </p>
+        <div
+          v-for="o in upcoming"
+          :key="o.id"
+          class="flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-xs transition-colors"
+          :class="upcomingMinutes(o) <= 0
+            ? 'border-violet-500/50 bg-violet-500/10'
+            : 'border-slate-700 bg-slate-950/40'"
+        >
+          <div class="flex min-w-0 items-center gap-2.5">
+            <span class="font-mono font-bold tabular-nums text-slate-100">{{ o.order_number }}</span>
+            <span v-if="o.fulfillment_type" class="hidden text-slate-400 sm:inline">{{ fulfillmentLabel(o) }}</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+              :class="upcomingMinutes(o) <= 0
+                ? 'bg-violet-500/25 text-violet-200'
+                : upcomingMinutes(o) <= 30
+                  ? 'bg-amber-500/20 text-amber-300'
+                  : 'bg-slate-700/70 text-slate-300'"
+            >
+              <span aria-hidden="true">⏱</span>
+              {{ upcomingMinutes(o) <= 0
+                ? t('ownerHome.upcomingDueNow')
+                : t('ownerHome.upcomingFiresIn', { min: upcomingMinutes(o) }) }}
+            </span>
+          </div>
+          <button
+            v-if="o.status === 'scheduled'"
+            type="button"
+            class="ui-press shrink-0 rounded-full border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20 disabled:opacity-50"
+            :disabled="releasingId === o.id"
+            @click="releaseUpcoming(o)"
+          >
+            {{ releasingId === o.id ? t('common.loading') : t('ownerHome.upcomingStartNow') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Recent orders list -->
       <div v-if="recentOrders.length" class="space-y-2">
         <p class="ui-kicker">{{ t("ownerHome.recentOrdersList") }}</p>
@@ -455,12 +519,15 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import OwnerDashboardAlerts from "../components/OwnerDashboardAlerts.vue";
 import OwnerDashboardReadiness from "../components/OwnerDashboardReadiness.vue";
 import OwnerDashboardDishPanel from "../components/OwnerDashboardDishPanel.vue";
+import OwnerNextAction from "../components/OwnerNextAction.vue";
 import { useI18n } from "../composables/useI18n";
+import { useNowTicker } from "../composables/useNowTicker";
+import { upcomingOrders, minutesUntilScheduled } from "../lib/ownerLiveFocus";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
@@ -474,6 +541,7 @@ defineOptions({ name: "OwnerHome" });
 const tenant = useTenantStore();
 const order = useOrderStore();
 const toast = useToastStore();
+const router = useRouter();
 const { t, formatNumber, currentLocale } = useI18n();
 
 // ── Capability gates ──────────────────────────────────────────────────────────
@@ -701,6 +769,84 @@ const recentOrders = computed(() =>
     })
     .slice(0, 6)
 );
+
+// ── Upcoming / advance (scheduled) orders ─────────────────────────────────────
+// Surface scheduled or near-due pre-orders in the live flow with a fires-in
+// countdown + a Start-now release. Recomputes off the shared ticker.
+const { now: focusNow } = useNowTicker();
+const upcoming = computed(() => upcomingOrders(order.orders, focusNow.value));
+const upcomingMinutes = (o) => minutesUntilScheduled(o, focusNow.value);
+
+const releasingId = ref(null);
+const releaseUpcoming = async (o) => {
+  if (releasingId.value) return;
+  releasingId.value = o.id;
+  try {
+    // Release a scheduled advance order to the kitchen now (scheduled → pending).
+    await order.updateOrderStatus(o.id, { status: "pending" });
+    toast.show(t("ownerHome.upcomingReleased", { order: o.order_number }), "success");
+  } catch {
+    toast.show(t("ownerOrders.updateFailed"), "error");
+  } finally {
+    releasingId.value = null;
+  }
+};
+
+// ── Focus mode: single next-action surface for a solo owner ───────────────────
+const FOCUS_KEY = typeof window === "undefined" ? "owner:focus" : `owner:focus:${window.location.hostname}`;
+const focusMode = ref((() => {
+  try { return localStorage.getItem(FOCUS_KEY) === "on"; } catch { return false; }
+})());
+const toggleFocusMode = () => {
+  focusMode.value = !focusMode.value;
+  try { localStorage.setItem(FOCUS_KEY, focusMode.value ? "on" : "off"); } catch { /* ignore */ }
+};
+
+// Orders the owner has skipped this session — removed from the focus candidate
+// pool so "Next" can cycle past one to the following action.
+const skippedFocusIds = ref(new Set());
+const focusOrders = computed(() =>
+  order.orders.filter((o) => !skippedFocusIds.value.has(o.id)),
+);
+const skipNextAction = (action) => {
+  if (action?.order?.id != null) {
+    skippedFocusIds.value = new Set(skippedFocusIds.value).add(action.order.id);
+  }
+};
+
+const focusBusy = ref(false);
+const handleNextAction = async (action) => {
+  if (focusBusy.value) return;
+  const o = action?.order;
+  focusBusy.value = true;
+  try {
+    if (action.kind === "confirm") {
+      await order.updateOrderStatus(o.id, { status: "confirmed" });
+      toast.show(t("ownerOrders.updated"), "success");
+    } else if (action.kind === "dueSoon") {
+      await order.updateOrderStatus(o.id, { status: o.status === "scheduled" ? "pending" : "preparing" });
+      toast.show(t("ownerOrders.updated"), "success");
+    } else if (action.kind === "handoff") {
+      const next = o.fulfillment_type === "delivery" ? "out_for_delivery" : "completed";
+      await order.updateOrderStatus(o.id, { status: next });
+      toast.show(t("ownerOrders.updated"), "success");
+    } else if (action.kind === "overdue") {
+      await order.updateOrderStatus(o.id, { status: "ready" });
+      toast.show(t("ownerOrders.updated"), "success");
+    } else if (action.kind === "fire") {
+      // Coursing fires from the kitchen view; route the owner there to fire it.
+      await router.push({ name: "owner-kitchen" });
+    } else if (action.kind === "soldOut") {
+      await api.post("/owner/dishes/reset-availability/");
+      soldOutCount.value = 0;
+      toast.show(t("ownerHome.allClear"), "success");
+    }
+  } catch {
+    toast.show(t("ownerOrders.updateFailed"), "error");
+  } finally {
+    focusBusy.value = false;
+  }
+};
 
 // ── Order helpers ─────────────────────────────────────────────────────────────
 // An order is "urgent" when it has been in a live status longer than expected:

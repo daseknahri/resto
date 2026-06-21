@@ -222,6 +222,53 @@
       </div>
     </header>
 
+    <!-- ── UPCOMING / DUE-SOON STRIP: scheduled + near-due advance orders ──── -->
+    <section
+      v-if="activeTab === 'active' && upcoming.length"
+      class="rounded-2xl border border-violet-500/30 bg-violet-500/5 px-4 py-3 space-y-2"
+      :aria-label="t('ownerOrders.upcomingTitle')"
+    >
+      <p class="ui-kicker inline-flex items-center gap-1.5 text-violet-300/80">
+        <span aria-hidden="true">🗓️</span>{{ t('ownerOrders.upcomingTitle') }}
+      </p>
+      <div
+        v-for="o in upcoming"
+        :key="o.id"
+        class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs transition-colors"
+        :class="upcomingMinutes(o) <= 0
+          ? 'border-violet-500/50 bg-violet-500/10'
+          : 'border-slate-700/70 bg-slate-950/40'"
+      >
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <span class="font-mono font-bold tabular-nums text-white">{{ o.order_number }}</span>
+          <span class="ui-data-strip font-medium">{{ fulfillmentLabel(o) }}</span>
+          <span class="text-slate-500">{{ formatScheduledFor(o.scheduled_for) }}</span>
+          <span
+            class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+            :class="upcomingMinutes(o) <= 0
+              ? 'bg-violet-500/25 text-violet-200'
+              : upcomingMinutes(o) <= 30
+                ? 'bg-amber-500/20 text-amber-300'
+                : 'bg-slate-700/70 text-slate-300'"
+          >
+            <span aria-hidden="true">⏱</span>
+            {{ upcomingMinutes(o) <= 0
+              ? t('ownerOrders.dueSoonBadge')
+              : t('ownerOrders.upcomingFiresIn', { min: upcomingMinutes(o) }) }}
+          </span>
+        </div>
+        <button
+          v-if="o.status === 'scheduled'"
+          type="button"
+          class="ui-press shrink-0 rounded-full border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20 disabled:opacity-50"
+          :disabled="order.updatingOrderId === o.id"
+          @click="releaseNow(o)"
+        >
+          {{ order.updatingOrderId === o.id ? t('common.loading') : t('ownerOrders.releaseNow') }}
+        </button>
+      </div>
+    </section>
+
     <!-- ── ACTIVE TAB: loading / error / empty / list ─────────────────── -->
     <template v-if="activeTab === 'active'">
     <!-- Loading: skeleton order cards -->
@@ -462,6 +509,13 @@
                 class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
               >
                 <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(o.scheduled_for) }}
+              </span>
+              <!-- Due-soon badge — near/past fire time while still in a live status -->
+              <span
+                v-if="o.scheduled_for && o.status !== 'completed' && o.status !== 'cancelled' && orderIsDueSoon(o)"
+                class="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300"
+              >
+                <span aria-hidden="true">⏱</span> {{ t('ownerOrders.dueSoonBadge') }}
               </span>
               <!-- Payment badge -->
               <span
@@ -1067,6 +1121,8 @@ import AppIcon from "../components/AppIcon.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
+import { useNowTicker } from "../composables/useNowTicker";
+import { upcomingOrders, minutesUntilScheduled, isDueSoon } from "../lib/ownerLiveFocus";
 import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
@@ -1367,6 +1423,17 @@ const formatScheduledFor = (iso) => {
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
+
+// ── Upcoming / advance (scheduled) orders ─────────────────────────────────────
+// A "due soon" strip surfaces scheduled or near-due pre-orders proactively so a
+// pre-ordered lunch isn't invisible until it's late. Recomputes off the ticker.
+const { now: tickerNow } = useNowTicker();
+const upcoming = computed(() => upcomingOrders(order.orders, tickerNow.value));
+const upcomingMinutes = (o) => minutesUntilScheduled(o, tickerNow.value);
+// True when an order carries a scheduled_for that is within (or past) its window.
+const orderIsDueSoon = (o) => isDueSoon(o, tickerNow.value);
+
+const releaseNow = async (o) => updateStatus(o, "pending");
 
 const statusLabel = (s) => ({
   scheduled: t("ownerOrders.statusScheduled"),

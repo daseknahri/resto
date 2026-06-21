@@ -125,6 +125,116 @@ class TestCustomerServicesView(SimpleTestCase):
         self.assertEqual(svc["driver"]["last_activity"], d.isoformat())
 
 
+class TestCustomerActiveItemsView(SimpleTestCase):
+    """Super-app resume rail: active order / ride / package aggregator."""
+
+    def _req(self, customer_id=1):
+        req = MagicMock()
+        req.session = {"customer_id": customer_id} if customer_id else {}
+        return req
+
+    def test_unauthenticated_returns_401(self):
+        from accounts.views import CustomerActiveItemsView
+
+        resp = CustomerActiveItemsView().get(self._req(customer_id=None))
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.CustomerOrderRef")
+    def test_aggregates_active_order_ride_package(self, mock_ref, mock_ride):
+        from accounts.views import CustomerActiveItemsView
+
+        created = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
+
+        order = MagicMock()
+        order.order_number = "A123"
+        order.restaurant_name = "Pizza Place"
+        order.restaurant_slug = "pizza-place"
+        order.status = "preparing"
+        order.fulfillment_type = "delivery"
+        order.total = "85.00"
+        order.currency = "MAD"
+        order.vertical = "food"
+        order.order_created_at = created
+        mock_ref.objects.filter.return_value.order_by.return_value.__getitem__.return_value = [order]
+
+        # RideRequest.TERMINAL_STATUSES / Kind are read off the patched class — set them.
+        mock_ride.TERMINAL_STATUSES = {"completed", "cancelled"}
+        mock_ride.Kind.RIDE = "ride"
+        mock_ride.Kind.PACKAGE = "package"
+
+        ride = MagicMock()
+        ride.pk = 7
+        ride.kind = "ride"
+        ride.status = "accepted"
+        ride.pickup_address = "Pickup St"
+        ride.dropoff_address = "Dropoff Ave"
+        ride.fare = "40.00"
+        ride.created_at = created
+        # filter().exclude().order_by().first() — ride for first call, None for package.
+        chain = mock_ride.objects.filter.return_value.exclude.return_value.order_by.return_value
+        chain.first.side_effect = [ride, None]
+
+        resp = CustomerActiveItemsView().get(self._req(1))
+        self.assertEqual(len(resp.data["orders"]), 1)
+        self.assertEqual(resp.data["orders"][0]["order_number"], "A123")
+        self.assertEqual(resp.data["orders"][0]["status"], "preparing")
+        self.assertIsNotNone(resp.data["ride"])
+        self.assertEqual(resp.data["ride"]["status"], "accepted")
+        self.assertEqual(resp.data["ride"]["dropoff_address"], "Dropoff Ave")
+        self.assertIsNone(resp.data["package"])
+
+
+class TestSerializeCustomerRoleFlags(SimpleTestCase):
+    """Additive read-only role flags on the customer session serializer."""
+
+    def _customer(self, **over):
+        c = MagicMock()
+        c.pk = 1
+        c.email = over.get("email", "")
+        c.email_verified = over.get("email_verified", False)
+        c.is_driver = over.get("is_driver", False)
+        c.driver_approved = over.get("driver_approved", False)
+        c.is_driver_online = False
+        c.birthday = None
+        # Numeric / string fields used by the serializer
+        c.wallet_balance = "0"
+        c.loyalty_points = 0
+        c.lifetime_loyalty_points = 0
+        c.locale = "en"
+        c.referral_code = ""
+        return c
+
+    def test_driver_approved_flag_passthrough(self):
+        from accounts.views import _serialize_customer
+
+        data = _serialize_customer(self._customer(is_driver=True, driver_approved=True))
+        self.assertTrue(data["is_driver"])
+        self.assertTrue(data["driver_approved"])
+
+    @patch("accounts.models.User")
+    def test_has_tenant_false_when_email_unverified(self, mock_user):
+        from accounts.views import _serialize_customer
+
+        data = _serialize_customer(
+            self._customer(email="owner@shop.com", email_verified=False)
+        )
+        self.assertFalse(data["has_tenant"])
+        self.assertFalse(data["is_staff"])
+        mock_user.objects.filter.assert_not_called()
+
+    @patch("accounts.models.User")
+    def test_has_tenant_true_when_verified_email_matches_tenant_user(self, mock_user):
+        from accounts.views import _serialize_customer
+
+        mock_user.objects.filter.return_value.exists.return_value = True
+        data = _serialize_customer(
+            self._customer(email="owner@shop.com", email_verified=True)
+        )
+        self.assertTrue(data["has_tenant"])
+        self.assertTrue(data["is_staff"])
+
+
 class TestCustomerServiceProfilesView(SimpleTestCase):
     """P3: read/update per-service notification preferences."""
 

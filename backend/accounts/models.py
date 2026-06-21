@@ -1390,3 +1390,65 @@ class UserTOTPDevice(models.Model):
                 self.save(update_fields=["backup_codes"])
                 return True
         return False
+
+
+class CustomerNotification(models.Model):
+    """Persistent, customer-facing in-app notification (the inbox / notification center).
+
+    Lives in the PUBLIC schema so it can be written from any tenant ``schema_context``
+    AND from platform-level (ride/courier/wallet) dispatch — exactly like
+    ``CustomerPushSubscription`` and ``NotificationLog``. This MIRRORS the existing
+    fire-and-forget Web Push events (same title/body/url) so a missed/denied/backgrounded
+    push is no longer lost forever: the inbox is the durable source of truth and push is
+    just one delivery channel (the Careem/Grab pattern).
+
+    Distinct from ``NotificationLog`` — that is a server-side AUDIT table (delivery
+    outcome, subscriber counts); this is the CUSTOMER-FACING feed they read in the app.
+
+    Loose ``customer_id`` (no FK constraint) for cross-schema safety with django-tenants,
+    matching the convention used by ``WinbackNudge`` / ``NotificationLog``.
+    """
+
+    # Coarse cross-vertical grouping for icon/colour + per-vertical filtering later.
+    class Vertical(models.TextChoices):
+        FOOD = "food", "Food"
+        SHOPS = "shops", "Shops"
+        PHARMACY = "pharmacy", "Pharmacy"
+        RIDE = "ride", "Ride"
+        COURIER = "courier", "Courier"
+        WALLET = "wallet", "Wallet"
+        GENERAL = "general", "General"
+
+    customer_id = models.BigIntegerField(
+        db_index=True,
+        help_text="FK to accounts.Customer (loose — no FK constraint for cross-schema safety).",
+    )
+    # Machine event key mirroring the push event (e.g. delivery.delivered, ride.accepted,
+    # review_prompt, charge_request) — useful for client-side icon mapping / dedupe.
+    type = models.CharField(max_length=40, blank=True, db_index=True)
+    vertical = models.CharField(
+        max_length=12, choices=Vertical.choices, default=Vertical.GENERAL, db_index=True
+    )
+    title = models.CharField(max_length=160)
+    body = models.CharField(max_length=400, blank=True)
+    # In-app deep link (relative path) the row navigates to on tap, e.g. /orders/ORD-1.
+    url = models.CharField(max_length=300, blank=True)
+    # Null until the customer reads it; powers the unread badge + mark-read.
+    read_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            # Inbox list + unread-count are always scoped to one customer, newest-first.
+            models.Index(fields=("customer_id", "created_at"), name="custnotif_cust_created"),
+            models.Index(fields=("customer_id", "read_at"), name="custnotif_cust_read"),
+        ]
+
+    @property
+    def is_read(self) -> bool:
+        return self.read_at is not None
+
+    def __str__(self) -> str:
+        state = "read" if self.read_at else "unread"
+        return f"CustomerNotification(cust={self.customer_id}, {self.type}, {state})"

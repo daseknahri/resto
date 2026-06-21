@@ -25,8 +25,6 @@ def _send_charge_request_sync(customer_id, restaurant_name, amount):
     with schema_context("public"):
         cust = Customer.objects.filter(pk=customer_id).first()
         subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
-    if not subs:
-        return
 
     loc = (getattr(cust, "locale", "") or "en")
     if loc not in _MESSAGES:
@@ -34,6 +32,20 @@ def _send_charge_request_sync(customer_id, restaurant_name, amount):
     msg = _MESSAGES[loc]
     title = msg["title"].format(r=restaurant_name or msg["restaurant"])
     body = msg["body"].format(a=amount)
+
+    # Durable inbox row mirroring the charge-approval push (a wallet event the customer
+    # must see even if the push was missed). Deep-links to the account/charge surface.
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=customer_id, title=title, body=body, url="/account",
+            type="charge_request", vertical="wallet",
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return
 
     gone = []
     for s in subs:
@@ -303,8 +315,6 @@ def notify_customer_order_milestone_sync(order_number, tenant_id, event) -> int:
         if cust is not None and not getattr(cust, "notify_order_updates", True):
             return 0
         subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
-    if not subs:
-        return 0
 
     loc = (getattr(cust, "locale", "") or "en")
     if loc not in copy:
@@ -313,6 +323,21 @@ def notify_customer_order_milestone_sync(order_number, tenant_id, event) -> int:
     title = msg["title"].format(r=restaurant_name)
     body = msg["body"].format(r=restaurant_name)
     url = f"/orders/{order_number}"
+
+    # Persist a durable inbox row mirroring this push (the source of truth even if the
+    # push is missed/denied). Written BEFORE the no-subscription guard so the inbox is
+    # populated even for customers who never enabled push.
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=customer_id, title=title, body=body, url=url,
+            type=f"delivery.{event}", vertical="food",
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return 0
 
     gone, sent = [], 0
     for s in subs:
@@ -352,8 +377,6 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     # Respect the customer's opt-out for review reminders.
     if cust is not None and not getattr(cust, "notify_review_prompts", True):
         return 0
-    if not subs:
-        return 0
 
     loc = (getattr(cust, "locale", "") or "en")
     if loc not in _REVIEW_MESSAGES:
@@ -362,6 +385,19 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     title = msg["title"].format(r=restaurant_name or "your order")
     body = msg["body"]
     url = f"/orders/{order_number}"
+
+    # Durable inbox row mirroring the review-prompt push (written even with no subs).
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=customer_id, title=title, body=body, url=url,
+            type="review_prompt", vertical="food",
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return 0
 
     gone, sent = [], 0
     for s in subs:
@@ -403,8 +439,6 @@ def send_predispatch_reminder_sync(customer_id, restaurant_name, order_number) -
 
     if cust is not None and not getattr(cust, "notify_order_updates", True):
         return 0
-    if not subs:
-        return 0
 
     loc = (getattr(cust, "locale", "") or "en")
     if loc not in _PREDISPATCH_REMINDER_MESSAGES:
@@ -413,6 +447,19 @@ def send_predispatch_reminder_sync(customer_id, restaurant_name, order_number) -
     title = msg["title"]
     body = msg["body"].format(r=restaurant_name or "the restaurant")
     url = f"/orders/{order_number}"
+
+    # Durable inbox row mirroring the predispatch reminder push (written even with no subs).
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=customer_id, title=title, body=body, url=url,
+            type="predispatch_reminder", vertical="food",
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return 0
 
     gone, sent = [], 0
     for s in subs:
@@ -622,13 +669,25 @@ def notify_rider_sync(rider_id, event) -> int:
     with schema_context("public"):
         cust = Customer.objects.filter(pk=rider_id).first()
         subs = list(CustomerPushSubscription.objects.filter(customer_id=rider_id))
-    if not subs:
-        return 0
 
     loc = (getattr(cust, "locale", "") or "en")
     if loc not in copy:
         loc = "en"
     msg = copy[loc]
+
+    # Durable inbox row mirroring the ride-status push (written even with no subs).
+    try:
+        from .notifications import create_customer_notification
+        create_customer_notification(
+            customer_id=rider_id, title=msg["title"], body=msg["body"], url="/rides",
+            type=f"ride.{event}", vertical="ride",
+        )
+    except Exception:
+        pass
+
+    if not subs:
+        return 0
+
     gone, sent = [], 0
     for s in subs:
         result = _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/rides")
