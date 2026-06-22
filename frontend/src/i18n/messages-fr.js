@@ -5017,6 +5017,9 @@ kitchen: {
   includeHeld: "Inclure en attente",
   dueSoon: "Bientot due",
   elapsedFromOrder: "{m} min depuis la commande",
+  autoPrint: "Impression auto",
+  autoPrintOn: "Impression auto : ACTIVÉE",
+  autoPrintOff: "Impression auto : DÉSACTIVÉE",
 },
 stepSuperCategories: {
   title: "Groupes de menu",

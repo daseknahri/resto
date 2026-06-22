@@ -4997,6 +4997,9 @@ export const messages = {
       includeHeld: "Include held",
       dueSoon: "Due soon",
       elapsedFromOrder: "{m} min since order",
+      autoPrint: "Auto-print",
+      autoPrintOn: "Auto-print: ON",
+      autoPrintOff: "Auto-print: OFF",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -10530,6 +10533,9 @@ export const messages = {
       includeHeld: "Inclure en attente",
       dueSoon: "Bientot due",
       elapsedFromOrder: "{m} min depuis la commande",
+      autoPrint: "Impression auto",
+      autoPrintOn: "Impression auto : ACTIVÉE",
+      autoPrintOff: "Impression auto : DÉSACTIVÉE",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

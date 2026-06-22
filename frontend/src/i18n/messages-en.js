@@ -5007,6 +5007,9 @@ kitchen: {
   includeHeld: "Include held",
   dueSoon: "Due soon",
   elapsedFromOrder: "{m} min since order",
+  autoPrint: "Auto-print",
+  autoPrintOn: "Auto-print: ON",
+  autoPrintOff: "Auto-print: OFF",
 },
 orderStatus: {
   kicker: "Order tracking",

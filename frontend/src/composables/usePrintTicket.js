@@ -32,8 +32,7 @@ export function usePrintTicket() {
     return "";
   };
 
-  const printTicket = (o) => {
-    if (!o) return;
+  const _buildHtml = (o) => {
     const cur = o.currency;
     const itemRows = (o.items || []).map((item) => {
       const opts = item.options?.length
@@ -155,6 +154,13 @@ export function usePrintTicket() {
       <div class="footer">${t("ownerOrders.ticketPrinted")} ${new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date())}</div>
     </body></html>`;
 
+    return html;
+  };
+
+  // Manual print: opens a popup window (requires user gesture to avoid popup block).
+  const printTicket = (o) => {
+    if (!o) return;
+    const html = _buildHtml(o);
     const win = window.open("", "_blank", "width=420,height=620");
     if (!win) { toast.show(t("ownerOrders.printBlocked"), "error"); return; }
     win.document.write(html);
@@ -163,5 +169,29 @@ export function usePrintTicket() {
     setTimeout(() => { win.print(); win.close(); }, 300);
   };
 
-  return { printTicket };
+  // Auto-print: hidden iframe avoids popup-blocked restriction for non-gesture contexts.
+  // The browser still shows the print dialog unless a default printer is configured
+  // silently (kiosk/thermal-printer setup). Each call prints one receipt.
+  const printTicketSilent = (o) => {
+    if (!o) return;
+    const html = _buildHtml(o);
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+    document.body.appendChild(iframe);
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+      iframe.contentWindow.focus();
+      setTimeout(() => {
+        try { iframe.contentWindow.print(); } catch { /* cross-origin guard */ }
+        setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1500);
+      }, 300);
+    } catch {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    }
+  };
+
+  return { printTicket, printTicketSilent };
 }

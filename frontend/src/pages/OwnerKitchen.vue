@@ -72,6 +72,18 @@
         >
           <span aria-hidden="true" class="text-sm">{{ kitchenSoundOn ? '🔔' : '🔕' }}</span>
         </button>
+        <!-- Auto-print toggle -->
+        <button
+          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :class="autoPrint ? '' : 'opacity-50'"
+          :aria-label="autoPrint ? t('kitchen.autoPrintOn') : t('kitchen.autoPrintOff')"
+          :aria-pressed="autoPrint"
+          @click="toggleAutoPrint"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+            <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a1 1 0 001 1h8a1 1 0 001-1v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9v-1h8v1H6zm0 2v-1h8v1H6zM4 9h12v3H4V9z" clip-rule="evenodd"/>
+          </svg>
+        </button>
         <!-- Fullscreen toggle -->
         <button
           class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -545,7 +557,15 @@ defineOptions({ name: "OwnerKitchen" });
 const { t, formatDateTime, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 const toast = useToastStore();
-const { printTicket } = usePrintTicket();
+const { printTicket, printTicketSilent } = usePrintTicket();
+
+// ── Auto-print toggle (localStorage-persisted across page reloads) ────────────
+const _AP_KEY = "kepoli.kitchen.autoPrint";
+const autoPrint = ref(localStorage.getItem(_AP_KEY) === "1");
+const toggleAutoPrint = () => {
+  autoPrint.value = !autoPrint.value;
+  localStorage.setItem(_AP_KEY, autoPrint.value ? "1" : "");
+};
 
 // ── Wake lock (contract 3) ────────────────────────────────────────────────────
 // useWakeLock manages its own onMounted/onUnmounted — no return value needed.
@@ -900,6 +920,9 @@ const checkNewOrderIds = (orders) => {
   orders.forEach((o) => _seenOrderIds.add(o.id));
   if (newOnes.length > 0) {
     toast.show(t("orderFlow.newOrder"), "info");
+    if (autoPrint.value) {
+      newOnes.forEach((o) => printTicketSilent(o));
+    }
   }
 };
 
