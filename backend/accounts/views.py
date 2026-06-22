@@ -5240,7 +5240,7 @@ class AdminFlashSaleListCreateView(APIView):
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
         with schema_context("public"):
-            sales = list(PlatformFlashSale.objects.all())
+            sales = list(PlatformFlashSale.objects.all()[:500])
             return Response([_serialize_flash_sale(fs) for fs in sales])
 
     def post(self, request, *args, **kwargs):
@@ -7507,7 +7507,7 @@ class AdminDeliveryZoneListCreateView(APIView):
         from .models import DeliveryZone
         from django_tenants.utils import schema_context
         with schema_context("public"):
-            zones = list(DeliveryZone.objects.all())
+            zones = list(DeliveryZone.objects.all()[:500])
         return Response([_serialize_zone(z) for z in zones])
 
     def post(self, request, *args, **kwargs):
