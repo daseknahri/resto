@@ -1,21 +1,22 @@
-/* eslint-disable */
-'use strict';
+/* global clients */
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 
-/**
- * Service Worker — Web Push notification handler for the owner dashboard.
- *
- * This SW is intentionally minimal: it handles push events (showing the OS
- * notification) and notificationclick events (focusing/opening the owner tab).
- *
- * It does NOT implement cache strategies — Vite manages those separately.
- * Registered from usePushNotifications.js at /sw.js (root scope).
- */
+// Workbox injects the precache manifest here at build time.
+// Includes all Vite-generated JS/CSS chunks, index.html, and icons.
+precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
+
+// SPA shell: serve cached index.html for all navigation requests so the
+// app opens instantly on repeat visits even when the network is slow.
+// API fetch() calls are not "navigation" requests — they bypass this.
+registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')));
 
 // ── Push event ───────────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let payload = { title: 'New order', body: '', url: '/owner/orders' };
+  let payload = { title: 'New notification', body: '', url: '/owner/orders' };
   try {
     payload = { ...payload, ...event.data.json() };
   } catch {
@@ -27,8 +28,8 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      tag: 'new-order',          // Replace previous unread notification of same tag
-      renotify: true,             // Re-alert even if a 'new-order' notification already exists
+      tag: 'new-order',
+      renotify: true,
       requireInteraction: false,
       data: { url: payload.url || '/owner/orders' },
     }),
@@ -44,17 +45,12 @@ self.addEventListener('notificationclick', (event) => {
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Focus any existing app window and navigate it to the target (works for both
-        // the owner dashboard and customer-facing pages like /account).
         for (const client of clientList) {
           if ('focus' in client) {
             return Promise.resolve(client.navigate(targetUrl)).then((c) => (c || client).focus());
           }
         }
-        // Otherwise open a new window.
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
+        if (clients.openWindow) return clients.openWindow(targetUrl);
       }),
   );
 });

@@ -1,8 +1,27 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      // usePushNotifications.js registers '/sw.js' manually — no auto-registration needed.
+      injectRegister: null,
+      // manifest-loader.js + backend serve the per-persona manifests — skip injection.
+      manifest: false,
+      injectManifest: {
+        injectionPoint: "self.__WB_MANIFEST",
+        // Precache all Vite-generated assets: JS chunks, CSS, HTML shell, icons.
+        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+      },
+      // Never activate in dev — push infra is prod-only.
+      devOptions: { enabled: false },
+    }),
+  ],
   server: {
     host: "0.0.0.0",
     port: 5180,
