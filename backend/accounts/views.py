@@ -6982,7 +6982,7 @@ class AdminDriverListView(APIView):
 
         drivers = list(
             Customer.objects.filter(is_driver=True)
-            .order_by("-driver_position_updated_at", "-id")
+            .order_by("-driver_position_updated_at", "-id")[:200]
         )
 
         # Batch job stats per driver

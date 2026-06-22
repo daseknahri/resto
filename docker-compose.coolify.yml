@@ -34,10 +34,12 @@ services:
     expose:
       # Container exposes 3000 (non-root nginx UID 101 binds it; 3000 > 1024).
       - "3000"
-    # Mount media volume read-only so nginx can serve uploaded files directly
+    # Mount media + static volumes read-only so nginx can serve files directly
     # without proxying through Django (faster and eliminates 404 race conditions).
+    # static_data is populated by collectstatic in entrypoint.sh before api is healthy.
     volumes:
       - media_data:/app/media:ro
+      - static_data:/app/staticfiles:ro
     healthcheck:
       # healthcheck hits the container port 3000.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
@@ -61,6 +63,8 @@ services:
     expose:
       # Container exposes 3000 (non-root nginx UID 101 binds it; 3000 > 1024).
       - "3000"
+    volumes:
+      - static_data:/app/staticfiles:ro
     healthcheck:
       # healthcheck hits the container port 3000.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
@@ -193,6 +197,7 @@ services:
       - "8000"
     volumes:
       - media_data:/app/media
+      - static_data:/app/staticfiles
     healthcheck:
       test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/').getcode() == 200 else 1)"]
       interval: 15s
@@ -319,3 +324,4 @@ volumes:
   postgres_data:
   redis_data:
   media_data:
+  static_data:
