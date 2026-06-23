@@ -2072,7 +2072,8 @@ const topUpQueryMsg = computed(() => {
 });
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
-const activeTab = ref('overview');
+const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'loyalty', 'reviews', 'referral'];
+const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'overview');
 const TABS = computed(() => [
   { id: 'overview',      icon: 'home',     label: t('customerAccount.tabOverview')      },
   { id: 'orders',        icon: 'calendar', label: t('customerAccount.tabOrders')        },

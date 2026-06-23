@@ -580,6 +580,7 @@ mktMenu: {
   payFromWalletTitle: "Paid from your wallet",
   walletBalanceLine: "Wallet balance: {balance}",
   walletShortNotice: "Add {amount} to your wallet to place this order.",
+  topUpWallet: "Top up",
   walletTopUpRequired: "Your wallet ({balance}) doesn't cover the {total} total. Top up to continue.",
   walletTopUpRequiredShort: "Top up wallet to order",
   walletInsufficientError: "Your wallet balance doesn't cover this order. Please top up your wallet.",

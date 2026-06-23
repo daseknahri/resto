@@ -815,6 +815,10 @@
               <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
               <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
                 {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
+                <RouterLink
+                  :to="{ name: 'customer-account', query: { tab: 'wallet' } }"
+                  class="ms-1.5 underline hover:no-underline text-amber-300"
+                >{{ t('mktMenu.topUpWallet') }}</RouterLink>
               </p>
             </div>
           </div>

@@ -579,6 +579,7 @@ mktMenu: {
   payFromWalletTitle: "Paye depuis votre portefeuille",
   walletBalanceLine: "Solde du portefeuille : {balance}",
   walletShortNotice: "Ajoutez {amount} a votre portefeuille pour passer cette commande.",
+  topUpWallet: "Recharger",
   walletTopUpRequired: "Votre portefeuille ({balance}) ne couvre pas le total de {total}. Rechargez pour continuer.",
   walletTopUpRequiredShort: "Rechargez pour commander",
   walletInsufficientError: "Votre solde de portefeuille ne couvre pas cette commande. Veuillez recharger votre portefeuille.",
