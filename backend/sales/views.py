@@ -2664,7 +2664,7 @@ class OwnerDashboardView(APIView):
         ]
 
         hourly_rows = (
-            revenue_qs.annotate(hour=ExtractHour("created_at"))
+            revenue_qs.annotate(hour=ExtractHour("created_at", tzinfo=_tenant_tz))
             .values("hour")
             .annotate(orders=Count("id"))
             .order_by("hour")
@@ -2673,7 +2673,7 @@ class OwnerDashboardView(APIView):
         orders_by_hour = [hourly_map.get(h, 0) for h in range(24)]
 
         weekday_rows = (
-            revenue_qs.annotate(weekday=ExtractWeekDay("created_at"))
+            revenue_qs.annotate(weekday=ExtractWeekDay("created_at", tzinfo=_tenant_tz))
             .values("weekday")
             .annotate(orders=Count("id"))
             .order_by("weekday")
@@ -2685,7 +2685,10 @@ class OwnerDashboardView(APIView):
         # 2D heatmap: (weekday 1-7) × (hour 0-23) → order count
         day_hour_rows = (
             revenue_qs
-            .annotate(weekday=ExtractWeekDay("created_at"), hour=ExtractHour("created_at"))
+            .annotate(
+                weekday=ExtractWeekDay("created_at", tzinfo=_tenant_tz),
+                hour=ExtractHour("created_at", tzinfo=_tenant_tz),
+            )
             .values("weekday", "hour")
             .annotate(orders=Count("id"))
         )

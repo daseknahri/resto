@@ -1875,6 +1875,7 @@ import { ref, computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, watch
 import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useWaiterStore } from "../stores/waiter";
+import { useMenuStore } from "../stores/menu";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { useSessionStore } from "../stores/session";
@@ -1898,6 +1899,7 @@ const dismissWaiterFirstRun = () => {
   try { localStorage.setItem(WAITER_FIRSTRUN_KEY, "1"); } catch (e) { void e; }
 };
 const waiter = useWaiterStore();
+const menu = useMenuStore();
 // Screen Wake Lock — prevents the waiter tablet from sleeping during service
 useWakeLock();
 // 30-s ticker for elapsed-time badges on active cards (task 3)
@@ -2937,6 +2939,8 @@ onMounted(async () => {
     },
   });
 
+  // Prefetch menu categories so WaiterNewOrder opens instantly on first use.
+  menu.fetchCategories();
   const [initial] = await Promise.all([waiter.fetchOrders(), loadTableStatuses(), loadMyShift()]);
   if (Array.isArray(initial)) prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
   document.addEventListener("visibilitychange", onVisible);
