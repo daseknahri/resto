@@ -8419,6 +8419,26 @@ class DishBulkAvailabilityResetView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class DishBulkMarkUnavailableView(APIView):
+    """POST /api/owner/dishes/mark-all-unavailable/
+
+    Marks ALL published dishes as is_available=False. Intended for closing-time
+    use so the owner can quickly take everything off-menu without toggling each
+    item individually. The morning-reset (reset-availability) reverses it.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_menu(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        marked_count = Dish.objects.filter(
+            is_published=True, is_available=True
+        ).update(is_available=False)
+
+        return Response({"marked": marked_count}, status=status.HTTP_200_OK)
+
+
 class DishBulkPriceUpdateView(APIView):
     """PATCH /api/owner/dishes/bulk-price/
 

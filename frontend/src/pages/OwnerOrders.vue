@@ -1234,9 +1234,17 @@
                   :aria-label="t('kitchen.eightySixSearch')"
                 />
               </div>
-              <!-- Reset all available -->
-              <div v-if="orders86SoldOutCount > 0" class="mt-2 flex justify-end">
+              <!-- Reset all available / Mark all unavailable -->
+              <div class="mt-2 flex items-center justify-between gap-2">
                 <button
+                  v-if="orders86Dishes.some(d => d.is_available)"
+                  class="ui-press rounded-full border border-red-500/40 px-2.5 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                  :disabled="orders86MarkingUnavailable"
+                  @click="orders86MarkAllUnavailable"
+                >{{ orders86MarkingUnavailable ? t('common.loading') : t('kitchen.markAllUnavailable') }}</button>
+                <span v-else />
+                <button
+                  v-if="orders86SoldOutCount > 0"
                   class="ui-press rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
                   :disabled="orders86Resetting"
                   @click="orders86ResetAll"
@@ -1379,6 +1387,7 @@ const orders86Fetching = ref(false);
 const orders86Search = ref("");
 const orders86TogglingId = ref(null);
 const orders86Resetting = ref(false);
+const orders86MarkingUnavailable = ref(false);
 
 const orders86SoldOutCount = computed(
   () => orders86Dishes.value.filter((d) => d.is_published && !d.is_available).length
@@ -1449,6 +1458,22 @@ const orders86ResetAll = async () => {
     toast.show(t("ownerHome.resetAvailabilityFailed"), "error");
   } finally {
     orders86Resetting.value = false;
+  }
+};
+
+const orders86MarkAllUnavailable = async () => {
+  if (orders86MarkingUnavailable.value) return;
+  orders86MarkingUnavailable.value = true;
+  try {
+    const { data } = await api.post("/owner/dishes/mark-all-unavailable/");
+    orders86Dishes.value.forEach((d) => { if (d.is_available) d.is_available = false; });
+    bustCache("menu.categories");
+    const count = data?.marked ?? 0;
+    toast.show(t("kitchen.markAllUnavailableDone", { count }), "success");
+  } catch {
+    toast.show(t("kitchen.markAllUnavailableFailed"), "error");
+  } finally {
+    orders86MarkingUnavailable.value = false;
   }
 };
 
