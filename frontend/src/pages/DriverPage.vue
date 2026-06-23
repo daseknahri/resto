@@ -541,6 +541,32 @@
         </div>
       </div>
 
+      <!-- ── Driver performance stats strip ── -->
+      <div
+        v-if="earnings && earnings.total_deliveries > 0"
+        class="ui-panel grid grid-cols-3 divide-x divide-slate-700/40 p-0 overflow-hidden ui-reveal"
+        :aria-label="t('driver.statsCard')"
+      >
+        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
+          <p class="ui-stat-label">{{ t('driver.avgRating') }}</p>
+          <p class="mt-1 text-base font-bold text-amber-300">
+            {{ earnings.avg_rating != null ? `★ ${earnings.avg_rating}` : '—' }}
+          </p>
+        </div>
+        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
+          <p class="ui-stat-label">{{ t('driver.acceptanceRate') }}</p>
+          <p class="mt-1 text-base font-bold tabular-nums text-slate-200">
+            {{ earnings.acceptance_rate != null ? `${earnings.acceptance_rate}%` : '—' }}
+          </p>
+        </div>
+        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
+          <p class="ui-stat-label">{{ t('driver.completionRate') }}</p>
+          <p class="mt-1 text-base font-bold tabular-nums text-emerald-400">
+            {{ earnings.completion_rate != null ? `${earnings.completion_rate}%` : '—' }}
+          </p>
+        </div>
+      </div>
+
       <!-- ── Driver settings accordion (vehicle picker + docs) ──
            Collapsed by default; rarely-changed controls out of the way. -->
       <div class="ui-panel p-0 overflow-hidden ui-reveal">

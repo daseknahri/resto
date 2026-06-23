@@ -7207,8 +7207,25 @@ class DriverEarningsView(APIView):
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from .driver_service import driver_earnings_summary, CASHOUT_MIN
+        from .models import DeliveryJob
+        from django.db.models import Avg, Count, Q as _Q
         s = driver_earnings_summary(customer_id)
         available = str(cust.wallet_balance or "0")
+
+        # Performance stats — acceptance rate, completion rate, avg customer rating.
+        _perf = DeliveryJob.objects.filter(driver=cust).aggregate(
+            total=Count("id"),
+            completed=Count("id", filter=_Q(status=DeliveryJob.Status.DELIVERED)),
+            avg_rating=Avg("customer_driver_rating"),
+        )
+        _accepted = _perf["total"] or 0
+        _completed = _perf["completed"] or 0
+        _declined = DeliveryJob.objects.filter(declined_by__contains=[cust.id]).count()
+        _total_offered = _accepted + _declined
+        _acceptance_rate = round(_accepted / _total_offered * 100) if _total_offered > 0 else None
+        _completion_rate = round(_completed / _accepted * 100) if _accepted > 0 else None
+        _avg_rating = round(float(_perf["avg_rating"]), 1) if _perf["avg_rating"] else None
+
         return Response({
             "earned": str(s["earned"]), "paid": str(s["paid"]), "owed": str(s["owed"]),
             # Wallet-based available balance (the cashable amount) + cash-out eligibility.
@@ -7221,6 +7238,11 @@ class DriverEarningsView(APIView):
             # Today's delivery stats — driver daily UX strip.
             "earned_today": str(s["earned_today"]),
             "deliveries_today": s["deliveries_today"],
+            # Performance stats strip.
+            "total_deliveries": _completed,
+            "acceptance_rate": _acceptance_rate,
+            "completion_rate": _completion_rate,
+            "avg_rating": _avg_rating,
         })
 
 
