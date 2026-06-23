@@ -4359,6 +4359,20 @@ class MarketplacePlaceOrderView(APIView):
                             (_cc_snap["dish_id"], _cc_snap["qty"] * qty, _cc_snap["name"])
                         )
 
+                # Reject delivery orders below the restaurant's configured minimum.
+                if fulfillment_type == "delivery":
+                    _min_order = Decimal(str(profile.delivery_minimum_order or "0"))
+                    if _min_order > 0 and food_subtotal < _min_order:
+                        return Response(
+                            {
+                                "detail": f"Minimum order for delivery is {_min_order}.",
+                                "code": "below_delivery_minimum",
+                                "minimum": str(_min_order),
+                                "current": str(food_subtotal),
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 # Delivery fee — distance-based (base + per-km) when configured,
                 # else the flat fallback fee. Driver keeps 100% of it.
                 _delivery_fee = Decimal("0")

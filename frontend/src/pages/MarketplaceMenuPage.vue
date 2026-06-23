@@ -828,12 +828,12 @@
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-            :disabled="placing || prepayShortfall || deliveryBlocked"
+            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0"
             :aria-busy="placing"
             @click="placeOrder"
           >
             <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ placing ? t('mktMenu.placing') : (deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : t('mktMenu.placeOrder'))) }}
+            {{ placing ? t('mktMenu.placing') : (deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder')))) }}
           </button>
         </div>
       </div>
@@ -1517,6 +1517,16 @@ const deliveryFee = computed(() => {
   }
   return p.flat > 0 ? p.flat : 0;
 });
+const deliveryMinOrder = computed(() => {
+  const raw = restaurant.value?.delivery_minimum_order;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
+const deliveryMinGap = computed(() =>
+  form.fulfillment_type === 'delivery'
+    ? Math.max(0, deliveryMinOrder.value - cartTotal.value)
+    : 0
+);
 const deliveryBlocked = computed(
   () => form.fulfillment_type === 'delivery' && deliveryOutOfRange.value,
 );
