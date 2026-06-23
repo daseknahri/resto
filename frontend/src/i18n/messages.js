@@ -655,6 +655,9 @@ export const messages = {
       phoneRequired: "Please enter your phone number.",
       addressRequired: "Please enter a delivery address.",
       savedAddresses: "Saved addresses",
+      saveAddress: "Save this address for next time",
+      saveAddressLabelPlaceholder: "Label (e.g. Home, Work) — optional",
+      deleteSavedAddress: "Delete saved address",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -6183,6 +6186,9 @@ export const messages = {
       phoneRequired: "Veuillez entrer votre numero de telephone.",
       addressRequired: "Veuillez entrer une adresse de livraison.",
       savedAddresses: "Adresses enregistrees",
+      saveAddress: "Sauvegarder cette adresse pour la prochaine fois",
+      saveAddressLabelPlaceholder: "Libelle (ex. Maison, Travail) — optionnel",
+      deleteSavedAddress: "Supprimer l'adresse sauvegardee",
     },
     reservationManage: {
       kicker: "Reservation",

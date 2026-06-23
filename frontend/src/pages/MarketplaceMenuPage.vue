@@ -645,16 +645,28 @@
               <div v-if="customerStore.isAuthenticated && mktSavedAddresses.length" class="space-y-1.5">
                 <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('mktMenu.savedAddresses') }}</p>
                 <div class="space-y-1">
-                  <button
+                  <div
                     v-for="addr in mktSavedAddresses"
                     :key="addr.id"
-                    type="button"
-                    class="flex min-w-0 w-full items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-start text-xs transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40"
-                    @click="applyMktSavedAddress(addr)"
+                    class="flex min-w-0 w-full items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5"
                   >
-                    <span v-if="addr.label" class="font-medium text-slate-200 shrink-0 me-0.5">{{ addr.label }} —</span>
-                    <span class="min-w-0 truncate text-slate-400">{{ addr.address }}</span>
-                  </button>
+                    <button
+                      type="button"
+                      class="min-w-0 flex-1 text-start text-xs focus-visible:outline-none"
+                      @click="applyMktSavedAddress(addr)"
+                    >
+                      <span v-if="addr.label" class="font-medium text-slate-200 me-0.5">{{ addr.label }} —</span>
+                      <span class="truncate text-slate-400">{{ addr.address }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="shrink-0 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none"
+                      :aria-label="t('mktMenu.deleteSavedAddress')"
+                      @click="deleteMktSavedAddress(addr.id)"
+                    >
+                      <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M6 2h4a1 1 0 0 1 1 1v1H5V3a1 1 0 0 1 1-1ZM4 4H2v1h1l.8 8.1A1 1 0 0 0 4.8 14h6.4a1 1 0 0 0 1-.9L13 5h1V4H4Zm7 1H5l.7 7h4.6L12 5Z"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div>
@@ -666,6 +678,21 @@
                   v-model="form.delivery_address"
                   rows="2"
                   class="ui-textarea resize-none"
+                />
+              </div>
+              <!-- Save address checkbox (authenticated customers only) -->
+              <div v-if="customerStore.isAuthenticated && form.delivery_address" class="space-y-1.5">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="saveAddressAfterOrder" type="checkbox" class="rounded" />
+                  <span class="text-xs text-slate-400">{{ t('mktMenu.saveAddress') }}</span>
+                </label>
+                <input
+                  v-if="saveAddressAfterOrder"
+                  v-model.trim="saveAddressLabel"
+                  type="text"
+                  class="ui-input text-xs"
+                  :placeholder="t('mktMenu.saveAddressLabelPlaceholder')"
+                  :aria-label="t('mktMenu.saveAddressLabelPlaceholder')"
                 />
               </div>
               <!-- Coordinates → distance-based fee -->
@@ -1178,6 +1205,16 @@ const applyMktSavedAddress = (addr) => {
   form.delivery_address = addr.address || '';
   if (addr.lat != null) form.delivery_lat = addr.lat;
   if (addr.lng != null) form.delivery_lng = addr.lng;
+};
+
+const saveAddressAfterOrder = ref(false);
+const saveAddressLabel = ref('');
+
+const deleteMktSavedAddress = async (id) => {
+  try {
+    await api.delete(`/customer/addresses/${id}/`);
+    mktSavedAddresses.value = mktSavedAddresses.value.filter((a) => a.id !== id);
+  } catch { /* non-critical */ }
 };
 
 // When the customer switches to delivery, auto-fill their most recent saved
@@ -1741,6 +1778,20 @@ const placeOrder = async () => {
       payload.redeem_points = loyaltyPoints.value;
     }
     const res = await api.post('/marketplace/order/', payload);
+    // Optionally persist the delivery address for future orders.
+    if (form.fulfillment_type === 'delivery' && saveAddressAfterOrder.value && form.delivery_address) {
+      try {
+        const saved = await api.post('/customer/addresses/', {
+          label: saveAddressLabel.value.trim() || '',
+          address: form.delivery_address,
+          location_url: '',
+          lat: form.delivery_lat || null,
+          lng: form.delivery_lng || null,
+        });
+        // Prepend so it becomes the auto-selected address next time.
+        mktSavedAddresses.value = [saved.data, ...mktSavedAddresses.value].slice(0, 10);
+      } catch { /* non-critical */ }
+    }
     // Stamp localStorage so MarketplaceOrderStatus can show a "just placed" banner
     try {
       localStorage.setItem('mktLastOrderNumber', String(res.data.order_number));

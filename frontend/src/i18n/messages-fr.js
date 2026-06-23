@@ -651,6 +651,9 @@ mktMenu: {
   phoneRequired: "Veuillez entrer votre numero de telephone.",
   addressRequired: "Veuillez entrer une adresse de livraison.",
   savedAddresses: "Adresses enregistrees",
+  saveAddress: "Sauvegarder cette adresse pour la prochaine fois",
+  saveAddressLabelPlaceholder: "Libelle (ex. Maison, Travail) — optionnel",
+  deleteSavedAddress: "Supprimer l'adresse sauvegardee",
 },
 reservationManage: {
   kicker: "Reservation",
