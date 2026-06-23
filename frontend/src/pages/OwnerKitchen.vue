@@ -385,8 +385,8 @@
 
         <!-- Notes -->
         <div v-if="order.customer_note || order.owner_note" class="mt-3 space-y-1.5 border-t border-slate-700/40 px-4 pt-3 text-xs">
-          <p v-if="order.customer_note" class="flex items-start gap-1.5 text-slate-400">
-            <span class="mt-px shrink-0 font-semibold text-slate-300">{{ t("kitchen.noteCustomer") }}:</span>
+          <p v-if="order.customer_note" class="flex items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-1.5 text-amber-200">
+            <span class="mt-px shrink-0 font-semibold">{{ t("kitchen.noteCustomer") }}:</span>
             <span>{{ order.customer_note }}</span>
           </p>
           <p v-if="order.owner_note" class="flex items-start gap-1.5 text-amber-300/80">
@@ -1060,8 +1060,13 @@ const advance = async (orderId) => {
 };
 const toggleItem = async (order, item) => {
   if (item?.id == null) return; // older payloads without item ids → no-op
-  const ok = await waiter.toggleItemReady(order.id, item.id, !item.is_ready);
-  if (!ok) toast.show(t('kitchen.itemToggleFailed'), 'error');
+  const markingReady = !item.is_ready;
+  const ok = await waiter.toggleItemReady(order.id, item.id, markingReady);
+  if (!ok) {
+    toast.show(t('kitchen.itemToggleFailed'), 'error');
+  } else if (markingReady) {
+    try { navigator.vibrate?.(40); } catch { /* not supported */ }
+  }
 };
 
 // ── Bulk item-readiness helpers ────────────────────────────────────────────────
