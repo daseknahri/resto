@@ -2285,6 +2285,12 @@ const mapOrderApiError = (err) => {
       ? t('cartPage.menuTemporarilyUnavailableWithNote', { note })
       : t('cartPage.menuTemporarilyUnavailable');
   }
+  if (code === 'below_delivery_minimum') {
+    const minimum = data?.minimum ? formatPrice(Number(data.minimum)) : '';
+    return minimum
+      ? t('cartPage.deliveryMinOrderNotMet', { amount: minimum })
+      : t('cartPage.genericCheckoutError');
+  }
   return t('cartPage.genericCheckoutError');
 };
 

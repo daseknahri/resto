@@ -1764,6 +1764,11 @@ const placeOrder = async () => {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {
       checkoutError.value = t('mktMenu.itemsUnavailable');
+    } else if (code === 'below_delivery_minimum') {
+      const minimum = err?.response?.data?.minimum ? fmtPrice(Number(err.response.data.minimum)) : '';
+      checkoutError.value = minimum
+        ? t('mktMenu.deliveryMinOrderNotMet', { amount: minimum })
+        : t('mktMenu.orderError');
     } else if (typeof code === 'string' && code.startsWith('loyalty_')) {
       customerStore.fetchCustomer(true);
       useLoyalty.value = false;
