@@ -1135,6 +1135,7 @@ const trapCheckoutFocus = (e) => {
 
 watch(checkoutOpen, async (open) => {
   if (open) {
+    if (!cart.value.length) { checkoutOpen.value = false; return; }
     await nextTick();
     checkoutDialogRef.value?.querySelector(FOCUSABLE_CO)?.focus();
     document.addEventListener('keydown', trapCheckoutFocus);
