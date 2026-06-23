@@ -250,9 +250,10 @@
             {{ t('ownerHome.oldestPending', { min: oldestPendingMinutes }) }}
           </p>
         </RouterLink>
-        <div v-else class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
+        <div v-else class="space-y-1 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ todayStats.pending }}</p>
+          <p class="ui-stat-value text-slate-100">0</p>
+          <p class="text-[10px] text-emerald-400/70">{{ t("ownerHome.allClear") }}</p>
         </div>
       </div>
 

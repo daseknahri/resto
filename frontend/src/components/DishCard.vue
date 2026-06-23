@@ -222,6 +222,11 @@
         <h3 class="text-base font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
         <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
         <p v-if="dish.description" class="line-clamp-2 text-[13px] text-slate-400" :title="dish.description">{{ dish.description }}</p>
+        <p
+          v-if="dish.allergens?.length"
+          class="text-[10px] leading-tight text-amber-500/60 mt-0.5"
+          :title="dish.allergens.map(a => t(`menu.allergen_${a}`)).join(', ')"
+        >⚠ {{ dish.allergens.slice(0, 3).map(a => t(`menu.allergen_${a}`)).join(' · ') }}<template v-if="dish.allergens.length > 3"> +{{ dish.allergens.length - 3 }}</template></p>
       </div>
       <!-- Qty stepper or Add -->
       <template v-if="canOrder">
@@ -287,6 +292,11 @@
         <span class="text-[10px] tabular-nums text-slate-500 line-through">{{ formatPrice(dish.price) }}</span>
       </template>
       <span v-else class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.price) }}</span>
+      <p
+        v-if="dish.allergens?.length"
+        class="truncate text-[9px] text-amber-500/55"
+        :title="dish.allergens.map(a => t(`menu.allergen_${a}`)).join(', ')"
+      >⚠ {{ dish.allergens.slice(0, 2).map(a => t(`menu.allergen_${a}`)).join(' · ') }}<template v-if="dish.allergens.length > 2"> +{{ dish.allergens.length - 2 }}</template></p>
     </div>
     <!-- Compact qty controls -->
     <div class="relative z-10 shrink-0" @click.stop>
