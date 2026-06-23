@@ -5262,6 +5262,7 @@ customerAccount: {
   cancelOrder: "Annuler la commande",
   orderCancelled: "Commande annulee avec succes",
   orderCancelFailed: "Impossible d'annuler cette commande. Elle a peut-etre deja ete confirmee.",
+  noOrdersYet: "Aucune commande pour l'instant.",
   loyaltyTitle: "Points de fidelite",
   loyaltyPts: "pts",
   loyaltyEarnRate: "Vous gagnez {pts} points pour chaque 1 depense.",

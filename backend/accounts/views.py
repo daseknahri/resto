@@ -1305,6 +1305,10 @@ class CustomerMarketplaceOrdersView(APIView):
                     "vertical": r.vertical or "",
                     "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
                     "items_snapshot": r.items_snapshot or [],
+                    "can_cancel": (
+                        r.status in ("scheduled", "pending", "confirmed")
+                        and r.fulfillment_type != "table"
+                    ),
                 }
                 for r in refs
             ],

@@ -5271,6 +5271,7 @@ customerAccount: {
   cancelOrder: "Cancel order",
   orderCancelled: "Order cancelled successfully",
   orderCancelFailed: "Couldn't cancel this order. It may have already been confirmed by the restaurant.",
+  noOrdersYet: "No orders yet.",
   loyaltyTitle: "Loyalty Points",
   loyaltyPts: "pts",
   loyaltyEarnRate: "You earn {pts} points for every $1 spent.",

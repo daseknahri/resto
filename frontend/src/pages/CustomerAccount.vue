@@ -594,10 +594,24 @@
                       class="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-[var(--color-secondary,#f59e0b)] hover:text-[var(--color-secondary,#f59e0b)] transition-colors"
                       @click="reorderMarketplace(o)"
                     >{{ t('customerAccount.reorder') }}</button>
+                    <button
+                      v-if="o.can_cancel && o.restaurant_slug"
+                      :disabled="cancellingOrderNumber === o.order_number"
+                      class="text-[11px] text-red-400/70 transition-colors hover:text-red-300 disabled:opacity-40"
+                      @click.stop="cancelMarketplaceOrder(o)"
+                    >{{ cancellingOrderNumber === o.order_number ? t('common.loading') : t('customerAccount.cancelOrder') }}</button>
                   </div>
                 </div>
               </li>
             </ul>
+          </div>
+
+          <!-- Unfiltered-empty: no marketplace orders at all -->
+          <div
+            v-else-if="!selectedVertical && !loadingMarketplaceOrders && customerStore.isAuthenticated"
+            class="ui-panel ui-reveal p-5 text-center"
+          >
+            <p class="text-sm text-slate-400">{{ t('customerAccount.noOrdersYet') }}</p>
           </div>
 
           <!-- Filtered-empty: a service filter is active but returned no orders -->
@@ -2800,6 +2814,21 @@ const cancelOrder = async (order) => {
     } else {
       toast.show(t('customerAccount.orderCancelFailed'), 'error');
     }
+  } finally {
+    cancellingOrderNumber.value = null;
+  }
+};
+
+const cancelMarketplaceOrder = async (order) => {
+  if (cancellingOrderNumber.value) return;
+  cancellingOrderNumber.value = order.order_number;
+  try {
+    await api.post(`/marketplace/order/${order.order_number}/cancel/`, { restaurant: order.restaurant_slug });
+    toast.show(t('customerAccount.orderCancelled'), 'success');
+    const target = marketplaceOrders.value.find((o) => o.order_number === order.order_number);
+    if (target) { target.status = 'cancelled'; target.can_cancel = false; }
+  } catch {
+    toast.show(t('customerAccount.orderCancelFailed'), 'error');
   } finally {
     cancellingOrderNumber.value = null;
   }
