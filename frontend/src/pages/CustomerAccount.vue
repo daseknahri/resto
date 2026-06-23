@@ -1352,6 +1352,34 @@
               <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
             </div>
           </div>
+
+          <!-- Loyalty history -->
+          <div v-if="loyaltyHistory && loyaltyHistory.events && loyaltyHistory.events.length" class="ui-panel overflow-hidden p-0">
+            <div class="border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.loyaltyHistoryTitle') }}</p>
+            </div>
+            <ul class="divide-y divide-slate-800/50">
+              <li
+                v-for="(ev, idx) in loyaltyHistory.events"
+                :key="idx"
+                class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-slate-300">
+                    <span v-if="ev.type === 'earn'">{{ t('customerAccount.loyaltyHistoryEarn', { ref: ev.ref }) }}</span>
+                    <span v-else>{{ t('customerAccount.loyaltyHistoryRedeem', { credit: ev.credit }) }}</span>
+                  </p>
+                  <p class="text-[11px] text-slate-500 tabular-nums">{{ formatDate(ev.date) }}</p>
+                </div>
+                <span
+                  class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
+                  :class="ev.type === 'earn' ? 'bg-indigo-500/12 text-indigo-300 border border-indigo-500/20' : 'bg-amber-500/12 text-amber-300 border border-amber-500/20'"
+                >
+                  {{ ev.type === 'earn' ? '+' : '-' }}{{ ev.points }} {{ t('customerAccount.loyaltyPts') }}
+                </span>
+              </li>
+            </ul>
+          </div>
         </template>
 
 
@@ -2573,6 +2601,17 @@ const fetchLoyaltyConfig = async () => {
       redeemAmount.value = res.data.redeem_threshold;
     }
   } catch { /* silent */ }
+  fetchLoyaltyHistory();
+};
+
+const loyaltyHistory = ref(null);
+
+const fetchLoyaltyHistory = async () => {
+  if (loyaltyHistory.value) return; // already loaded
+  try {
+    const res = await api.get('/customer/loyalty/history/');
+    loyaltyHistory.value = res.data;
+  } catch { loyaltyHistory.value = { events: [] }; }
 };
 
 let redeemKey = null; // stable across retries of the same redemption; cleared on success

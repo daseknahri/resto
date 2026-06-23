@@ -10692,6 +10692,78 @@ class CustomerLoyaltyRedeemView(APIView):
         })
 
 
+class CustomerLoyaltyHistoryView(APIView):
+    """GET /api/customer/loyalty/history/
+    Returns a chronological ledger of loyalty point events for the authenticated
+    customer: orders that earned points and redemptions that converted points to
+    wallet credit. Maximum 50 most-recent entries.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+        from decimal import Decimal as _Dec
+
+        try:
+            customer = _CustM.objects.get(pk=request.user.customer_id)
+        except (AttributeError, _CustM.DoesNotExist):
+            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        events = []
+
+        # Earn events: completed orders with points_earned > 0 (tenant-scoped via schema)
+        earn_orders = (
+            Order.objects.filter(
+                customer_id=customer.id,
+                points_earned__gt=0,
+                status=Order.Status.COMPLETED,
+            )
+            .only("order_number", "points_earned", "created_at", "paid_at")
+            .order_by("-created_at")[:50]
+        )
+        for o in earn_orders:
+            events.append({
+                "type": "earn",
+                "points": o.points_earned,
+                "date": (o.paid_at or o.created_at).isoformat(),
+                "ref": o.order_number,
+            })
+
+        # Redeem events: LOYALTY wallet transactions
+        redeem_txns = (
+            _WTM.objects.filter(
+                customer=customer,
+                type=_WTM.Type.LOYALTY,
+            )
+            .order_by("-created_at")[:50]
+        )
+        for tx in redeem_txns:
+            pts = 0
+            note = tx.note or ""
+            if note.startswith("Redeemed ") and "loyalty points" in note:
+                try:
+                    pts = int(note.split()[1])
+                except (IndexError, ValueError):
+                    pts = 0
+            events.append({
+                "type": "redeem",
+                "points": pts,
+                "credit": str(tx.amount.quantize(_Dec("0.01"))),
+                "date": tx.created_at.isoformat(),
+                "ref": tx.reference or "",
+            })
+
+        # Sort combined list descending by date, cap at 50
+        events.sort(key=lambda e: e["date"], reverse=True)
+        events = events[:50]
+
+        return Response({
+            "balance": customer.loyalty_points,
+            "lifetime": customer.lifetime_loyalty_points,
+            "events": events,
+        })
+
+
 class PromoCodeCheckView(APIView):
     """GET /api/promo-code-check/?code=XXX
     Returns promo validity and a preview of the discount without placing an order.
