@@ -342,19 +342,33 @@
           </div>
         </div>
 
-        <!-- Order again — shown on terminal states -->
-        <button
-          v-if="order.status === 'completed' || order.status === 'cancelled'"
-          type="button"
-          class="ui-press ui-reveal mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 py-3 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-          :style="{ '--ui-delay': '180ms' }"
-          @click="reorder"
-        >
-          <svg viewBox="0 0 16 16" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
-          </svg>
-          {{ t('mktOrderStatus.orderAgain') }}
-        </button>
+        <!-- Terminal-state actions -->
+        <div v-if="order.status === 'completed' || order.status === 'cancelled'" class="mt-2 flex gap-2">
+          <button
+            v-if="order.status === 'completed'"
+            type="button"
+            class="ui-press ui-reveal inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-slate-700/60 bg-slate-800/50 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-800 print:hidden"
+            :style="{ '--ui-delay': '160ms' }"
+            @click="printReceipt"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0" aria-hidden="true">
+              <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            {{ t('mktOrderStatus.printReceipt') }}
+          </button>
+          <button
+            type="button"
+            class="ui-press ui-reveal inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 py-3 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+            :style="{ '--ui-delay': '180ms' }"
+            @click="reorder"
+          >
+            <svg viewBox="0 0 16 16" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
+            </svg>
+            {{ t('mktOrderStatus.orderAgain') }}
+          </button>
+        </div>
       </template>
     </div>
   </div>
@@ -419,6 +433,8 @@ const fetchDelivery = async () => {
 };
 
 // Driver rating now lives in <DeliveryTracker> (shared by both order pages).
+
+const printReceipt = () => window.print();
 
 // ── Reorder ───────────────────────────────────────────────────────────────────
 const reorder = () => {

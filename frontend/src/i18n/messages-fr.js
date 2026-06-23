@@ -776,6 +776,7 @@ mktOrderStatus: {
   justPlacedTitle: "Commande passee !",
   justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
   orderAgain: "Commander a nouveau",
+  printReceipt: "Imprimer le recu",
 },
 contactPage: {
   kicker: "Support",

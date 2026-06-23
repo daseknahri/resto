@@ -777,6 +777,7 @@ mktOrderStatus: {
   justPlacedTitle: "Order placed!",
   justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
   orderAgain: "Order again",
+  printReceipt: "Print receipt",
 },
 contactPage: {
   kicker: "Support",
