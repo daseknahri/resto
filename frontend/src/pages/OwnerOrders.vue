@@ -347,6 +347,25 @@
         >✕</button>
       </div>
 
+      <!-- Period aggregate summary (shown when a date filter is active and orders loaded) -->
+      <div
+        v-if="(historyFrom || historyTo) && order.historyOrders.length && !order.historyLoading"
+        class="flex items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-2.5 text-xs text-slate-400"
+        role="status"
+        :aria-label="t('ownerOrders.periodSummaryLabel')"
+      >
+        <span>
+          <span class="font-semibold text-slate-200 tabular-nums">{{ order.historyOrders.length }}</span>
+          {{ t('ownerOrders.periodOrderCount') }}
+        </span>
+        <span class="h-3 w-px bg-slate-700 shrink-0" aria-hidden="true" />
+        <span>
+          {{ t('ownerOrders.periodRevenue') }}
+          <span class="ms-1 font-semibold text-emerald-300 tabular-nums">{{ historyPeriodRevenue }}</span>
+        </span>
+        <span v-if="order.historyHasMore" class="ms-auto text-[10px] text-amber-400/80">{{ t('ownerOrders.periodPartial') }}</span>
+      </div>
+
       <!-- History loading skeleton -->
       <div v-if="order.historyLoading && !order.historyOrders.length" class="space-y-3">
         <div v-for="i in 3" :key="i" class="ui-panel animate-pulse space-y-3 p-4">
@@ -1505,6 +1524,14 @@ const activeTab = ref("active");
 
 const historyFrom = ref("");
 const historyTo = ref("");
+
+const historyPeriodRevenue = computed(() => {
+  const orders = order.historyOrders;
+  if (!orders.length) return '';
+  const currency = orders[0]?.currency ?? 'USD';
+  const total = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  return formatCurrency(total, currency);
+});
 
 const switchToHistory = () => {
   activeTab.value = "history";
