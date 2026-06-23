@@ -1423,6 +1423,7 @@ driver: {
   failCancel: "Never mind",
   historyTitle: "Recent deliveries",
   historyEmpty: "No completed deliveries yet.",
+  historyLoadMore: "Load more",
   pendingTitle: "Available deliveries",
   noPending: "No deliveries available right now.",
   offlineEmpty: "You're offline. Go online to see deliveries.",

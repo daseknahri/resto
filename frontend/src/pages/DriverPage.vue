@@ -1081,6 +1081,12 @@
                 <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
               </li>
             </ul>
+            <button
+              v-if="historyHasMore"
+              :disabled="loadingHistory"
+              class="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+              @click="loadMoreHistory"
+            >{{ loadingHistory ? t('common.loading') : t('driver.historyLoadMore') }}</button>
           </template>
         </div>
       </div>
@@ -1596,20 +1602,26 @@ const activeReadyEta = computed(() => {
 const showHistory = ref(false);
 const history = ref([]);
 const loadingHistory = ref(false);
-const fetchHistory = async () => {
+const historyPage = ref(1);
+const historyHasMore = ref(false);
+const fetchHistory = async (page = 1) => {
   loadingHistory.value = true;
   try {
-    const { data } = await api.get('/driver/deliveries/');
-    history.value = Array.isArray(data.results) ? data.results : [];
+    const { data } = await api.get(`/driver/deliveries/?page=${page}`);
+    const incoming = Array.isArray(data.results) ? data.results : [];
+    history.value = page === 1 ? incoming : [...history.value, ...incoming];
+    historyHasMore.value = Boolean(data.has_more);
+    historyPage.value = page;
   } catch {
     /* keep last */
   } finally {
     loadingHistory.value = false;
   }
 };
+const loadMoreHistory = () => fetchHistory(historyPage.value + 1);
 const toggleHistory = () => {
   showHistory.value = !showHistory.value;
-  if (showHistory.value && !history.value.length) fetchHistory();
+  if (showHistory.value && !history.value.length) fetchHistory(1);
 };
 
 // Ride history (driver's completed/cancelled rides) — lazy-loaded on first expand.

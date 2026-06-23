@@ -7360,12 +7360,20 @@ class DriverDeliveriesView(APIView):
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from .models import DeliveryJob
+        PAGE_SIZE = 20
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        offset = (page - 1) * PAGE_SIZE
         jobs = list(
             DeliveryJob.objects.filter(
                 driver_id=customer_id,
                 status__in=[DeliveryJob.Status.DELIVERED, DeliveryJob.Status.FAILED],
-            ).order_by("-created_at")[:50]
+            ).order_by("-created_at")[offset:offset + PAGE_SIZE + 1]
         )
+        has_more = len(jobs) > PAGE_SIZE
+        jobs = jobs[:PAGE_SIZE]
         # Batch-resolve restaurant names (avoids N+1 via _tenant_slug_name cache).
         _names = {j.tenant_id: _tenant_slug_name(j.tenant_id)[1] for j in jobs}
         results = [{
@@ -7380,7 +7388,7 @@ class DriverDeliveriesView(APIView):
             "created_at": j.created_at.isoformat(),
             "customer_driver_rating": j.customer_driver_rating,
         } for j in jobs]
-        return Response({"results": results})
+        return Response({"results": results, "has_more": has_more, "page": page})
 
 
 class AdminPlatformAnalyticsView(APIView):

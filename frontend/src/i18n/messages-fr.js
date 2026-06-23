@@ -1422,6 +1422,7 @@ driver: {
   failCancel: "Annuler",
   historyTitle: "Livraisons recentes",
   historyEmpty: "Aucune livraison terminee pour le moment.",
+  historyLoadMore: "Charger plus",
   pendingTitle: "Livraisons disponibles",
   noPending: "Aucune livraison disponible pour le moment.",
   offlineEmpty: "Vous etes hors ligne. Passez en ligne pour voir les livraisons.",
