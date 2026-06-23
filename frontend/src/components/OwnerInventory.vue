@@ -677,6 +677,58 @@
         </div>
       </template>
     </template>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CATEGORIES
+    ════════════════════════════════════════════════════════════════════════ -->
+    <template v-else-if="activeSubtab === 'categories'">
+      <div class="ui-panel space-y-1 p-3 sm:p-4">
+        <p class="text-xs font-semibold text-slate-200">{{ t("inventory.catPauseTitle") }}</p>
+        <p class="text-[11px] text-slate-500">{{ t("inventory.catPauseHint") }}</p>
+      </div>
+
+      <template v-if="catFetching">
+        <div v-for="i in 4" :key="i" class="ui-panel animate-pulse px-3 py-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="h-3 w-32 rounded bg-slate-700/60" />
+            <div class="h-7 w-20 rounded-lg bg-slate-700/40" />
+          </div>
+        </div>
+      </template>
+
+      <div v-else-if="!catList.length" class="ui-empty-state py-12 text-center">
+        <p class="text-sm font-medium text-slate-400">{{ t("inventory.catEmpty") }}</p>
+      </div>
+
+      <ul v-else role="list" class="space-y-1.5">
+        <li
+          v-for="(cat, index) in catList"
+          :key="cat.id"
+          class="ui-panel ui-reveal flex items-center justify-between gap-3 px-3 py-3"
+          :class="cat.is_temporarily_disabled ? 'opacity-60' : ''"
+          :style="{ '--ui-delay': `${Math.min(index, 14) * 15}ms` }"
+        >
+          <div class="min-w-0">
+            <p class="truncate text-xs font-semibold text-slate-100">{{ cat.name }}</p>
+            <p v-if="cat.super_category_name" class="mt-0.5 truncate text-[10px] text-slate-500">{{ cat.super_category_name }}</p>
+          </div>
+          <button
+            role="switch"
+            :aria-checked="!cat.is_temporarily_disabled"
+            :aria-busy="catSavingId === cat.id"
+            :disabled="catSavingId === cat.id"
+            class="ui-press ui-touch-target shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+            :class="cat.is_temporarily_disabled
+              ? 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-red-500/60'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-500/60'"
+            @click="toggleCategoryPause(cat)"
+          >
+            <svg v-if="catSavingId === cat.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="me-1 inline h-3 w-3 animate-spin"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ cat.is_temporarily_disabled ? t("inventory.catPaused") : t("inventory.catActive") }}
+          </button>
+        </li>
+      </ul>
+    </template>
   </div>
 </template>
 
@@ -698,6 +750,7 @@ const subtabs = [
   { key: "dishStock", labelKey: "inventory.subtabDishStock" },
   { key: "ingredients", labelKey: "inventory.subtabIngredients" },
   { key: "recipes", labelKey: "inventory.subtabRecipes" },
+  { key: "categories", labelKey: "inventory.subtabCategories" },
 ];
 const activeSubtab = ref("dishStock");
 
@@ -709,6 +762,9 @@ const switchSubtab = (key) => {
   if (key === "recipes") {
     if (!recDishes.value.length && !recDishFetching.value) fetchDishesForRecipe();
     if (!ingredients.value.length && !ingFetching.value) fetchIngredients();
+  }
+  if (key === "categories" && !catList.value.length && !catFetching.value) {
+    fetchCategories();
   }
 };
 
@@ -1047,6 +1103,42 @@ const recDeleteLine = async (line) => {
     toast.show(t("inventory.recLineFailed"), "error");
   } finally {
     recDeletingLineId.value = null;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATEGORIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+const catList = ref([]);
+const catFetching = ref(false);
+const catSavingId = ref(null);
+
+const fetchCategories = async () => {
+  if (catFetching.value) return;
+  catFetching.value = true;
+  try {
+    const { data } = await api.get("/categories/", { timeout: 8000 });
+    catList.value = Array.isArray(data) ? data : [];
+  } catch {
+    toast.show(t("inventory.catToggleFailed"), "error");
+  } finally {
+    catFetching.value = false;
+  }
+};
+
+const toggleCategoryPause = async (cat) => {
+  if (catSavingId.value === cat.id) return;
+  const next = !cat.is_temporarily_disabled;
+  catSavingId.value = cat.id;
+  try {
+    await api.patch(`/categories/${cat.id}/`, { is_temporarily_disabled: next });
+    cat.is_temporarily_disabled = next;
+    bustCache("menu.categories");
+  } catch {
+    toast.show(t("inventory.catToggleFailed"), "error");
+  } finally {
+    catSavingId.value = null;
   }
 };
 </script>

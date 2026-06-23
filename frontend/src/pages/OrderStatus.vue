@@ -304,9 +304,9 @@
         role="status"
       >{{ statusHint }}</p>
 
-      <!-- Contact restaurant escape hatch — shown only while preparing and tenant phone known -->
+      <!-- Contact restaurant escape hatch — shown any time order is active and phone is known -->
       <div
-        v-if="orderData.status === 'preparing' && orderData.tenant_phone"
+        v-if="!['completed','cancelled'].includes(orderData.status) && orderData.tenant_phone"
         class="ui-reveal flex justify-center"
         :style="{ '--ui-delay': '92ms' }"
       >
