@@ -2713,7 +2713,7 @@ class PlaceOrderView(APIView):
 
         # Reject delivery orders below the restaurant's configured minimum order amount.
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
-            _min_order = Decimal(str(profile.delivery_minimum_order or "0"))
+            _min_order = Decimal(str(getattr(profile, "delivery_minimum_order", None) or "0"))
             if _min_order > 0 and _food_subtotal < _min_order:
                 return Response(
                     {

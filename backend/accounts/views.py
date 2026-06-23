@@ -1248,6 +1248,10 @@ class CustomerOrdersView(APIView):
                     "owner_reply_at": rating.owner_reply_at.isoformat() if rating.owner_reply_at else None,
                 } if rating else None,
                 "items": items,
+                "can_cancel": (
+                    order.status in ("scheduled", "pending", "confirmed")
+                    and order.fulfillment_type != "table"
+                ),
             })
 
         return Response({"orders": result, "count": len(result), "has_more": has_more, "page": page})
@@ -4361,7 +4365,7 @@ class MarketplacePlaceOrderView(APIView):
 
                 # Reject delivery orders below the restaurant's configured minimum.
                 if fulfillment_type == "delivery":
-                    _min_order = Decimal(str(profile.delivery_minimum_order or "0"))
+                    _min_order = Decimal(str(getattr(profile, "delivery_minimum_order", None) or "0"))
                     if _min_order > 0 and food_subtotal < _min_order:
                         return Response(
                             {

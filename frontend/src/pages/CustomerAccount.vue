@@ -686,6 +686,12 @@
                         class="text-[11px] text-slate-500 transition-colors hover:text-amber-400"
                         @click="activeTab = 'reviews'"
                       >{{ t('customerAccount.reviewsRateNudge') }}</button>
+                      <button
+                        v-if="order.can_cancel"
+                        :disabled="cancellingOrderNumber === order.order_number"
+                        class="mt-0.5 text-[11px] text-red-400/70 transition-colors hover:text-red-300 disabled:opacity-40"
+                        @click.stop="cancelOrder(order)"
+                      >{{ cancellingOrderNumber === order.order_number ? t('common.loading') : t('customerAccount.cancelOrder') }}</button>
                     </div>
                     <button
                       v-if="order.items?.length"
@@ -2775,6 +2781,29 @@ const MKT_ORDER_STATUS = {
   cancelled: 'orderStatus.statusCancelled',
 };
 const mktOrderStatus = (s) => t(MKT_ORDER_STATUS[s] || 'orderStatus.statusPending');
+
+// ── Order self-cancel ──────────────────────────────────────────────────────────
+const cancellingOrderNumber = ref(null);
+const cancelOrder = async (order) => {
+  if (cancellingOrderNumber.value) return;
+  cancellingOrderNumber.value = order.order_number;
+  try {
+    await api.post(`/order-status/${order.order_number}/cancel/`);
+    toast.show(t('customerAccount.orderCancelled'), 'success');
+    // Optimistically mark as cancelled in the list; full refetch will sync.
+    const target = apiOrders.value.find((o) => o.order_number === order.order_number);
+    if (target) { target.status = 'cancelled'; target.can_cancel = false; }
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code === 'cannot_cancel') {
+      toast.show(t('customerAccount.orderCancelFailed'), 'error');
+    } else {
+      toast.show(t('customerAccount.orderCancelFailed'), 'error');
+    }
+  } finally {
+    cancellingOrderNumber.value = null;
+  }
+};
 
 // ── Vertical filter for marketplace orders ────────────────────────────────────
 const selectedVertical = ref('');
