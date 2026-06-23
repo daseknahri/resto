@@ -681,6 +681,24 @@ const activeOrder = computed(() => {
   } catch { return null; }
 });
 
+// Verify active order still exists and is non-terminal; clear localStorage if not.
+const validateActiveOrder = async () => {
+  const ord = activeOrder.value;
+  if (!ord) return;
+  const TERMINAL = new Set(['completed', 'cancelled']);
+  try {
+    const res = await api.get(`/marketplace/order/${ord.number}/`, { params: { restaurant: ord.slug } });
+    if (TERMINAL.has(res.data?.status)) {
+      try { localStorage.removeItem('mktLastOrderNumber'); localStorage.removeItem('mktLastOrderAt'); localStorage.removeItem('mktLastOrderSlug'); } catch { /* ignore */ }
+      activeOrderDismissed.value = true;
+    }
+  } catch {
+    // 404 / network error — treat as gone
+    try { localStorage.removeItem('mktLastOrderNumber'); localStorage.removeItem('mktLastOrderAt'); localStorage.removeItem('mktLastOrderSlug'); } catch { /* ignore */ }
+    activeOrderDismissed.value = true;
+  }
+};
+
 const { t, currentLocale: locale } = useI18n();
 
 // ── Business-type category tabs ───────────────────────────────────────────────
@@ -1035,5 +1053,5 @@ watch(() => [route.query.type, route.query.sub], ([typeVal, subVal]) => {
   selectedShopSubtype.value = (selectedBusinessType.value === 'shop' && _SHOP_SUBTYPE_KEYS.includes(sub)) ? sub : '';
 });
 
-onMounted(fetchRestaurants);
+onMounted(() => { fetchRestaurants(); validateActiveOrder(); });
 </script>

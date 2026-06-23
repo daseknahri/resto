@@ -155,6 +155,7 @@ def _with_reservation_reminder_metrics(queryset):
     return queryset.annotate(
         last_reminder_status=Subquery(latest_reminder_rows.values("status")[:1]),
         last_reminder_at=Subquery(latest_reminder_rows.values("created_at")[:1]),
+        last_reminder_failure_reason=Subquery(latest_reminder_rows.values("failure_reason")[:1]),
         reminder_count=Count("reminders"),
         reminder_opened_count=Count(
             "reminders",

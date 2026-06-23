@@ -1172,6 +1172,7 @@ const arabicMessages = {
     "opened": "مفتوح",
     "failed": "فاشل",
     "last": "آخر",
+    "reminderFailReason": "سبب الفشل",
     "whatsappTemplate": "مرحباً {name}، هذه متابعة بخصوص حجز الطاولة.",
     "quickChat": "محادثة سريعة",
     "reminder": "تذكير",

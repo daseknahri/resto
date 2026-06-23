@@ -4092,6 +4092,7 @@ ownerReservations: {
   opened: "Ouvert",
   failed: "Echec",
   last: "Dernier",
+  reminderFailReason: "Raison de l'échec",
   whatsappTemplate: "Bonjour {name}, ceci est le suivi de votre reservation de table.",
   quickChat: "Chat rapide",
   reminder: "Rappel",

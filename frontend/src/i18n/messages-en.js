@@ -4133,6 +4133,7 @@ ownerReservations: {
   opened: "Opened",
   failed: "Failed",
   last: "Last",
+  reminderFailReason: "Failure reason",
   whatsappTemplate: "Hi {name}, this is your table reservation follow-up.",
   quickChat: "Quick chat",
   reminder: "Reminder",

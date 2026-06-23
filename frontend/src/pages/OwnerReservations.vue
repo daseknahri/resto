@@ -362,6 +362,10 @@
               {{ formatDate(reservation.last_reminder_at) }}
             </span>
           </div>
+          <p
+            v-if="reservation.last_reminder_status === 'failed' && reservation.last_reminder_failure_reason"
+            class="text-[11px] text-rose-400/80 leading-snug"
+          >{{ t("ownerReservations.reminderFailReason") }}: {{ reservation.last_reminder_failure_reason }}</p>
 
           <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <a

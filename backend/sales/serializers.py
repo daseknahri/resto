@@ -47,6 +47,9 @@ class ReservationReminderStatsSerializerMixin:
     def get_last_reminder_at(self, obj):
         return getattr(obj, "last_reminder_at", None)
 
+    def get_last_reminder_failure_reason(self, obj):
+        return getattr(obj, "last_reminder_failure_reason", "") or ""
+
     def _safe_count(self, obj, attr_name: str):
         value = getattr(obj, attr_name, 0)
         try:
@@ -73,6 +76,7 @@ class LeadSerializer(ReservationSlaSerializerMixin, ReservationReminderStatsSeri
     sla_minutes_overdue = serializers.SerializerMethodField()
     last_reminder_status = serializers.SerializerMethodField()
     last_reminder_at = serializers.SerializerMethodField()
+    last_reminder_failure_reason = serializers.SerializerMethodField()
     reminder_count = serializers.SerializerMethodField()
     reminder_opened_count = serializers.SerializerMethodField()
     reminder_failed_count = serializers.SerializerMethodField()
@@ -100,6 +104,7 @@ class LeadSerializer(ReservationSlaSerializerMixin, ReservationReminderStatsSeri
             "sla_minutes_overdue",
             "last_reminder_status",
             "last_reminder_at",
+            "last_reminder_failure_reason",
             "reminder_count",
             "reminder_opened_count",
             "reminder_failed_count",
@@ -151,6 +156,7 @@ class OwnerReservationSerializer(ReservationSlaSerializerMixin, ReservationRemin
     sla_minutes_overdue = serializers.SerializerMethodField()
     last_reminder_status = serializers.SerializerMethodField()
     last_reminder_at = serializers.SerializerMethodField()
+    last_reminder_failure_reason = serializers.SerializerMethodField()
     reminder_count = serializers.SerializerMethodField()
     reminder_opened_count = serializers.SerializerMethodField()
     reminder_failed_count = serializers.SerializerMethodField()
@@ -175,6 +181,7 @@ class OwnerReservationSerializer(ReservationSlaSerializerMixin, ReservationRemin
             "sla_minutes_overdue",
             "last_reminder_status",
             "last_reminder_at",
+            "last_reminder_failure_reason",
             "reminder_count",
             "reminder_opened_count",
             "reminder_failed_count",
