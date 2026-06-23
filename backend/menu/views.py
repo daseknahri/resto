@@ -6416,7 +6416,7 @@ class OwnerOrderListView(APIView):
         qs = (
             Order.objects
             .select_related("customer")
-            .prefetch_related("items")
+            .prefetch_related("items", "rating")
             .order_by("-created_at")
         )
 
