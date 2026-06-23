@@ -2209,6 +2209,7 @@ waiterPage: {
   floorNoOrders: "No open orders",
   floorAllSections: "All sections",
   floorSectionFilter: "Section",
+  idleAlert: "{n} table(s) have been waiting 20+ min",
   floorCapacity: "{n} seats",
   floorTileAriaLabel: "Table {label}, {status}",
   floorExpandOrders: "Open table {label}",

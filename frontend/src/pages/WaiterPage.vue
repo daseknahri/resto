@@ -174,6 +174,28 @@
           >{{ sec }}</button>
         </div>
 
+        <!-- Idle table alert banner — tables waiting >= 20 min -->
+        <Transition name="fade">
+          <div
+            v-if="urgentFloorTiles.length > 0 && !idleAlertDismissed"
+            class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+            role="alert"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true"><path d="M8 2 1.5 13h13L8 2Zm0 4v3.5M8 11.5h.01"/></svg>
+            <p class="min-w-0 flex-1 text-[11px] leading-snug text-red-300">
+              {{ t('waiterPage.idleAlert', { n: urgentFloorTiles.length }) }}:
+              <span class="font-semibold">{{ urgentFloorTiles.map(t => t.tableLabel).join(', ') }}</span>
+            </p>
+            <button
+              class="ui-press shrink-0 text-red-400/60 hover:text-red-300 focus-visible:outline-none"
+              :aria-label="t('common.dismiss')"
+              @click="idleAlertDismissed = true"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+            </button>
+          </div>
+        </Transition>
+
         <!-- Empty state: no tables at all -->
         <div v-if="filteredFloorTiles.length === 0" class="ui-empty-state py-10 text-center">
           <p class="text-3xl" aria-hidden="true">🪑</p>
@@ -2181,6 +2203,17 @@ const filteredFloorTiles = computed(() => {
   if (!floorSectionFilter.value) return allFloorTiles.value;
   return allFloorTiles.value.filter((t) => t.tableSection === floorSectionFilter.value);
 });
+
+// Tables with at least one order waiting >= 20 minutes (red threshold)
+const urgentFloorTiles = computed(() =>
+  allFloorTiles.value.filter((tile) =>
+    tile.orders.some((o) => {
+      const m = orderElapsedMinutes(o);
+      return m !== null && m >= 20;
+    })
+  )
+);
+const idleAlertDismissed = ref(false);
 
 // Data for the currently-expanded floor tile (used by the expanded panel)
 const expandedFloorTileData = computed(() =>

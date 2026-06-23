@@ -1814,6 +1814,17 @@ class OwnerReservationDetailView(APIView):
                 )
             payload = OwnerReservationSerializer(lead).data
 
+        # Send confirmation email when owner marks a reservation as "won" (confirmed).
+        if lead.status == Lead.Status.WON and previous_status != Lead.Status.WON and lead.email and lead.cancel_token:
+            try:
+                from sales.messaging import build_reservation_manage_url, send_reservation_confirmed_email
+                send_reservation_confirmed_email(
+                    tenant, lead,
+                    build_reservation_manage_url(tenant, lead.cancel_token),
+                )
+            except Exception:
+                pass
+
         return Response(payload)
 
     def patch(self, request, lead_id):
