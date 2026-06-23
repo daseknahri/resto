@@ -7518,6 +7518,12 @@ class OwnerOrderStatusUpdateView(APIView):
                         _sms_task, customer_phone, getattr(tenant, "name", ""),
                         order.order_number, getattr(tenant, "id", None),
                     )
+            # Web push for "ready" (pickup) — fires regardless of SMS setting.
+            try:
+                from accounts.push import notify_customer_order_milestone_sync
+                notify_customer_order_milestone_sync(order.order_number, tenant.id, "ready")
+            except Exception:
+                pass
 
         # Warn when cancelling an order that had cash payments collected — staff
         # must return the money manually; the system cannot do this automatically.

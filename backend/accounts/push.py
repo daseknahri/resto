@@ -260,6 +260,11 @@ def notify_driver_job_cancelled_sync(driver_id, order_number) -> int:
 
 # Customer-facing delivery milestone nudges. {r} = restaurant. Deep-link to /orders/<n>.
 _MILESTONE_MESSAGES = {
+    "ready": {
+        "en": {"title": "Your order is ready!", "body": "Your order from {r} is ready for pickup."},
+        "fr": {"title": "Votre commande est prete !", "body": "Votre commande chez {r} est prete. Venez la chercher !"},
+        "ar": {"title": "طلبك جاهز!", "body": "طلبك من {r} جاهز للاستلام."},
+    },
     "assigned": {
         "en": {"title": "A driver is on it", "body": "{r} assigned a driver to your order."},
         "fr": {"title": "Un livreur est en route", "body": "{r} a assigne un livreur a votre commande."},
