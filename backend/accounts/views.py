@@ -5109,6 +5109,7 @@ class MarketplaceOrderStatusView(APIView):
                     _owns = False
 
                 items = []
+                existing_rating = None
                 if _owns:
                     items = [
                         {
@@ -5124,6 +5125,10 @@ class MarketplaceOrderStatusView(APIView):
                         }
                         for item in order.items.all()
                     ]
+                    try:
+                        existing_rating = order.rating
+                    except Exception:
+                        existing_rating = None
         except Exception as exc:
             logger.exception("MarketplaceOrderStatusView error for order=%s tenant=%s: %s", order_number, slug, exc)
             return Response({"detail": "Could not load order.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5152,6 +5157,14 @@ class MarketplaceOrderStatusView(APIView):
         except Exception:
             can_cancel = False
 
+        rating_data = None
+        if existing_rating is not None:
+            rating_data = {
+                "score": existing_rating.score,
+                "comment": existing_rating.comment or "",
+                "owner_reply": existing_rating.owner_reply or "",
+            }
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
@@ -5173,6 +5186,8 @@ class MarketplaceOrderStatusView(APIView):
             "items": items,
             "restaurant_slug": slug,
             "restaurant_name": tenant.name,
+            "has_rating": existing_rating is not None,
+            "rating": rating_data,
         })
 
 

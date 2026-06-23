@@ -2728,7 +2728,9 @@ const arabicMessages = {
     "pointsEarnedHint": "أُضيفت إلى حسابك",
     "pointsPending": "نقاط معلّقة",
     "pointsPendingHint": "ستُضاف إلى حسابك عند إتمام الطلب",
-    "pollFailed": "توقّف التحديث · تحقق من اتصالك"
+    "pollFailed": "توقّف التحديث · تحقق من اتصالك",
+    "rateCommentPlaceholder": "اترك تعليقاً (اختياري)…",
+    "rateThankYou": "شكراً على ملاحظاتك!"
   },
   "pushPrime": {
     "title": "تابع طلبك مباشرةً",
@@ -3225,6 +3227,13 @@ Object.assign(arabicMessages, {
     pointsEarned: "\u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0644\u0627\u0621 \u0627\u0644\u0645\u0643\u062a\u0633\u0628\u0629",
     justPlacedTitle: "\u062a\u0645 \u062a\u0642\u062f\u064a\u0645 \u0627\u0644\u0637\u0644\u0628!",
     justPlacedSubtitle: "\u0627\u0633\u062a\u0644\u0645\u0646\u0627 \u0637\u0644\u0628\u0643. \u0627\u0633\u062a\u0631\u062e\u0650 \u0628\u064a\u0646\u0645\u0627 \u0646\u0639\u062f\u0651\u0647 \u0644\u0643.",
+    orderAgain: "\u0627\u0637\u0644\u0628 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649",
+    printReceipt: "\u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u0625\u064a\u0635\u0627\u0644",
+    rateTitle: "\u0643\u064a\u0641 \u0643\u0627\u0646 \u0637\u0644\u0628\u0643\u061f",
+    rateCommentPlaceholder: "\u0627\u062a\u0631\u0643 \u062a\u0639\u0644\u064a\u0642\u0627\u064b (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)\u2026",
+    rateSubmit: "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
+    rateSubmitting: "\u062c\u0627\u0631\u064d \u0627\u0644\u0625\u0631\u0633\u0627\u0644\u2026",
+    rateThankYou: "\u0634\u0643\u0631\u0627\u064b \u0639\u0644\u0649 \u0645\u0644\u0627\u062d\u0638\u0627\u062a\u0643!",
   },
   ownerMenuBuilder: {
     importCsv: "\u0627\u0633\u062a\u064a\u0631\u0627\u062f CSV",

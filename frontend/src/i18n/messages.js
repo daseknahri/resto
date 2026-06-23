@@ -781,6 +781,11 @@ export const messages = {
       justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
       orderAgain: "Order again",
       printReceipt: "Print receipt",
+      rateTitle: "How was your order?",
+      rateCommentPlaceholder: "Leave a comment (optional)…",
+      rateSubmit: "Submit rating",
+      rateSubmitting: "Submitting…",
+      rateThankYou: "Thanks for your feedback!",
     },
     contactPage: {
       kicker: "Support",
@@ -6335,6 +6340,11 @@ export const messages = {
       justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
       orderAgain: "Commander a nouveau",
       printReceipt: "Imprimer le recu",
+      rateTitle: "Comment etait votre commande ?",
+      rateCommentPlaceholder: "Laisser un commentaire (optionnel)…",
+      rateSubmit: "Soumettre l'avis",
+      rateSubmitting: "Envoi…",
+      rateThankYou: "Merci pour votre retour !",
     },
     contactPage: {
       kicker: "Support",

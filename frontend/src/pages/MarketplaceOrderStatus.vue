@@ -369,6 +369,53 @@
             {{ t('mktOrderStatus.orderAgain') }}
           </button>
         </div>
+
+        <!-- Rating prompt (completed, not yet rated) -->
+        <div
+          v-if="order.status === 'completed' && !order.has_rating"
+          class="mt-3 ui-panel ui-reveal p-4 space-y-3"
+          :style="{ '--ui-delay': '200ms' }"
+        >
+          <p class="text-sm font-semibold text-slate-200">{{ t('mktOrderStatus.rateTitle') }}</p>
+          <div class="flex gap-2" role="radiogroup" :aria-label="t('mktOrderStatus.rateTitle')">
+            <button
+              v-for="star in 5"
+              :key="star"
+              type="button"
+              role="radio"
+              class="ui-touch-target ui-press flex items-center justify-center text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 focus-visible:rounded-lg"
+              :aria-label="`${star}`"
+              :aria-checked="star <= mktRatingScore"
+              @click="mktRatingScore = star"
+            >
+              <span :class="star <= mktRatingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
+            </button>
+          </div>
+          <textarea
+            v-model="mktRatingComment"
+            rows="2"
+            :placeholder="t('mktOrderStatus.rateCommentPlaceholder')"
+            class="ui-textarea w-full resize-none text-sm"
+          />
+          <button
+            :disabled="mktRatingScore === 0 || mktRatingSubmitting"
+            :aria-busy="mktRatingSubmitting"
+            class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-40"
+            @click="submitMktRating"
+          >
+            <svg v-if="mktRatingSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ mktRatingSubmitting ? t('mktOrderStatus.rateSubmitting') : t('mktOrderStatus.rateSubmit') }}
+          </button>
+        </div>
+
+        <!-- Already rated -->
+        <div
+          v-else-if="order.status === 'completed' && order.has_rating"
+          class="mt-3 flex items-center gap-2.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/6 px-4 py-3 text-sm font-medium text-emerald-300"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+          {{ t('mktOrderStatus.rateThankYou') }}
+        </div>
       </template>
     </div>
   </div>
@@ -435,6 +482,25 @@ const fetchDelivery = async () => {
 // Driver rating now lives in <DeliveryTracker> (shared by both order pages).
 
 const printReceipt = () => window.print();
+
+// ── Rating ────────────────────────────────────────────────────────────────────
+const mktRatingScore = ref(0);
+const mktRatingComment = ref('');
+const mktRatingSubmitting = ref(false);
+
+const submitMktRating = async () => {
+  if (mktRatingScore.value === 0 || mktRatingSubmitting.value) return;
+  mktRatingSubmitting.value = true;
+  try {
+    await api.post(`/orders/${order.value.order_number}/rate/`, {
+      score: mktRatingScore.value,
+      comment: mktRatingComment.value.trim(),
+    });
+    // Mark rated locally so the prompt hides without waiting for next poll
+    if (order.value) order.value = { ...order.value, has_rating: true };
+  } catch { /* silent */ }
+  finally { mktRatingSubmitting.value = false; }
+};
 
 // ── Reorder ───────────────────────────────────────────────────────────────────
 const reorder = () => {

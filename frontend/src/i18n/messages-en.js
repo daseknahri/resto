@@ -778,6 +778,11 @@ mktOrderStatus: {
   justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
   orderAgain: "Order again",
   printReceipt: "Print receipt",
+  rateTitle: "How was your order?",
+  rateCommentPlaceholder: "Leave a comment (optional)…",
+  rateSubmit: "Submit rating",
+  rateSubmitting: "Submitting…",
+  rateThankYou: "Thanks for your feedback!",
 },
 contactPage: {
   kicker: "Support",

@@ -777,6 +777,11 @@ mktOrderStatus: {
   justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
   orderAgain: "Commander a nouveau",
   printReceipt: "Imprimer le recu",
+  rateTitle: "Comment etait votre commande ?",
+  rateCommentPlaceholder: "Laisser un commentaire (optionnel)…",
+  rateSubmit: "Soumettre l'avis",
+  rateSubmitting: "Envoi…",
+  rateThankYou: "Merci pour votre retour !",
 },
 contactPage: {
   kicker: "Support",
