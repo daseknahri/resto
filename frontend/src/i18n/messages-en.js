@@ -5545,6 +5545,8 @@ shiftClose: {
   noDrawer: "No drawer session for this service day.",
   overShortLabel: "Over / short",
   tipsTotalLabel: "Tips collected",
+  collectedCashLabel: "Cash collected",
+  collectedWalletLabel: "Wallet collected",
   voidsTotalLabel: "Voids total",
   voidsCountLabel: "Voids count",
   ordersLabel: "Orders completed",

@@ -5536,6 +5536,8 @@ shiftClose: {
   noDrawer: "Aucune session de caisse pour ce jour de service.",
   overShortLabel: "Écart",
   tipsTotalLabel: "Pourboires collectés",
+  collectedCashLabel: "Espèces perçues",
+  collectedWalletLabel: "Portefeuille perçu",
   voidsTotalLabel: "Total annulations",
   voidsCountLabel: "Nb annulations",
   ordersLabel: "Commandes complétées",

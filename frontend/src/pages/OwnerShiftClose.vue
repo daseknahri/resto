@@ -153,6 +153,14 @@
             <p class="text-lg font-bold tabular-nums text-amber-300 print:text-amber-700">{{ fmtMoney(report.tips?.total) }}</p>
           </div>
           <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("shiftClose.collectedCashLabel") }}</p>
+            <p class="text-lg font-bold tabular-nums text-emerald-300 print:text-emerald-700">{{ fmtMoney(report.collected?.cash) }}</p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("shiftClose.collectedWalletLabel") }}</p>
+            <p class="text-lg font-bold tabular-nums text-sky-300 print:text-sky-700">{{ fmtMoney(report.collected?.wallet) }}</p>
+          </div>
+          <div>
             <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("shiftClose.voidsCountLabel") }}</p>
             <p class="text-lg font-bold tabular-nums text-slate-200 print:text-black">{{ report.voids?.count ?? 0 }}</p>
           </div>
