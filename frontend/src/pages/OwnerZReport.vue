@@ -155,6 +155,14 @@
           </p>
           <p class="text-[10px] text-slate-600 print:text-slate-400">{{ t("zReport.refundsBasis") }}</p>
         </div>
+        <!-- Discounts -->
+        <div v-if="report.discounts?.total && parseFloat(report.discounts.total) > 0" class="ui-admin-subcard ui-reveal space-y-1.5 p-3 print:border print:border-slate-300 print:bg-white print:shadow-none">
+          <p class="ui-stat-label print:text-slate-500">{{ t("zReport.discountsTotal") }}</p>
+          <p class="text-xl font-bold tabular-nums text-rose-400 print:text-rose-700">-{{ fmtMoney(report.discounts.total) }}</p>
+          <p class="text-[10px] text-slate-600 print:text-slate-400">
+            {{ t("zReport.discountsBreakdown", { promo: fmtMoney(report.discounts.promo), loyalty: fmtMoney(report.discounts.loyalty) }) }}
+          </p>
+        </div>
         <!-- Net cash position -->
         <div class="ui-admin-subcard ui-reveal space-y-1.5 p-3 print:border print:border-slate-300 print:bg-white print:shadow-none">
           <p class="ui-stat-label print:text-slate-500">{{ t("zReport.netCash") }}</p>

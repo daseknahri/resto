@@ -4873,6 +4873,8 @@ zReport: {
   tips: "Tips",
   refunds: "Refunds",
   refundsBasis: "Refunds sourced from wallet credits and cash-back corrections.",
+  discountsTotal: "Discounts given",
+  discountsBreakdown: "Promos {promo} · Loyalty {loyalty}",
   netCash: "Net cash position",
   netCashHint: "Cash on hand to deposit = Cash collected + Tips cash − Cash refunds",
   netLabel: "Net cash to deposit",

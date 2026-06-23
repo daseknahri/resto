@@ -4883,6 +4883,8 @@ zReport: {
   tips: "Pourboires",
   refunds: "Remboursements",
   refundsBasis: "Remboursements issus de credits portefeuille et corrections especes.",
+  discountsTotal: "Remises accordees",
+  discountsBreakdown: "Promos {promo} · Fidelite {loyalty}",
   netCash: "Position nette en especes",
   netCashHint: "Especes a deposer = Especes collectees + Pourboires especes - Remboursements especes",
   netLabel: "Especes nettes a deposer",

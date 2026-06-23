@@ -7999,6 +7999,15 @@ class OwnerZReportView(APIView):
         tips_agg = collected_qs.aggregate(tips=_Sum("tip_amount"))
         tips_total = Decimal(str(tips_agg["tips"] or 0)).quantize(Decimal("0.01"))
 
+        # ── Discounts in window ───────────────────────────────────────────────
+        discounts_agg = collected_qs.aggregate(
+            promo=_Sum("promotion_discount"),
+            loyalty=_Sum("loyalty_discount"),
+        )
+        discount_promo = Decimal(str(discounts_agg["promo"] or 0)).quantize(Decimal("0.01"))
+        discount_loyalty = Decimal(str(discounts_agg["loyalty"] or 0)).quantize(Decimal("0.01"))
+        discount_total = (discount_promo + discount_loyalty).quantize(Decimal("0.01"))
+
         # ── Refunds in window ─────────────────────────────────────────────────
         # WalletTransaction.REFUND rows created in the window — wallet credits only.
         # There is no cash-refund ledger in the current data model.
@@ -8185,6 +8194,11 @@ class OwnerZReportView(APIView):
             },
             "tips": {
                 "total": str(tips_total),
+            },
+            "discounts": {
+                "promo": str(discount_promo),
+                "loyalty": str(discount_loyalty),
+                "total": str(discount_total),
             },
             "by_staff": by_staff,
             "labor": {
