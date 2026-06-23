@@ -1248,6 +1248,11 @@ class CustomerOrdersView(APIView):
                     "owner_reply_at": rating.owner_reply_at.isoformat() if rating.owner_reply_at else None,
                 } if rating else None,
                 "items": items,
+                "delivery_fee": str(order.delivery_fee),
+                "tip_amount": str(order.tip_amount),
+                "promotion_discount": str(order.promotion_discount),
+                "loyalty_discount": str(order.loyalty_discount),
+                "wallet_amount_paid": str(order.wallet_amount_paid),
                 "can_cancel": (
                     order.status in ("scheduled", "pending", "confirmed")
                     and order.fulfillment_type != "table"

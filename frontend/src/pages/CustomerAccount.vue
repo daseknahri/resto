@@ -731,12 +731,19 @@
                         @click.stop="cancelOrder(order)"
                       >{{ cancellingOrderNumber === order.order_number ? t('common.loading') : t('customerAccount.cancelOrder') }}</button>
                     </div>
-                    <button
-                      v-if="order.items?.length"
-                      class="mt-0.5 shrink-0 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
-                      :aria-expanded="expandedOrders.has(order.order_number)"
-                      @click="toggleOrder(order.order_number)"
-                    >{{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}</button>
+                    <div class="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                      <button
+                        v-if="order.items?.length"
+                        class="rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                        :aria-expanded="expandedOrders.has(order.order_number)"
+                        @click="toggleOrder(order.order_number)"
+                      >{{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}</button>
+                      <button
+                        v-if="order.status === 'completed' && order.items?.length"
+                        class="rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                        @click="receiptOrder = order"
+                      >{{ t('customerAccount.viewReceipt') }}</button>
+                    </div>
                   </div>
                   <Transition name="ui-expand">
                     <div
@@ -753,6 +760,25 @@
                           <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatPrice(item.subtotal) }}</span>
                         </li>
                       </ul>
+                      <!-- Fee/discount breakdown -->
+                      <div v-if="order.delivery_fee > 0 || order.tip_amount > 0 || order.promotion_discount > 0 || order.loyalty_discount > 0" class="mt-1.5 space-y-0.5 border-t border-slate-700/40 pt-1.5 text-[11px] text-slate-500">
+                        <div v-if="order.promotion_discount > 0" class="flex items-center justify-between gap-2">
+                          <span>{{ t('customerAccount.receiptPromoDiscount') }}</span>
+                          <span class="tabular-nums text-emerald-400">-{{ formatPrice(order.promotion_discount) }}</span>
+                        </div>
+                        <div v-if="order.loyalty_discount > 0" class="flex items-center justify-between gap-2">
+                          <span>{{ t('customerAccount.receiptLoyaltyDiscount') }}</span>
+                          <span class="tabular-nums text-emerald-400">-{{ formatPrice(order.loyalty_discount) }}</span>
+                        </div>
+                        <div v-if="order.delivery_fee > 0" class="flex items-center justify-between gap-2">
+                          <span>{{ t('customerAccount.receiptDeliveryFee') }}</span>
+                          <span class="tabular-nums">+{{ formatPrice(order.delivery_fee) }}</span>
+                        </div>
+                        <div v-if="order.tip_amount > 0" class="flex items-center justify-between gap-2">
+                          <span>{{ t('customerAccount.receiptTip') }}</span>
+                          <span class="tabular-nums">+{{ formatPrice(order.tip_amount) }}</span>
+                        </div>
+                      </div>
                       <button
                         class="ui-press mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
                         @click="reorder(order)"
@@ -2084,6 +2110,74 @@
 
     <CustomerAuthModal v-if="showAuthModal" @close="showAuthModal = false" @authenticated="onAuthenticated" />
     <CustomerAuthModal v-if="showAddPhone" :initial-tab="'phone'" @close="showAddPhone = false" @authenticated="onPhoneAdded" />
+
+    <!-- Receipt modal -->
+    <Teleport to="body">
+      <Transition name="ui-fade">
+        <div
+          v-if="receiptOrder"
+          class="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center print:bg-white print:backdrop-blur-none"
+          role="dialog"
+          :aria-label="t('customerAccount.viewReceipt')"
+          @click.self="receiptOrder = null"
+        >
+          <div class="receipt-modal w-full max-w-sm rounded-t-2xl border border-slate-700/60 bg-slate-900 p-5 shadow-2xl sm:rounded-2xl print:border-none print:shadow-none print:bg-white print:text-slate-900">
+            <div class="mb-4 flex items-start justify-between gap-3 print:hidden">
+              <p class="text-sm font-semibold text-slate-100">{{ t('customerAccount.viewReceipt') }}</p>
+              <button class="text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="receiptOrder = null">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
+            <div class="space-y-3 text-[12px]">
+              <div class="text-center print:block">
+                <p class="font-bold text-slate-100 print:text-slate-900">{{ tenantName }}</p>
+                <p class="text-[10px] text-slate-500 print:text-slate-600">{{ t('customerAccount.orderNumber', { number: receiptOrder.order_number }) }}</p>
+                <p class="text-[10px] text-slate-500 print:text-slate-600">{{ formatDate(receiptOrder.created_at) }}</p>
+              </div>
+              <div class="border-t border-dashed border-slate-700/60 pt-3 print:border-slate-300">
+                <ul class="space-y-1">
+                  <li v-for="(item, idx) in receiptOrder.items" :key="idx" class="flex items-start gap-1.5">
+                    <span class="shrink-0 text-slate-500 tabular-nums">{{ item.qty }}×</span>
+                    <span class="min-w-0 flex-1 text-slate-200 print:text-slate-800">{{ item.dish_name }}</span>
+                    <span class="shrink-0 tabular-nums text-slate-300 print:text-slate-800">{{ formatPrice(item.subtotal) }}</span>
+                  </li>
+                </ul>
+              </div>
+              <div class="border-t border-dashed border-slate-700/60 pt-2 space-y-1 print:border-slate-300">
+                <div v-if="receiptOrder.promotion_discount > 0" class="flex items-center justify-between gap-2 text-emerald-400">
+                  <span>{{ t('customerAccount.receiptPromoDiscount') }}</span>
+                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.promotion_discount) }}</span>
+                </div>
+                <div v-if="receiptOrder.loyalty_discount > 0" class="flex items-center justify-between gap-2 text-emerald-400">
+                  <span>{{ t('customerAccount.receiptLoyaltyDiscount') }}</span>
+                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.loyalty_discount) }}</span>
+                </div>
+                <div v-if="receiptOrder.delivery_fee > 0" class="flex items-center justify-between gap-2 text-slate-400">
+                  <span>{{ t('customerAccount.receiptDeliveryFee') }}</span>
+                  <span class="tabular-nums">{{ formatPrice(receiptOrder.delivery_fee) }}</span>
+                </div>
+                <div v-if="receiptOrder.tip_amount > 0" class="flex items-center justify-between gap-2 text-slate-400">
+                  <span>{{ t('customerAccount.receiptTip') }}</span>
+                  <span class="tabular-nums">{{ formatPrice(receiptOrder.tip_amount) }}</span>
+                </div>
+                <div v-if="receiptOrder.wallet_amount_paid > 0" class="flex items-center justify-between gap-2 text-indigo-300">
+                  <span>{{ t('customerAccount.receiptWallet') }}</span>
+                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.wallet_amount_paid) }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2 border-t border-slate-700/60 pt-1.5 font-bold text-slate-100 print:border-slate-300 print:text-slate-900">
+                  <span>{{ t('customerAccount.receiptTotal') }}</span>
+                  <span class="tabular-nums">{{ formatPrice(receiptOrder.total) }}</span>
+                </div>
+              </div>
+            </div>
+            <button
+              class="mt-4 w-full rounded-xl border border-slate-700/60 bg-slate-800/60 py-2.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 print:hidden"
+              @click="printReceipt()"
+            >{{ t('customerAccount.printReceipt') }}</button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -2160,6 +2254,8 @@ const showAddPhone = ref(false);
 
 // ── Order expand / reorder ────────────────────────────────────────────────────
 const expandedOrders = ref(new Set());
+const receiptOrder = ref(null);
+const printReceipt = () => { window.print(); };
 
 const toggleOrder = (orderNumber) => {
   const s = new Set(expandedOrders.value);
