@@ -181,7 +181,17 @@
         <!-- Staff card header -->
         <div class="flex items-center justify-between gap-3 px-4 py-3.5">
           <div class="min-w-0 space-y-0.5">
-            <p class="text-sm font-semibold tracking-tight text-slate-100 truncate">{{ member.name }}</p>
+            <div class="flex items-center gap-2 min-w-0">
+              <p class="text-sm font-semibold tracking-tight text-slate-100 truncate">{{ member.name }}</p>
+              <span
+                v-if="member.shift?.is_clocked_in"
+                class="shrink-0 flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400"
+                :title="t('ownerStaff.clockedInSince', { time: fmtTime(member.shift.clock_in) })"
+              >
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" aria-hidden="true" />
+                {{ t('ownerStaff.clockedIn') }}
+              </span>
+            </div>
             <p class="text-xs text-slate-500 truncate">{{ member.email }}</p>
             <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
               <span class="tabular-nums">{{ t('ownerStaff.statOrders', { n: member.stats?.orders_handled || 0 }) }}</span>
@@ -388,6 +398,15 @@ const fmtMoney = (v) => {
     }).format(n);
   } catch {
     return n.toFixed(2);
+  }
+};
+
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso;
   }
 };
 

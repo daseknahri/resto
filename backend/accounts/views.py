@@ -1626,6 +1626,19 @@ class OwnerStaffListCreateView(APIView):
             except Exception:
                 stats_map = {}
 
+        # Open shifts: clock_out=None means currently clocked in.
+        shift_map = {}
+        if staff_ids:
+            try:
+                from menu.models import Shift as _Shift
+                open_shifts = _Shift.objects.filter(
+                    user_id__in=staff_ids, clock_out__isnull=True
+                ).values("user_id", "clock_in")
+                for sh in open_shifts:
+                    shift_map[sh["user_id"]] = sh["clock_in"].isoformat()
+            except Exception:
+                shift_map = {}
+
         results = [
             {
                 "id": s["id"],
@@ -1640,6 +1653,10 @@ class OwnerStaffListCreateView(APIView):
                     "void_orders": s["perm_void"],
                 },
                 "stats": stats_map.get(s["id"], {"orders_handled": 0, "revenue": "0.00", "last_active": None}),
+                "shift": {
+                    "is_clocked_in": s["id"] in shift_map,
+                    "clock_in": shift_map.get(s["id"]),
+                },
             }
             for s in staff
         ]

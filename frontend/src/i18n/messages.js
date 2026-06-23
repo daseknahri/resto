@@ -1995,6 +1995,8 @@ export const messages = {
       shareEmail: "Share via email",
       shareEmailSubject: "Your staff login credentials",
       shareCredentialsText: "Hi, here are your staff login credentials:\nEmail: {email}\nPassword: {password}\nLogin at: {url}",
+      clockedIn: "Clocked in",
+      clockedInSince: "Since {time}",
     },
     waiterLayout: {
       role: "Waiter",
@@ -7547,6 +7549,8 @@ export const messages = {
       shareEmail: "Partager par email",
       shareEmailSubject: "Vos identifiants de connexion",
       shareCredentialsText: "Bonjour, voici vos identifiants de connexion :\nEmail : {email}\nMot de passe : {password}\nConnectez-vous sur : {url}",
+      clockedIn: "Pointe",
+      clockedInSince: "Depuis {time}",
     },
     waiterLayout: {
       role: "Serveur",

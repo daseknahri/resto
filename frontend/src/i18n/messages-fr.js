@@ -1991,6 +1991,8 @@ ownerStaff: {
   shareEmail: "Partager par email",
   shareEmailSubject: "Vos identifiants de connexion",
   shareCredentialsText: "Bonjour, voici vos identifiants de connexion :\nEmail : {email}\nMot de passe : {password}\nConnectez-vous sur : {url}",
+  clockedIn: "Pointe",
+  clockedInSince: "Depuis {time}",
 },
 waiterLayout: {
   role: "Serveur",

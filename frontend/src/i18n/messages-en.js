@@ -1992,6 +1992,8 @@ ownerStaff: {
   shareEmail: "Share via email",
   shareEmailSubject: "Your staff login credentials",
   shareCredentialsText: "Hi, here are your staff login credentials:\nEmail: {email}\nPassword: {password}\nLogin at: {url}",
+  clockedIn: "Clocked in",
+  clockedInSince: "Since {time}",
 },
 waiterLayout: {
   role: "Waiter",
