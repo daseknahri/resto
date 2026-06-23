@@ -497,6 +497,14 @@
             <div class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5">
               <code class="flex-1 font-mono text-sm font-bold tracking-widest text-[var(--color-secondary)]">{{ customerStore.customer.referral_code }}</code>
               <button
+                v-if="typeof navigator !== 'undefined' && 'share' in navigator"
+                class="ui-press shrink-0 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white"
+                :aria-label="t('customerAccount.referralShare')"
+                @click="shareReferralLink"
+              >
+                {{ t('customerAccount.referralShare') }}
+              </button>
+              <button
                 class="ui-press shrink-0 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white"
                 :class="referralCopied ? 'border-emerald-500/50 bg-emerald-500/10 !text-emerald-300' : ''"
                 @click="copyReferralLink"
@@ -542,14 +550,30 @@
             >{{ opt.label }}</button>
           </div>
 
+          <!-- Order search -->
+          <div class="relative">
+            <svg class="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
+            </svg>
+            <input
+              v-model.trim="orderSearch"
+              type="search"
+              class="w-full rounded-xl border border-slate-700/60 bg-slate-800/50 py-2 ps-9 pe-3 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              :placeholder="t('customerAccount.orderSearchPlaceholder')"
+            />
+          </div>
+
           <!-- Order history across all restaurants (marketplace index) -->
           <div v-if="marketplaceOrders.length" class="ui-panel ui-reveal overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
               <p class="ui-kicker">{{ t('customerAccount.allOrdersTitle') }}</p>
               <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.allOrdersHint') }}</p>
             </div>
-            <ul class="divide-y divide-slate-800/60">
-              <li v-for="o in marketplaceOrders" :key="o.restaurant_slug + o.order_number">
+            <div v-if="!filteredMarketplaceOrders.length" class="px-4 py-6 text-center text-sm text-slate-500">
+              {{ t('customerAccount.orderSearchNoResults') }}
+            </div>
+            <ul v-else class="divide-y divide-slate-800/60">
+              <li v-for="o in filteredMarketplaceOrders" :key="o.restaurant_slug + o.order_number">
                 <div class="flex items-center gap-3 px-4 py-3">
                   <!-- Status dot -->
                   <span
@@ -2402,6 +2426,17 @@ const copyReferralLink = async () => {
   clearTimeout(_referralCopyTimer);
   _referralCopyTimer = setTimeout(() => { referralCopied.value = false; }, 2000);
 };
+const shareReferralLink = async () => {
+  const code = customerStore.customer?.referral_code;
+  if (!code) return;
+  const link = `${window.location.origin}?ref=${code}`;
+  try {
+    await navigator.share({ url: link, text: t('customerAccount.referralShareText') });
+  } catch {
+    /* user cancelled or share not supported */
+  }
+};
+
 const loyaltyConfig = ref(null);
 const redeemAmount = ref(0);
 const redeeming = ref(false);
@@ -2837,6 +2872,17 @@ const cancelMarketplaceOrder = async (order) => {
 
 // ── Vertical filter for marketplace orders ────────────────────────────────────
 const selectedVertical = ref('');
+const orderSearch = ref('');
+
+const filteredMarketplaceOrders = computed(() => {
+  const q = orderSearch.value.trim().toLowerCase();
+  if (!q) return marketplaceOrders.value;
+  return marketplaceOrders.value.filter(
+    (o) =>
+      (o.restaurant_name || '').toLowerCase().includes(q) ||
+      (o.order_number || '').toLowerCase().includes(q)
+  );
+});
 
 const VERTICAL_FILTER_OPTIONS = computed(() => {
   const opts = [{ id: '', label: t('customerAccount.svcAll') }];
