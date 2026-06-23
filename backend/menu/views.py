@@ -2711,6 +2711,20 @@ class PlaceOrderView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+        # Reject delivery orders below the restaurant's configured minimum order amount.
+        if fulfillment_type == Order.FulfillmentType.DELIVERY:
+            _min_order = Decimal(str(profile.delivery_minimum_order or "0"))
+            if _min_order > 0 and _food_subtotal < _min_order:
+                return Response(
+                    {
+                        "detail": f"Minimum order for delivery is {_min_order}.",
+                        "code": "below_delivery_minimum",
+                        "minimum": str(_min_order),
+                        "current": str(_food_subtotal),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # For delivery, enrich order with customer identity; for pickup/table use payload values
         if fulfillment_type == Order.FulfillmentType.DELIVERY and _linked_customer:
             _customer_name = _linked_customer.name or validated.get("customer_name", "")
