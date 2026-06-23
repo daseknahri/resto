@@ -5097,6 +5097,7 @@ orderStatus: {
   tableOrderHint: "Votre commande est en preparation. Restez a votre table.",
   tableUnknown: "Table",
   backToMenu: "Retour au menu",
+  printReceipt: "Imprimer le recu",
   orderReadyTitle: "Votre commande est prete !",
   readyBodyPickup: "Venez recuperer votre commande au comptoir.",
   readyBodyDelivery: "Votre commande est en chemin !",

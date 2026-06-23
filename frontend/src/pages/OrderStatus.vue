@@ -691,6 +691,14 @@
         </span>
         <div class="flex flex-wrap gap-2 ms-auto">
           <button
+            v-if="orderData.status === 'completed'"
+            class="ui-btn-outline inline-flex items-center gap-1.5 px-4 py-2 text-sm print:hidden"
+            @click="printReceipt"
+          >
+            <AppIcon name="print" class="h-4 w-4" aria-hidden="true" />
+            {{ t("orderStatus.printReceipt") }}
+          </button>
+          <button
             v-if="orderData.items?.some(i => i.dish_slug)"
             class="ui-btn-primary inline-flex px-5 py-2.5 text-sm"
             @click="reorder"
@@ -838,6 +846,8 @@ const stopCountdown = () => {
 // Unified, availability-safe path (useReorder): re-resolves each line against the
 // live menu (drops sold-out items, refreshes prices, drops stale options) and
 // restores fulfillment context — identical to the Menu.vue reorder.
+const printReceipt = () => window.print();
+
 const reorder = async () => {
   if (!orderData.value?.items?.length) return;
   const result = await reorderFromOrder(orderData.value);

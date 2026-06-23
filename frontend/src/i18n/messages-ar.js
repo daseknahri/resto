@@ -2634,6 +2634,7 @@ const arabicMessages = {
     "fulfillmentDelivery": "توصيل",
     "fulfillmentTable": "طاولة {table}",
     "backToMenu": "العودة إلى القائمة",
+    "printReceipt": "طباعة الإيصال",
     "orderReadyTitle": "طلبك جاهز!",
     "readyBodyPickup": "يُرجى التوجه إلى الكاونتر لاستلام طلبك.",
     "readyBodyDelivery": "طلبك في الطريق إليك!",

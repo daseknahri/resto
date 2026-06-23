@@ -5055,6 +5055,7 @@ orderStatus: {
   tableOrderHint: "Your order is being prepared. Stay at your table.",
   tableUnknown: "Table",
   backToMenu: "Back to menu",
+  printReceipt: "Print receipt",
   orderReadyTitle: "Your order is ready!",
   readyBodyPickup: "Please come collect your order at the counter.",
   readyBodyDelivery: "Your order is on its way!",
