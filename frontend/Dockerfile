@@ -34,7 +34,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.31-alpine AS runner
 
 # R13: non-root nginx.
 # nginx:1.27-alpine ships with a built-in `nginx` user (UID 101 / GID 101).
