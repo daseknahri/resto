@@ -1,31 +1,31 @@
 Django==4.2.30
-psycopg2==2.9.9
-djangorestframework==3.15.2
-django-tenants==3.6.0
+psycopg2==2.9.12
+djangorestframework==3.17.1
+django-tenants==3.10.1
 python-dotenv==1.2.2
 dj-database-url==2.1.0
-django-cors-headers==4.4.0
+django-cors-headers==4.9.0
 Pillow==12.2.0
 qrcode==7.4.2
 reportlab==4.2.2
 gunicorn==23.0.0
-whitenoise==6.8.2
-sentry-sdk==2.16.0
-django-storages==1.14.4
-boto3==1.35.36
+whitenoise==6.12.0
+sentry-sdk==2.63.0
+django-storages==1.14.6
+boto3==1.43.36
 django-redis==5.4.0
 redis==5.0.8
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
 # Optional at runtime: without a broker the app falls back to in-process dispatch.
-celery==5.4.0
-pywebpush==2.0.0
+celery==5.6.3
+pywebpush==2.3.0
 # Real-time (WebSockets). Channels activates only when installed; the app and its
 # polling fall back gracefully without it. Serve under ASGI (uvicorn/daphne) and
 # set REDIS_URL for the cross-process channel layer in production.
-channels==4.1.0
-channels-redis==4.2.0
-daphne==4.1.2
-uvicorn[standard]==0.30.6
-pyotp==2.9.0
+channels==4.3.2
+channels-redis==4.3.0
+daphne==4.2.2
+uvicorn[standard]==0.49.0
+pyotp==2.10.0
 # PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
 stripe>=10.0.0,<13.0.0
