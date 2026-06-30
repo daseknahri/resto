@@ -2809,8 +2809,8 @@ const onWalletCharged = async () => {
   }
 };
 const onOrderPlaced = () => {
-  // Immediately reload the order list so the new order appears
   waiter.fetchOrders({ silent: true });
+  toast.show(t('waiterPage.orderSentToKitchen'), 'success');
 };
 
 // ── Bill / receipt ─────────────────────────────────────────────────────────────
