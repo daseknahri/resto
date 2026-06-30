@@ -5318,6 +5318,7 @@ customerAccount: {
   receiptWallet: "Wallet credit",
   receiptTotal: "Total",
   cancelOrder: "Cancel order",
+  cancelConfirm: "Cancel this order? This cannot be undone.",
   orderCancelled: "Order cancelled successfully",
   orderCancelFailed: "Couldn't cancel this order. It may have already been confirmed by the restaurant.",
   noOrdersYet: "No orders yet.",

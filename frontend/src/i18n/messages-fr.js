@@ -5309,6 +5309,7 @@ customerAccount: {
   receiptWallet: "Crédit portefeuille",
   receiptTotal: "Total",
   cancelOrder: "Annuler la commande",
+  cancelConfirm: "Annuler cette commande ? Cette action est irréversible.",
   orderCancelled: "Commande annulee avec succes",
   orderCancelFailed: "Impossible d'annuler cette commande. Elle a peut-etre deja ete confirmee.",
   noOrdersYet: "Aucune commande pour l'instant.",
