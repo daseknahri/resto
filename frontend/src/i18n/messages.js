@@ -1330,6 +1330,7 @@ export const messages = {
       resultCategories: "Categories created",
       resultSkipped: "Rows skipped",
       resultWarnings: "Warnings",
+      draftBadgeLabel: "{count} hidden",
     },
     ownerLoyalty: {
       kicker: "Loyalty",
@@ -6925,6 +6926,7 @@ export const messages = {
       resultCategories: "Categories creees",
       resultSkipped: "Lignes ignorees",
       resultWarnings: "Avertissements",
+      draftBadgeLabel: "{count} masque(s)",
     },
     ownerLoyalty: {
       kicker: "Fidelite",

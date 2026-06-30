@@ -39,6 +39,7 @@
         >
           <AppIcon :name="tab.icon" class="me-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{{ tab.label }}</span>
+          <span v-if="tab.key === 'dishes' && draftDishCount > 0" class="ms-1 inline-flex items-center justify-center rounded-full bg-amber-500/20 px-1.5 py-px text-[10px] font-bold text-amber-300" :aria-label="t('ownerMenuBuilder.draftBadgeLabel', { count: draftDishCount })">{{ draftDishCount }}</span>
         </button>
       </nav>
     </div>
@@ -209,6 +210,7 @@ import TemplatePickerModal from "../components/TemplatePickerModal.vue";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import { useToastStore } from "../stores/toast";
+import { useMenuStore } from "../stores/menu";
 import api from "../lib/api";
 import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
@@ -224,6 +226,10 @@ const router = useRouter();
 const { t } = useI18n();
 const { itemPlural, groupPlural } = useVocabulary();
 const toast = useToastStore();
+const menuStore = useMenuStore();
+const draftDishCount = computed(() =>
+  Object.values(menuStore.dishes).flat().filter((d) => !d.is_published).length
+);
 
 // ── Starter templates ───────────────────────────────────────────────────────────
 const showTemplates = ref(false);

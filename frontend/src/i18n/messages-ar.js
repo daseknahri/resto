@@ -3269,6 +3269,7 @@ Object.assign(arabicMessages, {
     resultCategories: "\u0627\u0644\u062a\u0635\u0646\u064a\u0641\u0627\u062a \u0627\u0644\u0645\u0646\u0634\u0623\u0629",
     resultSkipped: "\u0627\u0644\u0635\u0641\u0648\u0641 \u0627\u0644\u0645\u062a\u062e\u0637\u0627\u0629",
     resultWarnings: "\u0627\u0644\u062a\u062d\u0630\u064a\u0631\u0627\u062a",
+    "draftBadgeLabel": "{count} \u0645\u062e\u0641\u064a",
   },
   ownerLoyalty: {
     kicker: "\u0627\u0644\u0648\u0644\u0627\u0621",

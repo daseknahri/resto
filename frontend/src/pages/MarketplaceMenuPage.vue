@@ -1213,8 +1213,16 @@ const onAuthenticated = async () => {
   placeOrder(); // retry with the newly established session
 };
 
-// Cart: [{slug, name, price, qty}]
-const cart = ref([]);
+// Cart: [{slug, name, price, qty}] — persisted to sessionStorage so items survive
+// navigation back from the marketplace listing page.
+const MKT_CART_KEY = `mkt:cart:${slug}`;
+const _savedCart = (() => {
+  try { return JSON.parse(sessionStorage.getItem(MKT_CART_KEY) || 'null'); } catch { return null; }
+})();
+const cart = ref(Array.isArray(_savedCart) ? _savedCart : []);
+watch(cart, (v) => {
+  try { sessionStorage.setItem(MKT_CART_KEY, JSON.stringify(v)); } catch { /* quota */ }
+}, { deep: true });
 
 const form = reactive({
   fulfillment_type: 'pickup',
@@ -1852,6 +1860,8 @@ const placeOrder = async () => {
       localStorage.setItem('mktLastOrderAt', String(Date.now()));
       localStorage.setItem('mktLastOrderSlug', String(slug));
     } catch { /* storage unavailable */ }
+    // Clear the persisted cart now that the order is placed
+    try { sessionStorage.removeItem(MKT_CART_KEY); } catch { /* ignore */ }
     // Navigate to order status page
     router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
   } catch (err) {

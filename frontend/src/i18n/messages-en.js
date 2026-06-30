@@ -1327,6 +1327,7 @@ ownerMenuBuilder: {
   resultCategories: "Categories created",
   resultSkipped: "Rows skipped",
   resultWarnings: "Warnings",
+  draftBadgeLabel: "{count} hidden",
 },
 ownerLoyalty: {
   kicker: "Loyalty",

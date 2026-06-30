@@ -1326,6 +1326,7 @@ ownerMenuBuilder: {
   resultCategories: "Categories creees",
   resultSkipped: "Lignes ignorees",
   resultWarnings: "Avertissements",
+  draftBadgeLabel: "{count} masque(s)",
 },
 ownerLoyalty: {
   kicker: "Fidelite",
