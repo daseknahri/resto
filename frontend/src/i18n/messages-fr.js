@@ -718,6 +718,7 @@ deliveryTracker: {
   statusAriaLabel: "Statut de livraison : {status}",
   driverSection: "Informations sur le livreur",
   ratingHint: "Selectionnez d'abord une note",
+  deliveredSuccess: "Votre commande a été livrée !",
 },
 mktOrderStatus: {
   title: "Commande {number}",

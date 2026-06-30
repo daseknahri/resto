@@ -722,6 +722,7 @@ export const messages = {
       statusAriaLabel: "Delivery status: {status}",
       driverSection: "Driver information",
       ratingHint: "Select a star rating first",
+      deliveredSuccess: "Your order has been delivered!",
     },
     mktOrderStatus: {
       title: "Order {number}",
@@ -6314,6 +6315,7 @@ export const messages = {
       statusAriaLabel: "Statut de livraison : {status}",
       driverSection: "Informations sur le livreur",
       ratingHint: "Selectionnez d'abord une note",
+      deliveredSuccess: "Votre commande a été livrée !",
     },
     mktOrderStatus: {
       title: "Commande {number}",

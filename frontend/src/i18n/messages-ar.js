@@ -3183,6 +3183,7 @@ Object.assign(arabicMessages, {
     statusAriaLabel: "\u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0648\u0635\u064a\u0644: {status}",
     driverSection: "\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0633\u0627\u0626\u0642",
     ratingHint: "\u0627\u062e\u062a\u0631 \u062a\u0642\u064a\u064a\u0645\u0627\u064b \u0623\u0648\u0644\u0627\u064b",
+    "deliveredSuccess": "\u062a\u0645 \u062a\u0648\u0635\u064a\u0644 \u0637\u0644\u0628\u0643!",
   },
   mktOrderStatus: {
     title: "\u0637\u0644\u0628 {number}",
