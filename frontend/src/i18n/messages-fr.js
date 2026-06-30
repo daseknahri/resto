@@ -866,6 +866,7 @@ ridePage: {
   rateTitle: "Notez votre conducteur",
   rateCta: "Envoyer la note",
   rated: "Merci pour votre retour !",
+  ratingFailed: "Impossible d'envoyer votre note — veuillez réessayer.",
   vehicleLabel: "Vehicule",
   walletShort: "Portefeuille",
   cashShort: "Especes",

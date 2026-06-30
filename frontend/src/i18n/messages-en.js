@@ -868,6 +868,7 @@ ridePage: {
   rateTitle: "Rate your driver",
   rateCta: "Submit rating",
   rated: "Thanks for your feedback!",
+  ratingFailed: "Couldn't submit your rating — please try again.",
   vehicleLabel: "Vehicle",
   walletShort: "Wallet",
   cashShort: "Cash",
