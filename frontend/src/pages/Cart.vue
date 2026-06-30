@@ -1050,6 +1050,7 @@ import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import QtyStepperButton from '../components/QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
 import { useMenuStore } from '../stores/menu';
@@ -1070,6 +1071,7 @@ const menu = useMenuStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const { formatPrice, itemCountLabel, t } = useI18n();
 const currencyStore = useCurrencyStore();
 
@@ -1159,6 +1161,11 @@ const applySavedAddress = (addr) => {
 };
 
 const deleteSavedAddress = async (id) => {
+  const ok = await confirm({
+    title: t('cartPage.deleteAddressConfirm'),
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api.delete(`/customer/addresses/${id}/`);
     savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
@@ -1642,7 +1649,14 @@ const clearFieldError = (field) => {
   fieldErrors.value = next;
 };
 
-const clearCart = () => {
+const clearCart = async () => {
+  const ok = await confirm({
+    title: t('cartPage.clearCartConfirm'),
+    message: t('cartPage.clearCartConfirmBody'),
+    confirmLabel: t('cartPage.clearCartConfirmYes'),
+    danger: true,
+  });
+  if (!ok) return;
   cart.clear();
   unavailableSlugs.value = [];
   toast.show(t('cartPage.cartCleared'), 'info');
