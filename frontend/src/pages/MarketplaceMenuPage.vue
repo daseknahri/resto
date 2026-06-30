@@ -449,7 +449,7 @@
             <button
               type="button"
               class="text-xs text-slate-500 underline transition-colors hover:text-slate-300"
-              @click="selectedAllergenFilter = []"
+              @click="selectedAllergenFilter = []; try { localStorage.removeItem(ALLERGEN_KEY) } catch {}"
             >{{ t('mktMenu.searchClear') }}</button>
           </div>
 
@@ -1495,6 +1495,7 @@ const addToCart = (dish) => {
       happy_hour_ends_at: dish.happy_hour?.ends_at ?? null,
       happy_hour_starts_at: dish.happy_hour?.starts_at ?? null,
     });
+    toastStore.show(t('mktMenu.addedToCart', { name: dish.name }), 'success', 2000);
   }
 };
 
@@ -1547,7 +1548,10 @@ const TAG_COLOURS = {
 const tagBadgeClass = (tag) => TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate-900/60 text-slate-400';
 
 // ── Allergen "Free from" filter ───────────────────────────────────────────────
-const selectedAllergenFilter = ref([]);
+const ALLERGEN_KEY = `mkt-allergens-${slug}`;
+const selectedAllergenFilter = ref((() => {
+  try { return JSON.parse(localStorage.getItem(ALLERGEN_KEY) || '[]'); } catch { return []; }
+})());
 
 const availableAllergens = computed(() => {
   const seen = new Set();
@@ -1565,6 +1569,7 @@ const toggleAllergenFilter = (allergen) => {
   const idx = selectedAllergenFilter.value.indexOf(allergen);
   if (idx >= 0) selectedAllergenFilter.value.splice(idx, 1);
   else selectedAllergenFilter.value.push(allergen);
+  try { localStorage.setItem(ALLERGEN_KEY, JSON.stringify(selectedAllergenFilter.value)); } catch { /* quota */ }
 };
 
 /** Returns true when the dish is safe for the active allergen exclusions. */

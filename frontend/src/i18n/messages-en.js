@@ -599,6 +599,7 @@ mktMenu: {
   cartItemUnavailable: "No longer available — remove before ordering",
   cartHasUnavailableItems: "Some items in your cart are no longer available. Remove them to place your order.",
   cartHasUnavailableShort: "Remove unavailable items",
+  addedToCart: "{name} added",
   authRequired: "Delivery orders require a signed-in account.",
   restaurantClosed: "This place is currently closed.",
   itemsUnavailable: "Some items are no longer available.",

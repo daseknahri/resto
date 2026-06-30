@@ -598,6 +598,7 @@ mktMenu: {
   cartItemUnavailable: "Plus disponible — retirez avant de commander",
   cartHasUnavailableItems: "Certains articles du panier ne sont plus disponibles. Retirez-les pour passer votre commande.",
   cartHasUnavailableShort: "Retirez les articles indisponibles",
+  addedToCart: "{name} ajouté",
   authRequired: "Les commandes en livraison necessitent un compte connecte.",
   restaurantClosed: "Cet etablissement est actuellement ferme.",
   itemsUnavailable: "Certains articles ne sont plus disponibles.",

@@ -2786,6 +2786,7 @@ const arabicMessages = {
     cartItemUnavailable: "غير متوفر — أزله قبل الطلب",
     cartHasUnavailableItems: "بعض العناصر في السلة لم تعد متوفرة. أزلها لإتمام طلبك.",
     cartHasUnavailableShort: "أزل العناصر غير المتوفرة",
+    addedToCart: "تمت إضافة {name}",
     "placeOrderError": "تعذّر إرسال الطلب. يرجى المحاولة مجدداً.",
     "placeOrderSuccess": "تم الطلب!",
     "switchToInApp": "طلب داخل التطبيق",
