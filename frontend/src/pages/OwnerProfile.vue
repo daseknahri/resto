@@ -367,6 +367,13 @@ watch(
 );
 
 const saveSchedule = async () => {
+  const invalidDay = scheduleLocal.value.find(
+    (d) => d.enabled && d.open && d.close && d.close <= d.open,
+  );
+  if (invalidDay) {
+    toast.show(t('orderHandling.hoursInvalidRange', { day: invalidDay.label }), 'error');
+    return;
+  }
   scheduleSaving.value = true;
   scheduleStatus.value = '';
   try {

@@ -4588,6 +4588,7 @@ orderHandling: {
   hoursClose: "Closing time for {day}",
   hoursClosed: "Closed",
   hoursSaved: "Opening hours saved.",
+  hoursInvalidRange: "{day}: closing time must be after opening time.",
   dayMon: "Mon",
   dayTue: "Tue",
   dayWed: "Wed",

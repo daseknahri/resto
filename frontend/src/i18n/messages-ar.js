@@ -2666,6 +2666,7 @@ const arabicMessages = {
     "hoursClose": "وقت الإغلاق ({day})",
     "hoursClosed": "مغلق",
     "hoursSaved": "تم حفظ ساعات العمل.",
+    "hoursInvalidRange": "{day}: يجب أن يكون وقت الإغلاق بعد وقت الفتح.",
     "dayMon": "الإثنين",
     "dayTue": "الثلاثاء",
     "dayWed": "الأربعاء",
