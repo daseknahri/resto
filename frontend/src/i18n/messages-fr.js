@@ -2071,6 +2071,8 @@ waiterPage: {
   payCash: "Especes",
   payWalletMethod: "Portefeuille",
   cashFull: "Especes — {amount}",
+  cashReceived: "Especes recues",
+  cashChange: "Monnaie a rendre",
   splitSection: "Partager le montant",
   shiftSince: "Debut du shift",
   shiftRefresh: "Charger",

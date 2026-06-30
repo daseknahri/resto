@@ -1509,6 +1509,26 @@ class="min-w-0 flex-1 leading-snug"
 
           <!-- Standard settle controls (hidden when seat-split mode is on) -->
           <template v-else>
+            <!-- Cash received input + change calculator -->
+            <div class="rounded-lg border border-slate-700/50 bg-slate-800/40 p-3 space-y-2">
+              <label class="block text-[11px] font-medium text-slate-400" for="waiter-cash-received">{{ t('waiterPage.cashReceived') }}</label>
+              <input
+                id="waiter-cash-received"
+                v-model="cashReceived"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
+                :placeholder="fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency)"
+              />
+              <div v-if="cashChange !== null" class="flex items-center justify-between text-sm tabular-nums">
+                <span class="text-slate-400">{{ t('waiterPage.cashChange') }}</span>
+                <span :class="Number(cashChange) >= 0 ? 'font-bold text-emerald-300' : 'font-bold text-red-400'">
+                  {{ Number(cashChange) >= 0 ? '+' : '' }}{{ fmtOrderPrice(Number(cashChange), settleChooser.currency) }}
+                </span>
+              </div>
+            </div>
             <!-- Primary CTA: Cash full amount — one tap -->
             <button
               class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-4 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -2666,6 +2686,17 @@ const settleOutstanding = (order) => {
 };
 // Tracks the amount the user typed in the settle-chooser input (empty string = full amount).
 const splitAmount = ref('');
+
+const cashReceived = ref('');
+// Clear cash input whenever settle sheet opens/closes
+watch(settleChooser, () => { cashReceived.value = ''; });
+const cashChange = computed(() => {
+  if (!settleChooser.value || !cashReceived.value) return null;
+  const due = settleOutstanding(settleChooser.value);
+  const received = parseFloat(cashReceived.value);
+  if (!Number.isFinite(received) || received <= 0) return null;
+  return (received - due).toFixed(2);
+});
 
 // Outstanding amount on the open bill (total minus any wallet already applied).
 const billOutstanding = computed(() => {

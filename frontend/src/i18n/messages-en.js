@@ -2072,6 +2072,8 @@ waiterPage: {
   payCash: "Cash",
   payWalletMethod: "Wallet",
   cashFull: "Cash — {amount}",
+  cashReceived: "Cash received",
+  cashChange: "Change due",
   splitSection: "Split amount",
   shiftSince: "Shift started at",
   shiftRefresh: "Load",
