@@ -65,8 +65,8 @@
         </div>
       </div>
 
-      <!-- Today's stats bar -->
-      <div v-else class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3.5">
+      <!-- Today's stats bar — sticky so counts stay visible while scrolling -->
+      <div v-else class="sticky top-0 z-10 grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-900/95 px-3 py-3.5 backdrop-blur-sm">
         <div class="text-center">
           <p class="text-2xl font-bold text-white tabular-nums leading-none">{{ todayStats.count }}</p>
           <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayOrders") }}</p>

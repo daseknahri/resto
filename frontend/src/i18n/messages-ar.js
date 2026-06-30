@@ -2626,7 +2626,20 @@ const arabicMessages = {
     "prepIncrease": "زيادة وقت التحضير",
     "minutesUnit": "د",
     "saved": "تم حفظ معالجة الطلبات.",
-    "saveFailed": "تعذّر حفظ معالجة الطلبات."
+    "saveFailed": "تعذّر حفظ معالجة الطلبات.",
+    "hoursTitle": "ساعات العمل",
+    "hoursHint": "حدد جدولك الأسبوعي. يرى العملاء ساعات اليوم على صفحة قائمتك.",
+    "hoursOpen": "وقت الفتح ({day})",
+    "hoursClose": "وقت الإغلاق ({day})",
+    "hoursClosed": "مغلق",
+    "hoursSaved": "تم حفظ ساعات العمل.",
+    "dayMon": "الإثنين",
+    "dayTue": "الثلاثاء",
+    "dayWed": "الأربعاء",
+    "dayThu": "الخميس",
+    "dayFri": "الجمعة",
+    "daySat": "السبت",
+    "daySun": "الأحد"
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",

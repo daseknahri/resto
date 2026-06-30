@@ -103,6 +103,63 @@
             {{ ohSaving ? t("common.saving") : t("common.save") }}
           </button>
         </div>
+
+        <!-- ── Business hours editor ── -->
+        <header class="space-y-1 border-t border-white/10 pt-5">
+          <h3 class="text-base font-semibold text-white">{{ t("orderHandling.hoursTitle") }}</h3>
+          <p class="text-xs text-white/55">{{ t("orderHandling.hoursHint") }}</p>
+        </header>
+
+        <div class="space-y-1.5 rounded-2xl bg-white/5 p-4">
+          <div
+            v-for="(day, idx) in scheduleLocal"
+            :key="day.key"
+            class="flex flex-wrap items-center gap-2 py-1.5"
+            :class="idx < scheduleLocal.length - 1 ? 'border-b border-white/8' : ''"
+          >
+            <!-- Day label + enabled toggle -->
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="day.enabled"
+              :aria-label="day.label"
+              class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors"
+              :class="day.enabled
+                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-400'"
+              @click="day.enabled = !day.enabled"
+            >{{ day.label }}</button>
+            <!-- Time inputs (only active when day is enabled) -->
+            <template v-if="day.enabled">
+              <input
+                v-model="day.open"
+                type="time"
+                class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
+                :aria-label="t('orderHandling.hoursOpen', { day: day.label })"
+              />
+              <span class="text-slate-500">–</span>
+              <input
+                v-model="day.close"
+                type="time"
+                class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
+                :aria-label="t('orderHandling.hoursClose', { day: day.label })"
+              />
+            </template>
+            <span v-else class="text-xs text-slate-500">{{ t("orderHandling.hoursClosed") }}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <p v-if="scheduleStatus" class="text-sm text-white/70" role="status">{{ scheduleStatus }}</p>
+          <button
+            type="button"
+            class="ui-btn-primary ui-press ms-auto"
+            :disabled="scheduleSaving"
+            @click="saveSchedule"
+          >
+            {{ scheduleSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
       </section>
 
       <component
@@ -274,4 +331,60 @@ watch(
   () => tenant.meta?.profile,
   () => loadOrderHandling(),
 );
+
+// ── Business hours editor ─────────────────────────────────────────────────────
+const _SCHEDULE_DAYS = [
+  { key: 'mon', labelKey: 'orderHandling.dayMon' },
+  { key: 'tue', labelKey: 'orderHandling.dayTue' },
+  { key: 'wed', labelKey: 'orderHandling.dayWed' },
+  { key: 'thu', labelKey: 'orderHandling.dayThu' },
+  { key: 'fri', labelKey: 'orderHandling.dayFri' },
+  { key: 'sat', labelKey: 'orderHandling.daySat' },
+  { key: 'sun', labelKey: 'orderHandling.daySun' },
+];
+
+const _buildScheduleLocal = () => {
+  const sched = tenant.meta?.profile?.business_hours_schedule || {};
+  return _SCHEDULE_DAYS.map(({ key, labelKey }) => {
+    const entry = sched[key] || {};
+    return {
+      key,
+      label: t(labelKey),
+      enabled: Boolean(entry.enabled),
+      open: entry.open || '09:00',
+      close: entry.close || '22:00',
+    };
+  });
+};
+
+const scheduleLocal = ref(_buildScheduleLocal());
+const scheduleSaving = ref(false);
+const scheduleStatus = ref('');
+
+watch(
+  () => tenant.meta?.profile?.business_hours_schedule,
+  () => { scheduleLocal.value = _buildScheduleLocal(); },
+);
+
+const saveSchedule = async () => {
+  scheduleSaving.value = true;
+  scheduleStatus.value = '';
+  try {
+    const schedule = Object.fromEntries(
+      scheduleLocal.value.map(({ key, enabled, open, close }) => [
+        key,
+        { enabled, open: enabled ? open : null, close: enabled ? close : null },
+      ])
+    );
+    const saved = await profileApi.save({ business_hours_schedule: schedule });
+    tenant.mergeProfile(saved);
+    scheduleStatus.value = t('common.saved');
+    toast.show(t('orderHandling.hoursSaved'), 'success');
+  } catch (e) {
+    scheduleStatus.value = t('common.saveFailed');
+    toast.show(e?.message || t('common.saveFailed'), 'error');
+  } finally {
+    scheduleSaving.value = false;
+  }
+};
 </script>
