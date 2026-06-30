@@ -468,6 +468,31 @@
             >{{ t('mktMenu.searchClear') }}</button>
           </div>
 
+          <!-- Favourites horizontal rail -->
+          <div v-if="favoriteDishes.length" class="space-y-2">
+            <p class="ui-kicker">{{ t('mktMenu.favourites') }}</p>
+            <div class="flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                v-for="fd in favoriteDishes"
+                :key="fd.slug"
+                type="button"
+                class="ui-press flex shrink-0 flex-col items-start gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-2.5 text-start transition hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+                style="min-width: 110px; max-width: 140px"
+                @click="openOptionPanel(fd)"
+              >
+                <div
+                  v-if="fd.image_url"
+                  class="h-12 w-full rounded-xl bg-cover bg-center"
+                  :style="{ backgroundImage: `url(${fd.image_url})` }"
+                  aria-hidden="true"
+                />
+                <div v-else class="flex h-12 w-full items-center justify-center rounded-xl bg-rose-500/10 text-xl" aria-hidden="true">❤️</div>
+                <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">{{ fd.name }}</p>
+                <p class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(fd.effective_price || fd.price) }}</p>
+              </button>
+            </div>
+          </div>
+
           <!-- Recently viewed horizontal rail -->
           <div v-if="recentlyViewed.length" class="space-y-2">
             <p class="ui-kicker">{{ t('mktMenu.recentlyViewed') }}</p>
@@ -575,9 +600,21 @@
                         <span class="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">-{{ flashSalePct }}%</span>
                       </span>
                       <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                      <!-- Favorite (heart) button -->
+                      <button
+                        class="ui-press ms-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-1"
+                        :class="isFavorite(dish.slug)
+                          ? 'text-rose-400 focus-visible:ring-rose-500/40'
+                          : 'text-slate-500 hover:text-slate-300 focus-visible:ring-slate-500/50'"
+                        :aria-label="`${isFavorite(dish.slug) ? t('mktMenu.unfavorite') : t('mktMenu.favorite')} ${dish.name}`"
+                        :aria-pressed="isFavorite(dish.slug)"
+                        @click.stop="toggleFavorite(dish)"
+                      >
+                        <svg viewBox="0 0 16 16" :fill="isFavorite(dish.slug) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M8 13.5S2 9.5 2 5.5A3 3 0 0 1 8 4a3 3 0 0 1 6 1.5c0 4-6 8-6 8z"/></svg>
+                      </button>
                       <!-- Share dish icon -->
                       <button
-                        class="ui-press ms-auto me-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/50"
+                        class="ui-press me-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/50"
                         :aria-label="`${t('mktMenu.shareDish')} ${dish.name}`"
                         @click.stop="shareDish(dish)"
                       >
@@ -1234,6 +1271,19 @@
       @authenticated="onAuthenticated"
     />
 
+    <!-- Floating back-to-top button -->
+    <Transition name="ui-fade">
+      <button
+        v-if="showBackToTop"
+        type="button"
+        class="ui-press fixed bottom-24 end-4 z-[1200] flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/90 shadow-lg backdrop-blur-sm text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+        :aria-label="t('mktMenu.backToTop')"
+        @click="() => window.scrollTo({ top: 0, behavior: 'smooth' })"
+      >
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>
+      </button>
+    </Transition>
+
   </div>
 </template>
 
@@ -1357,6 +1407,7 @@ onBeforeUnmount(() => {
   if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
   clearInterval(_flashSaleTimer);
   clearInterval(_hhTick);
+  window.removeEventListener('scroll', _onPageScroll);
 });
 // ── Share restaurant link ─────────────────────────────────────────────────────
 const menuLinkCopied = ref(false);
@@ -1609,6 +1660,18 @@ const tagBadgeClass = (tag) => TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate
 
 // ── Allergen "Free from" filter ───────────────────────────────────────────────
 const ALLERGEN_KEY = `mkt-allergens-${slug}`;
+const FAVORITES_KEY = `mkt-favs-${slug}`;
+const favorites = ref((() => {
+  try { return new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]')); } catch { return new Set(); }
+})());
+const isFavorite = (dishSlug) => favorites.value.has(dishSlug);
+const toggleFavorite = (dish) => {
+  const next = new Set(favorites.value);
+  if (next.has(dish.slug)) { next.delete(dish.slug); } else { next.add(dish.slug); }
+  favorites.value = next;
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...next])); } catch { /* quota */ }
+};
+
 const RECENTLY_VIEWED_KEY = `mkt-recent-${slug}`;
 const RECENTLY_VIEWED_MAX = 6;
 const recentlyViewed = ref((() => {
@@ -1623,6 +1686,19 @@ const trackRecentlyViewed = (dish) => {
 const selectedAllergenFilter = ref((() => {
   try { return JSON.parse(localStorage.getItem(ALLERGEN_KEY) || '[]'); } catch { return []; }
 })());
+
+const favoriteDishes = computed(() => {
+  if (!favorites.value.size) return [];
+  const all = [];
+  for (const sc of (restaurant.value?.super_categories || [])) {
+    for (const cat of (sc.categories || [])) {
+      for (const d of (cat.dishes || [])) {
+        if (favorites.value.has(d.slug)) all.push(d);
+      }
+    }
+  }
+  return all;
+});
 
 const availableAllergens = computed(() => {
   const seen = new Set();
@@ -2299,7 +2375,11 @@ const applyReorderItems = () => {
   }
 };
 
+const showBackToTop = ref(false);
+const _onPageScroll = () => { showBackToTop.value = window.scrollY > 400; };
+
 onMounted(async () => {
+  window.addEventListener('scroll', _onPageScroll, { passive: true });
   await customerStore.fetchCustomer();
   fetchMktSavedAddresses(); // non-blocking — degrades gracefully if unauthenticated
   await fetchMenu();
