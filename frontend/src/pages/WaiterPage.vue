@@ -3130,6 +3130,7 @@ const playAlert = () => {
   } catch {
     // AudioContext unavailable — silent fail
   }
+  try { navigator.vibrate?.([200, 100, 200]); } catch { /* unsupported */ }
 };
 
 const checkNewOrders = (orders) => {

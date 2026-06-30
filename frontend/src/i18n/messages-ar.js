@@ -2529,6 +2529,7 @@ const arabicMessages = {
     "trackTitle": "التوصيل المباشر",
     "trackUnavailable": "التتبّع المباشر غير متاح لهذا الطلب بعد.",
     "settleAndClose": "تحصيل وإغلاق",
+    "cashierModalTitle": "المبلغ المستحق",
     "markedPaid": "تم تسجيل الدفع",
     "markPaidFailed": "تعذر تسجيل الدفع. حاول مرة أخرى.",
     "rateCustomer": "تقييم العميل",

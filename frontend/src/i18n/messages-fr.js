@@ -4441,6 +4441,7 @@ ownerOrders: {
   trackTitle: "Livraison en direct",
   trackUnavailable: "Le suivi en direct n'est pas encore disponible pour cette commande.",
   settleAndClose: "Encaisser et cloturer",
+  cashierModalTitle: "Montant à régler",
   markedPaid: "Paiement enregistre",
   markPaidFailed: "Impossible d'enregistrer le paiement. Reessayez.",
   rateCustomer: "Evaluer le client",

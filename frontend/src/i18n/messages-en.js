@@ -4434,6 +4434,7 @@ ownerOrders: {
   trackTitle: "Live delivery",
   trackUnavailable: "Live tracking isn't available for this order yet.",
   settleAndClose: "Settle & close",
+  cashierModalTitle: "Amount due",
   markedPaid: "Payment recorded",
   markPaidFailed: "Could not record payment. Please try again.",
   rateCustomer: "Rate customer",
