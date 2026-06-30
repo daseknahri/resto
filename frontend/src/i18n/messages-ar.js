@@ -3424,6 +3424,8 @@ Object.assign(arabicMessages, {
     todayStrip: "اليوم: {deliveries_today} توصيل · {earned_today}",
     goOnlineNextDrop: "الاتصال للتوصيل التالي",
     goOnlineNextDropDismiss: "إغلاق",
+    "cashCollectedTitle": "النقد المحصّل",
+    "dismissCash": "إغلاق ملخص النقد",
     toPickupKm: "{km} كم إلى الاستلام",
     gpsStale: "إشارة GPS قديمة — قد تفوتك العروض",
     statsCard: "أداء السائق",

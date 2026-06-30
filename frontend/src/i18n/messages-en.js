@@ -1495,6 +1495,8 @@ driver: {
   todayStrip: "Today: {deliveries_today} drops · {earned_today}",
   goOnlineNextDrop: "Go online for the next drop",
   goOnlineNextDropDismiss: "Dismiss",
+  cashCollectedTitle: "Cash collected",
+  dismissCash: "Dismiss cash summary",
   toPickupKm: "{km} km to collect",
   gpsStale: "GPS stale — you may miss offers",
   statsCard: "Driver performance",

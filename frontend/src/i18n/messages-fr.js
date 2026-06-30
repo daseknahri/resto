@@ -1494,6 +1494,8 @@ driver: {
   todayStrip: "Aujourd'hui : {deliveries_today} livraisons · {earned_today}",
   goOnlineNextDrop: "Passer en ligne pour la prochaine livraison",
   goOnlineNextDropDismiss: "Ignorer",
+  cashCollectedTitle: "Especes encaissees",
+  dismissCash: "Ignorer le recapitulatif",
   toPickupKm: "{km} km jusqu au retrait",
   gpsStale: "GPS obsolète — vous pourriez manquer des offres",
   statsCard: "Performance du chauffeur",

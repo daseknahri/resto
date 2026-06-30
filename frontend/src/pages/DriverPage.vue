@@ -1185,6 +1185,31 @@
     @pass="decline"
   />
 
+  <!-- Cash-collected confirmation — shown briefly after a COD delivery completes. -->
+  <Teleport to="body">
+    <Transition name="ui-fade">
+      <div
+        v-if="lastCollectedCash"
+        class="fixed bottom-[4.5rem] inset-x-0 z-[1499] mx-4 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 backdrop-blur-sm"
+        role="status"
+        aria-live="polite"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 shrink-0 text-amber-400" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clip-rule="evenodd"/></svg>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-bold text-amber-200">{{ t('driver.cashCollectedTitle') }}</p>
+          <p class="text-lg font-bold tabular-nums text-white">{{ fmtMoney(lastCollectedCash) }}</p>
+        </div>
+        <button
+          class="ui-press shrink-0 rounded-full p-1.5 text-amber-300/60 hover:text-amber-200"
+          :aria-label="t('driver.dismissCash')"
+          @click="lastCollectedCash = null"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Post-delivery "Go online for the next drop" sticky CTA.
        Only shown when the driver just completed a delivery, is now offline,
        and has no active job. Dismissable. Does NOT change backend behaviour. -->
@@ -1583,8 +1608,10 @@ const exclusiveOfferSeconds = computed(() =>
 
 // ── Item D: post-delivery "go online for next drop" sticky CTA ────────────────
 const showGoOnlineCta = ref(false);
+const lastCollectedCash = ref(null); // amount collected on last COD delivery
 const handleGoOnlineCta = async () => {
   showGoOnlineCta.value = false;
+  lastCollectedCash.value = null;
   await toggleOnline();
 };
 
@@ -1771,6 +1798,7 @@ const closeCodeModal = () => {
 const _afterDelivered = async (data, job) => {
   closeCodeModal();
   if (data.is_terminal) {
+    if (job?.collect_cash && job?.order_total) lastCollectedCash.value = job.order_total;
     activeJob.value = null;
     online.value = false;
     stopGeo();
