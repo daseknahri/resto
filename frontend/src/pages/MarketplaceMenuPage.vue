@@ -113,6 +113,17 @@
               </div>
             </div>
           </div>
+          <!-- Share restaurant link -->
+          <div class="mt-3 flex justify-end">
+            <button
+              class="ui-press inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/50 px-3 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50"
+              :aria-label="t('mktMenu.shareRestaurant')"
+              @click="shareRestaurant"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/><path d="M5.5 8.9l5 2.7M10.5 4.1l-5 2.7"/></svg>
+              {{ menuLinkCopied ? t('mktMenu.linkCopied') : t('mktMenu.share') }}
+            </button>
+          </div>
         </header>
       </div>
 
@@ -1200,6 +1211,24 @@ onBeforeUnmount(() => {
   if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
   clearInterval(_flashSaleTimer);
 });
+// ── Share restaurant link ─────────────────────────────────────────────────────
+const menuLinkCopied = ref(false);
+let _menuLinkCopyTimer = null;
+const shareRestaurant = async () => {
+  const url = window.location.href;
+  const title = restaurant.value?.name || '';
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      menuLinkCopied.value = true;
+      if (_menuLinkCopyTimer) clearTimeout(_menuLinkCopyTimer);
+      _menuLinkCopyTimer = setTimeout(() => { menuLinkCopied.value = false; }, 1800);
+    }
+  } catch { /* user cancelled share or clipboard denied */ }
+};
+
 const placing = ref(false);
 const checkoutError = ref('');
 const showAuthModal = ref(false); // opens when delivery order requires sign-in
