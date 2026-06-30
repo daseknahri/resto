@@ -2246,6 +2246,7 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
 import { groupWalletTransactionsByDate } from '../lib/walletHistory';
 
@@ -2255,6 +2256,7 @@ const currencyStore = useCurrencyStore();
 const tenantStore = useTenantStore();
 const cart = useCartStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const menuStore = useMenuStore();
 const router = useRouter();
 const route = useRoute();
@@ -2319,6 +2321,17 @@ const reorder = async (order) => {
   if (!items.length) {
     toast.show(t('customerAccount.reorderEmpty'), 'info');
     return;
+  }
+  // Warn before overwriting an existing in-progress cart.
+  if (cart.items.length > 0) {
+    const ok = await confirm({
+      title: t('customerAccount.reorderCartTitle'),
+      message: t('customerAccount.reorderCartBody'),
+      confirmLabel: t('customerAccount.reorderCartConfirm'),
+      danger: false,
+    });
+    if (!ok) return;
+    cart.clear();
   }
   // Ensure live menu data is loaded so we can resolve current prices.
   if (!menuStore.categories.length) {

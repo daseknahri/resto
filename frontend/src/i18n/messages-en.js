@@ -2253,6 +2253,7 @@ waiterPage: {
   floorSectionFilter: "Section",
   idleAlert: "{n} table(s) have been waiting 20+ min",
   floorCapacity: "{n} seats",
+  floorOrderCount: "{n} active orders",
   floorTileAriaLabel: "Table {label}, {status}",
   floorExpandOrders: "Open table {label}",
   // Item 1 — table context into new-order sheet
@@ -5395,6 +5396,9 @@ customerAccount: {
   reorderAdded: "Items added to cart",
   reorderUnavailable: "These items are no longer on the menu.",
   reorderEmpty: "Nothing to reorder.",
+  reorderCartTitle: "Replace your cart?",
+  reorderCartBody: "You already have items in your cart. Starting a new reorder will clear them.",
+  reorderCartConfirm: "Clear & reorder",
   viewReceipt: "Receipt",
   printReceipt: "Print receipt",
   receiptDeliveryFee: "Delivery fee",
