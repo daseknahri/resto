@@ -581,15 +581,25 @@
           <!-- Header -->
           <div class="flex items-center justify-between">
             <h2 id="marketplace-menu-checkout-dialog-title" class="text-base font-bold text-white">{{ t('mktMenu.yourOrder') }}</h2>
-            <button
-              class="ui-press ui-touch-target flex items-center justify-center rounded-xl border border-slate-700/60 bg-slate-900/60 text-slate-400 transition-colors hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-              :aria-label="t('common.close')"
-              @click="checkoutOpen = false"
-            >
-              <svg aria-hidden="true" viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round" />
-              </svg>
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="cart.length > 1"
+                class="ui-press rounded-lg px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-rose-400 focus-visible:outline-none"
+                :aria-label="t('mktMenu.clearCart')"
+                @click="cart.splice(0); checkoutOpen = false"
+              >
+                {{ t('mktMenu.clearCart') }}
+              </button>
+              <button
+                class="ui-press ui-touch-target flex items-center justify-center rounded-xl border border-slate-700/60 bg-slate-900/60 text-slate-400 transition-colors hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                :aria-label="t('common.close')"
+                @click="checkoutOpen = false"
+              >
+                <svg aria-hidden="true" viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <!-- Cart items -->

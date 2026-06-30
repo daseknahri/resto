@@ -557,6 +557,7 @@ mktMenu: {
   checkout: "Commander",
   backToList: "← Retour",
   yourOrder: "Votre commande",
+  clearCart: "Tout vider",
   fulfillmentLabel: "Mode",
   fulfillmentPickup: "Retrait",
   fulfillmentDelivery: "Livraison",

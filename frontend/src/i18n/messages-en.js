@@ -558,6 +558,7 @@ mktMenu: {
   checkout: "Checkout",
   backToList: "← Back",
   yourOrder: "Your order",
+  clearCart: "Clear all",
   fulfillmentLabel: "Fulfillment",
   fulfillmentPickup: "Pickup",
   fulfillmentDelivery: "Delivery",

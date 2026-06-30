@@ -3058,6 +3058,7 @@ Object.assign(arabicMessages, {
     checkout: "\u0625\u062a\u0645\u0627\u0645 \u0627\u0644\u0637\u0644\u0628",
     backToList: "\u2190 \u0631\u062c\u0648\u0639",
     yourOrder: "\u0637\u0644\u0628\u0643",
+    clearCart: "\u0625\u0641\u0631\u0627\u063a \u0627\u0644\u0633\u0644\u0629",
     fulfillmentLabel: "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645",
     fulfillmentPickup: "\u0627\u0633\u062a\u0644\u0627\u0645",
     fulfillmentDelivery: "\u062a\u0648\u0635\u064a\u0644",
