@@ -546,6 +546,8 @@ mktMenu: {
   error: "Impossible de charger ce menu.",
   closed: "Ferme",
   open: "Ouvert",
+  hoursToday: "Auj. {open}–{close}",
+  hoursClosedToday: "Ferme aujourd'hui",
   deliveryFee: "Frais de livraison",
   freeDelivery: "Livraison gratuite",
   minOrder: "Min. commande {amount}",

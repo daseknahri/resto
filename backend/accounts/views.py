@@ -4077,6 +4077,7 @@ class MarketplaceMenuView(APIView):
             "price_tier": profile.price_tier,
             "tags": profile.tags or [],
             "is_open": is_open,
+            "business_hours_schedule": profile.business_hours_schedule or {},
             "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
             "cod_enabled": cod_enabled,
             "cod_eligible": cod_eligible,

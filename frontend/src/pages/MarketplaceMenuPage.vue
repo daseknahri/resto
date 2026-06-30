@@ -113,6 +113,32 @@
               </div>
             </div>
           </div>
+          <!-- Opening hours (today + expandable week) -->
+          <div v-if="todayHours" class="mt-2 pl-px">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 focus-visible:outline-none transition-colors"
+              :aria-expanded="hoursExpanded"
+              @click="hoursExpanded = !hoursExpanded"
+            >
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 shrink-0" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M6 3.5V6l1.5 1.5"/></svg>
+              <span v-if="todayHours.closed" class="text-rose-400/80">{{ t('mktMenu.hoursClosedToday') }}</span>
+              <span v-else>{{ t('mktMenu.hoursToday', { open: todayHours.open, close: todayHours.close }) }}</span>
+              <span class="transition-transform" :class="hoursExpanded ? 'rotate-180' : ''" aria-hidden="true">▾</span>
+            </button>
+            <div v-if="hoursExpanded && weeklyHours" class="mt-1.5 overflow-hidden rounded-lg border border-slate-700/50 bg-slate-800/40 divide-y divide-slate-700/30">
+              <div
+                v-for="day in weeklyHours"
+                :key="day.key"
+                class="flex justify-between items-center px-2.5 py-1.5 text-[11px]"
+                :class="day.isToday ? 'bg-slate-700/40 font-semibold text-slate-200' : 'text-slate-400'"
+              >
+                <span>{{ day.label }}</span>
+                <span v-if="day.open" class="tabular-nums">{{ day.open }} – {{ day.close }}</span>
+                <span v-else class="text-slate-500">–</span>
+              </div>
+            </div>
+          </div>
           <!-- Share restaurant link -->
           <div class="mt-3 flex justify-end">
             <button
@@ -1778,6 +1804,43 @@ const prepEta = computed(() => {
   const hi = restaurant.value?.prep_eta_max;
   if (lo == null || hi == null) return null;
   return { min: lo, max: hi };
+});
+
+// ── Opening hours ─────────────────────────────────────────────────────────────
+const _JS_DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const _SCHEDULE_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+// Reference Mondays for Intl.DateTimeFormat day-name generation (avoids 21 i18n keys).
+// 2023-01-02 is a Monday; index 0=Mon...index 6=Sun.
+const _scheduleRefDates = _SCHEDULE_KEYS.map((_, i) => new Date(2023, 0, 2 + i));
+
+const todayHours = computed(() => {
+  const sched = restaurant.value?.business_hours_schedule;
+  if (!sched || typeof sched !== 'object') return null;
+  const key = _JS_DAY_KEYS[new Date().getDay()];
+  const entry = sched[key];
+  if (!entry || typeof entry !== 'object') return { closed: true };
+  if (!entry.enabled) return { closed: true };
+  return { closed: false, open: entry.open, close: entry.close };
+});
+
+const hoursExpanded = ref(false);
+
+const weeklyHours = computed(() => {
+  const sched = restaurant.value?.business_hours_schedule;
+  if (!sched || typeof sched !== 'object') return null;
+  const todayKey = _JS_DAY_KEYS[new Date().getDay()];
+  return _SCHEDULE_KEYS.map((key, idx) => {
+    const entry = sched[key];
+    const enabled = entry?.enabled;
+    const label = _scheduleRefDates[idx].toLocaleDateString(undefined, { weekday: 'short' });
+    return {
+      key,
+      label,
+      isToday: key === todayKey,
+      open: enabled ? entry.open : null,
+      close: enabled ? entry.close : null,
+    };
+  });
 });
 
 const fmtPrice = (amount) => {

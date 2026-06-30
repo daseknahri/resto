@@ -547,6 +547,8 @@ mktMenu: {
   error: "Could not load this menu.",
   closed: "Closed now",
   open: "Open",
+  hoursToday: "Today {open}–{close}",
+  hoursClosedToday: "Closed today",
   deliveryFee: "Delivery fee",
   freeDelivery: "Free delivery",
   minOrder: "Min. order {amount}",
