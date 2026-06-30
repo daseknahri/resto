@@ -439,8 +439,11 @@
             class="flex flex-col items-center gap-3 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-12 text-center"
           >
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="h-10 w-10 text-slate-700" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="M13 13 17 17"/></svg>
-            <p class="text-sm font-medium text-slate-400">{{ t('mktMenu.noMatchDish') }}</p>
-            <button type="button" class="text-xs text-slate-500 underline transition-colors hover:text-slate-300" @click="mktSearchQuery = ''">{{ t('mktMenu.searchClear') }}</button>
+            <div>
+              <p class="text-sm font-medium text-slate-300">{{ t('mktMenu.noMatchDish') }}</p>
+              <p class="mt-0.5 text-xs text-slate-600">{{ t('mktMenu.noMatchHint', { q: mktSearchQuery }) }}</p>
+            </div>
+            <button type="button" class="rounded-full border border-slate-700/60 bg-slate-800/40 px-4 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-600 hover:text-white" @click="mktSearchQuery = ''">{{ t('mktMenu.browseAll') }}</button>
           </div>
         </template>
 
@@ -1459,15 +1462,15 @@ const _savedFulfillment = (() => {
   try { return localStorage.getItem(MKT_FULFILLMENT_KEY); } catch { return null; }
 })();
 
-// Cart: [{slug, name, price, qty}] — persisted to sessionStorage so items survive
-// navigation back from the marketplace listing page.
+// Cart: [{slug, name, price, qty}] — persisted to localStorage so items survive
+// tab close / crash and navigation back from the marketplace listing page.
 const MKT_CART_KEY = `mkt:cart:${slug}`;
 const _savedCart = (() => {
-  try { return JSON.parse(sessionStorage.getItem(MKT_CART_KEY) || 'null'); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(MKT_CART_KEY) || 'null'); } catch { return null; }
 })();
 const cart = ref(Array.isArray(_savedCart) ? _savedCart : []);
 watch(cart, (v) => {
-  try { sessionStorage.setItem(MKT_CART_KEY, JSON.stringify(v)); } catch { /* quota */ }
+  try { localStorage.setItem(MKT_CART_KEY, JSON.stringify(v)); } catch { /* quota */ }
 }, { deep: true });
 watch(() => form.fulfillment_type, (v) => {
   try { localStorage.setItem(MKT_FULFILLMENT_KEY, v); } catch { /* quota */ }
@@ -2211,7 +2214,7 @@ const placeOrder = async () => {
       localStorage.setItem('mktLastOrderSlug', String(slug));
     } catch { /* storage unavailable */ }
     // Clear the persisted cart now that the order is placed
-    try { sessionStorage.removeItem(MKT_CART_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(MKT_CART_KEY); } catch { /* ignore */ }
     // Navigate to order status page
     router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
   } catch (err) {

@@ -2733,6 +2733,13 @@ const seatGroupLabel = (seat) => {
 const payCashForSeat = async (order, seat) => {
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
+  const ok = await confirm({
+    title: t('waiterPage.splitCashConfirmTitle'),
+    message: t('waiterPage.splitCashConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
+    confirmLabel: t('waiterPage.payCash'),
+    danger: false,
+  });
+  if (!ok) return;
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   splitBySeatMode.value = false;
@@ -2758,6 +2765,13 @@ const payCashForSeat = async (order, seat) => {
 const payWalletForSeat = async (order, seat) => {
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
+  const ok = await confirm({
+    title: t('waiterPage.splitWalletConfirmTitle'),
+    message: t('waiterPage.splitWalletConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
+    confirmLabel: t('waiterPage.payWalletForSeat'),
+    danger: false,
+  });
+  if (!ok) return;
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   splitBySeatMode.value = false;

@@ -636,6 +636,8 @@ mktMenu: {
   searchClear: "Clear",
   searchResultsKicker: "Search results",
   noMatchDish: "No matches found.",
+  noMatchHint: "No dishes matched \"{q}\" — try a different term.",
+  browseAll: "Browse all dishes",
   flashSaleBanner: "⚡ {pct}% off everything — flash sale!",
   flashSaleEnds: "Ends in {time}",
   flashDiscount: "Flash sale ({pct}% off)",
@@ -2270,6 +2272,11 @@ waiterPage: {
   newOrderForTable: "New order for {label}",
   // Item 3 — per-seat wallet payment
   payWalletForSeat: "Wallet",
+  // Item 4 — split-by-seat confirmation dialogs
+  splitCashConfirmTitle: "Confirm cash payment",
+  splitCashConfirmBody: "Record a cash payment of {amount} for this seat?",
+  splitWalletConfirmTitle: "Confirm wallet payment",
+  splitWalletConfirmBody: "Deduct {amount} from this customer's wallet for their seat?",
   // Item 5 — void reason chips
   voidReasonSheet: "Why is this item being voided?",
   voidReasonWrongItem: "Wrong item",
