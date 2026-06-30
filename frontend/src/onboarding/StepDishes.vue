@@ -68,6 +68,12 @@
           <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" @click="unpublishAllInCategory">
             {{ t("stepDishes.bulkUnpublish") }}
           </button>
+          <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" @click="markAllAvailableInCategory">
+            {{ t("stepDishes.bulkMarkAvailable") }}
+          </button>
+          <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs text-rose-400/80 hover:text-rose-300" @click="markAllUnavailableInCategory">
+            {{ t("stepDishes.bulkMarkUnavailable") }}
+          </button>
         </div>
       </div>
 
@@ -2129,6 +2135,29 @@ const unpublishAllInCategory = async () => {
   });
   if (!ok) return;
   activeCategoryDishes.value.forEach((dish) => { dish.is_published = false; });
+};
+
+const markAllAvailableInCategory = async () => {
+  const count = activeCategoryDishes.value.filter((d) => d.is_available === false).length;
+  if (!count) return;
+  const ok = await confirm({
+    title: t("stepDishes.confirmBulkMarkAvailable", { count }),
+    confirmLabel: t("stepDishes.bulkMarkAvailable"),
+  });
+  if (!ok) return;
+  activeCategoryDishes.value.forEach((dish) => { dish.is_available = true; });
+};
+
+const markAllUnavailableInCategory = async () => {
+  const count = activeCategoryDishes.value.filter((d) => d.is_available !== false).length;
+  if (!count) return;
+  const ok = await confirm({
+    title: t("stepDishes.confirmBulkMarkUnavailable", { count }),
+    confirmLabel: t("stepDishes.bulkMarkUnavailable"),
+    danger: true,
+  });
+  if (!ok) return;
+  activeCategoryDishes.value.forEach((dish) => { dish.is_available = false; });
 };
 
 const addQuickGroup = () => {
