@@ -2546,6 +2546,7 @@ const arabicMessages = {
     "sourceMarketplace": "السوق",
     awaitingDriver: "بانتظار السائق",
     preparingTimerTitle: "الوقت المنقضي منذ بدء التحضير",
+    printAllTickets: "طباعة جميع التذاكر ({count})",
     markAllReady: "تعليم الكل جاهزاً ({count})",
     bulkReadyConfirmTitle: "تعليم {count} طلبات كجاهزة؟",
     bulkReadyConfirmBody: "سيتم تعليم جميع الطلبات قيد التحضير المرئية كجاهزة.",

@@ -193,5 +193,46 @@ export function usePrintTicket() {
     }
   };
 
-  return { printTicket, printTicketSilent };
+  // Bulk print: combine N tickets into one print window, separated by page breaks.
+  // Requires a user gesture (popup) — use from a button click handler.
+  const printBulkTickets = (orders) => {
+    if (!orders?.length) return;
+    const bodies = orders
+      .map((o) => {
+        if (!o) return '';
+        const full = _buildHtml(o);
+        const m = full.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        return m ? m[1] : '';
+      })
+      .filter(Boolean);
+    if (!bodies.length) return;
+
+    const win = window.open('', '_blank', 'width=420,height=680');
+    if (!win) { toast.show(t('ownerOrders.printBlocked'), 'error'); return; }
+
+    const combined = `<!DOCTYPE html><html lang="${currentLocale.value}" dir="${currentLocale.value === 'ar' ? 'rtl' : 'ltr'}"><head>
+      <meta charset="utf-8"><title>Kitchen Tickets</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Courier New',monospace; font-size:13px; width:300px; padding:12px; }
+        h1 { font-size:18px; text-align:center; letter-spacing:1px; border-bottom:2px dashed #000; padding-bottom:8px; margin-bottom:8px; }
+        .meta { font-size:11px; margin-bottom:8px; line-height:1.6; }
+        table { width:100%; border-collapse:collapse; }
+        .divider { border-top:1px dashed #000; margin:8px 0; }
+        .total td { font-weight:bold; font-size:15px; padding:4px 0; }
+        .footer { text-align:center; font-size:10px; color:#666; margin-top:12px; border-top:1px dashed #000; padding-top:8px; }
+        .ticket { page-break-after:always; }
+        .ticket:last-child { page-break-after:avoid; }
+        @media print { @page { margin:0; size:80mm auto; } }
+      </style></head><body>
+      ${bodies.map((b) => `<div class="ticket">${b}</div>`).join('')}
+    </body></html>`;
+
+    win.document.write(combined);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 300);
+  };
+
+  return { printTicket, printTicketSilent, printBulkTickets };
 }

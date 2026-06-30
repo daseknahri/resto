@@ -469,6 +469,19 @@
     </template>
 
     <!-- ── ACTIVE TAB: order list ───────────────────────────────────────── -->
+    <!-- Bulk print kitchen tickets — shown when filtering pending/confirmed with ≥2 orders -->
+    <div
+      v-if="activeTab === 'active' && ['pending','confirmed'].includes(activeStatus) && filteredOrders.length >= 2"
+      class="flex justify-end"
+    >
+      <button
+        class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+        @click="printBulkTickets(filteredOrders)"
+      >
+        <span aria-hidden="true">🖨</span> {{ t('ownerOrders.printAllTickets', { count: filteredOrders.length }) }}
+      </button>
+    </div>
+
     <!-- Bulk mark-all-ready — shown only when filtering by 'preparing' with ≥2 visible orders -->
     <div
       v-if="activeTab === 'active' && activeStatus === 'preparing' && filteredOrders.length >= 2"
@@ -2183,7 +2196,7 @@ const submitCorrectMethod = async () => {
 // ── Print ticket ──────────────────────────────────────────────────────────────
 // Thermal-friendly receipt printer (shared with OwnerKitchen). Includes tip + the
 // restaurant thank-you note.
-const { printTicket } = usePrintTicket();
+const { printTicket, printBulkTickets } = usePrintTicket();
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 // Calls the server export endpoint (up to 5 000 rows, BOM-prefixed for Excel)

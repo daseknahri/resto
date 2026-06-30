@@ -4443,6 +4443,7 @@ ownerOrders: {
   sourceMarketplace: "Marketplace",
   awaitingDriver: "Awaiting driver",
   preparingTimerTitle: "Time elapsed since order started preparing",
+  printAllTickets: "Print all tickets ({count})",
   markAllReady: "Mark all ready ({count})",
   bulkReadyConfirmTitle: "Mark {count} orders as ready?",
   bulkReadyConfirmBody: "All visible preparing orders will be marked ready.",
