@@ -437,6 +437,11 @@
             </div>
           </div>
 
+          <!-- Customer note (shown when present) -->
+          <p v-if="o.customer_note" class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300">
+            <span class="font-semibold text-slate-400">{{ t("ownerOrders.note") }}:</span> {{ o.customer_note }}
+          </p>
+
           <!-- Print button for historical orders -->
           <div class="flex gap-2">
             <button class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" @click="printTicket(o)">
