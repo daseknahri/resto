@@ -109,7 +109,7 @@
           <button
             v-if="canManageOrders"
             class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/50 bg-emerald-500/10 font-semibold text-emerald-300"
-            @click="showNewOrder = true"
+            @click="currentShift ? (showNewOrder = true) : toast.show(t('waiterPage.mustClockInFirst'), 'warning')"
           >
             + {{ t('waiterPage.newOrderBtn') }}
           </button>

@@ -115,7 +115,11 @@
     </div>
 
     <!-- Daily revenue mini-chart -->
-    <div v-if="data && chartDays.length > 1" class="max-w-full space-y-1">
+    <div v-if="data && !chartDays.length" class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-5 text-center space-y-1">
+      <p class="text-sm font-medium text-slate-400">{{ t('ownerHome.noRevenueData') }}</p>
+      <p class="text-xs text-slate-600">{{ t('ownerHome.noRevenueDataHint') }}</p>
+    </div>
+    <div v-else-if="data && chartDays.length > 1" class="max-w-full space-y-1">
       <p class="ui-kicker">{{ t("ownerHome.dailyRevenueKicker") }}</p>
       <h4 class="text-sm font-medium text-slate-100">{{ t("ownerHome.revenueDailyChart") }}</h4>
       <div

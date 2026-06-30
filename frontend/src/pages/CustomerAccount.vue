@@ -150,6 +150,7 @@
                 {{ formatPrice(walletBalance) }}
               </p>
               <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.walletTitle') }}</p>
+              <p v-if="walletBalance <= 0" class="mt-0.5 text-[9px] font-semibold text-[var(--color-secondary)]/70">{{ t('customerAccount.topUpHint') }}</p>
             </button>
 
             <!-- Loyalty -->
