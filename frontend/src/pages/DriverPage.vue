@@ -1843,6 +1843,7 @@ const submitCashout = async () => {
     const { data } = await api.post('/driver/cashout/', { amount });
     cashout.value = data;
     closeCashoutModal();
+    toast.show(t('driver.cashOutSubmitted'), 'success');
   } catch (err) {
     cashoutModalError.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {

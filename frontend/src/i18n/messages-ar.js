@@ -3402,6 +3402,7 @@ Object.assign(arabicMessages, {
     cashOut: "سحب نقدي",
     cashOutMin: "تحتاج إلى {amount} للسحب.",
     cashOutCode: "رمز الاسترداد",
+    cashOutSubmitted: "تم إرسال طلب السحب — أظهر الرمز في أي مطعم لاستلام أموالك.",
     cashOutShowCode: "أظهر هذا الرمز في أي مطعم لاستلام {amount} نقداً:",
     cashOutCancel: "إلغاء",
     cashOutAmountPrompt: "المبلغ المراد سحبه (حتى {max}):",

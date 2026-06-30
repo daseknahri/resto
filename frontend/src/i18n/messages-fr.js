@@ -1475,6 +1475,7 @@ driver: {
   cashOut: "Retirer",
   cashOutMin: "Atteignez {amount} pour retirer.",
   cashOutCode: "Code de retrait",
+  cashOutSubmitted: "Demande de retrait envoyée — montrez le code dans un restaurant pour recevoir vos fonds.",
   cashOutShowCode: "Montrez ce code dans un restaurant pour recevoir {amount} en especes :",
   cashOutCancel: "Annuler",
   cashOutAmountPrompt: "Montant a retirer (jusqu a {max}) :",

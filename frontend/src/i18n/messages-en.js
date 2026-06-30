@@ -1476,6 +1476,7 @@ driver: {
   cashOut: "Cash out",
   cashOutMin: "Reach {amount} to cash out.",
   cashOutCode: "Redemption code",
+  cashOutSubmitted: "Cash-out request submitted — show the code at a restaurant to collect your funds.",
   cashOutShowCode: "Show this code at a restaurant to collect {amount} in cash:",
   cashOutCancel: "Cancel",
   cashOutAmountPrompt: "Amount to cash out (up to {max}):",
