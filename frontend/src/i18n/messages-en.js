@@ -4441,6 +4441,7 @@ ownerOrders: {
   noteEtaBtn: "Note & ETA",
   servedBy: "Served by {waiters}",
   noWaiterAssigned: "No waiter assigned to this table",
+  hasNote: "Note",
   outForDelivery: "Out for delivery",
   markDelivered: "Mark delivered",
   trackDelivery: "Track",

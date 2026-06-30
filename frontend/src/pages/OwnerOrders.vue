@@ -620,7 +620,18 @@
                 🍳 {{ orderAgeMin(o) }}m
               </span>
             </div>
-            <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
+              <!-- Customer note indicator — visible on collapsed card so owner knows to check -->
+              <span
+                v-if="o.customer_note"
+                class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300"
+                :title="o.customer_note"
+              >
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-2.5 w-2.5 shrink-0" aria-hidden="true"><path d="M1 9.5V11h1.5l4.7-4.7-1.5-1.5L1 9.5z"/><path d="M10.1 2.4a.95.95 0 0 0-1.5 0L7.5 3.5l1.5 1.5L10.1 4a.95.95 0 0 0 0-1.5z"/></svg>
+                {{ t('ownerOrders.hasNote') }}
+              </span>
+            </div>
             <!-- Floor section + responsible waiter (table orders) -->
             <p v-if="o.section_name || (o.responsible_waiters && o.responsible_waiters.length)" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
               <span v-if="o.section_name" class="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5 text-[10px] font-medium text-slate-300">{{ o.section_name }}</span>

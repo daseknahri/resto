@@ -989,6 +989,20 @@
               :class="route.query.topup === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
               role="status"
             >{{ topUpQueryMsg }}</p>
+            <!-- Quick preset amounts -->
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="preset in [50, 100, 200, 500]"
+                :key="preset"
+                type="button"
+                class="ui-press rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                :class="topUpAmount === preset
+                  ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
+                  : 'border-slate-700/60 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                :disabled="topUpLoading"
+                @click="topUpAmount = preset"
+              >{{ preset }}</button>
+            </div>
             <label class="flex flex-col gap-1 text-xs text-slate-400">
               <span>{{ t('customerAccount.topUpAmountLabel') }}</span>
               <input

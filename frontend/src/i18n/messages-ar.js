@@ -2535,6 +2535,7 @@ const arabicMessages = {
     "noteEtaBtn": "ملاحظة والوقت",
     "servedBy": "يخدمها {waiters}",
     "noWaiterAssigned": "لا نادل معيّن لهذه الطاولة",
+    "hasNote": "ملاحظة",
     "outForDelivery": "قيد التوصيل",
     "markDelivered": "تحديد كمُسلّم",
     "trackDelivery": "تتبّع",

@@ -4448,6 +4448,7 @@ ownerOrders: {
   noteEtaBtn: "Note et delai",
   servedBy: "Servi par {waiters}",
   noWaiterAssigned: "Aucun serveur affecte a cette table",
+  hasNote: "Note",
   outForDelivery: "En livraison",
   markDelivered: "Marquer livre",
   trackDelivery: "Suivre",
