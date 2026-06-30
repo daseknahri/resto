@@ -1252,6 +1252,13 @@ const onAuthenticated = async () => {
   placeOrder(); // retry with the newly established session
 };
 
+// Fulfillment preference — saved to localStorage per restaurant so returning
+// delivery customers don't have to re-select every visit.
+const MKT_FULFILLMENT_KEY = `mkt:fulfillment:${slug}`;
+const _savedFulfillment = (() => {
+  try { return localStorage.getItem(MKT_FULFILLMENT_KEY); } catch { return null; }
+})();
+
 // Cart: [{slug, name, price, qty}] — persisted to sessionStorage so items survive
 // navigation back from the marketplace listing page.
 const MKT_CART_KEY = `mkt:cart:${slug}`;
@@ -1262,6 +1269,9 @@ const cart = ref(Array.isArray(_savedCart) ? _savedCart : []);
 watch(cart, (v) => {
   try { sessionStorage.setItem(MKT_CART_KEY, JSON.stringify(v)); } catch { /* quota */ }
 }, { deep: true });
+watch(() => form.fulfillment_type, (v) => {
+  try { localStorage.setItem(MKT_FULFILLMENT_KEY, v); } catch { /* quota */ }
+});
 
 const form = reactive({
   fulfillment_type: 'pickup',
@@ -1765,6 +1775,10 @@ const fetchMenu = async () => {
         [{ slug, ts: Date.now() }, ...existing].slice(0, 8)
       ));
     } catch { /* storage unavailable */ }
+    // Restore fulfillment preference — only if that type is available here
+    if (_savedFulfillment === 'delivery' && res.data?.delivery_enabled) {
+      form.fulfillment_type = 'delivery';
+    }
     // Pre-fill customer info if signed in
     if (customer.value) {
       form.customer_name = customer.value.name || '';
