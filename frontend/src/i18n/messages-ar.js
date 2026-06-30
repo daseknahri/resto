@@ -2187,6 +2187,7 @@ const arabicMessages = {
     "deliveryMinOrderLabel": "الحد الأدنى للطلب: {amount}",
     "deliveryMinOrderNotMet": "التوصيل يتطلب حداً أدنى للطلب بقيمة {amount}. أضف المزيد من العناصر للمتابعة.",
     "deliveryMinAddMore": "أضف {amount} للتوصيل",
+    deliveryMinProgress: "الحد الأدنى للطلب للتوصيل",
     "deliveryZoneInfo": "منطقة التوصيل: {desc}",
     "mapLinkPasted": "تم لصق رابط الخريطة",
     "openMapsInstruction": "ابحث عن موقعك على الخرائط، انسخ الرابط، ثم اضغط لصق الرابط",

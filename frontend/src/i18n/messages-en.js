@@ -3118,6 +3118,7 @@ cartPage: {
   deliveryZoneInfo: "Delivery area: {desc}",
   deliveryMinOrderLabel: "Min. order: {amount}",
   deliveryMinAddMore: "Add {amount} more for delivery",
+  deliveryMinProgress: "Minimum order for delivery",
   deliveryFeeDistance: "Delivery: {fee} · {km} km",
   deliveryFeeByDistance: "Set your address to see the delivery fee (priced by distance).",
   deliveryFeeByDistanceShort: "By distance",

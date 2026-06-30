@@ -578,6 +578,26 @@
 
     </div><!-- /max-w-3xl shell -->
 
+    <!-- Delivery minimum progress strip (shown before checkout opens) -->
+    <Transition name="ui-fade">
+      <div
+        v-if="cart.length && !checkoutOpen && form.fulfillment_type === 'delivery' && deliveryMinGap > 0"
+        class="fixed inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-t-xl border border-slate-700/60 bg-slate-900/95 px-4 py-2.5 backdrop-blur-sm"
+        style="bottom: calc(var(--safe-bottom) + 4.5rem)"
+      >
+        <div class="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+          <span>{{ t('mktMenu.deliveryMinProgress') }}</span>
+          <span class="font-semibold text-amber-300">{{ t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) }}</span>
+        </div>
+        <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-700/60">
+          <div
+            class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300"
+            :style="{ width: `${Math.min(100, Math.round((cartTotal / deliveryMinOrder) * 100))}%` }"
+          />
+        </div>
+      </div>
+    </Transition>
+
     <!-- Cart bottom bar (visible when cart has items) -->
     <button
       v-if="cart.length && !checkoutOpen"

@@ -3077,6 +3077,7 @@ cartPage: {
   deliveryZoneInfo: "Zone de livraison: {desc}",
   deliveryMinOrderLabel: "Min. commande: {amount}",
   deliveryMinAddMore: "Ajoutez {amount} pour la livraison",
+  deliveryMinProgress: "Commande minimale pour la livraison",
   deliveryFeeDistance: "Livraison : {fee} · {km} km",
   deliveryFeeByDistance: "Indiquez votre adresse pour voir les frais de livraison (selon la distance).",
   deliveryFeeByDistanceShort: "Selon la distance",
