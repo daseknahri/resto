@@ -926,6 +926,16 @@
             <p class="flex-1 text-xs font-medium text-rose-300">{{ t('mktMenu.restaurantClosed') }}</p>
           </div>
 
+          <!-- Guest + delivery warning — shown before submit so customer knows to sign in -->
+          <div
+            v-if="form.fulfillment_type === 'delivery' && !customerStore.isAuthenticated"
+            class="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/8 px-3 py-2.5"
+            role="status"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
+            <p class="flex-1 text-xs font-medium text-sky-200">{{ t('mktMenu.authRequired') }}</p>
+          </div>
+
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"

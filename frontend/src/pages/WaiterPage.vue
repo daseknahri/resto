@@ -85,6 +85,15 @@
         <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-600/50" aria-hidden="true" />
         <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
         <div class="flex shrink-0 items-center gap-2">
+          <!-- Sound mute toggle -->
+          <button
+            class="ui-btn-outline ui-press ui-touch-target px-3 py-1.5 text-sm"
+            :class="waiterSoundOn ? '' : 'opacity-50'"
+            :aria-label="waiterSoundOn ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
+            @click="waiterSoundOn = !waiterSoundOn"
+          >
+            <span aria-hidden="true">{{ waiterSoundOn ? '🔔' : '🔕' }}</span>
+          </button>
           <!-- Clock-in / clock-out (B4) -->
           <button
             v-if="canManageOrders && !currentShift"
@@ -1943,10 +1952,11 @@ const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 // ── New-order audio alert ────────────────────────────────────────────────────
 const WAITER_SOUND_KEY = typeof window === 'undefined' ? 'waiter:sound' : `waiter:sound:${window.location.hostname}`;
-const waiterSoundEnabled = () => { try { return localStorage.getItem(WAITER_SOUND_KEY) !== 'off'; } catch { return true; } };
+const waiterSoundOn = ref((() => { try { return localStorage.getItem(WAITER_SOUND_KEY) !== 'off'; } catch { return true; } })());
+watch(waiterSoundOn, (v) => { try { localStorage.setItem(WAITER_SOUND_KEY, v ? 'on' : 'off'); } catch { /* ignore */ } });
 const _waiterKnownIds = new Set();
 const _playWaiterAlert = () => {
-  if (!waiterSoundEnabled()) return;
+  if (!waiterSoundOn.value) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.2].forEach((delay, i) => {

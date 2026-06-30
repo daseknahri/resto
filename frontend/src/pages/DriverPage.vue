@@ -6,15 +6,26 @@
         <p class="ui-kicker">{{ t('driver.kicker') }}</p>
         <h1 class="ui-display text-2xl font-semibold leading-tight text-white">{{ t('driver.title') }}</h1>
       </div>
-      <!-- Persistent driver⇄client switch: returns the rider to the consumer hub. -->
-      <RouterLink
-        v-if="customerStore.isAuthenticated"
-        :to="{ name: 'super-app-hub' }"
-        class="ui-btn-outline ui-touch-target inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-[11px] sm:text-sm"
-      >
-        <AppIcon name="home" class="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{{ t('driver.switchToOrdering') }}</span>
-      </RouterLink>
+      <div class="flex shrink-0 items-center gap-2">
+        <!-- Sound mute toggle -->
+        <button
+          class="ui-btn-outline ui-press ui-touch-target px-3 py-2 text-sm"
+          :class="driverSoundOn ? '' : 'opacity-50'"
+          :aria-label="driverSoundOn ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
+          @click="driverSoundOn = !driverSoundOn"
+        >
+          <span aria-hidden="true">{{ driverSoundOn ? '🔔' : '🔕' }}</span>
+        </button>
+        <!-- Persistent driver⇄client switch: returns the rider to the consumer hub. -->
+        <RouterLink
+          v-if="customerStore.isAuthenticated"
+          :to="{ name: 'super-app-hub' }"
+          class="ui-btn-outline ui-touch-target inline-flex items-center gap-1.5 px-3 py-2 text-[11px] sm:text-sm"
+        >
+          <AppIcon name="home" class="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{{ t('driver.switchToOrdering') }}</span>
+        </RouterLink>
+      </div>
     </header>
 
     <!-- Loading -->
@@ -1500,10 +1511,11 @@ const pendingJobs = ref([]);
 
 // ── Job-offer audio alert ────────────────────────────────────────────────────
 const DRIVER_SOUND_KEY = typeof window === 'undefined' ? 'driver:sound' : `driver:sound:${window.location.hostname}`;
-const driverSoundEnabled = () => { try { return localStorage.getItem(DRIVER_SOUND_KEY) !== 'off'; } catch { return true; } };
+const driverSoundOn = ref((() => { try { return localStorage.getItem(DRIVER_SOUND_KEY) !== 'off'; } catch { return true; } })());
+watch(driverSoundOn, (v) => { try { localStorage.setItem(DRIVER_SOUND_KEY, v ? 'on' : 'off'); } catch { /* ignore */ } });
 const _driverKnownJobIds = new Set();
 const _playJobAlert = () => {
-  if (!driverSoundEnabled()) return;
+  if (!driverSoundOn.value) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.15, 0.30].forEach((delay, i) => {
