@@ -267,7 +267,11 @@ def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
     # itself on every .filter() call so the chain stays valid.
     order_qs = MagicMock()
     order_qs.filter.return_value = order_qs
-    order_qs.aggregate.return_value = {"tips": Decimal("5.00")}
+    # Two aggregate() calls on collected_qs: tips first, then promo+loyalty discounts.
+    order_qs.aggregate.side_effect = [
+        {"tips": Decimal("5.00")},
+        {"promo": Decimal("0.00"), "loyalty": Decimal("0.00")},
+    ]
     mock_order_objs = MagicMock()
     mock_order_objs.filter.return_value = order_qs
 

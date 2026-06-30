@@ -7525,14 +7525,13 @@ class OwnerOrderStatusUpdateView(APIView):
             except Exception:
                 pass
 
-        # Delivery milestone pushes: assigned / out_for_delivery / delivered / failed.
+        # Delivery milestone pushes: out_for_delivery / delivered.
         # The "ready" push above only covers pickup; these cover the delivery journey.
         _DELIVERY_MILESTONE_MAP = {
-            Order.Status.ASSIGNED: "assigned",
             Order.Status.OUT_FOR_DELIVERY: "out_for_delivery",
-            Order.Status.DELIVERED: "delivered",
+            Order.Status.COMPLETED: "delivered",
         }
-        if tenant and new_status in _DELIVERY_MILESTONE_MAP:
+        if tenant and new_status in _DELIVERY_MILESTONE_MAP and order.fulfillment_type == Order.FulfillmentType.DELIVERY:
             try:
                 from accounts.push import notify_customer_order_milestone_sync
                 notify_customer_order_milestone_sync(
