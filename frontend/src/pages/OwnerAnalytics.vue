@@ -165,6 +165,7 @@ import RepeatAnalyticsWidget from "../components/RepeatAnalyticsWidget.vue";
 import OwnerDashboardRevenue from "../components/OwnerDashboardRevenue.vue";
 import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";
+import { useToastStore } from "../stores/toast";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
@@ -175,6 +176,7 @@ defineOptions({ name: "OwnerAnalytics" });
 const session = useSessionStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
+const toast = useToastStore();
 const { t, formatNumber } = useI18n();
 
 const PERIOD_OPTIONS = [1, 7, 14, 30, 90];
@@ -289,8 +291,10 @@ const exportAnalyticsCsv = async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  } catch { /* silent — server may not have data */ }
-  finally {
+    toast.show(t('ownerAnalytics.exportDone'), 'success', 3000);
+  } catch {
+    toast.show(t('ownerAnalytics.exportFailed'), 'error');
+  } finally {
     analyticsExporting.value = false;
   }
 };

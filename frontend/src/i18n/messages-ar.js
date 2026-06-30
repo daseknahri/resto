@@ -487,6 +487,8 @@ const arabicMessages = {
     "sparklineRevenue": "اتجاه الإيرادات خلال الأيام السبعة الماضية",
     "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية",
     "exportCsv": "تصدير CSV",
+    "exportDone": "تم تصدير CSV — تحقّق من ملفات التنزيل.",
+    "exportFailed": "فشل التصدير — لا توجد بيانات لهذه الفترة.",
     "periodToday": "اليوم",
     "statementTitle": "كشف حساب الفترة",
     "statementGross": "الإيراد الإجمالي",

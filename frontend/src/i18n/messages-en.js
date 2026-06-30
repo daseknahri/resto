@@ -3442,6 +3442,8 @@ ownerAnalytics: {
   sparklineRevenue: "Revenue trend over the last 7 days",
   sparklineAvgTicket: "Average ticket trend over the last 7 days",
   exportCsv: "Export CSV",
+  exportDone: "CSV exported — check your downloads.",
+  exportFailed: "Export failed — no data available for this period.",
   periodToday: "Today",
   statementTitle: "Period statement",
   statementGross: "Gross revenue",

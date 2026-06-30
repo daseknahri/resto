@@ -3398,6 +3398,8 @@ ownerAnalytics: {
   sparklineRevenue: "Tendance du chiffre d affaires sur les 7 derniers jours",
   sparklineAvgTicket: "Tendance du panier moyen sur les 7 derniers jours",
   exportCsv: "Exporter CSV",
+  exportDone: "CSV exporte — verifiez vos telechargements.",
+  exportFailed: "Echec de l export — aucune donnee disponible pour cette periode.",
   periodToday: "Aujourd'hui",
   statementTitle: "Relevé de période",
   statementGross: "Chiffre d'affaires brut",
