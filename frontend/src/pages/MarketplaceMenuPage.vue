@@ -116,6 +116,34 @@
         </header>
       </div>
 
+      <!-- Fulfillment type quick-switch (shown when restaurant supports delivery) -->
+      <div
+        v-if="restaurant?.delivery_enabled"
+        class="ui-reveal mx-4 mb-2 flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/50 p-1"
+        :style="{ '--ui-delay': '20ms' }"
+        role="group"
+        :aria-label="t('mktMenu.fulfillmentLabel')"
+      >
+        <button
+          class="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+          :class="form.fulfillment_type === 'pickup' ? 'bg-[var(--color-secondary)] text-white' : 'text-slate-400 hover:text-slate-200'"
+          :aria-pressed="form.fulfillment_type === 'pickup'"
+          @click="form.fulfillment_type = 'pickup'"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M8 2a4 4 0 1 0 0 8A4 4 0 0 0 8 2z"/><path d="M3.5 14c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5"/></svg>
+          {{ t('mktMenu.fulfillmentPickup') }}
+        </button>
+        <button
+          class="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+          :class="form.fulfillment_type === 'delivery' ? 'bg-[var(--color-secondary)] text-white' : 'text-slate-400 hover:text-slate-200'"
+          :aria-pressed="form.fulfillment_type === 'delivery'"
+          @click="form.fulfillment_type = 'delivery'"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M1.5 10.5h9m-9 0V6.5l2-4h6l2 4v4m-9 0a1.5 1.5 0 1 0 3 0m6-4.5h2.5l.5 4.5H13m0 0a1.5 1.5 0 1 0-3 0"/></svg>
+          {{ t('mktMenu.fulfillmentDelivery') }}
+        </button>
+      </div>
+
       <!-- Flash sale banner -->
       <div
         v-if="restaurant.flash_sale"
