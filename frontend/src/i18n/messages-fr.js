@@ -797,6 +797,7 @@ mktOrderStatus: {
   submitRating: "Envoyer l'evaluation",
   ratingThanks: "Merci pour votre retour !",
   statusStepperLabel: "Etapes de la commande",
+  checkNow: "Actualiser",
   currentStep: "etape en cours",
   stepDone: "termine",
   pointsEarned: "Points de fidelite gagnes",

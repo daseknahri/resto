@@ -799,6 +799,7 @@ mktOrderStatus: {
   submitRating: "Submit rating",
   ratingThanks: "Thanks for your feedback!",
   statusStepperLabel: "Order progress steps",
+  checkNow: "Check now",
   currentStep: "current step",
   stepDone: "completed",
   pointsEarned: "Loyalty points earned",

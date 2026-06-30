@@ -174,6 +174,19 @@
 
         <!-- Status stepper -->
         <div class="ui-panel ui-reveal p-5" :style="{ '--ui-delay': '84ms' }">
+          <!-- Manual refresh — only for active orders (terminal states auto-stop polling) -->
+          <div v-if="order && !['completed','cancelled'].includes(order.status)" class="mb-3 flex justify-end">
+            <button
+              type="button"
+              class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/40 px-2.5 py-1 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-600 disabled:opacity-50"
+              :disabled="refreshing"
+              :aria-busy="refreshing"
+              @click="manualRefresh"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 shrink-0" :class="{ 'animate-spin': refreshing }" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ t('mktOrderStatus.checkNow') }}
+            </button>
+          </div>
           <div class="flex items-center justify-between gap-1" role="list" :aria-label="t('mktOrderStatus.statusStepperLabel')">
             <template v-for="(step, idx) in statusSteps" :key="step.key">
               <div class="relative flex flex-1 flex-col items-center gap-1.5" role="listitem">
@@ -475,6 +488,7 @@ const slug = route.params.slug;
 const orderNumber = route.params.orderNumber;
 
 const loading = ref(true);
+const refreshing = ref(false);
 const fetchError = ref(false);
 const order = ref(null);
 const pollFailures = ref(0);
@@ -624,6 +638,12 @@ const progressPercent = computed(() => {
 // ── Polling ───────────────────────────────────────────────────────────────────
 let _pollTimer = null;
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled']);
+
+const manualRefresh = async () => {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try { await fetchStatus(); } finally { refreshing.value = false; }
+};
 
 const fetchStatus = async () => {
   fetchError.value = false;
