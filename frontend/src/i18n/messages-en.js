@@ -5259,6 +5259,7 @@ customerAccount: {
   emailSaveFailed: "Could not save email. Try again.",
   emailInvalid: "Please enter a valid email address.",
   signOut: "Sign out",
+  etaMin: "~{min} min",
   trackOrder: "Track",
   ordersTitle: "Order history",
   allOrdersTitle: "All your orders",

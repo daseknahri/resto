@@ -222,6 +222,10 @@
                 {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
               </p>
               <p class="text-[11px] text-slate-400">{{ statusLabel(order.status) }}</p>
+              <p v-if="order.estimated_ready_minutes && ['confirmed','preparing'].includes(order.status)" class="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-300/80">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75V8l2.25 2"/></svg>
+                {{ t('customerAccount.etaMin', { min: order.estimated_ready_minutes }) }}
+              </p>
             </div>
             <RouterLink
               :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"

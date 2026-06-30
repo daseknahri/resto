@@ -5249,6 +5249,7 @@ customerAccount: {
   emailSaveFailed: "Impossible d'enregistrer l'e-mail. Reessayez.",
   emailInvalid: "Veuillez saisir une adresse e-mail valide.",
   signOut: "Se deconnecter",
+  etaMin: "~{min} min",
   trackOrder: "Suivre",
   ordersTitle: "Historique des commandes",
   allOrdersTitle: "Toutes vos commandes",
