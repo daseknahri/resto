@@ -479,6 +479,14 @@
           <div class="space-y-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-mono text-base font-bold tracking-tight text-white">{{ o.order_number }}</span>
+              <button
+                class="ui-press -ms-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 focus-visible:outline-none"
+                :aria-label="t('ownerOrders.copyOrderNumber')"
+                @click.stop="copyOrderNumber(o)"
+              >
+                <svg v-if="copiedOrderId === o.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-emerald-400"><path d="M3 8l3.5 3.5L13 4.5"/></svg>
+                <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H12"/></svg>
+              </button>
               <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="statusClass(o.status)">
                 {{ statusLabel(o.status) }}
               </span>
@@ -1741,6 +1749,17 @@ const setFilter = (val) => { activeStatus.value = val; };
 const refresh = () => order.fetchOrders();
 
 // Copy delivery address to clipboard
+const copiedOrderId = ref(null);
+let _orderCopyTimer = null;
+const copyOrderNumber = async (o) => {
+  try {
+    await navigator.clipboard.writeText(String(o.order_number));
+    copiedOrderId.value = o.id;
+    if (_orderCopyTimer) clearTimeout(_orderCopyTimer);
+    _orderCopyTimer = setTimeout(() => { copiedOrderId.value = null; _orderCopyTimer = null; }, 1500);
+  } catch { /* clipboard not available */ }
+};
+
 const copiedAddressId = ref(null);
 let _addrCopyTimer = null;
 const copyAddress = async (o) => {

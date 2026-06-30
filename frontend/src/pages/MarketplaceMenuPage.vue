@@ -1778,6 +1778,10 @@ const placeOrder = async () => {
     checkoutError.value = t('mktMenu.phoneRequired');
     return;
   }
+  if (form.customer_phone.replace(/\D/g, '').length < 7) {
+    checkoutError.value = t('mktMenu.phoneInvalid');
+    return;
+  }
   if (form.fulfillment_type === 'delivery' && !form.delivery_address.trim()) {
     checkoutError.value = t('mktMenu.addressRequired');
     return;
