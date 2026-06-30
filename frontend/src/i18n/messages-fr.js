@@ -5355,6 +5355,7 @@ customerAccount: {
   notificationsTitle: "Notifications",
   notifyOrderUpdates: "Mises a jour de commande",
   notifyReviewPrompts: "Rappels d'avis",
+  notifyPromotions: "Offres promotionnelles et réductions",
   notifyBrowserPush: "Notifications navigateur",
   notifyBrowserPushHint: "Recevez des mises a jour en temps reel dans votre navigateur",
   prefPromotions: "Offres et annonces",

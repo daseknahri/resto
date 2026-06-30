@@ -1950,6 +1950,16 @@
                   @change="savePref('notify_review_prompts', $event.target.checked)"
                 />
               </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-slate-300">{{ t('customerAccount.notifyPromotions') }}</span>
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/40"
+                  :checked="!!customerStore.customer?.notify_promotions"
+                  :disabled="savingPrefs"
+                  @change="savePref('notify_promotions', $event.target.checked)"
+                />
+              </label>
               <!-- Browser push notifications opt-in -->
               <div v-if="pushSupported && pushEnabled" class="flex items-start justify-between gap-3 pt-0.5">
                 <div class="min-w-0 flex-1">

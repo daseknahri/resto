@@ -5364,6 +5364,7 @@ customerAccount: {
   notificationsTitle: "Notifications",
   notifyOrderUpdates: "Order status updates",
   notifyReviewPrompts: "Review reminders",
+  notifyPromotions: "Promotional offers & discounts",
   prefPromotions: "Offers & announcements",
   prefPromotionsHint: "Occasional news from places you've ordered from.",
   notifyBrowserPush: "Browser push notifications",
