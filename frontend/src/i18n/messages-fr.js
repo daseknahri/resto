@@ -5296,6 +5296,7 @@ customerAccount: {
   orderHideItems: "Masquer les articles",
   reorder: "Recommander",
   reorderAdded: "Articles ajoutes au panier",
+  reorderWalletShort: "Votre solde portefeuille pourrait ne pas couvrir cette commande — rechargez avant de passer.",
   reorderUnavailable: "Ces articles ne sont plus au menu.",
   reorderEmpty: "Rien a recommander.",
   viewReceipt: "Reçu",

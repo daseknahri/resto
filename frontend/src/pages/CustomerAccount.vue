@@ -2314,6 +2314,11 @@ const reorder = async (order) => {
   } else {
     toast.show(t('customerAccount.reorderAdded'), 'success');
   }
+  // Wallet pre-flight: warn if balance won't cover the cart total.
+  const cartTotal = cart.items.reduce((s, i) => s + (i.unitPrice ?? i.price) * i.qty, 0);
+  if (cartTotal > 0 && walletBalance.value < cartTotal) {
+    toast.show(t('customerAccount.reorderWalletShort'), 'warning');
+  }
   router.push({ name: 'cart' });
 };
 

@@ -374,9 +374,9 @@
         </div>
       </section>
 
-      <!-- Results count + sort ── hidden while loading, error, or empty -->
-      <div v-if="!loading && !fetchError && displayedRestaurants.length" class="flex items-center justify-between gap-3 px-1">
-        <p class="text-[11px] text-slate-500">{{ t('marketplace.resultsCount', { n: displayedRestaurants.length }) }}</p>
+      <!-- Results count + sort — sort always visible so user can pick before results arrive -->
+      <div v-if="!fetchError && (displayedRestaurants.length || loading)" class="flex items-center justify-between gap-3 px-1">
+        <p class="text-[11px] text-slate-500">{{ loading ? '' : t('marketplace.resultsCount', { n: displayedRestaurants.length }) }}</p>
         <select
           v-model="sortBy"
           :aria-label="t('marketplace.sortBy')"

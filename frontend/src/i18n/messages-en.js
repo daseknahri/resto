@@ -3232,6 +3232,7 @@ menu: {
   viewStatus: "View status →",
   reorder: "Order Again",
   reorderAdded: "Items added to your cart",
+  reorderWalletShort: "Your wallet balance may not cover this order — top up before placing.",
   reorderEmpty: "Nothing to reorder.",
   orderAgainChip: "Order again: {name}{extra}",
   reorderWithFulfillment: "Reordering with your last {context}",
