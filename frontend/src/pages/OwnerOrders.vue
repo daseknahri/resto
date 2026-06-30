@@ -82,6 +82,26 @@
           >{{ todayStats.pending }}</p>
           <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
         </div>
+        <!-- Active filter context strip — shown only when a filter is active -->
+        <Transition name="ui-fade">
+          <div
+            v-if="activeStatus || searchQuery || activeFulfillmentType || activePaymentStatus || activeDateFilter !== 'all'"
+            class="col-span-3 mt-1 flex flex-wrap items-center gap-1.5 border-t border-slate-800/60 pt-2 text-[10px] text-slate-500"
+          >
+            <span>{{ t('ownerOrders.filterContextLabel') }}</span>
+            <span v-if="activeStatus" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">
+              {{ statusTabs.find(t => t.value === activeStatus)?.label || activeStatus }}
+            </span>
+            <span v-if="searchQuery" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">"{{ searchQuery }}"</span>
+            <span v-if="activeFulfillmentType" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ activeFulfillmentType }}</span>
+            <span v-if="activePaymentStatus" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ activePaymentStatus }}</span>
+            <span v-if="activeDateFilter !== 'all'" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ t(`ownerOrders.dateFilter_${activeDateFilter}`) }}</span>
+            <button
+              class="ms-auto rounded-full px-1.5 py-0.5 text-slate-600 hover:text-slate-400 ui-press"
+              @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
+            >{{ t('ownerOrders.clearFilters') }}</button>
+          </div>
+        </Transition>
       </div>
 
       <!-- Search + filter trigger row -->
