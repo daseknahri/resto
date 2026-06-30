@@ -916,9 +916,9 @@
                 <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
                 {{ t('mktMenu.deliveryFeeDistance', { fee: fmtPrice(deliveryFee), km: deliveryDistanceKm }) }}
               </p>
-              <p v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <p v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-amber-400" role="alert">
                 <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ t('mktMenu.deliveryFeeByDistance') }}
+                {{ t('mktMenu.deliveryNeedsLocation') }}
               </p>
             </div>
             <div>
@@ -1094,12 +1094,12 @@
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0"
+            :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0"
             :aria-busy="placing"
             @click="placeOrder"
           >
             <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ placing ? t('mktMenu.placing') : unavailableSlugs.size > 0 ? t('mktMenu.cartHasUnavailableShort') : !restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder') }}
+            {{ placing ? t('mktMenu.placing') : unavailableSlugs.size > 0 ? t('mktMenu.cartHasUnavailableShort') : !restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : needsLocation ? t('mktMenu.needsLocationShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder') }}
           </button>
         </div>
       </div>
@@ -1909,6 +1909,11 @@ const deliveryOutOfRange = computed(() => {
 });
 const deliveryFeeIsDistance = computed(
   () => deliveryPricing.value.perKm > 0 && deliveryDistanceKm.value != null,
+);
+const needsLocation = computed(
+  () => form.fulfillment_type === 'delivery'
+    && deliveryPricing.value.perKm > 0
+    && (form.delivery_lat == null || form.delivery_lng == null),
 );
 const deliveryIsFree = computed(() => {
   const p = deliveryPricing.value;

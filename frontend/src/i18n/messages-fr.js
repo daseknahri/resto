@@ -577,6 +577,8 @@ mktMenu: {
   locateFailed: "Impossible d'obtenir votre position. Vous pouvez commander au tarif fixe.",
   deliveryFeeDistance: "Livraison : {fee} · {km} km",
   deliveryFeeByDistance: "Partagez votre position pour voir les frais de livraison (selon la distance).",
+  deliveryNeedsLocation: "Utilisez Ma position pour calculer les frais de livraison.",
+  needsLocationShort: "Position requise",
   deliveryOutOfRange: "Cette adresse est hors de la zone de livraison (max {km} km).",
   deliveryOutOfRangeShort: "Adresse hors zone",
   note: "Instructions speciales (optionnel)",

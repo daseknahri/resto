@@ -578,6 +578,8 @@ mktMenu: {
   locateFailed: "Couldn't get your location. You can still order at the flat fee.",
   deliveryFeeDistance: "Delivery: {fee} · {km} km",
   deliveryFeeByDistance: "Share your location to see the delivery fee (priced by distance).",
+  deliveryNeedsLocation: "Use My Location to calculate the delivery fee.",
+  needsLocationShort: "Set location first",
   deliveryOutOfRange: "This address is outside the delivery area (max {km} km).",
   deliveryOutOfRangeShort: "Address out of range",
   note: "Special instructions (optional)",
