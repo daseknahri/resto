@@ -5329,6 +5329,7 @@ customerAccount: {
   loyaltyEarnRate: "Vous gagnez {pts} points pour chaque 1 depense.",
   loyaltyCanRedeem: "Vous pouvez echanger {threshold} pts contre {credit} de credits.",
   loyaltyNeedMore: "Gagnez encore {need} points pour debloquer {credit} de credits.",
+  loyaltyShopNow: "Commander →",
   loyaltyEquivHint: "Valeur approximative en portefeuille",
   loyaltyRedeemLabel: "Points a echanger",
   loyaltyRedeem: "Echanger",

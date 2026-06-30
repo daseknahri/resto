@@ -5338,6 +5338,7 @@ customerAccount: {
   loyaltyEarnRate: "You earn {pts} points for every $1 spent.",
   loyaltyCanRedeem: "You can redeem {threshold} pts for {credit} in wallet credits.",
   loyaltyNeedMore: "Earn {need} more points to unlock {credit} in wallet credits.",
+  loyaltyShopNow: "Shop now →",
   loyaltyEquivHint: "Approximate wallet value",
   loyaltyRedeemLabel: "Points to redeem",
   loyaltyRedeem: "Redeem",

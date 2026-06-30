@@ -895,6 +895,16 @@
             <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
           </div>
 
+          <!-- Minimum order warning panel -->
+          <div
+            v-if="form.fulfillment_type === 'delivery' && deliveryMinGap > 0"
+            class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+            role="alert"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <p class="flex-1 text-xs font-medium text-amber-200">{{ t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) }}</p>
+          </div>
+
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"

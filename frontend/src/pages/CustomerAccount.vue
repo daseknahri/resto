@@ -1355,6 +1355,7 @@
                 </p>
                 <p v-else class="text-xs text-slate-500">
                   {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints, credit: loyaltyUnlockCredit ?? '?' }) }}
+                  <RouterLink :to="{ name: 'marketplace' }" class="ms-1 font-semibold text-[var(--color-secondary)]/80 underline hover:no-underline">{{ t('customerAccount.loyaltyShopNow') }}</RouterLink>
                 </p>
 
                 <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold && walletVerified" class="flex flex-wrap items-center gap-3 pt-1">
