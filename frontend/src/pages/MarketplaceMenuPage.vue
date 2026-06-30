@@ -305,9 +305,12 @@
                       </span>
                       <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
                     </span>
-                    <span v-else-if="flashSalePct" class="flex items-baseline gap-1.5">
-                      <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
-                      <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
+                    <span v-else-if="flashSalePct" class="flex flex-col items-start gap-0.5">
+                      <span class="flex items-baseline gap-1.5">
+                        <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
+                        <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
+                      </span>
+                      <span class="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">-{{ flashSalePct }}%</span>
                     </span>
                     <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                     <!-- Inline qty stepper once in cart, plain add button otherwise -->
@@ -458,9 +461,12 @@
                         </span>
                         <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
                       </span>
-                      <span v-else-if="flashSalePct" class="flex items-baseline gap-1.5">
-                        <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
-                        <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
+                      <span v-else-if="flashSalePct" class="flex flex-col items-start gap-0.5">
+                        <span class="flex items-baseline gap-1.5">
+                          <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
+                          <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
+                        </span>
+                        <span class="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">-{{ flashSalePct }}%</span>
                       </span>
                       <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                       <!-- Inline qty stepper once in cart, plain add button otherwise -->

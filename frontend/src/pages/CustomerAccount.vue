@@ -633,16 +633,22 @@
           <!-- Unfiltered-empty: no marketplace orders at all -->
           <div
             v-else-if="!selectedVertical && !loadingMarketplaceOrders && customerStore.isAuthenticated"
-            class="ui-panel ui-reveal p-5 text-center"
+            class="ui-panel ui-reveal p-5 text-center space-y-2"
           >
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/80 mx-auto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="h-5 w-5 text-slate-500" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg>
+            </div>
             <p class="text-sm text-slate-400">{{ t('customerAccount.noOrdersYet') }}</p>
           </div>
 
           <!-- Filtered-empty: a service filter is active but returned no orders -->
           <div
             v-else-if="selectedVertical && !loadingMarketplaceOrders"
-            class="ui-panel ui-reveal p-5 text-center"
+            class="ui-panel ui-reveal p-5 text-center space-y-2"
           >
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/80 mx-auto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="h-5 w-5 text-slate-500" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </div>
             <p class="text-sm text-slate-400">{{ t('customerAccount.noOrdersInService') }}</p>
           </div>
 
