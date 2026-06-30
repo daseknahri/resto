@@ -134,10 +134,11 @@
           :data-active="activeStatus === tab.value || undefined"
           @click="setFilter(tab.value)"
         >
-          {{ tab.label }}
+          <span v-if="tab.urgent" aria-hidden="true">🔴</span> {{ tab.label }}
           <span
             v-if="tab.count > 0"
-            class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
+            class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
+            :class="tab.urgent ? 'bg-red-500/30 text-red-200' : 'bg-slate-700/80'"
           >{{ tab.count }}</span>
         </button>
       </div>
@@ -1690,8 +1691,12 @@ const paymentStatusTabs = computed(() => {
 const statusTabs = computed(() => {
   const counts = {};
   order.orders.forEach((o) => { counts[o.status] = (counts[o.status] || 0) + 1; });
+  const overdueCount = order.orders.filter(
+    (o) => ['pending','confirmed'].includes(o.status) && orderAgeMin(o) >= 10,
+  ).length;
   return [
     { value: "", label: t("ownerOrders.allStatuses"), count: 0 },
+    ...(overdueCount > 0 ? [{ value: "_overdue", label: t("ownerOrders.statusOverdue"), count: overdueCount, urgent: true }] : []),
     { value: "scheduled", label: t("ownerOrders.statusScheduled"), count: counts.scheduled || 0 },
     { value: "pending", label: t("ownerOrders.statusPending"), count: counts.pending || 0 },
     { value: "confirmed", label: t("ownerOrders.statusConfirmed"), count: counts.confirmed || 0 },
@@ -1751,8 +1756,11 @@ const filteredOrders = computed(() => {
   const q = searchQuery.value.toLowerCase();
 
   let base = order.orders.filter((o) => {
-    // Status filter
-    if (activeStatus.value && o.status !== activeStatus.value) return false;
+    // Status filter — '_overdue' is a synthetic filter: pending/confirmed orders aged ≥ 10 min
+    if (activeStatus.value === '_overdue') {
+      if (!['pending','confirmed'].includes(o.status)) return false;
+      if (orderAgeMin(o) < 10) return false;
+    } else if (activeStatus.value && o.status !== activeStatus.value) return false;
 
     // Fulfillment-type filter
     if (activeFulfillmentType.value && o.fulfillment_type !== activeFulfillmentType.value) return false;
