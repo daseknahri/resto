@@ -2199,6 +2199,8 @@ waiterPage: {
   clockedInSince: "Depuis {time}",
   clockInFailed: "Impossible de pointer l'arrivee — reessayez.",
   clockOutFailed: "Impossible de pointer le depart — reessayez.",
+  clockOutConfirmTitle: "Pointer le depart ?",
+  clockOutConfirmBody: "Votre service se terminera immediatement.",
   alreadyClockedIn: "Vous avez deja pointe votre arrivee.",
   notClockedIn: "Vous n'etes pas pointe actuellement.",
   // Item A — tap-to-ready

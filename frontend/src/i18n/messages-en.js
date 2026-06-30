@@ -2205,6 +2205,8 @@ waiterPage: {
   clockedInSince: "Since {time}",
   clockInFailed: "Could not clock in — please try again.",
   clockOutFailed: "Could not clock out — please try again.",
+  clockOutConfirmTitle: "Clock out?",
+  clockOutConfirmBody: "Your shift will end immediately.",
   alreadyClockedIn: "You are already clocked in.",
   notClockedIn: "You are not currently clocked in.",
   // Item A — tap-to-ready

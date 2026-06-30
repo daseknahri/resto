@@ -1913,6 +1913,7 @@ import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
 import { useWakeLock } from "../composables/useWakeLock";
+import { useConfirmModal } from "../composables/useConfirmModal";
 
 const { t, formatDateTime, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
@@ -2255,6 +2256,7 @@ const floorDotClass = (status) => {
 // ── Clock-in / clock-out (B4) ─────────────────────────────────────────────────
 const currentShift = ref(null);
 const clockBusy = ref(false);
+const { confirm } = useConfirmModal();
 
 const loadMyShift = async () => {
   try {
@@ -2266,6 +2268,14 @@ const loadMyShift = async () => {
 };
 
 const doClock = async (direction) => {
+  if (direction === 'out') {
+    const ok = await confirm({
+      title: t('waiterPage.clockOutConfirmTitle'),
+      body: t('waiterPage.clockOutConfirmBody'),
+      confirmLabel: t('waiterPage.clockOut'),
+    });
+    if (!ok) return;
+  }
   clockBusy.value = true;
   try {
     if (direction === 'in') {
