@@ -69,6 +69,30 @@
       </div>
     </div>
 
+    <!-- ── Push notification soft-prompt (authenticated, not yet subscribed) ── -->
+    <div
+      v-if="customerStore.isAuthenticated && pushSupported && pushPermission !== 'denied' && !pushSubscribed && !pushBannerDismissed"
+      class="flex items-center gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/6 px-4 py-3"
+      role="status"
+    >
+      <span class="text-lg shrink-0" aria-hidden="true">🔔</span>
+      <p class="flex-1 text-xs text-sky-200">{{ t('superAppHub.pushPrompt') }}</p>
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          class="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-200 transition-colors hover:border-sky-400 focus-visible:outline-none"
+          :disabled="pushLoading"
+          @click="subscribePush"
+        >{{ t('superAppHub.pushEnable') }}</button>
+        <button
+          type="button"
+          class="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-300 focus-visible:outline-none"
+          :aria-label="t('common.dismiss')"
+          @click="pushBannerDismissed = true"
+        >✕</button>
+      </div>
+    </div>
+
     <!-- ── RESUME RAIL — "Continue where you left off" ──────────────────── -->
     <section
       v-if="customerStore.isAuthenticated && hasResumable"
@@ -199,6 +223,7 @@ import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import RoleSwitcher from '../components/RoleSwitcher.vue';
 import { useI18n } from '../composables/useI18n';
+import { useCustomerPush } from '../composables/useCustomerPush';
 import { useCustomerActivity } from '../composables/useCustomerActivity';
 import { useCustomerStore } from '../stores/customer';
 import { getServices } from '../lib/services';
@@ -218,6 +243,17 @@ const {
   hasResumable,
   load: loadActivity,
 } = useCustomerActivity();
+
+// ── Push notification soft prompt ────────────────────────────────────────────
+const {
+  supported: pushSupported,
+  permission: pushPermission,
+  subscribed: pushSubscribed,
+  loading: pushLoading,
+  subscribe: subscribePush,
+  autoRestore: pushAutoRestore,
+} = useCustomerPush();
+const pushBannerDismissed = ref(false);
 
 // Status-adjust the service grid by the platform's enabled_verticals (P0), then
 // float the verticals the customer actually uses to the top (usage order desc),
@@ -302,6 +338,7 @@ onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await loadActivity();
+  pushAutoRestore();
 });
 
 // Full literal Tailwind class strings per accent — never computed by string concat

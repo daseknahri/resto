@@ -465,6 +465,8 @@ superAppHub: {
   partnerTitle: "Open your business on Kepoli",
   partnerBody: "List your restaurant, shop or pharmacy and start taking orders and deliveries.",
   partnerCta: "Get started",
+  pushPrompt: "Enable notifications to get live order updates",
+  pushEnable: "Enable",
 },
 marketplace: {
   kicker: "Order online",
@@ -5305,6 +5307,7 @@ customerAccount: {
   allOrdersTitle: "All your orders",
   allOrdersHint: "Across every restaurant on the platform.",
   ordersEmpty: "No orders yet.",
+  ordersEmptyCta: "Discover restaurants",
   localOrdersTitle: "Orders on this device",
   orderNumber: "Order #{number}",
   loading: "Loading…",

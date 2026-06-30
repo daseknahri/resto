@@ -466,6 +466,8 @@ export const messages = {
       partnerTitle: "Open your business on Kepoli",
       partnerBody: "List your restaurant, shop or pharmacy and start taking orders and deliveries.",
       partnerCta: "Get started",
+      pushPrompt: "Enable notifications to get live order updates",
+      pushEnable: "Enable",
     },
     marketplace: {
       kicker: "Order online",
@@ -5296,6 +5298,7 @@ export const messages = {
       allOrdersTitle: "All your orders",
       allOrdersHint: "Across every restaurant on the platform.",
       ordersEmpty: "No orders yet.",
+      ordersEmptyCta: "Discover restaurants",
       localOrdersTitle: "Orders on this device",
       orderNumber: "Order #{number}",
       loading: "Loading…",
@@ -6101,6 +6104,8 @@ export const messages = {
       partnerTitle: "Ouvrez votre commerce sur Kepoli",
       partnerBody: "Referencez votre restaurant, boutique ou pharmacie et commencez a recevoir des commandes et livraisons.",
       partnerCta: "Commencer",
+      pushPrompt: "Activez les notifications pour suivre vos commandes en direct",
+      pushEnable: "Activer",
     },
     marketplace: {
       kicker: "Commander en ligne",
@@ -10931,6 +10936,7 @@ export const messages = {
       allOrdersTitle: "Toutes vos commandes",
       allOrdersHint: "Sur tous les restaurants de la plateforme.",
       ordersEmpty: "Aucune commande pour l'instant.",
+      ordersEmptyCta: "Decouvrir les restaurants",
       localOrdersTitle: "Commandes sur cet appareil",
       orderNumber: "Commande #{number}",
       loading: "Chargement…",

@@ -685,10 +685,14 @@
 
               <div
                 v-else-if="!apiOrders.length && !cart.recentOrders.length"
-                class="ui-empty-state text-center p-6 space-y-2"
+                class="ui-empty-state text-center p-6 space-y-3"
               >
                 <AppIcon name="calendar" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
                 <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.ordersEmpty') }}</p>
+                <RouterLink
+                  to="/"
+                  class="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-4 py-2 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none"
+                >{{ t('customerAccount.ordersEmptyCta') }}</RouterLink>
               </div>
 
               <ul v-else-if="apiOrders.length" class="space-y-2">

@@ -464,6 +464,8 @@ superAppHub: {
   partnerTitle: "Ouvrez votre commerce sur Kepoli",
   partnerBody: "Referencez votre restaurant, boutique ou pharmacie et commencez a recevoir des commandes et livraisons.",
   partnerCta: "Commencer",
+  pushPrompt: "Activez les notifications pour suivre vos commandes en direct",
+  pushEnable: "Activer",
 },
 marketplace: {
   kicker: "Commander en ligne",
@@ -5295,6 +5297,7 @@ customerAccount: {
   allOrdersTitle: "Toutes vos commandes",
   allOrdersHint: "Sur tous les restaurants de la plateforme.",
   ordersEmpty: "Aucune commande pour l'instant.",
+  ordersEmptyCta: "Decouvrir les restaurants",
   localOrdersTitle: "Commandes sur cet appareil",
   orderNumber: "Commande #{number}",
   loading: "Chargement…",

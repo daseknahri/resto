@@ -107,7 +107,7 @@
             class="ui-state-chip ui-press ui-touch-target shrink-0 border-amber-500/40 bg-amber-500/8 font-semibold text-amber-300 disabled:opacity-50"
             :title="currentShift?.clock_in ? t('waiterPage.clockedInSince', { time: formatDateTime(currentShift.clock_in) }) : ''"
             @click="doClock('out')"
-          >{{ t('waiterPage.clockedIn') }} ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
+          >{{ t('waiterPage.clockedIn') }}<template v-if="shiftElapsed"> · {{ shiftElapsed }}</template> ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
           <button
             v-if="canManageOrders"
             class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 font-semibold text-[var(--color-secondary)]"
@@ -2029,6 +2029,18 @@ const menu = useMenuStore();
 useWakeLock();
 // 30-s ticker for elapsed-time badges on active cards (task 3)
 const { now: tickerNow } = useNowTicker();
+
+const shiftElapsed = computed(() => {
+  const clockIn = waiter.currentShift?.clock_in;
+  if (!clockIn) return null;
+  const ms = tickerNow.value - new Date(clockIn).getTime();
+  if (ms < 0) return null;
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+});
+
 const toast = useToastStore();
 const tenant = useTenantStore();
 const session = useSessionStore();
