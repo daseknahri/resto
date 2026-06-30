@@ -825,6 +825,11 @@
 
           <!-- Totals -->
           <div class="ui-panel px-4 py-3 space-y-1.5 text-sm">
+            <!-- ETA chip — shown above totals when available -->
+            <div v-if="prepEta" class="flex items-center gap-1.5 text-[11px] text-emerald-400/80 pb-0.5">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75V8l2.25 2"/></svg>
+              {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
+            </div>
             <div class="flex justify-between text-slate-400">
               <span>{{ t('mktMenu.subtotal') }}</span>
               <span class="tabular-nums">{{ fmtPrice(cartTotal) }}</span>
