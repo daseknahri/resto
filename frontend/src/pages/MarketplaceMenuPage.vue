@@ -1401,7 +1401,7 @@ const addToCart = (dish) => {
     : Number(dish.price);
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
-    existing.qty++;
+    if (existing.qty < 99) existing.qty++;
     // refresh happy_hour_ends_at / happy_hour_starts_at in case window changed
     existing.happy_hour_ends_at = dish.happy_hour?.ends_at ?? null;
     existing.happy_hour_starts_at = dish.happy_hour?.starts_at ?? null;
@@ -1421,7 +1421,7 @@ const addToCart = (dish) => {
 
 const addToCartBySlug = (dishSlug) => {
   const existing = cart.value.find((i) => i.slug === dishSlug);
-  if (existing) existing.qty++;
+  if (existing && existing.qty < 99) existing.qty++;
 };
 
 const removeFromCart = (dishSlug) => {
@@ -1589,7 +1589,7 @@ const confirmOptionSelection = () => {
   const unitPrice = dish.option_groups?.length ? optionPanelUnitPrice.value : dishEffectiveBase;
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
-    existing.qty++;
+    if (existing.qty < 99) existing.qty++;
     existing.unitPrice = unitPrice;
     existing.options = selectedOptions;
     existing.happy_hour_ends_at = dish.happy_hour?.ends_at ?? null;

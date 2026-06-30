@@ -1872,6 +1872,7 @@ const arabicMessages = {
     "stockQtyLabel": "كمية المخزون",
     "stockQtyPlaceholder": "غير محدود",
     "stockQtyHint": "اتركه فارغاً لمخزون غير محدود. عندما يصل المخزون إلى 0 يتم تعليم الطبق كنافد.",
+    "outOfStock": "نفد من المخزون",
     "tagsTitle": "العلامات الغذائية والحساسية",
     "tag_vegan": "نباتي (فيغان)",
     "tag_vegetarian": "نباتي",

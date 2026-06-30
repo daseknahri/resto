@@ -2692,6 +2692,7 @@ stepDishes: {
   stockQtyLabel: "Quantite en stock",
   stockQtyPlaceholder: "Illimite",
   stockQtyHint: "Laisser vide pour illimite. Quand le stock atteint 0, le plat est marque comme epuise.",
+  outOfStock: "En rupture de stock",
   tagsTitle: "Tags dietetiques",
   tag_vegan: "Vegan",
   tag_vegetarian: "Vegetarien",

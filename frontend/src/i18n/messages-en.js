@@ -2733,6 +2733,7 @@ stepDishes: {
   stockQtyLabel: "Stock quantity",
   stockQtyPlaceholder: "Unlimited",
   stockQtyHint: "Leave blank for unlimited. When stock hits 0, the dish auto-marks as sold out.",
+  outOfStock: "Out of stock",
   tagsTitle: "Dietary Tags",
   tag_vegan: "Vegan",
   tag_vegetarian: "Vegetarian",

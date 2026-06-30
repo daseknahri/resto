@@ -145,6 +145,7 @@
                 <span v-if="Array.isArray(dish.options) && dish.options.length">· {{ dish.options.length }} {{ t("stepDishes.variantsTitle") }}</span>
                 <span v-if="dish.option_groups?.length" class="text-sky-300">· {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
                 <span v-if="dish.combo_components?.length" class="rounded-full border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">{{ t("combos.badge") }}</span>
+                <span v-if="dish.is_available === false || dish.stock_qty === 0" class="rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">{{ t("stepDishes.outOfStock") }}</span>
                 <span v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">· {{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(" · ") }}</span>
               </div>
             </div>
