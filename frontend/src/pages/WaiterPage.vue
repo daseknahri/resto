@@ -1632,6 +1632,12 @@ class="min-w-0 flex-1 leading-snug"
             </div>
           </div>
 
+          <!-- Paid-in-full confirmation banner -->
+          <div v-if="billOrder.payment_status === 'paid'" class="mx-5 mb-2 flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+            <span class="text-sm font-semibold text-emerald-700">{{ t('waiterPage.billPaidFull') }}</span>
+          </div>
+
           <!-- Pay with wallet (when there's still an outstanding amount) -->
           <div v-if="billOutstanding > 0 && canManageOrders" class="px-5 pb-1 no-print">
             <button
@@ -2593,8 +2599,9 @@ const splitAmount = ref('');
 // Outstanding amount on the open bill (total minus any wallet already applied).
 const billOutstanding = computed(() => {
   if (!billOrder.value) return 0;
+  if (billOrder.value.payment_status === 'paid') return 0;
   const total = Number(billOrder.value.total) || 0;
-  const paid = Number(billOrder.value.wallet_amount_paid) || 0;
+  const paid = Number(billOrder.value.amount_paid) || Number(billOrder.value.wallet_amount_paid) || 0;
   return Math.max(0, +(total - paid).toFixed(2));
 });
 

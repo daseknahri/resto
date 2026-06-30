@@ -75,6 +75,14 @@
             <AppIcon name="clock" class="h-3 w-3 shrink-0 text-sky-300/80" aria-hidden="true" />
             {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
           </span>
+          <RouterLink
+            v-if="tenant.capabilities.reservations"
+            :to="{ name: 'reserve' }"
+            class="inline-flex items-center gap-1 rounded-full border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-300 backdrop-blur-sm hover:border-violet-400/60 hover:bg-violet-500/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 shrink-0" aria-hidden="true"><rect x="1.75" y="3.75" width="12.5" height="10.5" rx="1.5"/><path d="M1.75 7h12.5M5.5 3.75V1.75M10.5 3.75V1.75"/></svg>
+            {{ t('menu.bookTable') }}
+          </RouterLink>
         </div>
       </div>
     </header>
