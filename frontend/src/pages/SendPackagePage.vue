@@ -795,6 +795,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useToastStore } from '../stores/toast';
 import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
@@ -804,6 +805,7 @@ import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import PushPrimingSheet from '../components/PushPrimingSheet.vue';
 
 const { t, formatPrice, currentLocale } = useI18n();
+const toast = useToastStore();
 const customerStore = useCustomerStore();
 
 // ── Push priming sheet ────────────────────────────────────────────────────────
@@ -1194,7 +1196,7 @@ const cancelScheduled = async (tripId) => {
   try {
     await api.post(`/rides/${tripId}/cancel/`);
     await fetchActiveTrip();
-    errorMsg.value = t('tripSchedule.cancelled');
+    toast.show(t('tripSchedule.cancelled'), 'success');
   } catch {
     errorMsg.value = t('ridePage.errorRequest');
   } finally {
