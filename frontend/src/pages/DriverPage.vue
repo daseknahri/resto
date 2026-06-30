@@ -769,9 +769,33 @@
       </div>
 
       <!-- Offline + no active job — go online prompt -->
-      <div v-else-if="!activeJob" class="ui-empty-state text-center space-y-2.5 ui-reveal">
-        <AppIcon name="truck" class="mx-auto h-9 w-9 text-slate-600" aria-hidden="true" />
-        <p class="text-sm font-medium text-slate-400">{{ t('driver.offlineEmpty') }}</p>
+      <div v-else-if="!activeJob" class="ui-panel p-5 space-y-4 ui-reveal text-center">
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800/80 mx-auto">
+          <AppIcon name="truck" class="h-7 w-7 text-slate-500" aria-hidden="true" />
+        </div>
+        <div class="space-y-1">
+          <p class="text-sm font-semibold text-slate-100">{{ t('driver.offlineTitle') }}</p>
+          <p class="text-[12px] text-slate-400">{{ t('driver.offlineHint') }}</p>
+        </div>
+        <!-- Quick checklist before going online -->
+        <ul class="mx-auto max-w-[240px] space-y-1.5 text-left text-[12px] text-slate-400">
+          <li class="flex items-center gap-2" :class="!geoError ? 'text-emerald-400' : 'text-amber-400'">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0" aria-hidden="true">
+              <template v-if="!geoError"><path d="M3.5 8.5l3 3 6-6"/></template>
+              <template v-else><path d="M3 3l10 10M13 3 3 13"/></template>
+            </svg>
+            {{ geoError ? t('driver.offlineCheckGPS') : t('driver.offlineGPSOk') }}
+          </li>
+          <li class="flex items-center gap-2 text-emerald-400">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6"/></svg>
+            {{ t('driver.offlineCheckProfile') }}
+          </li>
+        </ul>
+        <button
+          class="ui-btn-primary mx-auto w-full max-w-[200px] py-2.5 text-sm font-semibold"
+          :disabled="busy"
+          @click="toggleOnline"
+        >{{ t('driver.goOnline') }}</button>
       </div>
 
       <!-- ── Rides section (car drivers only, while online and no active delivery) ── -->
