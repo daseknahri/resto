@@ -876,7 +876,7 @@
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
-              :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || closedBlocksOrder || closedNeedsSchedule"
+              :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || closedBlocksOrder || closedNeedsSchedule || unavailableSlugs.length > 0"
               :aria-busy="placingOrder"
               @click="placeInAppOrder"
             >
