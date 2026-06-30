@@ -2479,6 +2479,8 @@ const arabicMessages = {
     "newOrderNotifTitle_one": "طلب جديد واحد",
     "newOrderNotifTitle_other": "{count} طلبات جديدة",
     "newOrderNotifBody": "هناك طلب (طلبات) جديدة تنتظر تأكيدك.",
+    "newOrderBanner": "🔔 وصل {count} طلب جديد",
+    "newOrderBannerTap": "اضغط للعرض",
     "todayOrders": "اليوم",
     "todayRevenue": "الإيرادات",
     "todayPending": "معلق",

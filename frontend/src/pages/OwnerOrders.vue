@@ -143,6 +143,20 @@
         </button>
       </div>
 
+      <!-- New-order sticky banner — appears when new orders arrive while owner is on the page -->
+      <Transition name="ui-fade">
+        <button
+          v-if="newOrderBannerCount > 0"
+          type="button"
+          class="ui-press flex w-full items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm font-semibold text-amber-300"
+          @click="activeStatus = 'pending'; newOrderBannerCount = 0"
+        >
+          <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
+          {{ t('ownerOrders.newOrderBanner', { count: newOrderBannerCount }) }}
+          <span class="ms-auto text-xs font-normal text-amber-400/70">{{ t('ownerOrders.newOrderBannerTap') }}</span>
+        </button>
+      </Transition>
+
       <!-- Active filter summary -->
       <p v-if="filteredOrders.length !== order.orders.length" class="text-xs text-slate-500">
         {{ t("ownerOrders.showingFiltered", { shown: filteredOrders.length, total: order.orders.length }) }}
@@ -2301,6 +2315,7 @@ const exportCsv = async () => {
 // ── New-order alert ───────────────────────────────────────────────────────────
 const knownOrderIds = ref(new Set());
 const lastAlertTime = ref(0);
+const newOrderBannerCount = ref(0); // dismissed by clicking the banner
 const RECURRING_ALERT_MS = 2 * 60 * 1000; // re-ping every 2 min while pending orders sit
 
 const playAlertSound = () => {
@@ -2358,6 +2373,7 @@ const checkForNewOrders = (freshOrders) => {
     playAlertSound();
     showBrowserNotification(newPending.length);
     toast.show(t(newPending.length === 1 ? "ownerOrders.newOrderNotifTitle_one" : "ownerOrders.newOrderNotifTitle_other", { count: newPending.length }), "info");
+    newOrderBannerCount.value += newPending.length;
     lastAlertTime.value = Date.now();
   }
 };

@@ -4379,6 +4379,8 @@ ownerOrders: {
   newOrderNotifTitle_one: "{count} nouvelle commande",
   newOrderNotifTitle_other: "{count} nouvelles commandes",
   newOrderNotifBody: "De nouvelles commandes attendent votre confirmation.",
+  newOrderBanner: "🔔 {count} nouvelle commande reçue",
+  newOrderBannerTap: "Voir",
   todayOrders: "Aujourd'hui",
   todayRevenue: "Chiffre d'affaires",
   todayPending: "En attente",
