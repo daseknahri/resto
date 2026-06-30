@@ -4437,6 +4437,7 @@ ownerOrders: {
   customerTrustRatings_other: "{count} ratings",
   customerTrustLow: "Low trust",
   sourceMarketplace: "Marketplace",
+  awaitingDriver: "Awaiting driver",
   preparingTimerTitle: "Time elapsed since order started preparing",
   markAllReady: "Mark all ready ({count})",
   bulkReadyConfirmTitle: "Mark {count} orders as ready?",

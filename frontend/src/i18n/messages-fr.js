@@ -4446,6 +4446,7 @@ ownerOrders: {
   customerTrustRatings_other: "{count} evaluations",
   customerTrustLow: "Faible confiance",
   sourceMarketplace: "Marketplace",
+  awaitingDriver: "En attente d'un livreur",
   preparingTimerTitle: "Temps ecoule depuis le debut de la preparation",
   markAllReady: "Tout marquer pret ({count})",
   bulkReadyConfirmTitle: "Marquer {count} commandes comme pretes ?",

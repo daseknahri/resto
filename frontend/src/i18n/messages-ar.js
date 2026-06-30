@@ -2543,6 +2543,7 @@ const arabicMessages = {
     "customerTrustRatings_other": "{count} تقييمات",
     "customerTrustLow": "ثقة منخفضة",
     "sourceMarketplace": "السوق",
+    awaitingDriver: "بانتظار السائق",
     preparingTimerTitle: "الوقت المنقضي منذ بدء التحضير",
     markAllReady: "تعليم الكل جاهزاً ({count})",
     bulkReadyConfirmTitle: "تعليم {count} طلبات كجاهزة؟",

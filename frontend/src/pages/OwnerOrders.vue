@@ -539,6 +539,13 @@
               >
                 <span aria-hidden="true">🛒</span> {{ t('ownerOrders.sourceMarketplace') }}
               </span>
+              <!-- Awaiting driver badge — ready delivery, no driver assigned yet -->
+              <span
+                v-if="o.status === 'ready' && o.fulfillment_type === 'delivery' && (!o.delivery_job || o.delivery_job.status === 'searching')"
+                class="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
+              >
+                <span aria-hidden="true">🛵</span> {{ t('ownerOrders.awaitingDriver') }}
+              </span>
               <!-- Age warning badge (pending / confirmed) -->
               <span
                 v-if="orderAgeMin(o) >= 1 && ['pending', 'confirmed'].includes(o.status)"
