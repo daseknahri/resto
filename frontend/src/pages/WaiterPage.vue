@@ -315,6 +315,17 @@
                   <svg viewBox="0 0 14 14" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8"/><path d="M8 1h5m0 0v5m0-5L6 8"/></svg>
                   {{ t('waiterPage.openMenuLink') }}
                 </a>
+                <!-- QR code button — show for any table with a known slug -->
+                <button
+                  v-if="expandedFloorTileData.orders[0]?.table_slug || expandedFloorTileData.tableKey"
+                  type="button"
+                  class="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-600/40 bg-slate-800/60 px-2 py-1 text-[10px] font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none"
+                  :aria-label="t('waiterPage.showQR')"
+                  @click="showTableQR(expandedFloorTileData.orders[0]?.table_slug || expandedFloorTileData.tableKey, expandedFloorTileData.tableLabel)"
+                >
+                  <svg viewBox="0 0 14 14" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="0.5"/><rect x="8" y="1" width="5" height="5" rx="0.5"/><rect x="1" y="8" width="5" height="5" rx="0.5"/><path d="M8 8h2m3 0v0m0 2v1m0 2h-1m-2-1v2m0-3h0"/></svg>
+                  {{ t('waiterPage.showQR') }}
+                </button>
                 <span v-if="expandedFloorTileData.orders.length > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
                   {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(expandedFloorTileData.totalOutstanding, expandedFloorTileData.orders[0]?.currency) }}
                 </span>
@@ -1948,6 +1959,39 @@ class="min-w-0 flex-1 leading-snug"
       </div>
     </Transition>
   </Teleport>
+
+  <!-- Table QR code modal -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 scale-95"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="qrDataUrl"
+        class="fixed inset-0 z-[5000] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+        @click.self="qrDataUrl = ''"
+        @keydown.esc="qrDataUrl = ''"
+      >
+        <div
+          class="flex flex-col items-center gap-4 rounded-2xl bg-slate-50 p-6 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('waiterPage.showQR')"
+        >
+          <p class="text-sm font-semibold text-slate-700">{{ qrTableLabel }}</p>
+          <img :src="qrDataUrl" :alt="t('waiterPage.qrCodeAlt', { label: qrTableLabel })" class="h-56 w-56 rounded-lg" />
+          <p class="text-[11px] text-slate-400">{{ t('waiterPage.qrScanHint') }}</p>
+          <button
+            type="button"
+            class="rounded-lg bg-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300 focus-visible:outline-none"
+            @click="qrDataUrl = ''"
+          >{{ t('common.close') }}</button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1997,6 +2041,22 @@ const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 const WAITER_SOUND_KEY = typeof window === 'undefined' ? 'waiter:sound' : `waiter:sound:${window.location.hostname}`;
 const waiterSoundOn = ref((() => { try { return localStorage.getItem(WAITER_SOUND_KEY) !== 'off'; } catch { return true; } })());
 watch(waiterSoundOn, (v) => { try { localStorage.setItem(WAITER_SOUND_KEY, v ? 'on' : 'off'); } catch { /* ignore */ } });
+// ── Table QR code modal ───────────────────────────────────────────────────────
+const qrTableLabel = ref('');
+const qrDataUrl = ref('');
+const showTableQR = async (slug, label) => {
+  if (!slug) return;
+  qrTableLabel.value = label || slug;
+  qrDataUrl.value = '';
+  const url = window.location.origin + '/t/' + encodeURIComponent(slug);
+  try {
+    const { default: QRCode } = await import('qrcode');
+    qrDataUrl.value = await QRCode.toDataURL(url, { width: 220, margin: 2, color: { dark: '#1e293b', light: '#f8fafc' } });
+  } catch {
+    qrDataUrl.value = '';
+  }
+};
+
 const _waiterKnownIds = new Set();
 const _playWaiterAlert = () => {
   if (!waiterSoundOn.value) return;
