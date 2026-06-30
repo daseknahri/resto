@@ -404,7 +404,7 @@
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
         </button>
-        <!-- High-frequency daily destinations: Kitchen, Z-Report, Availability -->
+        <!-- High-frequency daily destinations: Kitchen, Tables & QR, Z-Report, Availability -->
         <RouterLink
           v-if="showKitchen"
           :to="{ name: 'owner-kitchen' }"
@@ -412,6 +412,14 @@
         >
           <AppIcon name="menu" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("ownerLayout.kitchen") }}
+        </RouterLink>
+        <RouterLink
+          v-if="tenant.capabilities.tables !== false"
+          :to="{ name: 'owner-tables' }"
+          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+        >
+          <AppIcon name="qr" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.tablesQr") }}
         </RouterLink>
         <RouterLink
           :to="{ name: 'owner-z-report' }"
