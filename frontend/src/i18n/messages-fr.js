@@ -4619,6 +4619,7 @@ happyHour: {
   categoryHint: "Laisser vide pour toutes les categories.",
   isActiveLabel: "Actif",
   until: "jusqu'a {time}",
+  endsIn: "termine dans {min}m",
   percentOff: "-{pct}%",
   deleteConfirm: "Supprimer cette regle happy hour ?",
   deleted: "Regle happy hour supprimee.",

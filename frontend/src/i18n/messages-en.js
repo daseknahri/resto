@@ -4610,6 +4610,7 @@ happyHour: {
   categoryHint: "Leave empty to apply to all categories.",
   isActiveLabel: "Active",
   until: "until {time}",
+  endsIn: "ends in {min}m",
   percentOff: "-{pct}%",
   deleteConfirm: "Delete this happy-hour rule?",
   deleted: "Happy-hour rule deleted.",

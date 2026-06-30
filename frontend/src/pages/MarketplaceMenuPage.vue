@@ -343,7 +343,7 @@
                         <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.effective_price) }}</span>
                         <span class="text-[11px] tabular-nums text-slate-500 line-through">{{ fmtPrice(dish.price) }}</span>
                       </span>
-                      <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+                      <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% <template v-if="hhMinutesLeft(dish.happy_hour.ends_at) !== null">{{ t('happyHour.endsIn', { min: hhMinutesLeft(dish.happy_hour.ends_at) }) }}</template><template v-else>{{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</template></span>
                     </span>
                     <span v-else-if="flashSalePct" class="flex flex-col items-start gap-0.5">
                       <span class="flex items-baseline gap-1.5">
@@ -499,7 +499,7 @@
                           <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.effective_price) }}</span>
                           <span class="text-[11px] tabular-nums text-slate-500 line-through">{{ fmtPrice(dish.price) }}</span>
                         </span>
-                        <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+                        <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% <template v-if="hhMinutesLeft(dish.happy_hour.ends_at) !== null">{{ t('happyHour.endsIn', { min: hhMinutesLeft(dish.happy_hour.ends_at) }) }}</template><template v-else>{{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</template></span>
                       </span>
                       <span v-else-if="flashSalePct" class="flex flex-col items-start gap-0.5">
                         <span class="flex items-baseline gap-1.5">
@@ -1168,6 +1168,17 @@ const businessIcon = (r) => {
   return '🍽️';
 };
 
+// ── Happy-hour minutes-left helper (minute resolution) ────────────────────────
+const _nowHHMM = ref(new Date().toTimeString().slice(0, 5));
+let _hhTick = setInterval(() => { _nowHHMM.value = new Date().toTimeString().slice(0, 5); }, 30_000);
+const hhMinutesLeft = (endsAt) => {
+  if (!endsAt) return null;
+  const [eh, em] = endsAt.split(':').map(Number);
+  const [nh, nm] = _nowHHMM.value.split(':').map(Number);
+  let diff = (eh * 60 + em) - (nh * 60 + nm);
+  if (diff < 0) diff += 1440; // next-day wrap
+  return diff <= 120 ? diff : null; // only show when ≤ 2 h left
+};
 // ── Flash sale countdown ───────────────────────────────────────────────────────
 const flashSaleCountdown = ref('');
 let _flashSaleTimer = null;
@@ -1241,6 +1252,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', trapCheckoutFocus);
   if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
   clearInterval(_flashSaleTimer);
+  clearInterval(_hhTick);
 });
 // ── Share restaurant link ─────────────────────────────────────────────────────
 const menuLinkCopied = ref(false);
