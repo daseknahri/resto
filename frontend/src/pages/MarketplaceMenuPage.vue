@@ -916,15 +916,25 @@
             <p class="flex-1 text-xs font-medium text-amber-200">{{ t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) }}</p>
           </div>
 
+          <!-- Restaurant closed warning panel -->
+          <div
+            v-if="restaurant && !restaurant.is_open"
+            class="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/8 px-3 py-2.5"
+            role="alert"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd"/></svg>
+            <p class="flex-1 text-xs font-medium text-rose-300">{{ t('mktMenu.restaurantClosed') }}</p>
+          </div>
+
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0"
+            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || (restaurant && !restaurant.is_open)"
             :aria-busy="placing"
             @click="placeOrder"
           >
             <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ placing ? t('mktMenu.placing') : (deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder')))) }}
+            {{ placing ? t('mktMenu.placing') : (!restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder')) }}
           </button>
         </div>
       </div>
