@@ -720,6 +720,30 @@
                         >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
                         <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(order.status) }}</span>
                       </div>
+                      <!-- Order status mini-timeline — shown for active (non-cancelled) orders -->
+                      <div
+                        v-if="order.status !== 'cancelled'"
+                        class="flex items-center gap-0.5 overflow-x-auto pb-0.5"
+                        :aria-label="t('customerAccount.orderTimeline')"
+                        style="scrollbar-width:none"
+                      >
+                        <template
+                          v-for="(step, si) in (order.fulfillment_type === 'delivery'
+                            ? ['pending','confirmed','preparing','out_for_delivery','completed']
+                            : ['pending','confirmed','preparing','ready','completed'])"
+                          :key="step"
+                        >
+                          <span
+                            class="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap transition-colors"
+                            :class="(order.fulfillment_type === 'delivery'
+                              ? ['pending','confirmed','preparing','out_for_delivery','completed']
+                              : ['pending','confirmed','preparing','ready','completed']).indexOf(order.status) >= si
+                              ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
+                              : 'bg-slate-800/60 text-slate-600'"
+                          >{{ t(`customerAccount.timelineStep_${step}`) }}</span>
+                          <span v-if="si < 4" class="h-px w-2 shrink-0 bg-slate-700/60" aria-hidden="true" />
+                        </template>
+                      </div>
                       <div class="flex flex-wrap items-center gap-2 text-slate-500">
                         <span v-if="order.fulfillment_type">{{
                           order.fulfillment_type === 'pickup'   ? t('orderStatus.fulfillmentPickup')   :

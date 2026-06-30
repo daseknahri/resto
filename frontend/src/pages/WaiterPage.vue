@@ -239,8 +239,19 @@
             :aria-pressed="expandedFloorTable === tile.tableKey"
             @click="toggleFloorTile(tile)"
           >
-            <!-- Status dot -->
+            <!-- "Ready to serve" pulse ring — overlays the status dot when food is ready -->
             <span
+              v-if="tile.orders.some(o => o.status === 'ready')"
+              class="absolute end-2 top-2 flex h-4 w-4 items-center justify-center"
+              :title="t('waiterPage.floorReadyToServe')"
+              aria-hidden="true"
+            >
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </span>
+            <!-- Status dot (hidden when ready pulse is shown) -->
+            <span
+              v-else
               class="absolute end-2.5 top-2.5 h-2.5 w-2.5 rounded-full"
               :class="floorDotClass(tile.tableStatus)"
               aria-hidden="true"
