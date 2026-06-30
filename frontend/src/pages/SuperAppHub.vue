@@ -121,6 +121,28 @@
       </div>
     </section>
 
+    <!-- ── ORDER AGAIN RAIL — recent restaurants from completed orders ──── -->
+    <section
+      v-if="customerStore.isAuthenticated && recentRestaurants.length"
+      aria-labelledby="reorder-heading"
+      class="ui-reveal space-y-3"
+    >
+      <h2 id="reorder-heading" class="ui-kicker">{{ t('superAppHub.orderAgainTitle') }}</h2>
+      <div class="flex gap-2.5 overflow-x-auto pb-1">
+        <RouterLink
+          v-for="r in recentRestaurants"
+          :key="r.restaurant_slug"
+          :to="{ name: 'marketplace-menu', params: { slug: r.restaurant_slug } }"
+          class="ui-press flex shrink-0 flex-col items-start gap-1 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5 transition hover:bg-slate-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          style="min-width: 140px; max-width: 180px"
+        >
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60 text-xl" aria-hidden="true">🍽</span>
+          <p class="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-white">{{ r.restaurant_name }}</p>
+          <p class="text-[10px] text-slate-500">{{ t('superAppHub.orderAgainCta') }}</p>
+        </RouterLink>
+      </div>
+    </section>
+
     <!-- ── SERVICE LAUNCHER GRID ─────────────────────────────────────────── -->
     <section aria-labelledby="services-heading">
       <h2 id="services-heading" class="sr-only">{{ t('home.verticalsTitle') }}</h2>
@@ -226,6 +248,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useCustomerActivity } from '../composables/useCustomerActivity';
 import { useCustomerStore } from '../stores/customer';
+import api from '../lib/api';
 import { getServices } from '../lib/services';
 import { PLATFORM_NAME } from '../lib/brand';
 
@@ -334,11 +357,21 @@ const resumeCards = computed(() => {
   return cards.slice(0, 3);
 });
 
+const recentRestaurants = ref([]);
+
 onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await loadActivity();
   pushAutoRestore();
+  // Fetch recent cross-restaurant order history to surface "Order again" shortcuts.
+  try {
+    const { data } = await api.get('/customer/orders/all/?page=1');
+    const seen = new Set();
+    recentRestaurants.value = (data.orders || [])
+      .filter((o) => o.restaurant_slug && o.status === 'completed' && !seen.has(o.restaurant_slug) && seen.add(o.restaurant_slug))
+      .slice(0, 3);
+  } catch { /* best-effort */ }
 });
 
 // Full literal Tailwind class strings per accent — never computed by string concat

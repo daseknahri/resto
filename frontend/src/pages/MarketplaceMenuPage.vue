@@ -304,6 +304,13 @@
               : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
             @click="toggleAllergenFilter(allergen)"
           >{{ t(`mktMenu.allergen_${allergen}`) }}</button>
+          <!-- Hidden items counter shown when filter is active -->
+          <Transition name="ui-fade">
+            <span
+              v-if="allergenHiddenCount > 0"
+              class="ms-auto shrink-0 whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
+            >{{ t('mktMenu.allergenHidden', { n: allergenHiddenCount }) }}</span>
+          </Transition>
         </div>
       </nav>
 
@@ -1616,6 +1623,20 @@ const filteredSuperCategories = computed(() => {
       dishes: (cat.dishes || []).filter(dishPassesAllergenFilter),
     })).filter(cat => cat.dishes.length > 0),
   })).filter(sc => sc.categories.length > 0);
+});
+
+/** How many dishes are hidden by the active allergen filter. */
+const allergenHiddenCount = computed(() => {
+  if (!selectedAllergenFilter.value.length) return 0;
+  let total = 0;
+  for (const sc of (restaurant.value?.super_categories || [])) {
+    for (const cat of (sc.categories || [])) {
+      for (const d of (cat.dishes || [])) {
+        if (!dishPassesAllergenFilter(d)) total += 1;
+      }
+    }
+  }
+  return total;
 });
 
 // ── Option group selection panel ─────────────────────────────────────────────
