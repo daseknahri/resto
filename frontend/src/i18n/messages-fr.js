@@ -1433,6 +1433,8 @@ driver: {
   offlineHint: "Passez en ligne pour recevoir des demandes de livraison.",
   goOnline: "Passer en ligne",
   goOffline: "Passer hors ligne",
+  nowOnline: "Vous etes en ligne — acceptez des missions",
+  nowOffline: "Vous etes passe hors ligne",
   activeTitle: "Livraison en cours",
   order: "Commande",
   pickup: "Recuperation",

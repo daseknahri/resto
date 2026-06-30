@@ -1435,6 +1435,8 @@ driver: {
   offlineHint: "Go online to receive delivery requests.",
   goOnline: "Go online",
   goOffline: "Go offline",
+  nowOnline: "You're online — accepting jobs",
+  nowOffline: "You've gone offline",
   activeTitle: "Current delivery",
   order: "Order",
   pickup: "Pick up",

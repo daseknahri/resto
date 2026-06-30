@@ -2038,6 +2038,7 @@ const toggleOnline = async () => {
     const { data } = await api.patch('/driver/status/', { online: next });
     online.value = Boolean(data.is_driver_online);
     if (online.value) {
+      toast.show(t('driver.nowOnline'), 'success', 2500);
       showGoOnlineCta.value = false; // dismiss the CTA once truly online
       startGeo();
       // One-time sound unlock: call enableSound within this user-gesture context so
@@ -2054,6 +2055,7 @@ const toggleOnline = async () => {
       await fetchJobs();
       if (driverVehicleType.value === 'car') fetchRides();
     } else {
+      toast.show(t('driver.nowOffline'), 'info', 2000);
       stopGeo();
       rideOffers.value = [];
       activeRide.value = null;

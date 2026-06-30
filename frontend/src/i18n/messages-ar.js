@@ -3401,6 +3401,8 @@ Object.assign(arabicMessages, {
     offlineHint: "اتصل لاستقبال طلبات التوصيل.",
     goOnline: "الاتصال",
     goOffline: "قطع الاتصال",
+    nowOnline: "أنت متصل الآن — تقبّل المهام",
+    nowOffline: "لقد قطعت الاتصال",
     activeTitle: "التوصيل الحالي",
     order: "الطلب",
     pickup: "الاستلام",

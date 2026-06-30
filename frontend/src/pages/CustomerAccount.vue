@@ -159,7 +159,12 @@
               :aria-label="t('customerAccount.loyaltyTitle')"
               @click="activeTab = 'wallet'"
             >
-              <p class="text-sm font-bold tabular-nums leading-tight" :class="loyaltyPoints > 0 ? 'text-indigo-300' : 'text-slate-500'">
+              <p
+                class="text-sm font-bold tabular-nums leading-tight"
+                :class="loyaltyConfig?.enabled && loyaltyConfig.redeem_threshold > 0 && loyaltyPoints >= loyaltyConfig.redeem_threshold
+                  ? 'text-emerald-300'
+                  : loyaltyPoints > 0 ? 'text-indigo-300' : 'text-slate-500'"
+              >
                 {{ loyaltyPoints }}
               </p>
               <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.loyaltyPts') }}</p>
