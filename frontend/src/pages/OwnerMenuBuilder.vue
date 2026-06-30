@@ -6,6 +6,17 @@
       <div class="flex items-center justify-between gap-3">
         <h2 class="ui-display min-w-0 truncate text-base font-semibold text-white sm:text-lg">{{ activeTabTitle }}</h2>
         <div class="flex shrink-0 items-center gap-2">
+          <a
+            href="/menu"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-outline ui-press inline-flex gap-1.5 px-3 py-1.5 text-xs"
+            :aria-label="t('ownerLayout.publicPreview')"
+          >
+            <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t("ownerLayout.publicPreview") }}</span>
+            <span class="sr-only sm:hidden">{{ t("ownerLayout.publicPreview") }}</span>
+          </a>
           <button
             class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
             @click="showTemplates = true"
