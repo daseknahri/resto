@@ -1285,6 +1285,7 @@ const arabicMessages = {
     "sent": "تم الإرسال",
     "contactMe": "تواصل معي",
     "shareRestaurant": "مشاركة",
+    "shareDish": "مشاركة الطبق",
     "shareRestaurantCopied": "تم نسخ الرابط إلى الحافظة",
     "nameError": "يجب أن يكون الاسم حرفين على الأقل.",
     "contactRequired": "أدخل رقم الهاتف أو البريد الإلكتروني.",

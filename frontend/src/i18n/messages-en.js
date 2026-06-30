@@ -620,6 +620,7 @@ mktMenu: {
   restaurantKicker: "Order online",
   share: "Share",
   shareRestaurant: "Share this restaurant",
+  shareDish: "Share dish",
   linkCopied: "Link copied!",
   menuEmpty: "{catalog} coming soon",
   menuEmptyBody: "No items added yet.",

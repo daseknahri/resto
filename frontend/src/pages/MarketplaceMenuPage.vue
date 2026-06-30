@@ -379,6 +379,14 @@
                       <span class="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">-{{ flashSalePct }}%</span>
                     </span>
                     <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                    <!-- Share dish icon -->
+                    <button
+                      class="ui-press ms-auto me-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/50"
+                      :aria-label="`${t('mktMenu.shareDish')} ${dish.name}`"
+                      @click.stop="shareDish(dish)"
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/><path d="M5.5 8.9l5 2.7M10.5 4.1l-5 2.7"/></svg>
+                    </button>
                     <!-- Inline qty stepper once in cart, plain add button otherwise -->
                     <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
                       <button
@@ -535,6 +543,14 @@
                         <span class="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">-{{ flashSalePct }}%</span>
                       </span>
                       <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                      <!-- Share dish icon -->
+                      <button
+                        class="ui-press ms-auto me-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/50"
+                        :aria-label="`${t('mktMenu.shareDish')} ${dish.name}`"
+                        @click.stop="shareDish(dish)"
+                      >
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/><path d="M5.5 8.9l5 2.7M10.5 4.1l-5 2.7"/></svg>
+                      </button>
                       <!-- Inline qty stepper once in cart, plain add button otherwise -->
                       <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
                         <button
@@ -1326,6 +1342,18 @@ const shareRestaurant = async () => {
       _menuLinkCopyTimer = setTimeout(() => { menuLinkCopied.value = false; }, 1800);
     }
   } catch { /* user cancelled share or clipboard denied */ }
+};
+
+const shareDish = async (dish) => {
+  const url = `${window.location.origin}${window.location.pathname}#dish-${dish.slug}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: dish.name, text: dish.description || dish.name, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      toastStore.show(t('mktMenu.linkCopied'), 'success', 1600);
+    }
+  } catch { /* user cancelled or clipboard denied */ }
 };
 
 const placing = ref(false);

@@ -619,6 +619,7 @@ mktMenu: {
   restaurantKicker: "Commander en ligne",
   share: "Partager",
   shareRestaurant: "Partager ce restaurant",
+  shareDish: "Partager le plat",
   linkCopied: "Lien copie !",
   menuEmpty: "{catalog} bientot disponible",
   menuEmptyBody: "Aucun article disponible pour le moment.",
