@@ -514,11 +514,13 @@
               </span>
               <!-- Age warning badge -->
               <span
-                v-if="orderAgeMin(o) >= 5 && ['pending', 'confirmed'].includes(o.status)"
+                v-if="orderAgeMin(o) >= 1 && ['pending', 'confirmed'].includes(o.status)"
                 class="rounded-full px-2 py-0.5 text-[10px] font-bold"
                 :class="orderAgeMin(o) >= 10
                   ? 'bg-red-500/25 text-red-300'
-                  : 'bg-amber-500/25 text-amber-300'"
+                  : orderAgeMin(o) >= 5
+                    ? 'bg-amber-500/25 text-amber-300'
+                    : 'bg-slate-700/60 text-slate-300'"
               >
                 <span aria-hidden="true">⏱</span> {{ orderAgeMin(o) }}m
               </span>
@@ -1863,7 +1865,12 @@ const orderWhatsappUrl = (phone) => {
 };
 
 // ── Order age ─────────────────────────────────────────────────────────────────
-const orderAgeMin = (o) => Math.floor((Date.now() - new Date(o.created_at)) / 60000);
+// tickNow updates every 30 s so age badges stay live between order-store refreshes.
+const tickNow = ref(Date.now());
+let _ageTick = null;
+onMounted(() => { _ageTick = setInterval(() => { tickNow.value = Date.now(); }, 30000); });
+onUnmounted(() => clearInterval(_ageTick));
+const orderAgeMin = (o) => Math.floor((tickNow.value - new Date(o.created_at)) / 60000);
 
 const orderCardClass = (o) => {
   if (["pending", "confirmed"].includes(o.status)) {
