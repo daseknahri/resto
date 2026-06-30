@@ -304,6 +304,17 @@
                   class="shrink-0 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] font-semibold text-violet-300 transition-colors hover:border-violet-400 disabled:opacity-50"
                   @click="markTableStatus(expandedFloorTileData, 'reserved')"
                 >{{ t('waiterPage.markReserved') }}</button>
+                <a
+                  v-if="expandedFloorTileData.orders[0]?.table_slug"
+                  :href="`/t/${encodeURIComponent(expandedFloorTileData.orders[0].table_slug)}`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-600/40 bg-slate-800/60 px-2 py-1 text-[10px] font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none"
+                  :aria-label="t('waiterPage.openMenuLink')"
+                >
+                  <svg viewBox="0 0 14 14" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8"/><path d="M8 1h5m0 0v5m0-5L6 8"/></svg>
+                  {{ t('waiterPage.openMenuLink') }}
+                </a>
                 <span v-if="expandedFloorTileData.orders.length > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
                   {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(expandedFloorTileData.totalOutstanding, expandedFloorTileData.orders[0]?.currency) }}
                 </span>
@@ -702,6 +713,18 @@
               <span class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">
                 {{ t('waiterPage.tableTotal') }}: {{ fmtOrderPrice(group.totalOutstanding, group.orders[0]?.currency) }}
               </span>
+              <!-- Table menu link — opens customer-facing menu for this table in a new tab -->
+              <a
+                v-if="group.orders[0]?.table_slug"
+                :href="`/t/${encodeURIComponent(group.orders[0].table_slug)}`"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-600/40 bg-slate-800/60 px-2 py-1 text-[10px] font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none"
+                :aria-label="t('waiterPage.openMenuLink')"
+              >
+                <svg viewBox="0 0 14 14" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8"/><path d="M8 1h5m0 0v5m0-5L6 8"/></svg>
+                {{ t('waiterPage.openMenuLink') }}
+              </a>
               <!-- New order for this table (shown on the group header for quick re-ordering) -->
               <button
                 v-if="canManageOrders"

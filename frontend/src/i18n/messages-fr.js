@@ -2220,6 +2220,7 @@ waiterPage: {
   listViewToggle: "Vue liste",
   floorEmpty: "Aucune table trouvee. Ajoutez des tables depuis le tableau de bord proprietaire.",
   floorNewOrder: "Nouvelle commande",
+  openMenuLink: "Ouvrir le menu",
   floorNoOrders: "Pas de commandes ouvertes",
   floorAllSections: "Toutes les sections",
   floorSectionFilter: "Section",

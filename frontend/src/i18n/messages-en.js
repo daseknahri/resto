@@ -2226,6 +2226,7 @@ waiterPage: {
   listViewToggle: "List view",
   floorEmpty: "No tables found. Add tables from the owner dashboard.",
   floorNewOrder: "New order",
+  openMenuLink: "Open menu",
   floorNoOrders: "No open orders",
   floorAllSections: "All sections",
   floorSectionFilter: "Section",
