@@ -60,6 +60,21 @@
       </div>
 
       <template v-else-if="order">
+        <!-- Poll-failure warning — shown after 2+ consecutive background refresh failures -->
+        <div
+          v-if="pollFailures > 1"
+          role="alert"
+          class="flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-amber-400"><path fill-rule="evenodd" d="M8.485 2.495c-.673-1.167-2.357-1.167-3.03 0L1.166 8.741C.473 9.938 1.324 11.5 2.712 11.5h10.576c1.388 0 2.239-1.562 1.546-2.759L8.485 2.495ZM8 5a.75.75 0 0 1 .75.75V8a.75.75 0 1 1-1.5 0V5.75A.75.75 0 0 1 8 5Zm0 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
+          <p class="flex-1 text-xs text-amber-300">{{ t('orderStatus.pollFailed') }}</p>
+          <button
+            type="button"
+            class="shrink-0 text-xs font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 focus-visible:outline-none"
+            @click="fetchStatus"
+          >{{ t('common.retry') }}</button>
+        </div>
+
         <!-- Just-placed celebration banner — auto-dismisses after 5 s -->
         <Transition name="ui-fade">
           <div
@@ -441,6 +456,7 @@ const orderNumber = route.params.orderNumber;
 const loading = ref(true);
 const fetchError = ref(false);
 const order = ref(null);
+const pollFailures = ref(0);
 // Only announce when status genuinely changes — not on every poll cycle that
 // re-assigns the same order object (which would re-trigger screen readers).
 const liveStatus = ref('');
@@ -577,6 +593,7 @@ const fetchStatus = async () => {
       params: { restaurant: slug },
     });
     order.value = res.data;
+    pollFailures.value = 0;
     // Stop polling when terminal
     if (TERMINAL_STATUSES.has(res.data.status)) {
       clearInterval(_pollTimer);
@@ -584,6 +601,7 @@ const fetchStatus = async () => {
     }
   } catch {
     fetchError.value = true;
+    pollFailures.value += 1;
   } finally {
     loading.value = false;
   }

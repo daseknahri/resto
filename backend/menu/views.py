@@ -7525,6 +7525,22 @@ class OwnerOrderStatusUpdateView(APIView):
             except Exception:
                 pass
 
+        # Delivery milestone pushes: assigned / out_for_delivery / delivered / failed.
+        # The "ready" push above only covers pickup; these cover the delivery journey.
+        _DELIVERY_MILESTONE_MAP = {
+            Order.Status.ASSIGNED: "assigned",
+            Order.Status.OUT_FOR_DELIVERY: "out_for_delivery",
+            Order.Status.DELIVERED: "delivered",
+        }
+        if tenant and new_status in _DELIVERY_MILESTONE_MAP:
+            try:
+                from accounts.push import notify_customer_order_milestone_sync
+                notify_customer_order_milestone_sync(
+                    order.order_number, tenant.id, _DELIVERY_MILESTONE_MAP[new_status]
+                )
+            except Exception:
+                pass
+
         # Warn when cancelling an order that had cash payments collected — staff
         # must return the money manually; the system cannot do this automatically.
         cash_collected = None

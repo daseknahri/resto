@@ -3468,6 +3468,7 @@ ownerHome: {
   recentOrdersList: "Commandes recentes",
   noOrdersYet: "Aucune commande pour l'instant.",
   noOrdersYetBody: "Les commandes apparaitront ici quand les clients commenceront a commander.",
+  noOrdersShareHint: "Partagez le lien de votre menu",
   analyticsKicker: "Apercu des performances",
   periodSelectorLabel: "Periode d analyse",
   analyticsTitle: "Analytics menu sur 30 jours",

@@ -3499,6 +3499,7 @@ ownerHome: {
   recentOrdersList: "Recent orders",
   noOrdersYet: "No orders yet.",
   noOrdersYetBody: "Orders will appear here once customers start ordering.",
+  noOrdersShareHint: "Share your menu link",
   analyticsKicker: "Performance insights",
   periodSelectorLabel: "Analytics period",
   analyticsTitle: "{days}-day analytics",

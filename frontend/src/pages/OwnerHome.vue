@@ -546,9 +546,16 @@
           </div>
         </RouterLink>
       </div>
-      <div v-else-if="!order.ordersLoading" class="ui-empty-state text-center">
+      <div v-else-if="!order.ordersLoading" class="ui-empty-state text-center space-y-2.5">
         <p class="text-sm font-semibold text-slate-100">{{ t("ownerHome.noOrdersYet") }}</p>
-        <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+        <p class="text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+        <button
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:text-slate-100"
+          @click="copyMenuUrl"
+        >
+          <AppIcon name="link" class="h-3 w-3 shrink-0" aria-hidden="true" />
+          {{ copied ? t("ownerHome.menuUrlCopied") : t("ownerHome.noOrdersShareHint") }}
+        </button>
       </div>
     </article>
 

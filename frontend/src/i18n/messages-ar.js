@@ -588,6 +588,7 @@ const arabicMessages = {
     "recentOrdersList": "الطلبات الأخيرة",
     "noOrdersYet": "لا توجد طلبات بعد.",
     "noOrdersYetBody": "ستظهر الطلبات هنا عند بدء العملاء بالطلب.",
+    "noOrdersShareHint": "شارك رابط قائمتك",
     "analyticsKicker": "رؤى الأداء",
     "periodSelectorLabel": "فترة التحليلات",
     "analyticsTitle": "تحليلات {days} يوم",
