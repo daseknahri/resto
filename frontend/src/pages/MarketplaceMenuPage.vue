@@ -628,6 +628,15 @@
             </div>
           </div>
 
+          <!-- Unavailable items warning banner -->
+          <div
+            v-if="unavailableSlugs.size > 0"
+            class="rounded-xl border border-red-500/30 bg-red-900/15 px-3 py-2.5 text-[11px] font-semibold text-red-300"
+            role="alert"
+          >
+            {{ t('mktMenu.cartHasUnavailableItems') }}
+          </div>
+
           <!-- Cart items -->
           <div class="space-y-2">
             <article
@@ -642,7 +651,8 @@
               />
               <!-- info -->
               <div class="flex-1 min-w-0 space-y-0.5">
-                <p class="truncate text-sm font-semibold leading-snug text-slate-100" :title="item.name">{{ item.name }}</p>
+                <p class="truncate text-sm font-semibold leading-snug" :class="unavailableSlugs.has(item.slug) ? 'text-slate-400 line-through' : 'text-slate-100'" :title="item.name">{{ item.name }}</p>
+                <p v-if="unavailableSlugs.has(item.slug)" class="text-[10px] font-semibold text-red-400">{{ t('mktMenu.cartItemUnavailable') }}</p>
                 <p v-if="item.options?.length" class="truncate text-[11px] text-slate-500 leading-snug">{{ item.options.map(o => o.name).join(', ') }}</p>
                 <p class="text-xs tabular-nums">
                   <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice((item.unitPrice ?? item.price) * item.qty) }}</span>
@@ -976,12 +986,12 @@
           <!-- Submit -->
           <button
             class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || (restaurant && !restaurant.is_open)"
+            :disabled="placing || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0"
             :aria-busy="placing"
             @click="placeOrder"
           >
             <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ placing ? t('mktMenu.placing') : (!restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder')) }}
+            {{ placing ? t('mktMenu.placing') : unavailableSlugs.size > 0 ? t('mktMenu.cartHasUnavailableShort') : !restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder') }}
           </button>
         </div>
       </div>
@@ -2132,6 +2142,18 @@ const _buildDishMap = () => {
   }
   return map;
 };
+
+// Reactive set of cart slugs whose live dish is currently marked unavailable.
+// Updates whenever the restaurant menu refreshes or the cart changes.
+const unavailableSlugs = computed(() => {
+  const map = _buildDishMap();
+  const slugs = new Set();
+  for (const item of cart.value) {
+    const live = map.get(item.slug);
+    if (live && live.is_available === false) slugs.add(item.slug);
+  }
+  return slugs;
+});
 
 // Pre-fill the cart from a re-order navigation (items_snapshot from CustomerOrderRef).
 // Called after fetchMenu so live prices are available. Silently drops items no longer
