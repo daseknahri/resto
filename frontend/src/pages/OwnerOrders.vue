@@ -598,11 +598,13 @@
               <span
                 v-if="orderAgeMin(o) >= 1 && ['pending', 'confirmed'].includes(o.status)"
                 class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                :class="orderAgeMin(o) >= 10
-                  ? 'bg-red-500/25 text-red-300'
-                  : orderAgeMin(o) >= 5
-                    ? 'bg-amber-500/25 text-amber-300'
-                    : 'bg-slate-700/60 text-slate-300'"
+                :class="orderAgeMin(o) >= 20
+                  ? ['bg-red-500/25 text-red-300', 'animate-pulse']
+                  : orderAgeMin(o) >= 10
+                    ? 'bg-red-500/25 text-red-300'
+                    : orderAgeMin(o) >= 5
+                      ? 'bg-amber-500/25 text-amber-300'
+                      : 'bg-slate-700/60 text-slate-300'"
               >
                 <span aria-hidden="true">⏱</span> {{ orderAgeMin(o) }}m
               </span>
@@ -610,11 +612,13 @@
               <span
                 v-if="o.status === 'preparing' && orderAgeMin(o) >= 1"
                 class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                :class="orderAgeMin(o) >= 25
-                  ? 'bg-red-500/25 text-red-300'
-                  : orderAgeMin(o) >= 15
-                    ? 'bg-amber-500/25 text-amber-300'
-                    : 'bg-orange-500/20 text-orange-300'"
+                :class="orderAgeMin(o) >= 35
+                  ? ['bg-red-500/25 text-red-300', 'animate-pulse']
+                  : orderAgeMin(o) >= 25
+                    ? 'bg-red-500/25 text-red-300'
+                    : orderAgeMin(o) >= 15
+                      ? 'bg-amber-500/25 text-amber-300'
+                      : 'bg-orange-500/20 text-orange-300'"
                 :title="t('ownerOrders.preparingTimerTitle')"
               >
                 🍳 {{ orderAgeMin(o) }}m
