@@ -791,6 +791,8 @@ export const messages = {
       rateSubmit: "Submit rating",
       rateSubmitting: "Submitting…",
       rateThankYou: "Thanks for your feedback!",
+      etaReady: "Ready in ~{min} min",
+      etaAnyMoment: "Ready any moment now",
     },
     contactPage: {
       kicker: "Support",
@@ -6396,6 +6398,8 @@ export const messages = {
       rateSubmit: "Soumettre l'avis",
       rateSubmitting: "Envoi…",
       rateThankYou: "Merci pour votre retour !",
+      etaReady: "Pret dans ~{min} min",
+      etaAnyMoment: "Pret d'un moment a l'autre",
     },
     contactPage: {
       kicker: "Support",

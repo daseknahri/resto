@@ -277,6 +277,27 @@
           </div>
         </div>
 
+        <!-- ETA countdown pill -->
+        <Transition name="ui-fade">
+          <div
+            v-if="order?.estimated_ready_minutes && ['confirmed', 'preparing'].includes(order.status)"
+            class="ui-panel ui-reveal flex items-center gap-3 border-emerald-500/30 bg-emerald-500/5 px-4 py-3"
+            :style="{ '--ui-delay': '98ms' }"
+            role="status"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd"/></svg>
+            <p class="text-sm font-semibold text-emerald-200">
+              <template v-if="countdownSeconds !== null && countdownSeconds > 0">
+                {{ t('mktOrderStatus.etaReady', { min: Math.ceil(countdownSeconds / 60) }) }}
+                <span class="ms-1.5 font-mono text-xs font-normal tabular-nums text-emerald-300/70">{{ Math.floor(countdownSeconds / 60) }}:{{ String(countdownSeconds % 60).padStart(2, '0') }}</span>
+              </template>
+              <template v-else>
+                {{ t('mktOrderStatus.etaAnyMoment') }}
+              </template>
+            </p>
+          </div>
+        </Transition>
+
         <!-- Driver tracking panel (shared component) -->
         <DeliveryTracker :delivery="delivery" />
 
@@ -467,6 +488,24 @@ watch(() => order.value?.status, (newStatus) => {
 // ── Just-placed celebration banner ────────────────────────────────────────────
 const showJustPlacedBanner = ref(false);
 let _justPlacedTimer = null;
+
+// ── ETA countdown (estimated_ready_minutes from backend) ─────────────────────
+const countdownSeconds = ref(null);
+let _countdownTimer = null;
+const _updateCountdown = () => {
+  const o = order.value;
+  if (!o?.estimated_ready_minutes || !o?.created_at || !['confirmed', 'preparing'].includes(o.status)) {
+    countdownSeconds.value = null;
+    return;
+  }
+  const readyAt = new Date(o.created_at).getTime() + o.estimated_ready_minutes * 60_000;
+  countdownSeconds.value = Math.floor((readyAt - Date.now()) / 1000);
+};
+watch(() => [order.value?.estimated_ready_minutes, order.value?.created_at, order.value?.status], () => {
+  _updateCountdown();
+  clearInterval(_countdownTimer);
+  if (countdownSeconds.value !== null) _countdownTimer = setInterval(_updateCountdown, 1000);
+});
 
 // ── Delivery-code copy ─────────────────────────────────────────────────────────
 const codeCopied = ref(false);
@@ -660,6 +699,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (_justPlacedTimer) clearTimeout(_justPlacedTimer);
   clearInterval(_pollTimer);
+  clearInterval(_countdownTimer);
   document.removeEventListener('visibilitychange', onMktStatusVisible);
 });
 </script>

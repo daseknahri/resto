@@ -2713,6 +2713,8 @@ const arabicMessages = {
     "cancelledOk": "تم إلغاء الطلب — وتم استرداد أي دفع.",
     "cancelTooLate": "لم يعد بالإمكان إلغاء هذا الطلب — يرجى التواصل مع الجهة.",
     "cancelFailed": "تعذّر إلغاء الطلب. حاول مرة أخرى.",
+    "etaReady": "جاهز خلال ~{min} د",
+    "etaAnyMoment": "جاهز في أي لحظة",
     "walletPaidOk": "تم الدفع من محفظتك. شكرًا!",
     "walletInsufficient": "رصيد المحفظة غير كافٍ لهذه الفاتورة.",
     "walletPayError": "تعذر إتمام الدفع. حاول مرة أخرى.",

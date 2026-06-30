@@ -787,6 +787,8 @@ mktOrderStatus: {
   rateSubmit: "Soumettre l'avis",
   rateSubmitting: "Envoi…",
   rateThankYou: "Merci pour votre retour !",
+  etaReady: "Pret dans ~{min} min",
+  etaAnyMoment: "Pret d'un moment a l'autre",
 },
 contactPage: {
   kicker: "Support",
