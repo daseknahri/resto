@@ -623,6 +623,7 @@ mktMenu: {
   share: "Share",
   shareRestaurant: "Share this restaurant",
   shareDish: "Share dish",
+  recentlyViewed: "Recently viewed",
   linkCopied: "Link copied!",
   menuEmpty: "{catalog} coming soon",
   menuEmptyBody: "No items added yet.",

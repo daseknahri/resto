@@ -632,6 +632,14 @@
                 {{ t('ownerOrders.hasNote') }}
               </span>
             </div>
+            <!-- Customer name (delivery/pickup only — dine-in already shows table info) -->
+            <p
+              v-if="o.customer_name && o.fulfillment_type !== 'table'"
+              class="flex items-center gap-1.5 text-xs text-slate-400"
+            >
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="h-3 w-3 shrink-0 text-slate-500" aria-hidden="true"><circle cx="6" cy="4" r="2.5"/><path d="M1.5 11c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5"/></svg>
+              <span class="font-medium text-slate-200">{{ o.customer_name }}</span>
+            </p>
             <!-- Floor section + responsible waiter (table orders) -->
             <p v-if="o.section_name || (o.responsible_waiters && o.responsible_waiters.length)" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
               <span v-if="o.section_name" class="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5 text-[10px] font-medium text-slate-300">{{ o.section_name }}</span>

@@ -468,6 +468,31 @@
             >{{ t('mktMenu.searchClear') }}</button>
           </div>
 
+          <!-- Recently viewed horizontal rail -->
+          <div v-if="recentlyViewed.length" class="space-y-2">
+            <p class="ui-kicker">{{ t('mktMenu.recentlyViewed') }}</p>
+            <div class="flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                v-for="rd in recentlyViewed"
+                :key="rd.slug"
+                type="button"
+                class="ui-press flex shrink-0 flex-col items-start gap-1.5 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-2.5 text-start transition hover:bg-slate-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                style="min-width: 110px; max-width: 140px"
+                @click="openOptionPanel(rd)"
+              >
+                <div
+                  v-if="rd.image_url"
+                  class="h-12 w-full rounded-xl bg-cover bg-center"
+                  :style="{ backgroundImage: `url(${rd.image_url})` }"
+                  aria-hidden="true"
+                />
+                <div v-else class="flex h-12 w-full items-center justify-center rounded-xl bg-slate-700/50 text-xl" aria-hidden="true">🍽</div>
+                <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">{{ rd.name }}</p>
+                <p class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(rd.effective_price || rd.price) }}</p>
+              </button>
+            </div>
+          </div>
+
           <div
             v-for="sc in filteredSuperCategories"
             :key="sc.id"
@@ -1584,6 +1609,17 @@ const tagBadgeClass = (tag) => TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate
 
 // ── Allergen "Free from" filter ───────────────────────────────────────────────
 const ALLERGEN_KEY = `mkt-allergens-${slug}`;
+const RECENTLY_VIEWED_KEY = `mkt-recent-${slug}`;
+const RECENTLY_VIEWED_MAX = 6;
+const recentlyViewed = ref((() => {
+  try { return JSON.parse(localStorage.getItem(RECENTLY_VIEWED_KEY) || '[]'); } catch { return []; }
+})());
+const trackRecentlyViewed = (dish) => {
+  const list = recentlyViewed.value.filter((d) => d.slug !== dish.slug);
+  list.unshift({ slug: dish.slug, name: dish.name, price: dish.price, effective_price: dish.effective_price, image_url: dish.image_url || '', is_available: dish.is_available });
+  recentlyViewed.value = list.slice(0, RECENTLY_VIEWED_MAX);
+  try { localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(recentlyViewed.value)); } catch { /* quota */ }
+};
 const selectedAllergenFilter = ref((() => {
   try { return JSON.parse(localStorage.getItem(ALLERGEN_KEY) || '[]'); } catch { return []; }
 })());
@@ -1646,6 +1682,7 @@ const panelSelections = ref({});      // groupId → [selectedOptionId, ...]
 const panelShowErrors = ref(false);
 
 const openOptionPanel = (dish) => {
+  trackRecentlyViewed(dish);
   const sel = {};
   for (const grp of dish.option_groups || []) sel[grp.id] = [];
   panelSelections.value = sel;

@@ -622,6 +622,7 @@ mktMenu: {
   share: "Partager",
   shareRestaurant: "Partager ce restaurant",
   shareDish: "Partager le plat",
+  recentlyViewed: "Vus récemment",
   linkCopied: "Lien copie !",
   menuEmpty: "{catalog} bientot disponible",
   menuEmptyBody: "Aucun article disponible pour le moment.",
