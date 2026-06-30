@@ -469,6 +469,20 @@
     </template>
 
     <!-- ── ACTIVE TAB: order list ───────────────────────────────────────── -->
+    <!-- Bulk mark-all-ready — shown only when filtering by 'preparing' with ≥2 visible orders -->
+    <div
+      v-if="activeTab === 'active' && activeStatus === 'preparing' && filteredOrders.length >= 2"
+      class="flex justify-end"
+    >
+      <button
+        class="ui-btn-primary ui-press px-3 py-1.5 text-xs"
+        :disabled="order.updatingOrderId != null"
+        @click="bulkMarkPreparingReady"
+      >
+        {{ t('ownerOrders.markAllReady', { count: filteredOrders.length }) }}
+      </button>
+    </div>
+
     <!-- Order list (shown when active tab and there are filtered orders) -->
     <div v-if="activeTab === 'active' && filteredOrders.length" class="space-y-2.5">
       <article
@@ -1921,6 +1935,22 @@ const orderCardClass = (o) => {
 };
 
 // ── Status actions ────────────────────────────────────────────────────────────
+const bulkMarkPreparingReady = async () => {
+  const preparing = filteredOrders.value.filter((o) => o.status === 'preparing');
+  if (preparing.length < 2) return;
+  const ok = await confirm({
+    title: t('ownerOrders.bulkReadyConfirmTitle', { count: preparing.length }),
+    body: t('ownerOrders.bulkReadyConfirmBody'),
+    confirmLabel: t('ownerOrders.markReady'),
+  });
+  if (!ok) return;
+  const results = await Promise.allSettled(
+    preparing.map((o) => order.updateOrderStatus(o.id, { status: 'ready' })),
+  );
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+  if (succeeded > 0) toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
+};
+
 const updateStatus = async (o, newStatus) => {
   if (newStatus === "cancelled") {
     const ok = await confirm({
