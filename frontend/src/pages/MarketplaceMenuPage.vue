@@ -184,7 +184,8 @@
           <p class="text-[12px] font-semibold leading-tight text-violet-200">
             {{ loyaltyPoints > 0 ? t('mktMenu.loyaltyTeaserPts', { points: loyaltyPoints }) : t('mktMenu.loyaltyTeaserEarn') }}
           </p>
-          <p v-if="loyaltyAvailable" class="text-[10px] leading-tight text-violet-400/80">{{ t('mktMenu.loyaltyTeaserRedeem') }}</p>
+          <p v-if="loyaltyEarnProjection > 0" class="text-[10px] leading-tight text-violet-400/80">{{ t('mktMenu.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
+          <p v-else-if="loyaltyAvailable" class="text-[10px] leading-tight text-violet-400/80">{{ t('mktMenu.loyaltyTeaserRedeem') }}</p>
         </div>
         <span
           v-if="loyaltyPoints > 0"
