@@ -3058,7 +3058,13 @@ const mktOrderStatus = (s) => t(MKT_ORDER_STATUS[s] || 'orderStatus.statusPendin
 const cancellingOrderNumber = ref(null);
 const cancelOrder = async (order) => {
   if (cancellingOrderNumber.value) return;
-  if (!window.confirm(t('customerAccount.cancelConfirm'))) return;
+  const ok = await confirm({
+    title: t('customerAccount.cancelConfirm'),
+    message: t('customerAccount.cancelConfirmBody'),
+    confirmLabel: t('customerAccount.cancelConfirmYes'),
+    danger: true,
+  });
+  if (!ok) return;
   cancellingOrderNumber.value = order.order_number;
   try {
     await api.post(`/order-status/${order.order_number}/cancel/`);
@@ -3080,7 +3086,13 @@ const cancelOrder = async (order) => {
 
 const cancelMarketplaceOrder = async (order) => {
   if (cancellingOrderNumber.value) return;
-  if (!window.confirm(t('customerAccount.cancelConfirm'))) return;
+  const ok = await confirm({
+    title: t('customerAccount.cancelConfirm'),
+    message: t('customerAccount.cancelConfirmBody'),
+    confirmLabel: t('customerAccount.cancelConfirmYes'),
+    danger: true,
+  });
+  if (!ok) return;
   cancellingOrderNumber.value = order.order_number;
   try {
     await api.post(`/marketplace/order/${order.order_number}/cancel/`, { restaurant: order.restaurant_slug });
