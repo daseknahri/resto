@@ -1498,6 +1498,34 @@ const online = ref(false);
 const activeJob = ref(null);
 const pendingJobs = ref([]);
 
+// ── Job-offer audio alert ────────────────────────────────────────────────────
+const DRIVER_SOUND_KEY = typeof window === 'undefined' ? 'driver:sound' : `driver:sound:${window.location.hostname}`;
+const driverSoundEnabled = () => { try { return localStorage.getItem(DRIVER_SOUND_KEY) !== 'off'; } catch { return true; } };
+const _driverKnownJobIds = new Set();
+const _playJobAlert = () => {
+  if (!driverSoundEnabled()) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.15, 0.30].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime([600, 900, 600][i], ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+      osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.2);
+    });
+  } catch { /* blocked */ }
+};
+const _checkNewJobs = (jobs) => {
+  if (!_driverKnownJobIds.size) { jobs.forEach(j => _driverKnownJobIds.add(j.id)); return; }
+  const hasNew = jobs.some(j => !_driverKnownJobIds.has(j.id));
+  jobs.forEach(j => _driverKnownJobIds.add(j.id));
+  if (hasNew) _playJobAlert();
+};
+watch(pendingJobs, _checkNewJobs, { deep: false });
+
 // Auto-expand active-job detail the first time a job arrives so the driver can
 // orient themselves, then collapse automatically when it clears.
 watch(

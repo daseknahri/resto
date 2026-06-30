@@ -1941,6 +1941,34 @@ const session = useSessionStore();
 const canManageOrders = computed(() => session.canManageOrders);
 const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
+// ── New-order audio alert ────────────────────────────────────────────────────
+const WAITER_SOUND_KEY = typeof window === 'undefined' ? 'waiter:sound' : `waiter:sound:${window.location.hostname}`;
+const waiterSoundEnabled = () => { try { return localStorage.getItem(WAITER_SOUND_KEY) !== 'off'; } catch { return true; } };
+const _waiterKnownIds = new Set();
+const _playWaiterAlert = () => {
+  if (!waiterSoundEnabled()) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.2].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(i === 0 ? 520 : 720, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.22);
+      osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.22);
+    });
+  } catch { /* blocked */ }
+};
+watch(() => waiter.orders, (orders) => {
+  if (!Array.isArray(orders)) return;
+  if (!_waiterKnownIds.size) { orders.forEach(o => _waiterKnownIds.add(o.id)); return; }
+  const hasNew = orders.some(o => o.status === 'pending' && !_waiterKnownIds.has(o.id));
+  orders.forEach(o => _waiterKnownIds.add(o.id));
+  if (hasNew) _playWaiterAlert();
+}, { deep: false });
+
 const showNewOrder = ref(false);
 // When opening new-order from a floor tile, pre-seed these so the waiter
 // doesn't have to re-pick the table. Both reset to '' on close.
