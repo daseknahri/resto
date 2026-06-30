@@ -3467,6 +3467,7 @@ ownerHome: {
   pushTo100: "Visez 100% avant les campagnes payantes et le deploiement QR.",
   liveOrders: "Commandes en direct",
   viewAllOrders: "Voir toutes les commandes",
+  newOrderArrived: "Nouvelle commande reçue !",
   inProgress: "En cours",
   recentOrdersList: "Commandes recentes",
   noOrdersYet: "Aucune commande pour l'instant.",

@@ -3499,6 +3499,7 @@ ownerHome: {
   pushTo100: "Push to 100% before paid campaigns and QR rollout.",
   liveOrders: "Live Orders",
   viewAllOrders: "View all orders",
+  newOrderArrived: "New order received!",
   inProgress: "In progress",
   recentOrdersList: "Recent orders",
   noOrdersYet: "No orders yet.",

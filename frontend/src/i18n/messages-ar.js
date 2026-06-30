@@ -584,6 +584,7 @@ const arabicMessages = {
     "pushTo100": "ارفع الجاهزية إلى 100% قبل الحملات المدفوعة ونشر QR.",
     "liveOrders": "الطلبات المباشرة",
     "viewAllOrders": "عرض جميع الطلبات",
+    "newOrderArrived": "تم استلام طلب جديد!",
     "inProgress": "قيد التنفيذ",
     "recentOrdersList": "الطلبات الأخيرة",
     "noOrdersYet": "لا توجد طلبات بعد.",

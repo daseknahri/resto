@@ -451,6 +451,23 @@
         </RouterLink>
       </div>
 
+      <!-- New-order flash banner -->
+      <Transition name="ui-fade">
+        <div
+          v-if="newOrderFlash"
+          class="flex items-center gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/12 px-4 py-2.5"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span class="relative inline-flex shrink-0" aria-hidden="true">
+            <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-70" />
+            <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+          </span>
+          <p class="flex-1 text-sm font-semibold text-amber-200">{{ t('ownerHome.newOrderArrived') }}</p>
+          <RouterLink :to="{ name: 'owner-orders' }" class="text-xs font-semibold text-amber-300 underline hover:no-underline">{{ t('ownerHome.viewAllOrders') }}</RouterLink>
+        </div>
+      </Transition>
+
       <!-- Status summary chips -->
       <div class="flex flex-wrap gap-2" aria-live="polite" aria-atomic="true">
         <div
@@ -580,7 +597,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import OwnerDashboardAlerts from "../components/OwnerDashboardAlerts.vue";
@@ -812,6 +829,25 @@ const yesterdayStats = computed(() => {
 });
 
 // ── Live orders ───────────────────────────────────────────────────────────────
+// New-order flash: track known IDs and show a brief banner when a new pending order arrives.
+const homeKnownIds = new Set();
+const newOrderFlash = ref(false);
+let newOrderFlashTimer = null;
+const watchHomeOrders = (orders) => {
+  if (!Array.isArray(orders) || !homeKnownIds.size) {
+    orders?.forEach((o) => homeKnownIds.add(o.id));
+    return;
+  }
+  const hasNew = orders.some((o) => o.status === "pending" && !homeKnownIds.has(o.id));
+  orders.forEach((o) => homeKnownIds.add(o.id));
+  if (hasNew) {
+    newOrderFlash.value = true;
+    if (newOrderFlashTimer) clearTimeout(newOrderFlashTimer);
+    newOrderFlashTimer = setTimeout(() => { newOrderFlash.value = false; }, 6000);
+  }
+};
+watch(() => order.orders, watchHomeOrders, { deep: false });
+
 const pendingOrders = computed(() => order.orders.filter((o) => o.status === "pending"));
 const oldestPendingMinutes = computed(() => {
   if (!pendingOrders.value.length) return null;
@@ -1091,6 +1127,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearInterval(pollTimer);
+  if (newOrderFlashTimer) clearTimeout(newOrderFlashTimer);
   if (copyResetTimer !== null) clearTimeout(copyResetTimer);
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onVisibilityChange);
