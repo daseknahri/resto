@@ -429,7 +429,11 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         # Order queryset
         order_qs = MagicMock()
         order_qs.filter.return_value = order_qs
-        order_qs.aggregate.return_value = {"tips": Decimal("0")}
+        # collected_qs.aggregate is called twice: tips first, then promo+loyalty.
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
 
         # WalletTransaction class
         wt_qs = MagicMock()
@@ -511,7 +515,11 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
 
         order_qs = MagicMock()
         order_qs.filter.return_value = order_qs
-        order_qs.aggregate.return_value = {"tips": Decimal("0")}
+        # collected_qs.aggregate is called twice: tips first, then promo+loyalty.
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
 
         wt_qs = MagicMock()
         wt_qs.filter.return_value = wt_qs
@@ -585,7 +593,11 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
 
         order_qs = MagicMock()
         order_qs.filter.return_value = order_qs
-        order_qs.aggregate.return_value = {"tips": Decimal("0")}
+        # collected_qs.aggregate is called twice: tips first, then promo+loyalty.
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
 
         def capture_filter(**kwargs):
             order_filter_kwargs_list.append(kwargs)
@@ -645,7 +657,11 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
 
         order_qs = MagicMock()
         order_qs.filter.return_value = order_qs
-        order_qs.aggregate.return_value = {"tips": Decimal("0")}
+        # collected_qs.aggregate is called twice: tips first, then promo+loyalty.
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
 
         oi_qs = MagicMock()
         oi_qs.__iter__ = lambda s: iter([])
@@ -955,7 +971,11 @@ class ZReportCollectedPredicateTests(SimpleTestCase):
 
         order_qs = MagicMock()
         order_qs.filter.return_value = order_qs
-        order_qs.aggregate.return_value = {"tips": Decimal("0")}
+        # collected_qs.aggregate is called twice: tips first, then promo+loyalty.
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
 
         def capture_filter(**kwargs):
             called_with.update(kwargs)
