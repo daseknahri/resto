@@ -60,12 +60,20 @@ export const useTenantStore = defineStore("tenant", {
     },
     /**
      * Check if a plan feature flag is enabled.
-     * TODO: restore per-flag gating once tier work is complete.
-     * For now always returns true so all owner features are accessible for testing.
+     * Reads the served `feature_flags` payload (top-level meta list of
+     * { key, enabled, config } rows) and returns the matching row's `enabled`.
+     * UI affordance only — the backend independently enforces entitlements.
+     * Safe defaults: when no feature_flags list is served (demo mode or older
+     * cached metas) we default to enabled so existing screens are never hidden;
+     * when the list is present but the key is absent, the flag is disabled.
      */
     hasFlag() {
-      // All feature flags are enabled by default; the key is intentionally ignored.
-      return () => true;
+      const flags = this.resolvedMeta?.feature_flags;
+      if (!Array.isArray(flags)) return () => true;
+      return (key) => {
+        const row = flags.find((f) => f && f.key === key);
+        return row ? row.enabled === true : false;
+      };
     },
     /** True when payment is overdue but still within the grace period window. */
     isInGracePeriod(state) {

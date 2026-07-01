@@ -65,7 +65,22 @@
         {{ t('deliveryTracker.call') }}
       </a>
     </section>
-    <p v-else class="ui-subtle text-xs">{{ t('deliveryTracker.searching') }}</p>
+    <template v-else>
+      <p class="ui-subtle flex items-center gap-1.5 text-xs" aria-live="polite" aria-atomic="true">
+        <span class="ui-live-dot bg-amber-400" aria-hidden="true"></span>
+        {{ t('deliveryTracker.searching') }}
+        <span v-if="searchElapsedText" class="text-slate-500 tabular-nums">· {{ searchElapsedText }}</span>
+      </p>
+      <!-- Gentle reassurance once the search runs long — no driver has declined, just still looking -->
+      <div
+        v-if="searchTakingLong"
+        class="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-2.5"
+        role="status"
+      >
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+        <p class="text-xs text-amber-200">{{ t('deliveryTracker.searchTakingLong') }}</p>
+      </div>
+    </template>
 
     <!-- Addresses -->
     <dl
@@ -253,6 +268,40 @@ const positionAgeText = computed(() => {
   return mins <= 0 ? t('deliveryTracker.updatedJustNow') : t('deliveryTracker.updatedAgo', { min: mins });
 });
 
+// ── "Still finding a driver" reassurance while searching ─────────────────────────
+// A self-driven clock (the parent poll may be slow) so the elapsed time keeps
+// ticking and a gentle banner appears once the search runs long. Presentational
+// only — dispatch keeps trying regardless.
+const isSearching = computed(() => props.delivery?.status === 'searching');
+const nowMs = ref(Date.now());
+const searchStartedMs = ref(null);
+let _searchTimer = null;
+
+watch(
+  isSearching,
+  (searching) => {
+    if (searching) {
+      if (searchStartedMs.value == null) searchStartedMs.value = Date.now();
+      nowMs.value = Date.now();
+      if (!_searchTimer) _searchTimer = setInterval(() => { nowMs.value = Date.now(); }, 15_000);
+    } else {
+      searchStartedMs.value = null;
+      if (_searchTimer) { clearInterval(_searchTimer); _searchTimer = null; }
+    }
+  },
+  { immediate: true },
+);
+
+const searchElapsedMin = computed(() => {
+  if (!isSearching.value || searchStartedMs.value == null) return 0;
+  return Math.max(0, Math.floor((nowMs.value - searchStartedMs.value) / 60000));
+});
+const searchElapsedText = computed(() =>
+  searchElapsedMin.value >= 1 ? t('deliveryTracker.searchElapsed', { min: searchElapsedMin.value }) : '',
+);
+// Escalate to a reassurance banner after a couple of minutes of searching.
+const searchTakingLong = computed(() => searchElapsedMin.value >= 2);
+
 // ── Rate your driver (after delivery) ───────────────────────────────────────────
 const ratingScore = ref(0);
 const ratingNote = ref('');
@@ -395,6 +444,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (_searchTimer) { clearInterval(_searchTimer); _searchTimer = null; }
   if (_map) {
     _map.remove();
     _map = null;

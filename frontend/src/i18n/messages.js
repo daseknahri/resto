@@ -726,6 +726,8 @@ export const messages = {
       driverUnnamed: "Your driver",
       online: "Online now",
       searching: "Finding a driver nearby…",
+      searchElapsed: "searching for {min} min",
+      searchTakingLong: "This is taking a little longer than usual. Hang tight — we're still finding you a driver.",
       from: "From",
       to: "To",
       call: "Call driver",
@@ -4292,6 +4294,7 @@ export const messages = {
       dragStart: "Picked up {name} — drag to a day column to reschedule",
       dropError: "Could not reschedule {name} — please try again",
       weekNav: "Week navigation",
+      moveHint: "press arrow keys to move to another day",
       status: {
         new: "New",
         contacted: "Contacted",
@@ -6435,6 +6438,8 @@ export const messages = {
       driverUnnamed: "Votre livreur",
       online: "En ligne",
       searching: "Recherche d'un livreur a proximite…",
+      searchElapsed: "recherche depuis {min} min",
+      searchTakingLong: "Cela prend un peu plus de temps que d'habitude. Patientez — nous cherchons toujours un livreur pour vous.",
       from: "De",
       to: "A",
       call: "Appeler le livreur",
@@ -9969,6 +9974,7 @@ export const messages = {
       dragStart: "{name} saisi — faites glisser vers une colonne pour replanifier",
       dropError: "Impossible de replanifier {name} — veuillez reessayer",
       weekNav: "Navigation par semaine",
+      moveHint: "utilisez les fleches pour deplacer vers un autre jour",
       status: {
         new: "Nouveau",
         contacted: "Contacte",

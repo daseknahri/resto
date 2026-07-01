@@ -723,6 +723,8 @@ deliveryTracker: {
   driverUnnamed: "Your driver",
   online: "Online now",
   searching: "Finding a driver nearby…",
+  searchElapsed: "searching for {min} min",
+  searchTakingLong: "This is taking a little longer than usual. Hang tight — we're still finding you a driver.",
   from: "From",
   to: "To",
   call: "Call driver",
@@ -4302,6 +4304,7 @@ reservationCalendar: {
   dragStart: "Picked up {name} — drag to a day column to reschedule",
   dropError: "Could not reschedule {name} — please try again",
   weekNav: "Week navigation",
+  moveHint: "press arrow keys to move to another day",
   status: {
     new: "New",
     contacted: "Contacted",

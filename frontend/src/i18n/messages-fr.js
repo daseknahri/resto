@@ -721,6 +721,8 @@ deliveryTracker: {
   driverUnnamed: "Votre livreur",
   online: "En ligne",
   searching: "Recherche d'un livreur a proximite…",
+  searchElapsed: "recherche depuis {min} min",
+  searchTakingLong: "Cela prend un peu plus de temps que d'habitude. Patientez — nous cherchons toujours un livreur pour vous.",
   from: "De",
   to: "A",
   call: "Appeler le livreur",
@@ -4258,6 +4260,7 @@ reservationCalendar: {
   dragStart: "{name} saisi — faites glisser vers une colonne pour replanifier",
   dropError: "Impossible de replanifier {name} — veuillez reessayer",
   weekNav: "Navigation par semaine",
+  moveHint: "utilisez les fleches pour deplacer vers un autre jour",
   status: {
     new: "Nouveau",
     contacted: "Contacte",

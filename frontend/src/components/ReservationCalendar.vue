@@ -76,17 +76,18 @@
             v-for="(res, resIndex) in reservationsByDay[day.iso] || []"
             :key="res.id"
           >
-            <!-- TODO: requires logic change — add keyboard reschedule path (WCAG 2.1 SC 2.1.1) -->
             <button
               type="button"
               class="w-full text-left ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
               :style="{ '--ui-delay': `${Math.min(resIndex, 5) * 20}ms` }"
               :class="statusChipClass(res.status)"
-              :aria-label="[res.name, res.booked_for ? timeLabel(res.booked_for) : '', res.party_size ? t('reservationCalendar.guests', { n: res.party_size }) : ''].filter(Boolean).join(', ')"
+              :aria-label="[res.name, res.booked_for ? timeLabel(res.booked_for) : '', res.party_size ? t('reservationCalendar.guests', { n: res.party_size }) : '', t('reservationCalendar.moveHint')].filter(Boolean).join(', ')"
               aria-roledescription="draggable"
+              aria-keyshortcuts="ArrowLeft ArrowRight"
               draggable="true"
               @dragstart="onDragStart(res)"
               @click="$emit('select', res)"
+              @keydown.left.right.up.down.prevent="onChipKeydown($event, res, day.iso)"
             >
               <p class="min-w-0 truncate font-semibold text-slate-100">{{ res.name }}</p>
               <p v-if="res.booked_for" class="tabular-nums text-slate-400">{{ timeLabel(res.booked_for) }}</p>
@@ -230,10 +231,8 @@ const onDragStart = (res) => {
   dropAnnouncement.value = t("reservationCalendar.dragStart", { name: res.name });
 };
 
-const onDrop = async (targetDayIso) => {
-  dragOverDay.value = null;
-  const res = dragging.value;
-  dragging.value = null;
+// Shared reschedule mutation used by both drag-drop and keyboard.
+const rescheduleTo = async (res, targetDayIso) => {
   if (!res) return;
 
   // Compute new booked_for: keep existing time if present, use noon otherwise
@@ -255,6 +254,25 @@ const onDrop = async (targetDayIso) => {
   } catch {
     dropAnnouncement.value = t("reservationCalendar.dropError", { name: res.name });
   }
+};
+
+const onDrop = async (targetDayIso) => {
+  dragOverDay.value = null;
+  const res = dragging.value;
+  dragging.value = null;
+  await rescheduleTo(res, targetDayIso);
+};
+
+// ── Keyboard reschedule (WCAG 2.1.1) ─────────────────────────────────────────────
+// Move the focused reservation one day earlier/later without a pointer drag.
+const onChipKeydown = async (event, res, currentDayIso) => {
+  const week = weekDays.value;
+  const idx = week.findIndex((d) => d.iso === currentDayIso);
+  if (idx === -1) return;
+  const delta = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
+  const target = week[idx + delta];
+  if (!target) return; // stay within the visible week; navigate weeks with Prev/Next
+  await rescheduleTo(res, target.iso);
 };
 
 // ── Status styling ─────────────────────────────────────────────────────────────
