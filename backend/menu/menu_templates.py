@@ -237,6 +237,121 @@ TEMPLATES = {
             },
         ],
     },
+    "patisserie_fine": {
+        "label": "Pâtisserie fine / French patisserie",
+        "business_type": "bakery",
+        "theme": {
+            "primary_color": "#4A2C2A",
+            "secondary_color": "#E9B7C4",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Signature Cakes",
+                "dishes": [
+                    {"name": "Opéra", "price": "38", "description": "Almond sponge, coffee buttercream, chocolate ganache."},
+                    {"name": "Fraisier", "price": "42", "description": "Génoise, crème mousseline, fresh strawberries."},
+                    {"name": "Paris-Brest", "price": "40", "description": "Choux pastry, praline cream, toasted almonds."},
+                    {"name": "Saint-Honoré", "price": "45", "description": "Puff pastry, caramel choux, Chantilly cream."},
+                ],
+            },
+            {
+                "name": "Tarts",
+                "dishes": [
+                    {"name": "Tarte au Citron Meringuée", "price": "35", "description": "Zesty lemon curd, torched meringue."},
+                    {"name": "Tarte aux Fraises", "price": "38", "description": "Crème pâtissière, glazed fresh strawberries."},
+                    {"name": "Tarte au Chocolat", "price": "36", "description": "Dark chocolate ganache, buttery sablé crust."},
+                ],
+            },
+            {
+                "name": "Petits Fours",
+                "dishes": [
+                    {"name": "Éclair au Café", "price": "22", "description": "Choux pastry, coffee cream, coffee fondant."},
+                    {"name": "Religieuse au Chocolat", "price": "24", "description": "Stacked choux, chocolate cream and glaze."},
+                    {"name": "Macarons (12)", "price": "110", "description": "Assorted premium flavours, gift box."},
+                    {"name": "Cannelé (4)", "price": "40", "description": "Caramelised crust, tender vanilla-rum centre."},
+                ],
+            },
+        ],
+    },
+    "viennoiserie": {
+        "label": "Viennoiserie / Morning bakery",
+        "business_type": "bakery",
+        "theme": {
+            "primary_color": "#7C4A21",
+            "secondary_color": "#F0CE9A",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Viennoiseries",
+                "dishes": [
+                    {"name": "Croissant au Beurre", "price": "8", "description": "Flaky all-butter croissant, baked fresh."},
+                    {"name": "Pain au Chocolat", "price": "10", "description": "Buttery pastry, two dark chocolate batons."},
+                    {"name": "Pain aux Raisins", "price": "12", "description": "Spiral pastry, crème pâtissière, plump raisins."},
+                    {"name": "Chausson aux Pommes", "price": "12", "description": "Puff pastry turnover, spiced apple compote."},
+                ],
+            },
+            {
+                "name": "Breakfast Breads",
+                "dishes": [
+                    {"name": "Brioche Tressée", "price": "25", "description": "Soft braided brioche, golden egg wash."},
+                    {"name": "Pain de Mie", "price": "20", "description": "Soft sandwich loaf, thin tender crust."},
+                    {"name": "Baguette Tradition", "price": "12", "description": "Crusty crust, open airy crumb."},
+                ],
+            },
+            {
+                "name": "Cookies & Muffins",
+                "dishes": [
+                    {"name": "Cookie Chocolat", "price": "12", "description": "Chewy centre, dark chocolate chunks."},
+                    {"name": "Muffin Myrtille", "price": "15", "description": "Moist muffin loaded with blueberries."},
+                    {"name": "Financier", "price": "10", "description": "Almond-brown-butter cake, moist and nutty."},
+                ],
+            },
+        ],
+    },
+    "bakery_traditional": {
+        "label": "Boulangerie traditionnelle / Moroccan bakery",
+        "business_type": "bakery",
+        "theme": {
+            "primary_color": "#6B4226",
+            "secondary_color": "#D9B382",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Moroccan Breads",
+                "dishes": [
+                    {"name": "Khobz (Pain Rond)", "price": "3", "description": "Round semolina bread, baked fresh daily."},
+                    {"name": "Batbout", "price": "5", "description": "Soft pan-cooked pocket bread."},
+                    {"name": "Harcha", "price": "6", "description": "Pan-fried semolina flatbread, buttery and crumbly."},
+                    {"name": "Msemen (2)", "price": "10", "description": "Layered square flatbread, crisp and flaky."},
+                ],
+            },
+            {
+                "name": "Savoury",
+                "dishes": [
+                    {"name": "Batbout Farci Kefta", "price": "18", "description": "Stuffed pocket bread, spiced minced beef."},
+                    {"name": "Msemen Farci", "price": "15", "description": "Flatbread stuffed with onion and herbs."},
+                    {"name": "Meloui", "price": "8", "description": "Coiled layered pancake, tender and rich."},
+                ],
+            },
+            {
+                "name": "Sweet Treats",
+                "dishes": [
+                    {"name": "Sfenj (3)", "price": "10", "description": "Moroccan doughnuts, light and airy."},
+                    {"name": "Ghriba aux Amandes", "price": "8", "description": "Crackled almond shortbread cookie."},
+                    {"name": "Baghrir", "price": "10", "description": "Thousand-hole pancake, honey and butter."},
+                ],
+            },
+        ],
+    },
     "bar": {
         "label": "Bar / Lounge",
         "business_type": "restaurant",
@@ -322,6 +437,124 @@ TEMPLATES = {
                     {"name": "Dish Soap", "price": "20", "description": "Lemon scent, 750ml."},
                     {"name": "Paper Towels (2)", "price": "18", "description": "Two-roll pack."},
                     {"name": "Trash Bags (30)", "price": "22", "description": "30 bags, 30L."},
+                ],
+            },
+        ],
+    },
+    "epicerie_fine": {
+        "label": "Épicerie fine / Gourmet deli",
+        "business_type": "grocery",
+        "theme": {
+            "primary_color": "#4E342E",
+            "secondary_color": "#C8A96A",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Cheese & Charcuterie",
+                "dishes": [
+                    {"name": "Aged Gouda (200g)", "price": "55", "description": "Matured, nutty and firm."},
+                    {"name": "Brie de Meaux (250g)", "price": "70", "description": "Soft, creamy, bloomy rind."},
+                    {"name": "Sliced Prosciutto (100g)", "price": "80", "description": "Dry-cured, thinly sliced."},
+                    {"name": "Green Olive Tapenade", "price": "35", "description": "Olives, capers, olive oil."},
+                ],
+            },
+            {
+                "name": "Oils & Condiments",
+                "dishes": [
+                    {"name": "Extra Virgin Olive Oil 500ml", "price": "75", "description": "First cold press, single origin."},
+                    {"name": "Argan Oil 250ml", "price": "90", "description": "Culinary Moroccan argan oil."},
+                    {"name": "Balsamic Vinegar 250ml", "price": "60", "description": "Aged, rich and syrupy."},
+                    {"name": "Wildflower Honey 500g", "price": "70", "description": "Raw, unfiltered, local."},
+                ],
+            },
+            {
+                "name": "Pantry Delicacies",
+                "dishes": [
+                    {"name": "Sun-Dried Tomatoes (200g)", "price": "40", "description": "In olive oil with herbs."},
+                    {"name": "Dark Chocolate 70% (100g)", "price": "35", "description": "Single-origin cocoa bar."},
+                    {"name": "Assorted Nuts (300g)", "price": "55", "description": "Roasted almonds, cashews, pistachios."},
+                ],
+            },
+        ],
+    },
+    "organic_market": {
+        "label": "Organic market / Bio store",
+        "business_type": "grocery",
+        "theme": {
+            "primary_color": "#33691E",
+            "secondary_color": "#C5E1A5",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Organic Produce",
+                "dishes": [
+                    {"name": "Organic Carrots (per kg)", "price": "18", "description": "Pesticide-free, freshly harvested."},
+                    {"name": "Organic Spinach (250g)", "price": "15", "description": "Tender leaves, triple washed."},
+                    {"name": "Organic Avocado (each)", "price": "12", "description": "Ripe and ready to eat."},
+                    {"name": "Organic Lemons (per kg)", "price": "20", "description": "Unwaxed, thin-skinned."},
+                ],
+            },
+            {
+                "name": "Grains & Superfoods",
+                "dishes": [
+                    {"name": "Organic Quinoa 500g", "price": "45", "description": "Protein-rich whole grain."},
+                    {"name": "Chia Seeds 250g", "price": "38", "description": "Rich in omega-3 and fibre."},
+                    {"name": "Rolled Oats 1kg", "price": "30", "description": "Whole-grain, no additives."},
+                    {"name": "Raw Almonds 500g", "price": "70", "description": "Unroasted, unsalted."},
+                ],
+            },
+            {
+                "name": "Plant-Based",
+                "dishes": [
+                    {"name": "Almond Milk 1L", "price": "28", "description": "Unsweetened, no additives."},
+                    {"name": "Tofu Nature 400g", "price": "25", "description": "Organic firm tofu."},
+                    {"name": "Coconut Yogurt 400g", "price": "35", "description": "Dairy-free, live cultures."},
+                ],
+            },
+        ],
+    },
+    "convenience_store": {
+        "label": "Convenience store / Hanout",
+        "business_type": "grocery",
+        "theme": {
+            "primary_color": "#0D47A1",
+            "secondary_color": "#FFCA28",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Snacks",
+                "dishes": [
+                    {"name": "Potato Chips 45g", "price": "8", "description": "Salted, crispy."},
+                    {"name": "Chocolate Bar", "price": "10", "description": "Milk chocolate, single bar."},
+                    {"name": "Biscuits Pack", "price": "12", "description": "Assorted sweet biscuits."},
+                    {"name": "Salted Peanuts 100g", "price": "10", "description": "Roasted and salted."},
+                ],
+            },
+            {
+                "name": "Drinks",
+                "dishes": [
+                    {"name": "Cola 1.5L", "price": "12", "description": "Chilled, family size."},
+                    {"name": "Still Water 1.5L", "price": "6", "description": "Single bottle."},
+                    {"name": "Energy Drink 25cl", "price": "15", "description": "Chilled can."},
+                    {"name": "Fruit Juice 25cl", "price": "8", "description": "Orange or apple."},
+                ],
+            },
+            {
+                "name": "Essentials",
+                "dishes": [
+                    {"name": "Fresh Milk 1L", "price": "10", "description": "Pasteurised, chilled."},
+                    {"name": "Sliced Bread", "price": "12", "description": "Soft sandwich loaf."},
+                    {"name": "Eggs (6)", "price": "14", "description": "Half-dozen, fresh."},
+                    {"name": "Table Salt 1kg", "price": "6", "description": "Fine iodised salt."},
                 ],
             },
         ],
@@ -1246,6 +1479,121 @@ TEMPLATES = {
             },
         ],
     },
+    "fashion_boutique": {
+        "label": "Fashion boutique / Prêt-à-porter",
+        "business_type": "retail",
+        "theme": {
+            "primary_color": "#212121",
+            "secondary_color": "#D4AF37",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Women",
+                "dishes": [
+                    {"name": "Silk Blouse", "price": "390", "description": "Flowing silk, mother-of-pearl buttons."},
+                    {"name": "Tailored Blazer", "price": "690", "description": "Structured shoulders, lined."},
+                    {"name": "Midi Dress", "price": "520", "description": "Elegant cut, breathable fabric."},
+                    {"name": "High-Waist Trousers", "price": "420", "description": "Tapered leg, crease-front."},
+                ],
+            },
+            {
+                "name": "Men",
+                "dishes": [
+                    {"name": "Oxford Shirt", "price": "290", "description": "Crisp cotton, button-down collar."},
+                    {"name": "Chino Trousers", "price": "360", "description": "Slim fit, stretch cotton."},
+                    {"name": "Wool Sweater", "price": "480", "description": "Merino wool, ribbed trim."},
+                    {"name": "Slim Blazer", "price": "790", "description": "Half-lined, notch lapel."},
+                ],
+            },
+            {
+                "name": "Accessories",
+                "dishes": [
+                    {"name": "Silk Scarf", "price": "220", "description": "Hand-rolled edges, printed."},
+                    {"name": "Leather Wallet", "price": "260", "description": "Full-grain, card slots."},
+                    {"name": "Statement Necklace", "price": "180", "description": "Gold-tone, adjustable."},
+                ],
+            },
+        ],
+    },
+    "electronics_store": {
+        "label": "Electronics store / High-tech",
+        "business_type": "retail",
+        "theme": {
+            "primary_color": "#0B1E3B",
+            "secondary_color": "#00B0FF",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Audio",
+                "dishes": [
+                    {"name": "Wireless Earbuds", "price": "450", "description": "Active noise cancellation, 24h battery."},
+                    {"name": "Bluetooth Speaker", "price": "390", "description": "Waterproof, deep bass."},
+                    {"name": "Over-Ear Headphones", "price": "690", "description": "Studio sound, foldable."},
+                ],
+            },
+            {
+                "name": "Accessories",
+                "dishes": [
+                    {"name": "Fast Charger 20W", "price": "120", "description": "USB-C, quick charge."},
+                    {"name": "Power Bank 10000mAh", "price": "180", "description": "Slim, dual-port."},
+                    {"name": "Phone Case", "price": "90", "description": "Shockproof, slim profile."},
+                    {"name": "Braided USB-C Cable 2m", "price": "60", "description": "Durable, fast data."},
+                ],
+            },
+            {
+                "name": "Smart Devices",
+                "dishes": [
+                    {"name": "Smartwatch", "price": "1200", "description": "Heart-rate, GPS, notifications."},
+                    {"name": "Wireless Mouse", "price": "160", "description": "Ergonomic, silent click."},
+                    {"name": "Mechanical Keyboard", "price": "420", "description": "Backlit, tactile switches."},
+                ],
+            },
+        ],
+    },
+    "home_decor": {
+        "label": "Home & decor store",
+        "business_type": "retail",
+        "theme": {
+            "primary_color": "#5D4037",
+            "secondary_color": "#BCAAA4",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Living Room",
+                "dishes": [
+                    {"name": "Woven Throw Blanket", "price": "220", "description": "Soft cotton blend, fringed."},
+                    {"name": "Decorative Cushion", "price": "120", "description": "Removable cover, plush filling."},
+                    {"name": "Ceramic Vase", "price": "180", "description": "Hand-glazed, matte finish."},
+                    {"name": "Scented Candle", "price": "90", "description": "Soy wax, 40h burn time."},
+                ],
+            },
+            {
+                "name": "Kitchen & Dining",
+                "dishes": [
+                    {"name": "Stoneware Dinner Set (4)", "price": "390", "description": "Reactive glaze, dishwasher safe."},
+                    {"name": "Wooden Serving Board", "price": "150", "description": "Acacia wood, oiled finish."},
+                    {"name": "Glass Storage Jars (3)", "price": "130", "description": "Airtight bamboo lids."},
+                ],
+            },
+            {
+                "name": "Textiles & Rugs",
+                "dishes": [
+                    {"name": "Handwoven Berber Rug", "price": "890", "description": "Wool, traditional pattern."},
+                    {"name": "Cotton Bath Towel Set", "price": "260", "description": "Absorbent, quick-dry."},
+                    {"name": "Linen Table Runner", "price": "140", "description": "Natural weave, fringed ends."},
+                ],
+            },
+        ],
+    },
     "pharmacy": {
         "label": "Pharmacy / Parapharmacie",
         "business_type": "pharmacy",
@@ -1291,6 +1639,84 @@ TEMPLATES = {
                     {"name": "Adhesive Bandages Assorted (30 pcs)", "price": "35", "description": "Waterproof, hypoallergenic."},
                     {"name": "Elastic Bandage 7.5cm×4.5m", "price": "28", "description": "Cohesive, reusable compression bandage."},
                     {"name": "Digital Thermometer", "price": "90", "description": "Fast 10-second oral/axillary reading."},
+                ],
+            },
+        ],
+    },
+    "parapharmacie": {
+        "label": "Parapharmacie / Beauty & derma",
+        "business_type": "pharmacy",
+        "theme": {
+            "primary_color": "#00695C",
+            "secondary_color": "#B2DFDB",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Face Care",
+                "dishes": [
+                    {"name": "Hyaluronic Serum 30ml", "price": "180", "description": "Deep hydration, plumps fine lines."},
+                    {"name": "Vitamin C Cream 50ml", "price": "160", "description": "Brightening antioxidant day cream."},
+                    {"name": "Cleansing Foam 150ml", "price": "95", "description": "Gentle daily face wash, non-drying."},
+                    {"name": "Eye Contour Gel 15ml", "price": "120", "description": "Reduces puffiness and dark circles."},
+                ],
+            },
+            {
+                "name": "Body & Sun",
+                "dishes": [
+                    {"name": "Nourishing Body Milk 400ml", "price": "90", "description": "24h hydration, fast absorbing."},
+                    {"name": "SPF 50+ Face Fluid 40ml", "price": "130", "description": "Anti-ageing, non-greasy sun protection."},
+                    {"name": "Repair Cica Balm 40ml", "price": "75", "description": "Soothes and repairs irritated skin."},
+                ],
+            },
+            {
+                "name": "Hair Care",
+                "dishes": [
+                    {"name": "Anti-Hair-Loss Shampoo 200ml", "price": "110", "description": "Strengthens roots, stimulates growth."},
+                    {"name": "Argan Hair Oil 100ml", "price": "85", "description": "Nourishing, adds shine and softness."},
+                    {"name": "Anti-Dandruff Treatment 125ml", "price": "95", "description": "Soothes scalp, reduces flaking."},
+                ],
+            },
+        ],
+    },
+    "herbalist": {
+        "label": "Herbalist / Herboristerie",
+        "business_type": "pharmacy",
+        "theme": {
+            "primary_color": "#4E5D2A",
+            "secondary_color": "#CDDC39",
+            "menu_theme": "light",
+            "menu_card_layout": "list",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Herbs & Teas",
+                "dishes": [
+                    {"name": "Verbena Loose Leaf 100g", "price": "35", "description": "Calming herbal infusion."},
+                    {"name": "Chamomile Flowers 100g", "price": "30", "description": "Soothing before-sleep tea."},
+                    {"name": "Green Tea Gunpowder 200g", "price": "45", "description": "Classic Moroccan mint-tea base."},
+                    {"name": "Sage Leaves 100g", "price": "28", "description": "Digestive and warming infusion."},
+                ],
+            },
+            {
+                "name": "Natural Oils",
+                "dishes": [
+                    {"name": "Pure Argan Oil 100ml", "price": "120", "description": "Cosmetic-grade, cold-pressed."},
+                    {"name": "Black Seed Oil 100ml", "price": "90", "description": "Nigella sativa, traditional tonic."},
+                    {"name": "Eucalyptus Essential Oil 30ml", "price": "60", "description": "Respiratory comfort, aromatherapy."},
+                    {"name": "Prickly Pear Seed Oil 30ml", "price": "220", "description": "Rich in vitamin E, anti-ageing."},
+                ],
+            },
+            {
+                "name": "Spices & Remedies",
+                "dishes": [
+                    {"name": "Ras el Hanout 100g", "price": "40", "description": "Blend of 20+ traditional spices."},
+                    {"name": "Ground Turmeric 100g", "price": "25", "description": "Anti-inflammatory golden spice."},
+                    {"name": "Raw Honey with Nigella 250g", "price": "95", "description": "Immune-supporting daily tonic."},
+                    {"name": "Ginger Root Powder 100g", "price": "30", "description": "Warming digestive aid."},
                 ],
             },
         ],

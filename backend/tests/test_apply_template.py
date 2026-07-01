@@ -69,6 +69,10 @@ class TemplateDataTests(SimpleTestCase):
                 "seafood", "steakhouse", "indian", "chinese",
                 "mexican", "snack_shawarma", "breakfast_brunch",
                 "vegan", "fried_chicken", "tea_house",
+                "patisserie_fine", "viennoiserie", "bakery_traditional",
+                "epicerie_fine", "organic_market", "convenience_store",
+                "fashion_boutique", "electronics_store", "home_decor",
+                "parapharmacie", "herbalist",
             },
         )
 
@@ -134,6 +138,10 @@ class ApplyTemplateViewTests(SimpleTestCase):
                 "seafood", "steakhouse", "indian", "chinese",
                 "mexican", "snack_shawarma", "breakfast_brunch",
                 "vegan", "fried_chicken", "tea_house",
+                "patisserie_fine", "viennoiserie", "bakery_traditional",
+                "epicerie_fine", "organic_market", "convenience_store",
+                "fashion_boutique", "electronics_store", "home_decor",
+                "parapharmacie", "herbalist",
             },
         )
 
