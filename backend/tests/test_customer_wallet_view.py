@@ -213,3 +213,72 @@ class CustomerWalletViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for call in base_qs.filter.call_args_list:
             self.assertNotIn("vertical", call.kwargs)
+
+    # ── B8: ?page= pagination ────────────────────────────────────────────────
+
+    def _get_with_page(self, page, session=None):
+        req = self.factory.get("/api/customer/wallet/", {"page": page})
+        req.user = MagicMock(is_authenticated=False)
+        req.session = session or _session()
+        return self.view(req)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_response_includes_page_and_has_more(self, mock_cust_objs, mock_tx_objs):
+        """The response must include page/has_more alongside the existing shape
+        (balance, transactions, etc. all still present)."""
+        customer = _make_customer(customer_id=20, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        tx = _make_tx(tx_id=1)
+        mock_tx_objs.filter.return_value.order_by.return_value.__getitem__.return_value = [tx]
+
+        resp = self._get(session=_session(customer_id=20))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("has_more", resp.data)
+        self.assertIn("page", resp.data)
+        self.assertEqual(resp.data["page"], 1)
+        self.assertFalse(resp.data["has_more"])
+        # Existing response shape (balance etc.) unchanged.
+        self.assertIn("balance", resp.data)
+        self.assertIn("transactions", resp.data)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_has_more_true_when_extra_row_returned(self, mock_cust_objs, mock_tx_objs):
+        """PAGE_SIZE=20 — if the slice returns 21 rows, has_more=True and only
+        20 are surfaced in the transactions list."""
+        customer = _make_customer(customer_id=21, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        txs = [_make_tx(tx_id=i) for i in range(21)]
+        mock_tx_objs.filter.return_value.order_by.return_value.__getitem__.return_value = txs
+
+        resp = self._get(session=_session(customer_id=21))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["has_more"])
+        self.assertEqual(len(resp.data["transactions"]), 20)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_page_param_is_echoed_back(self, mock_cust_objs, mock_tx_objs):
+        customer = _make_customer(customer_id=22, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        mock_tx_objs.filter.return_value.order_by.return_value.__getitem__.return_value = []
+
+        resp = self._get_with_page(3, session=_session(customer_id=22))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["page"], 3)
+
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_invalid_page_param_falls_back_to_1(self, mock_cust_objs, mock_tx_objs):
+        customer = _make_customer(customer_id=23, balance="40.00")
+        mock_cust_objs.get.return_value = customer
+
+        mock_tx_objs.filter.return_value.order_by.return_value.__getitem__.return_value = []
+
+        resp = self._get_with_page("not-a-number", session=_session(customer_id=23))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["page"], 1)

@@ -2379,6 +2379,43 @@ class OrderEligibilityView(APIView):
         })
 
 
+def _validate_option_group_selections(dish, option_ids):
+    """B2 (SECURITY): server-side mirror of the SPA's option-group enforcement
+    (DishPage.vue / QuickAddSheet.vue / WaiterNewOrder.vue groupSelectedCount logic).
+
+    The SPA auto-preselects the first option of any required (min_select > 0)
+    group and caps checkbox toggling at max_select, so a genuine SPA order can
+    never violate a group's bounds — only a malformed/API-bypass/replay request
+    can. option_ids is the (already dish-bound) list of DishOption ids submitted
+    for this dish. Returns None when all groups are satisfied, or an error dict
+    ({"code": "option_selection_invalid", "group": ..., "reason": ...}) to reject with.
+    Options with group=None (ungrouped/legacy) are not subject to group bounds.
+    """
+    selected = set(option_ids)
+    for group in dish.option_groups.all():
+        group_option_ids = {o.id for o in group.options.all()}
+        count = len(selected & group_option_ids)
+        if group.min_select and count < group.min_select:
+            return {
+                "detail": f"Please select at least {group.min_select} option(s) for '{group.name}'.",
+                "code": "option_selection_invalid",
+                "dish_slug": dish.slug,
+                "group_id": group.id,
+                "group_name": group.name,
+                "reason": "min_select",
+            }
+        if group.max_select and count > group.max_select:
+            return {
+                "detail": f"You can select at most {group.max_select} option(s) for '{group.name}'.",
+                "code": "option_selection_invalid",
+                "dish_slug": dish.slug,
+                "group_id": group.id,
+                "group_name": group.name,
+                "reason": "max_select",
+            }
+    return None
+
+
 class PlaceOrderView(APIView):
     """POST /api/place-order/ — customer submits an in-app order.
 
@@ -2500,7 +2537,7 @@ class PlaceOrderView(APIView):
         dishes_map = {d.slug: d for d in Dish.objects.filter(
             slug__in=slugs, is_published=True, is_available=True,
             category__is_published=True, category__is_temporarily_disabled=False,
-        ).select_related("category").prefetch_related("combo_components__component")}
+        ).select_related("category").prefetch_related("combo_components__component", "option_groups__options")}
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -2552,6 +2589,13 @@ class PlaceOrderView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # B2 (SECURITY): enforce OptionGroup.min_select/max_select server-side —
+            # mirrors the SPA's own enforcement, so only malformed/API-bypass/replay
+            # requests are rejected (see _validate_option_group_selections docstring).
+            _group_err = _validate_option_group_selections(dish, item_input.get("option_ids", []))
+            if _group_err:
+                return Response(_group_err, status=status.HTTP_400_BAD_REQUEST)
 
             qty = item_input["qty"]
             subtotal = unit_price * qty

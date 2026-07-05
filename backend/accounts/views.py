@@ -2133,7 +2133,11 @@ class CustomerPushSubscribeView(APIView):
 
 
 class CustomerWalletView(APIView):
-    """GET /api/customer/wallet/ — return balance + transaction history (last 50)."""
+    """GET /api/customer/wallet/ — return balance + paginated transaction history.
+
+    B8: ?page=N (1-based, PAGE_SIZE=20 — same convention as CustomerOrdersView)
+    paginates the transactions list only; balance/spend_by_vertical/etc. are
+    unaffected (they're not page-scoped)."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -2159,7 +2163,18 @@ class CustomerWalletView(APIView):
         vertical = (request.query_params.get("vertical") or "").strip().lower()
         if vertical in ALL_VERTICALS:
             txs_qs = txs_qs.filter(vertical=vertical)
-        txs = txs_qs.order_by("-created_at")[:50]
+
+        # B8: paginate the transaction list (same page/PAGE_SIZE=20 convention as
+        # CustomerOrdersView) — fetch one extra row to detect a further page.
+        PAGE_SIZE = 20
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        offset = (page - 1) * PAGE_SIZE
+        txs = list(txs_qs.order_by("-created_at")[offset:offset + PAGE_SIZE + 1])
+        has_more = len(txs) > PAGE_SIZE
+        txs = txs[:PAGE_SIZE]
 
         # Per-service spend breakdown (PAYMENT debits grouped by vertical) — the
         # "spent on food / shops / rides" view. One global balance, sliced for display.
@@ -2193,6 +2208,8 @@ class CustomerWalletView(APIView):
                 }
                 for tx in txs
             ],
+            "has_more": has_more,
+            "page": page,
         })
 
 
@@ -4295,7 +4312,7 @@ class MarketplacePlaceOrderView(APIView):
                     for d in _Dish.objects.filter(
                         slug__in=slugs, is_published=True, is_available=True,
                         category__is_published=True, category__is_temporarily_disabled=False,
-                    ).select_related("category").prefetch_related("combo_components__component")
+                    ).select_related("category").prefetch_related("combo_components__component", "option_groups__options")
                 }
                 missing = [s for s in slugs if s not in dishes_map]
                 if missing:
@@ -4357,6 +4374,13 @@ class MarketplacePlaceOrderView(APIView):
                             },
                             status=status.HTTP_400_BAD_REQUEST,
                         )
+                    # B2 (SECURITY): enforce OptionGroup.min_select/max_select server-side —
+                    # mirrors the SPA's own enforcement, so only malformed/API-bypass/replay
+                    # requests are rejected (see menu.views._validate_option_group_selections).
+                    from menu.views import _validate_option_group_selections as _vogs
+                    _group_err = _vogs(dish, [opt.id for opt in _bound_options])
+                    if _group_err:
+                        return Response(_group_err, status=status.HTTP_400_BAD_REQUEST)
                     option_snapshots = []
                     for opt in _bound_options:
                         unit_price += Decimal(str(opt.price_delta))
@@ -5089,6 +5113,20 @@ class MarketplaceOrderStatusView(APIView):
         except Tenant.DoesNotExist:
             return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # B7: the restaurant's own published contact phone + receipt message
+        # (Profile lives in the shared/public schema, same as Tenant, so this is
+        # safe to read outside the tenant schema_context below). tenant_phone is
+        # non-PII public contact info (safe on AllowAny, mirrors
+        # CustomerOrderStatusView in menu/views.py which exposes it the same way).
+        tenant_phone = ""
+        receipt_message = ""
+        try:
+            _tenant_profile = getattr(tenant, "profile", None)
+            tenant_phone = getattr(_tenant_profile, "phone", "") or ""
+            receipt_message = getattr(_tenant_profile, "receipt_message", "") or ""
+        except Exception:
+            pass
+
         try:
             with _sc(tenant.schema_name):
                 from menu.models import Order as _Order
@@ -5147,6 +5185,7 @@ class MarketplaceOrderStatusView(APIView):
                 "fulfillment_type": order.fulfillment_type,
                 "restaurant_slug": slug,
                 "restaurant_name": tenant.name,
+                "tenant_phone": tenant_phone,
             })
 
         # Owner-only from here down — full financial body + ownership affordances.
@@ -5192,6 +5231,9 @@ class MarketplaceOrderStatusView(APIView):
             "items": items,
             "restaurant_slug": slug,
             "restaurant_name": tenant.name,
+            "tenant_phone": tenant_phone,
+            "owner_note": order.owner_note,
+            "receipt_message": receipt_message,
             "has_rating": existing_rating is not None,
             "rating": rating_data,
         })
@@ -6891,6 +6933,14 @@ class DeliveryRatingView(APIView):
                     {"detail": "You can only rate your own order.", "code": "not_order_owner"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            # B14: idempotency guard — a second POST for an already-rated leg must
+            # not silently overwrite the first rating (contrast CustomerOrderRateView's
+            # already_rated 400 for order ratings).
+            if job.customer_driver_rating is not None:
+                return Response(
+                    {"detail": "This delivery has already been rated.", "code": "already_rated"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             job.customer_driver_rating = score
             job.customer_driver_note = note
             update_fields = ["customer_driver_rating", "customer_driver_note"]
@@ -6899,6 +6949,11 @@ class DeliveryRatingView(APIView):
             driver = getattr(job, "driver", None)
             if not customer_id or not driver or driver.id != customer_id:
                 return Response({"detail": "Driver session required."}, status=status.HTTP_403_FORBIDDEN)
+            if job.driver_customer_rating is not None:
+                return Response(
+                    {"detail": "This delivery has already been rated.", "code": "already_rated"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             job.driver_customer_rating = score
             job.driver_customer_note = note
             update_fields = ["driver_customer_rating", "driver_customer_note"]
@@ -6909,6 +6964,11 @@ class DeliveryRatingView(APIView):
                 return Response({"detail": "Owner session required."}, status=status.HTTP_401_UNAUTHORIZED)
             if not tenant_ctx or tenant_ctx.id != tenant.id:
                 return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+            if job.restaurant_driver_rating is not None:
+                return Response(
+                    {"detail": "This delivery has already been rated.", "code": "already_rated"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             job.restaurant_driver_rating = score
             job.restaurant_driver_note = note
             update_fields = ["restaurant_driver_rating", "restaurant_driver_note"]
@@ -6978,7 +7038,9 @@ class CustomerSavedAddressListCreateView(APIView):
 
 
 class CustomerSavedAddressDeleteView(APIView):
-    """DELETE /api/customer/addresses/<id>/ — remove a saved address."""
+    """DELETE /api/customer/addresses/<id>/ — remove a saved address.
+       PATCH  /api/customer/addresses/<id>/ — update label/address/lat/lng/location_url
+       for the signed-in customer's OWN saved address (partial update; B4)."""
 
     permission_classes = [AllowAny]
 
@@ -6993,6 +7055,37 @@ class CustomerSavedAddressDeleteView(APIView):
             return Response({"detail": "Address not found."}, status=status.HTTP_404_NOT_FOUND)
         addr.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, address_id, *args, **kwargs):
+        """B4: update label/address/lat/lng/location_url for the signed-in
+        customer's OWN saved address. 404 if the address doesn't belong to them
+        (same ownership scoping as delete/get — never leaks another customer's
+        row via a 403 vs 404 timing/response difference)."""
+        from .models import SavedAddress
+        customer, err = _resolve_customer_from_request(request)
+        if err:
+            return err
+        try:
+            addr = SavedAddress.objects.get(pk=address_id, customer=customer)
+        except SavedAddress.DoesNotExist:
+            return Response({"detail": "Address not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        if "address" in data:
+            address_text = str(data.get("address") or "").strip()[:300]
+            if not address_text:
+                return Response({"detail": "address is required.", "code": "missing_address"}, status=status.HTTP_400_BAD_REQUEST)
+            addr.address = address_text
+        if "label" in data:
+            addr.label = str(data.get("label") or "").strip()[:60]
+        if "location_url" in data:
+            addr.location_url = str(data.get("location_url") or "").strip()[:500]
+        if "lat" in data:
+            addr.lat = _parse_coord(data.get("lat"), -90, 90)
+        if "lng" in data:
+            addr.lng = _parse_coord(data.get("lng"), -180, 180)
+        addr.save()
+        return Response(_serialize_address(addr))
 
 
 def _serialize_address(addr) -> dict:

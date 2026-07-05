@@ -1289,6 +1289,67 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
         self.assertIn("total", resp.data)
         self.assertIn("payment_status", resp.data)
 
+    def test_owner_body_includes_tenant_phone_and_receipt_message(self):
+        """B7: contact parity with CustomerOrderStatusView — the owner body must
+        include tenant_phone (resolved from the tenant Profile) + owner_note +
+        receipt_message so the marketplace OrderStatus page can render a tel: link."""
+        tenant = MagicMock()
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.schema_name = "bistro"
+        tenant.profile.phone = "0600112233"
+        tenant.profile.receipt_message = "Thanks for ordering!"
+        order = MagicMock()
+        order.order_number = "ORD-001"
+        order.status = "confirmed"
+        order.fulfillment_type = "pickup"
+        order.customer_id = 7
+        order.total = "25.00"
+        order.delivery_fee = "0.00"
+        order.wallet_amount_paid = "0.00"
+        order.currency = "EUR"
+        order.estimated_ready_minutes = 20
+        order.scheduled_for = None
+        order.owner_note = "Ring the bell twice"
+        order.items.all.return_value = []
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()):
+                with patch("menu.models.Order") as mock_order:
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    resp = self._get(params={"restaurant": "bistro"}, session_cid=7)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["tenant_phone"], "0600112233")
+        self.assertEqual(resp.data["owner_note"], "Ring the bell twice")
+        self.assertEqual(resp.data["receipt_message"], "Thanks for ordering!")
+
+    def test_non_owner_body_includes_tenant_phone(self):
+        """B7: tenant_phone is public restaurant contact info (like restaurant_name),
+        so it's also present in the minimal non-owner body."""
+        tenant = MagicMock()
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.schema_name = "bistro"
+        tenant.profile.phone = "0600112233"
+        order = MagicMock()
+        order.order_number = "ORD-001"
+        order.status = "confirmed"
+        order.fulfillment_type = "pickup"
+        order.customer_id = 7
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()):
+                with patch("menu.models.Order") as mock_order:
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    # No session (anonymous) → non-owner.
+                    resp = self._get(params={"restaurant": "bistro"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["tenant_phone"], "0600112233")
+
     def test_valid_order_non_owner_returns_minimal_body(self):
         """OPS-5e IDOR gate: an anonymous / non-owner caller gets ONLY the minimal,
         non-sensitive status — no items / totals / financial fields."""

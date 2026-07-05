@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import OrderTrackingView, DeliveryRatingView
 
@@ -193,7 +193,14 @@ class DeliveryRatingViewTests(SimpleTestCase):
         """Helper that always includes a restaurant slug."""
         url = f"/api/marketplace/track/{order_number}/rate/?restaurant=myrestaurant"
         req = self.factory.post(url, data, format="json")
-        req.user = user or MagicMock(is_authenticated=False)
+        if user is not None:
+            # authentication_classes=[] means DRF's Request.user re-derives from
+            # perform_authentication() rather than trusting a plain req.user
+            # assignment — force_authenticate is the supported way to simulate
+            # an authenticated caller here.
+            force_authenticate(req, user=user)
+        else:
+            req.user = MagicMock(is_authenticated=False)
         req.session = session or _session()
         if tenant:
             req.tenant = tenant
@@ -284,6 +291,39 @@ class DeliveryRatingViewTests(SimpleTestCase):
         self.assertEqual(resp.data["score"], 5)
         job.save.assert_called_once()
 
+    def test_customer_role_already_rated_returns_400(self):
+        """B14: a second customer-role POST for an already-rated leg 400s with
+        code=already_rated instead of overwriting the first rating."""
+        import menu.models as mm
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _noop_sc(*a, **k):
+            yield
+
+        tenant = _make_tenant()
+        job = _make_job(status_val="delivered")
+        job.customer_driver_rating = 5  # already rated
+        order = SimpleNamespace(customer_id=42)
+        order_qs = MagicMock()
+        order_qs.only.return_value.first.return_value = order
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("django_tenants.utils.schema_context", _noop_sc), \
+                 patch.object(mm.Order, "objects") as mock_order_objs:
+                mock_dj.objects.get.return_value = job
+                mock_order_objs.filter.return_value = order_qs
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "customer", "score": 1, "note": "trying to overwrite"},
+                    session=_session(customer_id=42),
+                )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "already_rated")
+        job.save.assert_not_called()
+        self.assertEqual(job.customer_driver_rating, 5)
+
     def test_customer_role_non_owner_returns_403(self):
         """OPS-5f: a session customer who doesn't own the order cannot rate the driver."""
         import menu.models as mm
@@ -350,6 +390,30 @@ class DeliveryRatingViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["score"], 4)
 
+    def test_driver_role_already_rated_returns_400(self):
+        """B14: a second driver-role POST for an already-rated leg must not
+        silently overwrite the first rating."""
+        tenant = _make_tenant()
+        driver = MagicMock()
+        driver.id = 7
+        job = _make_job(status_val="delivered")
+        job.driver = driver
+        job.driver_customer_rating = 4  # already rated
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.get.return_value = job
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "driver", "score": 5},
+                    session=_session(customer_id=7),
+                )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "already_rated")
+        job.save.assert_not_called()
+        # The original rating must be untouched.
+        self.assertEqual(job.driver_customer_rating, 4)
+
     def test_restaurant_role_unauthenticated_returns_401(self):
         tenant = _make_tenant()
         job = _make_job(status_val="delivered")
@@ -378,3 +442,45 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 )
         # authentication_classes=[] → request.user is AnonymousUser → 401
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_restaurant_role_valid_saves_rating(self):
+        tenant = _make_tenant(tenant_id=1)
+        job = _make_job(status_val="delivered", tenant_id=1)
+        owner_user = MagicMock(is_authenticated=True)
+        owner_tenant_ctx = SimpleNamespace(id=1)
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.get.return_value = job
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "restaurant", "score": 5, "note": "On time"},
+                    user=owner_user,
+                    tenant=owner_tenant_ctx,
+                )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["score"], 5)
+        job.save.assert_called_once()
+
+    def test_restaurant_role_already_rated_returns_400(self):
+        """B14: a second restaurant-role POST for an already-rated leg must not
+        silently overwrite the first rating."""
+        tenant = _make_tenant(tenant_id=1)
+        job = _make_job(status_val="delivered", tenant_id=1)
+        job.restaurant_driver_rating = 3  # already rated
+        owner_user = MagicMock(is_authenticated=True)
+        owner_tenant_ctx = SimpleNamespace(id=1)
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.get.return_value = job
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "restaurant", "score": 1},
+                    user=owner_user,
+                    tenant=owner_tenant_ctx,
+                )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "already_rated")
+        job.save.assert_not_called()
+        self.assertEqual(job.restaurant_driver_rating, 3)

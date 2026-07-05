@@ -206,3 +206,80 @@ class CustomerSavedAddressDeleteViewTests(SimpleTestCase):
             resp = self._delete(5, session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         addr.delete.assert_called_once()
+
+
+# ── CustomerSavedAddressDeleteView.patch (B4: edit-address) ───────────────────
+
+class CustomerSavedAddressPatchViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = CustomerSavedAddressDeleteView.as_view()
+
+    def _patch(self, address_id, data, session=None):
+        req = self.factory.patch(f"/api/customer/addresses/{address_id}/", data, format="json")
+        req.user = MagicMock(is_authenticated=False)
+        req.session = session or _session()
+        return self.view(req, address_id=address_id)
+
+    def test_no_session_returns_401(self):
+        resp = self._patch(1, {"address": "New addr"}, session=_session(customer_id=None))
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.models.Customer.objects")
+    def test_updates_own_address(self, mock_cust_objs):
+        customer = _make_customer(customer_id=1)
+        mock_cust_objs.get.return_value = customer
+        addr = _make_address(5, label="Home", address="Old address")
+        with patch("accounts.models.SavedAddress.objects") as mock_sa_objs:
+            mock_sa_objs.get.return_value = addr
+            resp = self._patch(
+                5,
+                {"label": "Work", "address": "456 New Ave", "lat": 33.5, "lng": -7.6},
+                session=_session(customer_id=1),
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(addr.label, "Work")
+        self.assertEqual(addr.address, "456 New Ave")
+        self.assertAlmostEqual(addr.lat, 33.5)
+        self.assertAlmostEqual(addr.lng, -7.6)
+        addr.save.assert_called_once()
+        self.assertEqual(resp.data["address"], "456 New Ave")
+
+    @patch("accounts.models.Customer.objects")
+    def test_partial_update_only_touches_provided_fields(self, mock_cust_objs):
+        customer = _make_customer(customer_id=1)
+        mock_cust_objs.get.return_value = customer
+        addr = _make_address(5, label="Home", address="123 Main St", lat=1.0, lng=2.0)
+        with patch("accounts.models.SavedAddress.objects") as mock_sa_objs:
+            mock_sa_objs.get.return_value = addr
+            resp = self._patch(5, {"label": "New Label"}, session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(addr.label, "New Label")
+        # Untouched fields remain as-is.
+        self.assertEqual(addr.address, "123 Main St")
+        self.assertEqual(addr.lat, 1.0)
+        self.assertEqual(addr.lng, 2.0)
+
+    @patch("accounts.models.Customer.objects")
+    def test_blank_address_rejected_400(self, mock_cust_objs):
+        customer = _make_customer(customer_id=1)
+        mock_cust_objs.get.return_value = customer
+        addr = _make_address(5, address="Old address")
+        with patch("accounts.models.SavedAddress.objects") as mock_sa_objs:
+            mock_sa_objs.get.return_value = addr
+            resp = self._patch(5, {"address": "   "}, session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "missing_address")
+        addr.save.assert_not_called()
+
+    @patch("accounts.models.Customer.objects")
+    def test_not_found_returns_404(self, mock_cust_objs):
+        """B4: patching another customer's address (or an unknown id) 404s —
+        SavedAddress.objects.get is scoped to (pk=address_id, customer=customer)."""
+        customer = _make_customer(customer_id=1)
+        mock_cust_objs.get.return_value = customer
+        from accounts.models import SavedAddress
+        with patch("accounts.models.SavedAddress.objects") as mock_sa_objs:
+            mock_sa_objs.get.side_effect = SavedAddress.DoesNotExist
+            resp = self._patch(999, {"address": "Hijack attempt"}, session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

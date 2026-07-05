@@ -312,6 +312,9 @@ class DeliveryRatingOwnershipTests(SimpleTestCase):
 
         job = MagicMock()
         job.status = DeliveryJob.Status.DELIVERED
+        # B14: unrated by default so the already-rated guard doesn't false-positive
+        # on this bare MagicMock (a real DeliveryJob row starts with rating=None).
+        job.customer_driver_rating = None
 
         order = SimpleNamespace(customer_id=order_customer_id)
         order_qs = MagicMock()
