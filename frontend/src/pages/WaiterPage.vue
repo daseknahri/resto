@@ -477,7 +477,7 @@
                       @click="settleChooser = order"
                     ><span aria-hidden="true">💵</span></button>
                     <button
-                      v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                      v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
                       class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
                       @click="openAppend(order)"
                     ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
@@ -952,7 +952,7 @@ class="min-w-0 flex-1 leading-snug"
                     @click="settleChooser = order"
                   ><span aria-hidden="true">💵</span></button>
                   <button
-                    v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                    v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
                     class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
                     @click="openAppend(order)"
                   ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
@@ -1165,7 +1165,7 @@ class="min-w-0 flex-1 leading-snug"
                   @click="settleChooser = order"
                 ><span aria-hidden="true">💵</span></button>
                 <button
-                  v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                  v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
                   class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
                   @click="openAppend(order)"
                 ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
@@ -1370,7 +1370,7 @@ class="min-w-0 flex-1 leading-snug"
               @click="settleChooser = order"
             ><span aria-hidden="true">💵</span></button>
             <button
-              v-if="canManageOrders && order.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+              v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
               class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
               @click="openAppend(order)"
             ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
@@ -1973,6 +1973,7 @@ class="min-w-0 flex-1 leading-snug"
             :placeholder="t('waiterPage.voidReasonOtherPlaceholder')"
             autofocus
           />
+          <p v-if="!voidReasonValid" class="text-[11px] text-amber-400">{{ t('waiterPage.voidReasonRequired') }}</p>
           <div class="flex items-center justify-end gap-2 pt-1">
             <button
               class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
@@ -1980,7 +1981,7 @@ class="min-w-0 flex-1 leading-snug"
             >{{ t('common.cancel') }}</button>
             <button
               class="ui-press ui-touch-target rounded-xl border border-red-500/50 bg-red-500/15 px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-50"
-              :disabled="!!voidingItemId"
+              :disabled="!!voidingItemId || !voidReasonValid"
               @click="submitVoid"
             >{{ t('waiterPage.voidItem') }}</button>
           </div>
@@ -2133,8 +2134,19 @@ const appendOrder = ref(null);
 // Overflow action sheet — opens when waiter taps "…" on a card footer.
 const overflowOrder = ref(null); // order object whose overflow sheet is open
 
-// Open "New order" pre-seeded for the given floor tile
-const openNewOrderForTable = (tile) => {
+// Open "New order" pre-seeded for the given floor tile.
+// If the table already has active orders, confirm first — nudges the waiter
+// toward the existing running tab instead of silently starting a second, independent order.
+const openNewOrderForTable = async (tile) => {
+  if (tile.orders?.length > 0) {
+    const ok = await confirm({
+      title: t('waiterPage.dupOrderConfirmTitle'),
+      body: t('waiterPage.dupOrderConfirmBody'),
+      confirmLabel: t('waiterPage.dupOrderConfirmBtn'),
+      danger: false,
+    });
+    if (!ok) return;
+  }
   newOrderDefaultTableSlug.value = tile.tableKey || '';
   newOrderDefaultTableLabel.value = tile.tableLabel || '';
   showNewOrder.value = true;
@@ -2153,6 +2165,14 @@ const voidSheet = ref(null);  // { order, item } when the sheet is open, else nu
 const voidCustomReason = ref('');
 const VOID_PRESETS = ['voidReasonWrongItem', 'voidReasonChangedMind', 'voidReasonKitchenError', 'voidReasonComp', 'voidReasonOther'];
 const voidPickedPreset = ref('');  // key of selected preset, or '' for none
+
+// A reason is required before a void can be submitted: either a non-"Other" preset,
+// or "Other" with non-empty free text.
+const voidReasonValid = computed(() => {
+  if (!voidPickedPreset.value) return false;
+  if (voidPickedPreset.value === 'voidReasonOther') return voidCustomReason.value.trim().length > 0;
+  return true;
+});
 
 // Fire course
 const firingCourseOrderId = ref(null);
@@ -2218,6 +2238,7 @@ const voidItem = (order, item) => {
 
 const submitVoid = async () => {
   if (!voidSheet.value) return;
+  if (!voidReasonValid.value) return;
   const { order, item } = voidSheet.value;
   const reason = voidPickedPreset.value === 'voidReasonOther'
     ? voidCustomReason.value.trim()
@@ -2262,6 +2283,10 @@ const doAllReady = async (order) => {
 // ── Table grouping (waiter) ────────────────────────────────────────────────────
 const TERMINAL_STATUSES = new Set(['cancelled', 'completed', 'delivered']);
 const ACTIVE_TABLE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+// Subset of ACTIVE_TABLE_STATUSES that the backend append-items endpoint accepts.
+// Excludes 'ready' — the backend rejects appends to a 'ready' order with 409 bad_status,
+// so the "+ Add items" button must not be offered in that state.
+const APPENDABLE_TABLE_STATUSES = new Set(['pending', 'confirmed', 'preparing']);
 
 // tableStatusMap: slug → { id, status, capacity } from GET /api/staff/tables/
 const tableStatusMap = ref(new Map());
@@ -2606,14 +2631,16 @@ const toggleTransferItem = (itemId) => {
   transferSelectedIds.value = s;
 };
 
-// All active table orders except the source — candidates for item transfer destination
+// All active table orders except the source — candidates for item transfer destination.
+// Paid orders are excluded: transferring items onto an already-paid order would
+// understate what the customer owes (backend rejects this with 400/dest_already_paid).
 const transferDestOptions = computed(() => {
   const srcId = transferSrcOrder.value?.id;
   const allGroups = tableGrouping.value.tableGroups;
   const opts = [];
   for (const g of allGroups) {
     for (const o of g.orders) {
-      if (o.id !== srcId) opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
+      if (o.id !== srcId && o.payment_status !== 'paid') opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
     }
   }
   return opts;
@@ -2633,7 +2660,10 @@ const submitTransfer = async () => {
     toast.show(t('waiterPage.transferSuccess'), 'success', 2500);
     waiter.fetchOrders({ silent: true });
   } catch (e) {
-    void e;
+    const code = e?.response?.data?.code;
+    if (code === 'dest_already_paid') {
+      toast.show(t('waiterPage.transferDestAlreadyPaid'), 'error');
+    }
     transferError.value = t('waiterPage.transferFailed');
   } finally {
     transferBusy.value = false;

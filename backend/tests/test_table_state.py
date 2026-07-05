@@ -14,7 +14,7 @@ Covers:
     - source auto-cancelled when all items moved
     - 409 not_table, bad_status, already_paid
     - 409 items_not_found (voided or wrong order)
-    - 400 missing item_ids / dest_order_id
+    - 400 missing item_ids / dest_order_id / dest_already_paid
     - 403 unauthenticated / no perm
 
   Contract 3 — StaffMergeOrdersView  POST /api/staff/orders/<dest>/merge/
@@ -337,6 +337,46 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "already_paid")
+
+    def test_dest_already_paid_is_400(self):
+        """Transferring unpaid items onto an already-PAID dest must be rejected —
+        otherwise dest.total would rise above what was actually collected."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1])
+        dest = _make_order(pk=2, order_number="ORD-002", payment_status=Order.PaymentStatus.PAID)
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.get.side_effect = [src, dest]
+            om.select_for_update.return_value = locked
+            resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "dest_already_paid")
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 1, "order_number": "ORD-001"})
+    @patch("menu.views._recompute_order_totals")
+    def test_dest_unpaid_still_succeeds(self, recompute_mock, payload_mock, broadcast_mock):
+        """Sanity check: an active/unpaid dest is unaffected by the new guard."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1])
+        dest = _make_order(pk=2, order_number="ORD-002", payment_status=Order.PaymentStatus.UNPAID)
+
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.get.side_effect = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+
+            resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
+
+        self.assertNotIn(resp.status_code, [400, 403, 409])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

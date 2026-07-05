@@ -157,13 +157,57 @@ const _onWaiterCallsVisibility = () => {
   if (document.visibilityState === "visible") loadWaiterCalls();
 };
 
+// Alert sound for a new waiter call — same oscillator "beep" util and
+// sound-preference key WaiterPage uses for new-order alerts, so the waiter's
+// sound on/off choice stays consistent across the whole waiter surface.
+const WAITER_CALL_SOUND_KEY = typeof window === "undefined" ? "waiter:sound" : `waiter:sound:${window.location.hostname}`;
+const _waiterCallSoundEnabled = () => {
+  try { return localStorage.getItem(WAITER_CALL_SOUND_KEY) !== "off"; } catch { return true; }
+};
+const _playWaiterCallAlert = () => {
+  if (!_waiterCallSoundEnabled()) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.2].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(i === 0 ? 520 : 720, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.22);
+      osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.22);
+    });
+  } catch {
+    // AudioContext not available or blocked
+  }
+};
+const _notifyWaiterCall = (payload) => {
+  _playWaiterCallAlert();
+  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    const label = payload && payload.table_label ? payload.table_label : "";
+    new Notification(t("ownerLayout.waiterCallNotifTitle"), {
+      body: label
+        ? t("ownerLayout.waiterCallNotifBody", { table: label })
+        : t("ownerLayout.waiterCallNotifTitle"),
+      icon: "/favicon.ico",
+      tag: "waiter-call",
+      renotify: true,
+    });
+  }
+};
+
 // Real-time: staff share the owner WS channel. order.* refreshes the order list
 // instantly (vs the ≤15s page poll); waiter.call* updates the bell-call banner the
 // moment a customer rings. The poll below stays as a fallback if the socket drops or
 // can't connect (useRealtimeChannel degrades gracefully).
 const _waiterRealtime = useOwnerRealtime((event, payload) => {
   if (event === "waiter.call" || event === "waiter.call.ack") {
-    _handleWaiterCallRealtime(event, payload);
+    // Async: handleRealtime resyncs through the section-filtered list, so the
+    // alert only fires for a call this waiter is actually responsible for.
+    _handleWaiterCallRealtime(event, payload).then((isNew) => {
+      if (isNew) _notifyWaiterCall(payload);
+    });
   } else if (typeof event === "string" && event.startsWith("order")) {
     waiter.fetchOrders({ silent: true });
   }

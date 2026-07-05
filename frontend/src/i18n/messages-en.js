@@ -2254,6 +2254,7 @@ waiterPage: {
   transferFailed: "Transfer failed — please try again.",
   transferNoItems: "Select at least one item.",
   transferNoDest: "Select a destination order.",
+  transferDestAlreadyPaid: "That order is already paid — pick another table or settle it first.",
   // Merge orders (B5)
   mergeBtn: "Merge into…",
   mergeTitle: "Merge tables",
@@ -2309,6 +2310,9 @@ waiterPage: {
   // Item 1 — table context into new-order sheet
   recentPopularCat: "Recent / Popular",
   newOrderForTable: "New order for {label}",
+  dupOrderConfirmTitle: "Start a new order?",
+  dupOrderConfirmBody: "This table already has an open order. Start a separate new order anyway?",
+  dupOrderConfirmBtn: "Start new order",
   // Item 3 — per-seat wallet payment
   payWalletForSeat: "Wallet",
   // Item 4 — split-by-seat confirmation dialogs
@@ -2324,6 +2328,7 @@ waiterPage: {
   voidReasonComp: "Comp",
   voidReasonOther: "Other",
   voidReasonOtherPlaceholder: "Reason…",
+  voidReasonRequired: "Choose a reason before voiding.",
 },
 repeatAnalytics: {
   title: "Repeat Business",

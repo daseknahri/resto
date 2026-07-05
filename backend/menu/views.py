@@ -5468,6 +5468,10 @@ class StaffTransferItemsView(APIView):
       no_items         — item_ids is empty
       items_not_found  — one or more item_ids don't exist in src order (non-voided)
 
+    Guards (400):
+      dest_already_paid — destination order is already marked PAID (moving items
+                           onto it would raise its total above what was collected)
+
     On success both orders are recalculated, saved, and broadcast. Responds with
     the updated src payload. If all items are moved the src order is cancelled.
     """
@@ -5512,6 +5516,14 @@ class StaffTransferItemsView(APIView):
                 return Response({"detail": "Destination order is not a table order.", "code": "not_table"}, status=status.HTTP_409_CONFLICT)
             if dest.status not in self._ACTIVE:
                 return Response({"detail": "Destination order status does not allow item transfer.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
+            if dest.payment_status == Order.PaymentStatus.PAID:
+                return Response(
+                    {
+                        "detail": "Destination order is already paid; transferring items onto it would understate what the customer owes. Settle or choose another destination.",
+                        "code": "dest_already_paid",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # Validate items belong to src and are non-voided
             src_item_ids = {i.id for i in src.items.all() if not i.is_voided}

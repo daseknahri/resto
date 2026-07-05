@@ -77,7 +77,7 @@
       </div>
 
       <!-- ── Sign-in form ───────────────────────────────────────────────────── -->
-      <form class="space-y-4" novalidate @submit.prevent="submit">
+      <form v-if="!mfaRequired" class="space-y-4" novalidate @submit.prevent="submit">
         <label class="block space-y-1.5 text-sm font-medium text-slate-200">
           {{ t('signIn.identifier') }}
           <input
@@ -141,6 +141,76 @@
           <span class="font-medium">{{ t('waiterJoin.successRedirecting') }}</span>
         </div>
       </form>
+
+      <!-- ── MFA verification step ───────────────────────────────────────────── -->
+      <form v-else class="space-y-4" novalidate @submit.prevent="submitMfa">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t('mfa.stepKicker') }}</p>
+          <h2 class="text-sm font-semibold text-slate-100">{{ t('mfa.stepTitle') }}</h2>
+          <p class="text-xs leading-relaxed text-slate-400">{{ t('mfa.stepDescription') }}</p>
+        </div>
+
+        <label v-if="!useBackupCode" class="block space-y-1.5 text-sm font-medium text-slate-200">
+          {{ t('mfa.codeLabel') }}
+          <input
+            v-model="mfaCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            class="ui-input ui-touch-target mt-1"
+            :class="{ 'border-red-400': mfaError }"
+            :aria-invalid="mfaError ? 'true' : undefined"
+            :placeholder="t('mfa.codePlaceholder')"
+            @input="mfaError = ''"
+          />
+        </label>
+
+        <label v-else class="block space-y-1.5 text-sm font-medium text-slate-200">
+          {{ t('mfa.backupCodeLabel') }}
+          <input
+            v-model="mfaBackupCode"
+            type="text"
+            autocomplete="off"
+            class="ui-input ui-touch-target mt-1"
+            :class="{ 'border-red-400': mfaError }"
+            :aria-invalid="mfaError ? 'true' : undefined"
+            :placeholder="t('mfa.backupCodePlaceholder')"
+            @input="mfaError = ''"
+          />
+        </label>
+        <p v-if="mfaError" class="text-xs text-red-300 mt-1" role="alert">{{ mfaError }}</p>
+
+        <button
+          type="submit"
+          :disabled="loading || success"
+          :aria-busy="loading"
+          class="ui-btn-primary ui-press inline-flex w-full items-center justify-center gap-2 ui-touch-target disabled:opacity-60"
+        >
+          <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ loading ? t('mfa.verifying') : t('mfa.verifyBtn') }}
+        </button>
+
+        <div class="flex items-center justify-between gap-3 text-xs">
+          <button type="button" class="text-slate-400 underline-offset-2 hover:underline" @click="toggleBackupCode">
+            {{ useBackupCode ? t('mfa.useTotpCode') : t('mfa.useBackupCode') }}
+          </button>
+          <button type="button" class="text-slate-400 underline-offset-2 hover:underline" @click="backToLogin">
+            {{ t('mfa.backToLogin') }}
+          </button>
+        </div>
+
+        <!-- Success flash -->
+        <div
+          v-if="success"
+          role="status"
+          class="flex items-center gap-2.5 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-3 py-3 text-sm text-emerald-300"
+        >
+          <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <span class="font-medium">{{ t('waiterJoin.successRedirecting') }}</span>
+        </div>
+      </form>
     </div>
   </div>
 </template>
@@ -165,6 +235,13 @@ const error = ref("");
 const loading = ref(false);
 const success = ref(false);
 const fieldErrors = reactive({ email: "", password: "" });
+
+// MFA state — mirrors SignIn.vue's handling of the 202/mfa_required response.
+const mfaRequired = ref(false);
+const mfaCode = ref("");
+const mfaBackupCode = ref("");
+const mfaError = ref("");
+const useBackupCode = ref(false);
 
 const tenantName = computed(() => tenant.meta?.name || t("waiterJoin.kicker"));
 
@@ -194,12 +271,56 @@ const submit = async () => {
 
   loading.value = true;
   try {
-    await session.signIn(email.value.trim(), password.value);
+    const result = await session.signIn(email.value.trim(), password.value);
+    if (result && result.mfaRequired) {
+      // Second factor required — do NOT flash success or redirect yet.
+      mfaRequired.value = true;
+      mfaCode.value = "";
+      mfaBackupCode.value = "";
+      mfaError.value = "";
+      useBackupCode.value = false;
+      return;
+    }
     success.value = true;
     // Replace so the join page isn't in history — staff should land in the waiter app
     router.replace({ name: "waiter" });
   } catch {
     error.value = session.error || t("signIn.failed");
+  } finally {
+    loading.value = false;
+  }
+};
+
+const toggleBackupCode = () => {
+  useBackupCode.value = !useBackupCode.value;
+  mfaError.value = "";
+  mfaCode.value = "";
+  mfaBackupCode.value = "";
+};
+
+const backToLogin = () => {
+  mfaRequired.value = false;
+  mfaCode.value = "";
+  mfaBackupCode.value = "";
+  mfaError.value = "";
+  useBackupCode.value = false;
+};
+
+const submitMfa = async () => {
+  mfaError.value = "";
+  const codeVal = useBackupCode.value ? mfaBackupCode.value.trim() : mfaCode.value.trim();
+  if (!codeVal) {
+    mfaError.value = t("mfa.codeRequired");
+    return;
+  }
+  loading.value = true;
+  try {
+    const payload = useBackupCode.value ? { backup_code: codeVal } : { code: codeVal };
+    await session.verifyMfa(payload);
+    success.value = true;
+    router.replace({ name: "waiter" });
+  } catch {
+    mfaError.value = session.error || t("mfa.invalidCode");
   } finally {
     loading.value = false;
   }
