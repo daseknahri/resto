@@ -64,6 +64,9 @@ services:
       # Container exposes 3000 (non-root nginx UID 101 binds it; 3000 > 1024).
       - "3000"
     volumes:
+      # Shared media volume (read-only) so the image's baked /media/ nginx alias
+      # resolves — mirrors the frontend service (same image, same baked route).
+      - media_data:/app/media:ro
       - static_data:/app/staticfiles:ro
     healthcheck:
       # healthcheck hits the container port 3000.
@@ -232,6 +235,10 @@ services:
       disable: true
     environment: *django_env
     depends_on:
+      # api must be healthy first so entrypoint migrations/schema checks finish
+      # before any Celery task can touch the DB on a cold deploy.
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -259,6 +266,9 @@ services:
       disable: true
     environment: *django_env
     depends_on:
+      # api healthy first: beat must not schedule DB-touching jobs before migrations.
+      api:
+        condition: service_healthy
       redis:
         condition: service_healthy
     deploy:

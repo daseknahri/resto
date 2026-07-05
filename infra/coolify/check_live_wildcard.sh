@@ -11,7 +11,7 @@ Usage:
 Options:
   --base-domain <domain>      Tenant namespace base domain (default: menu.ibnbatoutaweb.com)
   --tenant-slug <slug>        Tenant slug to probe (default: smoke)
-  --proxy-config <path>       Proxy dynamic config path (default: /data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml)
+  --proxy-config <path>       Proxy dynamic config path (default: /data/coolify/proxy/dynamic/ibnbatoutaweb-tenant-wildcard.yml)
   --cert-dir <path>           Proxy certificate dir (default: /data/coolify/proxy/certs/menu.ibnbatoutaweb.com)
   --host-ip <ip>              Override public host IP for --resolve probes
   --skip-network              Skip external curl checks
