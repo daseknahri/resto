@@ -3,6 +3,10 @@ http:
     ibnbatoutaweb-tenant-wildcard-http:
       entryPoints:
         - http
+      # Traefik v3 defaults to v2-incompatible rule parsing; the {tenant:…} named
+      # HostRegexp capture is v2 syntax and only matches when ruleSyntax: v2 is set.
+      # (Mirrors render_tenant_wildcard_proxy.sh, the proven working generator.)
+      ruleSyntax: v2
       rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`)
       middlewares:
         - ibnbatoutaweb-tenant-https-redirect
@@ -11,6 +15,7 @@ http:
     ibnbatoutaweb-tenant-wildcard-https:
       entryPoints:
         - https
+      ruleSyntax: v2
       rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`)
       service: menu-ibnbatoutaweb-com-frontend@docker
       priority: 100

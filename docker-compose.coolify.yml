@@ -96,6 +96,8 @@ services:
       - "traefik.http.routers.ibnbatoutaweb-api-admin.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-admin.service=ibnbatoutaweb-api"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
+      # v2 rule syntax required for the {tenant:…} named HostRegexp capture under Traefik v3.
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant.rulesyntax=v2"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.service=ibnbatoutaweb-api"
       # WebSocket routes (/ws) → backend (ASGI). Mirror the /api routers; Traefik
@@ -108,6 +110,7 @@ services:
       - "traefik.http.routers.ibnbatoutaweb-api-admin-ws.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-admin-ws.service=ibnbatoutaweb-api"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.rulesyntax=v2"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.service=ibnbatoutaweb-api"
       # Media files are now served directly by nginx from the shared volume.
