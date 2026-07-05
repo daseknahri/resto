@@ -6036,6 +6036,50 @@ class DriverStatusView(APIView):
         })
 
 
+# Straight-line distance (km) from a driver's GPS fix to the pickup at which we
+# consider the driver "arriving shortly" and web-push the restaurant once, pre-pickup.
+# 0.5km is a proxy for "a couple of minutes out" — close enough to start plating
+# without being so tight the one-time push might be missed between position polls.
+ARRIVAL_PROXIMITY_KM = 0.5
+
+
+def _maybe_notify_restaurant_arrival(driver, driver_lat, driver_lng):
+    """Best-effort one-time "driver arriving" web-push to the restaurant.
+
+    Fires once per delivery job when the assigned driver comes within
+    ARRIVAL_PROXIMITY_KM of the pickup while still en route (pre-pickup), so the
+    kitchen can have the order ready for handoff. Fully guarded: any failure is
+    logged and swallowed so it can never affect the high-frequency
+    /driver/position/ endpoint that calls it.
+    """
+    try:
+        from .models import DeliveryJob
+        job = DeliveryJob.objects.filter(
+            driver=driver,
+            status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+            pickup_arrival_notified=False,
+        ).first()
+        if job is None:
+            return
+        dist = _pickup_distance_km(driver_lat, driver_lng, job)
+        if dist is None or dist > ARRIVAL_PROXIMITY_KM:
+            return
+        from tenancy.models import Tenant as _T
+        tnt = _T.objects.filter(pk=job.tenant_id).first()
+        if tnt:
+            from accounts.tasks import enqueue, web_push_tenant
+            enqueue(
+                web_push_tenant, tnt.schema_name,
+                "Driver arriving",
+                f"Your driver is nearby for order #{job.order_number} — have it ready for handoff.",
+                "/owner/orders",
+            )
+            job.pickup_arrival_notified = True
+            job.save(update_fields=["pickup_arrival_notified"])
+    except Exception:
+        logger.exception("driver-arriving push failed for driver %s", getattr(driver, "id", "?"))
+
+
 class DriverPositionUpdateView(APIView):
     """POST /api/driver/position/ — driver updates their current GPS position.
 
@@ -6072,6 +6116,10 @@ class DriverPositionUpdateView(APIView):
         customer.driver_lng = lng
         customer.driver_position_updated_at = now
         customer.save(update_fields=["driver_lat", "driver_lng", "driver_position_updated_at", "updated_at"])
+
+        # Best-effort one-time "driver arriving" ping to the restaurant. Fully guarded
+        # inside the helper so it can never affect this endpoint's response.
+        _maybe_notify_restaurant_arrival(customer, lat, lng)
 
         return Response({"lat": lat, "lng": lng, "updated_at": now.isoformat()})
 

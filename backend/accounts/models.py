@@ -894,6 +894,10 @@ class DeliveryJob(models.Model):
     failure_note = models.CharField(max_length=300, blank=True)
     # Owner has been alerted that this job is stuck (no driver) — set once by the sweep.
     owner_alerted_at = models.DateTimeField(null=True, blank=True)
+    # Set once the restaurant has been web-pushed that the assigned driver is nearby
+    # and approaching pickup (pre-pickup proximity alert). Prevents re-notifying on
+    # every subsequent position update once the one-time "arriving" push has fired.
+    pickup_arrival_notified = models.BooleanField(default=False)
     # How many times this job has been re-offered (bounds re-dispatch loops; audit).
     redispatch_count = models.PositiveSmallIntegerField(default=0)
     # How the owner/system resolved a failed job.
