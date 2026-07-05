@@ -522,6 +522,31 @@
                 {{ referralCopied ? t('customerAccount.referralCopied') : t('customerAccount.referralCopy') }}
               </button>
             </div>
+
+            <!-- Manual referral-code entry (for already-registered customers who
+                 didn't land via a ?ref= link, so the signup auto-apply never fired) -->
+            <div v-if="!customerStore.customer?.referral_reward_given" class="space-y-1.5 border-t border-slate-800/70 pt-3">
+              <p class="text-[11px] font-medium text-slate-400">{{ t('customerAccount.referralEnterTitle') }}</p>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="linkReferralCode"
+                  type="text"
+                  maxlength="20"
+                  class="ui-input flex-1 text-xs uppercase tracking-widest"
+                  :placeholder="t('customerAccount.referralEnterPlaceholder')"
+                  :disabled="linkingReferral"
+                  @keyup.enter="linkReferralCodeSubmit"
+                />
+                <button
+                  type="button"
+                  class="ui-press shrink-0 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white disabled:opacity-50"
+                  :disabled="linkingReferral || !linkReferralCode.trim()"
+                  @click="linkReferralCodeSubmit"
+                >{{ linkingReferral ? t('common.loading') : t('customerAccount.referralEnterSubmit') }}</button>
+              </div>
+              <p v-if="linkReferralError" class="text-[11px] text-red-300">{{ linkReferralError }}</p>
+              <p v-if="linkReferralSuccess" class="text-[11px] text-emerald-300">{{ linkReferralSuccess }}</p>
+            </div>
           </div>
 
           <!-- Profile completeness nudge -->
@@ -638,6 +663,23 @@
                 </div>
               </li>
             </ul>
+
+            <!-- Load more button (hidden while a client-side search filter is active) -->
+            <div
+              v-if="!orderSearch && (marketplaceOrdersHasMore || loadingMoreMarketplaceOrders)"
+              class="border-t border-slate-800/70 p-3 text-center"
+            >
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-2 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+                :disabled="loadingMoreMarketplaceOrders"
+                @click="loadMoreMarketplaceOrders"
+              >
+                <svg v-if="loadingMoreMarketplaceOrders" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                <AppIcon v-else name="chevronDown" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {{ loadingMoreMarketplaceOrders ? t('common.loading') : t('customerAccount.loadMoreOrders') }}
+              </button>
+            </div>
           </div>
 
           <!-- Unfiltered-empty: no marketplace orders at all -->
@@ -1261,6 +1303,20 @@
                   </li>
                 </template>
               </ul>
+
+              <!-- Load more button -->
+              <div v-if="walletHasMore || loadingMoreWallet" class="pt-1 text-center">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-2 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+                  :disabled="loadingMoreWallet"
+                  @click="loadMoreWallet"
+                >
+                  <svg v-if="loadingMoreWallet" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  <AppIcon v-else name="chevronDown" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {{ loadingMoreWallet ? t('common.loading') : t('customerAccount.loadMoreTransactions') }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2289,8 +2345,13 @@ const topUpQueryMsg = computed(() => {
 });
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
-const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'loyalty', 'reviews', 'referral'];
-const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'overview');
+const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'reviews'];
+// 'loyalty' and 'referral' are legacy deep-link ids from before that content was
+// merged into 'wallet' (loyalty) and 'overview' (referral card) — redirect them
+// rather than 404-ing a bookmarked/shared link into a blank pane.
+const LEGACY_TAB_REDIRECTS = { loyalty: 'wallet', referral: 'overview' };
+const _requestedTab = LEGACY_TAB_REDIRECTS[route.query.tab] || route.query.tab;
+const activeTab = ref(VALID_TABS.includes(_requestedTab) ? _requestedTab : 'overview');
 const TABS = computed(() => [
   { id: 'overview',      icon: 'home',     label: t('customerAccount.tabOverview')      },
   { id: 'orders',        icon: 'calendar', label: t('customerAccount.tabOrders')        },
@@ -2560,7 +2621,10 @@ const submitReview = async (order) => {
 };
 
 const loadingWallet = ref(false);
+const loadingMoreWallet = ref(false);
 const walletError = ref(false);
+const walletHasMore = ref(false);
+const walletCurrentPage = ref(1);
 const walletTransactions = ref([]);
 const walletBalance = computed(() => {
   const raw = customerStore.customer?.wallet_balance;
@@ -2645,6 +2709,41 @@ const shareReferralLink = async () => {
     await navigator.share({ url: link, text: t('customerAccount.referralShareText') });
   } catch {
     /* user cancelled or share not supported */
+  }
+};
+
+// Manual referral-code entry — for a customer who is already registered and
+// didn't land via a ?ref= link (so CustomerAuthModal's signup auto-apply never
+// ran). Same backend endpoint (CustomerLinkReferralView), called directly.
+const linkReferralCode = ref('');
+const linkingReferral = ref(false);
+const linkReferralError = ref('');
+const linkReferralSuccess = ref('');
+
+const linkReferralCodeSubmit = async () => {
+  const code = linkReferralCode.value.trim();
+  if (!code || linkingReferral.value) return;
+  linkReferralError.value = '';
+  linkReferralSuccess.value = '';
+  linkingReferral.value = true;
+  try {
+    await api.post('/customer/link-referral/', { code });
+    linkReferralSuccess.value = t('customerAccount.referralEnterSuccess');
+    linkReferralCode.value = '';
+    await customerStore.fetchCustomer(true);
+  } catch (err) {
+    const errCode = err?.response?.data?.code;
+    if (errCode === 'already_linked') {
+      linkReferralError.value = t('customerAccount.referralEnterAlreadyLinked');
+    } else if (errCode === 'self_referral') {
+      linkReferralError.value = t('customerAccount.referralEnterSelfReferral');
+    } else if (errCode === 'code_invalid') {
+      linkReferralError.value = t('customerAccount.referralEnterInvalid');
+    } else {
+      linkReferralError.value = t('customerAccount.referralEnterFailed');
+    }
+  } finally {
+    linkingReferral.value = false;
   }
 };
 
@@ -2988,27 +3087,46 @@ const sendCredit = async () => {
   }
 };
 
-const fetchWallet = async () => {
+const fetchWallet = async (page = 1) => {
   if (!customerStore.isAuthenticated) return;
-  loadingWallet.value = true;
-  walletError.value = false;
+  const isFirstPage = page === 1;
+  if (isFirstPage) {
+    loadingWallet.value = true;
+    walletError.value = false;
+    walletCurrentPage.value = 1;
+  } else {
+    loadingMoreWallet.value = true;
+  }
   try {
     // ?vertical= scopes ONLY the transaction list; balance + spend-by-vertical
     // stay global (one wallet pool). Blank/all → unfiltered list.
-    const params = walletVertical.value ? `?vertical=${encodeURIComponent(walletVertical.value)}` : '';
-    const res = await api.get(`/customer/wallet/${params}`);
-    walletTransactions.value = res.data.transactions || [];
+    const params = new URLSearchParams();
+    if (walletVertical.value) params.set('vertical', walletVertical.value);
+    if (page > 1) params.set('page', String(page));
+    const qs = params.toString();
+    const res = await api.get(`/customer/wallet/${qs ? `?${qs}` : ''}`);
+    const incoming = res.data.transactions || [];
+    if (isFirstPage) {
+      walletTransactions.value = incoming;
+    } else {
+      walletTransactions.value = [...walletTransactions.value, ...incoming];
+    }
+    walletHasMore.value = Boolean(res.data.has_more);
+    walletCurrentPage.value = page;
     p2pEnabled.value = Boolean(res.data.p2p_enabled);
     walletSpendByVertical.value = res.data.spend_by_vertical || {};
     if (res.data.balance !== undefined && customerStore.customer) {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }
   } catch {
-    walletError.value = true;
+    if (isFirstPage) walletError.value = true;
   } finally {
     loadingWallet.value = false;
+    loadingMoreWallet.value = false;
   }
 };
+
+const loadMoreWallet = () => fetchWallet(walletCurrentPage.value + 1);
 
 const fetchOrders = async (page = 1) => {
   if (!customerStore.isAuthenticated) return;
@@ -3043,6 +3161,9 @@ const loadMoreOrders = () => fetchOrders(ordersCurrentPage.value + 1);
 // Cross-restaurant order history (public marketplace index — works on any domain).
 const marketplaceOrders = ref([]);
 const loadingMarketplaceOrders = ref(false);
+const loadingMoreMarketplaceOrders = ref(false);
+const marketplaceOrdersHasMore = ref(false);
+const marketplaceOrdersCurrentPage = ref(1);
 const MKT_ORDER_STATUS = {
   pending: 'orderStatus.statusPending',
   confirmed: 'orderStatus.statusConfirmed',
@@ -3137,19 +3258,39 @@ const VERTICAL_FILTER_OPTIONS = computed(() => {
   return opts;
 });
 
-const fetchMarketplaceOrders = async (vertical = '') => {
+const fetchMarketplaceOrders = async (vertical = '', page = 1) => {
   if (!customerStore.isAuthenticated) return;
-  loadingMarketplaceOrders.value = true;
+  const isFirstPage = page === 1;
+  if (isFirstPage) {
+    loadingMarketplaceOrders.value = true;
+    marketplaceOrdersCurrentPage.value = 1;
+  } else {
+    loadingMoreMarketplaceOrders.value = true;
+  }
   try {
-    const params = vertical ? `?vertical=${vertical}` : '';
-    const res = await api.get(`/customer/orders/all/${params}`);
-    marketplaceOrders.value = res.data.orders || [];
+    const params = new URLSearchParams();
+    if (vertical) params.set('vertical', vertical);
+    if (page > 1) params.set('page', String(page));
+    const qs = params.toString();
+    const res = await api.get(`/customer/orders/all/${qs ? `?${qs}` : ''}`);
+    const incoming = res.data.orders || [];
+    if (isFirstPage) {
+      marketplaceOrders.value = incoming;
+    } else {
+      marketplaceOrders.value = [...marketplaceOrders.value, ...incoming];
+    }
+    marketplaceOrdersHasMore.value = Boolean(res.data.has_more);
+    marketplaceOrdersCurrentPage.value = page;
   } catch {
-    marketplaceOrders.value = [];
+    if (isFirstPage) marketplaceOrders.value = [];
   } finally {
     loadingMarketplaceOrders.value = false;
+    loadingMoreMarketplaceOrders.value = false;
   }
 };
+
+const loadMoreMarketplaceOrders = () =>
+  fetchMarketplaceOrders(selectedVertical.value, marketplaceOrdersCurrentPage.value + 1);
 
 const selectVertical = (v) => {
   selectedVertical.value = v;

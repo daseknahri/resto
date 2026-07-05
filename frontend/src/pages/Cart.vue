@@ -1072,7 +1072,7 @@ const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
-const { formatPrice, itemCountLabel, t } = useI18n();
+const { formatPrice, itemCountLabel, formatDateTime, t } = useI18n();
 const currencyStore = useCurrencyStore();
 
 const showAuthModal = ref(false);
@@ -2304,6 +2304,18 @@ const mapOrderApiError = (err) => {
     return minimum
       ? t('cartPage.deliveryMinOrderNotMet', { amount: minimum })
       : t('cartPage.genericCheckoutError');
+  }
+  if (code === 'delivery_out_of_range') {
+    return t('cartPage.deliveryOutOfRangeError');
+  }
+  if (code === 'ordering_paused') {
+    const resumeAt = typeof data?.resume_at === 'string' ? formatDateTime(data.resume_at, { dateStyle: undefined, timeStyle: 'short' }) : '';
+    return resumeAt
+      ? t('cartPage.orderingPausedUntil', { time: resumeAt })
+      : t('cartPage.orderingPaused');
+  }
+  if (code === 'dine_in_unavailable') {
+    return t('cartPage.dineInUnavailable');
   }
   return t('cartPage.genericCheckoutError');
 };

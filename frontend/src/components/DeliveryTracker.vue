@@ -196,6 +196,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from './AppIcon.vue';
@@ -206,6 +207,7 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+const toast = useToastStore();
 
 // Straight-line km between two points (rough ETA only).
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -312,6 +314,16 @@ const alreadyRated = computed(() => props.delivery?.ratings?.customer_driver_rat
 const ratingDone = computed(() => justRated.value || alreadyRated.value);
 const showRating = computed(() => props.delivery?.status === 'delivered' && !ratingDone.value);
 
+// Map backend rating-rejection codes to distinct, localized messages instead
+// of silently swallowing the error (B5) — already_rated is the new B14 gate;
+// not_order_owner covers the ownership check on the same endpoint.
+const trackerRatingErrorMessage = (err) => {
+  const code = err?.response?.data?.code;
+  if (code === 'already_rated') return t('deliveryTracker.rateErrorAlreadyRated');
+  if (code === 'not_order_owner') return t('deliveryTracker.rateErrorNotOwner');
+  return t('deliveryTracker.rateError');
+};
+
 const submitRating = async () => {
   if (!ratingScore.value || submittingRating.value) return;
   const d = props.delivery;
@@ -324,8 +336,9 @@ const submitRating = async () => {
       { params: { restaurant: d.restaurant_slug } },
     );
     justRated.value = true;
-  } catch {
-    // best-effort; leave the form open so the customer can retry
+  } catch (err) {
+    // leave the form open so the customer can retry
+    toast.show(trackerRatingErrorMessage(err), 'error');
   } finally {
     submittingRating.value = false;
   }

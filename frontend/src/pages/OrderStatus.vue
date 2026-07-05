@@ -585,9 +585,12 @@
         <p class="text-sm text-slate-200 leading-relaxed">{{ orderData.receipt_message }}</p>
       </div>
 
-      <!-- Rating prompt (completed, not yet rated) -->
+      <!-- Rating prompt (completed, not yet rated) — only shown when a customer
+           session exists that could actually rate it. The backend always 403s
+           not_order_owner for anonymous callers, so an anonymous dine-in
+           customer would otherwise see a form that can never succeed (B6). -->
       <div
-        v-if="orderData.status === 'completed' && !orderData.has_rating"
+        v-if="orderData.status === 'completed' && !orderData.has_rating && customerStore.isAuthenticated"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-4"
         :style="{ '--ui-delay': '126ms' }"
       >
@@ -626,6 +629,19 @@
         >
           <svg v-if="ratingSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
           {{ ratingSubmitting ? t("orderStatus.rateSubmitting") : t("orderStatus.rateSubmit") }}
+        </button>
+      </div>
+
+      <!-- Anonymous/non-owner completed order — brief sign-in-to-rate nudge instead
+           of a form that would always 403 (B6). -->
+      <div
+        v-else-if="orderData.status === 'completed' && !orderData.has_rating && !customerStore.isAuthenticated"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-3"
+        :style="{ '--ui-delay': '126ms' }"
+      >
+        <p class="text-sm text-slate-300">{{ t("orderStatus.rateSignInNudge") }}</p>
+        <button class="ui-btn-outline inline-flex px-4 py-2 text-sm" @click="showAuthModal = true">
+          {{ t("orderStatus.tableSignInNudgeButton") }}
         </button>
       </div>
 
@@ -794,6 +810,18 @@ const ratingScore = ref(0);
 const ratingComment = ref("");
 const ratingSubmitting = ref(false);
 
+// Map backend rating-rejection codes to distinct, localized messages instead
+// of one generic toast (B5) — already_rated/order_not_completed/not_order_owner/
+// invalid_score are all reachable outcomes from CustomerOrderRateView.
+const ratingErrorMessage = (err) => {
+  const code = err?.response?.data?.code;
+  if (code === "already_rated") return t("orderStatus.rateErrorAlreadyRated");
+  if (code === "order_not_completed") return t("orderStatus.rateErrorNotCompleted");
+  if (code === "not_order_owner") return t("orderStatus.rateErrorNotOwner");
+  if (code === "invalid_score") return t("orderStatus.rateErrorInvalidScore");
+  return t("orderStatus.rateError");
+};
+
 const submitRating = async () => {
   if (ratingScore.value === 0 || ratingSubmitting.value) return;
   ratingSubmitting.value = true;
@@ -805,8 +833,8 @@ const submitRating = async () => {
     toast.show(t("orderStatus.rateSubmitted"), "success");
     // Refresh so has_rating flips to true and the prompt hides
     await fetchStatus();
-  } catch {
-    toast.show(t("orderStatus.rateError"), "error");
+  } catch (err) {
+    toast.show(ratingErrorMessage(err), "error");
   } finally {
     ratingSubmitting.value = false;
   }

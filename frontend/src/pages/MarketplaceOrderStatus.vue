@@ -311,6 +311,22 @@
           </div>
         </Transition>
 
+        <!-- Contact restaurant escape hatch — shown any time order is active and phone is known (B7) -->
+        <div
+          v-if="!['completed','cancelled'].includes(order.status) && order.tenant_phone"
+          class="ui-reveal flex justify-center"
+          :style="{ '--ui-delay': '92ms' }"
+        >
+          <a
+            :href="`tel:${order.tenant_phone}`"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+            :aria-label="`${t('mktOrderStatus.contactRestaurant')}: ${order.tenant_phone}`"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M2.3 2.3c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1L4.2 6.6A9.5 9.5 0 0 0 9.4 11.8l1.2-1.2c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1l-1 1c-1.2 1.2-6-1.2-8.4-3.6C2 8.7-.5 3.8.7 2.5l1-.3.6.1Z"/></svg>
+            {{ t('mktOrderStatus.contactRestaurant') }}
+          </a>
+        </div>
+
         <!-- Driver tracking panel (shared component) -->
         <DeliveryTracker :delivery="delivery" />
 
@@ -557,6 +573,17 @@ const mktRatingScore = ref(0);
 const mktRatingComment = ref('');
 const mktRatingSubmitting = ref(false);
 
+// Map backend rating-rejection codes to distinct, localized messages instead
+// of silently swallowing the error (B5) — mirrors OrderStatus.vue's mapping.
+const mktRatingErrorMessage = (err) => {
+  const code = err?.response?.data?.code;
+  if (code === 'already_rated') return t('mktOrderStatus.rateErrorAlreadyRated');
+  if (code === 'order_not_completed') return t('mktOrderStatus.rateErrorNotCompleted');
+  if (code === 'not_order_owner') return t('mktOrderStatus.rateErrorNotOwner');
+  if (code === 'invalid_score') return t('mktOrderStatus.rateErrorInvalidScore');
+  return t('mktOrderStatus.rateError');
+};
+
 const submitMktRating = async () => {
   if (mktRatingScore.value === 0 || mktRatingSubmitting.value) return;
   mktRatingSubmitting.value = true;
@@ -567,8 +594,11 @@ const submitMktRating = async () => {
     });
     // Mark rated locally so the prompt hides without waiting for next poll
     if (order.value) order.value = { ...order.value, has_rating: true };
-  } catch { /* silent */ }
-  finally { mktRatingSubmitting.value = false; }
+  } catch (err) {
+    toast.show(mktRatingErrorMessage(err), 'error');
+  } finally {
+    mktRatingSubmitting.value = false;
+  }
 };
 
 // ── Reorder ───────────────────────────────────────────────────────────────────
