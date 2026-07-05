@@ -5977,10 +5977,20 @@ class DriverStatusView(APIView):
             customer = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # A driver reads as "rejected" when an admin has rejected them (driver_rejected_at
+        # set) and they haven't since been approved. AdminDriverApprovalView clears
+        # driver_rejected_at on a later approve, so this is naturally False for drivers who
+        # never applied (driver_rejected_at is None) AND for a rejection that was later
+        # reversed by approval. It stays True even after is_driver was forced False by the
+        # reject, which is what lets the app show a distinct "rejected" screen instead of
+        # silently falling back to "none" (never applied).
+        _driver_rejected = bool(customer.driver_rejected_at) and not customer.driver_approved
         return Response({
             "is_driver": bool(customer.is_driver),
             "driver_approved": bool(customer.driver_approved),
             "driver_status": ("approved" if customer.driver_approved else "pending") if customer.is_driver else "none",
+            "driver_rejected": _driver_rejected,
+            "driver_rejection_reason": customer.driver_rejection_reason or "",
             "driver_vehicle": customer.driver_vehicle or "",
             "is_driver_online": bool(customer.is_driver_online),
             "driver_car_approved": bool(customer.driver_car_approved),
@@ -6664,6 +6674,8 @@ class DriverJobStatusUpdateView(APIView):
             _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
             _notify_customer_milestone(job, "delivered")
         elif new_status == DeliveryJob.Status.FAILED:
+            customer.is_driver_online = False  # free the driver after a terminal outcome (mirrors DELIVERED)
+            customer.save(update_fields=["is_driver_online", "updated_at"])
             _on_job_failed(job)
         elif new_status == DeliveryJob.Status.AT_RESTAURANT:
             try:
@@ -7173,6 +7185,7 @@ class AdminDriverApprovalView(APIView):
     permission_classes = [IsPlatformAdmin]
 
     def post(self, request, driver_id, *args, **kwargs):
+        from django.utils import timezone as _tz
         from .models import Customer
         approve = request.path.rstrip("/").endswith("approve")
         try:
@@ -7182,13 +7195,23 @@ class AdminDriverApprovalView(APIView):
 
         if approve:
             driver.driver_approved = True
-            driver.save(update_fields=["driver_approved", "updated_at"])
+            # A re-approval supersedes any earlier rejection — clear its trace.
+            driver.driver_rejection_reason = ""
+            driver.driver_rejected_at = None
+            driver.save(update_fields=[
+                "driver_approved", "driver_rejection_reason", "driver_rejected_at", "updated_at",
+            ])
         else:
-            # Decline: revoke the application and force offline.
+            # Decline: revoke the application, force offline, and record why.
             driver.driver_approved = False
             driver.is_driver = False
             driver.is_driver_online = False
-            driver.save(update_fields=["driver_approved", "is_driver", "is_driver_online", "updated_at"])
+            driver.driver_rejection_reason = str(request.data.get("reason") or "")[:300]
+            driver.driver_rejected_at = _tz.now()
+            driver.save(update_fields=[
+                "driver_approved", "is_driver", "is_driver_online",
+                "driver_rejection_reason", "driver_rejected_at", "updated_at",
+            ])
 
         log_admin_action(
             action=(AdminAuditLog.Actions.DRIVER_APPROVED if approve
@@ -7427,6 +7450,52 @@ class DriverCashoutCancelView(APIView):
             req.resolved_at = _tz.now()
             req.save(update_fields=["status", "resolved_at"])
         return Response({"status": req.status})
+
+
+class DriverCashoutHistoryView(APIView):
+    """GET /api/driver/cashout/history/ — the signed-in driver's RESOLVED cash-out
+    requests (paid, cancelled, expired — never the current pending one; see
+    DriverCashoutView.get for that), newest first. Mirrors DriverDeliveriesView's
+    page/has_more pagination."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            Customer.objects.get(pk=customer_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .models import DriverCashoutRequest
+        PAGE_SIZE = 20
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        offset = (page - 1) * PAGE_SIZE
+        reqs = list(
+            DriverCashoutRequest.objects.filter(
+                driver_id=customer_id,
+            ).exclude(status=DriverCashoutRequest.Status.PENDING)
+            .order_by("-created_at")[offset:offset + PAGE_SIZE + 1]
+        )
+        has_more = len(reqs) > PAGE_SIZE
+        reqs = reqs[:PAGE_SIZE]
+        # Batch-resolve settling tenant names (avoids N+1 via _tenant_slug_name cache).
+        _names = {r.tenant_id: _tenant_slug_name(r.tenant_id)[1] for r in reqs if r.tenant_id}
+        results = [{
+            "id": r.id,
+            "amount": str(r.amount),
+            "status": r.status,
+            "created_at": r.created_at.isoformat(),
+            "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
+            "settled_by": _names.get(r.tenant_id, "") if r.tenant_id else "",
+        } for r in reqs]
+        return Response({"results": results, "has_more": has_more, "page": page})
 
 
 class DriverDeliveriesView(APIView):

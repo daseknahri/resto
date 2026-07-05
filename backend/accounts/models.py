@@ -35,6 +35,17 @@ class Customer(models.Model):
         default=False,
         help_text="A platform admin has vetted and approved this driver. Only approved drivers can go online or accept jobs.",
     )
+    # Set when an admin rejects a driver application (AdminDriverApprovalView reject path).
+    # Cleared on a later approve, so "rejected" only reads true for a NOT-yet-reapplied
+    # rejection (see DriverStatusView.get for the exact derived signal).
+    driver_rejection_reason = models.CharField(
+        max_length=300, blank=True, default="",
+        help_text="Optional admin-supplied reason shown to the driver when their application is rejected.",
+    )
+    driver_rejected_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When an admin last rejected this driver's application. Cleared on a later approve.",
+    )
     driver_vehicle = models.CharField(
         max_length=120, blank=True,
         help_text="Driver's vehicle, supplied at application (e.g. 'Motorbike — 1234-AB').",

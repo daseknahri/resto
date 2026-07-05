@@ -23,6 +23,7 @@ from accounts.views import (
     DriverJobAcceptView,
     DriverJobStatusUpdateView,
     DriverDeliveriesView,
+    DriverCashoutHistoryView,
     AdminDriverApprovalView,
 )
 
@@ -365,6 +366,89 @@ class DriverDeliveriesViewTests(SimpleTestCase):
         self.assertIn("failed", filter_kwargs["status__in"])
 
 
+# ── DriverCashoutHistoryView ──────────────────────────────────────────────────
+
+def _make_cashout_req(pk=1, status_val="paid", tenant_id=7, amount="150.00"):
+    r = MagicMock()
+    r.id = pk
+    r.amount = amount
+    r.status = status_val
+    r.tenant_id = tenant_id
+    r.created_at = MagicMock()
+    r.created_at.isoformat.return_value = "2026-06-01T09:00:00+00:00"
+    r.resolved_at = MagicMock()
+    r.resolved_at.isoformat.return_value = "2026-06-01T09:05:00+00:00"
+    return r
+
+
+class DriverCashoutHistoryViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverCashoutHistoryView.as_view()
+
+    def _get(self, session=None):
+        req = self.factory.get("/api/driver/cashout/history/")
+        req.session = session or _session()
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def test_no_session_returns_401(self):
+        resp = self.view(self._get(session=_session(customer_id=None)))
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.models.Customer.objects")
+    def test_driver_not_found_returns_404(self, mock_objs):
+        from accounts.models import Customer
+        mock_objs.get.side_effect = Customer.DoesNotExist
+        resp = self.view(self._get(session=_session(customer_id=99)))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("accounts.models.Customer.objects")
+    def test_returns_resolved_rows_excludes_pending(self, mock_objs):
+        mock_objs.get.return_value = _make_customer()
+        req = _make_cashout_req(status_val="paid")
+
+        with patch("accounts.models.DriverCashoutRequest") as mock_dcr:
+            qs = MagicMock()
+            qs.exclude.return_value.order_by.return_value.__getitem__.return_value = [req]
+            mock_dcr.objects.filter.return_value = qs
+            mock_dcr.Status.PENDING = "pending"
+            with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
+                resp = self.view(self._get(session=_session(customer_id=1)))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["results"]), 1)
+        row = resp.data["results"][0]
+        self.assertEqual(row["status"], "paid")
+        self.assertEqual(row["amount"], "150.00")
+        self.assertEqual(row["settled_by"], "Demo")
+        self.assertIn("resolved_at", row)
+        # Scoped to this driver only.
+        filter_kwargs = mock_dcr.objects.filter.call_args[1]
+        self.assertEqual(filter_kwargs["driver_id"], 1)
+        # Pending is excluded, never included in history.
+        exclude_kwargs = qs.exclude.call_args[1]
+        self.assertEqual(exclude_kwargs["status"], "pending")
+
+    @patch("accounts.models.Customer.objects")
+    def test_pagination_has_more_flag(self, mock_objs):
+        mock_objs.get.return_value = _make_customer()
+        # 21 rows returned for a page size of 20 → has_more True, only 20 kept.
+        rows = [_make_cashout_req(pk=i) for i in range(21)]
+
+        with patch("accounts.models.DriverCashoutRequest") as mock_dcr:
+            qs = MagicMock()
+            qs.exclude.return_value.order_by.return_value.__getitem__.return_value = rows
+            mock_dcr.objects.filter.return_value = qs
+            mock_dcr.Status.PENDING = "pending"
+            with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
+                resp = self.view(self._get(session=_session(customer_id=1)))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["has_more"])
+        self.assertEqual(len(resp.data["results"]), 20)
+
+
 # ── AdminDriverApprovalView ───────────────────────────────────────────────────
 
 class AdminDriverApprovalViewTests(SimpleTestCase):
@@ -594,6 +678,27 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
                     resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
                                        session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_failed.assert_called_once()
+
+    @patch("accounts.views._on_job_failed")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_failed_transition_clears_driver_online(self, mock_objs, mock_dj, mock_failed):
+        """D-1 bug fix: a FAILED delivery must free the driver (mirrors DELIVERED),
+        so a failed run doesn't strand the driver stuck 'online' server-side."""
+        customer = _make_customer(is_driver_online=True)
+        mock_objs.get.return_value = customer
+        job = _make_job(status_val="picked_up", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+        with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "failed"}):
+            with patch("accounts.views._batch_business_types", return_value={}):
+                with patch("django.utils.timezone.now", return_value=MagicMock()):
+                    resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
+                                       session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(customer.is_driver_online)
+        customer.save.assert_any_call(update_fields=["is_driver_online", "updated_at"])
         mock_failed.assert_called_once()
 
 
