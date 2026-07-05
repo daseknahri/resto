@@ -7526,6 +7526,30 @@ class AdminPlatformAnalyticsView(APIView):
                 return None
             return round(float(val), decimals)
 
+        # ── Revenue by vertical (additive, read-only) ─────────────────────────
+        # P1b tagged every WalletTransaction with its consumer vertical (see
+        # accounts/wallet_service.py + accounts/verticals.py). Group PAYMENT rows
+        # by that tag for a unified cross-vertical revenue view. Rows with a null
+        # vertical (top-ups, P2P transfers, admin adjustments) are global money
+        # movements, not per-service revenue, so they are excluded here — this is
+        # a pure read of existing tags, no new money math.
+        from .verticals import ALL_VERTICALS
+
+        vertical_rows = (
+            WalletTransaction.objects.filter(type="payment", vertical__isnull=False)
+            .values("vertical")
+            .annotate(total=Sum("amount"), count=Count("id"))
+        )
+        vertical_totals = {row["vertical"]: row for row in vertical_rows}
+        revenue_by_vertical = [
+            {
+                "vertical": v,
+                "total": _f(vertical_totals.get(v, {}).get("total")) or 0.0,
+                "count": vertical_totals.get(v, {}).get("count") or 0,
+            }
+            for v in ALL_VERTICALS
+        ]
+
         return Response({
             "tenants": {
                 "total": total_tenants,
@@ -7563,6 +7587,7 @@ class AdminPlatformAnalyticsView(APIView):
                 "total_bonus_issued": _f(txn_agg["total_bonus"]),
                 "total_payments": _f(txn_agg["total_payments"]),
             },
+            "revenue_by_vertical": revenue_by_vertical,
             "financials": {
                 "customer_wallet_liability": _f(wallet_agg["total_balance"]) or 0.0,
                 "restaurant_float_outstanding": _f(total_float) or 0.0,

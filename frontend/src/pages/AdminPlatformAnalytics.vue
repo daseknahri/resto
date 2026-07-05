@@ -165,6 +165,30 @@
         </section>
       </div>
 
+      <!-- Revenue by vertical -->
+      <section v-if="data.revenue_by_vertical" class="ui-reveal space-y-3" :style="{ '--ui-delay': '126ms' }">
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionRevenueByVertical') }}</h2>
+        <div class="ui-card overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-start text-[11px] uppercase tracking-wide text-slate-500">
+                <th class="px-4 py-2 text-start font-medium">{{ t('adminAnalytics.revenueVerticalCol') }}</th>
+                <th class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTotalCol') }}</th>
+                <th class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTxnsCol') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in data.revenue_by_vertical" :key="row.vertical" class="border-t border-white/5">
+                <td class="px-4 py-2 text-slate-200">{{ t(`adminAnalytics.vertical_${row.vertical}`) }}</td>
+                <td class="px-4 py-2 text-end tabular-nums text-slate-200">{{ currency(row.total) }}</td>
+                <td class="px-4 py-2 text-end tabular-nums text-slate-500">{{ row.count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-[11px] text-slate-500">{{ t('adminAnalytics.revenueByVerticalHint') }}</p>
+      </section>
+
       <!-- Wallet -->
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '140ms' }">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionWallet') }}</h2>
