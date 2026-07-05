@@ -275,6 +275,16 @@
                     </p>
                     <p v-if="selected.vehicle" class="truncate text-xs text-slate-400">{{ selected.vehicle }}</p>
                   </div>
+                  <!-- Optional reject reason — surfaced later on the driver's own status screen. -->
+                  <input
+                    v-if="!selected.approved"
+                    v-model="rejectReason"
+                    type="text"
+                    maxlength="300"
+                    class="ui-input text-sm"
+                    :placeholder="t('adminDrivers.rejectReasonPlaceholder')"
+                    :aria-label="t('adminDrivers.rejectReasonPlaceholder')"
+                  />
                   <div class="flex gap-2">
                     <button
                       v-if="!selected.approved"
@@ -432,11 +442,13 @@ const paying = ref(false);
 const payError = ref('');
 const vetting = ref(false);
 const vettingCar = ref(false);
+const rejectReason = ref(''); // optional reason posted with a reject; server-truncated to 300 chars
 
 const openDriver = async (d) => {
   selected.value = d;
   detail.value = null;
   payError.value = '';
+  rejectReason.value = '';
   loadingDetail.value = true;
   try {
     const res = await api.get(`/admin/drivers/${d.id}/earnings/`);
@@ -477,7 +489,8 @@ const setApproval = async (approve) => {
   if (!selected.value || vetting.value) return;
   vetting.value = true;
   try {
-    await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'approve' : 'reject'}/`, {});
+    const body = approve ? {} : { reason: rejectReason.value.trim() };
+    await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'approve' : 'reject'}/`, body);
     toast.show(approve ? t('adminDrivers.approveDone') : t('adminDrivers.rejectDone'), 'success');
     if (approve) {
       selected.value.approved = true;

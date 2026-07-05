@@ -79,6 +79,42 @@
       </div>
     </div>
 
+    <!-- Signed in, but a prior application was rejected — distinct from the
+         never-applied screen below (D-2a). Re-applying is allowed by default. -->
+    <div v-else-if="driverRejected" class="ui-panel p-5 space-y-4 ui-reveal">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
+          <AppIcon name="info" class="h-5 w-5 text-red-300" aria-hidden="true" />
+        </div>
+        <p class="text-base font-semibold text-slate-100">{{ t('driver.rejectedTitle') }}</p>
+      </div>
+      <p class="ui-subtle">{{ driverRejectionReason ? t('driver.rejectedReasonPrefix', { reason: driverRejectionReason }) : t('driver.rejectedBody') }}</p>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-slate-400" for="driver-vehicle-reapply">{{ t('driver.vehicleLabel') }}</label>
+        <input
+          id="driver-vehicle-reapply"
+          v-model.trim="vehicle"
+          type="text"
+          class="ui-input"
+          :placeholder="t('driver.vehiclePlaceholder')"
+        />
+      </div>
+      <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
+      </div>
+      <button
+        class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
+        :disabled="busy"
+        :aria-busy="busy"
+        @click="becomeDriver"
+      >
+        <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+        {{ busy ? t('common.loading') : t('driver.reapplyCta') }}
+      </button>
+    </div>
+
     <!-- Signed in but not yet a driver -->
     <div v-else-if="!isDriver" class="ui-panel p-5 space-y-4 ui-reveal">
       <div class="flex items-center gap-3">
@@ -150,6 +186,19 @@
 
     <!-- Driver dashboard (approved) -->
     <template v-else>
+      <!-- D-9: subtle staleness indicator — background polling has missed a few
+           beats in a row (extended outage), instead of failing silently. Not a
+           toast (would spam every failed tick); clears itself once a poll succeeds. -->
+      <div
+        v-if="connectionStale"
+        class="ui-panel flex items-center gap-2 border-amber-500/30 bg-amber-500/8 px-3 py-2 ui-reveal"
+        role="status"
+        aria-live="polite"
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0 animate-spin text-amber-300"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+        <p class="text-xs font-medium text-amber-200">{{ t('driver.connectionLost') }}</p>
+      </div>
+
       <!-- First-approved welcome (one-time, dismissible) -->
       <div v-if="!driverWelcomed" class="ui-panel space-y-3 border border-emerald-500/30 bg-emerald-900/10 p-4 ui-reveal">
         <div class="space-y-1">
@@ -439,7 +488,17 @@
             </p>
           </div>
           <p class="mt-0.5 text-xs text-slate-500">{{ online ? t('driver.onlineHint') : t('driver.offlineHint') }}</p>
-          <p v-if="geoError" class="mt-1 text-xs text-amber-300" role="status">{{ geoError }}</p>
+          <!-- D-5: geolocation-denied error gets a retry button + short re-enable hint,
+               since a driver who dismissed the browser's location prompt has no other
+               way back into the flow without knowing to change browser/OS settings. -->
+          <div v-if="geoError" class="mt-1 space-y-1">
+            <p class="text-xs text-amber-300" role="status">{{ geoError }}</p>
+            <p class="text-[11px] text-slate-500">{{ t('driver.geoRetryHint') }}</p>
+            <button
+              class="ui-press rounded-lg border border-amber-500/40 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:border-amber-400/70 hover:text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+              @click="startGeo"
+            >{{ t('driver.geoRetry') }}</button>
+          </div>
           <!-- Stale-GPS warning: a stationary 'online' driver whose last fix is old
                drops out of the rankable pool, so warn them to surface it. -->
           <p v-else-if="online && gpsStale" class="mt-1 flex items-center gap-1 text-xs text-amber-300" role="status">
@@ -539,6 +598,11 @@
                 <p class="my-1 text-4xl font-bold tracking-[0.35em] text-white tabular-nums">
                   <span class="sr-only">{{ t('driver.cashOutCode') }}: </span>{{ cashout.code }}
                 </p>
+                <p
+                  v-if="cashout.expires_at"
+                  class="text-[11px] font-medium"
+                  :class="cashoutSecondsLeft <= 60 ? 'text-red-300' : 'text-emerald-300/70'"
+                >{{ t('driver.cashOutExpiresIn', { time: fmtCountdown(cashoutSecondsLeft) }) }}</p>
                 <button
                   class="ui-btn-outline ui-press px-5 py-2 text-sm"
                   :disabled="busy"
@@ -546,6 +610,9 @@
                 >
                   {{ t('driver.cashOutCancel') }}
                 </button>
+              </div>
+              <div v-if="cashoutErrorMessage" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+                <p class="text-sm text-red-300">{{ cashoutErrorMessage }}</p>
               </div>
             </div>
           </template>
@@ -1126,6 +1193,59 @@
         </div>
       </div>
 
+      <!-- Cash-out history (resolved requests: paid / cancelled / expired) -->
+      <div class="ui-panel p-4 space-y-3 ui-reveal">
+        <button
+          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          :aria-expanded="showCashoutHistory"
+          aria-controls="driver-cashout-history-panel"
+          @click="toggleCashoutHistory"
+        >
+          <p class="text-sm font-semibold text-slate-200">{{ t('driver.cashOutHistoryTitle') }}</p>
+          <AppIcon :name="showCashoutHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+        </button>
+        <div id="driver-cashout-history-panel">
+          <template v-if="showCashoutHistory">
+            <div v-if="loadingCashoutHistory && !cashoutHistory.length" class="space-y-2" aria-busy="true">
+              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
+            </div>
+            <div v-else-if="!cashoutHistory.length" class="ui-empty-state text-center py-4 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('driver.cashOutHistoryEmpty') }}</p>
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="(c, index) in cashoutHistory"
+                :key="c.id"
+                class="ui-reveal flex items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
+                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-slate-200">{{ c.settled_by || t('driver.cashOutHistoryUnsettled') }}</p>
+                  <p class="text-[11px] text-slate-500">{{ fmtDate(c.resolved_at || c.created_at) }}</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span
+                    class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                    :class="{
+                      'bg-emerald-500/15 text-emerald-300': c.status === 'paid',
+                      'bg-slate-700/60 text-slate-400': c.status === 'cancelled',
+                      'bg-red-500/15 text-red-300': c.status === 'expired',
+                    }"
+                  >{{ t(`driver.cashOutStatus_${c.status}`) }}</span>
+                  <span class="text-sm font-semibold tabular-nums" :class="c.status === 'paid' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(c.amount) }}</span>
+                </div>
+              </li>
+            </ul>
+            <button
+              v-if="cashoutHistoryHasMore"
+              :disabled="loadingCashoutHistory"
+              class="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
+              @click="loadMoreCashoutHistory"
+            >{{ loadingCashoutHistory ? t('common.loading') : t('driver.historyLoadMore') }}</button>
+          </template>
+        </div>
+      </div>
+
       <!-- Ride history (car drivers only) -->
       <div v-if="driverVehicleType === 'car'" class="ui-panel p-4 space-y-3 ui-reveal">
         <button
@@ -1256,9 +1376,11 @@
       @keydown.esc="releaseRideConfirmOpen = false"
     >
       <div
+        ref="releaseRideDialogRef"
         role="dialog"
         aria-modal="true"
         :aria-label="t('driverRides.abandonCta')"
+        tabindex="-1"
         class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
       >
         <p class="text-sm font-semibold text-white">{{ t('driverRides.abandonCta') }}?</p>
@@ -1336,6 +1458,7 @@
       @keydown.esc="closeCodeModal"
     >
       <div
+        ref="codeDialogRef"
         role="dialog"
         aria-modal="true"
         :aria-label="t('driver.enterDeliveryCode')"
@@ -1425,6 +1548,7 @@
       @keydown.esc="closeCashoutModal"
     >
       <div
+        ref="cashoutDialogRef"
         role="dialog"
         aria-modal="true"
         :aria-label="t('driver.cashOut')"
@@ -1475,6 +1599,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import { useCustomerPush } from '../composables/useCustomerPush';
+import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
 import { pickupLabelKey } from '../lib/deliveryVocab';
 
@@ -1485,6 +1610,10 @@ const driverPush = useCustomerPush();
 
 const isDriver = ref(false);
 const approved = ref(false);
+// D-2a: distinct "application rejected" state (is_driver is also false here, but the
+// rejected screen takes priority over the generic never-applied screen — see fetchStatus).
+const driverRejected = ref(false);
+const driverRejectionReason = ref('');
 const offerModalRef = ref(null); // template ref to DriverOfferModal (exposes enableSound)
 
 // ── Dashboard accordion state ──────────────────────────────────────────────────
@@ -1554,6 +1683,8 @@ const rideOffers = ref([]);
 const activeRide = ref(null);
 const loadingRides = ref(false);
 const releaseRideConfirmOpen = ref(false);
+const releaseRideDialogRef = ref(null);
+useFocusTrap(releaseRideDialogRef, releaseRideConfirmOpen); // D-8: Tab focus-trap
 
 // ── Package handover code (inline on ride completion) ─────────────────────────
 const packageCodeInput = ref('');
@@ -1715,6 +1846,33 @@ const toggleHistory = () => {
   if (showHistory.value && !history.value.length) fetchHistory(1);
 };
 
+// D-3: Cash-out history (resolved requests — paid/cancelled/expired) — lazy-loaded
+// the first time the driver expands it, mirroring the Recent Deliveries accordion.
+const showCashoutHistory = ref(false);
+const cashoutHistory = ref([]);
+const loadingCashoutHistory = ref(false);
+const cashoutHistoryPage = ref(1);
+const cashoutHistoryHasMore = ref(false);
+const fetchCashoutHistory = async (page = 1) => {
+  loadingCashoutHistory.value = true;
+  try {
+    const { data } = await api.get(`/driver/cashout/history/?page=${page}`);
+    const incoming = Array.isArray(data.results) ? data.results : [];
+    cashoutHistory.value = page === 1 ? incoming : [...cashoutHistory.value, ...incoming];
+    cashoutHistoryHasMore.value = Boolean(data.has_more);
+    cashoutHistoryPage.value = page;
+  } catch {
+    /* keep last */
+  } finally {
+    loadingCashoutHistory.value = false;
+  }
+};
+const loadMoreCashoutHistory = () => fetchCashoutHistory(cashoutHistoryPage.value + 1);
+const toggleCashoutHistory = () => {
+  showCashoutHistory.value = !showCashoutHistory.value;
+  if (showCashoutHistory.value && !cashoutHistory.value.length) fetchCashoutHistory(1);
+};
+
 // Ride history (driver's completed/cancelled rides) — lazy-loaded on first expand.
 const showRideHistory = ref(false);
 const rideHistory = ref([]);
@@ -1805,6 +1963,8 @@ const codeInput = ref('');
 const codeError = ref('');
 const codeSubmitting = ref(false);
 const codeFirstRef = ref(null);
+const codeDialogRef = ref(null);
+useFocusTrap(codeDialogRef, codeModalOpen); // D-8: Tab focus-trap
 const proofPhotoInputRef = ref(null);
 const proofPhotoFile = ref(null);   // File object selected by the camera
 const proofPhotoPreview = ref('');  // Object URL for the in-modal thumbnail
@@ -1835,13 +1995,26 @@ const closeCodeModal = () => {
   _codeReturnFocus = null;
 };
 
+// D-1: after ANY terminal job transition (delivered OR failed) the backend now
+// forces is_driver_online=False, so re-fetch the real state from /driver/status/
+// instead of assuming offline client-side — keeps online/geo in sync with the
+// server rather than desyncing on a failed delivery that leaves the driver online.
+const _syncOnlineAfterTerminal = async () => {
+  const wasOnline = online.value;
+  await fetchStatus();
+  if (online.value) {
+    if (!wasOnline) startGeo(); // server says still online — keep tracking location
+  } else {
+    stopGeo();
+  }
+};
+
 const _afterDelivered = async (data, job) => {
   closeCodeModal();
   if (data.is_terminal) {
     if (job?.collect_cash && job?.order_total) lastCollectedCash.value = job.order_total;
     activeJob.value = null;
-    online.value = false;
-    stopGeo();
+    await _syncOnlineAfterTerminal();
     toast.show(t('driver.deliveredToast'), 'success');
     showGoOnlineCta.value = true;
     if (job && job.restaurant_slug) openCustomerRating(job);
@@ -1886,11 +2059,31 @@ const submitDeliveryCode = async () => {
   }
 };
 
+// D-10: distinct copy per backend error `code` for the cash-out request/cancel flow
+// (e.g. lockout / not_approved / stale-ish codes), instead of one generic message.
+const CASHOUT_ERROR_KEYS = {
+  not_approved: 'driver.cashOutErrorNotApproved',
+  below_min: 'driver.cashOutErrorBelowMin',
+  bad_amount: 'driver.cashOutErrorBadAmount',
+  already_pending: 'driver.cashOutErrorAlreadyPending',
+  locked: 'driver.cashOutErrorLocked',
+  retry: 'driver.cashOutErrorRetry',
+};
+const cashoutErrorMessageFor = (err) => {
+  const code = err?.response?.data?.code;
+  const retryAfter = err?.response?.data?.retry_after;
+  if (code === 'locked' && retryAfter) return t('driver.cashOutErrorLockedRetry', { seconds: retryAfter });
+  if (code && CASHOUT_ERROR_KEYS[code]) return t(CASHOUT_ERROR_KEYS[code]);
+  return err?.response?.data?.detail || t('driver.errorGeneric');
+};
+
 // ── Cash-out modal (replaces window.prompt) ───────────────────────────────────────
 const cashoutModalOpen = ref(false);
 const cashoutInput = ref('');
 const cashoutModalError = ref('');
 const cashoutFirstRef = ref(null);
+const cashoutDialogRef = ref(null);
+useFocusTrap(cashoutDialogRef, cashoutModalOpen); // D-8: Tab focus-trap
 let _cashoutReturnFocus = null;
 
 const closeCashoutModal = () => {
@@ -1913,7 +2106,7 @@ const submitCashout = async () => {
     closeCashoutModal();
     toast.show(t('driver.cashOutSubmitted'), 'success');
   } catch (err) {
-    cashoutModalError.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    cashoutModalError.value = cashoutErrorMessageFor(err);
   } finally {
     busy.value = false;
   }
@@ -1921,10 +2114,32 @@ const submitCashout = async () => {
 
 // ── Cash-out: redeem wallet balance for cash at a restaurant ─────────────────────
 const cashout = ref(null); // current pending request { id, amount, code, ... }
+// D-6: remaining seconds on the displayed code, driven by the shared 1s offer clock
+// (offerNow / offerSecondsLeft) so we don't spin up a second timer.
+const cashoutSecondsLeft = computed(() =>
+  cashout.value?.expires_at ? offerSecondsLeft(cashout.value.expires_at) : 0,
+);
+const fmtCountdown = (secs) => {
+  const s = Math.max(0, secs);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+};
+// D-10: cancel-flow error (request-flow errors surface inline in the cash-out modal
+// via cashoutModalError instead — see submitCashout).
+const cashoutErrorMessage = ref('');
 const fetchCashout = async () => {
   try {
     const { data } = await api.get('/driver/cashout/');
-    cashout.value = data.pending || null;
+    const wasPending = Boolean(cashout.value);
+    const nowPending = data.pending || null;
+    // D-4: the driver's own pending cash-out just resolved (redeemed/expired elsewhere) —
+    // poll-detected since no push exists for this event yet. Only announce success;
+    // history section (fetched lazily) picks up the resolved row on next expand.
+    if (wasPending && !nowPending) {
+      toast.show(t('driver.cashOutRedeemed'), 'success');
+    }
+    cashout.value = nowPending;
   } catch {
     cashout.value = null;
   }
@@ -1941,11 +2156,12 @@ const requestCashout = () => {
 const cancelCashout = async () => {
   if (!cashout.value) return;
   busy.value = true;
+  cashoutErrorMessage.value = '';
   try {
     await api.post(`/driver/cashout/${cashout.value.id}/cancel/`);
     cashout.value = null;
-  } catch {
-    /* ignore */
+  } catch (err) {
+    cashoutErrorMessage.value = cashoutErrorMessageFor(err);
   } finally {
     busy.value = false;
   }
@@ -1961,10 +2177,21 @@ const fetchStatus = async () => {
     driverCarApproved.value = Boolean(data.driver_car_approved);
     driverLicenceUrl.value = data.driver_licence_url || '';
     driverInsuranceUrl.value = data.driver_insurance_url || '';
+    // D-2a: show a distinct rejected screen instead of the generic apply screen.
+    driverRejected.value = Boolean(data.driver_rejected);
+    driverRejectionReason.value = data.driver_rejection_reason || '';
   } catch {
     isDriver.value = Boolean(customerStore.customer?.is_driver);
   }
 };
+
+// D-9: background poll failures were silently swallowed — surface a subtle
+// "connection lost / retrying" indicator after a few consecutive misses, instead
+// of leaving an extended outage invisible. Clears as soon as a poll succeeds again.
+// Deliberately not a toast (would spam on every failed 5s/15s tick).
+const STALE_AFTER_FAILURES = 2;
+const _pollFailCount = ref(0);
+const connectionStale = computed(() => _pollFailCount.value >= STALE_AFTER_FAILURES);
 
 const fetchJobs = async () => {
   if (!isDriver.value) return;
@@ -1973,8 +2200,10 @@ const fetchJobs = async () => {
     const { data } = await api.get('/driver/jobs/');
     activeJob.value = (data.active && data.active[0]) || null;
     pendingJobs.value = data.pending || [];
+    _pollFailCount.value = 0;
   } catch {
     /* keep last */
+    _pollFailCount.value += 1;
   } finally {
     loadingJobs.value = false;
   }
@@ -1989,6 +2218,10 @@ const POLL_IDLE_MS = 15000;
 const pollTick = () => {
   fetchJobs();
   if (driverVehicleType.value === 'car') fetchRides();
+  // D-4: no push exists yet for a redeemed cash-out (see backend contract), so poll —
+  // catches a PENDING→PAID/expired transition within one cycle; fetchCashout itself
+  // fires the "redeemed" toast when it notices the pending request just resolved.
+  fetchCashout();
 };
 
 const _currentPollMs = () => (activeJob.value || activeRide.value ? POLL_ACTIVE_MS : POLL_IDLE_MS);
@@ -2015,6 +2248,9 @@ const becomeDriver = async () => {
     isDriver.value = Boolean(data.is_driver);
     approved.value = Boolean(data.driver_approved);
     online.value = Boolean(data.is_driver_online);
+    // A successful (re)application clears the prior-rejection screen.
+    driverRejected.value = false;
+    driverRejectionReason.value = '';
     if (customerStore.customer) customerStore.setCustomer({ ...customerStore.customer, is_driver: true });
     toast.show(approved.value ? t('driver.registered') : t('driver.applied'), 'success');
     if (approved.value) {
@@ -2290,8 +2526,9 @@ const advance = async (toStatus, extra = {}) => {
     const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, payload);
     if (data.is_terminal) {
       activeJob.value = null;
-      online.value = false; // backend takes the driver offline after delivery
-      stopGeo();
+      // D-1: the server now forces is_driver_online=False after ANY terminal status
+      // (delivered or failed) — re-fetch the real state instead of assuming offline.
+      await _syncOnlineAfterTerminal();
       toast.show(t('driver.deliveredToast'), 'success');
       showGoOnlineCta.value = true; // Item D: prompt the driver to go back online
       if (job && job.restaurant_slug) openCustomerRating(job);
@@ -2325,17 +2562,8 @@ const custRatingScore = ref(0);
 const custRatingNote = ref('');
 const submittingRating = ref(false);
 const ratingDialogFirstFocus = ref(null);
-let ratingTriggerEl = null;
-
-watch(ratingJob, (val) => {
-  if (val) {
-    ratingTriggerEl = typeof document !== 'undefined' ? document.activeElement : null;
-    nextTick(() => { ratingDialogFirstFocus.value?.focus(); });
-  } else if (ratingTriggerEl) {
-    ratingTriggerEl.focus();
-    ratingTriggerEl = null;
-  }
-});
+// D-8: Tab focus-trap + open/return focus handling (shared helper).
+useFocusTrap(ratingDialogFirstFocus, ratingJob);
 
 const openCustomerRating = (job) => {
   ratingJob.value = job;
@@ -2475,6 +2703,12 @@ onMounted(async () => {
       pendingJobs.value = pendingJobs.value.filter(
         (j) => !j.offer_expires_at || Date.parse(j.offer_expires_at) > Date.now(),
       );
+    }
+    // D-6: once the displayed cash-out code's expiry passes, drop it client-side
+    // (instead of showing a stale/unusable code) — the next fetchCashout poll then
+    // reconciles with the server (e.g. a fresh pending request, if any).
+    if (cashout.value?.expires_at && Date.parse(cashout.value.expires_at) <= Date.now()) {
+      cashout.value = null;
     }
   }, 1000);
 
