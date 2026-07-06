@@ -7740,7 +7740,9 @@ def _restock_cancelled_order(order) -> None:
         by_slug = {}
         # component restock: pk → total qty to return
         by_component_pk: dict = {}
-        for it in order.items.all():
+        # LOG-03: voided items were ALREADY restocked at void time
+        # (StaffVoidOrderItemView) — re-processing them here would double-restock.
+        for it in order.items.filter(is_voided=False):
             if it.dish_slug:
                 by_slug[it.dish_slug] = by_slug.get(it.dish_slug, 0) + int(it.qty or 0)
             # Combo component restock from the placement snapshot

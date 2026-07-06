@@ -20,6 +20,9 @@ Contracts covered:
       - StaffOrderListThrottle falls back to IP for anonymous requests
       - WaiterCallThrottle keys on (schema, table_slug) when both present
       - WaiterCallThrottle falls back to IP when table_slug absent
+  H — Cancel-restock excludes already-voided items (LOG-03)
+      - A voided item was already restocked at void time; re-processing it in
+        _restock_cancelled_order must not restock it a second time.
 
 House style: SimpleTestCase + MagicMock, no real DB.
 """
@@ -31,7 +34,10 @@ from django.test import SimpleTestCase, RequestFactory
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from menu.views import PlaceOrderView, OwnerOrderStatusUpdateView, OwnerOrderMarkPaidView, StaffOrderPaymentView
+from menu.views import (
+    PlaceOrderView, OwnerOrderStatusUpdateView, OwnerOrderMarkPaidView, StaffOrderPaymentView,
+    _restock_cancelled_order,
+)
 from menu.models import Order
 from menu.throttles import StaffOrderListThrottle, WaiterCallThrottle
 from accounts.models import User
@@ -223,6 +229,32 @@ class PlaceOrderIdempotencyTests(SimpleTestCase):
         # Stock was never touched: select_for_update not called on Dish
         mock_dish.select_for_update.assert_not_called()
 
+    @patch("accounts.wallet_service.debit_wallet")
+    @patch("menu.views.Order.objects")
+    @patch("menu.views.Profile.objects")
+    def test_replay_same_key_does_not_debit_wallet_again(self, mock_profile_qs, mock_order_qs, mock_debit):
+        """LOG-01: replaying a known idempotency_key must short-circuit before the
+        wallet-debit chokepoint — the pre-check return happens well before
+        Order.objects.create()/debit_wallet() are ever reached."""
+        self._setup_profile_mock(mock_profile_qs)
+
+        existing = _make_order(
+            order_id=77,
+            order_number="ORD-XYZ",
+            idempotency_key="dup-key",
+            wallet_amount_paid=Decimal("10.00"),
+        )
+        mock_order_qs.filter.return_value.first.return_value = existing
+
+        req = self._post({"idempotency_key": "dup-key", "items": [{"slug": "burger", "qty": 1}]})
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(resp.data.get("idempotent_replay"))
+        # No second order was created and no second wallet debit was issued.
+        mock_order_qs.create.assert_not_called()
+        mock_debit.assert_not_called()
+
     # ── Race path: IntegrityError on create → re-fetch ────────────────────────
 
     @patch("menu.views.transaction")
@@ -314,6 +346,96 @@ class PlaceOrderIdempotencyTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["order_number"], "ORD-RACE")
         self.assertTrue(resp.data.get("idempotent_replay"))
+
+    # ── Different keys → two distinct orders ──────────────────────────────────
+
+    @patch("menu.views.transaction")
+    @patch("menu.views.Profile.objects")
+    @patch("menu.views.Order.objects")
+    @patch("menu.views.OrderItem.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.DishOption.objects")
+    @patch("menu.views.TableLink.objects")
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("menu.views._validate_scheduled_for", return_value=(None, None))
+    @patch("menu.views._is_restaurant_currently_open", return_value=True)
+    @patch("menu.views.OrderHandoffSerializer")
+    @patch("menu.views.get_all_active_hh_rules", return_value=[])
+    @patch("menu.views.effective_unit_price", return_value=(Decimal("10.00"), None))
+    def test_different_keys_create_two_orders(
+        self, mock_eup, mock_hh, mock_ser, mock_open, mock_sched,
+        mock_loyalty, mock_promo, mock_tablelink, mock_dish_opt, mock_dish,
+        mock_oi, mock_order_qs, mock_profile_qs, mock_tx
+    ):
+        """LOG-01: two requests with DIFFERENT idempotency_key values are two
+        genuinely distinct orders — dedup must never merge unrelated checkouts."""
+        class _Atomic:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        mock_tx.atomic.return_value = _Atomic()
+
+        profile = MagicMock()
+        profile.is_menu_temporarily_disabled = False
+        profile.is_menu_published = True
+        profile.capabilities = {}
+        profile.lat = None
+        profile.lng = None
+        mock_profile_qs.filter.return_value.first.return_value = profile
+
+        mock_ser.return_value.is_valid.return_value = True
+        mock_ser.return_value.validated_data = {
+            "items": [{"slug": "burger", "qty": 1, "option_ids": []}],
+            "fulfillment_type": "table",
+            "table_slug": "",
+            "table_label": "T1",
+            "customer_name": "Test",
+            "customer_phone": "",
+            "customer_note": "",
+        }
+
+        dish = MagicMock()
+        dish.slug = "burger"
+        dish.name = "Burger"
+        dish.currency = "MAD"
+        dish.stock_qty = None
+        dish.combo_components.all.return_value = []
+        dish.category = MagicMock()
+        dish.category.course = 0
+        mock_dish.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
+        mock_dish_opt.filter.return_value.select_related.return_value = []
+
+        mock_promo.filter.return_value = []
+        mock_loyalty.filter.return_value.first.return_value = None
+
+        # Pre-check lookup never finds an existing order for either key.
+        _filter_none = MagicMock()
+        _filter_none.first.return_value = None
+        mock_order_qs.filter.return_value = _filter_none
+
+        order_a = _make_order(order_id=1, order_number="ORD-AAA", idempotency_key="key-one")
+        order_b = _make_order(order_id=2, order_number="ORD-BBB", idempotency_key="key-two")
+        mock_order_qs.create.side_effect = [order_a, order_b]
+
+        with patch("menu.views._generate_order_number", side_effect=["ORD-AAA", "ORD-BBB"]):
+            req1 = self._post({"idempotency_key": "key-one", "items": [{"slug": "burger", "qty": 1}]})
+            resp1 = self.view(req1)
+            req2 = self._post({"idempotency_key": "key-two", "items": [{"slug": "burger", "qty": 1}]})
+            resp2 = self.view(req2)
+
+        self.assertEqual(resp1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp1.data["order_number"], "ORD-AAA")
+        self.assertEqual(resp2.data["order_number"], "ORD-BBB")
+        self.assertFalse(resp1.data.get("idempotent_replay"))
+        self.assertFalse(resp2.data.get("idempotent_replay"))
+        self.assertEqual(mock_order_qs.create.call_count, 2)
+        # Each create() call was stamped with its own distinct key.
+        keys_used = [c.kwargs.get("idempotency_key") for c in mock_order_qs.create.call_args_list]
+        self.assertEqual(keys_used, ["key-one", "key-two"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -806,3 +928,76 @@ class ThrottleScopingTests(SimpleTestCase):
 
         # No tbl: prefix — fell back to IP
         self.assertNotIn("tbl:", key)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Contract H — Cancel-restock excludes already-voided items (LOG-03)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_order_item(dish_slug, qty, is_voided=False, combo_components=None):
+    item = MagicMock()
+    item.dish_slug = dish_slug
+    item.qty = qty
+    item.is_voided = is_voided
+    item.combo_components = combo_components or []
+    return item
+
+
+class RestockCancelledOrderExcludesVoidedTests(SimpleTestCase):
+    """A voided item was already restocked at void time (StaffVoidOrderItemView).
+    Cancelling an order that had a prior void must restock ONLY the remaining
+    (non-voided) items — never re-restock the already-voided one."""
+
+    @patch("django.db.transaction.atomic")
+    @patch("menu.views.Dish.objects")
+    def test_voided_item_excluded_stock_tracked_item_restocked_once(self, mock_dish_qs, mock_atomic):
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=None)
+        cm.__exit__ = MagicMock(return_value=False)
+        mock_atomic.return_value = cm
+
+        order = MagicMock()
+        # One voided item (already restocked at void time) + one normal stock-tracked item.
+        voided_item = _make_order_item("burger", qty=2, is_voided=True)
+        normal_item = _make_order_item("fries", qty=3, is_voided=False)
+
+        items_qs = MagicMock()
+        # order.items.filter(is_voided=False) must exclude the voided item.
+        items_qs.filter.return_value = [normal_item]
+        order.items = items_qs
+
+        fries_dish = MagicMock()
+        fries_dish.slug = "fries"
+        fries_dish.pk = 2
+        fries_dish.stock_qty = 10
+        mock_dish_qs.select_for_update.return_value.filter.return_value = [fries_dish]
+
+        _restock_cancelled_order(order)
+
+        # The restock query only ever considered non-voided items.
+        items_qs.filter.assert_called_once_with(is_voided=False)
+        # Exactly one Dish.objects.filter(...).update(...) call, for "fries" only.
+        mock_dish_qs.filter.assert_called_once_with(pk=2)
+        update_kwargs = mock_dish_qs.filter.return_value.update.call_args.kwargs
+        self.assertEqual(update_kwargs.get("is_available"), True)
+        # The select_for_update() lock query is built only from the non-voided
+        # item — "burger" (the voided item) never enters the slug__in list.
+        (lock_q,), _ = mock_dish_qs.select_for_update.return_value.filter.call_args
+        self.assertEqual(lock_q.children, [("slug__in", ["fries"])])
+
+    @patch("menu.views.Dish.objects")
+    def test_all_items_voided_no_restock_query_issued(self, mock_dish_qs):
+        """If every item on the order was already voided, there is nothing left to
+        restock — the function must return early without touching Dish at all."""
+        order = MagicMock()
+        voided_item = _make_order_item("burger", qty=1, is_voided=True)
+
+        items_qs = MagicMock()
+        items_qs.filter.return_value = []  # is_voided=False excludes the only item
+        order.items = items_qs
+
+        _restock_cancelled_order(order)
+
+        items_qs.filter.assert_called_once_with(is_voided=False)
+        mock_dish_qs.select_for_update.assert_not_called()
+        mock_dish_qs.filter.assert_not_called()

@@ -166,7 +166,12 @@ def _make_order(order_id=10, status_val=Order.Status.PENDING,
     _items = items or []
     items_qs = MagicMock()
     items_qs.all.return_value = _items
-    items_qs.filter.return_value.first.return_value = _items[0] if _items else None
+    # LOG-03: _restock_cancelled_order now iterates order.items.filter(is_voided=False);
+    # make the filtered queryset iterable (yields the items) while keeping .first().
+    _filtered = MagicMock()
+    _filtered.__iter__ = lambda s: iter(_items)
+    _filtered.first.return_value = _items[0] if _items else None
+    items_qs.filter.return_value = _filtered
     order.items = items_qs
 
     payments_qs = MagicMock()
