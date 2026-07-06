@@ -2682,7 +2682,12 @@ const syncWakeLock = () => {
 };
 const onVisibilityChange = () => {
   // Re-acquire when the tab becomes visible again (the lock is auto-dropped while hidden).
-  if (typeof document !== 'undefined' && document.visibilityState === 'visible') syncWakeLock();
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    syncWakeLock();
+    // LOG-05: refresh immediately on unlock so the driver doesn't stare at stale
+    // jobs/rides until the next poll tick (mirrors WaiterPage / OwnerKitchen).
+    pollTick();
+  }
 };
 // Keep the wake-lock in step with the active-work state.
 watch([activeJob, activeRide, online], syncWakeLock);

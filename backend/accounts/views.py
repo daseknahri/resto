@@ -1874,6 +1874,17 @@ class OwnerStaffDeleteView(APIView):
         if err is not None:
             return err
 
+        # LOG-06: close any open shift for this staffer before deleting them, so a
+        # fire-mid-shift doesn't leave a permanently-open Shift (clock_out=null) that
+        # corrupts every future Z-report labor breakdown. Best-effort: a failure here
+        # must never block the delete.
+        try:
+            from django.utils import timezone as _tz
+            from menu.models import Shift
+            Shift.objects.filter(user_id=staff_user.id, clock_out__isnull=True).update(clock_out=_tz.now())
+        except Exception:
+            logger.exception("Failed to close open shifts for deleted staff %s", staff_id)
+
         staff_user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
