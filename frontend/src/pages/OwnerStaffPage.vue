@@ -518,7 +518,7 @@ const createStaff = async () => {
       name: data.name,
       email: data.email,
       username: data.username,
-      permissions: { manage_orders: true, view_revenue: false, edit_menu: false },
+      permissions: { manage_orders: true, view_revenue: false, edit_menu: false, void_orders: true },
     };
     staffList.value = [...staffList.value, newMember];
     writeCache(STAFF_CACHE_KEY, staffList.value);

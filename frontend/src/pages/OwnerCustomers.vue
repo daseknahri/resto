@@ -492,7 +492,7 @@ const loadCustomers = async (reset = false) => {
     loadingMore.value = true;
   }
   try {
-    const { data } = await api.get("/api/owner/customers/", {
+    const { data } = await api.get("/owner/customers/", {
       params: _buildParams(currentOffset.value),
     });
     // Backend returns { results, has_more, limit, offset } plus optional summary
@@ -579,7 +579,7 @@ const exportCsv = async () => {
   if (exporting.value) return;
   exporting.value = true;
   try {
-    const resp = await api.get("/api/owner/customers/", {
+    const resp = await api.get("/owner/customers/", {
       params: { format: "csv", search: searchQuery.value.trim() || undefined, segment: activeSegment.value || undefined },
       responseType: "blob",
     });

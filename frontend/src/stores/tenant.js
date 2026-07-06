@@ -62,7 +62,11 @@ export const useTenantStore = defineStore("tenant", {
      * Check if a plan feature flag is enabled.
      * Reads the served `feature_flags` payload (top-level meta list of
      * { key, enabled, config } rows) and returns the matching row's `enabled`.
-     * UI affordance only — the backend independently enforces entitlements.
+     * NOTE: these per-plan feature_flags are NOT currently enforced anywhere on
+     * the backend — no view reads a FeatureFlag row to gate an action. The real,
+     * enforced entitlements live in Plan.* fields (can_checkout, max_dishes,
+     * max_staff_accounts, …). This getter is a dormant/forward-looking UI
+     * affordance only; do NOT treat it as a security boundary.
      * Safe defaults: when no feature_flags list is served (demo mode or older
      * cached metas) we default to enabled so existing screens are never hidden;
      * when the list is present but the key is absent, the flag is disabled.

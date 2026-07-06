@@ -142,7 +142,7 @@
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div>
             <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("shiftClose.ordersLabel") }}</p>
-            <p class="text-lg font-bold tabular-nums text-slate-200 print:text-black">{{ report.collected?.total !== undefined ? report.collected_count ?? '—' : '—' }}</p>
+            <p class="text-lg font-bold tabular-nums text-slate-200 print:text-black">{{ report.collected?.count ?? report.collected_count ?? '—' }}</p>
           </div>
           <div>
             <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t("shiftClose.revenueLabel") }}</p>

@@ -323,8 +323,10 @@ import { useI18n } from '../composables/useI18n';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
+const toast = useToastStore();
 
 const loading = ref(true);
 const fetchError = ref(false);
@@ -498,7 +500,7 @@ const toggleDriver = async () => {
     if (detail.value) detail.value.is_driver = res.data.is_driver;
     syncRow({ is_driver: res.data.is_driver });
   } catch {
-    /* ignore */
+    toast.show(t('common.saveFailed'), 'error');
   } finally {
     togglingDriver.value = false;
   }
