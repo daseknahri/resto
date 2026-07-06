@@ -559,6 +559,7 @@ import { isDueSoon } from "../lib/ownerLiveFocus";
 import { chipClass as statusChipClass } from "../lib/orderStatusMeta";
 import { useWakeLock } from "../composables/useWakeLock";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 
@@ -570,6 +571,7 @@ const { t, formatDateTime, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 const toast = useToastStore();
 const { printTicket, printTicketSilent } = usePrintTicket();
+const { confirm } = useConfirmModal();
 
 // ── Auto-print toggle (localStorage-persisted across page reloads) ────────────
 const _AP_KEY = "kepoli.kitchen.autoPrint";
@@ -1069,6 +1071,15 @@ const fireCourse = async (order) => {
 };
 
 const advance = async (orderId) => {
+  const order = waiter.orders.find((o) => o.id === orderId);
+  if (order && lowestHeldCourse(order) !== null) {
+    const proceed = await confirm({
+      title: t('kitchen.heldCourseWarningTitle'),
+      body: t('kitchen.heldCourseWarningBody'),
+      confirmLabel: t('kitchen.heldCourseWarningConfirm'),
+    });
+    if (!proceed) return;
+  }
   const ok = await waiter.advanceStatus(orderId);
   if (!ok) toast.show(t('kitchen.updateFailed'), 'error');
 };
@@ -1098,6 +1109,14 @@ const allItemsReady = (order) => {
 };
 
 const markAllReady = async (order) => {
+  if (lowestHeldCourse(order) !== null) {
+    const proceed = await confirm({
+      title: t('kitchen.heldCourseWarningTitle'),
+      body: t('kitchen.heldCourseWarningBody'),
+      confirmLabel: t('kitchen.heldCourseWarningConfirm'),
+    });
+    if (!proceed) return;
+  }
   // Use the bulk endpoint (POST /staff/orders/<id>/items/ready-all/) which
   // marks all non-voided, not-yet-ready items in a single request.
   try {

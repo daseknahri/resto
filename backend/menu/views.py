@@ -3961,6 +3961,22 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
         if new_status == Order.Status.OUT_FOR_DELIVERY:
             lines.append("Your order is on its way!")
 
+        # K-8: surface the canned cancel-reason code as a plain phrase, if the
+        # order carries one. Kept simple (English only) — no per-locale machinery.
+        if new_status == Order.Status.CANCELLED and getattr(order, "cancel_reason", ""):
+            _CANCEL_REASON_PHRASES = {
+                Order.CancelReason.OUT_OF_STOCK: "an item was out of stock",
+                Order.CancelReason.TOO_BUSY: "the restaurant was too busy to take it",
+                Order.CancelReason.CLOSING_SOON: "the restaurant was closing soon",
+                Order.CancelReason.ITEM_UNAVAILABLE: "an item was unavailable",
+                Order.CancelReason.ADDRESS_ISSUE: "there was an issue with the delivery address",
+                Order.CancelReason.CUSTOMER_REQUEST: "it was cancelled at the customer's request",
+                Order.CancelReason.OTHER: "of an issue on our end",
+            }
+            _reason_phrase = _CANCEL_REASON_PHRASES.get(order.cancel_reason)
+            if _reason_phrase:
+                lines.append(f"Reason: {_reason_phrase}.")
+
         if order.owner_note:
             lines.append(f"\nNote from the team: {order.owner_note}")
 
@@ -6949,6 +6965,8 @@ class OwnerOrderListView(APIView):
                 **order_vat_fields(order, _vat_rate, _vat_label),
                 "currency": order.currency,
                 "owner_note": order.owner_note,
+                "cancel_reason": order.cancel_reason,
+                "cancel_note": order.cancel_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
                 "items_count": sum(i.qty for i in order.items.all()),
@@ -7095,6 +7113,8 @@ class OwnerOrderDetailView(APIView):
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "owner_note": order.owner_note,
+            "cancel_reason": order.cancel_reason,
+            "cancel_note": order.cancel_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "fired_course": getattr(order, "fired_course", 1),
             "items": [
@@ -7605,6 +7625,13 @@ class OwnerOrderStatusUpdateView(APIView):
         new_status = (request.data.get("status") or "").strip().lower()
         owner_note = request.data.get("owner_note")
         estimated_ready_minutes = request.data.get("estimated_ready_minutes")
+        # K-8: optional canned cancel-reason code (+ free-text note for "other").
+        # Only meaningful when new_status == CANCELLED; an unknown code is silently
+        # ignored (left blank) rather than rejected, so a stale/garbled client value
+        # never turns a cancel action into a 400/500.
+        _cancel_reason_raw = (str(request.data.get("cancel_reason") or "")).strip().lower()
+        _cancel_reason = _cancel_reason_raw if _cancel_reason_raw in {c.value for c in Order.CancelReason} else ""
+        _cancel_note = str(request.data.get("cancel_note") or "").strip()[:300]
 
         # Optional client-supplied idempotency key. The BFS already covers the
         # stale-retry case ("already_at_target" / "already_advanced"), so this
@@ -7755,6 +7782,17 @@ class OwnerOrderStatusUpdateView(APIView):
                 except (TypeError, ValueError):
                     order.estimated_ready_minutes = None
 
+            # K-8: stamp the canned cancel reason (+ optional note) on the same save
+            # as the status change — covers both the decline-new-order and
+            # cancel-in-progress paths, since both flow through this one view.
+            if new_status == Order.Status.CANCELLED:
+                if _cancel_reason:
+                    order.cancel_reason = _cancel_reason
+                    update_fields.append("cancel_reason")
+                if _cancel_note:
+                    order.cancel_note = _cancel_note
+                    update_fields.append("cancel_note")
+
             # For the cancel transition: wrap the save + side-effects atomically so
             # (a) a concurrent void can't race wallet_amount_paid, and (b) a refund
             # failure rolls back the status-to-CANCELLED update.
@@ -7880,6 +7918,9 @@ class OwnerOrderStatusUpdateView(APIView):
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
             "payment_status": order.payment_status,
         }
+        if new_status == Order.Status.CANCELLED:
+            resp["cancel_reason"] = order.cancel_reason
+            resp["cancel_note"] = order.cancel_note
         if cash_collected is not None:
             resp["cash_collected"] = cash_collected
 

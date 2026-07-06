@@ -478,6 +478,18 @@ class Order(models.Model):
         UNPAID = "unpaid", "Unpaid"
         PAID = "paid", "Paid"
 
+    # K-8: canned cancel-reason codes — a required pick-list for staff-initiated
+    # cancellations (decline-new-order and cancel-in-progress). Backend stores the
+    # CODE; the frontend renders localized labels and sends the code back.
+    class CancelReason(models.TextChoices):
+        OUT_OF_STOCK = "out_of_stock", "Out of stock"
+        TOO_BUSY = "too_busy", "Too busy"
+        CLOSING_SOON = "closing_soon", "Closing soon"
+        ITEM_UNAVAILABLE = "item_unavailable", "Item unavailable"
+        ADDRESS_ISSUE = "address_issue", "Address issue"
+        CUSTOMER_REQUEST = "customer_request", "Customer request"
+        OTHER = "other", "Other"
+
     order_number = models.CharField(max_length=20, unique=True, db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     # Platform-level customer link — null for anonymous orders, populated when the customer
@@ -534,6 +546,22 @@ class Order(models.Model):
         null=True,
         blank=True,
         help_text="When the order's bill was fully settled (paid).",
+    )
+    # K-8: staff-selected reason code for a cancelled order (decline-new-order or
+    # cancel-in-progress, both handled by OwnerOrderStatusUpdateView). Blank when
+    # the order isn't cancelled, or was cancelled without a reason (back-compat).
+    cancel_reason = models.CharField(
+        max_length=32,
+        choices=CancelReason.choices,
+        blank=True,
+        default="",
+        help_text="Canned reason code for a staff cancellation. Blank if not staff-cancelled.",
+    )
+    cancel_note = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Free-text detail supplied when cancel_reason == 'other'.",
     )
     # Order source — 'direct' (QR/subdomain), 'marketplace' (platform unified checkout)
     class Source(models.TextChoices):

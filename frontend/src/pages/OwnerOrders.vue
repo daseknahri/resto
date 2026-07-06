@@ -1190,6 +1190,61 @@
             {{ t("ownerOrders.cancel") }}
           </button>
         </div>
+
+        <!-- Cancel-reason inline panel — REQUIRED canned pick-list before a cancel PATCH is sent -->
+        <div v-if="cancelReasonPanel && cancelReasonPanel.orderId === o.id" class="rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2.5 space-y-2 text-xs">
+          <p class="font-semibold text-red-200">{{ t("ownerOrders.cancelReasonTitle") }}</p>
+          <p class="text-slate-400">{{ t("ownerOrders.cancelReasonHint") }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="code in CANCEL_REASON_CODES"
+              :key="code"
+              type="button"
+              class="rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60"
+              :class="cancelReasonPanel.code === code
+                ? 'border-red-400/60 bg-red-500/20 text-red-200'
+                : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+              @click="cancelReasonPanel.code = code"
+            >
+              {{ cancelReasonLabel(code) }}
+            </button>
+          </div>
+          <div v-if="cancelReasonPanel.code === 'other'" class="space-y-1">
+            <label :for="`cancel-note-${o.id}`" class="block text-[11px] font-medium text-slate-300">
+              {{ t("ownerOrders.cancelReasonNoteLabel") }}
+            </label>
+            <textarea
+              :id="`cancel-note-${o.id}`"
+              v-model="cancelReasonPanel.note"
+              rows="2"
+              maxlength="300"
+              class="ui-input w-full text-xs"
+              :placeholder="t('ownerOrders.cancelReasonNotePlaceholder')"
+            />
+          </div>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="ui-btn-danger px-3 py-1.5 text-xs"
+              :disabled="cancellingOrderId === o.id || !cancelReasonPanel.code"
+              @click="submitCancelReason(o)"
+            >
+              {{ cancellingOrderId === o.id ? t("common.saving") : t("ownerOrders.cancelReasonConfirm") }}
+            </button>
+            <button
+              type="button"
+              class="ui-btn-outline px-3 py-1.5 text-xs"
+              @click="cancelReasonPanel = null"
+            >{{ t("common.cancel") }}</button>
+          </div>
+        </div>
+
+        <!-- Stored cancel reason — shown on already-cancelled orders -->
+        <p v-if="o.status === 'cancelled' && o.cancel_reason" class="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-300">
+          <span class="font-semibold text-red-200">{{ t("ownerOrders.cancelReasonStoredLabel") }}:</span>
+          {{ cancelReasonLabel(o.cancel_reason) }}
+          <span v-if="o.cancel_note"> — {{ o.cancel_note }}</span>
+        </p>
       </article>
     </div>
 
@@ -2076,26 +2131,38 @@ const bulkMarkPreparingReady = async () => {
   if (succeeded > 0) toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
 };
 
+// K-8: canned cancel-reason codes — a required pick-list shown in an inline
+// panel (mirrors the correct-method panel pattern) before a cancellation PATCH
+// is sent. The backend stores the CODE only; labels are localized here.
+const CANCEL_REASON_CODES = [
+  "out_of_stock",
+  "too_busy",
+  "closing_soon",
+  "item_unavailable",
+  "address_issue",
+  "customer_request",
+  "other",
+];
+
+const cancelReasonLabel = (code) => t(`ownerOrders.cancelReason_${code}`);
+
+// cancelReasonPanel: { orderId, code, note }
+const cancelReasonPanel = ref(null);
+const cancellingOrderId = ref(null);
+
 const updateStatus = async (o, newStatus) => {
   if (newStatus === "cancelled") {
-    const ok = await confirm({
-      title: t("ownerOrders.cancelConfirmTitle"),
-      body: t("ownerOrders.cancelConfirmBody"),
-      confirmLabel: t("ownerOrders.statusCancelled"),
-    });
-    if (!ok) return;
+    // Toggle: if already open for this order, close it
+    if (cancelReasonPanel.value?.orderId === o.id) {
+      cancelReasonPanel.value = null;
+      return;
+    }
+    cancelReasonPanel.value = { orderId: o.id, code: "", note: "" };
+    return;
   }
   try {
-    const result = await order.updateOrderStatus(o.id, { status: newStatus });
+    await order.updateOrderStatus(o.id, { status: newStatus });
     toast.show(t("ownerOrders.updated"), "success");
-    // Warn the owner if cash was already collected — they must return it manually.
-    if (newStatus === "cancelled" && result?.cash_collected) {
-      toast.show(
-        t("ownerOrders.cancelCashWarning", { amount: result.cash_collected }),
-        "warning",
-        8000,
-      );
-    }
     // After confirming, immediately open the note/ETA panel so the owner can
     // set an estimated ready time in the same action without a second click.
     if (newStatus === "confirmed") {
@@ -2104,6 +2171,33 @@ const updateStatus = async (o, newStatus) => {
     }
   } catch {
     toast.show(t("ownerOrders.updateFailed"), "error");
+  }
+};
+
+const submitCancelReason = async (o) => {
+  const panel = cancelReasonPanel.value;
+  if (!panel || panel.orderId !== o.id || !panel.code) return;
+  cancellingOrderId.value = o.id;
+  try {
+    const result = await order.updateOrderStatus(o.id, {
+      status: "cancelled",
+      cancel_reason: panel.code,
+      cancel_note: panel.note,
+    });
+    toast.show(t("ownerOrders.updated"), "success");
+    // Warn the owner if cash was already collected — they must return it manually.
+    if (result?.cash_collected) {
+      toast.show(
+        t("ownerOrders.cancelCashWarning", { amount: result.cash_collected }),
+        "warning",
+        8000,
+      );
+    }
+    cancelReasonPanel.value = null;
+  } catch {
+    toast.show(t("ownerOrders.updateFailed"), "error");
+  } finally {
+    cancellingOrderId.value = null;
   }
 };
 

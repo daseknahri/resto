@@ -51,6 +51,8 @@ def _make_order(
     customer_phone="0612345678",
     customer_note="extra sauce",
     owner_note="",
+    cancel_reason="",
+    cancel_note="",
     delivery_address="",
     delivery_location_url="",
     delivery_lat=None,
@@ -88,6 +90,8 @@ def _make_order(
     order.customer_phone = customer_phone
     order.customer_note = customer_note
     order.owner_note = owner_note
+    order.cancel_reason = cancel_reason
+    order.cancel_note = cancel_note
     order.delivery_address = delivery_address
     order.delivery_location_url = delivery_location_url
     order.delivery_lat = delivery_lat
@@ -203,7 +207,10 @@ class OwnerOrderListViewTests(SimpleTestCase):
             MockOP.objects.filter.return_value.values.return_value = []
             resp = self._get()
         result = resp.data["results"][0]
-        for present_field in ("delivery_address", "delivery_lat", "delivery_lng", "customer_email"):
+        for present_field in (
+            "delivery_address", "delivery_lat", "delivery_lng", "customer_email",
+            "cancel_reason", "cancel_note",
+        ):
             self.assertIn(present_field, result)
         self.assertEqual(result["delivery_address"], "5 Rue de Paris")
 
@@ -300,7 +307,8 @@ class OwnerOrderDetailViewTests(SimpleTestCase):
             "table_label", "table_slug",
             "customer_name", "customer_phone", "customer_email", "customer_note",
             "delivery_address", "delivery_location_url", "delivery_lat", "delivery_lng",
-            "total", "currency", "owner_note", "estimated_ready_minutes",
+            "total", "currency", "owner_note", "cancel_reason", "cancel_note",
+            "estimated_ready_minutes",
             "items", "created_at", "updated_at", "status_updated_at",
         ):
             self.assertIn(field, resp.data, f"Missing field: {field}")
@@ -560,6 +568,64 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
             resp = self._patch(data={"status": "cancelled"})
             self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Cancel from '{current}' failed")
 
+    # ── K-8: canned cancel-reason codes ───────────────────────────────────────
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_cancel_with_valid_reason_stores_it(self, objects_mock, tz_mock):
+        order = _make_order(order_status="pending")
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "cancelled", "cancel_reason": "too_busy"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.cancel_reason, "too_busy")
+        self.assertEqual(resp.data["cancel_reason"], "too_busy")
+        _, kwargs = order.save.call_args
+        self.assertIn("cancel_reason", kwargs["update_fields"])
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_cancel_with_other_reason_stores_note(self, objects_mock, tz_mock):
+        order = _make_order(order_status="pending")
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={
+            "status": "cancelled",
+            "cancel_reason": "other",
+            "cancel_note": "Walk-in customer changed their mind.",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.cancel_reason, "other")
+        self.assertEqual(order.cancel_note, "Walk-in customer changed their mind.")
+        self.assertEqual(resp.data["cancel_note"], "Walk-in customer changed their mind.")
+        _, kwargs = order.save.call_args
+        self.assertIn("cancel_note", kwargs["update_fields"])
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_cancel_with_unknown_reason_is_ignored_not_500(self, objects_mock, tz_mock):
+        order = _make_order(order_status="pending")
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "cancelled", "cancel_reason": "not_a_real_code"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.cancel_reason, "")
+        _, kwargs = order.save.call_args
+        self.assertNotIn("cancel_reason", kwargs["update_fields"])
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_cancel_without_reason_still_works(self, objects_mock, tz_mock):
+        """Back-compat: cancelling without a cancel_reason at all must still succeed."""
+        order = _make_order(order_status="pending")
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "cancelled"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.cancel_reason, "")
+        _, kwargs = order.save.call_args
+        self.assertNotIn("cancel_reason", kwargs["update_fields"])
+
     # ── Invalid transitions ───────────────────────────────────────────────────
 
     @patch("menu.views.Order.objects")
@@ -680,6 +746,22 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
         self._patch(data={"status": "cancelled"})
 
         send_mail_mock.assert_called_once()
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_email_includes_cancel_reason_phrase(self, objects_mock, tz_mock, send_mail_mock):
+        """K-8: a cancellation with a stored reason includes a plain-language line."""
+        customer = MagicMock()
+        customer.email = "customer@example.com"
+        order = _make_order(order_status="pending", customer=customer)
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "cancelled", "cancel_reason": "out_of_stock"})
+
+        send_mail_mock.assert_called_once()
+        body = send_mail_mock.call_args[1]["message"]
+        self.assertIn("out of stock", body)
 
     @patch("menu.views.send_mail")
     @patch("menu.views.timezone")
