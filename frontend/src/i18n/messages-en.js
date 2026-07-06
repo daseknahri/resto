@@ -1117,7 +1117,13 @@ activateAccount: {
   activate: "Activate account",
   activated: "Activated. You can now continue.",
   tokenRequired: "Token is required",
-  passwordTooShort: "Password must be at least 8 characters"
+  passwordTooShort: "Password must be at least 8 characters",
+  resendPrompt: "Your activation link may have expired or already been used. Request a fresh one below.",
+  resendEmailLabel: "Email address",
+  resendEmailRequired: "Email is required",
+  resendAction: "Resend activation link",
+  resendSending: "Sending...",
+  resendConfirmation: "If that email is registered, a new activation link has been sent."
 },
 ownerLaunchSuccess: {
   launch: "Menu launch",

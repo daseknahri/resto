@@ -90,6 +90,43 @@
               <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ store.error }}</p>
             </div>
+
+            <div v-if="store.tokenExpiredOrUsed" class="ui-section-band space-y-3">
+              <p class="text-sm text-slate-300">{{ t("activateAccount.resendPrompt") }}</p>
+
+              <div v-if="!resendSent" class="space-y-2">
+                <label class="block text-sm text-slate-200" for="activate-resend-email-input">
+                  {{ t("activateAccount.resendEmailLabel") }}
+                </label>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="activate-resend-email-input"
+                    v-model="resendEmail"
+                    type="email"
+                    autocomplete="email"
+                    class="ui-input flex-1"
+                    :placeholder="t('activateAccount.resendEmailLabel')"
+                    @input="resendError = ''"
+                  />
+                  <button
+                    type="button"
+                    :disabled="resendSubmitting"
+                    :aria-busy="resendSubmitting"
+                    class="ui-btn-outline ui-press ui-touch-target inline-flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-60"
+                    @click="requestResend"
+                  >
+                    <svg v-if="resendSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                    {{ resendSubmitting ? t("activateAccount.resendSending") : t("activateAccount.resendAction") }}
+                  </button>
+                </div>
+                <p v-if="resendError" class="text-xs text-red-300" role="alert">{{ resendError }}</p>
+              </div>
+
+              <div v-else class="flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+                <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+                <p class="flex-1 text-sm text-emerald-200">{{ t("activateAccount.resendConfirmation") }}</p>
+              </div>
+            </div>
           </form>
         </div>
       </div>
@@ -103,6 +140,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useActivationStore } from "../stores/activation";
 import { useSessionStore } from "../stores/session";
+import api from "../lib/api";
 
 const route = useRoute();
 const router = useRouter();
@@ -113,6 +151,11 @@ const { t } = useI18n();
 const token = ref("");
 const password = ref("");
 const fieldErrors = reactive({ token: "", password: "" });
+
+const resendEmail = ref("");
+const resendSubmitting = ref(false);
+const resendSent = ref(false);
+const resendError = ref("");
 
 onMounted(() => {
   if (typeof route.query.token === "string") token.value = route.query.token;
@@ -129,6 +172,8 @@ const submit = async () => {
     fieldErrors.password = t("activateAccount.passwordTooShort");
     return;
   }
+  resendSent.value = false;
+  resendError.value = "";
   await store.activate(token.value, password.value);
   if (store.success) {
     try {
@@ -142,6 +187,26 @@ const submit = async () => {
     } else {
       router.push({ name: "onboarding" });
     }
+  }
+};
+
+const requestResend = async () => {
+  resendError.value = "";
+  if (!resendEmail.value.trim()) {
+    resendError.value = t("activateAccount.resendEmailRequired");
+    return;
+  }
+  resendSubmitting.value = true;
+  try {
+    // The endpoint always returns the same generic 200 regardless of outcome
+    // (anti-enumeration) — so success here never implies the email was real.
+    await api.post("/resend-activation/", { email: resendEmail.value.trim() });
+  } catch {
+    // Even a network/unexpected error should not surface a different message
+    // than success would — keep the confirmation generic either way.
+  } finally {
+    resendSubmitting.value = false;
+    resendSent.value = true;
   }
 };
 </script>

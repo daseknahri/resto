@@ -1120,7 +1120,13 @@ export const messages = {
       activate: "Activate account",
       activated: "Activated. You can now continue.",
       tokenRequired: "Token is required",
-      passwordTooShort: "Password must be at least 8 characters"
+      passwordTooShort: "Password must be at least 8 characters",
+      resendPrompt: "Your activation link may have expired or already been used. Request a fresh one below.",
+      resendEmailLabel: "Email address",
+      resendEmailRequired: "Email is required",
+      resendAction: "Resend activation link",
+      resendSending: "Sending...",
+      resendConfirmation: "If that email is registered, a new activation link has been sent."
     },
     ownerLaunchSuccess: {
       launch: "Menu launch",
@@ -6953,7 +6959,13 @@ export const messages = {
       activate: "Activer le compte",
       activated: "Active. Vous pouvez continuer.",
       tokenRequired: "Token requis",
-      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres"
+      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres",
+      resendPrompt: "Votre lien d'activation a peut-etre expire ou deja ete utilise. Demandez-en un nouveau ci-dessous.",
+      resendEmailLabel: "Adresse e-mail",
+      resendEmailRequired: "L'e-mail est requis",
+      resendAction: "Renvoyer le lien d'activation",
+      resendSending: "Envoi...",
+      resendConfirmation: "Si cette adresse e-mail est enregistree, un nouveau lien d'activation a ete envoye."
     },
     ownerLaunchSuccess: {
       launch: "Lancement du menu",

@@ -402,7 +402,13 @@ const arabicMessages = {
     "activate": "تفعيل الحساب",
     "activated": "تم التفعيل. يمكنك المتابعة الآن.",
     "tokenRequired": "الرمز مطلوب",
-    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل"
+    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
+    "resendPrompt": "ربما تكون صلاحية رابط التفعيل قد انتهت أو تم استخدامه من قبل. اطلب رابطاً جديداً أدناه.",
+    "resendEmailLabel": "البريد الإلكتروني",
+    "resendEmailRequired": "البريد الإلكتروني مطلوب",
+    "resendAction": "إعادة إرسال رابط التفعيل",
+    "resendSending": "جارٍ الإرسال...",
+    "resendConfirmation": "إذا كان هذا البريد الإلكتروني مسجلاً، فقد تم إرسال رابط تفعيل جديد إليه."
   },
   "router": {
     "orderingDisabled": "الطلبات غير مفعلة لهذه الباقة.",
