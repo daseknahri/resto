@@ -588,6 +588,17 @@ class User(AbstractUser):
             "waiters who should handle orders but not reverse them."
         ),
     )
+    # U4 — force password change on first login. Set True when a staff account is
+    # created via invite (the temp password is emailed in the clear); cleared the
+    # moment the user successfully sets their own password via
+    # StaffChangePasswordView. Defaults False so every existing/normal user
+    # (including owners, who are never invited this way) is unaffected — the
+    # login/MFA/lockout flow is unchanged; the frontend reads this flag from the
+    # login response to decide whether to force a change-password step.
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text="User must change their password before continuing (set at staff invite).",
+    )
 
     @property
     def is_platform_admin(self) -> bool:

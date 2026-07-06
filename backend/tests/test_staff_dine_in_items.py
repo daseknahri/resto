@@ -3,6 +3,7 @@ Tests for the R2 dine-in item management endpoints:
 
   POST /api/staff/orders/<order_id>/items/        — StaffAppendOrderItemsView
   POST /api/staff/orders/<order_id>/items/<item_id>/void/  — StaffVoidOrderItemView
+  POST /api/staff/orders/<order_id>/items/<item_id>/comp/  — StaffCompOrderItemView (V3)
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 
@@ -19,7 +20,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from menu.views import StaffAppendOrderItemsView, StaffVoidOrderItemView
+from menu.views import StaffAppendOrderItemsView, StaffVoidOrderItemView, StaffCompOrderItemView
 from menu.models import Order
 from accounts.models import User
 
@@ -53,6 +54,7 @@ def _make_item(
     note="",
     is_ready=False,
     is_voided=False,
+    is_comped=False,
 ):
     item = MagicMock()
     item.id = item_id
@@ -65,6 +67,10 @@ def _make_item(
     item.note = note
     item.is_ready = is_ready
     item.is_voided = is_voided
+    # V3: _recompute_order_totals now excludes comped items too — default False
+    # so every existing void/append test (which never sets this) keeps summing
+    # the item into the total exactly as before.
+    item.is_comped = is_comped
     item.save = MagicMock()
     return item
 
@@ -724,3 +730,259 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for it in resp.data["items"]:
             self.assertIn("is_voided", it)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# StaffCompOrderItemView — POST /api/staff/orders/<order_id>/items/<item_id>/comp/ (V3)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class StaffCompOrderItemViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = StaffCompOrderItemView.as_view()
+        # Patch _can_access_order so unit tests don't hit the DB for section lookups.
+        _patcher = patch("menu.views._can_access_order", return_value=True)
+        self._access_mock = _patcher.start()
+        self.addCleanup(_patcher.stop)
+
+    def _post(self, order_id=10, item_id=901, body=None, user=None):
+        body = body if body is not None else {"reason": "Manager goodwill"}
+        req = self.factory.post(
+            f"/api/staff/orders/{order_id}/items/{item_id}/comp/",
+            body,
+            format="json",
+        )
+        u = user or _user()
+        force_authenticate(req, user=u)
+        req.tenant = _tenant()
+        return self.view(req, order_id=order_id, item_id=item_id)
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
+    @patch("menu.views._can_void_order_item", return_value=False)
+    def test_no_void_permission_403(self, _mock):
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "forbidden")
+
+    # ── Guards ────────────────────────────────────────────────────────────────
+
+    @patch("menu.views.Order.objects")
+    def test_order_not_found_404(self, om):
+        om.prefetch_related.return_value.filter.return_value.first.return_value = None
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("menu.views.Order.objects")
+    def test_item_not_found_404(self, om):
+        order = _make_order(items=[])
+        order.items.filter.return_value.first.return_value = None
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post(item_id=999)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("menu.views.Order.objects")
+    def test_already_comped_409(self, om):
+        item = _make_item(is_comped=True)
+        order = _make_order(items=[item])
+        order.items.filter.return_value.first.return_value = item
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_comped")
+
+    @patch("menu.views.Order.objects")
+    def test_already_voided_409(self, om):
+        item = _make_item(is_voided=True)
+        order = _make_order(items=[item])
+        order.items.filter.return_value.first.return_value = item
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_voided")
+
+    @patch("menu.views.Order.objects")
+    def test_terminal_status_409(self, om):
+        item = _make_item(is_comped=False)
+        order = _make_order(status_val=Order.Status.COMPLETED, items=[item])
+        order.items.filter.return_value.first.return_value = item
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "bad_status")
+
+    @patch("menu.views.Order.objects")
+    def test_reason_required_400(self, om):
+        item = _make_item(is_comped=False)
+        order = _make_order(items=[item])
+        order.items.filter.return_value.first.return_value = item
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post(body={"reason": "   "})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "reason_required")
+        item.save.assert_not_called()
+
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_cash_paid_comp_rejected_cannot_comp_paid(self, om, tx_mock):
+        """Same money rule as void: a cash-settled PAID order (wallet_amount_paid
+        == 0) cannot auto-reconcile a comp and must be rejected."""
+        item = _make_item(is_comped=False, subtotal=Decimal("10.00"))
+        order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=Decimal("0"),
+            customer_id=42,
+            items=[item],
+        )
+        order.items.filter.return_value.first.return_value = item
+        om.prefetch_related.return_value.filter.return_value.first.return_value = order
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "cannot_comp_paid")
+        mock_cw.assert_not_called()
+        item.save.assert_not_called()
+
+    # ── Happy path: comp excludes item from total, records who/reason ─────────
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_comp_excludes_item_from_total_and_records_who_reason(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        item = _make_item(item_id=901, dish_slug="burger", qty=2,
+                          unit_price=Decimal("10.00"), subtotal=Decimal("20.00"),
+                          is_comped=False)
+        remaining_item = _make_item(item_id=902, dish_slug="pasta",
+                                    subtotal=Decimal("15.00"), is_comped=False)
+
+        first_order = _make_order(
+            total=Decimal("35.00"),
+            items=[item, remaining_item],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+
+        # After reload only remaining_item is non-comped/non-voided
+        comped_item = _make_item(is_comped=True, qty=2)
+        second_order = _make_order(
+            total=Decimal("35.00"),
+            items=[comped_item, remaining_item],
+        )
+
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+
+        staff = _user()
+        staff.id = 77
+        resp = self._post(body={"reason": "Sent out wrong dish, comped"}, user=staff)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # item.save called with the exact update_fields, recording who/reason/when
+        item.save.assert_called_once_with(
+            update_fields=["is_comped", "comped_at", "comp_reason", "comped_by_user_id"]
+        )
+        self.assertTrue(item.is_comped)
+        self.assertEqual(item.comp_reason, "Sent out wrong dish, comped")
+        self.assertEqual(item.comped_by_user_id, 77)
+        self.assertIsNotNone(item.comped_at)
+        # Total recomputed: only remaining_item (15.00) is non-voided/non-comped
+        self.assertEqual(second_order.total, Decimal("15.00"))
+        broadcast_mock.assert_called_once()
+
+    # ── Wallet refund on PAID order — follows the same rule as void ───────────
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_comp_on_paid_wallet_order_refunds_exact_line_total(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        line_total = Decimal("20.00")
+        wallet_paid = Decimal("35.00")
+
+        item = _make_item(item_id=901, dish_slug="burger", qty=2,
+                          unit_price=Decimal("10.00"), subtotal=line_total,
+                          is_comped=False)
+        remaining = _make_item(item_id=902, subtotal=Decimal("15.00"), is_comped=False)
+
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=wallet_paid,
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+
+        comped_item = _make_item(is_comped=True, qty=2, subtotal=line_total)
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=wallet_paid,
+            customer_id=42,
+            total=Decimal("15.00"),
+            items=[comped_item, remaining],
+        )
+
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            from django.db import connection as _c
+            resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_cw.assert_called_once()
+        kw_args = mock_cw.call_args.kwargs
+        self.assertEqual(mock_cw.call_args.args[1], line_total)
+        self.assertEqual(kw_args["idempotency_key"], f"compitem:{_c.schema_name}:901")
+        self.assertEqual(second_order.wallet_amount_paid, wallet_paid - line_total)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_double_comp_409(self, order_om, tx_mock, broadcast_mock):
+        """A second comp of the same item must return 409 already_comped."""
+        item = _make_item(is_comped=True)  # already comped
+        order = _make_order(items=[item])
+        order.items.filter.return_value.first.return_value = item
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_comped")
+
+    # ── is_comped in staff payload ─────────────────────────────────────────────
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_response_items_include_is_comped_flag(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        item = _make_item(is_comped=False)
+        first_order = _make_order(items=[item])
+        first_order.items.filter.return_value.first.return_value = item
+
+        comped = _make_item(is_comped=True)
+        second_order = _make_order(items=[comped])
+
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for it in resp.data["items"]:
+            self.assertIn("is_comped", it)

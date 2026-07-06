@@ -209,6 +209,25 @@ class OwnerStaffCreateViewTests(SimpleTestCase):
             self.assertIn(field, resp.data, f"Missing field: {field}")
         self.assertTrue(resp.data["temp_password"])  # non-empty
 
+    def test_invited_staff_created_with_must_change_password_true(self):
+        """U4: a staff account created via invite must have must_change_password=True
+        so the frontend forces a change-password step on first login."""
+        req = self._post({"name": "Jean Dupont", "email": "jean@demo.com"})
+        new_user = MagicMock()
+        new_user.id = 20
+        new_user.email = "jean@demo.com"
+        new_user.username = "jeandemo"
+
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.exists.return_value = False
+            obj_mock.create_user.return_value = new_user
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        _, kwargs = obj_mock.create_user.call_args
+        self.assertTrue(kwargs.get("must_change_password"))
+
 
 # ── OwnerStaffDeleteView ──────────────────────────────────────────────────────
 

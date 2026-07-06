@@ -130,9 +130,18 @@ class OwnerWaiterCallListView(APIView):
 
 
 class OwnerWaiterCallAcknowledgeView(APIView):
-    """POST /api/owner/waiter-calls/<id>/acknowledge/ — clear a call for all staff."""
+    """POST /api/owner/waiter-calls/<id>/acknowledge/ — clear a call for all staff.
 
-    permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
+    U2: any authenticated tenant staff may acknowledge a call, but ONLY for their
+    own section — mirrors the hard section routing in OwnerWaiterCallListView.
+    An owner may ack any call. A non-owner may ack only a call whose table_slug
+    is in their sections (or an orphan/unclaimed table); otherwise 403
+    section_denied. Permission is intentionally IsAuthenticated only (not
+    IsTenantEditorOrReadOnly) — the read-only 'edit menu' gate has nothing to do
+    with acknowledging a call, and would incorrectly block a plain waiter's POST.
+    """
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, call_id):
         from tenancy.capabilities import tenant_capability_enabled
@@ -145,6 +154,15 @@ class OwnerWaiterCallAcknowledgeView(APIView):
         call = WaiterCall.objects.filter(pk=call_id).first()
         if call is None:
             return Response({"detail": "Not found.", "code": "not_found"}, status=404)
+
+        from .views import _is_tenant_owner  # lazy import avoids a heavy module load cycle
+        if not _is_tenant_owner(request):
+            my_slugs, claimed_slugs = _section_slugs_for(request.user)
+            if claimed_slugs and call.table_slug and call.table_slug in claimed_slugs and call.table_slug not in my_slugs:
+                return Response(
+                    {"detail": "Access denied — not your section.", "code": "section_denied"},
+                    status=403,
+                )
         if call.status != WaiterCall.Status.ACKNOWLEDGED:
             call.status = WaiterCall.Status.ACKNOWLEDGED
             call.acknowledged_at = timezone.now()

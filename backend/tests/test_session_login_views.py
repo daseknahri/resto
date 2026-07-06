@@ -147,6 +147,44 @@ class LoginViewTests(SimpleTestCase):
                         self._post({"email": "owner@example.com", "password": "pass"})
         mock_login.assert_called_once()
 
+    # ── U4: must_change_password surfaced on successful login ─────────────────
+
+    def test_invited_user_login_reports_must_change_password_true(self):
+        """An invited staff user (must_change_password=True) must see that flag
+        in the top-level login response — the session is NOT blocked."""
+        user = _user()
+        user.must_change_password = True
+        with patch("accounts.views.LoginSerializer") as mock_ser:
+            instance = mock_ser.return_value
+            instance.is_valid.return_value = True
+            instance.validated_data = {"user": user}
+            with patch("accounts.models.UserTOTPDevice") as mock_totp:
+                mock_totp.objects.filter.return_value.exists.return_value = False
+                with patch("accounts.views.login"):
+                    with patch("accounts.views.serialize_user_session", return_value=_session_data()):
+                        resp = self._post({"email": "owner@example.com", "password": "pass"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["must_change_password"])
+
+    def test_normal_user_login_reports_must_change_password_false(self):
+        """A normal user (default must_change_password=False) is unaffected —
+        regression guard for the existing login flow."""
+        user = _user()
+        user.must_change_password = False
+        with patch("accounts.views.LoginSerializer") as mock_ser:
+            instance = mock_ser.return_value
+            instance.is_valid.return_value = True
+            instance.validated_data = {"user": user}
+            with patch("accounts.models.UserTOTPDevice") as mock_totp:
+                mock_totp.objects.filter.return_value.exists.return_value = False
+                with patch("accounts.views.login"):
+                    with patch("accounts.views.serialize_user_session", return_value=_session_data()):
+                        resp = self._post({"email": "owner@example.com", "password": "pass"})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["must_change_password"])
+
 
 # ── LogoutView ────────────────────────────────────────────────────────────────
 

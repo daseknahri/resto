@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from menu.views import OwnerSectionListCreateView, OwnerSectionDetailView
-from menu.waiter_views import _section_slugs_for
+from menu.waiter_views import _section_slugs_for, OwnerWaiterCallAcknowledgeView
 
 
 def _req(factory, method, path, data=None):
@@ -147,3 +147,120 @@ class WaiterCallSectionRoutingTests(SimpleTestCase):
         self.assertFalse(visible("t2"))   # another waiter's section
         self.assertTrue(visible("t3"))    # orphan (claimed by nobody)
         self.assertTrue(visible(""))      # non-table / no slug
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# U2 — OwnerWaiterCallAcknowledgeView: section-scoped ack
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class OwnerWaiterCallAcknowledgeSectionScopeTests(SimpleTestCase):
+    """Any authenticated tenant staff may POST ack, but only for their own
+    section — mirrors OwnerWaiterCallListView's hard section filter."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = OwnerWaiterCallAcknowledgeView.as_view()
+        # Waiter features are enabled for all tests in this class.
+        _cap_patcher = patch(
+            "tenancy.capabilities.tenant_capability_enabled", return_value=True
+        )
+        self._cap_mock = _cap_patcher.start()
+        self.addCleanup(_cap_patcher.stop)
+
+    def _post(self, call_id=5, user=None):
+        req = self.factory.post(f"/api/owner/waiter-calls/{call_id}/acknowledge/")
+        force_authenticate(req, user=user or MagicMock(id=9, is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1)
+        return self.view(req, call_id=call_id)
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=False)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_section_waiter_acks_own_section_call_ok(self, WC, _owner_gate, slugs_mock):
+        call = MagicMock(id=5, status="pending", table_slug="t1")
+        WC.objects.filter.return_value.first.return_value = call
+        WC.Status.ACKNOWLEDGED = "acknowledged"
+        slugs_mock.return_value = ({"t1"}, {"t1", "t2"})  # my_slugs, claimed_slugs
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        call.save.assert_called_once()
+        self.assertEqual(call.status, "acknowledged")
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=False)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_section_waiter_denied_foreign_section_call(self, WC, _owner_gate, slugs_mock):
+        call = MagicMock(id=5, status="pending", table_slug="t2")
+        WC.objects.filter.return_value.first.return_value = call
+        WC.Status.ACKNOWLEDGED = "acknowledged"
+        slugs_mock.return_value = ({"t1"}, {"t1", "t2"})  # t2 belongs to another waiter
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "section_denied")
+        call.save.assert_not_called()
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=False)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_section_waiter_acks_orphan_table_ok(self, WC, _owner_gate, slugs_mock):
+        """A table with no assigned section server (not in claimed_slugs) is
+        unowned and acknowledgeable by any waiter."""
+        call = MagicMock(id=5, status="pending", table_slug="t3")
+        WC.objects.filter.return_value.first.return_value = call
+        WC.Status.ACKNOWLEDGED = "acknowledged"
+        slugs_mock.return_value = ({"t1"}, {"t1", "t2"})  # t3 is unclaimed
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        call.save.assert_called_once()
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_owner_acks_any_call(self, WC, _owner_gate, slugs_mock):
+        call = MagicMock(id=5, status="pending", table_slug="t2")
+        WC.objects.filter.return_value.first.return_value = call
+        WC.Status.ACKNOWLEDGED = "acknowledged"
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        call.save.assert_called_once()
+        # Owner path never needs to consult section slugs.
+        slugs_mock.assert_not_called()
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=False)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_undivided_floor_no_filtering(self, WC, _owner_gate, slugs_mock):
+        """When no sections are claimed yet (claimed_slugs empty), every waiter
+        may ack every call — pre-section behaviour preserved."""
+        call = MagicMock(id=5, status="pending", table_slug="t9")
+        WC.objects.filter.return_value.first.return_value = call
+        WC.Status.ACKNOWLEDGED = "acknowledged"
+        slugs_mock.return_value = (set(), set())
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        call.save.assert_called_once()
+
+    @patch("menu.waiter_views._section_slugs_for")
+    @patch("menu.views._is_tenant_owner", return_value=False)
+    @patch("menu.waiter_views.WaiterCall")
+    def test_unauthenticated_ack_is_403(self, WC, _owner_gate, slugs_mock):
+        """No IsTenantEditorOrReadOnly gate — but IsAuthenticated must still block
+        an anonymous request (regression guard for the permission relaxation)."""
+        call = MagicMock(id=5, status="pending", table_slug="t1")
+        WC.objects.filter.return_value.first.return_value = call
+        req = self.factory.post("/api/owner/waiter-calls/5/acknowledge/")
+        req.tenant = SimpleNamespace(id=1)
+        # no force_authenticate — anonymous
+        resp = self.view(req, call_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        call.save.assert_not_called()

@@ -351,7 +351,7 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
             req = self._make_request(date_param="2026-06-10")
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
-        for key in ("window", "collected", "refunds", "voids", "tips", "by_staff",
+        for key in ("window", "collected", "refunds", "voids", "comps", "tips", "by_staff",
                     "food_cost", "labor", "net_cash_position", "net"):
             self.assertIn(key, resp.data, f"Missing top-level key: {key}")
 
@@ -487,6 +487,99 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
         self.assertEqual(item["voided_by"], 7, "voided_by must propagate voided_by_user_id")
         self.assertEqual(item["reason"], "wrong size")
         self.assertEqual(Decimal(item["line_total"]), Decimal("9.00"))  # 2 × 4.50
+
+
+class OwnerZReportCompItemShapeTests(SimpleTestCase):
+    """V3: when comped items exist, the comps list must carry correct fields
+    and reconcile alongside voids — parallel to OwnerZReportVoidItemShapeTests."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = OwnerZReportView.as_view()
+
+    def test_comp_item_has_required_fields_and_comped_by_propagated(self):
+        """Each comp entry: order_number, dish_name, qty, line_total, reason,
+        comped_by. comped_by propagates OrderItem.comped_by_user_id."""
+        fake_item = MagicMock()
+        fake_item.order.order_number = "ORD-002"
+        fake_item.dish_name = "Latte"
+        fake_item.qty = 1
+        fake_item.unit_price = Decimal("5.00")
+        fake_item.comp_reason = "Customer complaint"
+        fake_item.comped_by_user_id = 11
+
+        order_qs = MagicMock()
+        order_qs.filter.return_value = order_qs
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
+
+        wt_qs = MagicMock()
+        wt_qs.filter.return_value = wt_qs
+        wt_qs.aggregate.return_value = {"refund_count": 0, "refund_total": None}
+        mock_wt_class = MagicMock()
+        mock_wt_class.Type.REFUND = "REFUND"
+        mock_wt_class.objects.filter.return_value = wt_qs
+
+        # Voids query returns empty; comps query returns our one comped item.
+        # Both go through OrderItem.objects.select_related("order").filter(...),
+        # so we distinguish by inspecting the filter kwargs each call receives.
+        empty_qs = MagicMock()
+        empty_qs.__iter__ = lambda s: iter([])
+        comp_qs = MagicMock()
+        comp_qs.__iter__ = lambda s: iter([fake_item])
+
+        def _select_related_filter(**kwargs):
+            return comp_qs if kwargs.get("is_comped") else empty_qs
+
+        _sr = MagicMock()
+        _sr.filter.side_effect = _select_related_filter
+
+        _void_shift_qs = MagicMock()
+        _void_shift_qs.__iter__ = lambda s: iter([])
+        _mock_shift_cls = MagicMock()
+        _mock_shift_cls.objects.filter.return_value.order_by.return_value = _void_shift_qs
+
+        with (
+            patch("menu.revenue.split_revenue_for_orders",
+                  return_value={"cash": Decimal("0"), "wallet": Decimal("0")}),
+            patch("menu.views.Order.objects") as mock_order_objs,
+            patch("menu.views.OrderItem.objects") as mock_oi_objs,
+            patch("menu.views.OrderPayment.objects") as mock_op_objs,
+            patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", _mock_shift_cls),
+        ):
+            mock_order_objs.filter.return_value = order_qs
+            mock_oi_objs.select_related.return_value = _sr
+            _fc_chain = MagicMock()
+            _fc_chain.annotate.return_value = _fc_chain
+            _fc_chain.filter.return_value = _fc_chain
+            _fc_chain.aggregate.return_value = {"total": None}
+            mock_oi_objs.filter.return_value = _fc_chain
+            mock_op_objs.filter.return_value = _make_empty_op_qs()
+
+            req = self.factory.get("/api/owner/z-report/", {"date": "2026-06-10"})
+            req.user = _owner_user()
+            t = _tenant()
+            t.profile = _profile(tz="UTC", cutover=0)
+            req.tenant = t
+            req.path = "/api/owner/z-report/"
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Voids must stay empty (this fixture has no voided items).
+        self.assertEqual(resp.data["voids"]["items"], [])
+        comps = resp.data["comps"]["items"]
+        self.assertEqual(len(comps), 1)
+        item = comps[0]
+        for field in ("order_number", "dish_name", "qty", "line_total", "reason", "comped_by"):
+            self.assertIn(field, item, f"comp item missing field: {field}")
+        self.assertEqual(item["comped_by"], 11, "comped_by must propagate comped_by_user_id")
+        self.assertEqual(item["reason"], "Customer complaint")
+        self.assertEqual(Decimal(item["line_total"]), Decimal("5.00"))  # 1 × 5.00
+        self.assertEqual(resp.data["comps"]["count"], 1)
+        self.assertEqual(Decimal(resp.data["comps"]["total"]), Decimal("5.00"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

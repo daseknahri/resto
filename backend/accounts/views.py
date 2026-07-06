@@ -131,6 +131,9 @@ def serialize_user_session(user):
         "is_platform_admin": user.is_platform_admin,
         "can_access_admin_console": can_access_admin_console,
         "can_edit_tenant_menu": perm_edit_menu,
+        # U4: hint only — does NOT block the session. The frontend forces a
+        # change-password step when true; StaffChangePasswordView clears it.
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
         "permissions": {
             "manage_orders": perm_manage_orders,
             "view_revenue": perm_view_revenue,
@@ -263,7 +266,10 @@ class LoginView(APIView):
         enrollment_required = role_forces_mfa and not has_confirmed_device
         return Response(
             {"detail": "Signed in", "user": serialize_user_session(user),
-             "mfa_enrollment_required": enrollment_required},
+             "mfa_enrollment_required": enrollment_required,
+             # U4: top-level hint (also nested under user.must_change_password) — does
+             # NOT block the session; the frontend forces a change-password step.
+             "must_change_password": bool(getattr(user, "must_change_password", False))},
             status=status.HTTP_200_OK,
         )
 
@@ -1726,6 +1732,7 @@ class OwnerStaffListCreateView(APIView):
                         username=_u, email=email, password=_pw,
                         first_name=_fn, last_name=_ln,
                         role=User.Roles.TENANT_STAFF, tenant=tenant,
+                        must_change_password=True,
                     )
                     first_name, last_name, temp_password, username = _fn, _ln, _pw, _u
         if _limit_error_response is not None:
@@ -1759,6 +1766,7 @@ class OwnerStaffListCreateView(APIView):
                 last_name=last_name,
                 role=User.Roles.TENANT_STAFF,
                 tenant=tenant,
+                must_change_password=True,
             )
 
         # Email invite
@@ -1923,7 +1931,15 @@ class StaffChangePasswordView(APIView):
             )
 
         user.set_password(new_password)
-        user.save(update_fields=["password"])
+        _update_fields = ["password"]
+        # U4: clear the forced-change flag the moment the user sets their own
+        # password — whether they were forced into this screen or changed it
+        # voluntarily. No-op (still just one extra field in update_fields) for
+        # the common case where the flag was already False.
+        if getattr(user, "must_change_password", False):
+            user.must_change_password = False
+            _update_fields.append("must_change_password")
+        user.save(update_fields=_update_fields)
 
         # Keep the session alive after a password change so the staff member
         # stays logged in on this device.

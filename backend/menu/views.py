@@ -4507,6 +4507,7 @@ def _staff_order_payload(order):
                 "note": i.note,
                 "is_ready": i.is_ready,
                 "is_voided": i.is_voided,
+                "is_comped": i.is_comped,
                 "combo_components": i.combo_components,
                 "course": getattr(i, "course", 0),
                 "seat": getattr(i, "seat", 0),
@@ -4520,13 +4521,16 @@ def _staff_order_payload(order):
 
 
 def _recompute_order_totals(order):
-    """Recompute order.total/subtotal from non-voided items + delivery_fee/tip/discount.
+    """Recompute order.total/subtotal from non-voided/non-comped items +
+    delivery_fee/tip/discount.
 
-    Mirrors the PlaceOrderView formula: food_subtotal = sum(item.subtotal for non-voided),
-    then subtract promotion_discount and loyalty_discount, add delivery_fee and tip.
+    Mirrors the PlaceOrderView formula: food_subtotal = sum(item.subtotal for
+    non-voided, non-comped), then subtract promotion_discount and loyalty_discount,
+    add delivery_fee and tip. A comped item (V3) contributes 0, exactly like a
+    voided item — it stays on the ticket but is excluded from the money math.
     Does NOT save — caller must call order.save(update_fields=...).
     """
-    non_voided = [i for i in order.items.all() if not i.is_voided]
+    non_voided = [i for i in order.items.all() if not i.is_voided and not i.is_comped]
     food_subtotal = sum(Decimal(str(i.subtotal)) for i in non_voided)
     promo_discount = Decimal(str(order.promotion_discount or "0"))
     loyalty_discount = Decimal(str(order.loyalty_discount or "0"))
@@ -5179,6 +5183,192 @@ class StaffVoidOrderItemView(APIView):
                     # WalletTransaction lives in the shared schema; without this field
                     # the Z-report and dashboard would see refunds from all tenants.
                     tenant_id=_void_tenant.id if _void_tenant else None,
+                )
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order))
+
+
+class StaffCompOrderItemView(APIView):
+    """POST /api/staff/orders/<order_id>/items/<item_id>/comp/
+
+    Comp (mark free) a single line item on an open order without removing it from
+    the ticket — the kitchen still sees/fires it, but it contributes 0 to the
+    order total. Mirrors StaffVoidOrderItemView's guards and money handling
+    exactly, with two differences: comping never restocks the dish (the item was
+    still made/served — comping is a billing decision, not an inventory one) and
+    a reason is REQUIRED (void's reason is optional).
+
+    Auth: same _can_void_order_item gate as void — comping is financially
+    equivalent to voiding (it erases revenue), so it is gated by the same
+    loss-prevention permission rather than the looser _can_edit_tenant_order.
+
+    Guards (404/409):
+      404           — item does not belong to this order
+      already_comped — item.is_comped is already True (409)
+      already_voided — item.is_voided is already True (409) — a voided item is
+                       already excluded from the total; comping it too is meaningless.
+      bad_status    — order is in a terminal state (409)
+
+    Body (required): { "reason": str }
+
+    Money rule (identical to StaffVoidOrderItemView):
+      PAID orders whose money can't auto-reconcile (paid in cash, i.e.
+      wallet_amount_paid == 0) are rejected with cannot_comp_paid — same as void.
+      PAID wallet orders: refund = min(item.subtotal, order.wallet_amount_paid),
+      credit_wallet(..., tx_type=REFUND, idempotency_key=f"compitem:{schema}:{item_id}").
+      UNPAID orders with an overpaying wallet ledger: same overpay-refund +
+      auto-flip-to-PAID handling as void.
+
+    Returns the refreshed staff-list payload for the order.
+    """
+    permission_classes = [IsAuthenticated]
+
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+
+    def post(self, request, order_id, item_id, *args, **kwargs):
+        if not _can_void_order_item(request):
+            return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_access_order(request, order):
+            return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # Item must belong to this order
+        item = order.items.filter(pk=item_id).first()
+        if item is None:
+            return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if item.is_comped:
+            return Response({"detail": "Item is already comped.", "code": "already_comped"},
+                            status=status.HTTP_409_CONFLICT)
+
+        if item.is_voided:
+            return Response({"detail": "Item is already voided.", "code": "already_voided"},
+                            status=status.HTTP_409_CONFLICT)
+
+        if order.status in self._TERMINAL_STATUSES:
+            return Response(
+                {"detail": "Order is in a terminal state and cannot be modified.", "code": "bad_status"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Block comp on already-PAID orders whose money can't auto-reconcile ──
+        # Identical rule to StaffVoidOrderItemView: a PAID order with
+        # wallet_amount_paid > 0 can be exactly refunded below (Case A); a PAID
+        # order with wallet_amount_paid == 0 was settled in cash and cannot
+        # auto-reconcile a shrinking total.
+        if (
+            order.payment_status == Order.PaymentStatus.PAID
+            and Decimal(str(order.wallet_amount_paid or "0")) <= Decimal("0")
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This order is already paid in cash and cannot be comped "
+                        "automatically. Issue an explicit refund/correction instead."
+                    ),
+                    "code": "cannot_comp_paid",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = str(request.data.get("reason") or "").strip()[:300]
+        if not reason:
+            return Response({"detail": "A reason is required.", "code": "reason_required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Atomic: comp + recompute totals ────────────────────────────────────
+        with transaction.atomic():
+            now = timezone.now()
+            item.is_comped = True
+            item.comped_at = now
+            item.comp_reason = reason
+            item.comped_by_user_id = getattr(request.user, "id", None)
+            item.save(update_fields=["is_comped", "comped_at", "comp_reason", "comped_by_user_id"])
+
+            # Recompute order totals from non-voided, non-comped items.
+            # select_for_update() locks the order row so concurrent comp/void calls
+            # on different items cannot both read a stale wallet_amount_paid and
+            # each issue an independent refund (TOCTOU / double-spend fix) — same
+            # pattern as StaffVoidOrderItemView.
+            order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
+            _comped_item_subtotal = Decimal(str(item.subtotal or "0"))
+            _recompute_order_totals(order)
+
+            # ── Commission recompute — identical basis to StaffVoidOrderItemView ──
+            _recompute_commission = False
+            if order.source == Order.Source.MARKETPLACE:
+                _commission_rate = Decimal(str(order.commission_rate_applied or "0"))
+                if _commission_rate > Decimal("0"):
+                    _recompute_commission = True
+                    _new_food_subtotal = sum(
+                        (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided and not i.is_comped),
+                        Decimal("0"),
+                    )
+                    _new_commission = (_new_food_subtotal * _commission_rate).quantize(Decimal("0.01"))
+                    if _new_commission < Decimal("0"):
+                        _new_commission = Decimal("0")
+                    order.commission_amount = _new_commission
+
+            # Partial wallet refund — identical two-case handling to void.
+            _refunded = Decimal("0")
+            _extra_save_fields: list = []
+            wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+            new_total = Decimal(str(order.total or "0"))
+            if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
+                # Case A — PAID order comp
+                line_total = Decimal(str(item.subtotal))
+                refund_amount = min(line_total, wallet_paid)
+                if refund_amount > Decimal("0"):
+                    _refunded = refund_amount
+                    order.wallet_amount_paid = wallet_paid - _refunded
+            elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
+                # Case B — UNPAID order overpay reconciliation
+                ledger_paid = sum(
+                    (Decimal(str(p.amount)) for p in order.payments.all()), Decimal("0")
+                )
+                overpay = max(Decimal("0"), wallet_paid - new_total)
+                if overpay > Decimal("0"):
+                    _refunded = overpay
+                    order.wallet_amount_paid = wallet_paid - _refunded
+                remaining_wallet = wallet_paid - _refunded
+                if ledger_paid + remaining_wallet >= new_total:
+                    order.mark_paid(save=False)
+                    _extra_save_fields = ["payment_status", "paid_at"]
+
+            _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
+            _commission_fields = ["commission_amount"] if _recompute_commission else []
+            order.save(
+                update_fields=["total", "updated_at"]
+                + _wallet_fields + _extra_save_fields + _commission_fields
+            )
+
+            if _refunded > Decimal("0"):
+                from accounts.wallet_service import credit_wallet
+                from accounts.models import WalletTransaction as _WTx
+                from django.db import connection as _cic
+                _comp_tenant = getattr(request, "tenant", None)
+                # Namespaced idempotency key — same rationale as void's OPS-5g fix:
+                # WalletTransaction is public-schema, so item_id alone could collide
+                # across tenants.
+                credit_wallet(
+                    order.customer_id,
+                    _refunded,
+                    tx_type=_WTx.Type.REFUND,
+                    idempotency_key=f"compitem:{_cic.schema_name}:{item_id}",
+                    reference=order.order_number,
+                    note=f"Comp item: {item.dish_name}",
+                    require_verified=False,
+                    tenant_id=_comp_tenant.id if _comp_tenant else None,
                 )
 
         try:
@@ -8199,6 +8389,28 @@ class OwnerZReportView(APIView):
                 "voided_by": item.voided_by_user_id,
             })
 
+        # ── Comps in window (V3) ──────────────────────────────────────────────
+        # OrderItem.is_comped=True AND comped_at in [start, end). Parallel to the
+        # voids section above so comps show alongside voids and reconcile.
+        comped_items_qs = OrderItem.objects.select_related("order").filter(
+            is_comped=True,
+            comped_at__gte=window_start,
+            comped_at__lt=window_end,
+        )
+        comps_list = []
+        comps_total = Decimal("0.00")
+        for item in comped_items_qs:
+            line_total = (item.unit_price * item.qty).quantize(Decimal("0.01"))
+            comps_total += line_total
+            comps_list.append({
+                "order_number": item.order.order_number,
+                "dish_name": item.dish_name,
+                "qty": item.qty,
+                "line_total": str(line_total),
+                "reason": item.comp_reason or "",
+                "comped_by": item.comped_by_user_id,
+            })
+
         # ── By-staff breakdown ────────────────────────────────────────────────
         # Source: OrderPayment.recorded_by_name for ledger-based payments.
         # Legacy (one-shot settle) orders have no ledger row; they cannot be
@@ -8337,6 +8549,11 @@ class OwnerZReportView(APIView):
                 "count": len(voids_list),
                 "total": str(voids_total.quantize(Decimal("0.01"))),
                 "items": voids_list,
+            },
+            "comps": {
+                "count": len(comps_list),
+                "total": str(comps_total.quantize(Decimal("0.01"))),
+                "items": comps_list,
             },
             "tips": {
                 "total": str(tips_total),

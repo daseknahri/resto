@@ -739,6 +739,14 @@ class OrderItem(models.Model):
     voided_at = models.DateTimeField(null=True, blank=True)
     void_reason = models.CharField(max_length=120, blank=True)
     voided_by_user_id = models.IntegerField(null=True, blank=True)
+    # V3 — per-item comp: mark a line item free (owner/staff goodwill gesture)
+    # without voiding it off the ticket. Mirrors the is_voided/voided_at/void_reason/
+    # voided_by_user_id fields above; a comped item stays on the ticket (kitchen still
+    # sees it) but contributes 0 to the order total — see _recompute_order_totals.
+    is_comped = models.BooleanField(default=False)
+    comped_at = models.DateTimeField(null=True, blank=True)
+    comp_reason = models.CharField(max_length=300, blank=True)
+    comped_by_user_id = models.IntegerField(null=True, blank=True)
     # Course sequencing — snapshot of dish.category.course at placement/append time.
     # 0 = no course / fire immediately; 1–4 = course number held until staff fires it.
     course = models.PositiveSmallIntegerField(

@@ -18,13 +18,16 @@ from accounts.views import StaffChangePasswordView
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_user(is_authenticated=True, password_ok=True):
+def _make_user(is_authenticated=True, password_ok=True, must_change_password=False):
     """Return a mock User for staff/owner."""
     u = MagicMock()
     u.is_authenticated = is_authenticated
     u.check_password = MagicMock(return_value=password_ok)
     u.set_password = MagicMock()
     u.save = MagicMock()
+    # U4: defaults False so existing happy-path tests (which never set this) see
+    # the un-forced update_fields=["password"] save exactly as before.
+    u.must_change_password = must_change_password
     return u
 
 
@@ -134,6 +137,38 @@ class StaffChangePasswordViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # set_password must receive the stripped value
         user.set_password.assert_called_once_with("Str0ngNewPass!9")
+
+    # ── U4: force-password-change flag is cleared on a successful change ──────
+
+    def test_forced_change_clears_must_change_password_flag(self):
+        """An invited user (must_change_password=True) who successfully changes
+        their password must have the flag cleared and saved."""
+        user = _make_user(password_ok=True, must_change_password=True)
+        with patch("accounts.views.validate_password") as mock_validate, \
+             patch("accounts.views._update_session_auth_hash"):
+            mock_validate.return_value = None
+            resp = self._post(
+                {"current_password": "OldPass123", "new_password": "Str0ngNewPass!9"},
+                user=user,
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(user.must_change_password)
+        user.save.assert_called_once_with(update_fields=["password", "must_change_password"])
+
+    def test_normal_change_does_not_add_must_change_password_to_update_fields(self):
+        """A normal user (must_change_password already False) keeps the
+        original, un-forced update_fields=["password"] save — no behaviour
+        change for the existing flow."""
+        user = _make_user(password_ok=True, must_change_password=False)
+        with patch("accounts.views.validate_password") as mock_validate, \
+             patch("accounts.views._update_session_auth_hash"):
+            mock_validate.return_value = None
+            resp = self._post(
+                {"current_password": "OldPass123", "new_password": "Str0ngNewPass!9"},
+                user=user,
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        user.save.assert_called_once_with(update_fields=["password"])
 
     # ── Throttle (OPS-6: brute-force backstop on the current-password check) ────
 
