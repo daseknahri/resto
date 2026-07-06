@@ -133,7 +133,8 @@
           <p class="text-lg font-bold text-red-200">{{ t('mktOrderStatus.cancelled') }}</p>
           <router-link
             to="/order"
-            class="mt-3 inline-flex items-center gap-1.5 rounded-full border border-red-400/30 px-5 py-2 text-sm font-medium text-red-300 transition-colors hover:border-red-400/60 hover:text-red-200"
+            class="ui-btn-outline ui-press mt-3 inline-flex"
+            style="--color-secondary: #f43f5e; --color-secondary-rgb: 244,63,94"
           >
             {{ t('mktOrderStatus.backToMarketplace') }}
           </router-link>

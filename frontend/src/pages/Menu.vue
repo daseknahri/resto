@@ -178,7 +178,7 @@
             type="search"
             :placeholder="t('menu.dishSearchPlaceholder')"
             :aria-label="t('menu.search')"
-            class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
+            class="ui-input ps-8 pe-8"
           />
           <button
             v-if="isSearchActive"

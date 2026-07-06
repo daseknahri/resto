@@ -39,51 +39,59 @@
             <div class="grid grid-cols-2 gap-2">
               <router-link
                 :to="{ name: 'admin-delivery-zones' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                🗺 {{ t("adminConsole.deliveryZones") }}
+                <AppIcon name="location" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.deliveryZones") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-drivers' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                🛵 {{ t("adminConsole.drivers") }}
+                <AppIcon name="user" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.drivers") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-analytics' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                📊 {{ t("adminConsole.analytics") }}
+                <AppIcon name="chart" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.analytics") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-wallets' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                💳 {{ t("adminConsole.wallets") }}
+                <AppIcon name="wallet" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.wallets") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-customers' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                👥 {{ t("adminConsole.customers") }}
+                <AppIcon name="users" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.customers") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-delivery-jobs' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                📦 {{ t("adminConsole.deliveryJobs") }}
+                <AppIcon name="receipt" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.deliveryJobs") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-rides' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                🚗 {{ t("adminConsole.rides") }}
+                <AppIcon name="truck" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.rides") }}
               </router-link>
               <router-link
                 :to="{ name: 'admin-flash-sales' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center inline-flex items-center justify-center gap-1.5"
               >
-                ⚡ {{ t("adminConsole.flashSales") }}
+                <AppIcon name="sparkles" class="h-4 w-4" aria-hidden="true" />
+                {{ t("adminConsole.flashSales") }}
               </router-link>
             </div>
           </article>
@@ -1493,6 +1501,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { usePromptModal } from "../composables/usePromptModal";

@@ -110,14 +110,14 @@
           >{{ t('waiterPage.clockedIn') }}<template v-if="shiftElapsed"> · {{ shiftElapsed }}</template> ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
           <button
             v-if="canManageOrders"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 font-semibold text-[var(--color-secondary)]"
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
             @click="openCharge()"
           >
             {{ t('waiterPage.chargeWalletBtn') }}
           </button>
           <button
             v-if="canManageOrders"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/50 bg-emerald-500/10 font-semibold text-emerald-300"
+            class="ui-btn-primary ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
             @click="currentShift ? (showNewOrder = true) : toast.show(t('waiterPage.mustClockInFirst'), 'warning')"
           >
             + {{ t('waiterPage.newOrderBtn') }}
@@ -125,7 +125,8 @@
           <!-- Floor / List view toggle -->
           <button
             v-if="activeTab !== 'shift' && activeTab !== 'recent'"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
+            :class="floorView ? 'border-[var(--color-secondary)]/60 text-[var(--color-secondary)]' : ''"
             :data-active="floorView"
             :aria-pressed="floorView"
             :aria-label="floorView ? t('waiterPage.listViewToggle') : t('waiterPage.floorViewToggle')"

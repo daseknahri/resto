@@ -135,7 +135,7 @@
             v-if="filters.cities.length"
             v-model="selectedCity"
             :aria-label="t('marketplace.filterCity')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+            class="ui-input ui-touch-target rounded-full"
           >
             <option value="">{{ t('marketplace.filterCity') }}: {{ t('marketplace.filterAll') }}</option>
             <option v-for="c in filters.cities" :key="c" :value="c">{{ c }}</option>
@@ -146,7 +146,7 @@
             v-if="filters.cuisines.length"
             v-model="selectedCuisine"
             :aria-label="t('marketplace.filterCuisine')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+            class="ui-input ui-touch-target rounded-full"
           >
             <option value="">{{ t('marketplace.filterCuisine') }}: {{ t('marketplace.filterAll') }}</option>
             <option v-for="c in filters.cuisines" :key="c" :value="c">{{ c }}</option>
@@ -156,7 +156,7 @@
           <select
             v-model="selectedFulfillment"
             :aria-label="t('marketplace.filterFulfillment')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+            class="ui-input ui-touch-target rounded-full"
           >
             <option value="any">{{ t('marketplace.filterFulfillmentAny') }}</option>
             <option value="delivery">{{ t('marketplace.filterFulfillmentDelivery') }}</option>
@@ -167,7 +167,7 @@
           <select
             v-model="selectedPriceTier"
             :aria-label="t('marketplace.filterPriceTier')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+            class="ui-input ui-touch-target rounded-full"
           >
             <option value="">{{ t('marketplace.filterPriceTier') }}: {{ t('marketplace.filterAll') }}</option>
             <option value="1">{{ t('marketplace.priceTier1') }}</option>
@@ -179,7 +179,7 @@
           <select
             v-model="selectedMinRating"
             :aria-label="t('marketplace.filterMinRating')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+            class="ui-input ui-touch-target rounded-full"
           >
             <option value="">{{ t('marketplace.filterMinRating') }}: {{ t('marketplace.filterAll') }}</option>
             <option value="3">{{ t('marketplace.minRating3') }}</option>
@@ -380,7 +380,7 @@
         <select
           v-model="sortBy"
           :aria-label="t('marketplace.sortBy')"
-          class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+          class="ui-input ui-touch-target rounded-full"
         >
           <option value="relevance">{{ t('marketplace.sortRelevance') }}</option>
           <option value="rating">{{ t('marketplace.sortRating') }}</option>

@@ -404,32 +404,11 @@
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
         </button>
-        <!-- High-frequency daily destinations: Kitchen, Tables & QR, Z-Report, Availability -->
-        <RouterLink
-          v-if="showKitchen"
-          :to="{ name: 'owner-kitchen' }"
-          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
-        >
-          <AppIcon name="menu" class="owner-home-btn-icon" aria-hidden="true" />
-          {{ t("ownerLayout.kitchen") }}
-        </RouterLink>
-        <RouterLink
-          v-if="tenant.capabilities.tables !== false"
-          :to="{ name: 'owner-tables' }"
-          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
-        >
-          <AppIcon name="qr" class="owner-home-btn-icon" aria-hidden="true" />
-          {{ t("ownerLayout.tablesQr") }}
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'owner-z-report' }"
-          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
-        >
-          <AppIcon name="receipt" class="owner-home-btn-icon" aria-hidden="true" />
-          {{ t("zReport.navLabel") }}
-        </RouterLink>
+        <!-- High-frequency daily destination kept here: Availability. Kitchen, Tables & QR,
+             and Z-Report are reachable via OwnerLayout nav/dock/settings, so they are not
+             duplicated in this quick-actions grid. -->
         <button
-          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+          class="ui-btn-outline ui-press col-span-2 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
           @click="openAvailabilityPanel"
         >
           <AppIcon name="eye" class="owner-home-btn-icon" aria-hidden="true" />
@@ -631,9 +610,6 @@ const order = useOrderStore();
 const toast = useToastStore();
 const router = useRouter();
 const { t, formatNumber, currentLocale } = useI18n();
-
-// ── Capability gates ──────────────────────────────────────────────────────────
-const showKitchen = computed(() => tenant.capabilities.kitchen !== false);
 
 // ── Quick-action: open and scroll to the dish availability panel ──────────────
 const dishPanelRef = ref(null);

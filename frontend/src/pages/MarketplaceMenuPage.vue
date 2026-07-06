@@ -272,7 +272,7 @@
               type="search"
               :placeholder="t('mktMenu.searchPlaceholder')"
               :aria-label="t('mktMenu.search')"
-              class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
+              class="ui-input ps-8 pe-8"
             />
             <button
               v-if="isMktSearchActive"
@@ -690,7 +690,7 @@
     <button
       v-if="cart.length && !checkoutOpen"
       ref="checkoutTriggerRef"
-      class="ui-cart-bar ui-press fixed bottom-0 inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-2xl px-6 py-3.5 text-sm font-bold text-white flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+      class="ui-cart-bar ui-btn-outline ui-press fixed bottom-0 inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md justify-between rounded-2xl px-6 py-3.5 text-sm font-bold text-white"
       style="margin-bottom: calc(var(--safe-bottom) + 1rem)"
       :aria-label="`${t('mktMenu.checkout')} · ${fmtPrice(cartTotal)}`"
       @click="checkoutOpen = true"
@@ -1093,7 +1093,7 @@
 
           <!-- Submit -->
           <button
-            class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+            class="ui-btn-primary ui-press w-full justify-center gap-2 py-3.5 text-sm font-bold disabled:opacity-50"
             :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0"
             :aria-busy="placing"
             @click="placeOrder"

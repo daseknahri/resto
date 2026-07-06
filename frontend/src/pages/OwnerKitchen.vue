@@ -4,8 +4,8 @@
     :class="{ 'kitchen-fullscreen': isFullscreen }"
   >
     <!-- Top bar -->
-    <div class="kitchen-topbar" role="region" :aria-label="t('kitchen.displayHeader')">
-      <div class="flex items-center gap-3">
+    <div class="kitchen-topbar flex-wrap gap-2" role="region" :aria-label="t('kitchen.displayHeader')">
+      <div class="flex items-center gap-3 min-w-0">
         <span class="ui-kicker">{{ t("kitchen.title") }}</span>
         <!-- Offline / syncing indicator -->
         <span
@@ -22,7 +22,7 @@
         >{{ t("kitchen.syncing") }}</span>
       </div>
 
-      <div class="flex items-center gap-4">
+      <div class="flex items-center flex-wrap gap-2 sm:gap-4 min-w-0">
         <!-- WS live / polling indicator (contract 6c) -->
         <span
           v-if="wsState === 'live'"

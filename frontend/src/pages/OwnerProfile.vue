@@ -42,7 +42,7 @@
           <p class="text-sm text-white/60">{{ t("orderHandling.subtitle") }}</p>
         </header>
 
-        <div class="flex items-start justify-between gap-4 rounded-2xl bg-white/5 p-4">
+        <div class="ui-panel-soft flex items-start justify-between gap-4 p-4">
           <div class="min-w-0 space-y-1">
             <p class="text-sm font-medium text-white">{{ t("orderHandling.autoAcceptLabel") }}</p>
             <p class="text-xs text-white/55">{{ t("orderHandling.autoAcceptHint") }}</p>
@@ -61,13 +61,13 @@
           </button>
         </div>
 
-        <div class="space-y-2 rounded-2xl bg-white/5 p-4">
+        <div class="ui-panel-soft space-y-2 p-4">
           <label for="oh-prep" class="block text-sm font-medium text-white">{{ t("orderHandling.prepLabel") }}</label>
           <p class="text-xs text-white/55">{{ t("orderHandling.prepHint") }}</p>
           <div class="flex items-center gap-3">
             <button
               type="button"
-              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press"
+              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
               :disabled="ohSaving || prepMinutes <= 5"
               :aria-label="t('orderHandling.prepDecrease')"
               @click="prepMinutes = Math.max(5, prepMinutes - 5)"
@@ -84,7 +84,7 @@
             <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
             <button
               type="button"
-              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press"
+              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
               :disabled="ohSaving || prepMinutes >= 180"
               :aria-label="t('orderHandling.prepIncrease')"
               @click="prepMinutes = Math.min(180, prepMinutes + 5)"
@@ -110,7 +110,7 @@
           <p class="text-xs text-white/55">{{ t("orderHandling.hoursHint") }}</p>
         </header>
 
-        <div class="space-y-1.5 rounded-2xl bg-white/5 p-4">
+        <div class="ui-panel-soft space-y-1.5 p-4">
           <div
             v-for="(day, idx) in scheduleLocal"
             :key="day.key"
@@ -123,7 +123,7 @@
               role="switch"
               :aria-checked="day.enabled"
               :aria-label="day.label"
-              class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors"
+              class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
               :class="day.enabled
                 ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
                 : 'border-slate-700 bg-slate-900 text-slate-400'"

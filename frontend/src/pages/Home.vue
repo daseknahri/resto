@@ -125,16 +125,6 @@
                 <span>{{ t("common.demo") }}</span>
               </RouterLink>
             </div>
-            <div class="mt-5 grid gap-2 sm:grid-cols-2">
-              <div class="ui-admin-subcard p-3.5">
-                <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-                <p class="mt-2 text-base font-bold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
-              </div>
-              <div class="ui-admin-subcard p-3.5">
-                <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-                <p class="mt-2 text-base font-bold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
-              </div>
-            </div>
           </article>
           <article class="ui-command-deck p-6 ui-reveal" :style="{ '--ui-delay': '140ms' }">
             <div class="flex items-start justify-between gap-3">
@@ -267,21 +257,6 @@
           <p class="text-sm leading-relaxed text-slate-300">{{ t("home.plans.basic.description") }}</p>
         </div>
 
-        <div class="mt-5 grid gap-3 sm:grid-cols-3">
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-            <p class="mt-2 text-sm font-bold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
-          </article>
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-            <p class="mt-2 text-sm font-bold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
-          </article>
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-            <p class="mt-2 text-sm font-bold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
-          </article>
-        </div>
-
         <div class="mt-6 flex flex-wrap gap-3">
           <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.getMyMenu") }}</RouterLink>
           <RouterLink to="/contact" class="ui-btn-outline ui-touch-target">{{ t("home.talkSupport") }}</RouterLink>
@@ -295,20 +270,6 @@
           <p class="ui-kicker">{{ t("home.heroBadge") }}</p>
           <h2 id="plans-heading" class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl">{{ t("home.plansTitle") }}</h2>
           <p class="max-w-2xl text-sm leading-relaxed text-slate-300 md:text-base">{{ t("home.heroSubtitle") }}</p>
-        </div>
-        <div class="grid gap-3 sm:grid-cols-3 md:min-w-[360px]">
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-            <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
-          </article>
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-            <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
-          </article>
-          <article class="ui-admin-subcard p-3.5">
-            <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-            <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
-          </article>
         </div>
       </div>
       <div class="grid gap-5 md:grid-cols-3">
@@ -370,20 +331,6 @@
             <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
             <h2 id="cta-heading" class="ui-display text-3xl font-bold tracking-tight text-white">{{ t("home.readyTitle") }}</h2>
             <p class="leading-relaxed text-slate-300">{{ t("home.readyText") }}</p>
-          </div>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <article class="ui-metric-card">
-              <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-              <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
-            </article>
-            <article class="ui-metric-card">
-              <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-              <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
-            </article>
-            <article class="ui-metric-card">
-              <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-              <p class="mt-2 text-lg font-bold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
-            </article>
           </div>
         </div>
         <div class="ui-command-deck p-6">

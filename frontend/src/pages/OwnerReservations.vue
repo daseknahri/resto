@@ -29,7 +29,7 @@
               @click="viewMode = 'calendar'"
             >{{ t("ownerReservations.viewCalendar") }}</button>
           </div>
-          <button class="ui-btn-primary ui-press justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
+          <button class="ui-btn-outline ui-press justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
             <AppIcon name="refresh" class="owner-res-icon" />
             {{ loading ? t("common.loading") : t("common.refresh") }}
           </button>
@@ -616,8 +616,8 @@
         <p class="text-sm text-slate-400">{{ waitlistDate ? t("ownerReservations.waitlistEmpty") : t("ownerReservations.waitlistEmptyAll") }}</p>
       </div>
 
-      <!-- Table -->
-      <div v-else class="ui-table-wrap rounded-xl border border-slate-700/50">
+      <!-- Table (desktop) -->
+      <div v-else class="hidden md:block ui-table-wrap rounded-xl border border-slate-700/50">
         <table class="w-full min-w-[560px] text-sm">
           <thead>
             <tr class="border-b border-slate-700/50 bg-slate-900/70 text-xs text-slate-400">
@@ -650,6 +650,31 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Card list (mobile) -->
+      <div v-if="waitlistEntries.length" class="md:hidden space-y-2">
+        <article
+          v-for="entry in waitlistEntries"
+          :key="entry.id"
+          class="ui-panel-soft space-y-2 p-3 text-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate font-semibold text-slate-100">{{ entry.name }}</p>
+              <p v-if="entry.phone" class="text-xs text-slate-500 tabular-nums">{{ entry.phone }}</p>
+              <p v-if="entry.email" class="truncate text-xs text-slate-500">{{ entry.email }}</p>
+            </div>
+            <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold" :class="waitlistStatusClass(entry.status)">
+              {{ waitlistStatusLabel(entry.status) }}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-1.5 text-xs text-slate-300">
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.bookedFor") }}: {{ formatDate(entry.booked_for) }}</span>
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.waitlistParty", { n: entry.party_size }) }}</span>
+          </div>
+          <p v-if="entry.notes" class="rounded-lg border border-slate-800/70 bg-slate-950/40 px-2.5 py-2 text-xs text-slate-400 leading-relaxed">{{ entry.notes }}</p>
+        </article>
       </div>
     </section>
   </section>

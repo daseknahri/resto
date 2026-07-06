@@ -885,7 +885,7 @@
               {{ placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))))) }}
             </button>
             <button
-              v-if="cart.canWhatsapp"
+              v-if="cart.canWhatsapp && isBrowseOnlyPlan"
               class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
               :disabled="sendingWhatsapp"
               :aria-busy="sendingWhatsapp"
@@ -893,6 +893,17 @@
             >
               <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               <AppIcon v-else name="chat" class="h-4 w-4" />
+              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
+            </button>
+            <button
+              v-else-if="cart.canWhatsapp"
+              class="ui-top-link ui-touch-target ui-press flex w-full items-center justify-center gap-1.5 text-xs font-medium underline decoration-slate-600 underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none disabled:opacity-50"
+              :disabled="sendingWhatsapp"
+              :aria-busy="sendingWhatsapp"
+              @click="openWhatsApp"
+            >
+              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              <AppIcon v-else name="chat" class="h-3.5 w-3.5" />
               {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
             </button>
             <button
