@@ -113,8 +113,9 @@
             </div>
             <button
               type="button"
-              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15 ui-press ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-              @click="acknowledgeWaiterCall(call.id)"
+              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15 ui-press ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
+              :disabled="ackingCallId === call.id"
+              @click="doAcknowledgeWaiterCall(call.id)"
             >
               {{ t('ownerLayout.waiterCallAcknowledge') }}
             </button>
@@ -131,7 +132,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, computed } from "vue";
+import { onMounted, onUnmounted, computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
@@ -141,17 +142,43 @@ import { useTenantStore } from "../stores/tenant";
 import { useWaiterStore } from "../stores/waiter";
 import { useWaiterCalls } from "../composables/useWaiterCalls";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
+import { useToastStore } from "../stores/toast";
 
 const { t } = useI18n();
 const router = useRouter();
 const session = useSessionStore();
 const tenant = useTenantStore();
 const waiter = useWaiterStore();
+const toast = useToastStore();
 
 // Waiter-call bell alerts — a table pressed the QR "call waiter" bell. These were
 // previously visible ONLY to the owner; floor staff now see + acknowledge them here.
 // The list is section-filtered server-side, so a waiter sees only their own tables.
 const { pending: waiterCallsPending, load: loadWaiterCalls, acknowledge: acknowledgeWaiterCall, handleRealtime: _handleWaiterCallRealtime } = useWaiterCalls();
+
+// Ack feedback: useWaiterCalls().acknowledge() restores the optimistic removal
+// and rethrows on failure, so this layout surfaces success/failure via toast,
+// mapping the section_denied code (non-owner staff outside their section) to a
+// clear message per U2.
+const ackingCallId = ref(null);
+const doAcknowledgeWaiterCall = async (id) => {
+  if (ackingCallId.value) return;
+  ackingCallId.value = id;
+  try {
+    await acknowledgeWaiterCall(id);
+    toast.show(t("ownerLayout.waiterCallAckSuccess"), "success");
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    toast.show(
+      code === "section_denied"
+        ? t("ownerLayout.waiterCallAckSectionDenied")
+        : t("ownerLayout.waiterCallAckFailed"),
+      "error"
+    );
+  } finally {
+    ackingCallId.value = null;
+  }
+};
 let _waiterCallsTimer = null;
 const _onWaiterCallsVisibility = () => {
   if (document.visibilityState === "visible") loadWaiterCalls();

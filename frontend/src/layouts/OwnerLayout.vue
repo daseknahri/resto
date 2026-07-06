@@ -604,9 +604,21 @@ const layoutDoSilentPoll = async () => {
 const {
   pending: waiterCallsPending,
   load: loadWaiterCalls,
-  acknowledge: acknowledgeWaiterCall,
+  acknowledge: acknowledgeWaiterCallRaw,
   handleRealtime: handleWaiterRealtime,
 } = useWaiterCalls();
+
+// acknowledge() now rethrows on failure (so WaiterLayout can surface toast
+// feedback per U2) — swallow it here since the owner dashboard doesn't render
+// a failure toast for this action; the optimistic-restore in the composable
+// already puts the call back in the pending list.
+const acknowledgeWaiterCall = async (id) => {
+  try {
+    await acknowledgeWaiterCallRaw(id);
+  } catch {
+    /* pending list already restored by the composable */
+  }
+};
 
 const layoutNotifyWaiterCall = (payload) => {
   layoutPlayAlertSound();

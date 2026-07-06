@@ -27,8 +27,9 @@ export function useWaiterCalls() {
     pending.value = pending.value.filter((c) => c.id !== id); // optimistic
     try {
       await api.post(`/owner/waiter-calls/${id}/acknowledge/`);
-    } catch {
+    } catch (err) {
       pending.value = snapshot; // restore on failure
+      throw err; // rethrow so callers can surface feedback (e.g. section_denied)
     }
   };
 

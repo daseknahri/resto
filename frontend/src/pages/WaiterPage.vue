@@ -404,17 +404,18 @@
                     v-for="(item, idx) in order.items"
                     :key="idx"
                     class="flex items-start gap-2.5 py-0.5 text-sm"
-                    :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
+                    :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
                   >
-                    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums" :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">{{ item.qty }}</span>
-                    <span class="min-w-0 flex-1 leading-snug" :class="[item.is_voided ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">{{ item.dish_name }}</span>
+                    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums" :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">{{ item.qty }}</span>
+                    <span class="min-w-0 flex-1 leading-snug" :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">{{ item.dish_name }}</span>
                     <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
                     <span
-                      v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                      v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
                       class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
                       :class="isItemHeld(item, order) ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
                     >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
                     <span v-if="item.is_voided" class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none">{{ t('waiterPage.voidedBadge') }}</span>
+                    <span v-else-if="item.is_comped" class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none">{{ t('waiterPage.compedBadge') }}</span>
                     <button
                       v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
                       class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
@@ -425,7 +426,14 @@
                     ><span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span></button>
                     <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                     <button
-                      v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
+                      v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
+                      class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+                      :aria-label="t('waiterPage.compItem')"
+                      :disabled="compingItemId === item.id"
+                      @click.stop="compItem(order, item)"
+                    ><svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg></button>
+                    <button
+                      v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                       class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                       :aria-label="t('waiterPage.voidItem')"
                       :disabled="voidingItemId === item.id"
@@ -833,22 +841,22 @@
                   v-for="(item, idx) in order.items"
                   :key="idx"
                   class="flex items-start gap-2.5 py-0.5 text-sm"
-                  :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
+                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
                 >
                   <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                    :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">
+                    :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
                     {{ item.qty }}
                   </span>
                   <span
 class="min-w-0 flex-1 leading-snug"
-                    :class="[item.is_voided ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
+                    :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
                     {{ item.dish_name }}
                   </span>
                   <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
                   <!-- Course chip -->
                   <span
-                    v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                    v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
                     class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
                     :class="isItemHeld(item, order)
                       ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
@@ -858,6 +866,10 @@ class="min-w-0 flex-1 leading-snug"
                     v-if="item.is_voided"
                     class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
                   >{{ t('waiterPage.voidedBadge') }}</span>
+                  <span
+                    v-else-if="item.is_comped"
+                    class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
+                  >{{ t('waiterPage.compedBadge') }}</span>
                   <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
                   <button
                     v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
@@ -873,7 +885,16 @@ class="min-w-0 flex-1 leading-snug"
                   </button>
                   <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                   <button
-                    v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
+                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
+                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+                    :aria-label="t('waiterPage.compItem')"
+                    :disabled="compingItemId === item.id"
+                    @click.stop="compItem(order, item)"
+                  >
+                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+                  </button>
+                  <button
+                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                     class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                     :aria-label="t('waiterPage.voidItem')"
                     :disabled="voidingItemId === item.id"
@@ -1046,22 +1067,22 @@ class="min-w-0 flex-1 leading-snug"
                 v-for="(item, idx) in order.items"
                 :key="idx"
                 class="flex items-start gap-2.5 py-0.5 text-sm"
-                :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
+                :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
               >
                 <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                  :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">
+                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
                   {{ item.qty }}
                 </span>
                 <span
 class="min-w-0 flex-1 leading-snug"
-                  :class="[item.is_voided ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
+                  :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
                   {{ item.dish_name }}
                 </span>
                 <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
                 <!-- Course chip -->
                 <span
-                  v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                  v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
                   class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
                   :class="isItemHeld(item, order)
                     ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
@@ -1071,6 +1092,10 @@ class="min-w-0 flex-1 leading-snug"
                   v-if="item.is_voided"
                   class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
                 >{{ t('waiterPage.voidedBadge') }}</span>
+                <span
+                  v-else-if="item.is_comped"
+                  class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
+                >{{ t('waiterPage.compedBadge') }}</span>
                 <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
                 <button
                   v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
@@ -1086,7 +1111,16 @@ class="min-w-0 flex-1 leading-snug"
                 </button>
                 <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                 <button
-                  v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
+                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
+                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+                  :aria-label="t('waiterPage.compItem')"
+                  :disabled="compingItemId === item.id"
+                  @click.stop="compItem(order, item)"
+                >
+                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+                </button>
+                <button
+                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                   class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                   :aria-label="t('waiterPage.voidItem')"
                   :disabled="voidingItemId === item.id"
@@ -1257,22 +1291,22 @@ class="min-w-0 flex-1 leading-snug"
             v-for="(item, idx) in order.items"
             :key="idx"
             class="flex items-start gap-2.5 py-0.5 text-sm"
-            :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
+            :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
           >
             <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-              :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">
+              :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
               {{ item.qty }}
             </span>
             <span
 class="min-w-0 flex-1 leading-snug"
-              :class="[item.is_voided ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
+              :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
               {{ item.dish_name }}
             </span>
             <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
             <!-- Course chip -->
             <span
-              v-if="(item.course ?? 0) > 0 && !item.is_voided"
+              v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
               class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
               :class="isItemHeld(item, order)
                 ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
@@ -1283,6 +1317,11 @@ class="min-w-0 flex-1 leading-snug"
               v-if="item.is_voided"
               class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
             >{{ t('waiterPage.voidedBadge') }}</span>
+            <!-- Comped badge -->
+            <span
+              v-else-if="item.is_comped"
+              class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
+            >{{ t('waiterPage.compedBadge') }}</span>
             <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
             <button
               v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
@@ -1297,9 +1336,19 @@ class="min-w-0 flex-1 leading-snug"
               <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
             </button>
             <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-            <!-- Void affordance — only for non-voided items when waiter can manage orders -->
+            <!-- Comp affordance — only for non-voided, non-comped items when waiter can manage orders -->
             <button
-              v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
+              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
+              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+              :aria-label="t('waiterPage.compItem')"
+              :disabled="compingItemId === item.id"
+              @click.stop="compItem(order, item)"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+            </button>
+            <!-- Void affordance — only for non-voided, non-comped items when waiter can manage orders -->
+            <button
+              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
               class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
               :aria-label="t('waiterPage.voidItem')"
               :disabled="voidingItemId === item.id"
@@ -1699,15 +1748,16 @@ class="min-w-0 flex-1 leading-snug"
               v-for="(item, idx) in billOrder.items"
               :key="idx"
               class="flex items-baseline justify-between gap-2 text-sm"
-              :class="item.is_voided ? 'opacity-50' : ''"
+              :class="(item.is_voided || item.is_comped) ? 'opacity-50' : ''"
             >
-              <span class="min-w-0" :class="item.is_voided ? 'line-through text-slate-400' : 'text-slate-700'">
-                <span class="font-semibold" :class="item.is_voided ? 'text-slate-400' : 'text-slate-900'">{{ item.qty }}×</span>
+              <span class="min-w-0" :class="(item.is_voided || item.is_comped) ? 'line-through text-slate-400' : 'text-slate-700'">
+                <span class="font-semibold" :class="(item.is_voided || item.is_comped) ? 'text-slate-400' : 'text-slate-900'">{{ item.qty }}×</span>
                 {{ item.dish_name }}
                 <span v-if="item.note" class="text-[11px] italic text-slate-400"> ({{ item.note }})</span>
                 <span v-if="item.is_voided" class="ms-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-500 not-italic no-underline" style="text-decoration:none">{{ t('waiterPage.voidedBadge') }}</span>
+                <span v-else-if="item.is_comped" class="ms-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 not-italic no-underline" style="text-decoration:none">{{ t('waiterPage.compedBadge') }}</span>
               </span>
-              <span class="shrink-0 tabular-nums" :class="item.is_voided ? 'line-through text-slate-300' : 'text-slate-600'">
+              <span class="shrink-0 tabular-nums" :class="(item.is_voided || item.is_comped) ? 'line-through text-slate-300' : 'text-slate-600'">
                 {{ fmtOrderPrice(item.subtotal ?? (item.unit_price * item.qty), billOrder.currency) }}
               </span>
             </li>
@@ -1991,6 +2041,70 @@ class="min-w-0 flex-1 leading-snug"
     </Transition>
   </Teleport>
 
+  <!-- Comp-reason bottom sheet (V3) — mirrors the void-reason sheet above -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="compSheet"
+        class="fixed inset-0 z-[4200] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+        @click.self="compSheet = null"
+        @keydown.esc="compSheet = null"
+      >
+        <div
+          class="ui-panel w-full max-w-sm space-y-3 p-4"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('waiterPage.compItem')"
+        >
+          <div>
+            <p class="ui-kicker">{{ t('waiterPage.compItem') }}</p>
+            <p class="mt-0.5 text-xs font-semibold text-slate-200 truncate">{{ compSheet.item.dish_name }}</p>
+            <p class="mt-1 text-[11px] text-slate-400">{{ t('waiterPage.compReasonSheet') }}</p>
+          </div>
+          <!-- Preset chips -->
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="key in COMP_PRESETS"
+              :key="key"
+              class="ui-press rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+              :class="compPickedPreset === key
+                ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
+                : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
+              @click="compPickedPreset = key"
+            >{{ t(`waiterPage.${key}`) }}</button>
+          </div>
+          <!-- Free-text for "Other" -->
+          <input
+            v-if="compPickedPreset === 'compReasonOther'"
+            v-model="compCustomReason"
+            type="text"
+            maxlength="120"
+            class="ui-input w-full text-sm"
+            :placeholder="t('waiterPage.compReasonOtherPlaceholder')"
+            autofocus
+          />
+          <p v-if="!compReasonValid" class="text-[11px] text-amber-400">{{ t('waiterPage.compReasonRequired') }}</p>
+          <div class="flex items-center justify-end gap-2 pt-1">
+            <button
+              class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
+              @click="compSheet = null"
+            >{{ t('common.cancel') }}</button>
+            <button
+              class="ui-press ui-touch-target rounded-xl border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:opacity-50"
+              :disabled="!!compingItemId || !compReasonValid"
+              @click="submitComp"
+            >{{ t('waiterPage.compItem') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Table QR code modal -->
   <Teleport to="body">
     <Transition
@@ -2185,6 +2299,31 @@ const voidReasonValid = computed(() => {
   return true;
 });
 
+// Comp item (V3) — make a line item free with a required reason, distinct from
+// Void. Reuses the exact void-flow UI shape (bottom sheet, preset chips +
+// "Other" free text) per the backend StaffCompOrderItemView contract.
+// A PAID-in-cash order (wallet_amount_paid<=0) cannot be auto-comped — same
+// automatic-refund constraint as void — so the button must not be offered then.
+// Mirrors the exact rule in menu/views.py StaffCompOrderItemView.
+const canCompPaidOrder = (order) => {
+  if (order.payment_status !== 'paid') return true;
+  return Number(order.wallet_amount_paid) > 0;
+};
+const compingItemId = ref(null);
+// Comp-reason bottom sheet state
+const compSheet = ref(null);  // { order, item } when the sheet is open, else null
+const compCustomReason = ref('');
+const COMP_PRESETS = ['compReasonGoodwill', 'compReasonComplaint', 'compReasonLoyalty', 'compReasonManager', 'compReasonOther'];
+const compPickedPreset = ref('');  // key of selected preset, or '' for none
+
+// A reason is required before a comp can be submitted: either a non-"Other" preset,
+// or "Other" with non-empty free text.
+const compReasonValid = computed(() => {
+  if (!compPickedPreset.value) return false;
+  if (compPickedPreset.value === 'compReasonOther') return compCustomReason.value.trim().length > 0;
+  return true;
+});
+
 // Fire course
 const firingCourseOrderId = ref(null);
 
@@ -2274,6 +2413,44 @@ const submitVoid = async () => {
     }
   } finally {
     voidingItemId.value = null;
+  }
+};
+
+// Comp item (V3) — mirrors submitVoid, posting to the comp endpoint instead.
+const compItem = (order, item) => {
+  if (compingItemId.value) return;
+  compPickedPreset.value = '';
+  compCustomReason.value = '';
+  compSheet.value = { order, item };
+};
+
+const submitComp = async () => {
+  if (!compSheet.value) return;
+  if (!compReasonValid.value) return;
+  const { order, item } = compSheet.value;
+  const reason = compPickedPreset.value === 'compReasonOther'
+    ? compCustomReason.value.trim()
+    : compPickedPreset.value
+      ? t(`waiterPage.${compPickedPreset.value}`)
+      : '';
+  compSheet.value = null;
+  compingItemId.value = item.id;
+  try {
+    await api.post(`/staff/orders/${order.id}/items/${item.id}/comp/`, { reason });
+    toast.show(t('waiterPage.itemComped'), 'success');
+    await waiter.fetchOrders({ silent: true });
+  } catch (err) {
+    // Backstop for the already-paid-in-cash case: the comp button is normally
+    // hidden by canCompPaidOrder(), but this covers a stale-order-state race
+    // (e.g. another device settled the order in cash just before this tap).
+    if (err?.response?.data?.code === 'cannot_comp_paid') {
+      toast.show(t('waiterPage.cannotCompPaid'), 'error');
+      await waiter.fetchOrders({ silent: true });
+    } else {
+      toast.show(t('waiterPage.compFailed'), 'error');
+    }
+  } finally {
+    compingItemId.value = null;
   }
 };
 

@@ -77,7 +77,7 @@
       </div>
 
       <!-- ── Sign-in form ───────────────────────────────────────────────────── -->
-      <form v-if="!mfaRequired" class="space-y-4" novalidate @submit.prevent="submit">
+      <form v-if="!mfaRequired && !forcePasswordChangeRequired" class="space-y-4" novalidate @submit.prevent="submit">
         <label class="block space-y-1.5 text-sm font-medium text-slate-200">
           {{ t('signIn.identifier') }}
           <input
@@ -128,6 +128,72 @@
           </svg>
           <p class="flex-1 text-sm text-red-300">{{ error }}</p>
         </div>
+
+        <!-- Success flash -->
+        <div
+          v-if="success"
+          role="status"
+          class="flex items-center gap-2.5 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-3 py-3 text-sm text-emerald-300"
+        >
+          <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <span class="font-medium">{{ t('waiterJoin.successRedirecting') }}</span>
+        </div>
+      </form>
+
+      <!-- ── Forced password-change step (freshly-invited staff) ─────────────── -->
+      <form v-else-if="forcePasswordChangeRequired" class="space-y-4" novalidate @submit.prevent="submitForcePasswordChange">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t('forcePasswordChange.kicker') }}</p>
+          <h2 class="text-sm font-semibold text-slate-100">{{ t('forcePasswordChange.title') }}</h2>
+          <p class="text-xs leading-relaxed text-slate-400">{{ t('forcePasswordChange.description') }}</p>
+        </div>
+
+        <label class="block space-y-1.5 text-sm font-medium text-slate-200">
+          {{ t('forcePasswordChange.currentLabel') }}
+          <input
+            v-model="forcePwForm.current"
+            type="password"
+            autocomplete="current-password"
+            class="ui-input ui-touch-target mt-1"
+            :disabled="forcePwForm.loading"
+          />
+        </label>
+
+        <label class="block space-y-1.5 text-sm font-medium text-slate-200">
+          {{ t('forcePasswordChange.newLabel') }}
+          <input
+            v-model="forcePwForm.next"
+            type="password"
+            autocomplete="new-password"
+            class="ui-input ui-touch-target mt-1"
+            :disabled="forcePwForm.loading"
+          />
+        </label>
+
+        <label class="block space-y-1.5 text-sm font-medium text-slate-200">
+          {{ t('forcePasswordChange.confirmLabel') }}
+          <input
+            v-model="forcePwForm.confirm"
+            type="password"
+            autocomplete="new-password"
+            class="ui-input ui-touch-target mt-1"
+            :disabled="forcePwForm.loading"
+          />
+        </label>
+
+        <p v-if="forcePwForm.error" class="text-xs text-red-300" role="alert">{{ forcePwForm.error }}</p>
+
+        <button
+          type="submit"
+          :disabled="forcePwForm.loading || !forcePwForm.current || !forcePwForm.next || !forcePwForm.confirm"
+          :aria-busy="forcePwForm.loading"
+          class="ui-btn-primary ui-press inline-flex w-full items-center justify-center gap-2 ui-touch-target disabled:opacity-60"
+        >
+          <svg v-if="forcePwForm.loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ forcePwForm.loading ? t('forcePasswordChange.submitting') : t('forcePasswordChange.submitBtn') }}
+        </button>
 
         <!-- Success flash -->
         <div
@@ -222,6 +288,7 @@ import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
+import api from "../lib/api";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -242,6 +309,11 @@ const mfaCode = ref("");
 const mfaBackupCode = ref("");
 const mfaError = ref("");
 const useBackupCode = ref(false);
+
+// U4: forced password-change state — a freshly-invited staff member (server-side
+// must_change_password=True) must set their own password before landing in the app.
+const forcePasswordChangeRequired = ref(false);
+const forcePwForm = ref({ current: "", next: "", confirm: "", loading: false, error: "" });
 
 const tenantName = computed(() => tenant.meta?.name || t("waiterJoin.kicker"));
 
@@ -281,14 +353,26 @@ const submit = async () => {
       useBackupCode.value = false;
       return;
     }
-    success.value = true;
-    // Replace so the join page isn't in history — staff should land in the waiter app
-    router.replace({ name: "waiter" });
+    completeSignIn(result);
   } catch {
     error.value = session.error || t("signIn.failed");
   } finally {
     loading.value = false;
   }
+};
+
+// U4: shared post-authentication gate — if the server flagged this account as
+// needing a forced password change, show that step instead of redirecting.
+// Only once that step succeeds does the staff member land in the app.
+const completeSignIn = (user) => {
+  if (user && user.must_change_password) {
+    forcePasswordChangeRequired.value = true;
+    forcePwForm.value = { current: "", next: "", confirm: "", loading: false, error: "" };
+    return;
+  }
+  success.value = true;
+  // Replace so the join page isn't in history — staff should land in the waiter app
+  router.replace({ name: "waiter" });
 };
 
 const toggleBackupCode = () => {
@@ -316,13 +400,38 @@ const submitMfa = async () => {
   loading.value = true;
   try {
     const payload = useBackupCode.value ? { backup_code: codeVal } : { code: codeVal };
-    await session.verifyMfa(payload);
-    success.value = true;
-    router.replace({ name: "waiter" });
+    const user = await session.verifyMfa(payload);
+    completeSignIn(user);
   } catch {
     mfaError.value = session.error || t("mfa.invalidCode");
   } finally {
     loading.value = false;
+  }
+};
+
+const submitForcePasswordChange = async () => {
+  forcePwForm.value.error = "";
+  if (!forcePwForm.value.current || !forcePwForm.value.next || !forcePwForm.value.confirm) return;
+  if (forcePwForm.value.next !== forcePwForm.value.confirm) {
+    forcePwForm.value.error = t("forcePasswordChange.confirmMismatch");
+    return;
+  }
+  forcePwForm.value.loading = true;
+  try {
+    await api.post("/staff/change-password/", {
+      current_password: forcePwForm.value.current,
+      new_password: forcePwForm.value.next,
+    });
+    success.value = true;
+    router.replace({ name: "waiter" });
+  } catch (err) {
+    const data = err?.response?.data;
+    const msg = (typeof data?.detail === "string" && data.detail)
+      || (Array.isArray(data?.detail) && data.detail[0])
+      || t("forcePasswordChange.errorGeneric");
+    forcePwForm.value.error = msg;
+  } finally {
+    forcePwForm.value.loading = false;
   }
 };
 </script>
