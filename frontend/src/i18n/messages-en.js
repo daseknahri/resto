@@ -2756,6 +2756,7 @@ stepCategories: {
   stationLabel: "Prep station",
   stationPlaceholder: "e.g. bar, grill, cold (optional)",
   stationHint: "Kitchen screens can filter by station — leave blank to show everywhere.",
+  comboProtectedDelete: "Cannot delete — a combo still uses a dish in this category. Remove it from the combo first.",
 },
 stepDishes: {
   title: "Dishes",

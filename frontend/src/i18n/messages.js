@@ -2747,6 +2747,7 @@ export const messages = {
       stationLabel: "Prep station",
       stationPlaceholder: "e.g. bar, grill, cold (optional)",
       stationHint: "Kitchen screens can filter by station — leave blank to show everywhere.",
+      comboProtectedDelete: "Cannot delete — a combo still uses a dish in this category. Remove it from the combo first.",
     },
     stepDishes: {
       title: "Dishes",
@@ -8547,6 +8548,7 @@ export const messages = {
       stationLabel: "Poste de préparation",
       stationPlaceholder: "ex. bar, grill, froid (optionnel)",
       stationHint: "Les écrans cuisine peuvent filtrer par poste — laisser vide pour afficher partout.",
+      comboProtectedDelete: "Suppression impossible — un combo utilise encore un plat de cette categorie. Retirez-le d'abord du combo.",
     },
     stepDishes: {
       title: "Plats",

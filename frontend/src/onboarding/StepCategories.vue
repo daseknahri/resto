@@ -542,6 +542,7 @@ const normalizeCategory = (cat = {}) => ({
   slug: cat.slug || "",
   description: cat.description || "",
   description_i18n: cat.description_i18n && typeof cat.description_i18n === "object" ? { ...cat.description_i18n } : {},
+  image_url: cat.image_url || "",
   position: cat.position ?? categories.length,
   is_published: cat.is_published ?? true,
   is_temporarily_disabled: cat.is_temporarily_disabled ?? false,
@@ -829,8 +830,22 @@ const removeByLocalId = async (localId) => {
     danger: true,
   });
   if (!ok) return;
+  // If the category has a backend id, attempt the delete first so a protected-delete
+  // 409 (a combo still uses a dish in this category) is caught before we touch local
+  // state — otherwise splicing first would desync the client from the server.
+  if (cat?.id) {
+    try {
+      await categoryApi.remove(cat.id);
+    } catch (error) {
+      if (error?.status === 409 || error?.response?.status === 409) {
+        toast.show(t("stepCategories.comboProtectedDelete"), "error");
+        return;
+      }
+      toast.show(error?.message || t("common.saveFailed"), "error");
+      return;
+    }
+  }
   categories.splice(index, 1);
-  if (cat?.id) removedIds.value.push(cat.id);
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];
   renumberCategoriesForGroup(cat.super_category);
@@ -876,7 +891,7 @@ const saveAll = async () => {
           position: Number(cat.position) || 0,
           name_i18n: pickI18nMap(cat.name_i18n, allowedTranslationLocales),
           description_i18n: pickI18nMap(cat.description_i18n, allowedTranslationLocales),
-          image_url: "",
+          image_url: cat.image_url || "",
         });
         cat.id = saved.id;
         cat.slug = saved.slug;

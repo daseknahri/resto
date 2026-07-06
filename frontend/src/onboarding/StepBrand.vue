@@ -422,6 +422,7 @@
         <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
           {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
+        <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
         <p aria-live="polite" aria-atomic="true" class="text-sm text-slate-400">{{ status }}</p>
       </div>
     </section>
@@ -490,7 +491,7 @@ const errors = ref({});
 const tenant = useTenantStore();
 const locale = useLocaleStore();
 const toast = useToastStore();
-const emit = defineEmits(["next"]);
+const emit = defineEmits(["next", "back"]);
 const { localeOptions, t } = useI18n();
 const { translating, translateError, translateField } = useTranslate();
 

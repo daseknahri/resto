@@ -165,9 +165,12 @@ const stepStorageKey = computed(() => {
 // or is an earlier (backward) step. The final Publish step additionally requires
 // the menu to be publish-ready so an empty setup can't be jumped to via the nav.
 const canNavigateTo = (stepId) => {
+  // The Publish step must stay gated on canPublishStep even once highestCompleted
+  // has reached it — otherwise a prerequisite invalidated later (e.g. menu emptied
+  // out) would leave a stale, still-navigable nav item.
+  if (stepId === steps.length && !canPublishStep.value) return false;
   if (stepId <= highestCompleted.value) return true;
   if (stepId > highestCompleted.value + 1) return false;
-  if (stepId === steps.length && !canPublishStep.value) return false;
   return true;
 };
 

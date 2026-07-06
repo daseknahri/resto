@@ -2713,6 +2713,7 @@ stepCategories: {
   stationLabel: "Poste de préparation",
   stationPlaceholder: "ex. bar, grill, froid (optionnel)",
   stationHint: "Les écrans cuisine peuvent filtrer par poste — laisser vide pour afficher partout.",
+  comboProtectedDelete: "Suppression impossible — un combo utilise encore un plat de cette categorie. Retirez-le d'abord du combo.",
 },
 stepDishes: {
   title: "Plats",
