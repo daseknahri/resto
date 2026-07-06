@@ -1695,6 +1695,7 @@ walletCharge: {
   declined: "Le client a refuse le debit.",
   requestExpired: "La demande de debit a expire. Reessayez.",
   cancelRequest: "Annuler la demande de debit",
+  settleLockedHint: "Le montant est verrouille sur le solde restant de la commande.",
 },
 chargeRequest: {
   title: "Approuver le debit ?",
@@ -2189,6 +2190,7 @@ waiterPage: {
   billClose: "Fermer",
   orderSettled: "Commande reglee.",
   markPaidFailed: "Impossible d'enregistrer le paiement — reessayez.",
+  paymentShort: "Encaisse {collected} mais le total de la commande est {total} — encaissez le reste avant de regler.",
   ratingSubmitted: "Evaluation client enregistree.",
   ratingFailed: "Impossible d'enregistrer l'evaluation — reessayez.",
   addItems: "Ajouter des articles",
@@ -2199,6 +2201,7 @@ waiterPage: {
   voidReasonPrompt: "Raison (optionnel)",
   itemVoided: "Article annule.",
   voidFailed: "Impossible d'annuler l'article.",
+  cannotVoidPaid: "Cette commande est deja payee — utilisez un remboursement/correction au lieu d'annuler.",
   voidedBadge: "Annule",
   tableTotal: "Total table",
   tableOrders: "{n} commandes",

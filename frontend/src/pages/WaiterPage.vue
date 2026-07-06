@@ -425,7 +425,7 @@
                     ><span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span></button>
                     <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                     <button
-                      v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                      v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                       class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                       :aria-label="t('waiterPage.voidItem')"
                       :disabled="voidingItemId === item.id"
@@ -530,6 +530,7 @@
       v-if="showCharge"
       :prefill-amount="chargeContext.amount"
       :order-number="chargeContext.orderNumber"
+      :locked="chargeContext.locked"
       @close="showCharge = false"
       @charged="onWalletCharged"
     />
@@ -872,7 +873,7 @@ class="min-w-0 flex-1 leading-snug"
                   </button>
                   <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                   <button
-                    v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                    v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                     class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                     :aria-label="t('waiterPage.voidItem')"
                     :disabled="voidingItemId === item.id"
@@ -1085,7 +1086,7 @@ class="min-w-0 flex-1 leading-snug"
                 </button>
                 <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
                 <button
-                  v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+                  v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
                   class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                   :aria-label="t('waiterPage.voidItem')"
                   :disabled="voidingItemId === item.id"
@@ -1298,7 +1299,7 @@ class="min-w-0 flex-1 leading-snug"
             <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
             <!-- Void affordance — only for non-voided items when waiter can manage orders -->
             <button
-              v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && order.payment_status !== 'paid'"
+              v-if="canManageOrders && !item.is_voided && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
               class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
               :aria-label="t('waiterPage.voidItem')"
               :disabled="voidingItemId === item.id"
@@ -2159,6 +2160,16 @@ const closeNewOrder = () => {
 };
 
 // Void item
+// An already-PAID order can still be voided automatically only when it was
+// settled via wallet (wallet_amount_paid > 0) — the backend auto-refunds that
+// case via credit_wallet. A PAID order settled in cash (or any other non-wallet
+// tender) has no automatic way to hand back the difference, so the backend
+// rejects the void (cannot_void_paid) and the button must not be offered.
+// Mirrors the exact rule in menu/views.py StaffVoidOrderItemView.
+const canVoidPaidOrder = (order) => {
+  if (order.payment_status !== 'paid') return true;
+  return Number(order.wallet_amount_paid) > 0;
+};
 const voidingItemId = ref(null);
 // Void-reason bottom sheet state
 const voidSheet = ref(null);  // { order, item } when the sheet is open, else null
@@ -2251,8 +2262,16 @@ const submitVoid = async () => {
     await api.post(`/staff/orders/${order.id}/items/${item.id}/void/`, { reason });
     toast.show(t('waiterPage.itemVoided'), 'success');
     await waiter.fetchOrders({ silent: true });
-  } catch {
-    toast.show(t('waiterPage.voidFailed'), 'error');
+  } catch (err) {
+    // Backstop for the already-paid-in-cash case: the void button is normally
+    // hidden by canVoidPaidOrder(), but this covers a stale-order-state race
+    // (e.g. another device settled the order in cash just before this tap).
+    if (err?.response?.data?.code === 'cannot_void_paid') {
+      toast.show(t('waiterPage.cannotVoidPaid'), 'error');
+      await waiter.fetchOrders({ silent: true });
+    } else {
+      toast.show(t('waiterPage.voidFailed'), 'error');
+    }
   } finally {
     voidingItemId.value = null;
   }
@@ -3288,7 +3307,14 @@ const _finishSettle = async (order) => {
   // Pass the settle-intent key so the backend can deduplicate a lost-response retry
   const res = await waiter.markPaid(order.id, settleIntentKey.value);
   if (!res) {
-    toast.show(t("waiterPage.markPaidFailed"), "error");
+    if (waiter.lastMarkPaidError?.code === 'payment_short') {
+      toast.show(t('waiterPage.paymentShort', {
+        collected: fmtOrderPrice(waiter.lastMarkPaidError.collected, order.currency),
+        total: fmtOrderPrice(waiter.lastMarkPaidError.total, order.currency),
+      }), 'error');
+    } else {
+      toast.show(t("waiterPage.markPaidFailed"), "error");
+    }
     return;
   }
   // The full-wallet charge-sheet path settles via markPaid (not postPayment),
@@ -3367,8 +3393,10 @@ const payWallet = async (order) => {
   }
   // Full amount: use the existing wallet charge-sheet flow (pay-code entry).
   // The intent key will be cleared when onWalletCharged → _finishSettle succeeds.
+  // locked: true — this is a full-order settle, so the waiter must not be able
+  // to change the amount away from the order's outstanding balance (owner decision).
   pendingWalletSettle.value = order;
-  openCharge({ amount: settleOutstanding(order).toFixed(2), orderNumber: order.order_number });
+  openCharge({ amount: settleOutstanding(order).toFixed(2), orderNumber: order.order_number, locked: true });
 };
 
 // ── Display helpers ────────────────────────────────────────────────────────────

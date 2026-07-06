@@ -144,8 +144,12 @@
               step="0.01"
               min="0.01"
               class="ui-input w-full text-sm tabular-nums"
+              :class="locked ? 'opacity-70' : ''"
+              :readonly="locked"
+              :aria-readonly="locked ? 'true' : undefined"
               :placeholder="t('walletCharge.amountPlaceholder')"
             />
+            <span v-if="locked" class="ui-subtle block text-[11px]">{{ t('walletCharge.settleLockedHint') }}</span>
           </label>
 
           <!-- Error -->
@@ -192,6 +196,11 @@ import api from '../lib/api';
 const props = defineProps({
   prefillAmount: { type: [String, Number], default: '' },
   orderNumber: { type: String, default: '' },
+  // When true, the amount is a full-order settle and must be locked to
+  // prefillAmount (the order's outstanding balance) — the waiter cannot
+  // edit it. Only set this for the settle flow; the general (non-settle)
+  // wallet-charge use must keep the amount editable.
+  locked: { type: Boolean, default: false },
 });
 const emit = defineEmits(['close', 'charged']);
 const { t, currentLocale } = useI18n();

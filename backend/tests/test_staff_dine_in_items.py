@@ -632,10 +632,13 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
     @patch("menu.views.Dish.objects")
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
-    def test_cash_paid_void_no_wallet_call(
+    def test_cash_paid_void_rejected_cannot_void_paid(
         self, order_om, tx_mock, dish_om, broadcast_mock
     ):
-        """Order paid cash (wallet_amount_paid=0) must not call credit_wallet."""
+        """V1: an order paid in cash (wallet_amount_paid == 0, so the money can't
+        be auto-reconciled by a wallet refund) must be REJECTED with 400
+        cannot_void_paid rather than silently shrinking the total below what was
+        actually collected. No mutation, no wallet call, no broadcast."""
         item = _make_item(is_voided=False, subtotal=Decimal("10.00"))
         first_order = _make_order(
             payment_status=Order.PaymentStatus.PAID,
@@ -645,15 +648,41 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         )
         first_order.items.filter.return_value.first.return_value = item
 
-        second_order = _make_order(
-            payment_status=Order.PaymentStatus.PAID,
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "cannot_void_paid")
+        mock_cw.assert_not_called()
+        item.save.assert_not_called()  # item was never mutated
+        broadcast_mock.assert_not_called()
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_unpaid_order_void_still_works(
+        self, order_om, tx_mock, dish_om, broadcast_mock
+    ):
+        """V1 must not affect voiding on an UNPAID order — only already-PAID,
+        non-wallet-refundable orders are blocked."""
+        item = _make_item(is_voided=False, subtotal=Decimal("10.00"))
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
             wallet_amount_paid=Decimal("0"),
-            customer_id=42,
+            items=[item],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("0"),
             items=[],
         )
 
         order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
-        # Order reload now uses select_for_update() (TOCTOU fix)
         order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
 
         tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)

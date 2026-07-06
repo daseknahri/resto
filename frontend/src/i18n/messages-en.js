@@ -1697,6 +1697,7 @@ walletCharge: {
   declined: "The customer declined the charge.",
   requestExpired: "The charge request expired. Try again.",
   cancelRequest: "Cancel charge request",
+  settleLockedHint: "Amount is locked to the order's outstanding balance.",
 },
 chargeRequest: {
   title: "Approve charge?",
@@ -2191,6 +2192,7 @@ waiterPage: {
   billClose: "Close",
   orderSettled: "Order settled.",
   markPaidFailed: "Could not record payment — please try again.",
+  paymentShort: "Collected {collected} but the order total is {total} — collect the rest before settling.",
   ratingSubmitted: "Customer rating saved.",
   ratingFailed: "Could not save rating — please try again.",
   addItems: "Add items",
@@ -2201,6 +2203,7 @@ waiterPage: {
   voidReasonPrompt: "Reason (optional)",
   itemVoided: "Item voided.",
   voidFailed: "Could not void the item.",
+  cannotVoidPaid: "This order is already paid — use a refund/correction instead of voiding.",
   voidedBadge: "Voided",
   tableTotal: "Table total",
   tableOrders: "{n} orders",

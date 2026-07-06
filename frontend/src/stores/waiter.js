@@ -89,6 +89,7 @@ export const useWaiterStore = defineStore("waiter", {
     isSyncing: false,
     isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
     updatingOrderIds: new Set(),
+    lastMarkPaidError: null,   // { detail, code, collected, total } from the last failed markPaid() call
     shiftSummary: null,        // { orders_handled, total_revenue, currency, average_prep_time_minutes, since, period_hours }
     shiftSummaryLoading: false,
     shiftSummaryError: null,
@@ -297,10 +298,16 @@ export const useWaiterStore = defineStore("waiter", {
     // Accepts an optional idempotency_key (minted by the caller at button-press
     // time and cleared on confirmed success so the next settle gets a fresh key).
     // -------------------------------------------------------
+    // Returns the response payload on success, or null on failure. On failure,
+    // the backend `code` (e.g. "payment_short") and detail are stashed on
+    // this.lastMarkPaidError so the caller can surface a specific toast —
+    // existing callers that only check truthiness of the return value are
+    // unaffected.
     async markPaid(orderId, idempotency_key = null) {
       const order = this.orders.find((o) => o.id === orderId);
       if (!order) return null;
       this.updatingOrderIds = new Set([...this.updatingOrderIds, orderId]);
+      this.lastMarkPaidError = null;
       try {
         const body = { complete: order.status === "ready" };
         if (idempotency_key) body.idempotency_key = idempotency_key;
@@ -311,7 +318,8 @@ export const useWaiterStore = defineStore("waiter", {
           this.orders = this.orders.filter((o) => o.id !== orderId);
         }
         return res.data; // { payment_status, completed, status, ... }
-      } catch {
+      } catch (err) {
+        this.lastMarkPaidError = err?.response?.data ?? null;
         return null;
       } finally {
         this.updatingOrderIds = new Set([...this.updatingOrderIds].filter((id) => id !== orderId));

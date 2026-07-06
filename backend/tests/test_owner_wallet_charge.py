@@ -1,4 +1,5 @@
 """Tests for OwnerWalletChargeView (wallet charge by pay-code). No DB."""
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +10,7 @@ from rest_framework.test import APIRequestFactory
 
 from accounts.models import User
 from accounts.views import _WALLET_PAY_SALT
+from menu.models import OrderPayment
 from menu.views import OwnerWalletChargeView
 
 
@@ -82,3 +84,38 @@ class OwnerWalletChargeViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["status"], "charged")
         mock_debit.assert_called_once()
+
+    def test_order_tied_charge_writes_orderpayment_row(self):
+        """S1: when order_number is supplied, the charge must be tied to that
+        order as a real OrderPayment (method=wallet) row — not just an update to
+        wallet_amount_paid — so OwnerOrderMarkPaidView's reconciliation guard has
+        a real ledger figure to check the settle against."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        charged_order = MagicMock(id=77)
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx), \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views.OrderPayment.objects") as mock_op_objects, \
+             patch("menu.views._settle_order_if_wallet_covers"):
+            mock_order_objects.filter.return_value.update.return_value = 1
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = charged_order
+            resp = self._post({"token": token, "amount": "10.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_op_objects.create.assert_called_once()
+        _, kwargs = mock_op_objects.create.call_args
+        self.assertEqual(kwargs["order"], charged_order)
+        self.assertEqual(kwargs["amount"], Decimal("10.00"))
+        self.assertEqual(kwargs["method"], OrderPayment.Method.WALLET)
+
+    def test_no_order_number_does_not_write_orderpayment(self):
+        """The general (non-settle) wallet charge use — no order_number supplied —
+        must be untouched: no OrderPayment row, only the wallet debit."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx), \
+             patch("menu.views.OrderPayment.objects") as mock_op_objects:
+            resp = self._post({"token": token, "amount": "10.00"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_op_objects.create.assert_not_called()

@@ -4942,6 +4942,28 @@ class StaffVoidOrderItemView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # ── Block void on already-PAID orders whose money can't auto-reconcile ──
+        # A PAID order with wallet_amount_paid > 0 can be exactly refunded below
+        # (Case A) — that path stays open. A PAID order with wallet_amount_paid
+        # == 0 was settled in cash (or another non-wallet tender): voiding a line
+        # would silently shrink order.total below what was actually collected,
+        # with no automatic way to hand back the difference. Reject and point
+        # staff at an explicit refund/correction instead of overcollecting.
+        if (
+            order.payment_status == Order.PaymentStatus.PAID
+            and Decimal(str(order.wallet_amount_paid or "0")) <= Decimal("0")
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This order is already paid in cash and cannot be voided "
+                        "automatically. Issue an explicit refund/correction instead."
+                    ),
+                    "code": "cannot_void_paid",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         reason = str(request.data.get("reason") or "")[:120]
 
         # ── Atomic: void + restock + recompute totals ─────────────────────────
@@ -7800,6 +7822,53 @@ class OwnerOrderMarkPaidView(APIView):
                     "already_paid": True,
                     "completed": False,
                 })
+
+            # ── S1 reconciliation guard ────────────────────────────────────────
+            # This endpoint used to flip payment_status straight to PAID/COMPLETED
+            # with no check that the money actually collected covers order.total —
+            # e.g. the waiter wallet-charge sheet lets staff type ANY amount, then
+            # separately calls this endpoint to close the bill, so a short wallet
+            # charge (or a typo) could settle an order for less than it owes.
+            #
+            # "Collected" = ledger rows (OrderPayment — split-bill cash/wallet
+            # instalments, and now also wallet-charge-sheet settles, see
+            # OwnerWalletChargeView/_sync_charged_request_bills) PLUS any
+            # wallet_amount_paid not already reflected in a ledger row (legacy
+            # writers like CustomerOrderPayWalletView bump wallet_amount_paid
+            # directly with no OrderPayment row).
+            #
+            # A plain cash "Mark paid" with NO tracked payment at all (no ledger
+            # rows, wallet_amount_paid == 0) has nothing to reconcile against —
+            # that is staff's direct attestation that the bill was collected in
+            # full, exactly as before this fix, and is intentionally let through
+            # unconditionally so the everyday cash-settle flow is unaffected.
+            _CENT = Decimal("0.01")
+            _order_total = Decimal(str(order.total or "0")).quantize(_CENT)
+            _payment_rows = list(OrderPayment.objects.filter(order_id=order.id))
+            _ledger_paid = sum(
+                (Decimal(str(p.amount)) for p in _payment_rows), Decimal("0")
+            ).quantize(_CENT)
+            _ledger_wallet_paid = sum(
+                (Decimal(str(p.amount)) for p in _payment_rows if p.method == OrderPayment.Method.WALLET),
+                Decimal("0"),
+            ).quantize(_CENT)
+            _wallet_amount_paid = Decimal(str(order.wallet_amount_paid or "0")).quantize(_CENT)
+            _non_ledger_wallet = max(Decimal("0"), _wallet_amount_paid - _ledger_wallet_paid)
+            _collected = (_ledger_paid + _non_ledger_wallet).quantize(_CENT)
+            _has_tracked_payment = _ledger_paid > Decimal("0") or _wallet_amount_paid > Decimal("0")
+            if _has_tracked_payment and _collected < _order_total:
+                return Response(
+                    {
+                        "detail": (
+                            f"Collected amount {_collected} is short of the order total "
+                            f"{_order_total}. Collect the remainder before settling."
+                        ),
+                        "code": "payment_short",
+                        "collected": str(_collected),
+                        "total": str(_order_total),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
 
@@ -11553,6 +11622,34 @@ class OwnerWalletChargeView(APIView):
                 Order.objects.filter(order_number=order_number).update(
                     wallet_amount_paid=_F("wallet_amount_paid") + amount
                 )
+                # S1 fix: tie this charge to the order as a real OrderPayment ledger
+                # row (not just the wallet_amount_paid counter) so
+                # OwnerOrderMarkPaidView's reconciliation guard has an authoritative
+                # "collected" figure to check the settle against — previously this
+                # charge was invisible to the ledger and mark-paid could flip an
+                # order to PAID/COMPLETED for an amount that never matched the total.
+                # Kept in its own try so a failure writing the ledger row can never
+                # skip the auto-settle check below — a correct full-amount wallet
+                # settle must still flip the order to PAID even if this row fails.
+                try:
+                    _charged_order = Order.objects.filter(order_number=order_number).only("id").first()
+                    if _charged_order is not None:
+                        _recorder_name = (
+                            getattr(request.user, "get_full_name", lambda: "")() or
+                            getattr(request.user, "username", "") or
+                            getattr(request.user, "email", "") or
+                            ""
+                        )[:80]
+                        OrderPayment.objects.create(
+                            order=_charged_order,
+                            amount=amount,
+                            method=OrderPayment.Method.WALLET,
+                            recorded_by_user_id=getattr(request.user, "id", None),
+                            recorded_by_name=_recorder_name,
+                            note=note or "Wallet charge (pay code)",
+                        )
+                except Exception:
+                    pass  # ledger row is best-effort; the wallet bill update above already landed
                 _settle_order_if_wallet_covers(order_number)
             except Exception:
                 pass  # the payment is recorded regardless; bill update is best-effort
@@ -11591,6 +11688,24 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
             Order.objects.filter(order_number=onum).update(
                 wallet_amount_paid=_F("wallet_amount_paid") + amount
             )
+            # S1 fix: same OrderPayment tie-in as the instant-charge path above —
+            # this is the above-threshold (customer-approved) charge landing on the
+            # bill, so it needs the same reconciliation-guard visibility. Kept in
+            # its own try so a failure here (e.g. order looked up mid-delete)
+            # can never swallow the `applied` bookkeeping or the settle-check
+            # below — those must run whenever the wallet_amount_paid update above
+            # succeeded, exactly as before this ledger tie-in was added.
+            try:
+                _synced_order = Order.objects.filter(order_number=onum).only("id").first()
+                if _synced_order is not None:
+                    OrderPayment.objects.create(
+                        order=_synced_order,
+                        amount=amount,
+                        method=OrderPayment.Method.WALLET,
+                        note="Wallet charge (pay code, approved)",
+                    )
+            except Exception:
+                pass  # ledger row is best-effort; the wallet bill update above already landed
             _settle_order_if_wallet_covers(onum)
             applied[onum] = applied.get(onum, Decimal("0")) + amount
         except Exception:
