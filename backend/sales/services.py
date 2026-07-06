@@ -420,6 +420,65 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
     )
 
 
+def resend_activation_for_email(email: str) -> ActivationResendResult | None:
+    """B1: self-service activation resend, keyed by the owner's email.
+
+    Returns None when there is nothing to resend — unknown email, no tenant
+    attached, or the account has ALREADY completed activation (has a used
+    ActivationToken). Callers (the public view) MUST return the same generic
+    response regardless of the return value, to avoid account enumeration.
+    """
+    email = (email or "").strip()
+    if not email:
+        return None
+    User = get_user_model()
+    with schema_context(get_public_schema_name()):
+        with transaction.atomic():
+            user = (
+                User.objects.filter(email__iexact=email, tenant__isnull=False)
+                .select_related("tenant")
+                .order_by("id")
+                .first()
+            )
+            if user is None or user.tenant is None:
+                return None
+            tenant = user.tenant
+
+            already_activated = ActivationToken.objects.filter(user=user, used_at__isnull=False).exists()
+            if already_activated:
+                return None
+
+            (
+                activation,
+                admin_url,
+                workspace_url,
+                signin_url,
+                tenant_url,
+                activation_url,
+                whatsapp_link,
+                whatsapp_message_template,
+            ) = issue_activation(tenant, user, phone="")
+            _log_provisioning_event(
+                "self_service_activation_resent",
+                tenant_id=getattr(tenant, "id", None),
+                tenant_slug=getattr(tenant, "slug", ""),
+                owner_user_id=getattr(user, "id", None),
+            )
+
+    return ActivationResendResult(
+        tenant=tenant,
+        user=user,
+        activation_token=activation,
+        admin_url=admin_url,
+        workspace_url=workspace_url,
+        signin_url=signin_url,
+        tenant_url=tenant_url,
+        activation_url=activation_url,
+        whatsapp_link=whatsapp_link,
+        whatsapp_message_template=whatsapp_message_template,
+    )
+
+
 def _get_latest_provisioning_job(lead: Lead) -> ProvisioningJob:
     latest_job = (
         ProvisioningJob.objects.filter(lead=lead, status=ProvisioningJob.Status.SUCCESS, tenant__isnull=False)

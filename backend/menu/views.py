@@ -477,6 +477,81 @@ class PublishAccessMixin:
         if tenant:
             _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
+    # ── B3: auto-unpublish on empty menu ────────────────────────────────────────
+
+    def _auto_unpublish_if_menu_empty(self) -> None:
+        """After a dish/category/super-category delete, flip is_menu_published back
+        to False if the tenant menu is now empty (mirrors the exact publish-readiness
+        check in tenancy.serializers.ProfileSerializer.validate: 0 published categories
+        OR 0 published dishes). Without this, deleting the last dish/category leaves a
+        live-but-empty storefront stuck "published".
+
+        Best-effort and defensive: never let this secondary side-effect break the
+        primary delete response. Under SimpleTestCase-based unit tests (mocked
+        tenant/no real DB) the queries below raise, which the except swallows —
+        matching the existing _send_owner_email / notification try/except style
+        elsewhere in this module.
+        """
+        try:
+            profile = self._profile()
+            if profile is None or not profile.is_menu_published:
+                return
+            category_count = Category.objects.filter(is_published=True).count()
+            dish_count = Dish.objects.filter(is_published=True, category__is_published=True).count()
+            if category_count >= 1 and dish_count >= 1:
+                return
+            profile.is_menu_published = False
+            profile.published_at = None
+            profile.save(update_fields=["is_menu_published", "published_at"])
+            # Mirror ProfileView.perform_update: bust the /api/meta/ cache so the
+            # flip is visible immediately instead of waiting out its TTL.
+            try:
+                from tenancy.api import _bust_tenant_meta_cache
+                _bust_tenant_meta_cache(getattr(self._tenant(), "slug", ""))
+            except Exception:
+                pass
+            self._notify_owner_menu_auto_unpublished(profile)
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception("B3: auto-unpublish-on-empty-menu check failed")
+
+    def _notify_owner_menu_auto_unpublished(self, profile) -> None:
+        """Best-effort owner email when B3 auto-unpublishes an emptied-out menu."""
+        try:
+            tenant = self._tenant()
+            if tenant is None:
+                return
+            from accounts.models import User as _User
+            from accounts.notifications import record_notification
+
+            owner_email = (
+                _User.objects.filter(tenant=tenant, role=_User.Roles.TENANT_OWNER)
+                .values_list("email", flat=True)
+                .first()
+            )
+            if not owner_email:
+                return
+            tenant_name = getattr(tenant, "name", "") or getattr(tenant, "slug", "")
+            send_mail(
+                subject=f"Your menu was unpublished — {tenant_name}",
+                message=(
+                    f"Hi,\n\nYour storefront menu for {tenant_name} was automatically "
+                    "unpublished because it no longer has any published categories or "
+                    "dishes. Add at least one published category and dish, then "
+                    "republish from your dashboard.\n\n— Kepoli"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[owner_email],
+                fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+            )
+            record_notification(
+                channel="email", event="menu.auto_unpublished", status="sent",
+                recipient=owner_email, detail=tenant_name, tenant_id=getattr(tenant, "id", None),
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception("B3: owner auto-unpublish notification failed")
+
     # ── ViewSet action overrides ──────────────────────────────────────────────
 
     def list(self, request, *args, **kwargs):
@@ -573,6 +648,7 @@ class SuperCategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         instance = self.get_object()
         try:
             self.perform_destroy(instance)
+            self._auto_unpublish_if_menu_empty()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except (ProtectedError, RestrictedError):
             # Find the first dish (under this super-category's categories) that is a
@@ -665,6 +741,7 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         instance = self.get_object()
         try:
             self.perform_destroy(instance)
+            self._auto_unpublish_if_menu_empty()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except (ProtectedError, RestrictedError):
             # Find the first dish (in this category) that is a combo component, so we
@@ -840,6 +917,7 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         instance = self.get_object()
         try:
             self.perform_destroy(instance)
+            self._auto_unpublish_if_menu_empty()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except (ProtectedError, RestrictedError):
             # Find the first combo that references this dish as a component

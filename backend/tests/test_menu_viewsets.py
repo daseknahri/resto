@@ -591,3 +591,131 @@ class OptionGroupViewSetCacheBustTests(SimpleTestCase):
             with patch("rest_framework.mixins.CreateModelMixin.perform_create"):
                 vs.perform_create(ser)
         mock_bust.assert_not_called()
+
+
+# ── PublishAccessMixin._auto_unpublish_if_menu_empty (B3) ─────────────────────
+# Deleting the last published dish/category left is_menu_published stuck True
+# (ProfileSerializer only checks category/dish counts when *turning on*
+# publish). This mirrors that exact check (0 published categories OR 0
+# published dishes) after a delete and flips the flag back off.
+
+class AutoUnpublishIfMenuEmptyTests(SimpleTestCase):
+    def _make_viewset(self, tenant=None, profile=None):
+        vs = DishViewSet()
+        vs.request = SimpleNamespace(tenant=tenant or _tenant(), user=_owner())
+        vs._cached_profile = profile
+        return vs
+
+    def test_deleting_last_dish_flips_is_menu_published_false(self):
+        """Menu now empty (0 dishes) + was published → flips to False and notifies."""
+        profile = _profile(is_menu_published=True)
+        profile.published_at = "2026-01-01T00:00:00Z"
+        vs = self._make_viewset(profile=profile)
+
+        with patch("menu.views.Category") as mock_cat, patch("menu.views.Dish") as mock_dish:
+            mock_cat.objects.filter.return_value.count.return_value = 1
+            mock_dish.objects.filter.return_value.count.return_value = 0  # last dish gone
+            with patch.object(DishViewSet, "_notify_owner_menu_auto_unpublished") as mock_notify:
+                vs._auto_unpublish_if_menu_empty()
+
+        self.assertFalse(profile.is_menu_published)
+        self.assertIsNone(profile.published_at)
+        profile.save.assert_called_once_with(update_fields=["is_menu_published", "published_at"])
+        mock_notify.assert_called_once_with(profile)
+
+    def test_deleting_last_category_flips_is_menu_published_false(self):
+        """Menu now empty (0 categories) + was published → flips to False."""
+        profile = _profile(is_menu_published=True)
+        profile.published_at = "2026-01-01T00:00:00Z"
+        vs = self._make_viewset(profile=profile)
+
+        with patch("menu.views.Category") as mock_cat, patch("menu.views.Dish") as mock_dish:
+            mock_cat.objects.filter.return_value.count.return_value = 0  # last category gone
+            mock_dish.objects.filter.return_value.count.return_value = 0
+            with patch.object(DishViewSet, "_notify_owner_menu_auto_unpublished"):
+                vs._auto_unpublish_if_menu_empty()
+
+        self.assertFalse(profile.is_menu_published)
+        profile.save.assert_called_once_with(update_fields=["is_menu_published", "published_at"])
+
+    def test_deleting_a_non_last_dish_leaves_published_true(self):
+        """Menu still has >=1 category and >=1 dish → no flip, no save."""
+        profile = _profile(is_menu_published=True)
+        vs = self._make_viewset(profile=profile)
+
+        with patch("menu.views.Category") as mock_cat, patch("menu.views.Dish") as mock_dish:
+            mock_cat.objects.filter.return_value.count.return_value = 2
+            mock_dish.objects.filter.return_value.count.return_value = 3
+            with patch.object(DishViewSet, "_notify_owner_menu_auto_unpublished") as mock_notify:
+                vs._auto_unpublish_if_menu_empty()
+
+        self.assertTrue(profile.is_menu_published)
+        profile.save.assert_not_called()
+        mock_notify.assert_not_called()
+
+    def test_already_unpublished_tenant_is_untouched(self):
+        """Profile already has is_menu_published=False → no-op regardless of counts."""
+        profile = _profile(is_menu_published=False)
+        vs = self._make_viewset(profile=profile)
+
+        with patch("menu.views.Category") as mock_cat, patch("menu.views.Dish") as mock_dish:
+            vs._auto_unpublish_if_menu_empty()
+            mock_cat.objects.filter.assert_not_called()
+            mock_dish.objects.filter.assert_not_called()
+
+        self.assertFalse(profile.is_menu_published)
+        profile.save.assert_not_called()
+
+    def test_no_profile_is_a_safe_noop(self):
+        vs = self._make_viewset(profile=None)
+        with patch("menu.views.Category") as mock_cat, patch("menu.views.Dish") as mock_dish:
+            vs._auto_unpublish_if_menu_empty()
+            mock_cat.objects.filter.assert_not_called()
+            mock_dish.objects.filter.assert_not_called()
+
+    def test_db_error_is_swallowed_not_raised(self):
+        """Under SimpleTestCase-style callers with no real DB, any exception from the
+        profile/count queries must be swallowed — this is a best-effort side-effect
+        that must never break the primary delete response."""
+        vs = self._make_viewset(tenant=_tenant())
+        vs._cached_profile = None
+        with patch.object(DishViewSet, "_profile", side_effect=RuntimeError("db down")):
+            vs._auto_unpublish_if_menu_empty()  # must not raise
+
+
+class DestroyCallsAutoUnpublishTests(SimpleTestCase):
+    """destroy() on all three menu ViewSets calls the B3 check exactly once on the
+    success path, after perform_destroy succeeds and before returning 204."""
+
+    def _delete(self, viewset_cls, instance):
+        factory = APIRequestFactory()
+        req = factory.delete("/api/x/1/")
+        req.user = _owner(tenant_id=1)
+        req.tenant = _tenant(tenant_id=1)
+        view = viewset_cls.as_view({"delete": "destroy"})
+        with patch.object(viewset_cls, "get_object", return_value=instance):
+            with patch.object(viewset_cls, "perform_destroy", return_value=None):
+                with patch.object(viewset_cls, "_auto_unpublish_if_menu_empty") as mock_check:
+                    resp = view(req, pk=1)
+        return resp, mock_check
+
+    def test_dish_destroy_calls_check(self):
+        instance = MagicMock()
+        instance.name = "Fries"
+        resp, mock_check = self._delete(DishViewSet, instance)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        mock_check.assert_called_once()
+
+    def test_category_destroy_calls_check(self):
+        instance = MagicMock()
+        instance.name = "Sides"
+        resp, mock_check = self._delete(CategoryViewSet, instance)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        mock_check.assert_called_once()
+
+    def test_super_category_destroy_calls_check(self):
+        instance = MagicMock()
+        instance.name = "Menu"
+        resp, mock_check = self._delete(SuperCategoryViewSet, instance)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        mock_check.assert_called_once()

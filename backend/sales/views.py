@@ -78,6 +78,7 @@ from .services import (
     onboarding_package_for_lead,
     preview_lead_provision,
     provision_lead,
+    resend_activation_for_email,
     resend_activation_for_lead,
 )
 
@@ -1559,6 +1560,38 @@ class LeadResendActivationView(APIView):
                 "whatsapp_message_template": result.whatsapp_message_template,
             }
         )
+
+
+class SelfServiceResendActivationView(APIView):
+    """B1: public, self-service activation resend keyed by email.
+
+    LeadResendActivationView above is IsPlatformAdmin-only, so an owner whose
+    24h single-use activation token expires had no way to get a fresh one
+    without contacting support. This endpoint lets them request one directly.
+
+    Security:
+      - ALWAYS returns the same generic 200, whether or not the email matches
+        a real, not-yet-activated account — prevents account enumeration.
+      - Rate-limited (reuses PublicLeadThrottle / "public_leads" scope, the
+        same throttle the public lead-capture endpoint uses).
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PublicLeadThrottle]
+
+    GENERIC_DETAIL = "If an account with that email needs activation, we've sent a new link."
+
+    def post(self, request):
+        email = str(request.data.get("email", "")).strip()
+        if not email:
+            return Response({"detail": self.GENERIC_DETAIL}, status=status.HTTP_200_OK)
+        try:
+            resend_activation_for_email(email)
+        except Exception:
+            # Never leak whether the lookup/resend failed vs. found-nothing —
+            # log for ops visibility but keep the response generic either way.
+            logger.exception("Self-service activation resend failed unexpectedly")
+        return Response({"detail": self.GENERIC_DETAIL}, status=status.HTTP_200_OK)
 
 
 class LeadOnboardingPackageView(APIView):

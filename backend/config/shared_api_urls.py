@@ -130,6 +130,7 @@ from sales.views import (
     PublicReservationManageView,
     ProvisionLeadViewSet,
     ProvisioningJobViewSet,
+    SelfServiceResendActivationView,
 )
 
 shared_api_router = routers.DefaultRouter()
@@ -250,6 +251,7 @@ shared_api_urlpatterns = [
     path("api/mfa/disable/", MFADisableView.as_view(), name="mfa-disable"),
     path("api/lead-provision-preview/<int:lead_id>/", LeadProvisionPreviewView.as_view(), name="lead-provision-preview"),
     path("api/lead-resend-activation/<int:lead_id>/", LeadResendActivationView.as_view(), name="lead-resend-activation"),
+    path("api/resend-activation/", SelfServiceResendActivationView.as_view(), name="self-service-resend-activation"),
     path("api/lead-onboarding-package/<int:lead_id>/", LeadOnboardingPackageView.as_view(), name="lead-onboarding-package"),
     path("api/admin-reservation-alerts/", AdminReservationAlertsView.as_view(), name="admin-reservation-alerts"),
     path("api/admin-plan-feature-flags/", AdminPlanFeatureFlagListView.as_view(), name="admin-plan-feature-flags"),
