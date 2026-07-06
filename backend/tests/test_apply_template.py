@@ -214,3 +214,44 @@ class ApplyTemplateViewTests(SimpleTestCase):
         expected_dishes = sum(len(c["dishes"]) for c in TEMPLATES["fast_casual"]["categories"])
         self.assertEqual(resp.data["created_dishes"], expected_dishes)
         self.assertGreater(resp.data["created_categories"], 0)
+
+    # ── B2: menu cache bust on sample-menu seeding ────────────────────────────────
+
+    def test_post_with_content_busts_menu_cache(self):
+        """Seeding sample categories/dishes must bust the tenant menu cache so the
+        new dishes are visible to anonymous customers immediately (not stuck behind
+        the up-to-60s menu_ver cache) — this view creates Category/Dish rows
+        directly, with no ViewSet involved to run PublishAccessMixin's bust."""
+        prof = MagicMock()
+        with patch("django.db.transaction.atomic", _noop_atomic), \
+             patch("menu.views.Profile") as mock_profile, \
+             patch("menu.views.SuperCategory") as mock_sc, \
+             patch("menu.views.Category") as mock_cat, \
+             patch("menu.views.Dish") as mock_dish, \
+             patch("menu.views._bust_menu_cache") as mock_bust:
+            mock_profile.objects.filter.return_value.first.return_value = prof
+            mock_sc.objects.order_by.return_value.first.return_value = MagicMock(id=1)
+            mock_cat.objects.filter.return_value.first.return_value = None
+            mock_cat.objects.filter.return_value.exists.return_value = False
+            mock_cat.objects.count.return_value = 0
+            mock_cat.objects.create.return_value = MagicMock()
+            mock_dish.objects.filter.return_value.exists.return_value = False
+            mock_dish.objects.create.return_value = MagicMock()
+            resp = self._post({"template": "fast_casual"}, tenant=_tenant(tenant_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreater(resp.data["created_dishes"], 0)
+        mock_bust.assert_called_once()
+
+    def test_post_theme_only_does_not_bust_menu_cache(self):
+        """with_sample_content=False creates no categories/dishes → no menu-cache
+        bust needed (the public-list bust for business_type is separate and still
+        fires — see test_post_busts_public_list_cache)."""
+        prof = MagicMock()
+        with patch("django.db.transaction.atomic", _noop_atomic), \
+             patch("menu.views.Profile") as mock_profile, \
+             patch("menu.views._bust_menu_cache") as mock_bust:
+            mock_profile.objects.filter.return_value.first.return_value = prof
+            resp = self._post({"template": "cafe", "with_sample_content": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["created_dishes"], 0)
+        mock_bust.assert_not_called()

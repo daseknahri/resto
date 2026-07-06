@@ -206,6 +206,47 @@ class OwnerMenuImportViewTests(SimpleTestCase):
         self.assertGreater(resp.data["skipped"], 0)
         self.assertTrue(any("invalid price" in e.lower() for e in resp.data["errors"]))
 
+    # ── B2: cache bust on import (fixes publish-and-its-live for imported menus) ──
+
+    def test_post_valid_csv_busts_menu_cache(self):
+        """A CSV import that creates a dish must bust the tenant menu cache so the
+        new dish is visible to anonymous customers immediately (not stuck behind
+        the up-to-60s menu_ver cache)."""
+        csv_content = "category_name,dish_name,price,description\nMain,Burger,12.50,Juicy\n"
+        f = _csv_file(csv_content)
+        with patch("menu.views._bust_menu_cache") as mock_bust:
+            with patch("menu.views.SuperCategory") as mock_sc:
+                mock_sc.objects.order_by.return_value.first.return_value = MagicMock(id=1)
+                with patch("menu.views.Category") as mock_cat:
+                    mock_cat.objects.filter.return_value.first.return_value = None
+                    mock_cat.objects.filter.return_value.exists.return_value = False
+                    mock_cat.objects.count.return_value = 0
+                    mock_cat.objects.create.return_value = MagicMock()
+                    with patch("menu.views.Dish") as mock_dish:
+                        mock_dish.objects.filter.return_value.exists.return_value = False
+                        mock_dish.objects.create.return_value = MagicMock()
+                        resp = self._post(file=f, tenant=_tenant(tenant_id=1))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertGreater(resp.data["created_dishes"], 0)
+        mock_bust.assert_called_once()
+
+    def test_post_all_rows_skipped_does_not_bust_cache(self):
+        """No categories/dishes created (e.g. all rows invalid) → no bust needed."""
+        csv_content = "category_name,dish_name,price\nMain,Burger,not_a_price\n"
+        f = _csv_file(csv_content)
+        with patch("menu.views._bust_menu_cache") as mock_bust:
+            with patch("menu.views.SuperCategory") as mock_sc:
+                mock_sc.objects.order_by.return_value.first.return_value = MagicMock(id=1)
+                with patch("menu.views.Category") as mock_cat:
+                    mock_cat.objects.filter.return_value.exists.return_value = False
+                with patch("menu.views.Dish"):
+                    resp = self._post(file=f)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["created_dishes"], 0)
+        mock_bust.assert_not_called()
+
 
 # ── OwnerCustomerListView auth check ─────────────────────────────────────────
 

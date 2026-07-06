@@ -8,6 +8,7 @@ Tests for the menu ViewSets and their shared PublishAccessMixin logic:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +23,12 @@ from menu.views import (
     OptionGroupViewSet,
     SuperCategoryViewSet,
 )
+
+
+@contextmanager
+def _noop_atomic(*args, **kwargs):
+    """Stand-in for transaction.atomic() so unit tests need no real DB."""
+    yield
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -269,6 +276,125 @@ class DishViewSetPerformCreateTests(SimpleTestCase):
         ser.save.assert_called_once()
 
 
+# ── DishViewSet – cache busting (B2) ───────────────────────────────────────────
+# DishViewSet.perform_create/perform_update call serializer.save() directly
+# (bypassing PublishAccessMixin's super().perform_create/update), so they must
+# explicitly bust the menu cache themselves — otherwise newly-created/edited
+# dishes stay invisible to anonymous customers for up to 60s after being
+# published (menu_ver per-slug cache).
+
+class DishViewSetCacheBustTests(SimpleTestCase):
+    def _make_viewset(self, tenant=None):
+        vs = DishViewSet()
+        vs.request = SimpleNamespace(
+            tenant=tenant or _tenant(),
+            user=_owner(),
+        )
+        return vs
+
+    def _serializer(self, validated_data=None):
+        s = MagicMock()
+        s.save.return_value = MagicMock()
+        s.validated_data = validated_data or {}
+        return s
+
+    def test_perform_create_busts_cache_no_tenant_limit_path(self):
+        """No tenant on request → falls to the plain serializer.save() path, which
+        must still bust the cache."""
+        vs = DishViewSet()
+        vs.request = SimpleNamespace(tenant=None, user=_owner())
+        ser = self._serializer()
+        with patch("menu.views._bust_menu_cache") as mock_bust:
+            vs.perform_create(ser)
+        ser.save.assert_called_once()
+        # No tenant → _bust_current_tenant_menu_cache() finds no tenant and no-ops.
+        mock_bust.assert_not_called()
+
+    def test_perform_create_busts_cache_with_tenant(self):
+        vs = self._make_viewset(tenant=_tenant(tenant_id=1))
+        ser = self._serializer()
+        with patch("django_tenants.utils.get_public_schema_name", return_value="public"):
+            with patch("django_tenants.utils.schema_context") as mock_sc:
+                mock_sc.return_value.__enter__ = lambda s: None
+                mock_sc.return_value.__exit__ = lambda s, *a: None
+                with patch("tenancy.models.Plan") as mock_plan:
+                    mock_plan.objects.select_for_update.return_value.filter.return_value.first.return_value = None
+                    with patch("menu.views.Dish") as mock_dish:
+                        mock_dish.objects.count.return_value = 0
+                        with patch("menu.views._bust_menu_cache") as mock_bust:
+                            vs.perform_create(ser)
+        ser.save.assert_called_once()
+        mock_bust.assert_called_once_with("restaurant")
+
+    def test_perform_update_busts_cache(self):
+        vs = self._make_viewset(tenant=_tenant(tenant_id=1))
+        ser = self._serializer(validated_data={})
+        with patch("django.db.transaction.atomic", _noop_atomic):
+            with patch("menu.views._bust_menu_cache") as mock_bust:
+                vs.perform_update(ser)
+        ser.save.assert_called_once()
+        mock_bust.assert_called_once_with("restaurant")
+
+    def test_perform_update_with_stock_qty_still_busts_cache(self):
+        instance = MagicMock(pk=7)
+        vs = self._make_viewset(tenant=_tenant(tenant_id=1))
+        ser = self._serializer(validated_data={"stock_qty": 5})
+        ser.save.return_value = instance
+        with patch("django.db.transaction.atomic", _noop_atomic):
+            with patch("menu.views.Dish") as mock_dish:
+                with patch("menu.views._bust_menu_cache") as mock_bust:
+                    vs.perform_update(ser)
+        mock_dish.objects.filter.assert_called_once_with(pk=7)
+        mock_dish.objects.filter.return_value.update.assert_called_once_with(stock_auto_zeroed=False)
+        mock_bust.assert_called_once_with("restaurant")
+
+
+# ── DishViewSet.destroy – combo-component 409 (not a bare 500) ────────────────
+
+class DishViewSetDestroyComboProtectionTests(SimpleTestCase):
+    """A dish that is a combo component is PROTECTed; destroy() must translate
+    the resulting ProtectedError/RestrictedError into a clean 409, not a 500."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DishViewSet.as_view({"delete": "destroy"})
+
+    def _delete(self, instance, side_effect):
+        req = self.factory.delete("/api/dishes/1/")
+        req.user = _owner(tenant_id=1)
+        req.tenant = _tenant(tenant_id=1)
+        with patch.object(DishViewSet, "get_object", return_value=instance):
+            with patch.object(DishViewSet, "perform_destroy", side_effect=side_effect):
+                return self.view(req, pk=1)
+
+    def test_protected_error_returns_409_not_500(self):
+        from django.db.models import ProtectedError
+        combo_cc = MagicMock()
+        combo_cc.dish.name = "Burger Combo"
+        instance = MagicMock()
+        instance.name = "Fries"
+        instance.part_of_combos.select_related.return_value.first.return_value = combo_cc
+        resp = self._delete(instance, ProtectedError("protected", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "dish_is_combo_component")
+        self.assertIn("Burger Combo", resp.data["detail"])
+
+    def test_restricted_error_returns_409_not_500(self):
+        from django.db.models import RestrictedError
+        instance = MagicMock()
+        instance.name = "Fries"
+        instance.part_of_combos.select_related.return_value.first.return_value = None
+        resp = self._delete(instance, RestrictedError("restricted", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "dish_is_combo_component")
+
+    def test_normal_delete_returns_204(self):
+        instance = MagicMock()
+        instance.name = "Fries"
+        resp = self._delete(instance, None)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+
 # ── IsTenantEditorOrReadOnly – write access ───────────────────────────────────
 
 class MenuViewSetWritePermissionTests(SimpleTestCase):
@@ -311,6 +437,111 @@ class MenuViewSetWritePermissionTests(SimpleTestCase):
                 )
         # Got past permission check
         self.assertNotEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+# ── CategoryViewSet.destroy – combo-component 409 (B5) ────────────────────────
+# Category.dishes is on_delete=CASCADE, so deleting a category that contains a
+# combo-referenced dish cascades into the same ComboComponent.component
+# on_delete=PROTECT that DishViewSet.destroy already handles. Before this fix,
+# CategoryViewSet had no destroy() override, so the ProtectedError propagated
+# as a bare 500 instead of a clean 409.
+
+class CategoryViewSetDestroyComboProtectionTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = CategoryViewSet.as_view({"delete": "destroy"})
+
+    def _delete(self, instance, side_effect):
+        req = self.factory.delete("/api/categories/1/")
+        req.user = _owner(tenant_id=1)
+        req.tenant = _tenant(tenant_id=1)
+        with patch.object(CategoryViewSet, "get_object", return_value=instance):
+            with patch.object(CategoryViewSet, "perform_destroy", side_effect=side_effect):
+                return self.view(req, pk=1)
+
+    def test_protected_error_returns_409_not_500(self):
+        from django.db.models import ProtectedError
+        combo_cc = MagicMock()
+        combo_cc.dish.name = "Burger Combo"
+        blocked_dish = MagicMock()
+        blocked_dish.name = "Fries"
+        blocked_dish.part_of_combos.select_related.return_value.first.return_value = combo_cc
+        instance = MagicMock()
+        instance.name = "Sides"
+        instance.dishes.filter.return_value.first.return_value = blocked_dish
+        resp = self._delete(instance, ProtectedError("protected", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "category_has_combo_component")
+        self.assertIn("Fries", resp.data["detail"])
+        self.assertIn("Burger Combo", resp.data["detail"])
+
+    def test_restricted_error_returns_409_not_500(self):
+        from django.db.models import RestrictedError
+        instance = MagicMock()
+        instance.name = "Sides"
+        instance.dishes.filter.return_value.first.return_value = None
+        resp = self._delete(instance, RestrictedError("restricted", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "category_has_combo_component")
+
+    def test_normal_delete_returns_204(self):
+        instance = MagicMock()
+        instance.name = "Sides"
+        resp = self._delete(instance, None)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+
+# ── SuperCategoryViewSet.destroy – combo-component 409 (B5) ───────────────────
+# SuperCategory.categories and Category.dishes are both on_delete=CASCADE, so
+# deleting a super-category that (transitively) contains a combo-referenced
+# dish hits the same PROTECT. SuperCategoryViewSet had no destroy() override
+# either, so this also 500'd before this fix.
+
+class SuperCategoryViewSetDestroyComboProtectionTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = SuperCategoryViewSet.as_view({"delete": "destroy"})
+
+    def _delete(self, instance, side_effect):
+        req = self.factory.delete("/api/super-categories/1/")
+        req.user = _owner(tenant_id=1)
+        req.tenant = _tenant(tenant_id=1)
+        with patch.object(SuperCategoryViewSet, "get_object", return_value=instance):
+            with patch.object(SuperCategoryViewSet, "perform_destroy", side_effect=side_effect):
+                return self.view(req, pk=1)
+
+    def test_protected_error_returns_409_not_500(self):
+        from django.db.models import ProtectedError
+        combo_cc = MagicMock()
+        combo_cc.dish.name = "Burger Combo"
+        blocked_dish = MagicMock()
+        blocked_dish.name = "Fries"
+        blocked_dish.part_of_combos.select_related.return_value.first.return_value = combo_cc
+        instance = MagicMock()
+        instance.name = "Menu"
+        with patch("menu.views.Dish") as mock_dish:
+            mock_dish.objects.filter.return_value.first.return_value = blocked_dish
+            resp = self._delete(instance, ProtectedError("protected", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "super_category_has_combo_component")
+        self.assertIn("Fries", resp.data["detail"])
+        self.assertIn("Burger Combo", resp.data["detail"])
+
+    def test_restricted_error_returns_409_not_500(self):
+        from django.db.models import RestrictedError
+        instance = MagicMock()
+        instance.name = "Menu"
+        with patch("menu.views.Dish") as mock_dish:
+            mock_dish.objects.filter.return_value.first.return_value = None
+            resp = self._delete(instance, RestrictedError("restricted", set()))
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "super_category_has_combo_component")
+
+    def test_normal_delete_returns_204(self):
+        instance = MagicMock()
+        instance.name = "Menu"
+        resp = self._delete(instance, None)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
 
 # ── OptionGroupViewSet – cache busting ───────────────────────────────────────

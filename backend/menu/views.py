@@ -559,6 +559,51 @@ class SuperCategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             return [AllowAny()]
         return super().get_permissions()
 
+    def destroy(self, request, *args, **kwargs):
+        """Delete a super-category. Returns 409 if the delete cascades into a dish
+        that is a component of a combo (ProtectedError from
+        ComboComponent.component on_delete=PROTECT — SuperCategory.categories and
+        Category.dishes are both on_delete=CASCADE, so deleting a super-category
+        deletes its categories' dishes, which raises the same PROTECT as
+        DishViewSet.destroy).
+        The instance is fetched exactly once via get_object(); perform_destroy
+        receives that instance directly so DRF's DestroyModelMixin does not
+        make a redundant second get_object() call on the success path."""
+        from django.db.models import ProtectedError, RestrictedError
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except (ProtectedError, RestrictedError):
+            # Find the first dish (under this super-category's categories) that is a
+            # combo component, so we can name it (and the combo, if resolvable).
+            dish_name = ""
+            combo_name = ""
+            try:
+                blocked_dish = Dish.objects.filter(
+                    category__super_category=instance, part_of_combos__isnull=False
+                ).first()
+                if blocked_dish is not None:
+                    dish_name = blocked_dish.name
+                    first_cc = blocked_dish.part_of_combos.select_related("dish").first()
+                    if first_cc is not None:
+                        combo_name = first_cc.dish.name
+            except Exception:
+                pass
+            if dish_name and combo_name:
+                detail = (
+                    f"Cannot delete '{instance.name}': it contains '{dish_name}', "
+                    f"which is a component of combo '{combo_name}'."
+                )
+            elif dish_name:
+                detail = f"Cannot delete '{instance.name}': it contains '{dish_name}', which is used as a combo component."
+            else:
+                detail = f"Cannot delete '{instance.name}': it contains a dish used as a combo component."
+            return Response(
+                {"detail": detail, "code": "super_category_has_combo_component"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
 
 class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     serializer_class = CategorySerializer
@@ -607,6 +652,47 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             except Exception:
                 ctx["happy_hours"] = []
         return ctx
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete a category. Returns 409 if the delete cascades into a dish that is
+        a component of a combo (ProtectedError from ComboComponent.component
+        on_delete=PROTECT — Dish.category is on_delete=CASCADE, so deleting a category
+        deletes its dishes, which raises the same PROTECT as DishViewSet.destroy).
+        The instance is fetched exactly once via get_object(); perform_destroy
+        receives that instance directly so DRF's DestroyModelMixin does not
+        make a redundant second get_object() call on the success path."""
+        from django.db.models import ProtectedError, RestrictedError
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except (ProtectedError, RestrictedError):
+            # Find the first dish (in this category) that is a combo component, so we
+            # can name it (and the combo, if resolvable) in the error.
+            dish_name = ""
+            combo_name = ""
+            try:
+                blocked_dish = instance.dishes.filter(part_of_combos__isnull=False).first()
+                if blocked_dish is not None:
+                    dish_name = blocked_dish.name
+                    first_cc = blocked_dish.part_of_combos.select_related("dish").first()
+                    if first_cc is not None:
+                        combo_name = first_cc.dish.name
+            except Exception:
+                pass
+            if dish_name and combo_name:
+                detail = (
+                    f"Cannot delete '{instance.name}': it contains '{dish_name}', "
+                    f"which is a component of combo '{combo_name}'."
+                )
+            elif dish_name:
+                detail = f"Cannot delete '{instance.name}': it contains '{dish_name}', which is used as a combo component."
+            else:
+                detail = f"Cannot delete '{instance.name}': it contains a dish used as a combo component."
+            return Response(
+                {"detail": detail, "code": "category_has_combo_component"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
@@ -674,6 +760,10 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         We enter the public schema only long enough to acquire the lock and read
         max_dishes, then return to the tenant schema for the count and save —
         all inside one transaction.atomic() so the lock spans both steps.
+
+        Also busts the tenant menu cache (mirroring PublishAccessMixin.perform_create)
+        after each serializer.save() call site, since this override never calls
+        super().perform_create(serializer) and would otherwise skip the bust.
         """
         tenant = getattr(self.request, "tenant", None)
         if tenant is not None:
@@ -705,11 +795,13 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                                 }
                             )
                     serializer.save()
+                    self._bust_current_tenant_menu_cache()
                     return
             except Exception as exc:
                 if getattr(exc, "detail", None):
                     raise
         serializer.save()
+        self._bust_current_tenant_menu_cache()
 
     def perform_update(self, serializer):
         """Clear stock_auto_zeroed when the owner explicitly writes stock_qty.
@@ -724,6 +816,10 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
 
         Both writes are wrapped in atomic() so a concurrent checkout that zeros
         stock_qty cannot observe the save-without-clear intermediate state.
+
+        Also busts the tenant menu cache (mirroring PublishAccessMixin.perform_update)
+        since this override calls serializer.save() directly instead of
+        super().perform_update(serializer), which would otherwise skip the bust.
         """
         from django.db import transaction
         with transaction.atomic():
@@ -732,6 +828,7 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 # stock_auto_zeroed is backend-managed and not in the serializer,
                 # so use a direct .update() call rather than serializer.save() kwargs.
                 Dish.objects.filter(pk=instance.pk).update(stock_auto_zeroed=False)
+        self._bust_current_tenant_menu_cache()
 
     def destroy(self, request, *args, **kwargs):
         """Delete a dish. Returns 409 if the dish is a component of a combo
@@ -739,8 +836,7 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         The instance is fetched exactly once via get_object(); perform_destroy
         receives that instance directly so DRF's DestroyModelMixin does not
         make a redundant second get_object() call on the success path."""
-        from django.db import ProtectedError
-        from django.db.models import RestrictedError
+        from django.db.models import ProtectedError, RestrictedError
         instance = self.get_object()
         try:
             self.perform_destroy(instance)
@@ -11467,6 +11563,16 @@ class OwnerMenuImportView(APIView):
             )
             created_dishes += 1
 
+        # B2 fix: this view creates categories/dishes directly (Category.objects.create /
+        # Dish.objects.create) with no ViewSet involved, so PublishAccessMixin's
+        # perform_create bust never runs for this path. Bust here so a freshly-imported
+        # menu is visible to anonymous customers immediately instead of staying stuck
+        # behind the up-to-60s menu_ver cache.
+        if created_categories or created_dishes:
+            tenant = getattr(request, "tenant", None)
+            if tenant is not None:
+                _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
         return Response({
             "created_categories": created_categories,
             "created_dishes": created_dishes,
@@ -11581,6 +11687,14 @@ class ApplyTemplateView(APIView):
                             position=Dish.objects.filter(category=category).count(),
                         )
                         created_dishes += 1
+
+        # B2 fix: like OwnerMenuImportView, this view creates categories/dishes
+        # directly (no ViewSet), so PublishAccessMixin's perform_create bust never
+        # runs. Bust here so a freshly-applied sample menu is visible to anonymous
+        # customers immediately instead of staying stuck behind the menu_ver cache.
+        if created_categories or created_dishes:
+            if tenant is not None:
+                _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
         return Response({
             "applied": key,
