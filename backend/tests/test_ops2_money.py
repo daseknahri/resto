@@ -272,6 +272,8 @@ def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
         {"tips": Decimal("5.00")},
         {"promo": Decimal("0.00"), "loyalty": Decimal("0.00")},
     ]
+    # B7: collected.count / collected_count call collected_qs.count() directly.
+    order_qs.count.return_value = 0
     mock_order_objs = MagicMock()
     mock_order_objs.filter.return_value = order_qs
 
@@ -406,6 +408,78 @@ class OwnerZReportResponseShapeTests(SimpleTestCase):
             Decimal(resp.data["collected"]["cash"]),
         )
 
+    def test_b7_collected_count_exposed_both_paths(self):
+        """B7: report.collected.count AND top-level report.collected_count must
+        both be present and equal collected_qs.count() so OwnerShiftClose.vue's
+        "Orders" stat (which reads report.collected_count) renders instead of '—'.
+        """
+        patches = _z_report_patches()
+        # _z_report_patches wires Order.objects.filter(...) -> order_qs with
+        # order_qs.count.return_value = 0 by default; override it here.
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            req = self._make_request(date_param="2026-06-10")
+            # Patch the collected_qs count directly via the same mock used above.
+            resp = self.view(req)
+        self.assertIn("count", resp.data["collected"], "collected.count missing")
+        self.assertIn("collected_count", resp.data, "top-level collected_count missing")
+        self.assertEqual(
+            resp.data["collected"]["count"], resp.data["collected_count"],
+            "collected.count and collected_count must agree",
+        )
+
+    def test_b7_collected_count_reflects_order_count(self):
+        """B7: collected_count must reflect the actual number of collected orders."""
+        mock_split = MagicMock(return_value={"cash": Decimal("10.00"), "wallet": Decimal("0.00")})
+        order_qs = MagicMock()
+        order_qs.filter.return_value = order_qs
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0.00")},
+            {"promo": Decimal("0.00"), "loyalty": Decimal("0.00")},
+        ]
+        order_qs.count.return_value = 7
+        mock_order_objs = MagicMock()
+        mock_order_objs.filter.return_value = order_qs
+
+        wt_qs = MagicMock()
+        wt_qs.filter.return_value = wt_qs
+        wt_qs.aggregate.return_value = {"refund_count": 0, "refund_total": Decimal("0.00")}
+        mock_wt_class = MagicMock()
+        mock_wt_class.Type.REFUND = "REFUND"
+        mock_wt_class.objects.filter.return_value = wt_qs
+
+        oi_qs = MagicMock()
+        oi_qs.__iter__ = lambda s: iter([])
+        food_cost_chain = MagicMock()
+        food_cost_chain.annotate.return_value = food_cost_chain
+        food_cost_chain.filter.return_value = food_cost_chain
+        food_cost_chain.aggregate.return_value = {"total": None}
+        mock_oi_objs = MagicMock()
+        mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
+        mock_oi_objs.filter.return_value = food_cost_chain
+
+        mock_op_objs = MagicMock()
+        mock_op_objs.filter.return_value = _make_empty_op_qs()
+
+        shift_qs = MagicMock()
+        shift_qs.__iter__ = lambda s: iter([])
+        mock_shift_class = MagicMock()
+        mock_shift_class.objects.filter.return_value.order_by.return_value = shift_qs
+
+        with (
+            patch("menu.revenue.split_revenue_for_orders", mock_split),
+            patch("menu.views.Order.objects", mock_order_objs),
+            patch("menu.views.OrderItem.objects", mock_oi_objs),
+            patch("menu.views.OrderPayment.objects", mock_op_objs),
+            patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", mock_shift_class),
+        ):
+            req = self._make_request(date_param="2026-06-10")
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["collected"]["count"], 7)
+        self.assertEqual(resp.data["collected_count"], 7)
+
 
 class OwnerZReportVoidItemShapeTests(SimpleTestCase):
     """When voided items exist, the voids list must carry correct fields."""
@@ -434,6 +508,7 @@ class OwnerZReportVoidItemShapeTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         # WalletTransaction class
         wt_qs = MagicMock()
@@ -514,6 +589,7 @@ class OwnerZReportCompItemShapeTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         wt_qs = MagicMock()
         wt_qs.filter.return_value = wt_qs
@@ -582,6 +658,106 @@ class OwnerZReportCompItemShapeTests(SimpleTestCase):
         self.assertEqual(Decimal(resp.data["comps"]["total"]), Decimal("5.00"))
 
 
+class OwnerZReportCsvCompsSectionTests(SimpleTestCase):
+    """B6: the Z-report CSV export must include a comps section, parallel to the
+    existing voids section, since _build_report already returns comps_list/comps_total.
+    """
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = OwnerZReportView.as_view()
+
+    def test_csv_export_includes_comps_rows_and_summary(self):
+        fake_comp_item = MagicMock()
+        fake_comp_item.order.order_number = "ORD-003"
+        fake_comp_item.dish_name = "Croissant"
+        fake_comp_item.qty = 2
+        fake_comp_item.unit_price = Decimal("3.00")
+        fake_comp_item.comp_reason = "Manager comp"
+        fake_comp_item.comped_by_user_id = 9
+
+        order_qs = MagicMock()
+        order_qs.filter.return_value = order_qs
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
+        order_qs.count.return_value = 0
+        mock_order_objs = MagicMock()
+        mock_order_objs.filter.return_value = order_qs
+
+        wt_qs = MagicMock()
+        wt_qs.filter.return_value = wt_qs
+        wt_qs.aggregate.return_value = {"refund_count": 0, "refund_total": None}
+        mock_wt_class = MagicMock()
+        mock_wt_class.Type.REFUND = "REFUND"
+        mock_wt_class.objects.filter.return_value = wt_qs
+
+        # Voids empty; comps has our one item — distinguish by filter kwargs,
+        # same technique as OwnerZReportCompItemShapeTests.
+        empty_qs = MagicMock()
+        empty_qs.__iter__ = lambda s: iter([])
+        comp_qs = MagicMock()
+        comp_qs.__iter__ = lambda s: iter([fake_comp_item])
+
+        def _select_related_filter(**kwargs):
+            return comp_qs if kwargs.get("is_comped") else empty_qs
+
+        sr = MagicMock()
+        sr.filter.side_effect = _select_related_filter
+
+        mock_oi_objs = MagicMock()
+        mock_oi_objs.select_related.return_value = sr
+        food_cost_chain = MagicMock()
+        food_cost_chain.annotate.return_value = food_cost_chain
+        food_cost_chain.filter.return_value = food_cost_chain
+        food_cost_chain.aggregate.return_value = {"total": None}
+        mock_oi_objs.filter.return_value = food_cost_chain
+
+        mock_op_objs = MagicMock()
+        mock_op_objs.filter.return_value = _make_empty_op_qs()
+
+        shift_qs = MagicMock()
+        shift_qs.__iter__ = lambda s: iter([])
+        mock_shift_class = MagicMock()
+        mock_shift_class.objects.filter.return_value.order_by.return_value = shift_qs
+
+        with (
+            patch("menu.revenue.split_revenue_for_orders",
+                  return_value={"cash": Decimal("0"), "wallet": Decimal("0")}),
+            patch("menu.views.Order.objects", mock_order_objs),
+            patch("menu.views.OrderItem.objects", mock_oi_objs),
+            patch("menu.views.OrderPayment.objects", mock_op_objs),
+            patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", mock_shift_class),
+        ):
+            req = self.factory.get("/api/owner/z-report.csv", {"date": "2026-06-10"})
+            req.user = _owner_user()
+            t = _tenant()
+            t.profile = _profile(tz="UTC", cutover=0)
+            req.tenant = t
+            req.path = "/api/owner/z-report.csv"
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"].split(";")[0], "text/csv")
+        text = resp.content.decode("utf-8-sig")
+
+        # Summary section must carry a comps count/total line (mirroring voids).
+        self.assertIn("comps,count,1", text.replace(" ", ""))
+        self.assertIn("comps,total,6.00", text.replace(" ", ""))  # 2 x 3.00
+
+        # Row section: header + the one comp row, using the same shape as void rows.
+        self.assertIn(
+            "comp,order_number,dish_name,qty,line_total,reason,comped_by",
+            text.replace(" ", ""),
+        )
+        self.assertIn("ORD-003", text)
+        self.assertIn("Croissant", text)
+        self.assertIn("Manager comp", text)
+        self.assertIn("9", text)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONTRACT B (security) — Z-report refund query must include tenant_id filter
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -613,6 +789,7 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         wt_qs = MagicMock()
         wt_qs.filter.return_value = wt_qs
@@ -691,6 +868,7 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         def capture_filter(**kwargs):
             order_filter_kwargs_list.append(kwargs)
@@ -755,6 +933,7 @@ class ZReportRefundTenantFilterTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         oi_qs = MagicMock()
         oi_qs.__iter__ = lambda s: iter([])
@@ -1069,6 +1248,7 @@ class ZReportCollectedPredicateTests(SimpleTestCase):
             {"tips": Decimal("0")},
             {"promo": Decimal("0"), "loyalty": Decimal("0")},
         ]
+        order_qs.count.return_value = 0
 
         def capture_filter(**kwargs):
             called_with.update(kwargs)

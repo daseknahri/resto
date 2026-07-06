@@ -7347,6 +7347,18 @@ class OwnerPromotionListCreateView(APIView):
 
         raw_code = str(request.data.get("code") or "").strip().upper()[:20]
 
+        # B3: Promotion.code is non-unique at the DB level, but checkout resolves a
+        # code via Promotion.objects.get(code__iexact=..., is_active=True) — if two
+        # ACTIVE promotions share the same code (case-insensitively), that .get()
+        # raises MultipleObjectsReturned and checkout 500s. Reject the duplicate here
+        # instead, before it can ever reach checkout.
+        if raw_code and bool(request.data.get("is_active", True)):
+            if Promotion.objects.filter(code__iexact=raw_code, is_active=True).exists():
+                return Response(
+                    {"detail": "Another active promotion already uses this code.", "code": "duplicate_code"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         promo = Promotion.objects.create(
             name=name,
             description=str(request.data.get("description") or "").strip()[:200],
@@ -7440,6 +7452,17 @@ class OwnerPromotionDetailView(APIView):
             p.max_uses = max(1, int(raw)) if raw is not None else None
         if "code" in data:
             p.code = str(data["code"] or "").strip().upper()[:20]
+
+        # B3: same duplicate-active-code guard as create, checked against the
+        # promotion's state AFTER applying the requested field updates (so editing
+        # a promo while keeping its own code is still allowed), excluding itself.
+        if p.code and p.is_active:
+            if Promotion.objects.filter(code__iexact=p.code, is_active=True).exclude(pk=p.pk).exists():
+                return Response(
+                    {"detail": "Another active promotion already uses this code.", "code": "duplicate_code"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         p.save()
         return Response(_serialize_promotion(p))
 
@@ -8625,7 +8648,12 @@ class OwnerZReportView(APIView):
                 "cash": str(collected_cash),
                 "wallet": str(collected_wallet),
                 "total": str(collected_total),
+                "count": collected_qs.count(),
             },
+            # B7: OwnerShiftClose.vue's "Orders" stat reads report.collected_count
+            # (top-level, sibling of "collected") — expose it there so the count
+            # renders instead of the '—' placeholder. Mirrors collected.count above.
+            "collected_count": collected_qs.count(),
             "refunds": {
                 "count": refund_count,
                 "total": str(refund_total),
@@ -8722,6 +8750,10 @@ class OwnerZReportView(APIView):
         writer.writerow(["collected", "total", data["collected"]["total"]])
         writer.writerow(["refunds", "count", data["refunds"]["count"]])
         writer.writerow(["refunds", "total", data["refunds"]["total"]])
+        writer.writerow(["voids", "count", data["voids"]["count"]])
+        writer.writerow(["voids", "total", data["voids"]["total"]])
+        writer.writerow(["comps", "count", data["comps"]["count"]])
+        writer.writerow(["comps", "total", data["comps"]["total"]])
         writer.writerow(["tips", "total", data["tips"]["total"]])
         writer.writerow(["net", "cash_position", data["net_cash_position"]])
         writer.writerow(["net", "reconciliation", data["net"]])
@@ -8744,6 +8776,20 @@ class OwnerZReportView(APIView):
                 item["line_total"],
                 _csv_safe(item["reason"]),
                 item["voided_by"] or "",
+            ])
+        writer.writerow([])
+
+        # Comps section (V3) — parallel to the voids section above.
+        writer.writerow(["comp", "order_number", "dish_name", "qty", "line_total", "reason", "comped_by"])
+        for item in data["comps"]["items"]:
+            writer.writerow([
+                "comp",
+                item["order_number"],
+                _csv_safe(item["dish_name"]),
+                item["qty"],
+                item["line_total"],
+                _csv_safe(item["reason"]),
+                item["comped_by"] or "",
             ])
 
         return response
@@ -13009,13 +13055,6 @@ class DrawerCloseView(APIView):
         if not _is_tenant_owner(request):
             return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
 
-        session = DrawerSession.objects.select_for_update().filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
-        if session is None:
-            return Response(
-                {"detail": "No drawer session is currently open.", "code": "no_open_session"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
         counted_raw = request.data.get("counted_total")
         if counted_raw is None:
             return Response(
@@ -13037,22 +13076,29 @@ class DrawerCloseView(APIView):
         user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
         now = timezone.now()
 
-        # Cash collected = cash payments on completed orders paid since the drawer was opened.
-        # Reuses the same split_revenue_for_orders helper used by the Z-report so the
-        # cash figure is always consistent between the drawer close and the Z-report.
-        collected_qs = Order.objects.filter(
-            status=Order.Status.COMPLETED,
-            payment_status=Order.PaymentStatus.PAID,
-            paid_at__gte=session.opened_at,
-            paid_at__lte=now,
-        )
-        split = split_revenue_for_orders(collected_qs)
-        cash_collected = split["cash"]
-
-        expected_total = _compute_expected_total(session, cash_collected)
-        over_short = (counted_total - expected_total).quantize(Decimal("0.01"))
-
         with transaction.atomic():
+            session = DrawerSession.objects.select_for_update().filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
+            if session is None:
+                return Response(
+                    {"detail": "No drawer session is currently open.", "code": "no_open_session"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Cash collected = cash payments on completed orders paid since the drawer was opened.
+            # Reuses the same split_revenue_for_orders helper used by the Z-report so the
+            # cash figure is always consistent between the drawer close and the Z-report.
+            collected_qs = Order.objects.filter(
+                status=Order.Status.COMPLETED,
+                payment_status=Order.PaymentStatus.PAID,
+                paid_at__gte=session.opened_at,
+                paid_at__lte=now,
+            )
+            split = split_revenue_for_orders(collected_qs)
+            cash_collected = split["cash"]
+
+            expected_total = _compute_expected_total(session, cash_collected)
+            over_short = (counted_total - expected_total).quantize(Decimal("0.01"))
+
             session.status = DrawerSession.Status.CLOSED
             session.closed_at = now
             session.closed_by_user_id = user.id

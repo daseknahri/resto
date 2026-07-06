@@ -142,6 +142,8 @@ class OwnerPromotionListCreateViewTests(SimpleTestCase):
         promo = _make_promo(name="Lunch Deal", promo_type="fixed",
                             discount_value="5.00", code="LUNCH")
         mock_promo_objs.create.return_value = promo
+        # No other active promo shares this code (B3 duplicate-code guard).
+        mock_promo_objs.filter.return_value.exists.return_value = False
 
         resp = self._post({
             "name": "Lunch Deal",
@@ -162,6 +164,61 @@ class OwnerPromotionListCreateViewTests(SimpleTestCase):
 
         resp = self._post({"name": "Free Delivery Weekend", "promo_type": "free_delivery"})
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+    # ── B3: duplicate active code guard ──────────────────────────────────────
+    # Promotion.code is non-unique at the DB level; checkout does
+    # Promotion.objects.get(code__iexact=..., is_active=True), which raises
+    # MultipleObjectsReturned (500) if two ACTIVE promotions share a code. These
+    # views must reject that combination with a 400 before it can happen.
+
+    @patch("menu.views.Promotion.objects")
+    def test_post_duplicate_active_code_returns_400(self, mock_promo_objs):
+        """Creating an active promo with a code already used by another ACTIVE
+        promo must be rejected with 400 {code: 'duplicate_code'}."""
+        mock_promo_objs.filter.return_value.exists.return_value = True
+
+        resp = self._post({"name": "Second Happy Hour", "code": "HAPPY", "is_active": True})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "duplicate_code")
+        mock_promo_objs.create.assert_not_called()
+        # Verify the dup check queried case-insensitively for active promos.
+        filter_kwargs = mock_promo_objs.filter.call_args[1]
+        self.assertEqual(filter_kwargs.get("code__iexact"), "HAPPY")
+        self.assertTrue(filter_kwargs.get("is_active"))
+
+    @patch("menu.views.Promotion.objects")
+    def test_post_same_code_ok_when_other_is_inactive(self, mock_promo_objs):
+        """Reusing a code is fine as long as no OTHER promo with that code is active."""
+        mock_promo_objs.filter.return_value.exists.return_value = False
+        promo = _make_promo(name="New Promo", code="STALE")
+        mock_promo_objs.create.return_value = promo
+
+        resp = self._post({"name": "New Promo", "code": "STALE", "is_active": True})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_promo_objs.create.assert_called_once()
+
+    @patch("menu.views.Promotion.objects")
+    def test_post_duplicate_code_ok_when_new_promo_inactive(self, mock_promo_objs):
+        """Creating an INACTIVE promo should not trigger the dup-active-code check
+        even if another active promo already uses that code."""
+        promo = _make_promo(name="Draft Promo", code="HAPPY", is_active=False)
+        mock_promo_objs.create.return_value = promo
+
+        resp = self._post({"name": "Draft Promo", "code": "HAPPY", "is_active": False})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_promo_objs.create.assert_called_once()
+        # No need to consult the DB for a duplicate since the new promo is inactive.
+        mock_promo_objs.filter.assert_not_called()
+
+    @patch("menu.views.Promotion.objects")
+    def test_post_no_code_skips_duplicate_check(self, mock_promo_objs):
+        """A promo with no code at all should never hit the duplicate-code guard."""
+        promo = _make_promo(name="No Code Promo", code="")
+        mock_promo_objs.create.return_value = promo
+
+        resp = self._post({"name": "No Code Promo", "is_active": True})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_promo_objs.filter.assert_not_called()
 
 
 # ── OwnerPromotionDetailView ──────────────────────────────────────────────────
@@ -218,6 +275,8 @@ class OwnerPromotionDetailViewTests(SimpleTestCase):
     def test_patch_updates_name(self, mock_promo_objs):
         promo = _make_promo(promo_id=1, name="Old Name")
         mock_promo_objs.filter.return_value.first.return_value = promo
+        # No other active promo shares this code (B3 duplicate-code guard).
+        mock_promo_objs.filter.return_value.exclude.return_value.exists.return_value = False
 
         resp = self._patch(1, {"name": "New Name"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -237,11 +296,71 @@ class OwnerPromotionDetailViewTests(SimpleTestCase):
     def test_patch_invalid_promo_type_ignored(self, mock_promo_objs):
         promo = _make_promo(promo_type="percentage")
         mock_promo_objs.filter.return_value.first.return_value = promo
+        # No other active promo shares this code (B3 duplicate-code guard).
+        mock_promo_objs.filter.return_value.exclude.return_value.exists.return_value = False
 
         resp = self._patch(1, {"promo_type": "bogus"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # Original type unchanged
         self.assertEqual(promo.promo_type, "percentage")
+
+    # ── B3: duplicate active code guard (PATCH) ──────────────────────────────
+
+    @patch("menu.views.Promotion.objects")
+    def test_patch_duplicate_active_code_returns_400(self, mock_promo_objs):
+        """Editing a promo's code to match another ACTIVE promo's code must 400."""
+        promo = _make_promo(promo_id=1, code="OLD", is_active=True)
+        # _get_promo() uses Promotion.objects.filter(pk=...).first(); the dup
+        # check uses a SEPARATE Promotion.objects.filter(code__iexact=...).exclude(...).
+        # Route both through the same mock but distinguish by kwargs.
+        def _filter_side_effect(*args, **kwargs):
+            if "pk" in kwargs:
+                m = MagicMock()
+                m.first.return_value = promo
+                return m
+            m = MagicMock()
+            m.exclude.return_value.exists.return_value = True
+            return m
+        mock_promo_objs.filter.side_effect = _filter_side_effect
+
+        resp = self._patch(1, {"code": "TAKEN"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "duplicate_code")
+        promo.save.assert_not_called()
+
+    @patch("menu.views.Promotion.objects")
+    def test_patch_keeping_own_code_is_ok(self, mock_promo_objs):
+        """Editing a promo while keeping its own code must NOT trigger the
+        duplicate-code guard (the exclude(pk=p.pk) must exclude itself)."""
+        promo = _make_promo(promo_id=1, code="MINE", is_active=True, name="Old Name")
+
+        def _filter_side_effect(*args, **kwargs):
+            if "pk" in kwargs:
+                m = MagicMock()
+                m.first.return_value = promo
+                return m
+            # Excluding itself means no OTHER active promo shares the code.
+            m = MagicMock()
+            m.exclude.return_value.exists.return_value = False
+            return m
+        mock_promo_objs.filter.side_effect = _filter_side_effect
+
+        resp = self._patch(1, {"name": "New Name", "code": "MINE"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        promo.save.assert_called_once()
+
+    @patch("menu.views.Promotion.objects")
+    def test_patch_duplicate_code_ok_when_becoming_inactive(self, mock_promo_objs):
+        """Setting is_active=False in the same PATCH must skip the dup-active
+        guard entirely, even if another active promo shares the code."""
+        promo = _make_promo(promo_id=1, code="HAPPY", is_active=True)
+        mock_promo_objs.filter.return_value.first.return_value = promo
+
+        resp = self._patch(1, {"code": "HAPPY", "is_active": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        promo.save.assert_called_once()
+        # filter() should only have been called once (for _get_promo), never for the dup check.
+        mock_promo_objs.filter.assert_called_once()
 
     # ── DELETE ────────────────────────────────────────────────────────────────
 

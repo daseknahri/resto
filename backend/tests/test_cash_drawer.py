@@ -387,7 +387,12 @@ class DrawerCloseViewTests(SimpleTestCase):
         mock_ds.objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         req = _make_owner_request("POST", {"counted_total": "100.00"})
-        resp = DrawerCloseView().post(req)
+        # B1: the select_for_update() lock (and thus this 404 check) now happens
+        # INSIDE transaction.atomic() — mock it out same as test_close_computes_over_short.
+        with patch("menu.views.transaction") as mock_txn:
+            mock_txn.atomic.return_value.__enter__ = lambda s: None
+            mock_txn.atomic.return_value.__exit__ = MagicMock(return_value=False)
+            resp = DrawerCloseView().post(req)
         self.assertEqual(resp.status_code, 404)
 
     @patch("menu.views.DrawerSession")
@@ -397,6 +402,8 @@ class DrawerCloseViewTests(SimpleTestCase):
         mock_ds.Status.OPEN = "open"
         mock_ds.objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = session
 
+        # counted_total is parsed BEFORE the atomic/lock block, so no open
+        # session is ever looked up — transaction.atomic() is never entered.
         req = _make_owner_request("POST", {})
         resp = DrawerCloseView().post(req)
         self.assertEqual(resp.status_code, 400)
