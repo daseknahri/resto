@@ -14,6 +14,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
+from menu.models import Order
 from menu.views import (
     OwnerOrderListView,
     OwnerOrderDetailView,
@@ -61,6 +62,7 @@ def _make_order(
     updated_at_iso="2026-05-15T10:00:00+00:00",
     status_updated_at_iso=None,
     customer=None,
+    payment_status="paid",
 ):
     item = MagicMock()
     item.id = 10
@@ -94,6 +96,7 @@ def _make_order(
     order.total = Decimal(total)
     order.currency = currency
     order.customer = customer
+    order.payment_status = payment_status
 
     order.created_at = MagicMock()
     order.created_at.isoformat.return_value = created_at_iso
@@ -455,12 +458,98 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
     def test_ready_to_completed_succeeds(self, objects_mock, tz_mock):
-        order = _make_order(order_status="ready")
+        order = _make_order(order_status="ready")  # default payment_status="paid"
         objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "completed"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["status"], "completed")
+
+    # ── K-2: payment guard on the ->COMPLETED transition ──────────────────────
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_unpaid_dine_in_order_cannot_complete(self, objects_mock, tz_mock):
+        """A dine-in tab with an outstanding balance must not be closeable via a
+        direct status PATCH — only settling payment (or a zero total) unlocks it."""
+        order = _make_order(
+            order_status="ready",
+            fulfillment_type="table",
+            total="25.00",
+            payment_status=Order.PaymentStatus.UNPAID,
+        )
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "completed"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "payment_required")
+        order.save.assert_not_called()
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_paid_dine_in_order_can_complete(self, objects_mock, tz_mock):
+        order = _make_order(
+            order_status="ready",
+            fulfillment_type="table",
+            total="25.00",
+            payment_status=Order.PaymentStatus.PAID,
+        )
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "completed"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], "completed")
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_zero_total_unpaid_order_can_complete(self, objects_mock, tz_mock):
+        """A zero-total order (e.g. fully comped) has nothing owing, so it may
+        complete even though payment_status never flipped to PAID."""
+        order = _make_order(
+            order_status="ready",
+            fulfillment_type="table",
+            total="0.00",
+            payment_status=Order.PaymentStatus.UNPAID,
+        )
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "completed"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], "completed")
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_paid_pickup_order_can_complete(self, objects_mock, tz_mock):
+        """Pickup/delivery orders are already paid at placement (wallet pay-now) —
+        the payment guard must not block their normal ready->completed flow."""
+        order = _make_order(
+            order_status="ready",
+            fulfillment_type="pickup",
+            total="25.00",
+            payment_status=Order.PaymentStatus.PAID,
+        )
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "completed"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], "completed")
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_unpaid_delivery_order_out_for_delivery_to_completed_blocked(self, objects_mock, tz_mock):
+        """Defense in depth: even the delivery out_for_delivery->completed leg is
+        gated the same way if payment somehow never landed."""
+        order = _make_order(
+            order_status="out_for_delivery",
+            fulfillment_type="delivery",
+            total="25.00",
+            payment_status=Order.PaymentStatus.UNPAID,
+        )
+        objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
+
+        resp = self._patch(data={"status": "completed"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "payment_required")
 
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")

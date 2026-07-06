@@ -186,6 +186,18 @@
       </div>
     </div>
 
+    <!-- Error: order fetch failed — never show the all-clear state in this case -->
+    <div v-else-if="waiter.error" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3 mx-3 sm:mx-4" role="alert">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ waiter.error }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="doPoll"
+      >{{ t('common.retry') }}</button>
+    </div>
+
     <!-- All-day aggregate prep counts (toggle) -->
     <section
       v-else-if="allDay"
@@ -869,7 +881,6 @@ const onFullscreenChange = () => {
 
 // ── Polling ───────────────────────────────────────────────────────────────────
 let pollTimer = null;
-let prevPendingIds = new Set();
 
 const playAlert = () => {
   // Two-tone WebAudio beep — uses the lazy context so autoplay policy is satisfied.
@@ -903,10 +914,14 @@ const playAlert = () => {
   flashTimer = setTimeout(() => { newOrderFlash.value = false; }, 4000);
 };
 
+// Alert (sound + flash) on any newly-appearing ACTIONABLE order — not just ones
+// arriving in 'pending'. An order that skips straight to confirmed/preparing
+// (e.g. bulk-confirmed) still needs the kitchen's attention. De-duped against
+// _seenOrderIds (the same never-seen-before set that drives the toast below),
+// so an existing order simply changing status never re-triggers the alert.
 const checkNewOrders = (orders) => {
-  const pendingIds = new Set(orders.filter((o) => o.status === "pending").map((o) => o.id));
-  if ([...pendingIds].some((id) => !prevPendingIds.has(id)) && prevPendingIds.size > 0) playAlert();
-  prevPendingIds = pendingIds;
+  const actionableIds = orders.filter((o) => ACTIVE_STATUSES.has(o.status)).map((o) => o.id);
+  if (_seenOrderIds && actionableIds.some((id) => !_seenOrderIds.has(id))) playAlert();
 };
 
 // Detect truly new order IDs (any status) after first load — drives the toast.
@@ -974,7 +989,6 @@ onMounted(async () => {
 
   const initial = await waiter.fetchOrders();
   if (Array.isArray(initial)) {
-    prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
     checkNewOrderIds(initial); // seeds _seenOrderIds on first load
   }
 });

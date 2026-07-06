@@ -82,10 +82,10 @@
           >{{ todayStats.pending }}</p>
           <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
         </div>
-        <!-- Active filter context strip — shown only when a filter is active -->
+        <!-- Active filter context strip — shown only when a filter is active (active tab only; History has its own controls) -->
         <Transition name="ui-fade">
           <div
-            v-if="activeStatus || searchQuery || activeFulfillmentType || activePaymentStatus || activeDateFilter !== 'all'"
+            v-if="activeTab === 'active' && (activeStatus || searchQuery || activeFulfillmentType || activePaymentStatus || activeDateFilter !== 'all')"
             class="col-span-3 mt-1 flex flex-wrap items-center gap-1.5 border-t border-slate-800/60 pt-2 text-[10px] text-slate-500"
           >
             <span>{{ t('ownerOrders.filterContextLabel') }}</span>
@@ -104,8 +104,8 @@
         </Transition>
       </div>
 
-      <!-- Search + filter trigger row -->
-      <div class="flex flex-wrap items-center gap-2">
+      <!-- Search + filter trigger row (active tab only; History has its own date-range controls) -->
+      <div v-if="activeTab === 'active'" class="flex flex-wrap items-center gap-2">
         <input
           v-model.trim="searchQuery"
           type="search"
@@ -1802,8 +1802,6 @@ const statusTabs = computed(() => {
     { value: "preparing", label: t("ownerOrders.statusPreparing"), count: counts.preparing || 0 },
     { value: "ready", label: t("ownerOrders.statusReady"), count: counts.ready || 0 },
     { value: "out_for_delivery", label: t("ownerOrders.outForDelivery"), count: counts.out_for_delivery || 0 },
-    { value: "completed", label: t("ownerOrders.statusCompleted"), count: counts.completed || 0 },
-    { value: "cancelled", label: t("ownerOrders.statusCancelled"), count: counts.cancelled || 0 },
   ];
 });
 

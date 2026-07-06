@@ -34,7 +34,12 @@ export function usePrintTicket() {
 
   const _buildHtml = (o) => {
     const cur = o.currency;
-    const itemRows = (o.items || []).map((item) => {
+    // Voided items are excluded from the printed ticket entirely (nothing to cook).
+    // Held-course items (not yet fired) are flagged so the kitchen doesn't start
+    // them early — mirrors the is_voided / course-vs-fired_course handling already
+    // shown on-screen in OwnerKitchen.vue and OwnerOrders.vue.
+    const firedCourse = o.fired_course ?? 1;
+    const itemRows = (o.items || []).filter((item) => !item.is_voided).map((item) => {
       const opts = item.options?.length
         ? `<div style="font-size:11px;color:#555">${item.options.map((x) => escapeHtml(x.name)).join(", ")}</div>`
         : "";
@@ -46,8 +51,12 @@ export function usePrintTicket() {
             `<div style="font-size:10px;color:#888;padding-left:8px">↳ ${escapeHtml(comp.name)} ×${comp.qty * item.qty}</div>`
           ).join("")
         : "";
+      const isHeld = (item.course ?? 0) > 0 && item.course > firedCourse;
+      const heldChip = isHeld
+        ? `<span style="font-size:10px;font-weight:bold;color:#b45309;border:1px solid #b45309;border-radius:8px;padding:0 4px;margin-left:4px">${escapeHtml(t("waiterPage.heldChip"))}</span>`
+        : "";
       return `<tr>
-        <td style="padding:3px 0;vertical-align:top"><strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${opts}${note}${comboLines}</td>
+        <td style="padding:3px 0;vertical-align:top"><strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${heldChip}${opts}${note}${comboLines}</td>
         <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top">${fmt(item.subtotal, cur)}</td>
       </tr>`;
     }).join("");

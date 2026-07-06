@@ -4398,8 +4398,15 @@ class StaffShiftSummaryView(APIView):
 class StaffOrderItemReadyView(APIView):
     """PATCH /api/staff/order-items/<item_id>/ready/ — kitchen marks a single line item
     ready (or not) on a multi-item ticket. Body: { "ready": bool } (defaults to True).
+
+    K-7: mirrors the row-locking + terminal-status discipline of the sibling
+    StaffFireCourseView / StaffBulkReadyView endpoints — wraps the read-mutate-write
+    in transaction.atomic() + select_for_update() on the Order, and rejects with
+    409 bad_status when the order is already COMPLETED/CANCELLED.
     """
     permission_classes = [IsAuthenticated]
+
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
 
     def patch(self, request, item_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
@@ -4413,22 +4420,44 @@ class StaffOrderItemReadyView(APIView):
                  "code": "kitchen_unavailable"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Quick existence check before acquiring the write lock — avoids a lock
+        # wait on a non-existent row and gives a clean 404 (same discipline as
+        # StaffFireCourseView / StaffBulkReadyView).
         item = OrderItem.objects.select_related("order").filter(id=item_id).first()
         if item is None:
             return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
         if not _can_access_order(request, item.order):
             return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
                             status=status.HTTP_403_FORBIDDEN)
-        if item.is_voided:
-            return Response({"detail": "Voided items cannot be marked ready.", "code": "item_voided"},
-                            status=status.HTTP_409_CONFLICT)
-        _raw = request.data.get("ready", True)
-        ready = _raw.strip().lower() in ("1", "true", "yes") if isinstance(_raw, str) else bool(_raw)
-        item.is_ready = ready
-        item.ready_at = timezone.now() if ready else None
-        item.save(update_fields=["is_ready", "ready_at"])
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().filter(pk=item.order_id).first()
+            if order is None:
+                return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if order.status in self._TERMINAL_STATUSES:
+                return Response(
+                    {"detail": "Order is already completed or cancelled.", "code": "bad_status"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Re-fetch the item under the lock so a concurrent void can't race us.
+            item = OrderItem.objects.filter(id=item_id).first()
+            if item is None:
+                return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+            if item.is_voided:
+                return Response({"detail": "Voided items cannot be marked ready.", "code": "item_voided"},
+                                status=status.HTTP_409_CONFLICT)
+
+            _raw = request.data.get("ready", True)
+            ready = _raw.strip().lower() in ("1", "true", "yes") if isinstance(_raw, str) else bool(_raw)
+            item.is_ready = ready
+            item.ready_at = timezone.now() if ready else None
+            item.save(update_fields=["is_ready", "ready_at"])
+
         try:
-            _broadcast_order_change(item.order)  # live-refresh other kitchen/owner screens
+            _broadcast_order_change(order)  # live-refresh other kitchen/owner screens
         except Exception:
             pass
         return Response({"id": item.id, "is_ready": item.is_ready})
@@ -7683,6 +7712,25 @@ class OwnerOrderStatusUpdateView(APIView):
                         {"detail": f"Cannot transition from '{order.status}' to '{new_status}'.", "code": "invalid_transition"},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+
+                # K-2: a direct API call could otherwise close an order that still
+                # owes money — the frontend only hides the Complete button for an
+                # unpaid dine-in tab (OwnerOrders.vue), but that's a UI nicety, not
+                # a server-side guarantee. Reject COMPLETED when the order has a
+                # non-zero total and hasn't been marked PAID. Zero-total orders and
+                # pickup/delivery orders (paid up front at placement, see
+                # OwnerOrderMarkPaidView's PAID semantics) complete normally.
+                if new_status == Order.Status.COMPLETED:
+                    _k2_total = Decimal(str(order.total or "0"))
+                    if _k2_total > Decimal("0") and order.payment_status != Order.PaymentStatus.PAID:
+                        return Response(
+                            {
+                                "detail": "This order still has an unpaid balance. Settle payment before completing it.",
+                                "code": "payment_required",
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 order.status = new_status
                 order.status_updated_at = timezone.now()
 
