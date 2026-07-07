@@ -206,6 +206,16 @@
           </div>
         </Transition>
 
+        <!-- Stale table statuses warning — last /staff/tables/ poll failed; next poll retries automatically -->
+        <div
+          v-if="tableStatusesStale"
+          class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+          role="alert"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true"><path d="M8 2 1.5 13h13L8 2Zm0 4v3.5M8 11.5h.01"/></svg>
+          <p class="min-w-0 flex-1 text-[11px] leading-snug text-amber-300">{{ t('waiterPage.tableStatusStale') }}</p>
+        </div>
+
         <!-- Floor status legend (collapsed by default) -->
         <details class="group rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2 text-xs text-slate-400">
           <summary class="cursor-pointer select-none list-none font-medium text-slate-300 [&::-webkit-details-marker]:hidden">
@@ -2487,6 +2497,9 @@ const APPENDABLE_TABLE_STATUSES = new Set(['pending', 'confirmed', 'preparing'])
 
 // tableStatusMap: slug → { id, status, capacity } from GET /api/staff/tables/
 const tableStatusMap = ref(new Map());
+// Set when the last /staff/tables/ poll failed — table statuses shown may be stale.
+// Cleared automatically as soon as a subsequent poll succeeds.
+const tableStatusesStale = ref(false);
 
 const loadTableStatuses = async () => {
   try {
@@ -2496,8 +2509,10 @@ const loadTableStatuses = async () => {
       m.set(t.slug, { id: t.id, status: t.status, capacity: t.capacity });
     }
     tableStatusMap.value = m;
+    tableStatusesStale.value = false;
   } catch (e) {
     void e;
+    tableStatusesStale.value = true;
   }
 };
 

@@ -604,15 +604,32 @@ const eightySixFetching = ref(false);
 const eightySixSearch = ref("");
 const eightySixTogglingId = ref(null);
 
+// Stable sort order (86'd dishes pinned on top) is snapshotted once per
+// board-open/refetch rather than recomputed on every toggle. Re-sorting live
+// on each tap would make a row jump position mid tap-sequence (e.g. toggling
+// a dish moves it to the top, so the next tap can land on a different dish).
+const _eightySixOrderKey = ref(new Map());
+
+const _rebuild86OrderKey = () => {
+  const sorted = [...eightySixDishes.value].sort((a, b) => {
+    if (!a.is_available && b.is_available) return -1;
+    if (a.is_available && !b.is_available) return 1;
+    return 0;
+  });
+  const map = new Map();
+  sorted.forEach((d, i) => map.set(d.id, i));
+  _eightySixOrderKey.value = map;
+};
+
 const eightySixFiltered = computed(() => {
   const q = eightySixSearch.value.toLowerCase();
+  const orderKey = _eightySixOrderKey.value;
   const list = [...eightySixDishes.value]
     .filter((d) => d.is_published)
     .sort((a, b) => {
-      // 86'd (unavailable) pinned on top
-      if (!a.is_available && b.is_available) return -1;
-      if (a.is_available && !b.is_available) return 1;
-      return 0;
+      const ai = orderKey.has(a.id) ? orderKey.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const bi = orderKey.has(b.id) ? orderKey.get(b.id) : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
     });
   if (!q) return list;
   return list.filter(
@@ -631,6 +648,7 @@ const fetch86Dishes = async () => {
   try {
     const { data } = await api.get("/dishes/", { timeout: 6000 });
     eightySixDishes.value = Array.isArray(data) ? data : [];
+    _rebuild86OrderKey();
   } catch {
     toast.show(t("ownerHome.noDishesLoaded"), "error");
   } finally {

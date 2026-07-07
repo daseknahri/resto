@@ -56,7 +56,7 @@
       <p class="text-sm font-semibold text-slate-100">{{ t('ownerPromotions.noPromotions') }}</p>
       <p class="text-xs text-slate-400 max-w-xs mx-auto">{{ t('ownerPromotions.noPromotionsHint') }}</p>
       <div class="pt-2">
-        <button class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-5 py-2 text-sm" @click="openCreate">
+        <button class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-5 py-2 text-sm" @click="openCreate">
           {{ t('ownerPromotions.newPromotion') }}
         </button>
       </div>
@@ -1041,10 +1041,11 @@ const submitForm = async () => {
       toast.show(t('ownerPromotions.create'), 'success');
     }
     drawerOpen.value = false;
-  } catch {
+  } catch (err) {
+    const detail = err?.response?.data?.detail || err?.response?.data?.non_field_errors?.[0];
     drawerError.value = editingPromo.value
-      ? t('ownerPromotions.saveFailed')
-      : t('ownerPromotions.createFailed');
+      ? (detail || t('ownerPromotions.saveFailed'))
+      : (detail || t('ownerPromotions.createFailed'));
   } finally {
     submitting.value = false;
   }

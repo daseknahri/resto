@@ -113,11 +113,30 @@
             <div class="grid gap-3 md:grid-cols-2 md:gap-4">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("reservationPage.preferredDate") }}
-                <input v-model="form.date" type="date" class="ui-input" @change="onDateChange" />
+                <input
+                  v-model="form.date"
+                  type="date"
+                  class="ui-input"
+                  :class="fieldClass('date')"
+                  :min="todayDateStr"
+                  :aria-invalid="errors.date ? 'true' : undefined"
+                  aria-describedby="res-date-error"
+                  @change="onDateChange"
+                />
+                <p v-if="errors.date" id="res-date-error" role="alert" class="text-xs text-red-300">{{ errors.date }}</p>
               </label>
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("reservationPage.preferredTime") }}
-                <input v-model="form.time" type="time" class="ui-input" />
+                <input
+                  v-model="form.time"
+                  type="time"
+                  class="ui-input"
+                  :class="fieldClass('time')"
+                  :aria-invalid="errors.time ? 'true' : undefined"
+                  aria-describedby="res-time-error"
+                  @input="clearError('time')"
+                />
+                <p v-if="errors.time" id="res-time-error" role="alert" class="text-xs text-red-300">{{ errors.time }}</p>
               </label>
             </div>
 
@@ -398,6 +417,7 @@ const slotButtonClass = (slot) => {
 };
 
 const onDateChange = () => {
+  clearError("date");
   fetchAvailability(form.date);
 };
 
@@ -456,7 +476,17 @@ const errors = reactive({
   phone: "",
   email: "",
   party_size: "",
+  date: "",
+  time: "",
 });
+
+const todayDateStr = (() => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+})();
 
 const profile = computed(() => meta.value?.profile || {});
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
@@ -493,6 +523,8 @@ const validate = () => {
   errors.phone = "";
   errors.email = "";
   errors.party_size = "";
+  errors.date = "";
+  errors.time = "";
   let valid = true;
 
   if (!form.name || form.name.length < 2) {
@@ -511,6 +543,26 @@ const validate = () => {
   if (Number(form.party_size || 0) < 1) {
     errors.party_size = t("reservationPage.partySizeError");
     valid = false;
+  }
+  if (capacityEnabled.value && form.time && isSlotFull(form.time)) {
+    errors.time = t("reservationPage.slotFull");
+    valid = false;
+  }
+  if (form.date && form.date < todayDateStr) {
+    errors.date = t("reservationPage.pastDateError");
+    valid = false;
+  }
+  if (form.date && form.time) {
+    let combined = null;
+    try {
+      combined = new Date(`${form.date}T${form.time}`);
+    } catch {
+      combined = null;
+    }
+    if (combined && !Number.isNaN(combined.getTime()) && combined.getTime() < Date.now()) {
+      errors.time = t("reservationPage.pastTimeError");
+      valid = false;
+    }
   }
 
   return valid;

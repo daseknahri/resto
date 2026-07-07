@@ -524,7 +524,7 @@
     >
       <button
         class="ui-btn-primary ui-press px-3 py-1.5 text-xs"
-        :disabled="order.updatingOrderId != null"
+        :disabled="bulkBusy || order.updatingOrderId != null"
         @click="bulkMarkPreparingReady"
       >
         {{ t('ownerOrders.markAllReady', { count: filteredOrders.length }) }}
@@ -1758,6 +1758,12 @@ const switchToHistory = () => {
 };
 
 const reloadHistory = () => {
+  if (historyFrom.value && historyTo.value && historyFrom.value > historyTo.value) {
+    const swapped = historyFrom.value;
+    historyFrom.value = historyTo.value;
+    historyTo.value = swapped;
+    toast.show(t('ownerOrders.dateRangeSwapped'), 'info');
+  }
   order.fetchHistory({ reset: true, from: historyFrom.value, to: historyTo.value });
 };
 
@@ -2115,6 +2121,7 @@ const orderCardClass = (o) => {
 };
 
 // ── Status actions ────────────────────────────────────────────────────────────
+const bulkBusy = ref(false);
 const bulkMarkPreparingReady = async () => {
   const preparing = filteredOrders.value.filter((o) => o.status === 'preparing');
   if (preparing.length < 2) return;
@@ -2124,11 +2131,16 @@ const bulkMarkPreparingReady = async () => {
     confirmLabel: t('ownerOrders.markReady'),
   });
   if (!ok) return;
-  const results = await Promise.allSettled(
-    preparing.map((o) => order.updateOrderStatus(o.id, { status: 'ready' })),
-  );
-  const succeeded = results.filter((r) => r.status === 'fulfilled').length;
-  if (succeeded > 0) toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
+  bulkBusy.value = true;
+  try {
+    const results = await Promise.allSettled(
+      preparing.map((o) => order.updateOrderStatus(o.id, { status: 'ready' })),
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    if (succeeded > 0) toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
+  } finally {
+    bulkBusy.value = false;
+  }
 };
 
 // K-8: canned cancel-reason codes — a required pick-list shown in an inline
@@ -2335,7 +2347,8 @@ const loadPayments = async (orderId) => {
     const { data } = await api.get(`/owner/orders/${orderId}/`);
     paymentsMap.value = { ...paymentsMap.value, [orderId]: data.payments || [] };
   } catch {
-    // silently ignore — button stays visible
+    // button stays visible so the owner can retry
+    toast.show(t('ownerOrders.loadPaymentsFailed'), 'error');
   }
 };
 

@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import AppIcon from "../components/AppIcon.vue";
@@ -208,7 +208,7 @@ const onInsightsData = (data) => {
   }
 };
 
-// ── Today's order stats — from the order store (no extra fetch) ──
+// ── Today's order stats ──
 // Uses tenant timezone (Contract E) so "today" aligns with the restaurant's local day.
 const _fmtDate = (d) => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
@@ -218,24 +218,43 @@ const _fmtDate = (d) => {
   } catch { return d.toDateString(); }
 };
 
+// Count/revenue come from the /owner/dashboard/ revenue_summary.daily breakdown
+// (already fetched by OwnerDashboardInsights and bubbled up via onInsightsData),
+// NOT from the order store: the store's `orders` list is only populated by a
+// fetchOrders()/fetchHistory() call this page never makes (cold visit would show
+// 0 with no way to tell "no orders" from "not loaded"), and even when populated it
+// only holds ACTIVE (non-terminal) orders — completed orders from earlier today
+// would be invisible. The daily breakdown is authoritative for every order today
+// regardless of status/terminality.
+const _dailyEntry = (dateStr) => (revenueSummary.value?.daily || []).find((d) => d.date === dateStr);
+
+// Pending count still needs the order store (the daily revenue breakdown only
+// includes billable statuses and excludes "pending"). Ensure it's loaded so a
+// cold/deep-link visit doesn't show a false 0 — fetchOrders() is a public store
+// action (active-mode, no pagination) and is idempotent/cheap to call.
+onMounted(() => {
+  if (!order.orders.length && !order.ordersLoading) order.fetchOrders();
+});
+
 const todayStats = computed(() => {
-  const today = _fmtDate(new Date());
-  const todayOrders = order.orders.filter((o) => _fmtDate(new Date(o.created_at)) === today);
-  const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-  const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
+  const today = _dailyEntry(_fmtDate(new Date()));
+  const revenue = Number(today?.revenue) || 0;
+  const count = Number(today?.orders) || 0;
+  const currency = revenueSummary.value?.currency || "MAD";
   let revenueLabel = "";
   try {
     revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
   } catch {
     revenueLabel = `${currency} ${Math.floor(revenue)}`;
   }
-  return { count: todayOrders.length, revenue: revenueLabel, revenueRaw: revenue, pending: todayOrders.filter((o) => o.status === "pending").length };
+  const pending = order.orders.filter((o) => o.status === "pending").length;
+  return { count, revenue: revenueLabel, revenueRaw: revenue, pending };
 });
 
 const avgTicketLabel = computed(() => {
   const { count, revenueRaw } = todayStats.value;
   if (!count) return "—";
-  const currency = order.orders.find((o) => o.currency)?.currency || "MAD";
+  const currency = revenueSummary.value?.currency || "MAD";
   try { return formatNumber(revenueRaw / count, { style: "currency", currency, maximumFractionDigits: 0 }); }
   catch { return `${currency} ${Math.round(revenueRaw / count)}`; }
 });
@@ -243,9 +262,8 @@ const avgTicketLabel = computed(() => {
 const yesterdayStats = computed(() => {
   const y = new Date();
   y.setDate(y.getDate() - 1);
-  const yStr = _fmtDate(y);
-  const yOrders = order.orders.filter((o) => _fmtDate(new Date(o.created_at)) === yStr);
-  return { count: yOrders.length, revenue: yOrders.reduce((s, o) => s + (Number(o.total) || 0), 0) };
+  const entry = _dailyEntry(_fmtDate(y));
+  return { count: Number(entry?.orders) || 0, revenue: Number(entry?.revenue) || 0 };
 });
 
 // ── Sparklines from the revenue summary daily breakdown ──

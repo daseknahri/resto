@@ -190,32 +190,34 @@
         </button>
         <Transition name="ui-fade">
           <div v-if="voidsExpanded && report.voids.items.length" class="border-t border-slate-800 px-4 pb-3 print:border-slate-300">
-            <table class="w-full text-xs mt-2">
-              <thead>
-                <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
-                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
-                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
-                  <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
-                  <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
-                  <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
-                  <th class="py-1.5 font-medium">{{ t("zReport.colVoidedBy") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(item, idx) in report.voids.items"
-                  :key="idx"
-                  class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
-                >
-                  <td class="py-1.5 pe-2 text-slate-400 print:text-slate-600">{{ item.order_number }}</td>
-                  <td class="py-1.5 pe-2 text-slate-200 print:text-black">{{ item.dish_name }}</td>
-                  <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ item.qty }}</td>
-                  <td class="py-1.5 pe-2 text-end font-semibold tabular-nums text-red-400 print:text-red-700">{{ fmtMoney(item.line_total) }}</td>
-                  <td class="py-1.5 pe-2 text-slate-400 italic print:text-slate-600">{{ item.reason || t("zReport.noReason") }}</td>
-                  <td class="py-1.5 text-slate-400 print:text-slate-600">{{ item.voided_by || t("zReport.unknown") }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="ui-table-wrap mt-2">
+              <table class="w-full min-w-[560px] text-xs">
+                <thead>
+                  <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
+                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
+                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
+                    <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
+                    <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
+                    <th class="py-1.5 font-medium">{{ t("zReport.colVoidedBy") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(item, idx) in report.voids.items"
+                    :key="idx"
+                    class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
+                  >
+                    <td class="py-1.5 pe-2 text-slate-400 print:text-slate-600">{{ item.order_number }}</td>
+                    <td class="py-1.5 pe-2 text-slate-200 print:text-black">{{ item.dish_name }}</td>
+                    <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ item.qty }}</td>
+                    <td class="py-1.5 pe-2 text-end font-semibold tabular-nums text-red-400 print:text-red-700">{{ fmtMoney(item.line_total) }}</td>
+                    <td class="py-1.5 pe-2 text-slate-400 italic print:text-slate-600">{{ item.reason || t("zReport.noReason") }}</td>
+                    <td class="py-1.5 text-slate-400 print:text-slate-600">{{ item.voided_by || t("zReport.unknown") }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <p class="mt-1.5 text-[11px] text-slate-500 print:text-slate-400">{{ t("zReport.voidsTotal") }}: <span class="font-semibold">{{ fmtMoney(report.voids.total) }}</span></p>
           </div>
           <p v-else-if="voidsExpanded && !report.voids.items.length" class="border-t border-slate-800 px-4 py-2 text-xs text-slate-500 print:border-slate-300 print:text-slate-400">
@@ -238,32 +240,34 @@
         </button>
         <Transition name="ui-fade">
           <div v-if="compsExpanded && report.comps.items.length" class="border-t border-slate-800 px-4 pb-3 print:border-slate-300">
-            <table class="w-full text-xs mt-2">
-              <thead>
-                <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
-                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
-                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
-                  <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
-                  <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
-                  <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
-                  <th class="py-1.5 font-medium">{{ t("zReport.colCompedBy") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(item, idx) in report.comps.items"
-                  :key="idx"
-                  class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
-                >
-                  <td class="py-1.5 pe-2 text-slate-400 print:text-slate-600">{{ item.order_number }}</td>
-                  <td class="py-1.5 pe-2 text-slate-200 print:text-black">{{ item.dish_name }}</td>
-                  <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ item.qty }}</td>
-                  <td class="py-1.5 pe-2 text-end font-semibold tabular-nums text-red-400 print:text-red-700">{{ fmtMoney(item.line_total) }}</td>
-                  <td class="py-1.5 pe-2 text-slate-400 italic print:text-slate-600">{{ item.reason || t("zReport.noReason") }}</td>
-                  <td class="py-1.5 text-slate-400 print:text-slate-600">{{ item.comped_by || t("zReport.unknown") }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="ui-table-wrap mt-2">
+              <table class="w-full min-w-[560px] text-xs">
+                <thead>
+                  <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
+                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
+                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
+                    <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
+                    <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
+                    <th class="py-1.5 font-medium">{{ t("zReport.colCompedBy") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(item, idx) in report.comps.items"
+                    :key="idx"
+                    class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
+                  >
+                    <td class="py-1.5 pe-2 text-slate-400 print:text-slate-600">{{ item.order_number }}</td>
+                    <td class="py-1.5 pe-2 text-slate-200 print:text-black">{{ item.dish_name }}</td>
+                    <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ item.qty }}</td>
+                    <td class="py-1.5 pe-2 text-end font-semibold tabular-nums text-red-400 print:text-red-700">{{ fmtMoney(item.line_total) }}</td>
+                    <td class="py-1.5 pe-2 text-slate-400 italic print:text-slate-600">{{ item.reason || t("zReport.noReason") }}</td>
+                    <td class="py-1.5 text-slate-400 print:text-slate-600">{{ item.comped_by || t("zReport.unknown") }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <p class="mt-1.5 text-[11px] text-slate-500 print:text-slate-400">{{ t("zReport.compsTotal") }}: <span class="font-semibold">{{ fmtMoney(report.comps.total) }}</span></p>
           </div>
           <p v-else-if="compsExpanded && !report.comps.items.length" class="border-t border-slate-800 px-4 py-2 text-xs text-slate-500 print:border-slate-300 print:text-slate-400">
@@ -275,28 +279,30 @@
       <!-- By-staff table -->
       <div v-if="report.by_staff.length" class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 px-4 py-3 print:border-slate-300 print:bg-white">
         <p class="mb-2 text-sm font-semibold text-slate-200 print:text-black">{{ t("zReport.byStaff") }}</p>
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
-              <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
-              <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.staffOrders") }}</th>
-              <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.staffCash") }}</th>
-              <th class="py-1.5 font-medium text-end">{{ t("zReport.staffWallet") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in report.by_staff"
-              :key="row.name"
-              class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
-            >
-              <td class="py-1.5 pe-2 font-medium text-slate-200 print:text-black">{{ row.name }}</td>
-              <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ row.orders }}</td>
-              <td class="py-1.5 pe-2 text-end tabular-nums text-emerald-300 print:text-emerald-700">{{ fmtMoney(row.collected_cash) }}</td>
-              <td class="py-1.5 text-end tabular-nums text-sky-300 print:text-sky-700">{{ fmtMoney(row.collected_wallet) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="ui-table-wrap">
+          <table class="w-full min-w-[420px] text-xs">
+            <thead>
+              <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+                <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
+                <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.staffOrders") }}</th>
+                <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.staffCash") }}</th>
+                <th class="py-1.5 font-medium text-end">{{ t("zReport.staffWallet") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in report.by_staff"
+                :key="row.name"
+                class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
+              >
+                <td class="py-1.5 pe-2 font-medium text-slate-200 print:text-black">{{ row.name }}</td>
+                <td class="py-1.5 pe-2 text-center text-slate-400 print:text-slate-600">{{ row.orders }}</td>
+                <td class="py-1.5 pe-2 text-end tabular-nums text-emerald-300 print:text-emerald-700">{{ fmtMoney(row.collected_cash) }}</td>
+                <td class="py-1.5 text-end tabular-nums text-sky-300 print:text-sky-700">{{ fmtMoney(row.collected_wallet) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="mt-1.5 text-[10px] text-slate-600 print:text-slate-400">{{ t("zReport.byStaffNote") }}</p>
       </div>
       <p v-else-if="report" class="px-4 text-xs text-slate-500">{{ t("zReport.noStaffData") }}</p>
@@ -348,30 +354,32 @@
             </div>
             <!-- Shift list -->
             <p v-if="!report.labor.shifts?.length" class="text-xs text-slate-500">{{ t("zReport.laborNoShifts") }}</p>
-            <table v-else class="w-full text-xs mt-1">
-              <thead>
-                <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
-                  <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
-                  <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
-                  <th class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(sh, idx) in report.labor.shifts"
-                  :key="idx"
-                  class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
-                >
-                  <td class="py-1.5 pe-2 font-medium text-slate-200 print:text-black">{{ sh.user_name }}</td>
-                  <td class="py-1.5 pe-2 text-center tabular-nums text-slate-400">
-                    {{ sh.hours != null ? sh.hours + 'h' : t("zReport.laborStillOpen") }}
-                  </td>
-                  <td class="py-1.5 text-end tabular-nums text-slate-400">
-                    {{ sh.labor_cost ? fmtMoney(sh.labor_cost) : '—' }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div v-else class="ui-table-wrap mt-1">
+              <table class="w-full min-w-[380px] text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
+                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
+                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
+                    <th class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(sh, idx) in report.labor.shifts"
+                    :key="idx"
+                    class="border-b border-slate-800/50 last:border-0 print:border-slate-200"
+                  >
+                    <td class="py-1.5 pe-2 font-medium text-slate-200 print:text-black">{{ sh.user_name }}</td>
+                    <td class="py-1.5 pe-2 text-center tabular-nums text-slate-400">
+                      {{ sh.hours != null ? sh.hours + 'h' : t("zReport.laborStillOpen") }}
+                    </td>
+                    <td class="py-1.5 text-end tabular-nums text-slate-400">
+                      {{ sh.labor_cost ? fmtMoney(sh.labor_cost) : '—' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </Transition>
       </div>

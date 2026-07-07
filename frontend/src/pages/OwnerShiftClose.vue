@@ -22,7 +22,11 @@
 
     <!-- Error -->
     <div v-if="error" role="alert" class="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-      {{ error }}
+      <p>{{ error }}</p>
+      <button type="button" class="mt-3 ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm" @click="loadData">
+        <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
+        {{ t("common.retry") }}
+      </button>
     </div>
 
     <!-- Loading skeleton -->
@@ -276,6 +280,11 @@ const loadData = async () => {
       api.get("/owner/drawer/current/").catch(() => null),
       api.get("/owner/z-report/").catch(() => null),
     ]);
+
+    if (!drawerResp && !reportResp) {
+      error.value = t("shiftClose.loadError");
+      return;
+    }
 
     if (drawerResp?.data?.session) {
       drawer.value = drawerResp.data.session;

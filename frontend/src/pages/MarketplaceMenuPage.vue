@@ -480,6 +480,7 @@
                 :key="fd.slug"
                 type="button"
                 class="ui-press flex shrink-0 flex-col items-start gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-2.5 text-start transition hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+                :class="{ 'opacity-50': !fd.is_available }"
                 style="min-width: 110px; max-width: 140px"
                 @click="openOptionPanel(fd)"
               >
@@ -491,7 +492,8 @@
                 />
                 <div v-else class="flex h-12 w-full items-center justify-center rounded-xl bg-rose-500/10 text-xl" aria-hidden="true">❤️</div>
                 <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">{{ fd.name }}</p>
-                <p class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(fd.effective_price || fd.price) }}</p>
+                <p v-if="!fd.is_available" class="text-[10px] font-semibold text-slate-500">{{ t('mktMenu.soldOut') }}</p>
+                <p v-else class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(fd.effective_price || fd.price) }}</p>
               </button>
             </div>
           </div>
@@ -505,6 +507,7 @@
                 :key="rd.slug"
                 type="button"
                 class="ui-press flex shrink-0 flex-col items-start gap-1.5 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-2.5 text-start transition hover:bg-slate-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                :class="{ 'opacity-50': !rd.is_available }"
                 style="min-width: 110px; max-width: 140px"
                 @click="openOptionPanel(rd)"
               >
@@ -516,7 +519,8 @@
                 />
                 <div v-else class="flex h-12 w-full items-center justify-center rounded-xl bg-slate-700/50 text-xl" aria-hidden="true">🍽</div>
                 <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">{{ rd.name }}</p>
-                <p class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(rd.effective_price || rd.price) }}</p>
+                <p v-if="!rd.is_available" class="text-[10px] font-semibold text-slate-500">{{ t('mktMenu.soldOut') }}</p>
+                <p v-else class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(rd.effective_price || rd.price) }}</p>
               </button>
             </div>
           </div>
@@ -1298,6 +1302,7 @@ import { useVocabulary } from '../composables/useVocabulary';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import api from '../lib/api';
+import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
 
 const { t, formatCurrency } = useI18n();
@@ -1443,6 +1448,10 @@ const shareDish = async (dish) => {
 };
 
 const placing = ref(false);
+// Idempotency key for the in-flight/retryable checkout attempt (null between attempts):
+// reused on retry of the same submit so the backend replays instead of double-charging,
+// reset to null after a confirmed success so the next order mints a fresh key.
+let checkoutIdemKey = null;
 const checkoutError = ref('');
 const showAuthModal = ref(false); // opens when delivery order requires sign-in
 
@@ -1761,6 +1770,10 @@ const panelSelections = ref({});      // groupId → [selectedOptionId, ...]
 const panelShowErrors = ref(false);
 
 const openOptionPanel = (dish) => {
+  if (!dish.is_available) {
+    toastStore.show(t('menu.soldOutToast'), 'error', 2500);
+    return;
+  }
   trackRecentlyViewed(dish);
   const sel = {};
   for (const grp of dish.option_groups || []) sel[grp.id] = [];
@@ -1819,6 +1832,11 @@ const optionPanelUnitPrice = computed(() => {
 const confirmOptionSelection = () => {
   const dish = activeOptionDish.value;
   if (!dish) return;
+  if (!dish.is_available) {
+    toastStore.show(t('menu.soldOutToast'), 'error', 2500);
+    closeOptionPanel();
+    return;
+  }
   // Validate only when the dish actually has option groups
   if (dish.option_groups?.length && !optionPanelValid.value) {
     panelShowErrors.value = true;
@@ -2197,7 +2215,10 @@ const placeOrder = async () => {
     if (useLoyalty.value && loyaltyAvailable.value && loyaltyPoints.value > 0) {
       payload.redeem_points = loyaltyPoints.value;
     }
+    if (!checkoutIdemKey) checkoutIdemKey = newIdempotencyKey();
+    payload.idempotency_key = checkoutIdemKey;
     const res = await api.post('/marketplace/order/', payload);
+    checkoutIdemKey = null;
     // Optionally persist the delivery address for future orders.
     if (form.fulfillment_type === 'delivery' && saveAddressAfterOrder.value && form.delivery_address) {
       try {

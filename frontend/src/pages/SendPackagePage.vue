@@ -547,8 +547,10 @@
             class="ui-input w-full"
             :placeholder="t('sendPackage.recipientPhonePlaceholder')"
             :aria-label="t('sendPackage.recipientPhonePlaceholder')"
+            :aria-invalid="!!recipientPhoneError"
             required
           />
+          <p v-if="recipientPhoneError" role="alert" class="text-xs text-red-300">{{ recipientPhoneError }}</p>
           <textarea
             v-model="packageNote"
             class="ui-input w-full resize-none"
@@ -947,9 +949,28 @@ const canEstimate = computed(
     (dropoffLatLng.value || dropoffAddress.value.trim()),
 );
 
+// Light client-side pattern check — digits/+/spaces/dashes/parens only, at least
+// 8 digits. Catches obviously-invalid entries like "abc" before the API call;
+// the backend remains the source of truth for real validation.
+const PHONE_PATTERN = /^[0-9+\s()-]+$/;
+const isValidPhone = (value) => {
+  const trimmed = value.trim();
+  if (!trimmed || !PHONE_PATTERN.test(trimmed)) return false;
+  const digitCount = (trimmed.match(/\d/g) || []).length;
+  return digitCount >= 8;
+};
+
 const canRequest = computed(
-  () => recipientName.value.trim() !== '' && recipientPhone.value.trim() !== '',
+  () => recipientName.value.trim() !== '' && isValidPhone(recipientPhone.value),
 );
+
+// Inline error shown under the phone field once the user has typed something
+// invalid (only after non-empty input, so it doesn't nag on a blank field).
+const recipientPhoneError = computed(() => {
+  const trimmed = recipientPhone.value.trim();
+  if (!trimmed) return '';
+  return isValidPhone(trimmed) ? '' : t('sendPackage.recipientPhoneInvalid');
+});
 
 const minScheduleDate = computed(() => {
   const d = new Date();
@@ -1111,7 +1132,7 @@ const getEstimate = async () => {
 // ── Request package ───────────────────────────────────────────────────────────
 const requestPackage = async () => {
   if (!canRequest.value) {
-    errorMsg.value = t('sendPackage.recipientRequired');
+    errorMsg.value = recipientPhoneError.value || t('sendPackage.recipientRequired');
     return;
   }
   requesting.value = true;
@@ -1383,50 +1404,60 @@ const fetchHistory = async () => {
   }
 };
 
+const pollActiveTripOnce = async () => {
+  if (!activePackage.value?.id) { stopPolling(); return; }
+  const prevStatus = activePackage.value.status;
+  try {
+    const res = await api.get('/rides/active/');
+    const data = res.data;
+    // Handle both { ride, scheduled } and legacy flat shape
+    const rideData = (data && typeof data === 'object' && 'ride' in data)
+      ? data.ride
+      : (data?.id ? data : null);
+    if (data && typeof data === 'object' && 'scheduled' in data) {
+      scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
+        .filter((r) => r.kind === 'package');
+    }
+    if (rideData?.id && rideData.kind === 'package') {
+      activePackage.value = rideData;
+      if (['completed', 'cancelled'].includes(rideData.status)) {
+        stopPolling();
+        if (
+          rideData.status === 'cancelled' &&
+          ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
+          !cancelling.value
+        ) {
+          noDriverFound.value = true;
+          activePackage.value = null;
+          fetchHistory();
+        } else if (rideData.status === 'completed') {
+          fetchHistory();
+        }
+      }
+    } else {
+      // Active trip is gone or switched to a ride kind — stop
+      stopPolling();
+    }
+  } catch {
+    // ignore transient errors
+  }
+};
+
 const startPolling = () => {
   stopPolling();
-  pollTimer = setInterval(async () => {
-    if (!activePackage.value?.id) { stopPolling(); return; }
-    const prevStatus = activePackage.value.status;
-    try {
-      const res = await api.get('/rides/active/');
-      const data = res.data;
-      // Handle both { ride, scheduled } and legacy flat shape
-      const rideData = (data && typeof data === 'object' && 'ride' in data)
-        ? data.ride
-        : (data?.id ? data : null);
-      if (data && typeof data === 'object' && 'scheduled' in data) {
-        scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
-          .filter((r) => r.kind === 'package');
-      }
-      if (rideData?.id && rideData.kind === 'package') {
-        activePackage.value = rideData;
-        if (['completed', 'cancelled'].includes(rideData.status)) {
-          stopPolling();
-          if (
-            rideData.status === 'cancelled' &&
-            ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
-            !cancelling.value
-          ) {
-            noDriverFound.value = true;
-            activePackage.value = null;
-            fetchHistory();
-          } else if (rideData.status === 'completed') {
-            fetchHistory();
-          }
-        }
-      } else {
-        // Active trip is gone or switched to a ride kind — stop
-        stopPolling();
-      }
-    } catch {
-      // ignore transient errors
-    }
-  }, 5000);
+  pollTimer = setInterval(pollActiveTripOnce, 5000);
 };
 
 const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+};
+
+// Mobile browsers throttle/suspend background timers — resync immediately
+// when the tab regains focus instead of waiting for the next 5s tick.
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && activePackage.value?.id) {
+    pollActiveTripOnce();
+  }
 };
 
 // ── Leaflet: pick-map (drop-off pin) ─────────────────────────────────────────
@@ -1565,6 +1596,7 @@ onMounted(async () => {
     fetchHistory();
     fetchSavedAddresses();
   }
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 
 onBeforeUnmount(() => {
@@ -1573,5 +1605,6 @@ onBeforeUnmount(() => {
   clearTimeout(_shareToastTimer);
   destroyPickMap();
   destroyTrackingMap();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>

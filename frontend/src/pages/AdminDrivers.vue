@@ -466,6 +466,7 @@ const submitPayout = async () => {
   payError.value = '';
   const amount = parseFloat(payAmount.value);
   if (!amount || amount <= 0) { payError.value = t('adminDrivers.payoutInvalid'); return; }
+  if (amount > Number(detail.value.owed)) { payError.value = t('adminDrivers.payoutInvalid'); return; }
   paying.value = true;
   try {
     const res = await api.post(`/admin/drivers/${selected.value.id}/payout/`, {

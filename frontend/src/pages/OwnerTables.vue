@@ -168,15 +168,8 @@
       <article
         v-for="(table, index) in filteredTables"
         :key="table.id"
-        class="table-card ui-spotlight-card ui-reveal min-w-0 space-y-4 p-4 ui-press cursor-pointer"
-        :class="selectedTableId === table.id ? 'border-brand-secondary/60 shadow-brand-secondary/10' : ''"
+        class="table-card ui-spotlight-card ui-reveal min-w-0 space-y-4 p-4"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        tabindex="0"
-        role="button"
-        :aria-pressed="selectedTableId === table.id"
-        @click="selectedTableId = table.id"
-        @keydown.enter.prevent="selectedTableId = table.id"
-        @keydown.space.prevent="selectedTableId = table.id"
       >
         <!-- Card header — tenant brand + table name -->
         <div class="rounded-xl border border-slate-800/80 bg-slate-950/55 p-3.5">
@@ -494,7 +487,6 @@ const formMode = ref("create");
 const labelInputRef = ref(null);
 const searchQuery = ref("");
 const statusFilter = ref("all");
-const selectedTableId = ref(null);
 const { confirm } = useConfirmModal();
 const togglingId = ref(null);
 const deletingId = ref(null);
@@ -601,9 +593,6 @@ const generateQrBatch = async () => {
 
 const applyTables = async (list) => {
   tables.value = list;
-  if (!list.some((table) => table.id === selectedTableId.value)) {
-    selectedTableId.value = list[0]?.id ?? null;
-  }
   await generateQrBatch();
 };
 
@@ -729,9 +718,6 @@ const removeTable = async (table) => {
   try {
     await api.delete(`/tables/${table.id}/`);
     tables.value = tables.value.filter((item) => item.id !== table.id);
-    if (selectedTableId.value === table.id) {
-      selectedTableId.value = tables.value[0]?.id ?? null;
-    }
     writeCache(TABLES_CACHE_KEY, tables.value);
     toast.show(t("ownerTables.deleted"), "success");
   } catch (err) {

@@ -289,7 +289,18 @@
 
                 <!-- Cross-restaurant ledger -->
                 <div class="space-y-2">
-                  <p class="ui-kicker">{{ t('adminCustomers.ledgerTitle') }}</p>
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="ui-kicker">{{ t('adminCustomers.ledgerTitle') }}</p>
+                    <button
+                      v-if="ledgerStale"
+                      type="button"
+                      class="ui-touch-target inline-flex items-center gap-1 rounded px-2 text-[11px] font-medium text-amber-300 hover:text-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      @click="refreshLedger"
+                    >
+                      <AppIcon name="refresh" class="h-3 w-3" />
+                      {{ t('adminCustomers.ledgerStale') }}
+                    </button>
+                  </div>
                   <div v-if="!detail.transactions.length" class="ui-empty-state py-3 text-center">
                     <p class="text-xs text-slate-400">{{ t('adminCustomers.ledgerEmpty') }}</p>
                   </div>
@@ -405,6 +416,7 @@ const togglingDriver = ref(false);
 const orders = ref([]);
 const loadingOrders = ref(false);
 const ordersScanned = ref(0);
+const ledgerStale = ref(false);
 
 const ORDER_STATUS_KEY = {
   pending: 'orderStatus.statusPending',
@@ -443,6 +455,16 @@ const TX_KEY = {
 const txLabel = (type) => t(TX_KEY[type] || 'customerAccount.walletTxFallback');
 const isOutflow = (type) => type === 'payment' || type === 'transfer_out';
 
+const refreshLedger = () => {
+  if (!selected.value) return;
+  ledgerStale.value = false;
+  return api.get(`/admin/customers/${selected.value.id}/`).then((r) => {
+    detail.value = r.data;
+  }).catch(() => {
+    ledgerStale.value = true;
+  });
+};
+
 const openDetail = async (c) => {
   selected.value = c;
   detail.value = null;
@@ -450,6 +472,7 @@ const openDetail = async (c) => {
   creditNote.value = '';
   creditError.value = '';
   creditKey = null;
+  ledgerStale.value = false;
   loadingDetail.value = true;
   try {
     const res = await api.get(`/admin/customers/${c.id}/`);
@@ -484,8 +507,10 @@ const creditWallet = async () => {
     syncRow({ wallet_balance: res.data.new_balance });
     creditAmount.value = '';
     creditNote.value = '';
-    // refresh the ledger quietly (no skeleton flash)
-    api.get(`/admin/customers/${selected.value.id}/`).then((r) => { detail.value = r.data; }).catch(() => {});
+    // refresh the ledger quietly (no skeleton flash); retry once on failure, else flag as stale
+    api.get(`/admin/customers/${selected.value.id}/`).then((r) => {
+      detail.value = r.data;
+    }).catch(() => refreshLedger());
   } catch (err) {
     creditError.value = err?.response?.data?.detail || t('adminCustomers.creditFailed');
   } finally {

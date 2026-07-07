@@ -300,10 +300,10 @@ const filteredRestaurants = computed(() => {
   if (q) {
     list = list.filter(
       (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.cuisine_type.toLowerCase().includes(q) ||
-        r.city.toLowerCase().includes(q) ||
-        r.tagline.toLowerCase().includes(q)
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.cuisine_type || '').toLowerCase().includes(q) ||
+        (r.city || '').toLowerCase().includes(q) ||
+        (r.tagline || '').toLowerCase().includes(q)
     );
   }
   if (selectedCity.value) {

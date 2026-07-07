@@ -486,6 +486,14 @@ const save = async () => {
     if (!thr || thr < 1) { saveError.value = t('ownerLoyalty.validationThreshold'); return; }
     if (!val || val <= 0) { saveError.value = t('ownerLoyalty.validationValue'); return; }
   }
+  if (form.tier_enabled) {
+    const silverThr = Number(form.tier_silver_threshold);
+    const goldThr = Number(form.tier_gold_threshold);
+    const silverMul = Number(form.tier_silver_multiplier);
+    const goldMul = Number(form.tier_gold_multiplier);
+    if (!(goldThr > silverThr)) { saveError.value = t('ownerLoyalty.validationTierThreshold'); return; }
+    if (!(silverMul >= 1) || !(goldMul >= 1)) { saveError.value = t('ownerLoyalty.validationTierMultiplier'); return; }
+  }
   saving.value = true;
   try {
     const res = await api.patch('/owner/loyalty/', {

@@ -130,6 +130,7 @@ const results = ref([]);
 const errorMsg = ref("");
 
 const search = async () => {
+  if (loading.value) return;
   const digits = phone.value.replace(/\D/g, "");
   if (digits.length < 6) return;
   loading.value = true;

@@ -592,7 +592,7 @@ const exportCsv = async () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch {
-    // silently fail — UI already shows the data
+    toast.show(t("ownerCustomers.exportError"), "error");
   } finally {
     exporting.value = false;
   }
@@ -700,10 +700,13 @@ const submitGrantPoints = async () => {
   grantModal.loading = true;
   grantModal.error = "";
   try {
-    await api.post(`/owner/customers/${grantModal.customerId}/loyalty-grant/`, {
+    const res = await api.post(`/owner/customers/${grantModal.customerId}/loyalty-grant/`, {
       delta,
       reason: grantModal.reason.trim(),
     });
+    // update in-place so the card reflects the new balance immediately
+    const idx = customers.value.findIndex((x) => x.customer_id === grantModal.customerId);
+    if (idx >= 0) customers.value[idx] = { ...customers.value[idx], loyalty_points: res.data.loyalty_points };
     toast.show(t("ownerCustomers.grantPointsSuccess"), "success");
     closeGrantModal();
   } catch {

@@ -476,6 +476,10 @@
             <AppIcon v-else name="wallet" class="h-4 w-4 shrink-0" aria-hidden="true" />
             {{ payingWallet ? t('orderStatus.payingWallet') : t('orderStatus.payWithWallet', { amount: formatCurrency(orderData.amount_due, orderData.currency) }) }}
           </button>
+          <div v-if="walletPayError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <p class="flex-1 text-sm text-red-300">{{ walletPayError }}</p>
+          </div>
           <p class="text-center text-[11px] text-slate-500">
             {{ t('orderStatus.walletBalanceLine', { balance: formatCurrency(orderData.wallet_balance, orderData.currency) }) }}
           </p>
@@ -497,7 +501,7 @@
               <button
                 class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold border-red-400/30 text-red-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
                 :disabled="cancelling"
-                @click="cancelConfirming = true"
+                @click="cancelConfirming = true; cancelError = ''"
               >
                 {{ t('orderStatus.cancelOrder') }}
               </button>
@@ -537,6 +541,10 @@
               </div>
             </div>
           </Transition>
+          <div v-if="cancelError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <p class="flex-1 text-sm text-red-300">{{ cancelError }}</p>
+          </div>
           <p class="text-center text-[11px] text-slate-500">{{ t('orderStatus.cancelHint') }}</p>
         </template>
       </div>
@@ -1148,19 +1156,20 @@ const fetchStatus = async () => {
 
 // Pay the open bill from the customer's wallet (e.g. settling a dine-in tab).
 const payingWallet = ref(false);
+const walletPayError = ref("");
 const payWithWallet = async () => {
   if (payingWallet.value) return;
   payingWallet.value = true;
+  walletPayError.value = "";
   try {
     await api.post(`/orders/${props.orderNumber}/pay-wallet/`);
     await fetchStatus(); // refresh → flips to Paid, hides the button
     toast.show(t("orderStatus.walletPaidOk"), "success");
   } catch (err) {
     const code = err?.response?.data?.code;
-    toast.show(
-      code === "insufficient" ? t("orderStatus.walletInsufficient") : t("orderStatus.walletPayError"),
-      "error",
-    );
+    const message = code === "insufficient" ? t("orderStatus.walletInsufficient") : t("orderStatus.walletPayError");
+    walletPayError.value = message;
+    toast.show(message, "error");
   } finally {
     payingWallet.value = false;
   }
@@ -1169,9 +1178,11 @@ const payWithWallet = async () => {
 // Self-cancel an early pickup/delivery order (wallet auto-refunds server-side).
 const cancelling = ref(false);
 const cancelConfirming = ref(false);
+const cancelError = ref("");
 const cancelOrder = async () => {
   if (cancelling.value) return;
   cancelling.value = true;
+  cancelError.value = "";
   try {
     await api.post(`/order-status/${props.orderNumber}/cancel/`);
     await fetchStatus(); // refresh → flips to Cancelled, hides the button
@@ -1179,10 +1190,9 @@ const cancelOrder = async () => {
     cancelConfirming.value = false;
   } catch (err) {
     const code = err?.response?.data?.code;
-    toast.show(
-      code === "not_cancellable" ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed"),
-      "error",
-    );
+    const message = code === "not_cancellable" ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed");
+    cancelError.value = message;
+    toast.show(message, "error");
     cancelConfirming.value = false;
   } finally {
     cancelling.value = false;

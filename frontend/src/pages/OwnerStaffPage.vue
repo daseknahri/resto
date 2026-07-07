@@ -201,11 +201,17 @@
             </p>
           </div>
           <button
-            class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors ui-press ui-touch-target"
+            class="relative shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors ui-press ui-touch-target"
             :aria-expanded="expandedIds.has(member.id)"
             :aria-controls="'staff-panel-' + member.id"
             @click="toggleExpanded(member.id)"
           >
+            <span
+              v-if="saveError[member.id] && !expandedIds.has(member.id)"
+              class="absolute -top-1 -end-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-900"
+              :title="saveError[member.id]"
+              aria-hidden="true"
+            />
             {{ t("ownerStaff.manage") }}
             <svg
               class="h-3 w-3 transition-transform duration-200"

@@ -1067,6 +1067,7 @@ const manualRefresh = () => {
   void tenant.fetchMeta();
   void fetchRatings();
   void fetchTodayReservations();
+  void fetchDrawerState();
   // Re-fetch readiness data (counts, sold-out count) so the readiness card and
   // the alerts that depend on it stay in sync.
   readinessRef.value?.load();

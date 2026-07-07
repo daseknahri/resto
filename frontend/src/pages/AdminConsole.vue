@@ -321,8 +321,16 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="tenantsLoading" @click="fetchTenants(tenantPage)">{{ t("adminConsole.refreshTenants") }}</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
-      <div v-if="tenantsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
+        <span
+          v-if="tenantsLoading && tenants.length"
+          class="text-[11px] text-slate-500 tabular-nums"
+          role="status"
+          aria-live="polite"
+        >{{ t("common.updating") }}</span>
+      </div>
+      <div v-if="tenantsLoading && !tenants.length" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article v-for="n in tenantPageSize" :key="`tenant-skeleton-${n}`" class="ui-admin-card space-y-3">
           <div class="flex items-center justify-between gap-3">
             <div class="ui-skeleton h-4 w-36 rounded-full"></div>
@@ -345,7 +353,11 @@
         <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noTenantRecordsFound") }}</h3>
         <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.suspendReactivateCancel") }}</p>
       </article>
-      <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div
+        v-else
+        class="grid gap-3 transition-opacity duration-150 md:grid-cols-2 xl:grid-cols-3"
+        :class="tenantsLoading ? 'opacity-60' : ''"
+      >
         <article
           v-for="(tenant, index) in tenants"
           :key="`tenant-${tenant.id}`"
@@ -401,6 +413,7 @@
               {{ t("adminConsole.cancel") }}
             </button>
           </div>
+          <div class="mt-1 space-y-2 border-t border-slate-800 pt-3">
           <button
             class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
             @click="openLiveOrdersModal(tenant)"
@@ -509,6 +522,7 @@
                 </ul>
               </template>
             </div>
+          </div>
           </div>
         </article>
       </div>
@@ -837,6 +851,13 @@
                 :placeholder="t('adminConsole.flagConfigPlaceholder')"
                 @input="flag.configText = $event.target.value; planFlagDirtyKeys = new Set([...planFlagDirtyKeys, `${plan.plan_code}:${flag.key}`])"
               />
+              <p
+                v-if="planFlagErrors[planFlagStateKey(plan.plan_code, flag.key)]"
+                role="alert"
+                class="text-[11px] text-red-300"
+              >
+                {{ planFlagErrors[planFlagStateKey(plan.plan_code, flag.key)] }}
+              </p>
               <div class="flex items-center justify-between gap-2">
                 <span class="text-[11px]" :class="planFlagDirtyKeys.has(`${plan.plan_code}:${flag.key}`) ? 'text-amber-400' : 'text-slate-500'">
                   {{ flag.key }}{{ planFlagDirtyKeys.has(`${plan.plan_code}:${flag.key}`) ? ' •' : '' }}
@@ -1335,6 +1356,10 @@
             <div v-for="n in 6" :key="`dl-sk-${n}`" class="ui-skeleton h-8 rounded-lg"></div>
           </div>
           <div v-else class="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+            <div v-if="deliveryFormError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ deliveryFormError }}</p>
+            </div>
             <label class="block space-y-1">
               <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.fee") }}</span>
               <input
@@ -1543,6 +1568,7 @@ const planFeatureRows = ref([]);
 const planFlagsLoading = ref(false);
 const planFlagDirtyKeys = ref(new Set()); // tracks "planCode:flagKey" pairs with unsaved changes
 const planFlagSaving = ref({});
+const planFlagErrors = ref({}); // keyed by planFlagStateKey; per-flag validation error text
 const adminPanels = ref({
   alerts: false,
   planFlags: false,
@@ -1780,6 +1806,7 @@ const fetchPlanFeatureFlags = async () => {
     const rows = Array.isArray(res?.data?.plans) ? res.data.plans : [];
     planFeatureRows.value = rows.map((row) => normalizePlanFeatureRow(row));
     planFlagDirtyKeys.value = new Set(); // clear any unsaved state — we just loaded fresh data
+    planFlagErrors.value = {};
     loadedAdminViews.value = { ...loadedAdminViews.value, plans: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadPlanFeatureFlagsFailed"));
@@ -1795,6 +1822,12 @@ const savePlanFeatureFlag = async (plan, flag) => {
   const key = String(flag?.key || "").trim();
   if (!planCode || !key) return;
   const stateKey = planFlagStateKey(planCode, key);
+  // Clear any previous validation error for this flag before re-attempting.
+  if (planFlagErrors.value[stateKey]) {
+    const nextErrors = { ...planFlagErrors.value };
+    delete nextErrors[stateKey];
+    planFlagErrors.value = nextErrors;
+  }
   planFlagSaving.value = { ...planFlagSaving.value, [stateKey]: true };
   try {
     let config = null;
@@ -1802,8 +1835,7 @@ const savePlanFeatureFlag = async (plan, flag) => {
       config = parseFlagConfigText(flag.configText);
     } catch {
       const msg = t("adminConsole.invalidFlagConfig");
-      error.value = msg;
-      toast.show(msg, "error");
+      planFlagErrors.value = { ...planFlagErrors.value, [stateKey]: msg };
       return;
     }
 
@@ -2760,6 +2792,7 @@ const closeLiveOrdersModal = () => {
 // ── Delivery pricing modal ─────────────────────────────────────────────────
 const deliveryDialogRef = ref(null);
 const deliveryModal = ref({ open: false, tenant: null, loading: false, saving: false });
+const deliveryFormError = ref("");
 const deliveryForm = ref({
   delivery_fee: 0,
   delivery_base_fee: 0,
@@ -2803,6 +2836,7 @@ watch(() => deliveryModal.value.open, async (open) => {
 
 const openDeliveryModal = async (tenant) => {
   deliveryModal.value = { open: true, tenant, loading: true, saving: false };
+  deliveryFormError.value = "";
   deliveryForm.value = {
     delivery_fee: 0,
     delivery_base_fee: 0,
@@ -2842,10 +2876,46 @@ const closeDeliveryModal = () => {
   deliveryModal.value.open = false;
 };
 
+// Clamps out-of-range delivery pricing fields before they ever reach the API.
+// Commission is bounded 0-100; monetary fields must be >= 0 (a pasted negative
+// or absurd value is rejected rather than silently sent through).
+const validateDeliveryForm = (f) => {
+  const nonNegativeFields = [
+    ["delivery_fee", "adminConsole.delivery.fee"],
+    ["delivery_base_fee", "adminConsole.delivery.baseFee"],
+    ["delivery_per_km", "adminConsole.delivery.perKm"],
+    ["delivery_free_over", "adminConsole.delivery.freeOver"],
+    ["delivery_minimum_order", "adminConsole.delivery.minimumOrder"],
+  ];
+  for (const [field, labelKey] of nonNegativeFields) {
+    const value = f[field];
+    if (value === "" || value === null || value === undefined || Number.isNaN(Number(value)) || Number(value) < 0) {
+      return t("adminConsole.delivery.invalidValue", { field: t(labelKey) });
+    }
+  }
+  const commission = Number(f.delivery_commission_pct);
+  if (Number.isNaN(commission) || commission < 0 || commission > 100) {
+    return t("adminConsole.delivery.invalidValue", { field: t("adminConsole.delivery.commissionPct") });
+  }
+  if (f.delivery_radius_km_raw !== "" && f.delivery_radius_km_raw !== null) {
+    const radius = Number(f.delivery_radius_km_raw);
+    if (Number.isNaN(radius) || radius < 0) {
+      return t("adminConsole.delivery.invalidValue", { field: t("adminConsole.delivery.radiusKm") });
+    }
+  }
+  return "";
+};
+
 const saveDeliveryPricing = async () => {
   if (deliveryModal.value.saving) return;
-  deliveryModal.value.saving = true;
   const f = deliveryForm.value;
+  const validationError = validateDeliveryForm(f);
+  if (validationError) {
+    deliveryFormError.value = validationError;
+    return;
+  }
+  deliveryFormError.value = "";
+  deliveryModal.value.saving = true;
   const payload = {
     delivery_fee: f.delivery_fee,
     delivery_base_fee: f.delivery_base_fee,
