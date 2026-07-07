@@ -319,6 +319,13 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
         "args": ("sweep_delivery_jobs",),
     },
+    "reconcile-driver-earnings": {
+        "task": "accounts.tasks.run_management_command",
+        # every 15 min — backfill any delivery earnings whose wallet credit failed after
+        # DELIVERED (idempotent; light scan, so a lower cadence than the 60s job sweep).
+        "schedule": 900.0,
+        "args": ("reconcile_driver_earnings",),
+    },
     "sweep-ride-requests": {
         "task": "accounts.tasks.run_management_command",
         # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.
