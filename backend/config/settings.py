@@ -743,7 +743,10 @@ _VALID_REFERRER_POLICIES = {
     "origin-when-cross-origin", "same-origin", "strict-origin",
     "strict-origin-when-cross-origin", "unsafe-url",
 }
-_referrer_raw = os.getenv("DJANGO_REFERRER_POLICY", "strict-origin-when-cross-origin").strip()
+# An unset OR empty env var means "use the default": coerce a blank value (e.g. an empty
+# Coolify variable) to the default so it doesn't trip the E023 warning on every worker
+# boot. A non-empty but invalid value still warns below — a real typo should be surfaced.
+_referrer_raw = (os.getenv("DJANGO_REFERRER_POLICY", "").strip() or "strict-origin-when-cross-origin")
 _referrer_tokens = [t.strip() for t in _referrer_raw.split(",") if t.strip()]
 if _referrer_tokens and all(t in _VALID_REFERRER_POLICIES for t in _referrer_tokens):
     SECURE_REFERRER_POLICY = ",".join(_referrer_tokens)
