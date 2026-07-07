@@ -146,6 +146,17 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
         vertical = vertical_for_tenant_id(tenant_id)
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
+    # Concurrency: _find_idempotent above ran BEFORE this row lock, so a same-key racer
+    # could have slipped past it. Now that we hold the customer row lock (a racer had to
+    # commit + release before we got here), re-check under the lock and replay its row
+    # instead of inserting a second one — which would double-credit the balance and then
+    # 500 on the unique idempotency_key. (READ COMMITTED: the committed row is now visible.)
+    if idempotency_key:
+        existing = _find_idempotent(idempotency_key)
+        if existing is not None:
+            if existing.customer_id != int(customer_id):
+                raise WalletError("idempotency key collision: belongs to another customer")
+            return existing
     if require_verified:
         _require_verified(cust)
     new_balance = (_money(cust.wallet_balance) + amount).quantize(_CENT)
@@ -203,6 +214,14 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
         vertical = vertical_for_tenant_id(tenant_id)
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
+    # Re-check idempotency under the row lock (see credit_wallet): replay a concurrent
+    # same-key winner instead of racing a second insert that would 500 on the unique key.
+    if idempotency_key:
+        existing = _find_idempotent(idempotency_key)
+        if existing is not None:
+            if existing.customer_id != int(customer_id):
+                raise WalletError("idempotency key collision: belongs to another customer")
+            return existing
     balance = _money(cust.wallet_balance)
 
     charge = min(amount, balance) if allow_partial else amount
@@ -271,6 +290,13 @@ def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_ke
         return existing
 
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
+    # Re-check idempotency under the tenant row lock (see credit_wallet).
+    if idempotency_key:
+        existing = _find_idempotent_float(idempotency_key)
+        if existing is not None:
+            if existing.tenant_id != int(tenant_id):
+                raise WalletError("idempotency key collision: belongs to another tenant")
+            return existing
     _require_active_tenant(tenant)
     new_balance = (_money(tenant.float_balance) + amount).quantize(_CENT)
     tenant.float_balance = new_balance
@@ -335,6 +361,17 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
     # Lock both rows in a stable order (tenant, then customer) to avoid deadlocks.
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
     cust = Customer.objects.select_for_update().get(pk=customer_id)
+    # Re-check idempotency under the row locks (see credit_wallet): replay a concurrent
+    # same-key winner as (float_tx, wallet_tx) rather than racing a second double-entry.
+    if idempotency_key:
+        existing = _find_idempotent_float(idempotency_key)
+        if existing is not None:
+            if existing.tenant_id != int(tenant_id):
+                raise WalletError("idempotency key collision: belongs to another tenant")
+            wallet_tx = WalletTransaction.objects.filter(
+                idempotency_key=f"{idempotency_key}:w"
+            ).first()
+            return existing, wallet_tx
     _require_active_tenant(tenant)
     _require_verified(cust)
 
@@ -435,6 +472,17 @@ def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_k
     recipient = locked.get(int(recipient_id))
     if sender is None or recipient is None:
         raise WalletError("sender or recipient not found")
+    # Re-check idempotency under the row locks (see credit_wallet): replay a concurrent
+    # same-key winner as (out_tx, in_tx) rather than racing a second double-entry.
+    if idempotency_key:
+        existing = _find_idempotent(idempotency_key)
+        if existing is not None:
+            if existing.customer_id != int(sender_id):
+                raise WalletError("idempotency key collision: belongs to another customer")
+            in_tx = WalletTransaction.objects.filter(
+                idempotency_key=f"{idempotency_key}:in"
+            ).first()
+            return existing, in_tx
     _require_verified(sender)
     _require_verified(recipient)
 

@@ -4988,6 +4988,15 @@ class MarketplacePlaceOrderView(APIView):
                             if _earn_cfg and _linked_customer is not None:
                                 from decimal import Decimal as _DloyMkt
                                 from django.db.models import F as _Fearn
+                                # Serialize milestone grants for this customer. On COD /
+                                # zero-total orders nothing else locks the Customer row (no
+                                # debit_wallet), so two concurrent orders could both pass the
+                                # first-order / birthday check-then-act and double-grant. Take
+                                # the row lock for the rest of this atomic block (re-entrant if
+                                # the wallet-paid path already locked it via debit_wallet).
+                                Customer.objects.select_for_update().filter(
+                                    pk=_linked_customer.pk
+                                ).first()
                                 # C3: tier multiplier
                                 _mkt_lifetime = int(getattr(_linked_customer, "lifetime_loyalty_points", 0) or 0)
                                 if getattr(_earn_cfg, "tier_enabled", False):
@@ -5008,13 +5017,18 @@ class MarketplacePlaceOrderView(APIView):
                                         lifetime_loyalty_points=_Fearn("lifetime_loyalty_points") + _pts,
                                     )
                                     _Order.objects.filter(pk=order.pk).update(points_earned=_pts)
-                                # C3: first-order bonus
+                                # C3: first-order bonus. Count ALL prior non-cancelled orders
+                                # (not just PAID): COD orders never reach PAID, so a PAID-only
+                                # count reads 0 for two concurrent COD first-orders and both
+                                # grant. Counted under the row lock above, so the losing racer
+                                # sees the winner's committed order and skips.
                                 _mkt_first_bonus = int(getattr(_earn_cfg, "first_order_bonus_points", 0) or 0)
                                 if _mkt_first_bonus > 0:
                                     _mkt_prior = _Order.objects.filter(
                                         customer_id=_linked_customer.pk,
-                                        payment_status=_Order.PaymentStatus.PAID,
-                                    ).exclude(pk=order.pk).count()
+                                    ).exclude(pk=order.pk).exclude(
+                                        status=_Order.Status.CANCELLED
+                                    ).count()
                                     if _mkt_prior == 0:
                                         Customer.objects.filter(pk=_linked_customer.pk).update(
                                             loyalty_points=_Fearn("loyalty_points") + _mkt_first_bonus,
@@ -5026,7 +5040,12 @@ class MarketplacePlaceOrderView(APIView):
                                     from django.utils import timezone as _tzMkt
                                     _mkt_today = _tzMkt.localtime(_tzMkt.now()).date()
                                     _mkt_bday = getattr(_linked_customer, "birthday", None)
-                                    _mkt_yr = getattr(_linked_customer, "loyalty_birthday_rewarded_year", None)
+                                    # Fresh-read the rewarded-year under the row lock above
+                                    # (NOT the stale _linked_customer snapshot) so a concurrent
+                                    # birthday order that already granted this year is seen.
+                                    _mkt_yr = Customer.objects.filter(
+                                        pk=_linked_customer.pk
+                                    ).values_list("loyalty_birthday_rewarded_year", flat=True).first()
                                     if (
                                         _mkt_bday is not None
                                         and _mkt_bday.month == _mkt_today.month
