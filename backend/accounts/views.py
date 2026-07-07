@@ -2824,6 +2824,11 @@ class AdminCustomerOrdersView(APIView):
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
 
 
+# OPS: TTL for the voucher-batch idempotency cache guard (see post()). 24h comfortably
+# covers a network-retry / double-submit window without pinning keys forever.
+ADMIN_VOUCHER_IDEM_TTL = 86400
+
+
 class AdminWalletVoucherView(APIView):
     """
     GET  /api/admin/wallet/vouchers/          — list recent vouchers (last 100)
@@ -2897,15 +2902,45 @@ class AdminWalletVoucherView(APIView):
             except (ValueError, TypeError):
                 pass
 
-        vouchers = WalletVoucher.objects.bulk_create([
-            WalletVoucher(
-                code=WalletVoucher.generate_code(),
-                amount=amount,
-                note=note,
-                expires_at=expires_at,
-            )
-            for _ in range(count)
-        ])
+        # OPS: voucher batches are real platform money. A flaky network retry or a
+        # double-submit must not mint duplicate batches. Dedupe on the client-supplied
+        # idempotency_key via the shared cache (the same backend the voucher-redeem
+        # lockout uses); cache.add is an atomic set-if-absent so concurrent duplicates
+        # race safely. All validation above runs first, so a rejected request never
+        # consumes the key.
+        from django.core.cache import cache as _idem_cache
+        raw_idem = str(request.data.get("idempotency_key") or "").strip()[:128] or None
+        idem_result_key = f"adminvoucher:result:{raw_idem}" if raw_idem else None
+        idem_lock_key = f"adminvoucher:lock:{raw_idem}" if raw_idem else None
+        if raw_idem:
+            cached = _idem_cache.get(idem_result_key)
+            if cached is not None:
+                # Exact replay of an already-completed batch — return the same codes
+                # without minting a second batch.
+                return Response({**cached, "idempotent_replay": True}, status=status.HTTP_200_OK)
+            if not _idem_cache.add(idem_lock_key, "1", ADMIN_VOUCHER_IDEM_TTL):
+                # This key is already in flight (a true concurrent double-submit) and its
+                # result isn't cached yet — refuse rather than duplicate.
+                return Response(
+                    {"detail": "A voucher batch with this idempotency key is already being processed."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        try:
+            vouchers = WalletVoucher.objects.bulk_create([
+                WalletVoucher(
+                    code=WalletVoucher.generate_code(),
+                    amount=amount,
+                    note=note,
+                    expires_at=expires_at,
+                )
+                for _ in range(count)
+            ])
+        except Exception:
+            # Free the key so a genuine retry after a server-side failure isn't blocked.
+            if idem_lock_key:
+                _idem_cache.delete(idem_lock_key)
+            raise
 
         log_admin_action(
             action=AdminAuditLog.Actions.VOUCHER_ISSUED,
@@ -2914,12 +2949,16 @@ class AdminWalletVoucherView(APIView):
             metadata={"amount": str(amount), "count": len(vouchers),
                       "expires_at": expires_at.isoformat() if expires_at else None},
         )
-        return Response({
+        payload = {
             "created": len(vouchers),
             "codes": [v.code for v in vouchers],
             "amount": str(amount),
             "expires_at": expires_at.isoformat() if expires_at else None,
-        }, status=status.HTTP_201_CREATED)
+        }
+        if raw_idem:
+            # Store the batch result so an exact replay returns the same codes.
+            _idem_cache.set(idem_result_key, payload, ADMIN_VOUCHER_IDEM_TTL)
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 # OPS-5g: per-actor failed-attempt lockout for voucher redemption. A voucher code is a
