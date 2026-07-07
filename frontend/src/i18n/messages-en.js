@@ -938,6 +938,7 @@ sendPackage: {
   recipientPhonePlaceholder: "Recipient phone",
   historyEmpty: "No past deliveries yet.",
   recipientRequired: "Recipient name and phone are required.",
+  recipientPhoneInvalid: "Enter a valid phone number",
   signInFirst: "Sign in to send a package.",
   errorRecipient: "Recipient name and phone are required.",
   historyTitle: "Past deliveries",
@@ -1393,6 +1394,8 @@ ownerMenuBuilder: {
   resultSkipped: "Rows skipped",
   resultWarnings: "Warnings",
   draftBadgeLabel: "{count} hidden",
+  importSuccessCategoriesOnly: "{count} category(ies) imported successfully.",
+  resultNothingImported: "Nothing was imported. Check the file and try again.",
 },
 ownerLoyalty: {
   kicker: "Loyalty",
@@ -1444,6 +1447,8 @@ ownerLoyalty: {
   firstOrderBonusHint: "Awarded on a customer's first order at your business.",
   birthdayBonusLabel: "Birthday bonus (pts)",
   birthdayBonusHint: "Awarded when a customer with a birthday on file places an order on their birthday.",
+  validationTierThreshold: "Gold tier threshold must be higher than the silver tier threshold.",
+  validationTierMultiplier: "Tier multipliers must be at least 1.",
 },
 driver: {
   kicker: "Delivery",
@@ -1691,6 +1696,7 @@ adminRides: {
   faresSave: "Save fares",
   kindRide: "Ride",
   kindPackage: "Package",
+  faresNoChanges: "No changes to save",
 },
 walletCharge: {
   kicker: "Wallet",
@@ -1813,6 +1819,9 @@ adminFlashSales: {
   deleted: "Flash sale deleted.",
   deleteFailed: "Could not delete the flash sale.",
   updateFailed: "Could not update the flash sale.",
+  discountRange: "Discount must be between 1% and 100%.",
+  activeUntilBeforeFrom: "End date must be after the start date.",
+  activeUntilInPast: "End date must be in the future.",
 },
 adminDeliveryJobs: {
   kicker: "Platform Admin",
@@ -1878,6 +1887,7 @@ adminCustomers: {
   ordersTitle: "Orders (all restaurants)",
   ordersEmpty: "No orders found.",
   txAdjustment: "Adjustment",
+  ledgerStale: "Ledger may be out of date — tap to retry",
 },
 adminWallet: {
   kicker: "Platform admin",
@@ -2028,6 +2038,7 @@ ownerCustomers: {
   loadingMore: "Loading…",
   noMore: "All customers loaded.",
   searching: "Searching…",
+  exportError: "Export failed. Please try again.",
 },
 ownerStaff: {
   kicker: "Staff",
@@ -2369,6 +2380,7 @@ waiterPage: {
   compReasonOther: "Other",
   compReasonOtherPlaceholder: "Reason…",
   compReasonRequired: "Choose a reason before comping.",
+  tableStatusStale: "Table statuses may be out of date — retrying automatically.",
 },
 repeatAnalytics: {
   title: "Repeat Business",
@@ -3282,6 +3294,9 @@ cartPage: {
   orderingPaused: "This restaurant isn't accepting new orders right now. Please try again shortly.",
   orderingPausedUntil: "This restaurant isn't accepting new orders right now. Ordering resumes at {time}.",
   dineInUnavailable: "Dine-in ordering isn't available for this restaurant.",
+  tipHighConfirmTitle: "Confirm your tip amount",
+  tipHighConfirmBody: "You're about to tip {amount}, which is more than your order total. Continue with this tip?",
+  tipHighConfirmYes: "Yes, place order",
 },
 dishPage: {
   loadingDish: "Loading dish...",
@@ -3519,7 +3534,9 @@ reservationPage: {
   bookDirectly: "Book directly",
   bookingSummary: "Your reservation",
   contactSupport: "Need help?",
-  directBookingHint: "This restaurant also accepts reservations on an external platform."
+  directBookingHint: "This restaurant also accepts reservations on an external platform.",
+  pastDateError: "Please choose a date from today onward.",
+  pastTimeError: "Please choose a time that hasn't passed yet."
 },
 ownerAnalytics: {
   kicker: "Performance",
@@ -4002,6 +4019,7 @@ ownerBilling: {
   invoiceNotReady: "Invoice not yet available — contact support to complete your invoice.",
   dataExportSuccess: "Export downloaded.",
   commissionDownloaded: "Commission statement downloaded.",
+  commissionFuturePeriod: "That period hasn't happened yet — choose the current month or an earlier one.",
 },
 adminConsole: {
   loadJobsFailed: "Unable to load jobs (login as admin)",
@@ -4222,7 +4240,8 @@ adminConsole: {
     saved: "Delivery pricing updated",
     saveFailed: "Unable to save delivery pricing",
     loadFailed: "Unable to load delivery config",
-    close: "Close"
+    close: "Close",
+    invalidValue: "{field} must be a valid non-negative number (commission must be 0-100)."
   },
   liveOrders: {
     button: "View live orders",
@@ -4254,6 +4273,9 @@ adminConsole: {
   insuranceLink: "Insurance",
 },
 ownerReservations: {
+  preparedFirstOpenedRestCopied: "Prepared {count} reminders. Only the first chat was opened automatically -- the rest were copied to your clipboard and still need to be sent manually.",
+  clearPendingConfirmTitle: "Clear {count} pending reminders?",
+  clearPendingConfirmBody: "These reminders have not been marked as opened or failed yet. Clearing them now means you will lose track of whether they were actually sent.",
   kicker: "Owner inbox",
   title: "Reservation Requests",
   description: "Manage table reservation leads from your menu landing. Update status as you contact guests.",
@@ -4668,6 +4690,8 @@ ownerOrders: {
   filterSheetTitle: "Order filters",
   filterActiveCount: "{n} active",
   eightySixBoardBtn: "86 Board",
+  loadPaymentsFailed: "Couldn't load payments. Tap to try again.",
+  dateRangeSwapped: "Start and end dates were swapped so the range is valid.",
 },
 orderHandling: {
   tabLabel: "Orders",
@@ -5466,6 +5490,7 @@ customerAccount: {
   notSignedInTitle: "Sign in to your account",
   notSignedInBody: "Create a free account to track your orders and speed up delivery checkout.",
   signIn: "Sign in / Create account",
+  sessionExpired: "Your session expired — please sign in again to continue.",
   profileTitle: "Profile",
   namePlaceholder: "Your name",
   nameLabel: "Name",

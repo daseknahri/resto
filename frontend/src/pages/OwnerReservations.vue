@@ -684,6 +684,7 @@
 import { computed, onActivated, onMounted, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import ReservationCalendar from "../components/ReservationCalendar.vue";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/escape";
@@ -697,6 +698,7 @@ import { useToastStore } from "../stores/toast";
 const RES_CACHE = "owner.reservations";
 
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const { t, formatDateTime } = useI18n();
 const viewMode = ref("list"); // "list" | "calendar"
 const selectedCalendarRes = ref(null);
@@ -1058,6 +1060,10 @@ const bulkRetryReminders = async () => {
 
     if (!preparedCount) {
       toast.show(t("ownerReservations.noRemindersPrepared"), "info");
+    } else if (firstPopup && links.length > 1) {
+      // Only the first link is auto-opened; the rest were copied to the clipboard
+      // and still need to be sent manually, so say so explicitly.
+      toast.show(t("ownerReservations.preparedFirstOpenedRestCopied", { count: preparedCount }), "success");
     } else if (firstPopup) {
       toast.show(t("ownerReservations.preparedAndOpened", { count: preparedCount }), "success");
     } else {
@@ -1089,7 +1095,15 @@ const bulkRetryReminders = async () => {
   }
 };
 
-const clearPendingReminderReconciliation = () => {
+const clearPendingReminderReconciliation = async () => {
+  if (!pendingReminderReconciliation.value.length) return;
+  const ok = await confirm({
+    title: t("ownerReservations.clearPendingConfirmTitle", { count: pendingReminderReconciliation.value.length }),
+    body: t("ownerReservations.clearPendingConfirmBody"),
+    confirmLabel: t("ownerReservations.clearPending"),
+    danger: true,
+  });
+  if (!ok) return;
   pendingReminderReconciliation.value = [];
 };
 

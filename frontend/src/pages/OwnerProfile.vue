@@ -33,134 +33,143 @@
       :aria-labelledby="'owner-profile-tab-' + activeTab"
       class="focus-visible:outline-none"
     >
-      <section
+      <div
         v-if="activeTab === 'orders'"
-        class="ui-workspace-stage ui-reveal space-y-5 p-4 sm:p-5"
+        class="space-y-4"
       >
-        <header class="space-y-1">
-          <h3 class="text-lg font-semibold text-white">{{ t("orderHandling.title") }}</h3>
-          <p class="text-sm text-white/60">{{ t("orderHandling.subtitle") }}</p>
-        </header>
+        <section
+          class="ui-panel ui-reveal space-y-4 p-4 sm:p-5"
+          aria-labelledby="oh-order-handling-title"
+        >
+          <header class="space-y-1">
+            <h3 id="oh-order-handling-title" class="text-lg font-semibold text-white">{{ t("orderHandling.title") }}</h3>
+            <p class="text-sm text-white/60">{{ t("orderHandling.subtitle") }}</p>
+          </header>
 
-        <div class="ui-panel-soft flex items-start justify-between gap-4 p-4">
-          <div class="min-w-0 space-y-1">
-            <p class="text-sm font-medium text-white">{{ t("orderHandling.autoAcceptLabel") }}</p>
-            <p class="text-xs text-white/55">{{ t("orderHandling.autoAcceptHint") }}</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="autoAccept"
-            :aria-label="t('orderHandling.autoAcceptLabel')"
-            class="ui-touch-target shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors"
-            :class="autoAccept ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
-            :disabled="ohSaving"
-            @click="autoAccept = !autoAccept"
-          >
-            {{ autoAccept ? t("orderHandling.on") : t("orderHandling.off") }}
-          </button>
-        </div>
-
-        <div class="ui-panel-soft space-y-2 p-4">
-          <label for="oh-prep" class="block text-sm font-medium text-white">{{ t("orderHandling.prepLabel") }}</label>
-          <p class="text-xs text-white/55">{{ t("orderHandling.prepHint") }}</p>
-          <div class="flex items-center gap-3">
-            <button
-              type="button"
-              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-              :disabled="ohSaving || prepMinutes <= 5"
-              :aria-label="t('orderHandling.prepDecrease')"
-              @click="prepMinutes = Math.max(5, prepMinutes - 5)"
-            >−</button>
-            <input
-              id="oh-prep"
-              v-model.number="prepMinutes"
-              type="number"
-              inputmode="numeric"
-              min="5"
-              max="180"
-              class="ui-input w-20 text-center"
-            />
-            <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
-            <button
-              type="button"
-              class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-              :disabled="ohSaving || prepMinutes >= 180"
-              :aria-label="t('orderHandling.prepIncrease')"
-              @click="prepMinutes = Math.min(180, prepMinutes + 5)"
-            >+</button>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-between gap-3">
-          <p v-if="ohStatus" class="text-sm text-white/70" role="status">{{ ohStatus }}</p>
-          <button
-            type="button"
-            class="ui-btn-primary ui-press ms-auto"
-            :disabled="ohSaving"
-            @click="saveOrderHandling"
-          >
-            {{ ohSaving ? t("common.saving") : t("common.save") }}
-          </button>
-        </div>
-
-        <!-- ── Business hours editor ── -->
-        <header class="space-y-1 border-t border-white/10 pt-5">
-          <h3 class="text-base font-semibold text-white">{{ t("orderHandling.hoursTitle") }}</h3>
-          <p class="text-xs text-white/55">{{ t("orderHandling.hoursHint") }}</p>
-        </header>
-
-        <div class="ui-panel-soft space-y-1.5 p-4">
-          <div
-            v-for="(day, idx) in scheduleLocal"
-            :key="day.key"
-            class="flex flex-wrap items-center gap-2 py-1.5"
-            :class="idx < scheduleLocal.length - 1 ? 'border-b border-white/8' : ''"
-          >
-            <!-- Day label + enabled toggle -->
+          <div class="ui-panel-soft flex items-start justify-between gap-4 p-4">
+            <div class="min-w-0 space-y-1">
+              <p class="text-sm font-medium text-white">{{ t("orderHandling.autoAcceptLabel") }}</p>
+              <p class="text-xs text-white/55">{{ t("orderHandling.autoAcceptHint") }}</p>
+            </div>
             <button
               type="button"
               role="switch"
-              :aria-checked="day.enabled"
-              :aria-label="day.label"
-              class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-              :class="day.enabled
-                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-                : 'border-slate-700 bg-slate-900 text-slate-400'"
-              @click="day.enabled = !day.enabled"
-            >{{ day.label }}</button>
-            <!-- Time inputs (only active when day is enabled) -->
-            <template v-if="day.enabled">
-              <input
-                v-model="day.open"
-                type="time"
-                class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
-                :aria-label="t('orderHandling.hoursOpen', { day: day.label })"
-              />
-              <span class="text-slate-500">–</span>
-              <input
-                v-model="day.close"
-                type="time"
-                class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
-                :aria-label="t('orderHandling.hoursClose', { day: day.label })"
-              />
-            </template>
-            <span v-else class="text-xs text-slate-500">{{ t("orderHandling.hoursClosed") }}</span>
+              :aria-checked="autoAccept"
+              :aria-label="t('orderHandling.autoAcceptLabel')"
+              class="ui-touch-target shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors"
+              :class="autoAccept ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
+              :disabled="ohSaving"
+              @click="autoAccept = !autoAccept"
+            >
+              {{ autoAccept ? t("orderHandling.on") : t("orderHandling.off") }}
+            </button>
           </div>
-        </div>
 
-        <div class="flex items-center justify-between gap-3">
-          <p v-if="scheduleStatus" class="text-sm text-white/70" role="status">{{ scheduleStatus }}</p>
-          <button
-            type="button"
-            class="ui-btn-primary ui-press ms-auto"
-            :disabled="scheduleSaving"
-            @click="saveSchedule"
-          >
-            {{ scheduleSaving ? t("common.saving") : t("common.save") }}
-          </button>
-        </div>
-      </section>
+          <div class="ui-panel-soft space-y-2 p-4">
+            <label for="oh-prep" class="block text-sm font-medium text-white">{{ t("orderHandling.prepLabel") }}</label>
+            <p class="text-xs text-white/55">{{ t("orderHandling.prepHint") }}</p>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+                :disabled="ohSaving || prepMinutes <= 5"
+                :aria-label="t('orderHandling.prepDecrease')"
+                @click="prepMinutes = Math.max(5, prepMinutes - 5)"
+              >−</button>
+              <input
+                id="oh-prep"
+                v-model.number="prepMinutes"
+                type="number"
+                inputmode="numeric"
+                min="5"
+                max="180"
+                class="ui-input w-20 text-center"
+              />
+              <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
+              <button
+                type="button"
+                class="ui-touch-target rounded-full border border-slate-700 bg-slate-900 px-3 text-base font-semibold text-white ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+                :disabled="ohSaving || prepMinutes >= 180"
+                :aria-label="t('orderHandling.prepIncrease')"
+                @click="prepMinutes = Math.min(180, prepMinutes + 5)"
+              >+</button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3">
+            <p v-if="ohStatus" class="text-sm text-white/70" role="status">{{ ohStatus }}</p>
+            <button
+              type="button"
+              class="ui-btn-primary ui-press ms-auto"
+              :disabled="ohSaving"
+              @click="saveOrderHandling"
+            >
+              {{ ohSaving ? t("common.saving") : t("common.save") }}
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="ui-panel ui-reveal space-y-4 p-4 sm:p-5"
+          aria-labelledby="oh-hours-title"
+        >
+          <header class="space-y-1">
+            <h3 id="oh-hours-title" class="text-lg font-semibold text-white">{{ t("orderHandling.hoursTitle") }}</h3>
+            <p class="text-sm text-white/60">{{ t("orderHandling.hoursHint") }}</p>
+          </header>
+
+          <div class="ui-panel-soft space-y-1.5 p-4">
+            <div
+              v-for="(day, idx) in scheduleLocal"
+              :key="day.key"
+              class="flex flex-wrap items-center gap-2 py-1.5"
+              :class="idx < scheduleLocal.length - 1 ? 'border-b border-white/8' : ''"
+            >
+              <!-- Day label + enabled toggle -->
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="day.enabled"
+                :aria-label="day.label"
+                class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+                :class="day.enabled
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                  : 'border-slate-700 bg-slate-900 text-slate-400'"
+                @click="day.enabled = !day.enabled"
+              >{{ day.label }}</button>
+              <!-- Time inputs (only active when day is enabled) -->
+              <template v-if="day.enabled">
+                <input
+                  v-model="day.open"
+                  type="time"
+                  class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
+                  :aria-label="t('orderHandling.hoursOpen', { day: day.label })"
+                />
+                <span class="text-slate-500">–</span>
+                <input
+                  v-model="day.close"
+                  type="time"
+                  class="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-40"
+                  :aria-label="t('orderHandling.hoursClose', { day: day.label })"
+                />
+              </template>
+              <span v-else class="text-xs text-slate-500">{{ t("orderHandling.hoursClosed") }}</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3">
+            <p v-if="scheduleStatus" class="text-sm text-white/70" role="status">{{ scheduleStatus }}</p>
+            <button
+              type="button"
+              class="ui-btn-primary ui-press ms-auto"
+              :disabled="scheduleSaving"
+              @click="saveSchedule"
+            >
+              {{ scheduleSaving ? t("common.saving") : t("common.save") }}
+            </button>
+          </div>
+        </section>
+      </div>
 
       <component
         :is="activeComponent"

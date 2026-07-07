@@ -194,6 +194,14 @@
                 <p v-for="(err, i) in importResult.errors" :key="i" class="text-[11px] text-amber-200">&#x2022; {{ err }}</p>
               </div>
 
+              <div
+                v-if="!importResult.created_dishes && !importResult.created_categories"
+                class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3"
+                role="alert"
+              >
+                <p class="text-xs font-semibold text-slate-300">{{ t("ownerMenuBuilder.resultNothingImported") }}</p>
+              </div>
+
               <div class="flex gap-2">
                 <button class="ui-btn-outline ui-press flex-1" @click="resetImport">
                   {{ t("ownerMenuBuilder.importAgain") }}
@@ -402,6 +410,10 @@ const runImport = async () => {
     importResult.value = res.data;
     if (res.data.created_dishes > 0) {
       toast.show(t('ownerMenuBuilder.importSuccess', { count: res.data.created_dishes }), 'success');
+    } else if (res.data.created_categories > 0) {
+      toast.show(t('ownerMenuBuilder.importSuccessCategoriesOnly', { count: res.data.created_categories }), 'success');
+    } else {
+      toast.show(t('ownerMenuBuilder.resultNothingImported'), 'error');
     }
   } catch (err) {
     importError.value = err?.response?.data?.detail || t('ownerMenuBuilder.importFailed');

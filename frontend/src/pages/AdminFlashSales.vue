@@ -193,7 +193,7 @@ const fmtDate = (iso) => {
 };
 
 const fetchSales = async () => {
-  loading.value = true;
+  if (!sales.value.length) loading.value = true;
   fetchError.value = false;
   try {
     const res = await api.get('/admin/flash-sales/');
@@ -211,14 +211,29 @@ const createSale = async () => {
     createError.value = t('adminFlashSales.requiredFields');
     return;
   }
+  const discountValue = Number(form.discount_value);
+  if (!(discountValue > 0) || discountValue > 100) {
+    createError.value = t('adminFlashSales.discountRange');
+    return;
+  }
+  const fromDate = new Date(form.active_from);
+  const untilDate = new Date(form.active_until);
+  if (untilDate <= fromDate) {
+    createError.value = t('adminFlashSales.activeUntilBeforeFrom');
+    return;
+  }
+  if (untilDate <= new Date()) {
+    createError.value = t('adminFlashSales.activeUntilInPast');
+    return;
+  }
   creating.value = true;
   try {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
-      discount_value: Number(form.discount_value),
-      active_from: new Date(form.active_from).toISOString(),
-      active_until: new Date(form.active_until).toISOString(),
+      discount_value: discountValue,
+      active_from: fromDate.toISOString(),
+      active_until: untilDate.toISOString(),
     };
     if (form.max_redemptions) payload.max_redemptions = Number(form.max_redemptions);
     const res = await api.post('/admin/flash-sales/', payload);

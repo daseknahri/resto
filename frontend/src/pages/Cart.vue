@@ -1162,11 +1162,14 @@ const fetchSavedAddresses = async () => {
   }
 };
 
+const appliedSavedAddressId = ref(null);
+
 const applySavedAddress = (addr) => {
   deliveryAddress.value = addr.address;
   deliveryLocationUrl.value = addr.location_url || '';
   deliveryLat.value = addr.lat ?? null;
   deliveryLng.value = addr.lng ?? null;
+  appliedSavedAddressId.value = addr.id;
   clearFieldError('delivery_address');
   clearFieldError('delivery_location_url');
 };
@@ -1180,6 +1183,13 @@ const deleteSavedAddress = async (id) => {
   try {
     await api.delete(`/customer/addresses/${id}/`);
     savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
+    if (appliedSavedAddressId.value === id) {
+      appliedSavedAddressId.value = null;
+      deliveryAddress.value = '';
+      deliveryLocationUrl.value = '';
+      deliveryLat.value = null;
+      deliveryLng.value = null;
+    }
   } catch {
     toast.show(t('cartPage.addressDeleteFailed'), 'error');
   }
@@ -2127,6 +2137,7 @@ const validateForm = () => {
 };
 
 const applyPromoCode = async () => {
+  if (promoChecking.value) return;
   const code = promoCode.value.trim().toUpperCase();
   if (!code) return;
   promoError.value = '';
@@ -2434,6 +2445,15 @@ const placeInAppOrder = async () => {
     return;
   }
   if (!validateForm()) return;
+
+  if (tipHighWarning.value) {
+    const ok = await confirm({
+      title: t('cartPage.tipHighConfirmTitle'),
+      message: t('cartPage.tipHighConfirmBody', { amount: formatPrice(tipAmount.value) }),
+      confirmLabel: t('cartPage.tipHighConfirmYes'),
+    });
+    if (!ok) return;
+  }
 
   // Stale happy-hour guard: if any cart line was priced during a happy-hour
   // window that has since ended, refetch menu prices, update lines, and let the

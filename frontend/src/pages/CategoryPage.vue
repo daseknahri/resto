@@ -88,7 +88,7 @@
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
         class="ui-surface-lift ui-reveal group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-shadow duration-300"
-        :class="dish.is_available === false
+        :class="dish.is_available === false || dish.is_schedule_available === false
           ? 'border-slate-800/50 opacity-60'
           : cartQty(dish) > 0
             ? 'border-[var(--color-secondary)]/50 shadow-[0_20px_50px_rgba(245,158,11,0.12)]'
@@ -128,12 +128,12 @@
             </div>
             <!-- Sold-out frosted overlay on image -->
             <div
-              v-if="dish.is_available === false"
+              v-if="dish.is_available === false || dish.is_schedule_available === false"
               class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px]"
               aria-hidden="true"
             >
               <span class="rounded-full border border-slate-600/50 bg-slate-900/90 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
-                {{ t('menu.soldOut') }}
+                {{ dish.is_available === false ? t('menu.soldOut') : t('menu.notAvailableNow') }}
               </span>
             </div>
             <!-- Price badge -->
@@ -172,9 +172,9 @@
 
           <div class="mt-auto flex gap-2 pt-1">
             <span
-              v-if="dish.is_available === false"
+              v-if="dish.is_available === false || dish.is_schedule_available === false"
               class="flex flex-1 items-center justify-center rounded-xl border border-slate-700/40 bg-slate-800/40 py-2.5 text-xs font-semibold text-slate-500"
-            >{{ t('menu.soldOut') }}</span>
+            >{{ dish.is_available === false ? t('menu.soldOut') : t('menu.notAvailableNow') }}</span>
             <button
               v-else-if="!quickAddDisabled"
               class="ui-btn-primary ui-press flex-1 justify-center gap-1.5 py-2.5 text-sm font-semibold"
@@ -300,6 +300,10 @@ const handleCategoryImageError = (event) => withImageFallback(event);
 
 const addDishQuick = (dish) => {
   if (dish.is_available === false) return; // sold-out guard
+  if (dish.is_schedule_available === false) {
+    toast.show(t("menu.notAvailableNow"), "error");
+    return;
+  }
   if (isBrowseOnlyPlan.value) {
     toast.show(t("dishPage.orderingDisabledForPlan"), "info");
     return;

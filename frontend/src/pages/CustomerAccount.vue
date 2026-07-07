@@ -2313,7 +2313,6 @@ import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
-import { useMenuStore } from '../stores/menu';
 import { useCustomerStore } from '../stores/customer';
 import { useCurrencyStore } from '../stores/currency';
 import { useTenantStore } from '../stores/tenant';
@@ -2322,6 +2321,7 @@ import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useConfirmModal } from '../composables/useConfirmModal';
+import { useReorder } from '../composables/useReorder';
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
 import { groupWalletTransactionsByDate } from '../lib/walletHistory';
 
@@ -2332,7 +2332,7 @@ const tenantStore = useTenantStore();
 const cart = useCartStore();
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
-const menuStore = useMenuStore();
+const { reorderFromOrder } = useReorder();
 const router = useRouter();
 const route = useRoute();
 
@@ -2384,6 +2384,20 @@ const benefits = computed(() => [
 const showAuthModal = ref(false);
 const showAddPhone = ref(false);
 
+// Surgical 401 handling for authenticated customer-write calls: the global axios
+// instance (src/lib/api.js) intentionally excludes /customer/ (and other
+// customer-auth) endpoints from its automatic sign-out redirect, so a stale
+// session on a write call would otherwise fail silently / show a generic error.
+// Call this from a write site's catch block — it re-opens the sign-in modal and
+// returns true when the error was a 401, so the caller can `return` early instead
+// of also rendering its normal generic-failure message.
+const handleAuthExpired = (err) => {
+  if (err?.response?.status !== 401) return false;
+  toast.show(t('customerAccount.sessionExpired'), 'error');
+  showAuthModal.value = true;
+  return true;
+};
+
 // ── Order expand / reorder ────────────────────────────────────────────────────
 const expandedOrders = ref(new Set());
 const receiptOrder = ref(null);
@@ -2396,6 +2410,9 @@ const toggleOrder = (orderNumber) => {
   expandedOrders.value = s;
 };
 
+// Availability-safe reorder (unified code path): re-resolves each line against
+// the live menu via useReorder / POST /reorder-resolve/ (drops sold-out items,
+// refreshes prices, drops stale options) — identical to Menu.vue / OrderStatus.vue.
 const reorder = async (order) => {
   const items = order.items || [];
   if (!items.length) {
@@ -2413,50 +2430,8 @@ const reorder = async (order) => {
     if (!ok) return;
     cart.clear();
   }
-  // Ensure live menu data is loaded so we can resolve current prices.
-  if (!menuStore.categories.length) {
-    await menuStore.fetchCategories().catch(() => {});
-  }
-  // Build slug → live dish map from all loaded categories.
-  const dishMap = new Map();
-  for (const dishes of Object.values(menuStore.dishes || {})) {
-    for (const dish of dishes) {
-      if (dish.slug) dishMap.set(dish.slug, dish);
-    }
-  }
-  let priceChanged = false;
-  let dropped = false;
-  let added = 0;
-  for (const item of items) {
-    if (!item.dish_slug) continue;
-    const live = dishMap.get(item.dish_slug);
-    if (!live) { dropped = true; continue; }
-    const snapshotPrice = parseFloat(item.unit_price) || 0;
-    const livePrice = Number(live.price) || 0;
-    if (snapshotPrice !== livePrice) priceChanged = true;
-    cart.add({
-      slug: live.slug,
-      name: live.name || item.dish_name,
-      price: livePrice,
-      currency: order.currency || 'MAD',
-      qty: item.qty,
-      note: item.note || '',
-      option_ids: (item.options || []).map((o) => o.id).filter(Boolean),
-      option_labels: (item.options || []).map((o) => o.name).filter(Boolean),
-    });
-    added += 1;
-  }
-  // Nothing made it into the cart (menu changed entirely or fetch failed) —
-  // navigating to an empty cart with a "prices updated" toast would mislead.
-  if (!added) {
-    toast.show(t('customerAccount.reorderUnavailable'), 'error');
-    return;
-  }
-  if (priceChanged || dropped) {
-    toast.show(t('cartPage.reorderPriceNote'), 'info');
-  } else {
-    toast.show(t('customerAccount.reorderAdded'), 'success');
-  }
+  const result = await reorderFromOrder(order);
+  if (result.added <= 0) return;
   // Wallet pre-flight: warn if balance won't cover the cart total.
   const cartTotal = cart.items.reduce((s, i) => s + (i.unitPrice ?? i.price) * i.qty, 0);
   if (cartTotal > 0 && walletBalance.value < cartTotal) {
@@ -2499,6 +2474,7 @@ const saveEmail = async () => {
     customerStore.setCustomer(res.data.customer);
     showEmailInput.value = false;
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     emailError.value = err?.response?.data?.detail || t('customerAccount.emailSaveFailed');
   } finally {
     savingEmail.value = false;
@@ -2614,6 +2590,7 @@ const submitReview = async (order) => {
     }
     toast.show(t('customerAccount.reviewsSuccess'), 'success');
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     toast.show(err?.response?.data?.detail || t('customerAccount.reviewsError'), 'error');
   } finally {
     const s2 = new Set(submittingReview.value); s2.delete(num); submittingReview.value = s2;
@@ -2668,7 +2645,8 @@ const saveBirthday = async () => {
     const res = await api.patch('/customer/profile/', { birthday: editableBirthday.value || '' });
     customerStore.setCustomer({ ...customerStore.customer, birthday: res.data.birthday });
     toast.show(t('customerAccount.birthdaySaved'), 'success');
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     toast.show(t('common.saveFailed'), 'error');
   } finally {
     savingBirthday.value = false;
@@ -2732,6 +2710,7 @@ const linkReferralCodeSubmit = async () => {
     linkReferralCode.value = '';
     await customerStore.fetchCustomer(true);
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     const errCode = err?.response?.data?.code;
     if (errCode === 'already_linked') {
       linkReferralError.value = t('customerAccount.referralEnterAlreadyLinked');
@@ -2785,6 +2764,25 @@ const editError = ref('');
 const savingEdit = ref(false);
 const loadingAddresses = ref(false);
 
+// Best-effort geolocation capture for saved addresses — mirrors the Cart.vue
+// delivery-flow pattern (navigator.geolocation), but never blocks the save:
+// resolves { lat, lng } on success, or null on any denial/error/unsupported.
+const captureAddressCoords = () => new Promise((resolve) => {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    resolve(null);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position?.coords?.latitude;
+      const lng = position?.coords?.longitude;
+      resolve(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
+    },
+    () => resolve(null),
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+  );
+});
+
 const fetchAddresses = async () => {
   if (!customerStore.isAuthenticated) return;
   loadingAddresses.value = true;
@@ -2805,7 +2803,8 @@ const deleteAddress = async (id) => {
     savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
     deletingAddressId.value = null;
     toast.show(t('customerAccount.savedAddressDeleted'), 'success');
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     // Keep the confirm panel open so the user can see the error and retry.
     addrDeleteError.value = t('customerAccount.savedAddressDeleteFailed');
   }
@@ -2827,15 +2826,18 @@ const saveEdit = async () => {
   }
   savingEdit.value = true;
   try {
+    const coords = await captureAddressCoords();
     const res = await api.patch(`/customer/addresses/${editingAddressId.value}/`, {
       label: editForm.label.trim(),
       address: editForm.address.trim(),
+      ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
     });
     const idx = savedAddresses.value.findIndex((a) => a.id === editingAddressId.value);
     if (idx >= 0) savedAddresses.value[idx] = res.data;
     editingAddressId.value = null;
     toast.show(t('customerAccount.savedAddressEdited'), 'success');
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     editError.value = t('customerAccount.savedAddressEditFailed');
   } finally {
     savingEdit.value = false;
@@ -2856,9 +2858,11 @@ const addAddress = async () => {
   }
   savingAddress.value = true;
   try {
+    const coords = await captureAddressCoords();
     const res = await api.post('/customer/addresses/', {
       label: addrForm.label.trim(),
       address: addrForm.address.trim(),
+      ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
     });
     savedAddresses.value.unshift(res.data);
     addrForm.label = '';
@@ -2866,6 +2870,7 @@ const addAddress = async () => {
     addingAddress.value = false;
     toast.show(t('customerAccount.savedAddressSaved'), 'success');
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     const code = err?.response?.data?.code;
     addrError.value = code === 'address_limit'
       ? t('customerAccount.savedAddressLimit')
@@ -2921,6 +2926,7 @@ const redeemPoints = async () => {
     });
     redeemAmount.value = loyaltyConfig.value?.redeem_threshold || 100;
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     redeemError.value = err?.response?.data?.detail || t('customerAccount.loyaltyRedeemFailed');
   } finally {
     redeeming.value = false;
@@ -2951,6 +2957,7 @@ const redeemVoucher = async () => {
     await fetchWallet();
     voucherSuccess.value = t('customerAccount.voucherSuccess', { amount: res.data.credited });
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     voucherError.value = err?.response?.data?.detail || t('customerAccount.voucherError');
   } finally {
     voucherLoading.value = false;
@@ -3013,7 +3020,8 @@ const initTopUp = async () => {
     } else {
       topUpError.value = t('customerAccount.topUpError');
     }
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     topUpError.value = t('customerAccount.topUpError');
   } finally {
     topUpLoading.value = false;
@@ -3081,6 +3089,7 @@ const sendCredit = async () => {
     sendNote.value = '';
     await fetchWallet();
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     sendError.value = err?.response?.data?.detail || t('customerAccount.sendFailed');
   } finally {
     sending.value = false;
@@ -3396,11 +3405,12 @@ const saveServicePref = async (vertical, field, value) => {
       serviceProfiles.value[vertical].notify_updates = res.data.notify_updates;
       serviceProfiles.value[vertical].notify_promotions = res.data.notify_promotions;
     }
-  } catch {
+  } catch (err) {
     // Revert optimistic update on failure
     if (serviceProfiles.value[vertical]) {
       serviceProfiles.value[vertical][field] = !value;
     }
+    if (handleAuthExpired(err)) return;
     toast.show(t('customerAccount.prefSaveFailed'), 'error');
   } finally {
     savingServiceProfile.value = '';
@@ -3465,7 +3475,8 @@ const saveName = async () => {
   try {
     const res = await api.patch('/customer/profile/', { name: trimmed });
     customerStore.setCustomer(res.data.customer);
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     editableName.value = customerStore.customer?.name || '';
     toast.show(t('customerAccount.saveNameFailed'), 'error');
   } finally {
@@ -3480,7 +3491,8 @@ const savePref = async (field, value) => {
   try {
     const res = await api.patch('/customer/profile/', { [field]: value });
     customerStore.setCustomer(res.data.customer);
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     toast.show(t('customerAccount.prefSaveFailed'), 'error');
   } finally {
     savingPrefs.value = false;
@@ -3499,7 +3511,8 @@ const setLocale = async (code) => {
       localStorage.setItem(`locale_set_${customerStore.customer.id}`, '1');
     }
     toast.show(t('customerAccount.localeSaved'), 'success');
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     toast.show(t('customerAccount.localeSaveFailed'), 'error');
   } finally {
     savingLocale.value = false;
@@ -3559,6 +3572,7 @@ const requestErasure = async () => {
     toast.show(t('customerAccount.privacyDeleteDone'), 'success');
     router.push({ name: 'home' });
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     if (err?.response?.status === 409) {
       const errors = err.response.data?.errors || [];
       erasureBlockedMsg.value = errors.join(' · ') || t('customerAccount.privacyDeleteBlocked');

@@ -350,13 +350,19 @@ const cashoutCode = ref('');
 const cashoutPreview = ref(null);
 const cashoutBusy = ref(false);
 const cashoutError = ref('');
+// Snapshot of the exact code that was looked up — confirm sends THIS, not the
+// live cashoutCode binding, so a later autofill/paste/script mutation of the
+// (hidden-but-still-bound) input can't redirect the payout to a different code.
+let confirmedLookupCode = null;
 
 const lookupCashout = async () => {
   cashoutError.value = '';
   cashoutBusy.value = true;
+  const codeAtLookup = cashoutCode.value;
   try {
-    const { data } = await api.get('/owner/driver-cashout/', { params: { code: cashoutCode.value } });
+    const { data } = await api.get('/owner/driver-cashout/', { params: { code: codeAtLookup } });
     cashoutPreview.value = data;
+    confirmedLookupCode = codeAtLookup; // snapshot only on a successful lookup
   } catch (err) {
     cashoutError.value = err?.response?.data?.detail || t('ownerWallet.driverCashoutNotFound');
   } finally {
@@ -366,16 +372,26 @@ const lookupCashout = async () => {
 
 const confirmCashout = async () => {
   cashoutError.value = '';
+  // Defense in depth: if the visible code field changed since lookup, the
+  // preview is stale — force a fresh lookup rather than confirm a mismatched code.
+  if (cashoutCode.value !== confirmedLookupCode) {
+    cashoutPreview.value = null;
+    confirmedLookupCode = null;
+    cashoutError.value = t('ownerWallet.driverCashoutNotFound');
+    return;
+  }
   cashoutBusy.value = true;
   try {
-    const { data } = await api.post('/owner/driver-cashout/confirm/', { code: cashoutCode.value });
+    const { data } = await api.post('/owner/driver-cashout/confirm/', { code: confirmedLookupCode });
     toast.show(t('ownerWallet.driverCashoutPaid', { amount: fmtBalance(data.amount) }), 'success');
     cashoutPreview.value = null;
     cashoutCode.value = '';
+    confirmedLookupCode = null;
     fetchFloat(); // float just went up by the cash-out
   } catch (err) {
     cashoutError.value = err?.response?.data?.detail || t('ownerWallet.driverCashoutFailed');
     cashoutPreview.value = null;
+    confirmedLookupCode = null;
   } finally {
     cashoutBusy.value = false;
   }

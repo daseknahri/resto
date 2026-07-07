@@ -249,7 +249,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import adminApi from '../lib/adminApi';
@@ -378,7 +378,10 @@ const saveFares = async () => {
       changed[k] = String(v);
     }
   }
-  if (!Object.keys(changed).length) return;
+  if (!Object.keys(changed).length) {
+    toast.show(t('adminRides.faresNoChanges'), 'info');
+    return;
+  }
   faresSaving.value = true;
   try {
     const res = await adminApi.patch('/admin/settings/', changed);
@@ -394,8 +397,29 @@ const saveFares = async () => {
   }
 };
 
+// ── Live-ish polling: an ops board left open must not go stale for a whole shift ──
+const POLL_MS = 20000;
+let pollTimer = null;
+
+const onVisibilityChange = () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    fetchRides();
+  }
+};
+
 onMounted(() => {
   fetchRides();
   fetchFares();
+  pollTimer = setInterval(fetchRides, POLL_MS);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+});
+
+onUnmounted(() => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  }
 });
 </script>

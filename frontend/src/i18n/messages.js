@@ -918,6 +918,7 @@ export const messages = {
       rebookAriaLabel: "Rebook this ride",
     },
     sendPackage: {
+      recipientPhoneInvalid: "Enter a valid phone number",
       kicker: "Kepoli Courier",
       title: "Send a package",
       pickupLabel: "Pickup",
@@ -1376,6 +1377,8 @@ export const messages = {
       },
     },
     ownerMenuBuilder: {
+      importSuccessCategoriesOnly: "{count} category(ies) imported successfully.",
+      resultNothingImported: "Nothing was imported. Check the file and try again.",
       importCsv: "Import CSV",
       importTitle: "Import menu from CSV",
       importSubtitle: "Bulk-create categories and dishes from a spreadsheet.",
@@ -1398,6 +1401,8 @@ export const messages = {
       draftBadgeLabel: "{count} hidden",
     },
     ownerLoyalty: {
+      validationTierThreshold: "Gold tier threshold must be higher than the silver tier threshold.",
+      validationTierMultiplier: "Tier multipliers must be at least 1.",
       kicker: "Loyalty",
       title: "Loyalty Programme",
       subtitle: "Reward repeat customers with points they can redeem for wallet credits.",
@@ -1659,6 +1664,7 @@ export const messages = {
       codeLocked: "Too many attempts — wait a few minutes.",
     },
     adminRides: {
+      faresNoChanges: "No changes to save",
       kicker: "Platform",
       title: "Rides",
       subtitle: "Latest ride requests across the platform.",
@@ -1781,6 +1787,9 @@ export const messages = {
       historyEmpty: "No transactions yet.",
     },
     adminFlashSales: {
+      discountRange: "Discount must be between 1% and 100%.",
+      activeUntilBeforeFrom: "End date must be after the start date.",
+      activeUntilInPast: "End date must be in the future.",
       kicker: "Platform Admin",
       title: "Flash sales",
       subtitle: "Platform-sponsored discount campaigns restaurants opt into.",
@@ -1843,6 +1852,7 @@ export const messages = {
       statusFailed: "Failed",
     },
     adminCustomers: {
+      ledgerStale: "Ledger may be out of date — tap to retry",
       kicker: "Platform Admin",
       title: "Customers",
       subtitle: "Every customer on the platform — clients belong to the marketplace, not to a single restaurant.",
@@ -1962,6 +1972,7 @@ export const messages = {
       voucherCopied: "Copied!",
     },
     ownerCustomers: {
+      exportError: "Export failed. Please try again.",
       kicker: "Customer directory",
       title: "Customers",
       subtitle: "All-time customer profiles from orders",
@@ -2114,6 +2125,7 @@ export const messages = {
       utilityNav: "Utility navigation",
     },
     waiterPage: {
+      tableStatusStale: "Table statuses may be out of date — retrying automatically.",
       searchPlaceholder: "Search by table, order #, or name…",
       noActiveOrders: "All clear — no active orders",
       noActiveOrdersBody: "New orders will appear here automatically.",
@@ -3069,6 +3081,9 @@ export const messages = {
       }
     },
     cartPage: {
+      tipHighConfirmTitle: "Confirm your tip amount",
+      tipHighConfirmBody: "You're about to tip {amount}, which is more than your order total. Continue with this tip?",
+      tipHighConfirmYes: "Yes, place order",
       kicker: "Your selection",
       plan: "Plan: {plan}",
       table: "Table: {table}",
@@ -3458,6 +3473,8 @@ export const messages = {
       invalidPlan: "Invalid plan selection."
     },
     reservationPage: {
+      pastDateError: "Please choose a date from today onward.",
+      pastTimeError: "Please choose a time that hasn't passed yet.",
       kicker: "Reservation",
       title: "Reserve your table",
       description: "Submit your reservation request and our team will confirm with you.",
@@ -3926,6 +3943,7 @@ export const messages = {
       modeNav: "Sort mode",
     },
     ownerBilling: {
+      commissionFuturePeriod: "That period hasn't happened yet — choose the current month or an earlier one.",
       tabLabel: "Billing",
       currentPlanSection: "Subscription",
       yourPlan: "Active plan",
@@ -4194,6 +4212,7 @@ export const messages = {
       action: "Action",
       navMobile: "Admin navigation",
       delivery: {
+        invalidValue: "{field} must be a valid non-negative number (commission must be 0-100).",
         button: "Delivery",
         title: "Delivery pricing",
         subtitle: "Configure delivery fees and radius for this restaurant.",
@@ -4244,6 +4263,9 @@ export const messages = {
       insuranceLink: "Insurance",
     },
     ownerReservations: {
+      preparedFirstOpenedRestCopied: "Prepared {count} reminders. Only the first chat was opened automatically -- the rest were copied to your clipboard and still need to be sent manually.",
+      clearPendingConfirmTitle: "Clear {count} pending reminders?",
+      clearPendingConfirmBody: "These reminders have not been marked as opened or failed yet. Clearing them now means you will lose track of whether they were actually sent.",
       kicker: "Owner inbox",
       title: "Reservation Requests",
       description: "Manage table reservation leads from your menu landing. Update status as you contact guests.",
@@ -4424,6 +4446,8 @@ export const messages = {
       recipient: "To",
     },
     ownerOrders: {
+      loadPaymentsFailed: "Couldn't load payments. Tap to try again.",
+      dateRangeSwapped: "Start and end dates were swapped so the range is valid.",
       kicker: "Order management",
       title: "Orders",
       description: "Manage incoming orders and update their status in real time.",
@@ -5451,6 +5475,7 @@ export const messages = {
       welcomeExplore: "Explore",
     },
     customerAccount: {
+      sessionExpired: "Your session expired — please sign in again to continue.",
       kicker: "Your account",
       title: "My Account",
       notSignedInTitle: "Sign in to your account",
@@ -6757,6 +6782,7 @@ export const messages = {
       rebookAriaLabel: "Reserver a nouveau cette course",
     },
     sendPackage: {
+      recipientPhoneInvalid: "Entrez un numero de telephone valide",
       kicker: "Kepoli Courier",
       title: "Envoyer un colis",
       pickupLabel: "Collecte",
@@ -7215,6 +7241,8 @@ export const messages = {
       },
     },
     ownerMenuBuilder: {
+      importSuccessCategoriesOnly: "{count} categorie(s) importee(s) avec succes.",
+      resultNothingImported: "Rien n'a ete importe. Verifiez le fichier et reessayez.",
       importCsv: "Importer CSV",
       importTitle: "Importer le menu depuis un CSV",
       importSubtitle: "Creez en masse des categories et des plats depuis un tableur.",
@@ -7237,6 +7265,8 @@ export const messages = {
       draftBadgeLabel: "{count} masque(s)",
     },
     ownerLoyalty: {
+      validationTierThreshold: "Le seuil du niveau Or doit etre superieur au seuil du niveau Argent.",
+      validationTierMultiplier: "Les multiplicateurs de niveau doivent etre d'au moins 1.",
       kicker: "Fidelite",
       title: "Programme de fidelite",
       subtitle: "Recompensez les clients reguliers avec des points echangeables contre des credits.",
@@ -7498,6 +7528,7 @@ export const messages = {
       codeLocked: "Trop de tentatives — attendez quelques minutes.",
     },
     adminRides: {
+      faresNoChanges: "Aucune modification a enregistrer",
       kicker: "Plateforme",
       title: "Courses",
       subtitle: "Dernieres demandes de course sur la plateforme.",
@@ -7620,6 +7651,9 @@ export const messages = {
       historyEmpty: "Aucune transaction pour l'instant.",
     },
     adminFlashSales: {
+      discountRange: "La remise doit etre comprise entre 1 % et 100 %.",
+      activeUntilBeforeFrom: "La date de fin doit etre posterieure a la date de debut.",
+      activeUntilInPast: "La date de fin doit etre dans le futur.",
       kicker: "Admin plateforme",
       title: "Ventes flash",
       subtitle: "Campagnes de remise sponsorisees par la plateforme, auxquelles les restaurants adherent.",
@@ -7682,6 +7716,7 @@ export const messages = {
       statusFailed: "Echouee",
     },
     adminCustomers: {
+      ledgerStale: "Le grand livre est peut-etre obsolete — appuyez pour reessayer",
       kicker: "Admin plateforme",
       title: "Clients",
       subtitle: "Tous les clients de la plateforme — ils appartiennent au marketplace, pas a un restaurant.",
@@ -7801,6 +7836,7 @@ export const messages = {
       voucherCopied: "Copie !",
     },
     ownerCustomers: {
+      exportError: "Echec de l'export. Veuillez reessayer.",
       kicker: "Repertoire clients",
       title: "Clients",
       subtitle: "Profils clients de toutes les commandes",
@@ -7953,6 +7989,7 @@ export const messages = {
       utilityNav: "Navigation utilitaire",
     },
     waiterPage: {
+      tableStatusStale: "Le statut des tables est peut-etre obsolete — nouvelle tentative automatique en cours.",
       searchPlaceholder: "Table, n° commande, ou nom…",
       noActiveOrders: "Tout est calme — aucune commande active",
       noActiveOrdersBody: "Les nouvelles commandes apparaitront ici automatiquement.",
@@ -8876,6 +8913,9 @@ export const messages = {
       }
     },
     cartPage: {
+      tipHighConfirmTitle: "Confirmez le montant du pourboire",
+      tipHighConfirmBody: "Vous etes sur le point de laisser un pourboire de {amount}, superieur au total de votre commande. Continuer avec ce pourboire ?",
+      tipHighConfirmYes: "Oui, passer la commande",
       kicker: "Votre selection",
       plan: "Offre : {plan}",
       table: "Table : {table}",
@@ -9265,6 +9305,8 @@ export const messages = {
       invalidPlan: "Selection d offre invalide."
     },
     reservationPage: {
+      pastDateError: "Veuillez choisir une date a partir d'aujourd'hui.",
+      pastTimeError: "Veuillez choisir une heure qui n'est pas encore passee.",
       kicker: "Reservation",
       title: "Reservez votre table",
       description: "Envoyez votre demande de reservation et notre equipe vous confirmera.",
@@ -9733,6 +9775,7 @@ export const messages = {
       modeNav: "Mode de tri",
     },
     ownerBilling: {
+      commissionFuturePeriod: "Cette periode n'a pas encore eu lieu — choisissez le mois en cours ou un mois anterieur.",
       tabLabel: "Facturation",
       currentPlanSection: "Abonnement",
       yourPlan: "Offre active",
@@ -10001,6 +10044,7 @@ export const messages = {
       action: "Action",
       navMobile: "Navigation admin",
       delivery: {
+        invalidValue: "{field} doit etre un nombre valide non negatif (la commission doit etre comprise entre 0 et 100).",
         button: "Livraison",
         title: "Tarification livraison",
         subtitle: "Configurez les frais et le rayon de livraison pour ce restaurant.",
@@ -10051,6 +10095,9 @@ export const messages = {
       insuranceLink: "Assurance",
     },
     ownerReservations: {
+      preparedFirstOpenedRestCopied: "{count} rappels prepares. Seule la premiere conversation a ete ouverte automatiquement -- les autres ont ete copiees dans votre presse-papiers et doivent encore etre envoyees manuellement.",
+      clearPendingConfirmTitle: "Effacer {count} rappels en attente ?",
+      clearPendingConfirmBody: "Ces rappels n'ont pas encore ete marques comme ouverts ou echoues. Les effacer maintenant signifie que vous perdrez la trace de leur envoi effectif.",
       kicker: "Boite proprietaire",
       title: "Demandes de reservation",
       description: "Gerez les leads de reservation depuis votre landing menu. Mettez a jour le statut apres contact.",
@@ -10282,6 +10329,8 @@ export const messages = {
       recipient: "A",
     },
     ownerOrders: {
+      loadPaymentsFailed: "Impossible de charger les paiements. Appuyez pour reessayer.",
+      dateRangeSwapped: "Les dates de debut et de fin ont ete inversees pour que la periode soit valide.",
       kicker: "Gestion des commandes",
       title: "Commandes",
       description: "Gerez les commandes entrantes et mettez a jour leur statut en temps reel.",
@@ -11290,6 +11339,7 @@ export const messages = {
       later: "Plus tard",
     },
     customerAccount: {
+      sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer.",
       kicker: "Votre compte",
       title: "Mon compte",
       notSignedInTitle: "Connectez-vous a votre compte",

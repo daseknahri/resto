@@ -374,7 +374,7 @@
         <div class="space-y-1">
           <label for="commission-month" class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionMonth') }}</label>
           <select id="commission-month" v-model="commissionMonth" class="ui-input text-sm">
-            <option v-for="m in 12" :key="m" :value="m">{{ commissionMonthName(m) }}</option>
+            <option v-for="m in 12" :key="m" :value="m" :disabled="isFutureCommissionMonth(m)">{{ commissionMonthName(m) }}</option>
           </select>
         </div>
         <button
@@ -461,7 +461,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import api from '../lib/api'
 import { useI18n } from '../composables/useI18n'
 import { useVocabulary } from '../composables/useVocabulary'
@@ -760,8 +760,19 @@ const commissionMonthName = (m) => {
   }
 }
 
+const currentMonth = new Date().getMonth() + 1
+const isFutureCommissionMonth = (m) => commissionYear.value === currentYear && m > currentMonth
+
+watch(commissionYear, () => {
+  if (isFutureCommissionMonth(commissionMonth.value)) commissionMonth.value = currentMonth
+})
+
 const downloadCommissionPdf = async () => {
   if (commissionDownloading.value) return
+  if (isFutureCommissionMonth(commissionMonth.value)) {
+    toast.show(t('ownerBilling.commissionFuturePeriod'), 'error')
+    return
+  }
   commissionDownloading.value = true
   try {
     const res = await api.get('/owner/commission-statement/', {

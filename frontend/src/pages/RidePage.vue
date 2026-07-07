@@ -1071,55 +1071,65 @@ const fetchHistory = async () => {
   }
 };
 
+const pollActiveRideOnce = async () => {
+  if (!activeRide.value?.id) { stopPolling(); return; }
+  const prevStatus = activeRide.value.status;
+  try {
+    const res = await api.get('/rides/active/');
+    pollHealthy.value = true;
+    const data = res.data;
+    // Handle both { ride, scheduled } and legacy flat shape
+    const rideData = (data && typeof data === 'object' && 'ride' in data)
+      ? data.ride
+      : (data?.id ? data : null);
+    if (data && typeof data === 'object' && 'scheduled' in data) {
+      scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
+        .filter((r) => r.kind === 'ride');
+    }
+    if (rideData?.id) {
+      activeRide.value = rideData;
+      // Stop polling when terminal state
+      if (['completed', 'cancelled'].includes(rideData.status)) {
+        stopPolling();
+        // System-cancelled: was searching/accepted, now cancelled (no user action)
+        if (
+          rideData.status === 'cancelled' &&
+          ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
+          !cancelling.value
+        ) {
+          noDriverFound.value = true;
+          activeRide.value = null;
+          fetchHistory();
+        } else if (rideData.status === 'completed') {
+          fetchHistory();
+        }
+      }
+    } else {
+      // No active ride returned — likely completed/cancelled
+      stopPolling();
+    }
+  } catch {
+    // ignore transient errors, but surface them on the connection dot
+    pollHealthy.value = false;
+  }
+};
+
 const startPolling = () => {
   stopPolling();
   pollHealthy.value = true;
-  pollTimer = setInterval(async () => {
-    if (!activeRide.value?.id) { stopPolling(); return; }
-    const prevStatus = activeRide.value.status;
-    try {
-      const res = await api.get('/rides/active/');
-      pollHealthy.value = true;
-      const data = res.data;
-      // Handle both { ride, scheduled } and legacy flat shape
-      const rideData = (data && typeof data === 'object' && 'ride' in data)
-        ? data.ride
-        : (data?.id ? data : null);
-      if (data && typeof data === 'object' && 'scheduled' in data) {
-        scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
-          .filter((r) => r.kind === 'ride');
-      }
-      if (rideData?.id) {
-        activeRide.value = rideData;
-        // Stop polling when terminal state
-        if (['completed', 'cancelled'].includes(rideData.status)) {
-          stopPolling();
-          // System-cancelled: was searching/accepted, now cancelled (no user action)
-          if (
-            rideData.status === 'cancelled' &&
-            ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
-            !cancelling.value
-          ) {
-            noDriverFound.value = true;
-            activeRide.value = null;
-            fetchHistory();
-          } else if (rideData.status === 'completed') {
-            fetchHistory();
-          }
-        }
-      } else {
-        // No active ride returned — likely completed/cancelled
-        stopPolling();
-      }
-    } catch {
-      // ignore transient errors, but surface them on the connection dot
-      pollHealthy.value = false;
-    }
-  }, 5000);
+  pollTimer = setInterval(pollActiveRideOnce, 5000);
 };
 
 const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+};
+
+// Mobile browsers throttle/suspend background timers — resync immediately
+// when the tab regains focus instead of waiting for the next 5s tick.
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && activeRide.value?.id) {
+    pollActiveRideOnce();
+  }
 };
 
 // ── Leaflet: pick-map (drop-off pin) ─────────────────────────────────────────
@@ -1259,6 +1269,7 @@ onMounted(async () => {
     fetchHistory();
     fetchSavedAddresses();
   }
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 
 onBeforeUnmount(() => {
@@ -1266,5 +1277,6 @@ onBeforeUnmount(() => {
   clearCancelGuard();
   destroyPickMap();
   destroyTrackingMap();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>

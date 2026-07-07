@@ -430,6 +430,7 @@ const generatedCodes = ref([]);
 const copiedAll = ref(false);
 const vouchers = ref([]);
 const loadingVouchers = ref(false);
+let voucherKey = null; // stable across retries of the same voucher batch; cleared on success
 
 const fetchVouchers = async () => {
   loadingVouchers.value = true;
@@ -451,10 +452,12 @@ const generateVouchers = async () => {
     return;
   }
   voucherGenerating.value = true;
+  if (!voucherKey) voucherKey = newIdempotencyKey();
   try {
     const payload = {
       count: Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50),
       amount: amount.toFixed(2),
+      idempotency_key: voucherKey,
     };
     if (voucherNote.value.trim()) payload.note = voucherNote.value.trim();
     if (voucherExpiry.value) payload.expires_at = new Date(voucherExpiry.value).toISOString();
@@ -466,6 +469,7 @@ const generateVouchers = async () => {
     voucherNote.value = '';
     voucherExpiry.value = '';
     voucherQty.value = 1;
+    voucherKey = null; // confirmed — next batch gets a fresh key
     fetchVouchers(); // refresh the audit list with the new codes
   } catch (err) {
     const detail = err?.response?.data?.detail || '';

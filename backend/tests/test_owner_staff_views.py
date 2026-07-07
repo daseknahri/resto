@@ -263,6 +263,23 @@ class OwnerStaffDeleteViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         staff_user.delete.assert_called_once()
 
+    def test_delete_closes_open_shift(self):
+        """LOG-06: deleting a staffer closes any open shift (clock_out=null) first,
+        so a fire-mid-shift doesn't leave a permanently-open Shift that corrupts
+        future Z-report labor stats."""
+        staff_user = MagicMock()
+        staff_user.id = 10
+        import accounts.models as _accts
+        import menu.models as _menu
+        with patch.object(_accts.User, "objects") as obj_mock, \
+                patch.object(_menu.Shift, "objects") as shift_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._delete(10)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        shift_mock.filter.assert_called_once_with(user_id=10, clock_out__isnull=True)
+        shift_mock.filter.return_value.update.assert_called_once()
+        staff_user.delete.assert_called_once()
+
 
 # ── OwnerStaffDeleteView — PATCH (permissions) ────────────────────────────────
 

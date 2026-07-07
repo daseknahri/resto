@@ -967,6 +967,7 @@ sendPackage: {
   shareTrackingLinkTitle: "Suivez votre colis",
   shareTrackingLinkCopied: "Lien de suivi copie",
   shareTrackingLinkFailed: "Impossible de copier le lien — veuillez le copier manuellement",
+  recipientPhoneInvalid: "Entrez un numero de telephone valide",
 },
 recipientTrack: {
   title: "Suivez votre colis",
@@ -1391,6 +1392,8 @@ ownerMenuBuilder: {
   resultSkipped: "Lignes ignorees",
   resultWarnings: "Avertissements",
   draftBadgeLabel: "{count} masque(s)",
+  importSuccessCategoriesOnly: "{count} categorie(s) importee(s) avec succes.",
+  resultNothingImported: "Rien n'a ete importe. Verifiez le fichier et reessayez.",
 },
 ownerLoyalty: {
   kicker: "Fidelite",
@@ -1442,6 +1445,8 @@ ownerLoyalty: {
   firstOrderBonusHint: "Attribué lors de la première commande d un client dans votre établissement.",
   birthdayBonusLabel: "Bonus anniversaire (pts)",
   birthdayBonusHint: "Attribué quand un client avec une date d anniversaire enregistrée passe une commande le jour de son anniversaire.",
+  validationTierThreshold: "Le seuil du niveau Or doit etre superieur au seuil du niveau Argent.",
+  validationTierMultiplier: "Les multiplicateurs de niveau doivent etre d'au moins 1.",
 },
 driver: {
   kicker: "Livraison",
@@ -1689,6 +1694,7 @@ adminRides: {
   faresSave: "Enregistrer les tarifs",
   kindRide: "Course",
   kindPackage: "Colis",
+  faresNoChanges: "Aucune modification a enregistrer",
 },
 walletCharge: {
   kicker: "Portefeuille",
@@ -1811,6 +1817,9 @@ adminFlashSales: {
   deleted: "Vente flash supprimee.",
   deleteFailed: "Impossible de supprimer la vente flash.",
   updateFailed: "Impossible de mettre a jour la vente flash.",
+  discountRange: "La remise doit etre comprise entre 1 % et 100 %.",
+  activeUntilBeforeFrom: "La date de fin doit etre posterieure a la date de debut.",
+  activeUntilInPast: "La date de fin doit etre dans le futur.",
 },
 adminDeliveryJobs: {
   kicker: "Admin plateforme",
@@ -1876,6 +1885,7 @@ adminCustomers: {
   ordersTitle: "Commandes (tous restaurants)",
   ordersEmpty: "Aucune commande.",
   txAdjustment: "Ajustement",
+  ledgerStale: "Le grand livre est peut-etre obsolete — appuyez pour reessayer",
 },
 adminWallet: {
   kicker: "Admin plateforme",
@@ -2026,6 +2036,7 @@ ownerCustomers: {
   loadingMore: "Chargement…",
   noMore: "Tous les clients charges.",
   searching: "Recherche…",
+  exportError: "Echec de l'export. Veuillez reessayer.",
 },
 ownerStaff: {
   kicker: "Personnel",
@@ -2358,6 +2369,7 @@ waiterPage: {
   compReasonOther: "Autre",
   compReasonOtherPlaceholder: "Raison…",
   compReasonRequired: "Choisissez une raison avant d'offrir l'article.",
+  tableStatusStale: "Le statut des tables est peut-etre obsolete — nouvelle tentative automatique en cours.",
 },
 repeatAnalytics: {
   title: "Fidelisation client",
@@ -3239,6 +3251,9 @@ cartPage: {
   orderingPaused: "Ce restaurant n'accepte pas de nouvelles commandes pour le moment. Reessayez sous peu.",
   orderingPausedUntil: "Ce restaurant n'accepte pas de nouvelles commandes pour le moment. Reprise a {time}.",
   dineInUnavailable: "La commande sur place n'est pas disponible pour ce restaurant.",
+  tipHighConfirmTitle: "Confirmez le montant du pourboire",
+  tipHighConfirmBody: "Vous etes sur le point de laisser un pourboire de {amount}, superieur au total de votre commande. Continuer avec ce pourboire ?",
+  tipHighConfirmYes: "Oui, passer la commande",
 },
 dishPage: {
   loadingDish: "Chargement du plat...",
@@ -3424,6 +3439,8 @@ leadCapture: {
   invalidPlan: "Selection d offre invalide."
 },
 reservationPage: {
+  pastDateError: "Veuillez choisir une date a partir d'aujourd'hui.",
+  pastTimeError: "Veuillez choisir une heure qui n'est pas encore passee.",
   kicker: "Reservation",
   title: "Reservez votre table",
   description: "Envoyez votre demande de reservation et notre equipe vous confirmera.",
@@ -3958,6 +3975,7 @@ ownerBilling: {
   invoiceNotReady: "Facture non disponible — contactez le support pour finaliser votre facture.",
   dataExportSuccess: "Export telecharge.",
   commissionDownloaded: "Releve de commission telecharge.",
+  commissionFuturePeriod: "Cette periode n'a pas encore eu lieu — choisissez le mois en cours ou un mois anterieur.",
 },
 adminConsole: {
   loadPlanFeatureFlagsFailed: "Impossible de charger les indicateurs de fonctionnalités du forfait",
@@ -4178,7 +4196,8 @@ adminConsole: {
     saved: "Tarification livraison mise a jour",
     saveFailed: "Impossible d enregistrer la tarification livraison",
     loadFailed: "Impossible de charger la configuration livraison",
-    close: "Fermer"
+    close: "Fermer",
+    invalidValue: "{field} doit etre un nombre valide non negatif (la commission doit etre comprise entre 0 et 100)."
   },
   liveOrders: {
     button: "Voir commandes en direct",
@@ -4210,6 +4229,9 @@ adminConsole: {
   insuranceLink: "Assurance",
 },
 ownerReservations: {
+  preparedFirstOpenedRestCopied: "{count} rappels prepares. Seule la premiere conversation a ete ouverte automatiquement -- les autres ont ete copiees dans votre presse-papiers et doivent encore etre envoyees manuellement.",
+  clearPendingConfirmTitle: "Effacer {count} rappels en attente ?",
+  clearPendingConfirmBody: "Ces rappels n'ont pas encore ete marques comme ouverts ou echoues. Les effacer maintenant signifie que vous perdrez la trace de leur envoi effectif.",
   kicker: "Boite proprietaire",
   title: "Demandes de reservation",
   description: "Gerez les leads de reservation depuis votre landing menu. Mettez a jour le statut apres contact.",
@@ -4674,6 +4696,8 @@ ownerOrders: {
   filterSheetTitle: "Filtres commandes",
   filterActiveCount: "{n} actif(s)",
   eightySixBoardBtn: "Tableau 86",
+  loadPaymentsFailed: "Impossible de charger les paiements. Appuyez pour reessayer.",
+  dateRangeSwapped: "Les dates de debut et de fin ont ete inversees pour que la periode soit valide.",
 },
 orderHandling: {
   tabLabel: "Commandes",
@@ -5448,6 +5472,7 @@ pushPrime: {
   later: "Plus tard",
 },
 customerAccount: {
+  sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer.",
   kicker: "Votre compte",
   title: "Mon compte",
   notSignedInTitle: "Connectez-vous a votre compte",

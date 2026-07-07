@@ -73,6 +73,11 @@
       </div>
     </div>
   </Transition>
+
+  <!-- Surgical 401 re-auth: /customer/ endpoints are excluded from the global
+       axios sign-out redirect (see src/lib/api.js), so a stale session on
+       approve/decline must be handled here instead of failing silently. -->
+  <CustomerAuthModal v-if="showAuthModal" @close="showAuthModal = false" @authenticated="onAuthenticated" />
 </template>
 
 <script setup>
@@ -82,6 +87,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import AppIcon from './AppIcon.vue';
+import CustomerAuthModal from './CustomerAuthModal.vue';
 
 const { t, formatPrice } = useI18n();
 const customerStore = useCustomerStore();
@@ -90,8 +96,25 @@ const toast = useToastStore();
 const pendingCharges = ref([]);
 const chargeBusy = ref(null);  // id of the request being approved/declined
 const chargeError = ref('');
+const showAuthModal = ref(false);
 let pollTimer = null;
 const POLL_MS = 5000;
+
+// Detects a 401 on a customer-write call, surfaces the session-expired message,
+// and opens the sign-in modal so the customer can re-auth without losing the
+// pending charge context (it stays in pendingCharges and re-polls after sign-in).
+const handleAuthExpired = (err) => {
+  if (err?.response?.status !== 401) return false;
+  chargeError.value = t('customerAccount.sessionExpired');
+  showAuthModal.value = true;
+  return true;
+};
+
+const onAuthenticated = () => {
+  showAuthModal.value = false;
+  chargeError.value = '';
+  fetchChargeRequests();
+};
 
 // Focus management refs
 const panelRef = ref(null);
@@ -169,6 +192,7 @@ const approveCharge = async (req) => {
     pendingCharges.value = pendingCharges.value.filter((r) => r.id !== req.id);
     toast.show(t('chargeRequest.approved', { amount: formatPrice(req.amount) }), 'success');
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     const d = err?.response?.data;
     if (d?.code === 'insufficient') {
       chargeError.value = t('chargeRequest.insufficient', { balance: formatPrice(d.balance) });

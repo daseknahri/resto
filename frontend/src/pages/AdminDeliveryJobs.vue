@@ -134,7 +134,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import AppIcon from '../components/AppIcon.vue';
@@ -206,5 +206,28 @@ const setFilter = (s) => {
   fetchJobs();
 };
 
-onMounted(fetchJobs);
+// ── Live-ish polling: an ops board left open must not go stale for a whole shift ──
+const POLL_MS = 20000;
+let pollTimer = null;
+
+const onVisibilityChange = () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    fetchJobs();
+  }
+};
+
+onMounted(() => {
+  fetchJobs();
+  pollTimer = setInterval(fetchJobs, POLL_MS);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+});
+
+onUnmounted(() => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  }
+});
 </script>

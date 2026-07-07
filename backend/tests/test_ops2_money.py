@@ -256,6 +256,14 @@ class OwnerZReportAuthTests(SimpleTestCase):
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_owner_of_another_tenant_gets_403(self):
+        """P0 regression: the session cookie is valid on every tenant subdomain, so an
+        owner of tenant 1 must NOT be able to pull tenant 2's Z-report. _require_owner
+        must enforce user.tenant_id == request.tenant.id, not just the owner role."""
+        req = self._req(user=_owner_user(tenant_id=1), tenant=_tenant(tenant_id=2))
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
 
 def _z_report_patches(cash=Decimal("100.00"), wallet=Decimal("50.00"),
                       refund_count=0, refund_total=Decimal("0.00")):

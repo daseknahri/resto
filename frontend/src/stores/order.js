@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
+import { newIdempotencyKey } from "../lib/idempotency";
 
 export const useOrderStore = defineStore("order", {
   state: () => ({
@@ -8,6 +9,8 @@ export const useOrderStore = defineStore("order", {
     placing: false,
     placeError: null,
     placeFieldErrors: {},
+    // Idempotency key for the in-flight/retryable checkout attempt (null between attempts)
+    _checkoutIdemKey: null,
 
     // Owner order list — ACTIVE (hot poll path, ?mode=active, no pagination)
     orders: [],
@@ -42,14 +45,23 @@ export const useOrderStore = defineStore("order", {
     // -------------------------------------------------------
     // Customer: place order
     // -------------------------------------------------------
+    // Idempotency: reuse the same key across retries of one checkout attempt
+    // (e.g. a timeout-then-resubmit) so the backend replays the existing order
+    // instead of double-charging the wallet. Reset after a confirmed success so
+    // the next order mints a fresh key.
     async placeOrder(payload) {
       this.placing = true;
       this.placeError = null;
       this.placeFieldErrors = {};
       this.placedOrderNumber = null;
+      if (!this._checkoutIdemKey) this._checkoutIdemKey = newIdempotencyKey();
       try {
-        const res = await api.post("/place-order/", payload);
+        const res = await api.post("/place-order/", {
+          ...payload,
+          idempotency_key: this._checkoutIdemKey,
+        });
         this.placedOrderNumber = res.data.order_number;
+        this._checkoutIdemKey = null;
         return res.data;
       } catch (err) {
         const data = err?.response?.data || {};

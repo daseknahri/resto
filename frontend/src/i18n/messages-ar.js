@@ -1227,7 +1227,8 @@ const arabicMessages = {
       "saved": "تم تحديث تسعير التوصيل",
       "saveFailed": "تعذّر حفظ تسعير التوصيل",
       "loadFailed": "تعذّر تحميل إعدادات التوصيل",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "invalidValue": "يجب أن تكون قيمة {field} رقمًا صحيحًا غير سالب (يجب أن تكون العمولة بين 0 و100)."
     },
     "liveOrders": {
       "button": "عرض الطلبات المباشرة",
@@ -1273,6 +1274,9 @@ const arabicMessages = {
     "retryQueue": "قائمة إعادة المحاولة",
     "exitRetryQueue": "الخروج من قائمة إعادة المحاولة",
     "searchPlaceholder": "ابحث باسم الضيف أو الهاتف أو البريد أو الملاحظة",
+    "preparedFirstOpenedRestCopied": "تم تجهيز {count} تذكيرات. تم فتح أول محادثة تلقائيًا فقط -- تم نسخ الباقي إلى الحافظة ولا تزال بحاجة إلى الإرسال يدويًا.",
+    "clearPendingConfirmTitle": "مسح {count} تذكيرات معلّقة؟",
+    "clearPendingConfirmBody": "لم يتم بعد وضع علامة على هذه التذكيرات كمفتوحة أو فاشلة. مسحها الآن يعني أنك ستفقد تتبع ما إذا كانت قد أُرسلت بالفعل.",
     "loadFailed": "تعذر تحميل الحجوزات",
     "exporting": "جارٍ التصدير...",
     "exportCsv": "تصدير CSV",
@@ -1588,7 +1592,9 @@ const arabicMessages = {
     "bookDirectly": "احجز مباشرةً",
     "bookingSummary": "حجزك",
     "contactSupport": "هل تحتاج إلى مساعدة؟",
-    "directBookingHint": "يقبل هذا المطعم أيضاً الحجوزات عبر منصة خارجية."
+    "directBookingHint": "يقبل هذا المطعم أيضاً الحجوزات عبر منصة خارجية.",
+    "pastDateError": "الرجاء اختيار تاريخ من اليوم فصاعدًا.",
+    "pastTimeError": "الرجاء اختيار وقت لم يمض بعد."
   },
   "stepBrand": {
     "title": "الهوية ووسائل التواصل",
@@ -2411,7 +2417,10 @@ const arabicMessages = {
     "deliveryOutOfRangeError": "هذا العنوان يقع خارج منطقة التوصيل الخاصة بالمطعم.",
     "orderingPaused": "هذا المطعم لا يقبل طلبات جديدة حالياً. يرجى المحاولة مجدداً بعد قليل.",
     "orderingPausedUntil": "هذا المطعم لا يقبل طلبات جديدة حالياً. سيُستأنف الطلب في {time}.",
-    "dineInUnavailable": "الطلب داخل المطعم غير متاح لهذا المطعم."
+    "dineInUnavailable": "الطلب داخل المطعم غير متاح لهذا المطعم.",
+    "tipHighConfirmTitle": "تأكيد مبلغ الإكرامية",
+    "tipHighConfirmBody": "أنت على وشك ترك إكرامية بقيمة {amount}، وهي أكبر من إجمالي طلبك. هل تريد المتابعة بهذه الإكرامية؟",
+    "tipHighConfirmYes": "نعم، إتمام الطلب"
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",
@@ -2851,6 +2860,8 @@ const arabicMessages = {
     "markAllUnavailable": "تعليم الكل غير متاح",
     "markAllUnavailableDone": "تم تعليم {count} عنصر غير متاح",
     "markAllUnavailableFailed": "تعذّر تعليم العناصر — حاول مجددًا.",
+    "loadPaymentsFailed": "تعذّر تحميل المدفوعات. اضغط للمحاولة مرة أخرى.",
+    "dateRangeSwapped": "تم تبديل تاريخي البداية والنهاية ليكون النطاق صحيحًا.",
   },
   "orderHandling": {
     "tabLabel": "الطلبات",
@@ -3624,6 +3635,8 @@ Object.assign(arabicMessages, {
     resultSkipped: "\u0627\u0644\u0635\u0641\u0648\u0641 \u0627\u0644\u0645\u062a\u062e\u0637\u0627\u0629",
     resultWarnings: "\u0627\u0644\u062a\u062d\u0630\u064a\u0631\u0627\u062a",
     "draftBadgeLabel": "{count} \u0645\u062e\u0641\u064a",
+    importSuccessCategoriesOnly: "\u062a\u0645 \u0627\u0633\u062a\u064a\u0631\u0627\u062f {count} \u0641\u0626\u0629 \u0628\u0646\u062c\u0627\u062d.",
+    resultNothingImported: "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0633\u062a\u064a\u0631\u0627\u062f \u0623\u064a \u0634\u064a\u0621. \u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0645\u0644\u0641 \u0648\u062d\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.",
   },
   ownerLoyalty: {
     kicker: "\u0627\u0644\u0648\u0644\u0627\u0621",
@@ -3675,6 +3688,8 @@ Object.assign(arabicMessages, {
     firstOrderBonusHint: "\u062a\u064f\u0645\u0646\u062d \u0639\u0646\u062f \u0623\u0648\u0644 \u0637\u0644\u0628 \u0644\u0644\u0639\u0645\u064a\u0644 \u0641\u064a \u0646\u0634\u0627\u0637\u0643 \u0627\u0644\u062a\u062c\u0627\u0631\u064a.",
     birthdayBonusLabel: "\u0645\u0643\u0627\u0641\u0623\u0629 \u0639\u064a\u062f \u0627\u0644\u0645\u064a\u0644\u0627\u062f (\u0646\u0642\u0627\u0637)",
     birthdayBonusHint: "\u062a\u064f\u0645\u0646\u062d \u062d\u064a\u0646 \u064a\u064f\u0642\u062f\u0651\u0645 \u0639\u0645\u064a\u0644 \u0645\u0633\u062c\u0651\u0644 \u062a\u0627\u0631\u064a\u062e \u0645\u064a\u0644\u0627\u062f\u0647 \u0637\u0644\u0628\u0627\u064b \u0641\u064a \u064a\u0648\u0645 \u0645\u064a\u0644\u0627\u062f\u0647.",
+    validationTierThreshold: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062d\u062f \u0641\u0626\u0629 \u0627\u0644\u0630\u0647\u0628 \u0623\u0639\u0644\u0649 \u0645\u0646 \u062d\u062f \u0641\u0626\u0629 \u0627\u0644\u0641\u0636\u0629.",
+    validationTierMultiplier: "\u064a\u062c\u0628 \u0623\u0646 \u062a\u0643\u0648\u0646 \u0645\u0636\u0627\u0639\u0641\u0627\u062a \u0627\u0644\u0641\u0626\u0627\u062a 1 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644.",
   },
   driver: {
     kicker: "التوصيل",
@@ -3922,6 +3937,7 @@ Object.assign(arabicMessages, {
     kindRide: "رحلة",
     kindPackage: "طرد",
     statusScheduled: "مجدول",
+    faresNoChanges: "لا توجد تغييرات للحفظ",
   },
   walletCharge: {
     kicker: "المحفظة",
@@ -4044,6 +4060,9 @@ Object.assign(arabicMessages, {
     deleted: "\u062a\u0645 \u062d\u0630\u0641 \u0627\u0644\u0639\u0631\u0636.",
     deleteFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0630\u0641 \u0627\u0644\u0639\u0631\u0636.",
     updateFailed: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0639\u0631\u0636.",
+    discountRange: "\u064a\u062c\u0628 \u0623\u0646 \u062a\u0643\u0648\u0646 \u0646\u0633\u0628\u0629 \u0627\u0644\u062e\u0635\u0645 \u0628\u064a\u0646 1% \u0648100%.",
+    activeUntilBeforeFrom: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621 \u0628\u0639\u062f \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0628\u062f\u0621.",
+    activeUntilInPast: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0646\u062a\u0647\u0627\u0621 \u0641\u064a \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644.",
   },
   adminDeliveryJobs: {
     kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
@@ -4109,6 +4128,7 @@ Object.assign(arabicMessages, {
     ordersTitle: "\u0627\u0644\u0637\u0644\u0628\u0627\u062a (\u0643\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645)",
     ordersEmpty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0637\u0644\u0628\u0627\u062a.",
     txAdjustment: "\u062a\u0639\u062f\u064a\u0644",
+    ledgerStale: "\u0642\u062f \u062a\u0643\u0648\u0646 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0633\u062c\u0644 \u0642\u062f\u064a\u0645\u0629 \u2014 \u0627\u0636\u063a\u0637 \u0644\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629",
   },
   adminWallet: {
     kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
@@ -4259,6 +4279,7 @@ Object.assign(arabicMessages, {
     loadingMore: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026",
     noMore: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u062c\u0645\u064a\u0639 \u0627\u0644\u0639\u0645\u0644\u0627\u0621.",
     searching: "\u062c\u0627\u0631\u064d \u0627\u0644\u0628\u062d\u062b\u2026",
+    exportError: "\u0641\u0634\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.",
   },
   ownerStaff: {
     kicker: "\u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646",
@@ -4587,6 +4608,7 @@ Object.assign(arabicMessages, {
     compReasonOther: "\u0623\u062e\u0631\u0649",
     compReasonOtherPlaceholder: "\u0627\u0644\u0633\u0628\u0628\u2026",
     compReasonRequired: "\u0627\u062e\u062a\u0631 \u0633\u0628\u0628\u0627\u064b \u0642\u0628\u0644 \u0627\u0644\u0645\u062c\u0627\u0646\u064a\u0629.",
+    tableStatusStale: "\u0642\u062f \u062a\u0643\u0648\u0646 \u062d\u0627\u0644\u0629 \u0627\u0644\u0637\u0627\u0648\u0644\u0627\u062a \u063a\u064a\u0631 \u0645\u062d\u062f\u062b\u0629 \u2014 \u062a\u062a\u0645 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u062a\u0644\u0642\u0627\u0626\u064a\u064b\u0627.",
   },
   repeatAnalytics: {
     title: "\u0648\u0641\u0627\u0621 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
@@ -4726,6 +4748,7 @@ Object.assign(arabicMessages, {
     invoiceNotReady: "\u0627\u0644\u0641\u0627\u062a\u0648\u0631\u0629 \u063a\u064a\u0631 \u062c\u0627\u0647\u0632\u0629 \u0628\u0639\u062f \u2014 \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062f\u0639\u0645 \u0644\u0627\u0633\u062a\u0643\u0645\u0627\u0644 \u0641\u0627\u062a\u0648\u0631\u062a\u0643.",
     dataExportSuccess: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631.",
     commissionDownloaded: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0643\u0634\u0641 \u0627\u0644\u0639\u0645\u0648\u0644\u0629.",
+    commissionFuturePeriod: "\u0647\u0630\u0647 \u0627\u0644\u0641\u062a\u0631\u0629 \u0644\u0645 \u062a\u062d\u062f\u062b \u0628\u0639\u062f \u2014 \u0627\u062e\u062a\u0631 \u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u062d\u0627\u0644\u064a \u0623\u0648 \u0634\u0647\u0631\u064b\u0627 \u0633\u0627\u0628\u0642\u064b\u0627.",
   },
   reservationCalendar: {
     prevWeek: "\u0627\u0644\u0633\u0627\u0628\u0642",
@@ -5403,6 +5426,7 @@ Object.assign(arabicMessages, {
     notSignedInTitle: "\u0633\u062c\u0651\u0644 \u062f\u062e\u0648\u0644\u0643",
     notSignedInBody: "\u0623\u0646\u0634\u0626 \u062d\u0633\u0627\u0628\u0627\u064b \u0645\u062c\u0627\u0646\u064a\u0627\u064b \u0644\u062a\u062a\u0628\u0639 \u0637\u0644\u0628\u0627\u062a\u0643 \u0648\u062a\u0633\u0631\u064a\u0639 \u062f\u0641\u0639 \u0627\u0644\u062a\u0648\u0635\u064a\u0644.",
     signIn: "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644 / \u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628",
+    sessionExpired: "\u0627\u0646\u062a\u0647\u062a \u0635\u0644\u0627\u062d\u064a\u0629 \u062c\u0644\u0633\u062a\u0643 \u2014 \u064a\u0631\u062c\u0649 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644 \u0645\u062c\u062f\u062f\u0627\u064b \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
     profileTitle: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a",
     namePlaceholder: "\u0627\u0633\u0645\u0643",
     nameLabel: "\u0627\u0644\u0627\u0633\u0645",
@@ -5773,6 +5797,7 @@ Object.assign(arabicMessages, {
     recipientPhonePlaceholder: "\u0647\u0627\u062a\u0641 \u0627\u0644\u0645\u0633\u062a\u0644\u0645",
     historyEmpty: "\u0644\u0627 \u062a\u0648\u0635\u064a\u0644\u0627\u062a \u0633\u0627\u0628\u0642\u0629 \u0628\u0639\u062f.",
     recipientRequired: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u0644\u0645 \u0648\u0647\u0627\u062a\u0641\u0647 \u0645\u0637\u0644\u0648\u0628\u0627\u0646.",
+    recipientPhoneInvalid: "\u0623\u062f\u062e\u0644 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641 \u0635\u0627\u0644\u062d",
     cancelled: "\u0623\u064f\u0644\u063a\u064a\u062a \u0627\u0644\u062a\u0648\u0635\u064a\u0644\u0629",
     noCourierFound: "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 \u0639\u0644\u0649 \u0645\u0648\u0635\u0651\u0644 \u0647\u0630\u0647 \u0627\u0644\u0645\u0631\u0629 \u2014 \u0623\u064f\u0644\u063a\u064a\u062a \u062a\u0648\u0635\u064a\u0644\u062a\u0643. \u062d\u0627\u0648\u0644 \u0645\u062c\u062f\u062f\u0627\u064b \u0628\u0639\u062f \u062f\u0642\u0627\u0626\u0642.",
     handoverCodeTitle: "\u0631\u0645\u0632 \u0627\u0644\u062a\u0633\u0644\u064a\u0645",

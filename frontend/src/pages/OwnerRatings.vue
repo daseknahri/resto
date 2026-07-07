@@ -87,7 +87,7 @@
           :key="f.value"
           type="button"
           class="ui-chip ui-press shrink-0"
-          :class="activeScore === f.value ? 'router-link-active' : ''"
+          :class="activeScore === f.value ? 'owner-ratings-chip-active' : ''"
           :aria-pressed="activeScore === f.value"
           :aria-label="f.value === 'all' ? f.label : t('ownerRatings.starsLabel', { n: f.value })"
           @click="activeScore = f.value"
@@ -291,9 +291,16 @@ const saveReply = async (r) => {
     if (idx !== -1) {
       ratings.value[idx] = { ...ratings.value[idx], owner_reply: res.data.owner_reply, owner_reply_at: res.data.owner_reply_at };
     }
+    // Server confirmed the write — bust the stale list cache so a later
+    // revisit doesn't show the pre-reply snapshot.
+    bustCache(RATINGS_CACHE_KEY);
     cancelEdit(r);
     toast.show(t("ownerRatings.replySaved"), "success");
   } catch {
+    // Network/server failure: the optimistic patch never happened, but we can't be
+    // sure the request didn't land server-side. Re-fetch the list quietly so the
+    // UI reconciles with server truth instead of trusting local state.
+    fetchRatings(true);
     toast.show(t("ownerRatings.replyError"), "error");
   } finally {
     const next = new Set(replySaving.value);
@@ -310,8 +317,12 @@ const deleteReply = async (r) => {
     if (idx !== -1) {
       ratings.value[idx] = { ...ratings.value[idx], owner_reply: "", owner_reply_at: null };
     }
+    bustCache(RATINGS_CACHE_KEY);
     toast.show(t("ownerRatings.replyDeleted"), "success");
   } catch {
+    // Same reconciliation as saveReply: don't trust the optimistic local state
+    // on failure — the delete may have partially succeeded server-side.
+    fetchRatings(true);
     toast.show(t("ownerRatings.replyDeleteError"), "error");
   } finally {
     const next = new Set(replyDeleting.value);
@@ -395,7 +406,9 @@ const exportCsv = async () => {
     a.href = url;
     a.download = "ratings.csv";
     a.click();
-    URL.revokeObjectURL(url);
+    // Defer revocation — some mobile browsers start the download asynchronously
+    // and revoking immediately can corrupt it.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.show(t("ownerRatings.exportSuccess"), "success");
   } catch {
     toast.show(t("ownerRatings.exportError"), "error");
@@ -413,3 +426,15 @@ onActivated(() => {
   fetchRatings();
 });
 </script>
+
+<style scoped>
+/* Score filter pills are plain buttons (not router-links) — style the active
+   state on aria-pressed rather than piggybacking on router-link-active. Visual
+   treatment matches .ui-chip.router-link-active in tailwind.css. */
+.owner-ratings-chip-active,
+.ui-chip[aria-pressed="true"] {
+  border-color: var(--color-secondary);
+  background-color: rgba(245, 158, 11, 0.12);
+  color: var(--color-secondary);
+}
+</style>

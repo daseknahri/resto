@@ -1874,6 +1874,17 @@ class OwnerStaffDeleteView(APIView):
         if err is not None:
             return err
 
+        # LOG-06: close any open shift for this staffer before deleting them, so a
+        # fire-mid-shift doesn't leave a permanently-open Shift (clock_out=null) that
+        # corrupts every future Z-report labor breakdown. Best-effort: a failure here
+        # must never block the delete.
+        try:
+            from django.utils import timezone as _tz
+            from menu.models import Shift
+            Shift.objects.filter(user_id=staff_user.id, clock_out__isnull=True).update(clock_out=_tz.now())
+        except Exception:
+            logger.exception("Failed to close open shifts for deleted staff %s", staff_id)
+
         staff_user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -2813,6 +2824,11 @@ class AdminCustomerOrdersView(APIView):
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
 
 
+# OPS: TTL for the voucher-batch idempotency cache guard (see post()). 24h comfortably
+# covers a network-retry / double-submit window without pinning keys forever.
+ADMIN_VOUCHER_IDEM_TTL = 86400
+
+
 class AdminWalletVoucherView(APIView):
     """
     GET  /api/admin/wallet/vouchers/          — list recent vouchers (last 100)
@@ -2886,15 +2902,45 @@ class AdminWalletVoucherView(APIView):
             except (ValueError, TypeError):
                 pass
 
-        vouchers = WalletVoucher.objects.bulk_create([
-            WalletVoucher(
-                code=WalletVoucher.generate_code(),
-                amount=amount,
-                note=note,
-                expires_at=expires_at,
-            )
-            for _ in range(count)
-        ])
+        # OPS: voucher batches are real platform money. A flaky network retry or a
+        # double-submit must not mint duplicate batches. Dedupe on the client-supplied
+        # idempotency_key via the shared cache (the same backend the voucher-redeem
+        # lockout uses); cache.add is an atomic set-if-absent so concurrent duplicates
+        # race safely. All validation above runs first, so a rejected request never
+        # consumes the key.
+        from django.core.cache import cache as _idem_cache
+        raw_idem = str(request.data.get("idempotency_key") or "").strip()[:128] or None
+        idem_result_key = f"adminvoucher:result:{raw_idem}" if raw_idem else None
+        idem_lock_key = f"adminvoucher:lock:{raw_idem}" if raw_idem else None
+        if raw_idem:
+            cached = _idem_cache.get(idem_result_key)
+            if cached is not None:
+                # Exact replay of an already-completed batch — return the same codes
+                # without minting a second batch.
+                return Response({**cached, "idempotent_replay": True}, status=status.HTTP_200_OK)
+            if not _idem_cache.add(idem_lock_key, "1", ADMIN_VOUCHER_IDEM_TTL):
+                # This key is already in flight (a true concurrent double-submit) and its
+                # result isn't cached yet — refuse rather than duplicate.
+                return Response(
+                    {"detail": "A voucher batch with this idempotency key is already being processed."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        try:
+            vouchers = WalletVoucher.objects.bulk_create([
+                WalletVoucher(
+                    code=WalletVoucher.generate_code(),
+                    amount=amount,
+                    note=note,
+                    expires_at=expires_at,
+                )
+                for _ in range(count)
+            ])
+        except Exception:
+            # Free the key so a genuine retry after a server-side failure isn't blocked.
+            if idem_lock_key:
+                _idem_cache.delete(idem_lock_key)
+            raise
 
         log_admin_action(
             action=AdminAuditLog.Actions.VOUCHER_ISSUED,
@@ -2903,12 +2949,16 @@ class AdminWalletVoucherView(APIView):
             metadata={"amount": str(amount), "count": len(vouchers),
                       "expires_at": expires_at.isoformat() if expires_at else None},
         )
-        return Response({
+        payload = {
             "created": len(vouchers),
             "codes": [v.code for v in vouchers],
             "amount": str(amount),
             "expires_at": expires_at.isoformat() if expires_at else None,
-        }, status=status.HTTP_201_CREATED)
+        }
+        if raw_idem:
+            # Store the batch result so an exact replay returns the same codes.
+            _idem_cache.set(idem_result_key, payload, ADMIN_VOUCHER_IDEM_TTL)
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 # OPS-5g: per-actor failed-attempt lockout for voucher redemption. A voucher code is a
@@ -4938,6 +4988,15 @@ class MarketplacePlaceOrderView(APIView):
                             if _earn_cfg and _linked_customer is not None:
                                 from decimal import Decimal as _DloyMkt
                                 from django.db.models import F as _Fearn
+                                # Serialize milestone grants for this customer. On COD /
+                                # zero-total orders nothing else locks the Customer row (no
+                                # debit_wallet), so two concurrent orders could both pass the
+                                # first-order / birthday check-then-act and double-grant. Take
+                                # the row lock for the rest of this atomic block (re-entrant if
+                                # the wallet-paid path already locked it via debit_wallet).
+                                Customer.objects.select_for_update().filter(
+                                    pk=_linked_customer.pk
+                                ).first()
                                 # C3: tier multiplier
                                 _mkt_lifetime = int(getattr(_linked_customer, "lifetime_loyalty_points", 0) or 0)
                                 if getattr(_earn_cfg, "tier_enabled", False):
@@ -4958,13 +5017,18 @@ class MarketplacePlaceOrderView(APIView):
                                         lifetime_loyalty_points=_Fearn("lifetime_loyalty_points") + _pts,
                                     )
                                     _Order.objects.filter(pk=order.pk).update(points_earned=_pts)
-                                # C3: first-order bonus
+                                # C3: first-order bonus. Count ALL prior non-cancelled orders
+                                # (not just PAID): COD orders never reach PAID, so a PAID-only
+                                # count reads 0 for two concurrent COD first-orders and both
+                                # grant. Counted under the row lock above, so the losing racer
+                                # sees the winner's committed order and skips.
                                 _mkt_first_bonus = int(getattr(_earn_cfg, "first_order_bonus_points", 0) or 0)
                                 if _mkt_first_bonus > 0:
                                     _mkt_prior = _Order.objects.filter(
                                         customer_id=_linked_customer.pk,
-                                        payment_status=_Order.PaymentStatus.PAID,
-                                    ).exclude(pk=order.pk).count()
+                                    ).exclude(pk=order.pk).exclude(
+                                        status=_Order.Status.CANCELLED
+                                    ).count()
                                     if _mkt_prior == 0:
                                         Customer.objects.filter(pk=_linked_customer.pk).update(
                                             loyalty_points=_Fearn("loyalty_points") + _mkt_first_bonus,
@@ -4976,7 +5040,12 @@ class MarketplacePlaceOrderView(APIView):
                                     from django.utils import timezone as _tzMkt
                                     _mkt_today = _tzMkt.localtime(_tzMkt.now()).date()
                                     _mkt_bday = getattr(_linked_customer, "birthday", None)
-                                    _mkt_yr = getattr(_linked_customer, "loyalty_birthday_rewarded_year", None)
+                                    # Fresh-read the rewarded-year under the row lock above
+                                    # (NOT the stale _linked_customer snapshot) so a concurrent
+                                    # birthday order that already granted this year is seen.
+                                    _mkt_yr = Customer.objects.filter(
+                                        pk=_linked_customer.pk
+                                    ).values_list("loyalty_birthday_rewarded_year", flat=True).first()
                                     if (
                                         _mkt_bday is not None
                                         and _mkt_bday.month == _mkt_today.month
