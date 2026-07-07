@@ -109,6 +109,12 @@ class OrderStatusPiiTests(SimpleTestCase):
         order.status_updated_at = None
         order.items = items_qs
         order.rating = None  # no rating yet; prevents MagicMock auto-attr being truthy
+        # Dine-in ("table") order with no linked account. Anonymous orders carry no
+        # account PII to protect, so the order-status endpoint returns the full body
+        # (name/address/items) — as this class asserts. (A bare MagicMock customer_id
+        # would be truthy and read as an *identified* order, which the ownership gate
+        # now reduces to a minimal payload for an unauthenticated caller.)
+        order.customer_id = None
         return order
 
     @patch("menu.views.Order.objects")

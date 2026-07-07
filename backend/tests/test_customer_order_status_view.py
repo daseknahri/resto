@@ -72,6 +72,13 @@ def _make_order(
     # (MagicMock would otherwise auto-create a truthy MagicMock for any attribute)
     order.rating = None
 
+    # Default to an anonymous order (no linked customer) so the full-body shape/leak
+    # tests below exercise the details path. A bare MagicMock would be TRUTHY and read as
+    # an *identified* order, which the ownership gate now (correctly) reduces to a minimal
+    # payload for an unauthenticated caller. Tests that need an identified order set
+    # order.customer_id explicitly.
+    order.customer_id = None
+
     return order
 
 
@@ -213,7 +220,10 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         order.customer_id = 42
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
         resp = self._get()  # no session on the request
-        self.assertIsNone(resp.data["restaurant_feedback"])
+        # Identified order + anonymous viewer → minimal payload: the feedback (and the
+        # rest of the body) is not present at all, so it can't leak.
+        self.assertNotIn("restaurant_feedback", resp.data)
+        self.assertNotIn("customer_name", resp.data)
 
     @patch("accounts.models.CustomerRating")
     @patch("menu.views.Order.objects")
@@ -226,7 +236,9 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         req.session = {"customer_id": 99}  # a different customer
         req.tenant = MagicMock(id=7)
         resp = self.view(req, order_number="ORD123")
-        self.assertIsNone(resp.data["restaurant_feedback"])
+        # A different customer is a non-owner → minimal payload, nothing to leak.
+        self.assertNotIn("restaurant_feedback", resp.data)
+        self.assertNotIn("items", resp.data)
 
     @patch("accounts.models.CustomerRating")
     @patch("menu.views.Order.objects")
@@ -244,3 +256,44 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         self.assertEqual(fb["score"], 5)
         self.assertEqual(fb["note"], "Great")
         self.assertEqual(fb["created_at"], "2026-05-16T10:00:00+00:00")
+
+    # ── IDOR: identified orders are gated; anonymous dine-in tabs are not ──────
+
+    @patch("menu.views.Order.objects")
+    def test_identified_order_minimal_for_anonymous_viewer(self, objects_mock):
+        """An order with a linked customer must NOT leak its body to an anonymous caller
+        who merely guessed the order number — only status/timing/contact come back."""
+        order = _make_order(customer_name="Sara", delivery_address="12 Rue X", total="99.00")
+        order.customer_id = 42
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        resp = self._get()  # no session
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for field in ("order_number", "status", "fulfillment_type"):
+            self.assertIn(field, resp.data)
+        for leaked in ("customer_name", "delivery_address", "total", "items",
+                       "items_count", "payment_status", "owner_note", "rating"):
+            self.assertNotIn(leaked, resp.data, f"leaked {leaked} to anonymous viewer")
+
+    @patch("menu.views.Order.objects")
+    def test_identified_order_full_for_owning_customer(self, objects_mock):
+        order = _make_order(customer_name="Sara", total="99.00")
+        order.customer_id = 42
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        req = self.factory.get("/api/order-status/ORD123/")
+        req.session = {"customer_id": 42}  # the owner
+        req.tenant = MagicMock(id=7)
+        resp = self.view(req, order_number="ORD123")
+        self.assertIn("customer_name", resp.data)
+        self.assertIn("items", resp.data)
+        self.assertEqual(resp.data["total"], "99.00")
+
+    @patch("menu.views.Order.objects")
+    def test_anonymous_dinein_order_shows_details(self, objects_mock):
+        """A dine-in / cash order with NO linked customer has no account PII to protect,
+        and the table-QR viewer needs their bill — so the full body is returned."""
+        order = _make_order(fulfillment_type="dine_in", total="45.00")
+        order.customer_id = None
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        resp = self._get()
+        self.assertIn("items", resp.data)
+        self.assertEqual(resp.data["total"], "45.00")

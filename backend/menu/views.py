@@ -3726,6 +3726,24 @@ class CustomerOrderStatusView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Ownership gate. This endpoint is AllowAny and order numbers are ~16M-guessable
+        # (ORD-XXXXXX), so the full order body — items, prices, customer name, delivery
+        # address, financials, rating text — is exposed ONLY to the order's own signed-in
+        # customer, or when the order has no linked customer at all (anonymous dine-in /
+        # cash tab: no account PII to protect, and the table-QR viewer needs their bill).
+        # Delivery/pickup are wallet-only pay-now so they always carry a customer_id and
+        # are always protected here. Any other caller gets a minimal status-only payload
+        # (whitelisted at the return below).
+        try:
+            session_customer_id = request.session.get("customer_id")
+        except Exception:
+            session_customer_id = None
+        try:
+            _owns = bool(order.customer_id) and bool(session_customer_id) and int(session_customer_id) == int(order.customer_id)
+        except (TypeError, ValueError):
+            _owns = False
+        _show_details = _owns or not order.customer_id
+
         items = [
             {
                 "dish_slug": item.dish_slug,
@@ -3760,10 +3778,6 @@ class CustomerOrderStatusView(APIView):
         # number would expose private feedback. We require the session customer
         # to match the order's linked customer.
         restaurant_feedback = None
-        try:
-            session_customer_id = request.session.get("customer_id")
-        except Exception:
-            session_customer_id = None
         if order.customer_id and session_customer_id:
             try:
                 same_customer = int(session_customer_id) == int(order.customer_id)
@@ -3863,7 +3877,7 @@ class CustomerOrderStatusView(APIView):
             except Exception:
                 delivery_block = None
 
-        return Response({
+        resp = {
             "order_number": order.order_number,
             "status": order.status,
             "fulfillment_type": order.fulfillment_type,
@@ -3931,7 +3945,18 @@ class CustomerOrderStatusView(APIView):
             "tenant_phone": tenant_phone,
             # VAT breakdown (empty/zero unless the owner set a VAT rate; prices are VAT-inclusive).
             **vat_fields,
-        })
+        }
+        if not _show_details:
+            # Non-owner (someone enumerating order numbers, or a shared tracking link):
+            # strip PII, items, and financials — leave only status, timing, and the
+            # restaurant's own public contact info so a "track my order" link still works.
+            _allowed = {
+                "order_number", "status", "fulfillment_type", "requires_prepayment",
+                "estimated_ready_minutes", "status_updated_at", "created_at",
+                "receipt_message", "tenant_phone",
+            }
+            resp = {k: v for k, v in resp.items() if k in _allowed}
+        return Response(resp)
 
 
 class CustomerOrderCancelView(APIView):
@@ -8570,10 +8595,13 @@ class OwnerZReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _require_owner(self, request):
-        user = request.user
-        return getattr(user, "is_tenant_owner", False) or (
-            hasattr(user, "role") and user.role == getattr(user, "Roles", type("_R", (), {"TENANT_OWNER": "owner"})).TENANT_OWNER
-        )
+        # SECURITY: this must enforce the tenant MATCH, not just the owner role. The
+        # session cookie is valid on every tenant subdomain (shared parent domain), so an
+        # owner of tenant A whose bespoke check only asked "are you an owner?" could pull
+        # tenant B's full Z-report (revenue, staff sales, labor, food cost). Delegate to the
+        # shared helper, which additionally requires user.tenant_id == request.tenant.id
+        # (superuser / platform-admin bypass preserved).
+        return _is_tenant_owner(request)
 
     def _get_profile(self, request):
         tenant = getattr(request, "tenant", None)
