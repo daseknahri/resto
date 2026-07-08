@@ -106,6 +106,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Align npm with the pinned dev toolchain
+        # node 20 ships npm 10, whose `npm audit` can report advisories that a
+        # current npm no longer flags (a known npm-10 audit quirk). Pin to a current
+        # npm so the audit gate below matches a local `npm audit` and is reproducible
+        # — a clean local audit and a clean CI audit should never disagree on the same
+        # lockfile. Does NOT weaken the gate: npm 11 is newer, not older.
+        run: npm install -g npm@11
       - name: Install deps
         run: |
           cd frontend
