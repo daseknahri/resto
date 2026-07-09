@@ -1,0 +1,9 @@
+# Test/dev-only dependencies — NOT shipped in the production image.
+# The test suite is a pytest project (see pytest.ini: DJANGO_SETTINGS_MODULE);
+# CI's backend job installs this file and runs `pytest` (matching local dev).
+# Kept out of requirements.txt so these never reach production or the prod CVE scan.
+# Pinned to the versions used locally.
+pytest==8.3.5
+pytest-django==4.9.0
+pytz==2024.2
+pypdf==5.4.0

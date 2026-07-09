@@ -37,6 +37,9 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install -r requirements.txt
+          # Test-only deps (pytest + pytz/pypdf the suite imports). The suite is a
+          # pytest project; without these the runner can't even import several modules.
+          pip install -r requirements-dev.txt
       - name: Backend lint (ruff — Pyflakes F rules)
         # Enforced backend equivalent of the frontend's eslint gate. Catches the
         # undefined-name / NameError class that previously shipped undetected (a
@@ -94,10 +97,14 @@ jobs:
           name: openapi-schema
           path: backend/openapi.json
       - name: Backend tests
+        # Run the suite with pytest — its actual framework (pytest.ini +
+        # DJANGO_SETTINGS_MODULE). The old `manage.py test` (unittest) couldn't import the
+        # pytest-native modules and ignored the @pytest.mark.skipif(not _DB_AVAILABLE)
+        # guards. With the CI Postgres service, the DB-backed tests run for real.
         run: |
           cd backend
           . .venv/bin/activate
-          python manage.py test tests -v 2
+          python -m pytest tests
 
   frontend:
     runs-on: ubuntu-latest
