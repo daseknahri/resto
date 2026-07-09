@@ -89,9 +89,9 @@ class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
         self.assertEqual(resp.status_code, 200)
         debit.assert_called_once()
         key = debit.call_args.kwargs.get("idempotency_key")
-        self.assertEqual(key, f"order-pay-{SCHEMA}-ORD-1")
+        self.assertEqual(key, f"order-pay-{connection.schema_name}-ORD-1")
         # The schema name must actually appear in the key (the whole point of the fix).
-        self.assertIn(SCHEMA, key)
+        self.assertIn(connection.schema_name, key)
 
     @patch("accounts.wallet_service.debit_wallet")
     @patch("menu.views.Order.objects")
@@ -210,8 +210,8 @@ class StaffOrderPaymentKeyTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         mock_dw.assert_called_once()
         key = mock_dw.call_args[1]["idempotency_key"]
-        self.assertEqual(key, f"orderpay:{SCHEMA}:99")
-        self.assertIn(SCHEMA, key)
+        self.assertEqual(key, f"orderpay:{connection.schema_name}:99")
+        self.assertIn(connection.schema_name, key)
 
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
@@ -322,8 +322,8 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_cw.assert_called_once()
         key = mock_cw.call_args[1]["idempotency_key"]
-        self.assertEqual(key, f"voiditem:{SCHEMA}:901")
-        self.assertIn(SCHEMA, key)
+        self.assertEqual(key, f"voiditem:{connection.schema_name}:901")
+        self.assertIn(connection.schema_name, key)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -439,7 +439,12 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
     second tenant's legitimate redemption is silently refused."""
 
     RAW = "client-key-xyz"
-    EXPECT = f"loyalty:{SCHEMA}:{RAW}"
+
+    @property
+    def EXPECT(self):
+        # Read the live schema at access time, NOT at import — the test may run inside a
+        # tenant schema, and the key embeds whatever schema is active when the code runs.
+        return f"loyalty:{connection.schema_name}:{self.RAW}"
 
     def setUp(self):
         from menu.views import CustomerLoyaltyRedeemView
@@ -476,7 +481,7 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         # The pre-flight replay lookup queries the SCHEMA-NAMESPACED key, not the raw one.
         read_kwargs = mock_wt.filter.call_args.kwargs
         self.assertEqual(read_kwargs.get("idempotency_key"), self.EXPECT)
-        self.assertIn(SCHEMA, read_kwargs["idempotency_key"])
+        self.assertIn(connection.schema_name, read_kwargs["idempotency_key"])
 
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
@@ -502,7 +507,7 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         mock_wt.create.assert_called_once()
         create_kwargs = mock_wt.create.call_args.kwargs
         self.assertEqual(create_kwargs.get("idempotency_key"), self.EXPECT)
-        self.assertIn(SCHEMA, create_kwargs["idempotency_key"])
+        self.assertIn(connection.schema_name, create_kwargs["idempotency_key"])
         # The non-idempotency `reference` field is NOT namespaced (left as the points marker).
         self.assertEqual(create_kwargs.get("reference"), "loyalty:100pts")
 
@@ -534,7 +539,7 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         # The IntegrityError-handler refetch (the LAST .filter call) uses the namespaced key.
         refetch_kwargs = mock_wt.filter.call_args.kwargs
         self.assertEqual(refetch_kwargs.get("idempotency_key"), self.EXPECT)
-        self.assertIn(SCHEMA, refetch_kwargs["idempotency_key"])
+        self.assertIn(connection.schema_name, refetch_kwargs["idempotency_key"])
 
 
 # ═════════════════════════════════════════════════════════════════════════════
