@@ -20,6 +20,24 @@ from accounts.wallet_service import (
     transfer_between_customers,
     transfer_to_customer,
 )
+import itertools
+
+# django-tenants + TransactionTestCase does NOT truncate the public-schema tables
+# (Customer/Plan/Tenant) between tests, so fixed keys leak and collide on the next
+# setUp. A delete-based cleanup can't be used either: deleting a Customer cascades to
+# the tenant-schema menu_order table (SET_NULL FK), which isn't in scope on the public
+# connection. So each DB test mints unique keys instead.
+_phone_seq = itertools.count(600000010)
+_suffix_seq = itertools.count(1)
+
+
+def _uphone():
+    """A unique, valid-format phone (+212 + 9 digits) per call."""
+    return "+212" + str(next(_phone_seq))
+
+
+def _usuffix():
+    return next(_suffix_seq)
 
 
 class MoneyHelperTests(SimpleTestCase):
@@ -39,7 +57,7 @@ class WalletServiceTests(TransactionTestCase):
     def setUp(self):
         from accounts.models import Customer
         self.customer = Customer.objects.create(
-            name="Wallet Test", wallet_balance=Decimal("0"), phone="+212600000001", phone_verified=True,
+            name="Wallet Test", wallet_balance=Decimal("0"), phone=_uphone(), phone_verified=True,
         )
 
     def _balance(self):
@@ -101,16 +119,26 @@ class TenantFloatTransferTests(TransactionTestCase):
     """Platform-funds-restaurant → restaurant-funds-customer (needs a DB)."""
 
     def setUp(self):
+        from unittest.mock import patch
         from accounts.models import Customer
         from tenancy.models import Plan, Tenant
+        # credit_tenant_float / transfer_to_customer re-fetch the Tenant and save it. A
+        # freshly-fetched Tenant has auto_create_schema=True, so django-tenants' save()
+        # would create the physical schema — running migrations that use
+        # AddIndexConcurrently, which cannot execute inside the test transaction. These
+        # tests only exercise the public-schema float ledger, so stub schema creation out.
+        _p = patch.object(Tenant, "create_schema", lambda self, **kw: None)
+        _p.start()
+        self.addCleanup(_p.stop)
+        # Unique keys per test — public rows aren't truncated between tests (module note);
+        # a delete-based cleanup would cascade into tenant-schema tables.
+        suffix = _usuffix()
         self.customer = Customer.objects.create(
-            name="Float Test", wallet_balance=Decimal("0"), phone="+212600000002", phone_verified=True,
+            name="Float Test", wallet_balance=Decimal("0"), phone=_uphone(), phone_verified=True,
         )
-        self.plan = Plan.objects.create(name="Test Plan", code="test-float-plan")
-        # auto_create_schema=False: we only need the public-schema row (the float lives
-        # on it), not a physical tenant schema — keeps the test light.
-        self.tenant = Tenant(schema_name="test_float_t", name="Float Resto",
-                             slug="float-resto", plan=self.plan, float_balance=Decimal("0"))
+        self.plan = Plan.objects.create(name="Test Plan", code=f"test-float-plan-{suffix}")
+        self.tenant = Tenant(schema_name=f"test_float_{suffix}", name="Float Resto",
+                             slug=f"float-resto-{suffix}", plan=self.plan, float_balance=Decimal("0"))
         self.tenant.auto_create_schema = False
         self.tenant.save()
 
@@ -206,10 +234,10 @@ class P2PTransferTests(TransactionTestCase):
     def setUp(self):
         from accounts.models import Customer
         self.alice = Customer.objects.create(
-            name="Alice", wallet_balance=Decimal("0"), phone="+212600000003", phone_verified=True,
+            name="Alice", wallet_balance=Decimal("0"), phone=_uphone(), phone_verified=True,
         )
         self.bob = Customer.objects.create(
-            name="Bob", wallet_balance=Decimal("0"), phone="+212600000004", phone_verified=True,
+            name="Bob", wallet_balance=Decimal("0"), phone=_uphone(), phone_verified=True,
         )
 
     def _bal(self, cust):

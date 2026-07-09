@@ -171,17 +171,16 @@ class LoginLockoutDBTests(TestCase):
         Returns (user, None) on success, (None, str) on ValidationError.
         """
         from accounts.serializers import LoginSerializer
-        from rest_framework.exceptions import ValidationError
         s = LoginSerializer(data={"identifier": identifier, "password": password})
-        s.is_valid()  # triggers validate()
-        try:
-            result = s.validate({"identifier": identifier, "password": password})
-            return result.get("user"), None
-        except ValidationError as exc:
-            msgs = exc.detail
-            if isinstance(msgs, list):
-                return None, str(msgs[0])
-            return None, str(msgs)
+        # Run validation EXACTLY ONCE (via is_valid). The old helper also called
+        # s.validate() explicitly afterwards, which ran the failed-attempt counter twice
+        # per attempt — so the counter read 2 after one attempt and the lockout tripped at
+        # half the intended threshold.
+        if s.is_valid():
+            return s.validated_data.get("user"), None
+        nfe = s.errors.get("non_field_errors") or []
+        msg = str(nfe[0]) if nfe else str(s.errors)
+        return None, msg
 
     def test_lock_triggers_after_max_failures(self):
         """After LOGIN_MAX_FAILURES wrong passwords, the next attempt is rejected
