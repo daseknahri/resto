@@ -42,7 +42,7 @@
 | **SCHEMA-1** | API | 🟡 Med | OpenAPI via legacy `generateschema` → duplicate operationIds, unusable for client-gen | S |
 | **DATA-2** | Data | 🟡 Med | `CustomerOrderRef` mirror sync is post_save-only + `except:pass` → silent drift | S |
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog | L |
-| **DATA-4** | Data | 🟡 Med | Directory opt-in fields nullable with no "opt-in requires them" rule | S |
+| ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in fields nullable with no "opt-in requires them" rule~~ — serializer now requires city+coords to opt in | ~~S~~ |
 | **DATA-5** | Data | 🟡 Med | Four denormalized `Profile` mirrors kept by scattered signals → drift on a missed one | M |
 | **STRUCT-2** | Structure | 🟡 Med | 215 migrations, `Order` field sprawl, no squashing → slow per-schema deploys | M |
 | **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files | M |
@@ -356,14 +356,18 @@ across 76 migrations + every serializer/view/frontend ref.
 then, keep verticals at `coming_soon` (see the product recommendation in ARCHITECTURE §11).
 **Effort:** L. **Source:** data-model review.
 
-### DATA-4 — Directory opt-in has no data prerequisite
+### DATA-4 — Directory opt-in has no data prerequisite  ✅ ADDRESSED (2026-07-10)
 **Where:** `cuisine_type`, `city`, `lat`, `lng` are `blank/null=True` with no rule tying them to
 `directory_opt_in=True`.
 **Failure scenario:** A restaurant opts into the public directory with empty city/coords →
 distance-sort silently breaks; every consumer must null-guard (the frontend already had to).
-**Fix:** Enforce "opt-in requires discoverable fields" in the model/serializer `clean()`, or model
-listing as a child row that only exists when complete.
-**Effort:** S. **Source:** data-model review.
+**Resolution:** `ProfileSerializer.validate` now rejects `directory_opt_in=True` unless the
+effective **city** and **valid coordinates** are present (coords checked *after* the existing
+(0,0)/out-of-range normalization). Enforced only when `directory_opt_in` is in the update payload
+(mirrors the disable-note rule), so turning it on requires the data but editing an unrelated field
+on an already-listed profile isn't blocked. Tests: `tests/test_directory_optin_validation.py` (7,
+no DB). Left `cuisine_type` optional so non-food verticals aren't over-constrained.
+**Source:** data-model review.
 
 ### DATA-5 — Four `Profile` mirrors kept by scattered signals
 **Where:** `rating_avg`, `rating_count`, `marketplace_promos`, `closure_dates` — each synced by a
