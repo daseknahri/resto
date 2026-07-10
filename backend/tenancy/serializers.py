@@ -554,6 +554,25 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
                     attrs["lat"] = None
                 if "lng" in attrs:
                     attrs["lng"] = None
+
+        # DATA-4: opting into the public directory requires the fields the marketplace card
+        # and distance sort depend on (city + valid coordinates). Enforce only when
+        # directory_opt_in is part of THIS update and resolves True (mirrors the disable-note
+        # rule) — turning it on requires the data, but editing an unrelated field on an
+        # already-listed profile isn't blocked. Runs AFTER coord normalization above, so a bad
+        # (0,0)/out-of-range pair is treated as "no location".
+        if "directory_opt_in" in attrs and attrs.get("directory_opt_in"):
+            from .delivery_pricing import valid_coord
+            eff_city = attrs.get("city") if "city" in attrs else getattr(self.instance, "city", "")
+            d_lat = attrs.get("lat") if "lat" in attrs else getattr(self.instance, "lat", None)
+            d_lng = attrs.get("lng") if "lng" in attrs else getattr(self.instance, "lng", None)
+            missing = {}
+            if not str(eff_city or "").strip():
+                missing["city"] = "Add your city before listing in the public directory."
+            if not valid_coord(d_lat, d_lng):
+                missing["lat"] = "Set your location on the map before listing in the public directory."
+            if missing:
+                raise serializers.ValidationError(missing)
         return attrs
 
     def update(self, instance, validated_data):

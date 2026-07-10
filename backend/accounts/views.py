@@ -8518,10 +8518,29 @@ class CustomerTopUpWebhookView(APIView):
         cs = event.get("data", {}).get("object", {})
         meta = cs.get("metadata") or {}
         customer_id = meta.get("customer_id")
-        amount_str = meta.get("amount")
         event_id = event.get("id", "")
 
-        if not customer_id or not amount_str or not event_id:
+        # MONEY-3: only credit a session that actually cleared, and credit the SETTLED
+        # amount Stripe reports (amount_total, in the currency's minor unit) — NOT the
+        # client-echoed metadata amount, which is merely what we REQUESTED at intent time.
+        # A partial/adjusted/tampered session would otherwise over- or under-credit.
+        if cs.get("payment_status") not in (None, "paid"):
+            return Response({"ok": True})  # session didn't clear → nothing to credit
+
+        amount_total = cs.get("amount_total")
+        if amount_total is not None:
+            from decimal import Decimal as _D, InvalidOperation as _IO
+            try:
+                amount_value = (_D(str(amount_total)) / _D("100")).quantize(_D("0.01"))
+            except (_IO, ValueError, TypeError):
+                amount_value = None
+        else:
+            # Fallback for events without amount_total (older API / test fixtures): the
+            # server-set metadata amount. Trustworthy only because the signature is verified
+            # in production — always set PSP_STRIPE_WEBHOOK_SECRET before going live.
+            amount_value = meta.get("amount")
+
+        if not customer_id or amount_value in (None, "") or not event_id:
             return Response(
                 {"ok": False, "detail": "Missing metadata."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -8531,7 +8550,7 @@ class CustomerTopUpWebhookView(APIView):
         try:
             credit_wallet(
                 customer_id=customer_id,
-                amount=amount_str,
+                amount=amount_value,
                 idempotency_key=f"stripe:{event_id}",
                 reference=f"stripe:{cs.get('id', '')}",
                 note="PSP top-up via Stripe Checkout",

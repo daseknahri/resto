@@ -105,14 +105,17 @@ class WebhookDisabledTests(SimpleTestCase):
 class WebhookEventHandlingTests(SimpleTestCase):
     """Webhook credits wallet on checkout.session.completed; idempotency key is schema-namespaced."""
 
-    def _make_stripe_event(self, event_id="evt_test123", customer_id="42", amount="150.00"):
+    def _make_stripe_event(self, event_id="evt_test123", customer_id="42",
+                           amount_total=15000, meta_amount="150.00"):
         return {
             "id": event_id,
             "type": "checkout.session.completed",
             "data": {
                 "object": {
                     "id": "cs_test_abc",
-                    "metadata": {"customer_id": customer_id, "amount": amount},
+                    "payment_status": "paid",
+                    "amount_total": amount_total,   # settled amount, minor units (cents)
+                    "metadata": {"customer_id": customer_id, "amount": meta_amount},
                 }
             },
         }
@@ -146,7 +149,44 @@ class WebhookEventHandlingTests(SimpleTestCase):
         # Idempotency key must be namespaced with stripe: prefix (security invariant).
         self.assertEqual(call_kwargs["idempotency_key"], "stripe:evt_test123")
         self.assertEqual(call_kwargs["customer_id"], "42")
-        self.assertEqual(call_kwargs["amount"], "150.00")
+        # Amount is the SETTLED amount_total (15000 cents → 150.00), not metadata.
+        self.assertEqual(str(call_kwargs["amount"]), "150.00")
+
+    @override_settings(**_PSP_ON)
+    def test_credits_settled_amount_total_over_metadata(self):
+        """MONEY-3: the settled amount_total wins over the client-echoed metadata amount."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_stripe_event(amount_total=5000, meta_amount="999.00")
+        payload = json.dumps(event).encode()
+        factory = APIRequestFactory()
+        req = factory.post("/api/customer/topup/webhook/", data=payload, content_type="application/json")
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            mock_credit.return_value = MagicMock()
+            mock_stripe = MagicMock()
+            mock_stripe.api_key = ""
+            mock_stripe.error.SignatureVerificationError = Exception
+            with patch.dict("sys.modules", {"stripe": mock_stripe}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(str(mock_credit.call_args.kwargs["amount"]), "50.00")  # 5000 cents
+
+    @override_settings(**_PSP_ON)
+    def test_unpaid_session_does_not_credit(self):
+        """A session that didn't clear (payment_status != paid) must not credit."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_stripe_event()
+        event["data"]["object"]["payment_status"] = "unpaid"
+        payload = json.dumps(event).encode()
+        factory = APIRequestFactory()
+        req = factory.post("/api/customer/topup/webhook/", data=payload, content_type="application/json")
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            mock_stripe = MagicMock()
+            mock_stripe.api_key = ""
+            mock_stripe.error.SignatureVerificationError = Exception
+            with patch.dict("sys.modules", {"stripe": mock_stripe}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertTrue(resp.data.get("ok"))
+        mock_credit.assert_not_called()
 
     @override_settings(**_PSP_ON)
     def test_ignores_non_completed_event(self):
