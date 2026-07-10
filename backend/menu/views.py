@@ -10862,6 +10862,9 @@ class OwnerCustomerListView(APIView):
         if linked_customer_ids:
             try:
                 from accounts.models import CustomerRating
+                # Deliberately NOT filtered by tenant_id: the platform-wide
+                # aggregate trust score is the product (see CustomerRating
+                # docstring) — every restaurant sees the same average.
                 ratings = (
                     CustomerRating.objects
                     .filter(customer_id__in=linked_customer_ids)

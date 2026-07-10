@@ -18,13 +18,13 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | 🔴 Critical | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach | L |
+| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach. **Backstop middleware shipped** (foreign-tenant staff sessions downgraded to anonymous); policy layer + IDENTITY-1 remain | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
 | **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | ◑ Partial | count-floor guard **added** in CI; **still**: DB-fail-not-skip, E2E-in-CI, convert mock money/isolation tests | M |
+| **TEST-1** | Testing | ◑ Partial | count-floor + DB-fail-not-skip + **Playwright E2E now wired into CI** (MFA DB tests un-skipped); **still**: convert mock money/isolation tests to real DB integration | M |
 | **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
@@ -72,6 +72,23 @@ tenant-match), `IsOrderOwner`, `IsPlatformAdmin`, applied via `permission_classe
 public-schema object returned must carry `tenant_id == request.tenant.id` — a forgotten filter
 becomes a fail-closed no-op instead of a leak.
 **Effort:** L. Do it in slices (backstop first — it protects everything immediately).
+**Progress (slice 1 — backstop, 2026-07-10):** `CrossTenantSessionGuardMiddleware`
+(`config/middleware.py`, registered after `AuthenticationMiddleware`) now **downgrades to
+anonymous** any tenant-owner/staff session on a *foreign* tenant's host (mismatched or null
+`user.tenant_id`), so a forgotten per-view guard fails closed (401/403) instead of leaking —
+the Z-report/IDOR class is dead app-wide. A downgrade rather than a 403 because the shared
+cookie makes "owner of A browsing restaurant B as a guest" the normal case; superusers and
+platform admins are exempt (matching `_is_tenant_owner`/`IsPlatformAdmin`); sessions are not
+flushed (customer identity may share the session). Logged as `cross_tenant_session_downgraded`.
+Tests: `tests/test_cross_tenant_session_guard.py` (13, no DB). A query-level backstop
+(scoped manager) was evaluated and deliberately **deferred**: an inventory of all public-model
+call-sites found the unscoped majority is *legitimately* cross-tenant (driver app, customer
+marketplace, wallet ledger, admin, reconcile/GDPR commands), so auto-scoping would break the
+app for marginal gain; revisit after IDENTITY-1 lands. The one flagged query
+(`menu/views.py` CustomerRating average) is by-design platform-wide (per model docstring) and
+now commented as such.
+**Remaining:** (1) IDENTITY-1, (2) the policy-class layer (`IsTenantOwner` etc.) + delete both
+`_is_tenant_owner` helpers.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
 ### OPS-1 — Single Postgres, no replica, no PITR
@@ -160,11 +177,34 @@ concurrency/isolation regression ships.
 Playwright E2E (incl. the cross-subdomain-CSRF spec) into CI. (3) Add a **test-count floor**
 so a collection error can't silently drop tests. (4) Convert the highest-value money/isolation
 mocks into real DB integration tests.
-**Resolution (this batch — item 3 done):** the CI "Backend tests" step now asserts a floor on
+**Resolution (item 3, 2026-07-10):** the CI "Backend tests" step now asserts a floor on
 `passed` (≥ 4000) and a ceiling on `skipped` (≤ 100) parsed from the pytest summary — a collection
 error or a mass DB-self-skip (the exact false-green this warns about) now fails CI instead of
 passing with a silently shrunken suite. Parsing validated locally against real/edge summaries.
-**Remaining:** items 1 (DB-fail-not-skip), 2 (E2E in CI), 4 (convert mock money/isolation tests).
+**Resolution (item 1, 2026-07-10):** CI now sets `PYTEST_REQUIRE_DB=1`; `tests/conftest.py`
+aborts the whole session (`pytest_sessionstart`) if Postgres is unreachable, and the per-file
+availability guards re-raise instead of skipping. **Bonus root-cause find:** the old in-file probe
+(`django.db.connection.ensure_connection()` at import) *always* raised under pytest-django's
+access blocker — so the 24 MFA DB tests (`test_mfa_totp.py` B1–B7) had **never actually run in
+CI** (they were the mysterious "24 skipped" baseline). The probe now connects via the raw
+psycopg2 driver (`tests/_dbprobe.py`), so those tests execute in CI for the first time — and
+that first run exposed that all 24 were **written but never validated**: they drove the full
+`APIClient` stack against the default host `testserver`, which is neither a tenant domain nor a
+`PUBLIC_SCHEMA_HOST`, so every request 404'd at the tenant middleware before reaching a view.
+Fixed by pointing the client at the public host `localhost` (the MFA/login endpoints live in the
+shared urlconf and never read `request.tenant`); the 24 now exercise the real enrollment / login-
+gate / verify / disable flows.
+**Resolution (item 2, 2026-07-10):** a new `e2e` CI job (`.github/workflows/ci.yml`, gated on the
+backend+frontend jobs) stands up the real stack — Postgres, `migrate_schemas`, `seed_plans
+--with-demo` (creates the `demo` tenant + admin + owner), `runserver` on :8000, Vite dev on :5173,
+`demo.localhost` mapped to loopback — and runs the Playwright specs. **Split gate:** the
+`cross-subdomain-auth-csrf` spec (the security/isolation + CSRF regression this item names) and
+`mobile-breakpoint-regression` are **blocking**; `critical-saas-flow` (full onboarding journey,
+most timing/UI-fragile) runs **informational** (`continue-on-error`) so flake can't block unrelated
+PRs — promote it to blocking once it proves stable. Traces/screenshots/server logs upload as
+artifacts on every run.
+**Remaining:** item 4 (convert the highest-value mock money/isolation tests into real DB
+integration tests).
 **Effort:** M (remaining). **Source:** testing/CI review.
 
 ### DATA-1 — Cross-schema refs have no orphan protection

@@ -402,12 +402,24 @@ class A6_MFAStatusViewTests(SimpleTestCase):
 # B: DB-backed tests (TestCase — skip locally when Postgres is unavailable)
 # ════════════════════════════════════════════════════════════════════════════════
 
-try:
-    from django.db import connection as _conn
-    _conn.ensure_connection()
-    _DB_AVAILABLE = True
-except Exception:
-    _DB_AVAILABLE = False
+# RISK TEST-1: probe with the raw driver (see _dbprobe.py) — the old
+# `django.db.connection.ensure_connection()` probe always raised under
+# pytest-django's access blocker, so these B tests silently skipped even in CI
+# with Postgres up. With PYTEST_REQUIRE_DB set (CI), an unreachable DB raises
+# at collection instead of downgrading to a skip.
+import _dbprobe
+
+_DB_AVAILABLE = _dbprobe.db_available()
+
+# The MFA/login endpoints live in the SHARED (public-schema) urlconf, so these
+# full-stack APIClient requests must arrive on a host the tenant middleware
+# accepts. The DRF test client defaults to host "testserver", which is neither a
+# provisioned tenant domain nor a PUBLIC_SCHEMA_HOST, so every request 404s
+# before reaching a view. "localhost" is a default PUBLIC_SCHEMA_HOST (and is in
+# ALLOWED_HOSTS under DEBUG), so it routes to the public schema where these
+# endpoints are registered. (These are plain TestCases → public schema; the MFA
+# views never read request.tenant, so no tenant context is needed.)
+_PUBLIC_HOST = "localhost"
 
 
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="Postgres not available locally")
@@ -420,7 +432,7 @@ class B1_EnrollmentFlowTests(TestCase):
             password="testpass123",
             role=User.Roles.TENANT_OWNER,
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
         self.client.force_authenticate(user=self.user)
 
     def test_setup_creates_pending_device(self):
@@ -502,7 +514,7 @@ class B2_LoginGateTests(TestCase):
             password="testpass123",
             role=User.Roles.TENANT_OWNER,
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
 
     def _enroll(self, user):
         """Helper: enroll a confirmed TOTP device for the given user."""
@@ -562,7 +574,7 @@ class B3_VerifyTOTPTests(TestCase):
             confirmed=True,
             confirmed_at=timezone.now(),
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
 
     def _login(self):
         resp = self.client.post(
@@ -612,7 +624,7 @@ class B4_BackupCodeLoginTests(TestCase):
             confirmed_at=timezone.now(),
             backup_codes=[hashed],
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
 
     def _login(self):
         resp = self.client.post(
@@ -689,7 +701,7 @@ class B5_VerifyLockoutTests(TestCase):
             confirmed=True,
             confirmed_at=timezone.now(),
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
 
     def _login(self):
         resp = self.client.post(
@@ -731,7 +743,7 @@ class B6_DisableTests(TestCase):
             confirmed=True,
             confirmed_at=timezone.now(),
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
         self.client.force_authenticate(user=self.user)
 
     def test_disable_with_correct_password_succeeds(self):
@@ -786,7 +798,7 @@ class B7_RegressionFlagEmptyNoDeviceTests(TestCase):
             password="testpass123",
             role=User.Roles.TENANT_OWNER,
         )
-        self.client = APIClient()
+        self.client = APIClient(SERVER_NAME=_PUBLIC_HOST)
 
     def test_no_device_no_flag_login_returns_200(self):
         with self.settings(MFA_REQUIRED_ROLES=[]):

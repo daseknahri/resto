@@ -101,6 +101,14 @@ jobs:
         # DJANGO_SETTINGS_MODULE). The old `manage.py test` (unittest) couldn't import the
         # pytest-native modules and ignored the @pytest.mark.skipif(not _DB_AVAILABLE)
         # guards. With the CI Postgres service, the DB-backed tests run for real.
+        #
+        # PYTEST_REQUIRE_DB (TEST-1 item 1): DB tests must FAIL, not skip, when the DB
+        # is absent here. tests/conftest.py asserts DB reachability at session start and
+        # aborts the run if the Postgres service is gone; the _DB_AVAILABLE-style guards
+        # re-raise instead of skipping. Locally the variable stays unset (no Postgres on
+        # dev machines is the documented norm).
+        env:
+          PYTEST_REQUIRE_DB: "1"
         run: |
           cd backend
           . .venv/bin/activate
@@ -108,10 +116,12 @@ jobs:
           python -m pytest tests -q | tee pytest-summary.txt
           # TEST-1 floor: a collection error or a mass DB-self-skip must not pass CI as
           # "green" with a silently shrunken suite. Assert a floor on `passed` and a ceiling
-          # on `skipped` (baseline ~4707 passed / 24 skipped as of 2026-07-10 — bump the floor
-          # up over time as the suite grows). The Postgres service above means the DB-backed
-          # tests RUN here, so an abnormal skip spike means the DB went away and those tests
-          # were quietly not exercised — exactly the false-green this guards against.
+          # on `skipped` (baseline was ~4707 passed / 24 skipped as of 2026-07-10; those 24
+          # were the MFA DB tests whose availability probe always failed under pytest-django's
+          # access blocker — fixed via tests/_dbprobe.py, so expect ~4731 passed / ~0 skipped.
+          # Bump the floor up over time as the suite grows). The Postgres service above means
+          # the DB-backed tests RUN here, so an abnormal skip spike means the DB went away and
+          # those tests were quietly not exercised — exactly the false-green this guards against.
           summary="$(tail -n 20 pytest-summary.txt)"
           passed="$(echo "$summary" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || true)"
           skipped="$(echo "$summary" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || true)"
@@ -194,3 +204,158 @@ jobs:
           npm run lint
           npm run test
           npm run build
+
+  # ── RISK TEST-1 (item 2): wire the Playwright E2E into CI ─────────────────────
+  # The full-stack browser suite (frontend/tests/e2e) previously existed but never
+  # ran in CI, so a cross-subdomain-session / CSRF regression — the exact class the
+  # Z-report leak came from — could ship green. This job stands up the real stack
+  # (Postgres + Django + Vite + a provisioned `demo` tenant) and runs the specs.
+  #
+  # Gate policy (deliberate split — see the two test steps):
+  #   - cross-subdomain-auth-csrf + mobile-breakpoint specs are BLOCKING: they are
+  #     stable and guard the security/isolation + layout invariants TEST-1 targets.
+  #   - critical-saas-flow (full onboarding journey: provisions a tenant, scrapes the
+  #     activation link from the admin UI, drives the wizard) is INFORMATIONAL
+  #     (continue-on-error): highest value but the most timing/UI-text fragile, so it
+  #     must not block unrelated PRs on flake. Revisit once it proves stable in CI.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    env:
+      DJANGO_SECRET_KEY: ci-test-only-not-a-real-secret-key
+      DJANGO_DEBUG: "True"
+      DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+      # E2E identities — mirror infra/prepare_e2e.sh defaults; consumed by both the
+      # seeding step below and the Playwright specs (E2E_* vars on the test steps).
+      ADMIN_EMAIL: e2e-admin@example.com
+      ADMIN_PASSWORD: E2E_Admin_123!
+      OWNER_EMAIL: test_resto_user@demo.local
+      OWNER_PASSWORD: admin123
+      DEMO_DOMAIN: demo.localhost
+    services:
+      postgres:
+        image: postgres:16
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: resto
+          POSTGRES_USER: resto
+          POSTGRES_PASSWORD: resto
+        options: >-
+          --health-cmd="pg_isready -U resto" --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Map the demo tenant host to loopback
+        # Chromium resolves *.localhost to loopback on its own, but the shell
+        # health-check curls below use the system resolver, which does not.
+        run: echo "127.0.0.1 demo.localhost" | sudo tee -a /etc/hosts
+
+      - name: Install backend deps
+        run: |
+          cd backend
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Migrate + seed the demo tenant, admin, and owner
+        # Uses migrate_schemas (django-tenants), matching the backend job — NOT the
+        # bare `migrate` in infra/prepare_e2e.sh, whose behaviour under django-tenants
+        # is exactly what the backend job avoids. The seed commands themselves mirror
+        # prepare_e2e.sh (the local equivalent developers run).
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py migrate_schemas --shared
+          python manage.py migrate_schemas --tenant
+          python manage.py seed_plans --with-demo --domain "$DEMO_DOMAIN" --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"
+          python manage.py ensure_platform_admin --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"
+          python manage.py shell -c "from accounts.models import User; from tenancy.models import Tenant; t = Tenant.objects.get(slug='demo'); u, _ = User.objects.get_or_create(email='$OWNER_EMAIL', defaults={'username': '$OWNER_EMAIL', 'role': 'tenant_owner', 'tenant': t}); u.username = '$OWNER_EMAIL'; u.role = 'tenant_owner'; u.tenant = t; u.is_active = True; u.set_password('$OWNER_PASSWORD'); u.save(); print('Demo owner ensured:', u.email)"
+
+      - name: Start backend (0.0.0.0:8000)
+        run: |
+          cd backend
+          . .venv/bin/activate
+          nohup python manage.py runserver 0.0.0.0:8000 --noreload > "$GITHUB_WORKSPACE/backend-e2e.log" 2>&1 &
+          echo "started backend pid $!"
+
+      - name: Install frontend deps
+        run: |
+          npm install -g npm@11
+          cd frontend
+          npm ci
+
+      - name: Start frontend (Vite dev, 0.0.0.0:5173)
+        env:
+          # demo.localhost auto-resolves to demo.localhost:8000/api (src/lib/api.js),
+          # so this only matters for the plain-localhost/127.0.0.1 public-host specs.
+          VITE_API_BASE_URL: http://localhost:8000/api
+        run: |
+          cd frontend
+          nohup npm run dev -- --host 0.0.0.0 --port 5173 > "$GITHUB_WORKSPACE/frontend-e2e.log" 2>&1 &
+          echo "started frontend pid $!"
+
+      - name: Wait for backend + frontend to be ready
+        run: |
+          ok=""
+          for i in $(seq 1 60); do
+            if curl -sf http://demo.localhost:8000/api/health/ >/dev/null 2>&1; then ok=1; echo "backend ready"; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then echo "::error::backend did not become ready"; tail -n 100 "$GITHUB_WORKSPACE/backend-e2e.log" || true; exit 1; fi
+          ok=""
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ >/dev/null 2>&1; then ok=1; echo "frontend ready"; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then echo "::error::frontend did not become ready"; tail -n 100 "$GITHUB_WORKSPACE/frontend-e2e.log" || true; exit 1; fi
+
+      - name: Install Playwright browser
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: E2E — cross-subdomain session/CSRF + mobile breakpoints (blocking)
+        env:
+          E2E_FRONTEND_URL: http://demo.localhost:5173
+          E2E_PUBLIC_FRONTEND_URL: http://127.0.0.1:5173
+          E2E_API_URL: http://demo.localhost:8000
+          E2E_ADMIN_EMAIL: e2e-admin@example.com
+          E2E_ADMIN_PASSWORD: E2E_Admin_123!
+          E2E_OWNER_EMAIL: test_resto_user@demo.local
+          E2E_OWNER_PASSWORD: admin123
+        run: |
+          cd frontend
+          npx playwright test tests/e2e/cross-subdomain-auth-csrf.spec.js tests/e2e/mobile-breakpoint-regression.spec.js
+
+      - name: E2E — critical onboarding flow (informational, non-blocking)
+        continue-on-error: true
+        env:
+          E2E_FRONTEND_URL: http://demo.localhost:5173
+          E2E_PUBLIC_FRONTEND_URL: http://127.0.0.1:5173
+          E2E_API_URL: http://demo.localhost:8000
+          E2E_ADMIN_EMAIL: e2e-admin@example.com
+          E2E_ADMIN_PASSWORD: E2E_Admin_123!
+          E2E_OWNER_EMAIL: test_resto_user@demo.local
+          E2E_OWNER_PASSWORD: admin123
+        run: |
+          cd frontend
+          npx playwright test tests/e2e/critical-saas-flow.spec.js
+
+      - name: Upload E2E artifacts (traces, screenshots, server logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-artifacts
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+            backend-e2e.log
+            frontend-e2e.log
+          if-no-files-found: ignore
+          retention-days: 7

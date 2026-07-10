@@ -177,6 +177,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # AUTHZ-1 backstop: must run AFTER AuthenticationMiddleware (needs
+    # request.user) and before any view logic — downgrades a staff session
+    # to anonymous on a foreign tenant's host so forgotten per-view tenant
+    # checks fail closed instead of leaking. See config/middleware.py.
+    "config.middleware.CrossTenantSessionGuardMiddleware",
     "config.middleware.RequestLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
