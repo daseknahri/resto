@@ -24,7 +24,7 @@
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | 🟠 High | Mock tests patch the machinery they test; DB tests self-skip; E2E not in CI | M |
+| **TEST-1** | Testing | ◑ Partial | count-floor guard **added** in CI; **still**: DB-fail-not-skip, E2E-in-CI, convert mock money/isolation tests | M |
 | **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
@@ -32,7 +32,7 @@
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale (O(N) migrations, no PgBouncer, atomic-index landmine) | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout "owed" check reads an unlocked aggregate → double-pay race~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook would credit metadata, not settled `amount_total`~~ — now credits `amount_total`, paid-only | ~~S~~ |
-| **OPS-3** | Ops | 🟡 Med | One Redis = cache+sessions+WS+broker SPOF; eviction logs users out | M |
+| **OPS-3** | Ops | 🟡 Med | One Redis SPOF; sessions cache-only (eviction logs users out) — ⚠️ naive `cached_db` fix BREAKS (django-tenants schema); needs a schema-pinned backend | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | 🟡 Med | `acks_late` + no reject-on-worker-lost + no DLQ → duplicate SMS/email on worker loss | S |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
@@ -46,7 +46,7 @@
 | **DATA-5** | Data | 🟡 Med | Four denormalized `Profile` mirrors kept by scattered signals → drift on a missed one | M |
 | **STRUCT-2** | Structure | 🟡 Med | 215 migrations, `Order` field sprawl, no squashing → slow per-schema deploys | M |
 | **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files | M |
-| **OPS-4** | Ops | 🟢 Low | `daphne` is a pinned-but-never-invoked dependency (dead weight) | S |
+| **OPS-4** | Ops | 🟢 Low | ⏭️ Re-scoped — `daphne` is a registered `INSTALLED_APP` (ASGI runserver), NOT dead weight; removing it is a dev-tooling change, not a freebie | S |
 
 \* MULTITENANCY-1 is "high" as a *strategic* decision to make consciously, not an urgent bug.
 
@@ -148,7 +148,7 @@ split the god-files by bounded context (orders / catalog / dine-in / analytics /
 **Effort:** L. Start with `OrderService` — highest value, and it de-risks the money path.
 **Source:** backend-structure review.
 
-### TEST-1 — Test suite gives false confidence
+### TEST-1 — Test suite gives false confidence  ◑ PARTIALLY ADDRESSED (2026-07-10)
 **Where:** mock-heavy `SimpleTestCase`s that patch `WalletTransaction.objects`,
 `transaction.atomic`, `select_for_update`; DB tests self-skip when Postgres is absent;
 Playwright E2E specs exist but aren't wired into CI; no test-count floor.
@@ -160,8 +160,12 @@ concurrency/isolation regression ships.
 Playwright E2E (incl. the cross-subdomain-CSRF spec) into CI. (3) Add a **test-count floor**
 so a collection error can't silently drop tests. (4) Convert the highest-value money/isolation
 mocks into real DB integration tests.
-**Effort:** M.
-**Source:** testing/CI review.
+**Resolution (this batch — item 3 done):** the CI "Backend tests" step now asserts a floor on
+`passed` (≥ 4000) and a ceiling on `skipped` (≤ 100) parsed from the pytest summary — a collection
+error or a mass DB-self-skip (the exact false-green this warns about) now fails CI instead of
+passing with a silently shrunken suite. Parsing validated locally against real/edge summaries.
+**Remaining:** items 1 (DB-fail-not-skip), 2 (E2E in CI), 4 (convert mock money/isolation tests).
+**Effort:** M (remaining). **Source:** testing/CI review.
 
 ### DATA-1 — Cross-schema refs have no orphan protection
 **Where:** `(tenant_id, order_number)` on `DeliveryJob`, `WalletTransaction`, `CustomerOrderRef`,
@@ -272,8 +276,13 @@ unpaid-no-credit; 10 total, no DB needed).
 **Failure scenario:** A WS fan-out spike or the 256 MB ceiling triggers eviction → cached
 idempotency mutexes/throttle counters vanish **and** sessions get evicted, logging users out
 mid-shift.
-**Fix:** Move sessions off the cache (`cached_db` or signed cookies); split the broker onto its
-own instance at first contention.
+**Fix:** Move sessions off the cache, then split the broker onto its own instance at first contention.
+**⚠️ GOTCHA (verified 2026-07-10):** the naive `SESSION_ENGINE = cached_db` swap **breaks prod** here —
+django-tenants switches the connection to the *tenant* schema during middleware unwind, and
+`django_session` lives only in `public`, so a `cached_db` write 500s on every authenticated request
+(the team documented this at `config/settings.py` ~L409). The real fix is a **schema-pinned session
+backend** (force `schema_context("public")` around session DB writes) or **signed-cookie sessions**
+(size/invalidation tradeoffs) — a deliberate custom component, not a one-line setting.
 **Effort:** M. **Source:** async/realtime review.
 
 ### ASYNC-3 — Realtime and polling both run at full rate
@@ -401,10 +410,15 @@ hand-listed in three god url-files. Maintainable now (authors hold it in their h
 survive team growth. **Fix:** naming convention + per-domain url modules as part of STRUCT-1.
 **Effort:** M. **Source:** API/auth review.
 
-### OPS-4 — `daphne` is dead weight
-`daphne==4.2.2` is pinned but never invoked (prod serves via uvicorn). Enlarges the image, invites
-"which server is authoritative?" confusion. **Fix:** drop it from `requirements.txt`.
-**Effort:** S. **Source:** async/realtime review.
+### OPS-4 — `daphne` — re-scoped (NOT dead weight)  ⏭️ (2026-07-10)
+The async review called `daphne` dead weight, but on inspection it is **wired into `INSTALLED_APPS`**
+(`config/settings.py` ~L163 inserts it when channels is present) — it provides the ASGI `runserver`
+dev command. Prod serves via uvicorn, so `daphne` isn't the *server*, but removing the package also
+means removing the `INSTALLED_APPS` insertion and changes local `runserver` to the WSGI dev server
+(no WS in dev runserver). That's a deliberate dev-tooling change, **not** the free image-slim win the
+review implied — **skipped** as low-value/low-priority. If you do remove it: drop the requirement
+*and* the settings insertion, and confirm nobody relies on `manage.py runserver` for local WS.
+**Effort:** S. **Source:** async/realtime review (claim corrected here).
 
 ---
 
