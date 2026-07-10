@@ -88,6 +88,36 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
         logger.exception("Failed to mirror order %s to public index", getattr(instance, "order_number", "?"))
 
 
+@receiver(post_delete, sender="menu.Order")
+def remove_order_from_public_index(sender, instance, **kwargs):
+    """Drop the public mirror when a tenant order is deleted (DATA-2).
+
+    The mirror is created on post_save but was never removed on delete, so a hard-deleted
+    or purged order left a stale CustomerOrderRef — a phantom in the customer's cross-
+    restaurant "My Orders" that 404s on re-order. Runs in the same transaction as the
+    delete; best-effort so it can never break a delete over the index.
+    """
+    if not getattr(instance, "customer_id", None):
+        return
+
+    tenant = getattr(connection, "tenant", None)
+    tenant_id = getattr(tenant, "id", None)
+    if tenant_id is None:
+        return  # not in a tenant context — nothing to scope the delete to
+
+    try:
+        from accounts.models import CustomerOrderRef
+
+        CustomerOrderRef.objects.filter(
+            tenant_id=tenant_id, order_number=instance.order_number
+        ).delete()
+    except Exception:
+        logger.exception(
+            "Failed to remove order %s from public index",
+            getattr(instance, "order_number", "?"),
+        )
+
+
 def _denormalize_current_tenant_rating():
     """Recompute the denormalized rating summary for the CURRENT tenant (B8).
 

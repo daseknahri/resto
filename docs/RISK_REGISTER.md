@@ -40,7 +40,7 @@
 | **FE-3** | Frontend | 🟡 Med | ~500KB locale catalogs block first paint; Sentry not lazy | S–M |
 | **SER-1** | API | 🟡 Med | 242 raw `request.data` reads vs 41 serializer writes → validation/price-manip class | L |
 | **SCHEMA-1** | API | 🟡 Med | OpenAPI via legacy `generateschema` → duplicate operationIds, unusable for client-gen | S |
-| **DATA-2** | Data | 🟡 Med | `CustomerOrderRef` mirror sync is post_save-only + `except:pass` → silent drift | S |
+| **DATA-2** | Data | ◑ Partial | `CustomerOrderRef` mirror had no `post_delete` (phantom orders) — **fixed**; item-mutation re-mirror + periodic reconcile remain | S |
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog | L |
 | ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in fields nullable with no "opt-in requires them" rule~~ — serializer now requires city+coords to opt in | ~~S~~ |
 | **DATA-5** | Data | 🟡 Med | Four denormalized `Profile` mirrors kept by scattered signals → drift on a missed one | M |
@@ -336,13 +336,18 @@ evolve safely against the API is itself broken.
 typed client (which also mitigates API-1's client-drift risk).
 **Effort:** S–M. **Source:** API/auth review.
 
-### DATA-2 — `CustomerOrderRef` mirror can silently drift
-**Where:** `mirror_order_to_public_index` fires on `menu.Order` `post_save` only; no `post_delete`;
-OrderItem mutations don't always re-save the parent; wrapped in `except Exception: pass`.
-**Failure scenario:** A customer's cross-restaurant "My Orders" shows phantom orders, stale
-statuses, or a stale re-order cart, and it fails **invisibly** (swallowed exception + log line).
-**Fix:** Add `post_delete` handling; re-mirror on OrderItem mutation; stop swallowing errors
-silently (log + metric). A periodic reconcile of the mirror is the belt-and-suspenders.
+### DATA-2 — `CustomerOrderRef` mirror can silently drift  ◑ PARTIALLY ADDRESSED (2026-07-10)
+**Where:** `menu/signals.py` `mirror_order_to_public_index` fired on `menu.Order` `post_save` only;
+OrderItem mutations don't always re-save the parent.
+**Failure scenario:** A customer's cross-restaurant "My Orders" shows phantom orders (deleted
+orders that lingered), stale statuses, or a stale re-order cart.
+**Resolution (this batch):** added a `post_delete` receiver `remove_order_from_public_index` that
+drops the mirror row (scoped by `tenant_id` + `order_number`) when an order is deleted — killing
+the phantom-order class. The existing sync already logs failures via `logger.exception` (not a
+silent `except: pass`). Tests: `tests/test_order_mirror_delete.py` (3, incl. a receiver-registration
+guard against a wrong sender string).
+**Remaining (smaller residuals):** re-mirror on OrderItem void/comp/append mutation (status/items
+snapshot can still drift while the order lives), and a periodic mirror-reconcile as belt-and-suspenders.
 **Effort:** S. **Source:** data-model review.
 
 ### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
