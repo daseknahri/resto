@@ -1,0 +1,386 @@
+# Kepoli — Risk Register (known structural debt)
+
+> The honest output of a ground-up, 11-dimension adversarial architecture review
+> (2026-07-10). Every future session should read this **before** a scaling or onboarding
+> push, so nobody rediscovers this debt the hard way. Items are ranked by severity; each has
+> a concrete failure scenario, the fix, and a rough effort. When you close one, strike it
+> through and note the commit.
+>
+> **Overall verdict:** the architecture is **not poor** — it is genuinely good craftsmanship
+> for a small team, with debt concentrated in a few foundational places. The items below are
+> that concentrated debt. Fix the 3 critical items before onboarding paying tenants at volume.
+>
+> Effort key: **S** = hours · **M** = a few days · **L** = weeks · **XL** = multi-week project.
+
+---
+
+## Summary (ranked)
+
+| ID | Area | Sev | One-line | Effort |
+|---|---|---|---|---|
+| **AUTHZ-1** | Auth | 🔴 Critical | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach | L |
+| **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
+| **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
+| **MONEY-1** | Money | 🟠 High | No `balance == sum(ledger)` reconciliation → silent, permanent wallet drift | S–M |
+| **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
+| **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
+| **TEST-1** | Testing | 🟠 High | Mock tests patch the machinery they test; DB tests self-skip; E2E not in CI | M |
+| **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
+| **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
+| **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
+| **ASYNC-1** | Async | 🟠 High | Inline task fallback loses queued work on every deploy restart, no retry | M |
+| **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale (O(N) migrations, no PgBouncer, atomic-index landmine) | XL |
+| **MONEY-2** | Money | 🟡 Med | Driver-payout "owed" check reads an unlocked aggregate → double-pay race | S |
+| **MONEY-3** | Money | 🟡 Med | Dormant Stripe webhook would credit metadata, not settled `amount_total` | S |
+| **OPS-3** | Ops | 🟡 Med | One Redis = cache+sessions+WS+broker SPOF; eviction logs users out | M |
+| **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
+| **ASYNC-4** | Async | 🟡 Med | `acks_late` + no reject-on-worker-lost + no DLQ → duplicate SMS/email on worker loss | S |
+| **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
+| **FE-2** | Frontend | 🟡 Med | Six 2,500–3,700-line page components (single-writer bottleneck) | L |
+| **FE-3** | Frontend | 🟡 Med | ~500KB locale catalogs block first paint; Sentry not lazy | S–M |
+| **SER-1** | API | 🟡 Med | 242 raw `request.data` reads vs 41 serializer writes → validation/price-manip class | L |
+| **SCHEMA-1** | API | 🟡 Med | OpenAPI via legacy `generateschema` → duplicate operationIds, unusable for client-gen | S |
+| **DATA-2** | Data | 🟡 Med | `CustomerOrderRef` mirror sync is post_save-only + `except:pass` → silent drift | S |
+| **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog | L |
+| **DATA-4** | Data | 🟡 Med | Directory opt-in fields nullable with no "opt-in requires them" rule | S |
+| **DATA-5** | Data | 🟡 Med | Four denormalized `Profile` mirrors kept by scattered signals → drift on a missed one | M |
+| **STRUCT-2** | Structure | 🟡 Med | 215 migrations, `Order` field sprawl, no squashing → slow per-schema deploys | M |
+| **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files | M |
+| **OPS-4** | Ops | 🟢 Low | `daphne` is a pinned-but-never-invoked dependency (dead weight) | S |
+
+\* MULTITENANCY-1 is "high" as a *strategic* decision to make consciously, not an urgent bug.
+
+---
+
+## 🔴 Critical
+
+### AUTHZ-1 — Authorization is a copy-pasted convention on a shared cookie
+**Where:** ~198 of ~262 endpoints (no permission class); `_is_tenant_owner` duplicated in
+`menu/views.py` and `accounts/views.py` (divergent signatures) + predicate in 5+ places;
+`SESSION_COOKIE_DOMAIN = ".<suffix>"`.
+**Failure scenario:** A developer adds an owner endpoint and forgets the
+`if not _is_tenant_owner(request): return 403` line (or writes a bespoke check that validates
+the *role* but not `tenant_id` — exactly the Z-report bug). Because the session cookie is valid
+on every tenant subdomain, an authenticated owner of tenant A changes one id in the URL and
+reads tenant B's revenue, PII, and customer list. The Z-report leak and order-status IDOR we
+already fixed were symptoms of this class, not isolated bugs.
+**Fix:** (1) Unify identity — see IDENTITY-1 — so customers are `request.user`. (2) Replace the
+inline guards with **one tested policy module**: `IsTenantMember`, `IsTenantOwner` (always
+tenant-match), `IsOrderOwner`, `IsPlatformAdmin`, applied via `permission_classes` +
+`has_object_permission` on detail views. Delete both `_is_tenant_owner` helpers. (3) Add a
+**defense-in-depth backstop**: a `TenantScopedManager` (or middleware assertion) so any
+public-schema object returned must carry `tenant_id == request.tenant.id` — a forgotten filter
+becomes a fail-closed no-op instead of a leak.
+**Effort:** L. Do it in slices (backstop first — it protects everything immediately).
+**Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
+
+### OPS-1 — Single Postgres, no replica, no PITR
+**Where:** `docker-compose.coolify.yml` (one `postgres` service); no WAL archiving/replica.
+**Failure scenario:** The VPS disk fails at 14:00. The last dump ran at 02:00. Every wallet
+top-up, order, and payout from the last 12 hours is gone — unrecoverable. Your own runbook
+already admits "customers may need manual wallet adjustments." For a money app this is
+business-ending, not "degraded."
+**Fix:** Enable continuous WAL archiving / PITR (e.g. `pgBackRest` or a managed Postgres with
+PITR), and/or a streaming replica. Target RPO ≤ 5 min for the money tables.
+**Effort:** M.
+**Source:** ops/scale review (CRITICAL).
+
+### OPS-2 — Backups live on the same host they protect
+**Where:** backup scripts write to local disk on the VPS.
+**Failure scenario:** The VPS is lost (provider incident, ransomware, accidental teardown).
+The database *and* every backup vanish together. A backup you can't reach when the host is
+gone is not a backup.
+**Fix:** Ship every backup **off-box** immediately after creation (S3-compatible object store
+with versioning + lifecycle + a restore drill). This single change also materially mitigates
+OPS-1's blast radius.
+**Effort:** S. **This is the cheapest critical fix — do it first.**
+**Source:** ops/scale review (CRITICAL).
+
+---
+
+## 🟠 High
+
+### MONEY-1 — No `balance == sum(ledger)` invariant
+**Where:** `Customer.wallet_balance` / `Tenant.float_balance` (denormalized) vs
+`WalletTransaction` / `TenantFloatTransaction` (journals). No reconciliation job.
+**Failure scenario:** A process crashes between writing the journal row and updating the
+denormalized balance (or any code path updates one without the other). The balance silently
+drifts from the ledger. Nothing detects it; it compounds; the first symptom is a customer
+dispute you can't explain.
+**Fix:** A scheduled `reconcile_wallet_balances` command that asserts, per account,
+`wallet_balance == sum(signed ledger)` and alerts on any mismatch (dry-run + `--fix` modes,
+mirroring the existing `reconcile_driver_earnings`). Cheapest high-value money fix available.
+**Effort:** S–M.
+**Source:** money review, data-model review.
+
+### IDENTITY-1 — Two disjoint identity systems; the customer is invisible to DRF
+**Where:** staff → `request.user` (SessionAuth); customer → `request.session["customer_id"]`
+(~49 raw reads in `accounts/views.py`), never in `request.user`.
+**Failure scenario:** You *cannot* write an `IsOrderOwner` permission class for customer
+resources because the permission layer can't see the customer — so ownership is forced into
+every handler body and into response-shaping. This is the structural reason AUTHZ-1 exists and
+why the order-status IDOR was possible.
+**Fix:** A `CustomerSessionAuthentication` DRF auth class that hydrates `request.user` from
+`session["customer_id"]` (or a custom auth backend). Then customers, staff, owners, drivers,
+and admins all flow through one auth stack — the prerequisite for AUTHZ-1's policy layer.
+**Effort:** L (touches ~60 customer views), but it's the keystone.
+**Source:** API/auth review.
+
+### STRUCT-1 — God-files and no `OrderService`
+**Where:** `menu/views.py` = **13,380 lines / 110 classes** across 8 domains;
+`accounts/views.py` = 8,742; `PlaceOrderView.post` = a **574-line method** doing
+stock+loyalty+promo+wallet inline with locally-defined exception classes; **618 function-local
+imports** exist only to dodge circular deps between the two fat files.
+**Failure scenario:** The crown-jewel order path is raw inside an HTTP handler (contrast the
+clean `wallet_service`). Every change risks a regression in an unrelated concern; onboarding a
+new engineer means reading a 13k-line file; the circular-import web makes refactoring scary.
+**Fix:** Extract `OrderService` (place/modify/cancel/refund) as a tested domain service, then
+split the god-files by bounded context (orders / catalog / dine-in / analytics / admin). The
+618 local imports mostly dissolve once the files are split.
+**Effort:** L. Start with `OrderService` — highest value, and it de-risks the money path.
+**Source:** backend-structure review.
+
+### TEST-1 — Test suite gives false confidence
+**Where:** mock-heavy `SimpleTestCase`s that patch `WalletTransaction.objects`,
+`transaction.atomic`, `select_for_update`; DB tests self-skip when Postgres is absent;
+Playwright E2E specs exist but aren't wired into CI; no test-count floor.
+**Failure scenario:** The tests that "cover" money and isolation actually patch the very
+machinery they claim to protect — they verify Python control flow, not the invariant. One CI
+infra hiccup and DB tests silently skip, CI goes green with zero DB tests run, and a real
+concurrency/isolation regression ships.
+**Fix:** (1) Make DB tests **fail, not skip**, when the DB is absent in CI. (2) Wire the
+Playwright E2E (incl. the cross-subdomain-CSRF spec) into CI. (3) Add a **test-count floor**
+so a collection error can't silently drop tests. (4) Convert the highest-value money/isolation
+mocks into real DB integration tests.
+**Effort:** M.
+**Source:** testing/CI review.
+
+### DATA-1 — Cross-schema refs have no orphan protection
+**Where:** `(tenant_id, order_number)` on `DeliveryJob`, `WalletTransaction`, `CustomerOrderRef`,
+`CustomerRating`; **no `Order` `post_delete` handler anywhere**; `order_number` is only
+tenant-unique.
+**Failure scenario:** An `Order` is hard-deleted or its tenant schema is dropped. A
+`DeliveryJob` still carries `driver_payout` and feeds `reconcile_driver_earnings` → a driver is
+paid for a delivery whose order no longer exists, with no FK to catch it. Separately, any code
+that ever queries these public tables by `order_number` **without** `tenant_id` cross-contaminates
+restaurants.
+**Fix:** Make `order_number` **globally unique** (`{tenant_id}-{seq}` or UUID) so public refs need
+one column and can't cross-contaminate; add a reconciliation job for orphaned refs (generalize
+`reconcile_driver_earnings`); add an `Order` soft-delete convention + `post_delete` cleanup.
+**Effort:** M.
+**Source:** data-model review.
+
+### API-1 — No API versioning
+**Where:** zero versioning (URL/header/namespace) across all routes; no `VERSIONING` setting.
+**Failure scenario:** A PWA/mobile-web client caches an old bundle (service workers persist for
+hours/days). You ship a breaking response-shape change; in-flight clients break with no
+negotiation path. The moment there's a store-distributed native app (the rides/delivery
+ambition implies one), old versions are pinned in users' hands and you **cannot** force-upgrade.
+**Fix:** Introduce `/api/v1/` (`URLPathVersioning`) **now**, while there's one client and it's
+trivial. Retrofitting after a client is pinned is near-impossible.
+**Effort:** S now / XL if deferred.
+**Source:** API/auth review.
+
+### ASYNC-2 — One generic cron task on a shared 2-worker queue
+**Where:** `run_management_command` (single task, 23-entry allowlist) wired to ~23 beat entries;
+`--concurrency 2`; no `CELERY_TASK_ROUTES`; the sweep task has no retry decorator.
+**Failure scenario:** A slow `sweep_delivery_jobs` (the dispatch heartbeat) occupies one of the
+two worker slots; because every cron and every push notification share the single default queue,
+customers' "order ready" SMS are starved behind it. And the sweeps carry no retry, so a
+transient DB blip during a tick just drops that tick.
+**Fix:** Replace the generic task with named `@shared_task`s per command; add `task_routes` so
+sweeps go to a `cron` queue and notifications to their own; add retry/backoff to sweeps. The
+task name *becomes* the allowlist, deleting the drift-prone parallel list.
+**Effort:** M.
+**Source:** async/realtime review.
+
+### ASYNC-1 — Inline fallback loses work on restart
+**Where:** `accounts/tasks.py` `enqueue()` — when `CELERY_BROKER_URL` is unset (a likely default),
+tasks run on an in-process `ThreadPoolExecutor`; `.run()` bypasses `autoretry_for`; the pending
+queue is unbounded and evaporates on process exit.
+**Failure scenario:** Every deploy does a rolling uvicorn restart. Any inline task still queued
+(a `charge_request` money-nudge, an `sms_order_ready`) is dropped with no record and no retry.
+The docstring claims "durable, survives restarts" — true only in the broker branch, which may
+not be running.
+**Fix:** Make the broker **required in production** (fail-closed if unset), or give the inline
+path a durable outbox. At minimum, document that inline mode is dev-only and assert a broker in
+prod boot.
+**Effort:** M.
+**Source:** async/realtime review.
+
+### MULTITENANCY-1 — Schema-per-tenant caps the ambition (decide consciously)
+**Where:** `TENANT_APPS = [..., menu]`; django-tenants; the money layer pulled into `public`.
+**Failure scenario (at scale):** (a) Every deploy runs each of 76 `menu` migrations **per
+schema** — at hundreds of tenants a migration window is an operational hazard; (b) can't use
+PgBouncer transaction-pooling (`SET search_path` is session state) → connection ceiling; (c)
+O(N-schema) analytics; (d) a **latent landmine**: provisioning wraps schema creation in
+`transaction.atomic()`, but the planned index fix `AddIndexConcurrently` **cannot run in a
+transaction** — shipping it breaks tenant signup.
+**Fix / decision:** This is a *conscious decision*, not an urgent patch. If your true ceiling is
+**low-hundreds of premium tenants**, schema-per-tenant is fine — keep it. If you genuinely target
+**thousands**, plan a migration to **shared-schema + Postgres Row-Level Security** — which your
+money layer already proves works. Do not rewrite now; **decide the ceiling** and record it in
+[ADR-0001](adr/0001-schema-per-tenant.md).
+**Effort:** XL (only if you choose to migrate).
+**Source:** multitenancy review, data-model review.
+
+---
+
+## 🟡 Medium
+
+### MONEY-2 — Driver-payout "owed" check is unlocked
+**Where:** payout path aggregates "owed" without a row lock.
+**Failure scenario:** Two concurrent payout requests both read the same "owed" total before
+either writes → double payout.
+**Fix:** Compute and decrement owed under `select_for_update` (mirror the wallet-service pattern).
+**Effort:** S. **Source:** money review.
+
+### MONEY-3 — Dormant Stripe webhook trusts metadata
+**Where:** the inert Stripe webhook seam credits session metadata, not the settled amount.
+**Failure scenario (when PSP goes live):** a tampered/edited session credits the wrong amount.
+**Fix:** Credit strictly from the verified `amount_total` on the settled event; verify webhook
+signatures; make the credit idempotent on the Stripe event id. Fix **before** the PSP is enabled.
+**Effort:** S. **Source:** money review.
+
+### OPS-3 — One Redis backs four subsystems
+**Where:** `REDIS_URL` = cache + sessions + Channels layer + optional broker; 256 MB cap.
+**Failure scenario:** A WS fan-out spike or the 256 MB ceiling triggers eviction → cached
+idempotency mutexes/throttle counters vanish **and** sessions get evicted, logging users out
+mid-shift.
+**Fix:** Move sessions off the cache (`cached_db` or signed cookies); split the broker onto its
+own instance at first contention.
+**Effort:** M. **Source:** async/realtime review.
+
+### ASYNC-3 — Realtime and polling both run at full rate
+**Where:** `OrderStatus.vue` polls every 15s even when the WS is live; `OwnerOrders.vue` polls
+15s and doesn't instantiate the (already-built) `useOwnerRealtime` at all.
+**Failure scenario:** You pay for `channels_redis` + WS fan-out **and** keep full-rate polling —
+backend request volume is ~unchanged from poll-only, plus the WS cost. Realtime is additive, not
+substitutive.
+**Fix:** Gate polling on `connectionState !== 'live'` (drop to a 60s safety net when the socket is
+up); wire `useOwnerRealtime` into `OwnerOrders`.
+**Effort:** M. **Source:** async/realtime review.
+
+### ASYNC-4 — `acks_late` without dedupe → duplicate sends
+**Where:** `acks_late=True`, no `task_reject_on_worker_lost`, no DLQ; `_sync` senders have no
+dedupe key.
+**Failure scenario:** A worker is killed mid-`sms_order_ready` (by the 120s time-limit or OOM) →
+the task is redelivered and re-run → the customer gets a duplicate SMS (real cost + trust hit),
+exactly under the load when redelivery happens.
+**Fix:** Add an idempotency/dedupe key to notification sends (e.g. on `NotificationLog`); add a
+DLQ or a rejected→alert path.
+**Effort:** S. **Source:** async/realtime review.
+
+### FE-1 — i18n dual-source footgun
+**Where:** `messages.js` (inline en+fr, read by runtime + gates) **and** `messages-ar.js` **and**
+`messages-en.js` must all be edited for one new key.
+**Failure scenario:** A dev edits only `messages-{en,fr}.js`, passes `verify-i18n.mjs`, fails
+`verify-i18n-usage.mjs` (or ships raw keys at runtime). Already happened this project.
+**Fix:** Collapse to a **single source of truth** — delete `messages.js` as the runtime source,
+generate the parity files, or move to a keyed catalog with one file per locale. See
+[ADR-0005](adr/0005-i18n-dual-source.md).
+**Effort:** M. **Source:** frontend review.
+
+### FE-2 — Mega-page components
+**Where:** `WaiterPage.vue` 3,722, `CustomerAccount.vue` 3,654, + four more 2,500–3,700 lines.
+**Failure scenario:** Single-writer bottleneck; merge conflicts; hard to test; slow to reason about.
+**Fix:** Split each into feature child-components + composables.
+**Effort:** L. **Source:** frontend review.
+
+### FE-3 — Locale catalogs block first paint
+**Where:** ~500KB of locale data loaded up front; Sentry not lazy.
+**Failure scenario:** An Arabic visitor waits on ~500KB of JS before first meaningful paint.
+**Fix:** Split catalogs by namespace/route and lazy-load; lazy-init Sentry.
+**Effort:** S–M. **Source:** frontend review.
+
+### SER-1 — Writes bypass serializers
+**Where:** 242 raw `request.data.get(...)` reads vs 41 serializer-mediated writes.
+**Failure scenario:** Validation/type-coercion is hand-rolled per handler; a money endpoint
+reads a price/amount from `request.data` without a serializer guard → price-manipulation class
+(cf. the DishOption price-manip bug already fixed).
+**Fix:** Route writes — especially money/price endpoints — through serializers with explicit
+fields + `read_only_fields`.
+**Effort:** L (incremental; start with money endpoints). **Source:** API/auth review.
+
+### SCHEMA-1 — OpenAPI has duplicate operationIds
+**Where:** CI exports via legacy `generateschema`; ~239 view classes, zero `operationId` overrides.
+**Failure scenario:** Colliding operationIds make the schema unusable for typed client-generation
+(openapi-generator/orval drop or dedupe colliding ops) — the one mechanism that could let clients
+evolve safely against the API is itself broken.
+**Fix:** Switch to **drf-spectacular** (`@extend_schema`, unique operationIds); enables a generated
+typed client (which also mitigates API-1's client-drift risk).
+**Effort:** S–M. **Source:** API/auth review.
+
+### DATA-2 — `CustomerOrderRef` mirror can silently drift
+**Where:** `mirror_order_to_public_index` fires on `menu.Order` `post_save` only; no `post_delete`;
+OrderItem mutations don't always re-save the parent; wrapped in `except Exception: pass`.
+**Failure scenario:** A customer's cross-restaurant "My Orders" shows phantom orders, stale
+statuses, or a stale re-order cart, and it fails **invisibly** (swallowed exception + log line).
+**Fix:** Add `post_delete` handling; re-mirror on OrderItem mutation; stop swallowing errors
+silently (log + metric). A periodic reconcile of the mirror is the belt-and-suspenders.
+**Effort:** S. **Source:** data-model review.
+
+### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
+**Where:** `Dish.attributes` restricted to `{sku, barcode, brand, unit}`; retail/pharmacy have no
+home for variants, tax class, expiry, dosage, controlled-substance flags, batch/lot.
+**Failure scenario:** The first serious pharmacy/retail tenant needs regulated fields → you either
+overload `attributes` into an unqueryable free-for-all or do the deferred `Dish→Item` rename
+across 76 migrations + every serializer/view/frontend ref.
+**Fix:** When a paying non-food tenant is real, design a neutral `Product` with a typed
+`product_kind` + per-vertical satellite tables (`FoodAttrs`/`RetailAttrs`/`PharmacyAttrs`). Until
+then, keep verticals at `coming_soon` (see the product recommendation in ARCHITECTURE §11).
+**Effort:** L. **Source:** data-model review.
+
+### DATA-4 — Directory opt-in has no data prerequisite
+**Where:** `cuisine_type`, `city`, `lat`, `lng` are `blank/null=True` with no rule tying them to
+`directory_opt_in=True`.
+**Failure scenario:** A restaurant opts into the public directory with empty city/coords →
+distance-sort silently breaks; every consumer must null-guard (the frontend already had to).
+**Fix:** Enforce "opt-in requires discoverable fields" in the model/serializer `clean()`, or model
+listing as a child row that only exists when complete.
+**Effort:** S. **Source:** data-model review.
+
+### DATA-5 — Four `Profile` mirrors kept by scattered signals
+**Where:** `rating_avg`, `rating_count`, `marketplace_promos`, `closure_dates` — each synced by a
+different signal file + a different backfill command, all cross-schema, all best-effort.
+**Failure scenario:** A bulk update / data migration / direct SQL misses a signal → the public
+marketplace shows wrong ratings/promos with no constraint to catch it.
+**Fix:** Consolidate the denorm into one well-tested sync path; add a periodic reconcile. (Justified
+optimization — this is about making it robust, not removing it.)
+**Effort:** M. **Source:** data-model review.
+
+### STRUCT-2 — Migration sprawl, `Order` field-by-field growth
+**Where:** 215 migrations (menu at 0076); `Order` ~60 fields accreted one flag at a time; no squashing.
+**Failure scenario:** Every deploy runs a longer per-schema migration chain (compounds with
+MULTITENANCY-1); wide `Order` rows hurt every scan.
+**Fix:** Squash migrations at a release boundary; consider decomposing `Order` by bounded context
+as part of STRUCT-1.
+**Effort:** M. **Source:** data-model review.
+
+---
+
+## 🟢 Low
+
+### API-2 — Contract sprawl
+Inconsistent naming (`api/admin/customers/` vs `api/admin-tenants/`), RPC-style verb routes, all
+hand-listed in three god url-files. Maintainable now (authors hold it in their heads); won't
+survive team growth. **Fix:** naming convention + per-domain url modules as part of STRUCT-1.
+**Effort:** M. **Source:** API/auth review.
+
+### OPS-4 — `daphne` is dead weight
+`daphne==4.2.2` is pinned but never invoked (prod serves via uvicorn). Enlarges the image, invites
+"which server is authoritative?" confusion. **Fix:** drop it from `requirements.txt`.
+**Effort:** S. **Source:** async/realtime review.
+
+---
+
+## Recommended sequencing (the smart path)
+
+1. **This week (S/M, stops the bleeding):** OPS-2 (off-box backups) → OPS-1 (PITR) →
+   MONEY-1 (reconciliation job) → MONEY-2 (lock payout) → TEST-1 (DB tests fail-not-skip + wire E2E).
+2. **Next few weeks (the keystone refactors):** AUTHZ-1 backstop first, then IDENTITY-1 →
+   the `IsTenantOwner`/`IsOrderOwner` policy layer → STRUCT-1 (`OrderService`) → FE-1 (kill dual-source).
+3. **Before the PSP goes live:** MONEY-3, and re-audit every money endpoint through the new policy layer.
+4. **Before a native app ships:** API-1 (versioning) + SCHEMA-1 (drf-spectacular).
+5. **Strategic, decide don't drift:** MULTITENANCY-1 (pick your tenant ceiling) and the
+   depth-first-on-restaurant product call (ARCHITECTURE §11).
