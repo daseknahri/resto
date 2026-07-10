@@ -31,7 +31,7 @@
 | **ASYNC-1** | Async | 🟠 High | Inline task fallback loses queued work on every deploy restart, no retry | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale (O(N) migrations, no PgBouncer, atomic-index landmine) | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout "owed" check reads an unlocked aggregate → double-pay race~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
-| **MONEY-3** | Money | 🟡 Med | Dormant Stripe webhook would credit metadata, not settled `amount_total` | S |
+| ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook would credit metadata, not settled `amount_total`~~ — now credits `amount_total`, paid-only | ~~S~~ |
 | **OPS-3** | Ops | 🟡 Med | One Redis = cache+sessions+WS+broker SPOF; eviction logs users out | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | 🟡 Med | `acks_late` + no reject-on-worker-lost + no DLQ → duplicate SMS/email on worker loss | S |
@@ -253,12 +253,19 @@ Mirrors the wallet-service discipline; single-row lock, so no new deadlock order
 `tests/test_driver_payout_service.py` (6, green on Postgres).
 **Source:** money review.
 
-### MONEY-3 — Dormant Stripe webhook trusts metadata
-**Where:** the inert Stripe webhook seam credits session metadata, not the settled amount.
-**Failure scenario (when PSP goes live):** a tampered/edited session credits the wrong amount.
-**Fix:** Credit strictly from the verified `amount_total` on the settled event; verify webhook
-signatures; make the credit idempotent on the Stripe event id. Fix **before** the PSP is enabled.
-**Effort:** S. **Source:** money review.
+### MONEY-3 — Dormant Stripe webhook trusts metadata  ✅ ADDRESSED (2026-07-10)
+**Where:** `accounts/views.py` `CustomerTopUpWebhookView`, which credited `metadata.amount`
+(the *requested* amount echoed back), not the settled amount.
+**Failure scenario (when PSP goes live):** a partial/adjusted (or, without a signing secret,
+tampered) session credits the wrong amount.
+**Resolution:** the webhook now credits the **settled `amount_total`** Stripe reports (minor units
+→ MAD), only for sessions with `payment_status == "paid"`, falling back to metadata only when
+`amount_total` is absent (older events). Signature verification (when `PSP_STRIPE_WEBHOOK_SECRET`
+is set) and event-id idempotency (`stripe:<event_id>`) were already in place; the docstring still
+flags that the secret is **required in production**. Still dormant (`PSP_TOPUP_ENABLED=False`) —
+this hardens it before go-live. Tests: `tests/test_psp_topup.py` (+3, incl. amount_total-wins and
+unpaid-no-credit; 10 total, no DB needed).
+**Source:** money review.
 
 ### OPS-3 — One Redis backs four subsystems
 **Where:** `REDIS_URL` = cache + sessions + Channels layer + optional broker; 256 MB cap.
