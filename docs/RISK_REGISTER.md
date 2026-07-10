@@ -24,7 +24,7 @@
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | ◑ Partial | count-floor + DB-fail-not-skip + **Playwright E2E now wired into CI** (MFA DB tests un-skipped); **still**: convert mock money/isolation tests to real DB integration | M |
+| **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + **real threaded money/isolation DB tests** (MFA DB tests un-skipped). Residual: de-mock a low-value tail (cleanup, not risk) | M |
 | **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
@@ -165,7 +165,7 @@ split the god-files by bounded context (orders / catalog / dine-in / analytics /
 **Effort:** L. Start with `OrderService` — highest value, and it de-risks the money path.
 **Source:** backend-structure review.
 
-### TEST-1 — Test suite gives false confidence  ◑ PARTIALLY ADDRESSED (2026-07-10)
+### TEST-1 — Test suite gives false confidence  ✅ ADDRESSED (2026-07-10)
 **Where:** mock-heavy `SimpleTestCase`s that patch `WalletTransaction.objects`,
 `transaction.atomic`, `select_for_update`; DB tests self-skip when Postgres is absent;
 Playwright E2E specs exist but aren't wired into CI; no test-count floor.
@@ -203,8 +203,18 @@ backend+frontend jobs) stands up the real stack — Postgres, `migrate_schemas`,
 most timing/UI-fragile) runs **informational** (`continue-on-error`) so flake can't block unrelated
 PRs — promote it to blocking once it proves stable. Traces/screenshots/server logs upload as
 artifacts on every run.
-**Remaining:** item 4 (convert the highest-value mock money/isolation tests into real DB
-integration tests).
+**Resolution (item 4, 2026-07-10):** the load-bearing money/isolation invariant the mocks could
+never verify — that the `select_for_update` row lock and the under-lock idempotency re-check
+actually serialize *concurrent* writers — is now covered by real multi-threaded DB tests
+(`tests/test_money_concurrency.py`): concurrent same-key credit (must apply once, no unique-key
+500), concurrent debits (no overspend / negative balance), concurrent credits (no lost update),
+and concurrent driver payouts (no double-pay past `owed`, RISK MONEY-2). Each worker runs on its
+own connection, released together by a barrier so they genuinely contend; assertions are
+deterministic on correct code and only fail when the lock is broken. Both `test_wallet_service.py`
+and `test_driver_payout_service.py` had explicitly flagged this as un-coverable single-threaded —
+that gap is now closed. **Residual (low value):** a tail of older tests still mock `transaction.atomic`
+/ `select_for_update` (e.g. `test_a4_marketplace_cod.py`, `test_bulk_order_status.py`); they now
+duplicate control-flow coverage the real DB tests provide, so de-mocking them is cleanup, not risk.
 **Effort:** M (remaining). **Source:** testing/CI review.
 
 ### DATA-1 — Cross-schema refs have no orphan protection
