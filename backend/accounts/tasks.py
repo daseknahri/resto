@@ -155,6 +155,7 @@ _MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
     "expire_charge_requests",
     "sweep_delivery_jobs",
     "reconcile_driver_earnings",
+    "reconcile_wallet_balances",
     "sweep_ride_requests",
     "enforce_subscriptions",
     "fetch_currency_rates",

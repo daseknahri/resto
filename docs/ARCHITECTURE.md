@@ -233,12 +233,14 @@ The money layer is the **best-engineered part of the system**. See
 - **Payments (Stripe) are a dormant seam** — top-up/checkout/payout code exists but is inert
   until a PSP account + keys are added.
 
-### The one gap that matters
-**Nothing enforces or even checks the invariant `wallet_balance == sum(ledger)`.** The balance
-is a denormalized number the app spends against; there is no reconciliation job comparing it
-to the journal. A single stray write or a crash mid-move produces **silent, permanent balance
-drift that nothing detects.** A `reconcile_wallet_balances` assertion job is the cheapest,
-highest-value money fix available — see RISK **MONEY-1**. Two smaller gaps: the driver-payout
+### The one gap that mattered — now guarded
+The invariant `wallet_balance == ledger` used to be **unchecked**: the balance is a denormalized
+number the app spends against, and nothing compared it to the journal, so a stray write or a
+crash mid-move produced silent, permanent drift. This is now covered by
+`accounts/management/commands/reconcile_wallet_balances.py` (RISK **MONEY-1**, addressed): it
+asserts `balance == the latest ledger row's balance_after` (a sign-agnostic anchor) for both the
+customer wallet and the tenant float, runs detect-only on Beat every 6h alerting on the
+`payments` channel, and offers a lock-safe `--fix` for triage. Two smaller gaps remain: the driver-payout
 "owed" check reads an *unlocked* aggregate (double-pay race), and the dormant Stripe webhook
 would credit session metadata instead of the settled `amount_total` — fix both before the PSP
 goes live (RISK **MONEY-2/3**).

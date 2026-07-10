@@ -21,7 +21,7 @@
 | **AUTHZ-1** | Auth | 🔴 Critical | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
 | **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
-| **MONEY-1** | Money | 🟠 High | No `balance == sum(ledger)` reconciliation → silent, permanent wallet drift | S–M |
+| ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
 | **TEST-1** | Testing | 🟠 High | Mock tests patch the machinery they test; DB tests self-skip; E2E not in CI | M |
@@ -100,17 +100,25 @@ OPS-1's blast radius.
 
 ## 🟠 High
 
-### MONEY-1 — No `balance == sum(ledger)` invariant
+### MONEY-1 — No `balance == sum(ledger)` invariant  ✅ ADDRESSED (2026-07-10)
 **Where:** `Customer.wallet_balance` / `Tenant.float_balance` (denormalized) vs
 `WalletTransaction` / `TenantFloatTransaction` (journals). No reconciliation job.
 **Failure scenario:** A process crashes between writing the journal row and updating the
 denormalized balance (or any code path updates one without the other). The balance silently
 drifts from the ledger. Nothing detects it; it compounds; the first symptom is a customer
 dispute you can't explain.
-**Fix:** A scheduled `reconcile_wallet_balances` command that asserts, per account,
-`wallet_balance == sum(signed ledger)` and alerts on any mismatch (dry-run + `--fix` modes,
-mirroring the existing `reconcile_driver_earnings`). Cheapest high-value money fix available.
-**Effort:** S–M.
+**Resolution:** `accounts/management/commands/reconcile_wallet_balances.py` reconciles both
+ledgers by asserting `balance == balance_after of the latest ledger row` — a **sign-agnostic**
+anchor (`amount` is a positive magnitude and `adjustment` can go either way, so summing signed
+amounts is ambiguous; the recorded `balance_after` is not). Categories: OK / **DRIFT** (fixable)
+/ **ORPHAN** (non-zero balance, no ledger — never auto-fixed) / **CHAIN** (`--deep`: a row whose
+balance step ≠ its amount). Default mode is read-only detect + alert (on the `payments` channel);
+`--fix` repairs only the unambiguous DRIFT case under the wallet service's `select_for_update`
+lock, re-checking under the lock. Scheduled on Beat every 6h **detect-only** (Beat never
+auto-mutates money; a human runs `--fix` after triage). Verified: every active ledger writer
+(service + loyalty redeem + admin bulk bonus) sets `balance_after` to the persisted balance, so
+the check does not false-positive. Tests: `tests/test_reconcile_wallet_balances.py` (7, green on
+Postgres).
 **Source:** money review, data-model review.
 
 ### IDENTITY-1 — Two disjoint identity systems; the customer is invisible to DRF

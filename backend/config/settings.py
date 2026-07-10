@@ -326,6 +326,14 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 900.0,
         "args": ("reconcile_driver_earnings",),
     },
+    "reconcile-wallet-balances": {
+        "task": "accounts.tasks.run_management_command",
+        # every 6h — MONEY-1: assert denormalized wallet/float balances == their ledger head
+        # and alert on drift. DETECT-ONLY here (no --fix): Beat must never auto-mutate money;
+        # a flagged drift is repaired by a human running the command with --fix after triage.
+        "schedule": 6 * 60 * 60.0,
+        "args": ("reconcile_wallet_balances",),
+    },
     "sweep-ride-requests": {
         "task": "accounts.tasks.run_management_command",
         # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.
