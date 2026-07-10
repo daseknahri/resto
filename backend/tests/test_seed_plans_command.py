@@ -86,7 +86,7 @@ class SeedPlansWithoutDemoTests(SimpleTestCase):
             call_command("seed_plans")
         # get_user_model should not have been called without --with-demo
         mock_um.assert_not_called()
-        mock_tenant.objects.get_or_create.assert_not_called()
+        mock_tenant.objects.filter.assert_not_called()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -97,7 +97,7 @@ class SeedPlansWithDemoTests(SimpleTestCase):
     """Running with --with-demo creates superadmin, tenant, and domain."""
 
     def _run(self, email="admin@example.com", password="admin123",
-             domain="demo.localhost", user_created=True):
+             domain="demo.localhost", user_created=True, tenant_exists=False):
         stdout = StringIO()
         user_mgr, user_obj = _user_mgr(created=user_created)
 
@@ -108,7 +108,11 @@ class SeedPlansWithDemoTests(SimpleTestCase):
             mock_plan.objects = _plan_mgr()
             mock_um.return_value.objects = user_mgr
             mock_um.return_value.Roles.PLATFORM_SUPERADMIN = "platform_superadmin"
-            mock_tenant.objects.get_or_create.return_value = (MagicMock(), True)
+            # New demo path: look the tenant up by slug, then build the row +
+            # physical schema OUTSIDE any transaction (get_or_create's implicit txn
+            # would 500 on the AddIndexConcurrently tenant migrations).
+            existing_tenant = MagicMock() if tenant_exists else None
+            mock_tenant.objects.filter.return_value.first.return_value = existing_tenant
             call_command(
                 "seed_plans",
                 "--with-demo",
@@ -125,6 +129,7 @@ class SeedPlansWithDemoTests(SimpleTestCase):
             "mock_domain": mock_domain,
             "user_mgr": user_mgr,
             "user_obj": user_obj,
+            "existing_tenant": existing_tenant,
             "out": stdout.getvalue(),
         }
 
@@ -153,9 +158,25 @@ class SeedPlansWithDemoTests(SimpleTestCase):
         ctx = self._run(user_created=False)
         ctx["user_obj"].set_password.assert_not_called()
 
-    def test_tenant_get_or_create_called(self):
+    def test_tenant_looked_up_by_slug(self):
         ctx = self._run()
-        ctx["mock_tenant"].objects.get_or_create.assert_called_once()
+        ctx["mock_tenant"].objects.filter.assert_called_once_with(slug="demo")
+
+    def test_new_tenant_defers_schema_then_creates_it_outside_txn(self):
+        """A missing demo tenant is built with auto_create_schema=False (so save()
+        does NOT create the schema inside a transaction), then create_schema() runs
+        it explicitly — the MULTITENANCY-1 fix for AddIndexConcurrently migrations."""
+        ctx = self._run(tenant_exists=False)
+        new_tenant = ctx["mock_tenant"].return_value  # the Tenant(...) constructor result
+        self.assertFalse(new_tenant.auto_create_schema)
+        new_tenant.save.assert_called_once()
+        new_tenant.create_schema.assert_called_once_with(check_if_exists=True)
+
+    def test_existing_tenant_is_reused_and_not_reschematized(self):
+        ctx = self._run(tenant_exists=True)
+        # The already-present tenant is reused; no new row / schema is built.
+        ctx["mock_tenant"].return_value.save.assert_not_called()
+        ctx["mock_tenant"].return_value.create_schema.assert_not_called()
 
     def test_domain_get_or_create_called(self):
         ctx = self._run()

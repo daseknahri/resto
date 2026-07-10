@@ -68,15 +68,23 @@ class Command(BaseCommand):
             else:
                 self.stdout.write("Superadmin already exists; skipping password set.")
 
-            tenant, _ = Tenant.objects.get_or_create(
-                slug="demo",
-                defaults={
-                    "schema_name": "demo",
-                    "name": "Demo Restaurant",
-                    "plan": starter,
-                    "owner": user,
-                },
-            )
+            # Create the demo tenant WITHOUT letting get_or_create's implicit
+            # transaction wrap schema creation: the tenant migrations include
+            # AddIndexConcurrently (CREATE INDEX CONCURRENTLY), which Postgres forbids
+            # inside a transaction. Build the row first, then the schema outside any
+            # transaction (mirrors sales/services.provision_lead — MULTITENANCY-1).
+            tenant = Tenant.objects.filter(slug="demo").first()
+            if tenant is None:
+                tenant = Tenant(
+                    schema_name="demo",
+                    slug="demo",
+                    name="Demo Restaurant",
+                    plan=starter,
+                    owner=user,
+                )
+                tenant.auto_create_schema = False
+                tenant.save()
+                tenant.create_schema(check_if_exists=True)
             Domain.objects.get_or_create(
                 domain=options["domain"],
                 defaults={"tenant": tenant, "is_primary": True},

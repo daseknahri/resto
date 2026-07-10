@@ -275,9 +275,17 @@ prod boot.
 **Failure scenario (at scale):** (a) Every deploy runs each of 76 `menu` migrations **per
 schema** — at hundreds of tenants a migration window is an operational hazard; (b) can't use
 PgBouncer transaction-pooling (`SET search_path` is session state) → connection ceiling; (c)
-O(N-schema) analytics; (d) a **latent landmine**: provisioning wraps schema creation in
-`transaction.atomic()`, but the planned index fix `AddIndexConcurrently` **cannot run in a
-transaction** — shipping it breaks tenant signup.
+O(N-schema) analytics; (d) a ~~**latent landmine**~~ **REALIZED then fixed (2026-07-11)**:
+provisioning wrapped schema creation in `transaction.atomic()`, but the shipped index migrations
+(`menu/0060`, `0062`, `0066` — `AddIndexConcurrently`) **cannot run in a transaction**, so **every
+new tenant signup 500'd**. It was dormant only because no tenant had been provisioned since those
+migrations shipped; the new **e2e CI job surfaced it** (first thing in CI to create a tenant). Fixed
+in `sales/services.provision_lead` and `seed_plans --with-demo`: create the tenant ROW inside the
+txn with `auto_create_schema=False`, then `create_schema()` **after commit** (outside any txn); a
+schema-build failure rolls the tenant back (deletes it so the slug frees) and marks the
+`ProvisioningJob` FAILED. Tests: `tests/test_provision_schema_deferral.py` (deferral + rollback) +
+updated `test_seed_plans_command.py`; the success path is exercised end-to-end by the e2e job. The
+broader items (a)–(c) remain the conscious scaling decision below.
 **Fix / decision:** This is a *conscious decision*, not an urgent patch. If your true ceiling is
 **low-hundreds of premium tenants**, schema-per-tenant is fine — keep it. If you genuinely target
 **thousands**, plan a migration to **shared-schema + Postgres Row-Level Security** — which your
