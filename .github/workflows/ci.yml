@@ -104,7 +104,26 @@ jobs:
         run: |
           cd backend
           . .venv/bin/activate
-          python -m pytest tests
+          set -o pipefail
+          python -m pytest tests -q | tee pytest-summary.txt
+          # TEST-1 floor: a collection error or a mass DB-self-skip must not pass CI as
+          # "green" with a silently shrunken suite. Assert a floor on `passed` and a ceiling
+          # on `skipped` (baseline ~4707 passed / 24 skipped as of 2026-07-10 — bump the floor
+          # up over time as the suite grows). The Postgres service above means the DB-backed
+          # tests RUN here, so an abnormal skip spike means the DB went away and those tests
+          # were quietly not exercised — exactly the false-green this guards against.
+          summary="$(tail -n 20 pytest-summary.txt)"
+          passed="$(echo "$summary" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || true)"
+          skipped="$(echo "$summary" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || true)"
+          echo "backend tests: passed=${passed:-0} skipped=${skipped:-0}"
+          if [ "${passed:-0}" -lt 4000 ]; then
+            echo "::error::Backend test floor breached: only ${passed:-0} passed (expected >= 4000). A collection error or mass skip likely dropped tests."
+            exit 1
+          fi
+          if [ "${skipped:-0}" -gt 100 ]; then
+            echo "::error::Too many skipped backend tests (${skipped:-0} > 100) — the DB-backed tests may have been silently skipped."
+            exit 1
+          fi
 
   frontend:
     runs-on: ubuntu-latest
