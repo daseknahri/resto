@@ -24,7 +24,7 @@
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | ◑ Partial | count-floor **and** DB-fail-not-skip guards **added** in CI (+ MFA DB tests un-skipped); **still**: E2E-in-CI, convert mock money/isolation tests | M |
+| **TEST-1** | Testing | ◑ Partial | count-floor + DB-fail-not-skip + **Playwright E2E now wired into CI** (MFA DB tests un-skipped); **still**: convert mock money/isolation tests to real DB integration | M |
 | **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
@@ -194,7 +194,17 @@ that first run exposed that all 24 were **written but never validated**: they dr
 Fixed by pointing the client at the public host `localhost` (the MFA/login endpoints live in the
 shared urlconf and never read `request.tenant`); the 24 now exercise the real enrollment / login-
 gate / verify / disable flows.
-**Remaining:** items 2 (E2E in CI), 4 (convert mock money/isolation tests).
+**Resolution (item 2, 2026-07-10):** a new `e2e` CI job (`.github/workflows/ci.yml`, gated on the
+backend+frontend jobs) stands up the real stack — Postgres, `migrate_schemas`, `seed_plans
+--with-demo` (creates the `demo` tenant + admin + owner), `runserver` on :8000, Vite dev on :5173,
+`demo.localhost` mapped to loopback — and runs the Playwright specs. **Split gate:** the
+`cross-subdomain-auth-csrf` spec (the security/isolation + CSRF regression this item names) and
+`mobile-breakpoint-regression` are **blocking**; `critical-saas-flow` (full onboarding journey,
+most timing/UI-fragile) runs **informational** (`continue-on-error`) so flake can't block unrelated
+PRs — promote it to blocking once it proves stable. Traces/screenshots/server logs upload as
+artifacts on every run.
+**Remaining:** item 4 (convert the highest-value mock money/isolation tests into real DB
+integration tests).
 **Effort:** M (remaining). **Source:** testing/CI review.
 
 ### DATA-1 — Cross-schema refs have no orphan protection
