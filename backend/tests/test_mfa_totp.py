@@ -25,11 +25,13 @@ from unittest.mock import MagicMock, patch
 import pyotp
 import pytest
 
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, APIClient
 
 from accounts.models import User, UserTOTPDevice
+from accounts.throttles import MFAVerifyBurstThrottle, MFAVerifySustainedThrottle
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -421,12 +423,23 @@ _DB_AVAILABLE = _dbprobe.db_available()
 # views never read request.tenant, so no tenant context is needed.)
 _PUBLIC_HOST = "localhost"
 
+# Every B-class setUp calls _reset_throttles(): /api/login/ and /api/mfa/verify/ are
+# rate-limited by per-IP throttles that store their counters in the default cache
+# (LocMemCache in CI). Django's TestCase does NOT clear that cache between tests, and
+# every request here comes from the same host/IP — so login/verify hits ACCUMULATE
+# across the 24 MFA tests and trip a 429 in the later ones (CI showed `429 != 202/200`
+# in B4/B5/B7). Clearing before each test keeps them independent and order-insensitive.
+# (infra/prepare_e2e.sh documents the same throttle-reset need for the E2E run.)
+def _reset_throttles():
+    cache.clear()
+
 
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="Postgres not available locally")
 class B1_EnrollmentFlowTests(TestCase):
     """Full setup->confirm->backup-codes enrollment flow (DB-backed)."""
 
     def setUp(self):
+        _reset_throttles()
         self.user = User.objects.create_user(
             username="owner_mfa_b1",
             password="testpass123",
@@ -509,6 +522,7 @@ class B2_LoginGateTests(TestCase):
     """Login returns 202 when a confirmed device exists."""
 
     def setUp(self):
+        _reset_throttles()
         self.user = User.objects.create_user(
             username="owner_mfa_b2",
             password="testpass123",
@@ -561,6 +575,7 @@ class B3_VerifyTOTPTests(TestCase):
     """Verify with a valid TOTP completes login (200 + session)."""
 
     def setUp(self):
+        _reset_throttles()
         self.user = User.objects.create_user(
             username="owner_mfa_b3",
             password="testpass123",
@@ -608,6 +623,7 @@ class B4_BackupCodeLoginTests(TestCase):
     """Verify with a backup code logs in and consumes it (single-use)."""
 
     def setUp(self):
+        _reset_throttles()
         from django.utils import timezone
         self.user = User.objects.create_user(
             username="owner_mfa_b4",
@@ -689,6 +705,7 @@ class B5_VerifyLockoutTests(TestCase):
     """Verify lockout after N bad codes."""
 
     def setUp(self):
+        _reset_throttles()
         from django.utils import timezone
         self.user = User.objects.create_user(
             username="owner_mfa_b5",
@@ -711,13 +728,22 @@ class B5_VerifyLockoutTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
 
-    def test_lockout_after_max_failures(self):
+    # Isolate the account-lockout mechanism from the verify-burst *throttle*: this test
+    # drives MFA_MAX_FAILURES (10) rapid bad-code attempts, but mfa_verify_burst is 8/min,
+    # so the throttle would 429 at attempt 9 and the lockout counter would never reach 10.
+    # In production both defenses coexist (the 15-min lockout window spans several throttle
+    # windows); the throttle itself is exercised elsewhere. Disable it here so the lockout
+    # path is what we assert. Clearing the cache mid-loop can't substitute — the lockout
+    # counter lives in the same cache and would reset with it.
+    @patch.object(MFAVerifySustainedThrottle, "allow_request", return_value=True)
+    @patch.object(MFAVerifyBurstThrottle, "allow_request", return_value=True)
+    def test_lockout_after_max_failures(self, _burst, _sustained):
         """After MFA_MAX_FAILURES bad codes the account is locked."""
         from accounts.mfa_views import MFA_MAX_FAILURES
         self._login()
 
         for _ in range(MFA_MAX_FAILURES):
-            r = self.client.post("/api/mfa/verify/", {"code": "000000"}, format="json")
+            self.client.post("/api/mfa/verify/", {"code": "000000"}, format="json")
             # Each attempt returns 401 (bad code) until we hit the lockout.
 
         # Now the lockout should kick in even for a valid code-shaped request.
@@ -730,6 +756,7 @@ class B6_DisableTests(TestCase):
     """Disable requires re-auth."""
 
     def setUp(self):
+        _reset_throttles()
         from django.utils import timezone
         self.user = User.objects.create_user(
             username="owner_mfa_b6",
@@ -793,6 +820,7 @@ class B7_RegressionFlagEmptyNoDeviceTests(TestCase):
     """FLAG-EMPTY + NO DEVICE => login still returns 200 (critical regression guard)."""
 
     def setUp(self):
+        _reset_throttles()
         self.user = User.objects.create_user(
             username="owner_mfa_b7",
             password="testpass123",
