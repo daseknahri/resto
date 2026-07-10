@@ -24,7 +24,7 @@
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | ◑ Partial | count-floor guard **added** in CI; **still**: DB-fail-not-skip, E2E-in-CI, convert mock money/isolation tests | M |
+| **TEST-1** | Testing | ◑ Partial | count-floor **and** DB-fail-not-skip guards **added** in CI (+ MFA DB tests un-skipped); **still**: E2E-in-CI, convert mock money/isolation tests | M |
 | **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
@@ -160,11 +160,18 @@ concurrency/isolation regression ships.
 Playwright E2E (incl. the cross-subdomain-CSRF spec) into CI. (3) Add a **test-count floor**
 so a collection error can't silently drop tests. (4) Convert the highest-value money/isolation
 mocks into real DB integration tests.
-**Resolution (this batch — item 3 done):** the CI "Backend tests" step now asserts a floor on
+**Resolution (item 3, 2026-07-10):** the CI "Backend tests" step now asserts a floor on
 `passed` (≥ 4000) and a ceiling on `skipped` (≤ 100) parsed from the pytest summary — a collection
 error or a mass DB-self-skip (the exact false-green this warns about) now fails CI instead of
 passing with a silently shrunken suite. Parsing validated locally against real/edge summaries.
-**Remaining:** items 1 (DB-fail-not-skip), 2 (E2E in CI), 4 (convert mock money/isolation tests).
+**Resolution (item 1, 2026-07-10):** CI now sets `PYTEST_REQUIRE_DB=1`; `tests/conftest.py`
+aborts the whole session (`pytest_sessionstart`) if Postgres is unreachable, and the per-file
+availability guards re-raise instead of skipping. **Bonus root-cause find:** the old in-file probe
+(`django.db.connection.ensure_connection()` at import) *always* raised under pytest-django's
+access blocker — so the 24 MFA DB tests (`test_mfa_totp.py` B1–B7) had **never actually run in
+CI** (they were the mysterious "24 skipped" baseline). The probe now connects via the raw
+psycopg2 driver (`tests/_dbprobe.py`), so those tests execute in CI for the first time.
+**Remaining:** items 2 (E2E in CI), 4 (convert mock money/isolation tests).
 **Effort:** M (remaining). **Source:** testing/CI review.
 
 ### DATA-1 — Cross-schema refs have no orphan protection

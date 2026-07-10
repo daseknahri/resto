@@ -101,6 +101,14 @@ jobs:
         # DJANGO_SETTINGS_MODULE). The old `manage.py test` (unittest) couldn't import the
         # pytest-native modules and ignored the @pytest.mark.skipif(not _DB_AVAILABLE)
         # guards. With the CI Postgres service, the DB-backed tests run for real.
+        #
+        # PYTEST_REQUIRE_DB (TEST-1 item 1): DB tests must FAIL, not skip, when the DB
+        # is absent here. tests/conftest.py asserts DB reachability at session start and
+        # aborts the run if the Postgres service is gone; the _DB_AVAILABLE-style guards
+        # re-raise instead of skipping. Locally the variable stays unset (no Postgres on
+        # dev machines is the documented norm).
+        env:
+          PYTEST_REQUIRE_DB: "1"
         run: |
           cd backend
           . .venv/bin/activate
@@ -108,10 +116,12 @@ jobs:
           python -m pytest tests -q | tee pytest-summary.txt
           # TEST-1 floor: a collection error or a mass DB-self-skip must not pass CI as
           # "green" with a silently shrunken suite. Assert a floor on `passed` and a ceiling
-          # on `skipped` (baseline ~4707 passed / 24 skipped as of 2026-07-10 — bump the floor
-          # up over time as the suite grows). The Postgres service above means the DB-backed
-          # tests RUN here, so an abnormal skip spike means the DB went away and those tests
-          # were quietly not exercised — exactly the false-green this guards against.
+          # on `skipped` (baseline was ~4707 passed / 24 skipped as of 2026-07-10; those 24
+          # were the MFA DB tests whose availability probe always failed under pytest-django's
+          # access blocker — fixed via tests/_dbprobe.py, so expect ~4731 passed / ~0 skipped.
+          # Bump the floor up over time as the suite grows). The Postgres service above means
+          # the DB-backed tests RUN here, so an abnormal skip spike means the DB went away and
+          # those tests were quietly not exercised — exactly the false-green this guards against.
           summary="$(tail -n 20 pytest-summary.txt)"
           passed="$(echo "$summary" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || true)"
           skipped="$(echo "$summary" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || true)"

@@ -402,12 +402,14 @@ class A6_MFAStatusViewTests(SimpleTestCase):
 # B: DB-backed tests (TestCase — skip locally when Postgres is unavailable)
 # ════════════════════════════════════════════════════════════════════════════════
 
-try:
-    from django.db import connection as _conn
-    _conn.ensure_connection()
-    _DB_AVAILABLE = True
-except Exception:
-    _DB_AVAILABLE = False
+# RISK TEST-1: probe with the raw driver (see _dbprobe.py) — the old
+# `django.db.connection.ensure_connection()` probe always raised under
+# pytest-django's access blocker, so these B tests silently skipped even in CI
+# with Postgres up. With PYTEST_REQUIRE_DB set (CI), an unreachable DB raises
+# at collection instead of downgrading to a skip.
+import _dbprobe
+
+_DB_AVAILABLE = _dbprobe.db_available()
 
 
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="Postgres not available locally")
