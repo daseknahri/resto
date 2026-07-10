@@ -170,7 +170,13 @@ availability guards re-raise instead of skipping. **Bonus root-cause find:** the
 (`django.db.connection.ensure_connection()` at import) *always* raised under pytest-django's
 access blocker — so the 24 MFA DB tests (`test_mfa_totp.py` B1–B7) had **never actually run in
 CI** (they were the mysterious "24 skipped" baseline). The probe now connects via the raw
-psycopg2 driver (`tests/_dbprobe.py`), so those tests execute in CI for the first time.
+psycopg2 driver (`tests/_dbprobe.py`), so those tests execute in CI for the first time — and
+that first run exposed that all 24 were **written but never validated**: they drove the full
+`APIClient` stack against the default host `testserver`, which is neither a tenant domain nor a
+`PUBLIC_SCHEMA_HOST`, so every request 404'd at the tenant middleware before reaching a view.
+Fixed by pointing the client at the public host `localhost` (the MFA/login endpoints live in the
+shared urlconf and never read `request.tenant`); the 24 now exercise the real enrollment / login-
+gate / verify / disable flows.
 **Remaining:** items 2 (E2E in CI), 4 (convert mock money/isolation tests).
 **Effort:** M (remaining). **Source:** testing/CI review.
 
