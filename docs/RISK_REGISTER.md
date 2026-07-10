@@ -30,7 +30,7 @@
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
 | **ASYNC-1** | Async | 🟠 High | Inline task fallback loses queued work on every deploy restart, no retry | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale (O(N) migrations, no PgBouncer, atomic-index landmine) | XL |
-| **MONEY-2** | Money | 🟡 Med | Driver-payout "owed" check reads an unlocked aggregate → double-pay race | S |
+| ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout "owed" check reads an unlocked aggregate → double-pay race~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
 | **MONEY-3** | Money | 🟡 Med | Dormant Stripe webhook would credit metadata, not settled `amount_total` | S |
 | **OPS-3** | Ops | 🟡 Med | One Redis = cache+sessions+WS+broker SPOF; eviction logs users out | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
@@ -236,12 +236,22 @@ money layer already proves works. Do not rewrite now; **decide the ceiling** and
 
 ## 🟡 Medium
 
-### MONEY-2 — Driver-payout "owed" check is unlocked
-**Where:** payout path aggregates "owed" without a row lock.
+### MONEY-2 — Driver-payout "owed" check is unlocked  ✅ ADDRESSED (2026-07-10)
+**Where:** `accounts/driver_service.py` `record_driver_payout`, which aggregated "owed"
+(`earned − sum(payouts)`) without a row lock.
 **Failure scenario:** Two concurrent payout requests both read the same "owed" total before
 either writes → double payout.
-**Fix:** Compute and decrement owed under `select_for_update` (mirror the wallet-service pattern).
-**Effort:** S. **Source:** money review.
+**Resolution:** `record_driver_payout` now acquires `Customer.objects.select_for_update()` on the
+driver row before (re)computing owed and creating the `DriverPayout`, so concurrent settlements
+serialize — the second recomputes owed *including* the first's committed payout. Idempotency is
+also re-checked under the lock (a concurrent same-key request replays instead of racing a second
+insert that would 500 on the unique key). An adversarial review added two further hardenings to
+match the wallet-service discipline: a **cross-driver idempotency-key collision guard** (a
+caller-supplied key resolving to another driver's payout is refused, not silently handed back),
+and a **fail-closed** check if the driver row is absent (so the mutex can't be a silent no-op).
+Mirrors the wallet-service discipline; single-row lock, so no new deadlock ordering. Tests:
+`tests/test_driver_payout_service.py` (6, green on Postgres).
+**Source:** money review.
 
 ### MONEY-3 — Dormant Stripe webhook trusts metadata
 **Where:** the inert Stripe webhook seam credits session metadata, not the settled amount.

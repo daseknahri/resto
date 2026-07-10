@@ -80,16 +80,48 @@ def driver_earnings_summary(driver_id) -> dict:
 def record_driver_payout(driver_id, amount, *, method="cash", reference="", note="",
                          actor_user_id=None, idempotency_key=None, currency="MAD"):
     """Record a settlement paid to a driver. Idempotent; never pays more than owed."""
-    from .models import DriverPayout
+    from .models import Customer, DriverPayout
 
     amount = _money(amount)
     if amount <= 0:
         raise WalletError("payout amount must be positive")
 
+    def _replay_or_reject(existing):
+        # DriverPayout.idempotency_key is a GLOBAL unique column on the shared schema and the
+        # key is caller-supplied, so a key that resolves to ANOTHER driver's payout is a
+        # collision/attack, not a legit replay — refuse rather than hand back (and falsely
+        # acknowledge) someone else's settlement. Mirrors the wallet_service collision guards.
+        if existing.driver_id != int(driver_id):
+            payments_logger.error(
+                "driver payout idempotency-key collision schema=%s driver_id=%s key=%s",
+                _schema(), driver_id, idempotency_key,
+            )
+            raise WalletError("idempotency key collision: belongs to another driver")
+        return existing
+
     if idempotency_key:
         existing = DriverPayout.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
-            return existing
+            return _replay_or_reject(existing)
+
+    # MONEY-2: serialize concurrent settlements for THIS driver. `owed` = earned − sum(
+    # payouts); without a lock two payouts can both read the same owed and both write,
+    # paying out MORE than is owed (double-pay). Lock the driver row so a racer must commit
+    # + release before we (re)compute owed — then owed reflects every already-recorded
+    # payout. Mirrors the wallet service's select_for_update discipline.
+    _locked = Customer.objects.select_for_update().filter(pk=driver_id).first()
+    if _locked is None:
+        # No row locked ⇒ the serialization mutex would be a silent no-op. The only prod
+        # caller pre-checks existence, but fail closed so the service is self-defending.
+        raise WalletError("driver not found")
+
+    # Re-check idempotency under the lock: a concurrent same-key request may have committed
+    # its payout while we waited for the row lock — replay it instead of racing a second
+    # insert that would 500 on the unique idempotency_key.
+    if idempotency_key:
+        existing = DriverPayout.objects.filter(idempotency_key=idempotency_key).first()
+        if existing is not None:
+            return _replay_or_reject(existing)
 
     owed = driver_earnings_summary(driver_id)["owed"]
     if amount > owed:
