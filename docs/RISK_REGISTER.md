@@ -18,7 +18,7 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | 🔴 Critical | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach | L |
+| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach. **Backstop middleware shipped** (foreign-tenant staff sessions downgraded to anonymous); policy layer + IDENTITY-1 remain | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
 | **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
@@ -72,6 +72,23 @@ tenant-match), `IsOrderOwner`, `IsPlatformAdmin`, applied via `permission_classe
 public-schema object returned must carry `tenant_id == request.tenant.id` — a forgotten filter
 becomes a fail-closed no-op instead of a leak.
 **Effort:** L. Do it in slices (backstop first — it protects everything immediately).
+**Progress (slice 1 — backstop, 2026-07-10):** `CrossTenantSessionGuardMiddleware`
+(`config/middleware.py`, registered after `AuthenticationMiddleware`) now **downgrades to
+anonymous** any tenant-owner/staff session on a *foreign* tenant's host (mismatched or null
+`user.tenant_id`), so a forgotten per-view guard fails closed (401/403) instead of leaking —
+the Z-report/IDOR class is dead app-wide. A downgrade rather than a 403 because the shared
+cookie makes "owner of A browsing restaurant B as a guest" the normal case; superusers and
+platform admins are exempt (matching `_is_tenant_owner`/`IsPlatformAdmin`); sessions are not
+flushed (customer identity may share the session). Logged as `cross_tenant_session_downgraded`.
+Tests: `tests/test_cross_tenant_session_guard.py` (13, no DB). A query-level backstop
+(scoped manager) was evaluated and deliberately **deferred**: an inventory of all public-model
+call-sites found the unscoped majority is *legitimately* cross-tenant (driver app, customer
+marketplace, wallet ledger, admin, reconcile/GDPR commands), so auto-scoping would break the
+app for marginal gain; revisit after IDENTITY-1 lands. The one flagged query
+(`menu/views.py` CustomerRating average) is by-design platform-wide (per model docstring) and
+now commented as such.
+**Remaining:** (1) IDENTITY-1, (2) the policy-class layer (`IsTenantOwner` etc.) + delete both
+`_is_tenant_owner` helpers.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
 ### OPS-1 — Single Postgres, no replica, no PITR

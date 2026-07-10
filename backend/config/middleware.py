@@ -110,6 +110,88 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
             pass
 
 
+class CrossTenantSessionGuardMiddleware:
+    """AUTHZ-1 backstop: a staff identity is only valid on its own tenant's host.
+
+    The session cookie is scoped to the parent domain, so an authenticated
+    tenant-owner/staff session rides along to EVERY tenant subdomain. Each
+    owner/staff endpoint is supposed to re-check ``user.tenant_id ==
+    request.tenant.id`` by hand — the Z-report leak and the order-status IDOR
+    both happened where that line was forgotten. This middleware makes the
+    check structural: on a tenant host, a tenant-bound user whose ``tenant_id``
+    does not match the request's tenant is DOWNGRADED to anonymous for this
+    request. Views then fail closed through their normal auth checks; a
+    forgotten per-view guard becomes a 401/403, not a leak.
+
+    Deliberately a downgrade, not a 403: the same human may legitimately
+    browse another restaurant's public pages as a guest while logged in as
+    staff of their own restaurant (the shared cookie makes that the common
+    case, not an attack).
+
+    Scope notes:
+    - Platform superadmins are exempt — they operate across tenants by design.
+    - A tenant-bound role with ``tenant_id=None`` is also downgraded
+      (fail-closed: such a user owns no tenant, so it has no business holding
+      staff identity on any tenant host). Logged distinctly for triage.
+    - Customers are unaffected: customer identity lives in
+      ``request.session["customer_id"]``, never in ``request.user``.
+    - The session is NOT flushed — the same browser session may carry a
+      customer identity for this tenant, and the staff login stays fully
+      valid on its own subdomain.
+    - Covers everything behind Django/DRF SessionAuthentication (which reads
+      ``request.user`` set here). WS consumers authenticate separately.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    @staticmethod
+    def _is_tenant_host(request) -> bool:
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            # Public/main host: TenantAwareMainMiddleware never sets request.tenant.
+            return False
+        from django_tenants.utils import get_public_schema_name
+
+        return getattr(tenant, "schema_name", None) != get_public_schema_name()
+
+    def __call__(self, request):
+        if self._is_tenant_host(request):
+            user = getattr(request, "user", None)
+            if user is not None and user.is_authenticated:
+                from accounts.models import User
+
+                # is_superuser bypass matches the existing guards
+                # (_is_tenant_owner, IsPlatformAdmin): a createsuperuser
+                # account carries the DEFAULT role (tenant_owner) with no
+                # tenant, and must keep working across tenant hosts.
+                tenant_bound = not getattr(user, "is_superuser", False) and getattr(
+                    user, "role", None
+                ) in (
+                    User.Roles.TENANT_OWNER,
+                    User.Roles.TENANT_STAFF,
+                )
+                if tenant_bound and user.tenant_id != request.tenant.id:
+                    request_logger.warning(
+                        "cross_tenant_session_downgraded",
+                        extra={
+                            "structured": {
+                                "event": "cross_tenant_session_downgraded",
+                                "user_id": user.id,
+                                "user_role": user.role,
+                                "user_tenant_id": user.tenant_id,
+                                "request_tenant_id": request.tenant.id,
+                                "method": request.method,
+                                "path": request.path,
+                            }
+                        },
+                    )
+                    from django.contrib.auth.models import AnonymousUser
+
+                    request.user = AnonymousUser()
+        return self.get_response(request)
+
+
 class RequestLoggingMiddleware:
     """Emit structured request logs with tenant/user context and request IDs."""
 
