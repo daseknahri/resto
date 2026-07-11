@@ -1,4 +1,4 @@
-Django==4.2.30
+Django==6.0.7
 psycopg2==2.9.9
 djangorestframework==3.15.2
 # OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
