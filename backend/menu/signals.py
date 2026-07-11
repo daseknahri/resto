@@ -53,7 +53,9 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
         except Exception:
             vertical = ""
 
-        # Build a compact items snapshot for re-order (slugs + prices).
+        # Build a compact items snapshot for re-order (slugs + prices). Voided/comped
+        # line items are excluded (RISK DATA-2) — they were never actually fulfilled
+        # to the customer, so re-ordering them would resurrect a removed/comped dish.
         try:
             items_snap = [
                 {
@@ -62,7 +64,7 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
                     "qty": item.qty,
                     "price": float(item.unit_price),
                 }
-                for item in instance.items.all()
+                for item in instance.items.filter(is_voided=False, is_comped=False)
             ]
         except Exception:
             items_snap = []
