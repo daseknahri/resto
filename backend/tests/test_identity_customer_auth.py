@@ -9,7 +9,7 @@ the auth class's Customer lookup is patched, and requests are lightweight namesp
 identity + ownership decision logic runs without a database.
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.test import SimpleTestCase
