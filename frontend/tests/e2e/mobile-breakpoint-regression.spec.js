@@ -42,12 +42,21 @@ const assertNoHorizontalOverflow = async (page, label) => {
           return cr.width > 0 && cr.right > clientWidth + 2;
         });
         if (childOverflows) continue; // a parent stretched by a child — skip
+        // Ancestor chain (tag.class up to body) to locate the owning component.
+        const path = [];
+        for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+          const c = String(a.className || "").trim().split(/\s+/).slice(0, 2).join(".");
+          path.unshift(a.tagName.toLowerCase() + (c ? "." + c : ""));
+          if (path.length >= 6) break;
+        }
         offenders.push({
           tag: el.tagName.toLowerCase(),
           cls: String(el.className || "").slice(0, 140),
           right: Math.round(r.right),
           width: Math.round(r.width),
           text: (el.textContent || "").trim().slice(0, 40),
+          html: el.outerHTML.slice(0, 240),
+          path: path.join(" > "),
         });
       }
       offenders.sort((a, b) => b.right - a.right);
