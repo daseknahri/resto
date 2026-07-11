@@ -146,6 +146,23 @@ class TaskWrapperTests(SimpleTestCase):
         call_command.assert_called_once_with("release_scheduled_orders")
 
 
+class TaskQueueRoutingTests(SimpleTestCase):
+    """RISK ASYNC-2: the cron/sweep task must be routed off the notifications queue
+    so a slow sweep can't starve customer-facing SMS/WhatsApp/push sends. Uses
+    Celery's own router (no broker/DB needed) so this fails if CELERY_TASK_ROUTES
+    or CELERY_TASK_DEFAULT_QUEUE ever regresses."""
+
+    def test_cron_task_routes_to_cron_queue(self):
+        from config.celery import app
+        route = app.amqp.router.route({}, "accounts.tasks.run_management_command")
+        self.assertEqual(route["queue"].name, "cron")
+
+    def test_notification_task_routes_to_default_queue(self):
+        from config.celery import app
+        route = app.amqp.router.route({}, "accounts.tasks.sms_order_ready")
+        self.assertEqual(route["queue"].name, "notifications")
+
+
 class ChargeRequestDispatchTests(SimpleTestCase):
     """R14b FIX1: push_charge_request now routes through accounts.tasks.enqueue (bounded
     pool / .delay()) instead of spawning a raw threading.Thread."""

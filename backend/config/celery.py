@@ -8,8 +8,14 @@ and runs work inline in a daemon thread instead, so dev/local and any no-Redis d
 keep working exactly as before.
 
 Run in production (Coolify "Scheduled Tasks" / extra processes):
-    celery -A config worker -l info -Q notifications,default
+    celery -A config worker -l info -Q notifications,cron
     celery -A config beat   -l info     # only if you want Beat to own the cron jobs
+
+RISK ASYNC-2: accounts.tasks.run_management_command (every Beat cron/sweep entry) is
+routed to the "cron" queue (see CELERY_TASK_ROUTES in settings.py) so a slow sweep
+can't starve customer-facing notification tasks, which stay on "notifications". A
+production worker must consume BOTH queues (as above) or run two separate consumer
+groups — one per queue — so cron ticks never occupy notification slots.
 """
 import os
 
