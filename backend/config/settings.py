@@ -265,6 +265,15 @@ if HAS_CHANNELS:
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "").strip()
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "").strip() or (CELERY_BROKER_URL or None)
 CELERY_TASK_DEFAULT_QUEUE = "notifications"
+# RISK ASYNC-2: every Beat cron/sweep entry below shares the single
+# accounts.tasks.run_management_command task. Without a route it would land on the
+# same "notifications" queue as customer-facing SMS/WhatsApp/push, so a slow sweep
+# (e.g. reconcile_driver_earnings) can starve time-sensitive notifications behind it.
+# Route it to a dedicated "cron" queue instead — see config/celery.py docstring for
+# the worker command that must consume both queues.
+CELERY_TASK_ROUTES = {
+    "accounts.tasks.run_management_command": {"queue": "cron"},
+}
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_TIME_LIMIT = 120          # hard kill a stuck send after 2 min
 CELERY_TASK_SOFT_TIME_LIMIT = 90
