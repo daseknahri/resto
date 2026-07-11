@@ -173,6 +173,21 @@ class Customer(models.Model):
         self.phone_digits = _digits[-9:] if _digits else ""
         super().save(*args, **kwargs)
 
+    # ── DRF principal (IDENTITY-1) ────────────────────────────────────────────────
+    # A Customer becomes a first-class authenticated principal when
+    # CustomerSessionAuthentication sets it as request.user (from session["customer_id"]).
+    # These mirror Django's User.is_authenticated / .is_anonymous so DRF permission classes
+    # (IsAuthenticated, IsCustomer, IsOrderOwner) can treat a customer as a real principal
+    # instead of every view re-reading the raw session PK. A Customer is never a Django User
+    # — the two identity systems stay disjoint; this only makes Customer usable AS request.user.
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
 
 class WalletTransaction(models.Model):
     """Records every credit movement on a customer's wallet (top-up, payment, refund, bonus)."""

@@ -374,8 +374,11 @@ class VoucherRedeemCreditWalletTests(SimpleTestCase):
 
     def test_redeem_calls_credit_wallet_with_stable_key(self):
         import accounts.models as am
+        from accounts.models import Customer
+        from rest_framework.test import force_authenticate
 
-        customer = SimpleNamespace(id=42, phone_verified=True, wallet_balance=Decimal("0.00"))
+        # IDENTITY-1: real Customer principal (request.user), not an injected request.customer.
+        customer = Customer(id=42, phone_verified=True, wallet_balance=Decimal("0.00"))
 
         voucher = MagicMock()
         voucher.id = 7
@@ -401,9 +404,8 @@ class VoucherRedeemCreditWalletTests(SimpleTestCase):
             req = self.factory.post(
                 "/api/customer/wallet/redeem-voucher/", {"code": "abcd1234"}, format="json"
             )
-            req.user = MagicMock(is_authenticated=True)
-            req.customer = customer
-            req.session = {}
+            req.session = {"customer_id": 42}
+            force_authenticate(req, user=customer)
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

@@ -22,7 +22,7 @@
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
 | **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
-| **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
+| **IDENTITY-1** | Auth | ◑ Partial | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks. **Keystone shipped** (`CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`; customer is now `request.user`), proven on 3 views (incl. a live voucher `FieldError` fix); ~55-view sweep remains | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + **real threaded money/isolation DB tests** (MFA DB tests un-skipped). Residual: de-mock a low-value tail (cleanup, not risk) | M |
 | **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`, detect+alert money, `--fix` cleans mirror); global-unique `order_number` remains | S/L |
@@ -138,7 +138,7 @@ the check does not false-positive. Tests: `tests/test_reconcile_wallet_balances.
 Postgres).
 **Source:** money review, data-model review.
 
-### IDENTITY-1 — Two disjoint identity systems; the customer is invisible to DRF
+### IDENTITY-1 — Two disjoint identity systems; the customer is invisible to DRF  ◑ KEYSTONE SHIPPED (2026-07-11)
 **Where:** staff → `request.user` (SessionAuth); customer → `request.session["customer_id"]`
 (~49 raw reads in `accounts/views.py`), never in `request.user`.
 **Failure scenario:** You *cannot* write an `IsOrderOwner` permission class for customer
@@ -149,6 +149,37 @@ why the order-status IDOR was possible.
 `session["customer_id"]` (or a custom auth backend). Then customers, staff, owners, drivers,
 and admins all flow through one auth stack — the prerequisite for AUTHZ-1's policy layer.
 **Effort:** L (touches ~60 customer views), but it's the keystone.
+
+**Shipped (keystone + bounded slice):**
+- `accounts/authentication.py::CustomerSessionAuthentication` — hydrates the signed-in
+  `Customer` onto `request.user` from `session["customer_id"]`. Deliberately a plain
+  `BaseAuthentication` (NOT a subclass of DRF `SessionAuthentication`): customer POSTs run today
+  with an empty auth stack and thus **no CSRF enforcement**, so subclassing would newly 403 every
+  customer POST on CSRF. `authenticate_header` is set so unauthenticated requests render as **401**
+  (matching the old hand-rolled "Not authenticated"), not 403. Fails closed (returns `None`) on
+  absent/stale session PK.
+- `Customer.is_authenticated` / `.is_anonymous` properties (`accounts/models.py`) — makes the
+  model usable AS a principal; the two identity systems stay disjoint (a Customer is never a User).
+- `accounts/permissions.py::IsCustomer`, `IsOrderOwner` — the single home for the
+  `customer_id`-ownership predicate that ~5 IDOR-prone views each re-implemented. `IsOrderOwner`
+  is usable both as a DRF object permission and as a plain predicate (so views keep their specific
+  coded/​graceful-degradation responses).
+- **Converted 3 views:** `CustomerWalletRedeemVoucherView` (also fixes a **live bug** — it did
+  `Customer.objects.get(user=request.user)`, but `Customer` has no `user` field → `FieldError` for
+  any real caller; the old tests masked it by injecting `request.customer`), and
+  `MarketplaceOrderCancelView` (inline `int==int` → shared `IsOrderOwner`, exact 403 preserved).
+- Tests: `tests/test_identity_customer_auth.py` (16, no DB) + rewritten voucher/cancel view tests
+  to the real auth path (force-authenticated `Customer` principal).
+
+**Landmine found (guides the deferred sweep):** now that `Customer.is_authenticated` is `True`,
+any multi-role view that hydrates the customer onto `request.user` **and** has a
+`request.user.is_authenticated` *staff* gate (e.g. `DeliveryRatingView`'s `role=="restaurant"`
+branch) would let a customer principal pass the staff gate. Such branches must additionally check
+the principal is a `User` (not a `Customer`) before the sweep flips their `authentication_classes`.
+
+**Remaining:** the ~55-view mechanical sweep (customer/driver endpoints still reading
+`session["customer_id"]` by hand), per-branch hardening of multi-role views (the landmine above),
+then optional customer-CSRF hardening as a deliberate, separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

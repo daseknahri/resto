@@ -34,7 +34,7 @@ from django.test import SimpleTestCase
 from django.test import RequestFactory
 from django.test import override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -42,11 +42,11 @@ from rest_framework.test import APIRequestFactory
 # ═════════════════════════════════════════════════════════════════════════════
 
 def _make_customer(customer_id=1, wallet_balance=Decimal("20.00")):
-    c = MagicMock()
-    c.id = customer_id
-    c.wallet_balance = wallet_balance
-    c.phone_verified = True
-    return c
+    # IDENTITY-1: a real (unsaved) Customer so it passes IsCustomer (is_authenticated +
+    # class name); no DB is touched. The redeem path reads balance_after from the (mocked)
+    # ledger, so wallet_balance is only for signature parity.
+    from accounts.models import Customer
+    return Customer(id=customer_id, phone_verified=True, wallet_balance=wallet_balance)
 
 
 def _make_voucher(code="GIFT1234AB", amount=Decimal("15.00"), is_used=False,
@@ -87,10 +87,11 @@ class VoucherRedeemInvalidCodeLockoutTests(SimpleTestCase):
         req = self.factory.post(
             "/api/customer/wallet/redeem-voucher/", {"code": code}, format="json"
         )
-        req.user = MagicMock(is_authenticated=True)
-        req.customer = customer
         # Session customer id is what the lockout key prefers.
         req.session = {"customer_id": customer.id}
+        # IDENTITY-1: force the DRF Customer principal (request.user) — the auth class's
+        # session lookup is covered in test_identity_customer_auth.py.
+        force_authenticate(req, user=customer)
         return req
 
     def _fire_invalid(self, customer):
