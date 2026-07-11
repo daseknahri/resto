@@ -92,7 +92,7 @@ jobs:
           . .venv/bin/activate
           python manage.py spectacular --file openapi.json --validate
       - name: Upload OpenAPI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openapi-schema
           path: backend/openapi.json
@@ -355,7 +355,7 @@ jobs:
 
       - name: Upload E2E artifacts (traces, screenshots, server logs)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-e2e-artifacts
           path: |
