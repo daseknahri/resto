@@ -11,8 +11,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from menu.views import CustomerLoyaltyRedeemView
 from accounts.views import CustomerWalletRedeemVoucherView
 
@@ -60,26 +61,27 @@ class LoyaltyRedeemIdempotencyTests(SimpleTestCase):
 
 class VoucherRedeemIdempotencyTests(SimpleTestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate the per-actor invalid-code lockout counter
         self.factory = APIRequestFactory()
         self.view = CustomerWalletRedeemVoucherView.as_view()
 
-    def _post(self, body, user):
+    def _post(self, body, customer):
         req = self.factory.post("/api/customer/wallet/redeem-voucher/", body, format="json")
-        req.user = user
+        req.session = {"customer_id": customer.id}
+        # IDENTITY-1: the redeem view now reads the Customer off request.user.
+        force_authenticate(req, user=customer)
         return self.view(req)
 
     @patch("django.db.transaction.atomic")
     @patch("accounts.models.WalletVoucher.objects")
-    @patch("accounts.views.Customer.objects")
-    def test_same_customer_replay_returns_success(self, mock_cust, mock_voucher, _mock_atomic):
-        customer = MagicMock(phone_verified=True, wallet_balance=Decimal("60.00"))
-        customer.id = 7
-        mock_cust.get.return_value = customer
+    def test_same_customer_replay_returns_success(self, mock_voucher, _mock_atomic):
+        customer = Customer(id=7, phone_verified=True, wallet_balance=Decimal("60.00"))
 
         voucher = MagicMock(is_used=True, used_by_id=7, amount=Decimal("25.00"), note="Promo")
         mock_voucher.select_for_update.return_value.get.return_value = voucher
 
-        resp = self._post({"code": "ABCD1234"}, user=_auth_user(customer_id=7))
+        resp = self._post({"code": "ABCD1234"}, customer=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])
@@ -88,16 +90,13 @@ class VoucherRedeemIdempotencyTests(SimpleTestCase):
 
     @patch("django.db.transaction.atomic")
     @patch("accounts.models.WalletVoucher.objects")
-    @patch("accounts.views.Customer.objects")
-    def test_other_customer_still_rejected(self, mock_cust, mock_voucher, _mock_atomic):
-        customer = MagicMock(phone_verified=True, wallet_balance=Decimal("60.00"))
-        customer.id = 7
-        mock_cust.get.return_value = customer
+    def test_other_customer_still_rejected(self, mock_voucher, _mock_atomic):
+        customer = Customer(id=7, phone_verified=True, wallet_balance=Decimal("60.00"))
 
         # Voucher was used by a DIFFERENT customer (id 99) — must stay rejected.
         voucher = MagicMock(is_used=True, used_by_id=99, amount=Decimal("25.00"), note="Promo")
         mock_voucher.select_for_update.return_value.get.return_value = voucher
 
-        resp = self._post({"code": "ABCD1234"}, user=_auth_user(customer_id=7))
+        resp = self._post({"code": "ABCD1234"}, customer=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

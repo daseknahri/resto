@@ -31,8 +31,10 @@ from tenancy.openstate import schedule_open_now, tenant_local_now
 
 from django.core.management import call_command
 
+from .authentication import CustomerSessionAuthentication
 from .messaging import send_password_reset_email
 from .models import Customer, CustomerOrderRef, SavedAddress, WalletTransaction
+from .permissions import IsCustomer, IsOrderOwner
 from .throttles import (
     ActivationThrottle,
     AdminPIIThrottle,
@@ -2998,7 +3000,11 @@ class CustomerWalletRedeemVoucherView(APIView):
     Redeems a single-use voucher code for the authenticated customer.
     """
 
-    permission_classes = [IsAuthenticated]
+    # IDENTITY-1: the signed-in customer is now request.user (was a broken
+    # Customer.objects.get(user=request.user) — Customer has no `user` field, so this view
+    # raised FieldError for any caller that got past the old IsAuthenticated staff gate).
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     # OPS-5g: a redeemed code maps straight to wallet credit → brute-force-to-money
     # target. The throttle is the rate backstop; the per-actor invalid-code lockout
     # below is the primary brute-force defense.
@@ -3009,15 +3015,8 @@ class CustomerWalletRedeemVoucherView(APIView):
         from django.utils import timezone as _tz
         from .models import WalletVoucher, WalletTransaction
 
-        # Resolve customer
-        customer = getattr(request, "customer", None)
-        if customer is None:
-            try:
-                customer = Customer.objects.get(user=request.user)
-            except Customer.DoesNotExist:
-                customer = None
-        if customer is None:
-            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         if not customer.phone_verified:
             return Response(
                 {"detail": "Verify your phone number to use your wallet.", "code": "phone_unverified"},
@@ -5331,6 +5330,10 @@ class MarketplaceOrderCancelView(APIView):
     restocks — reusing the same helpers as the direct flow. Session ownership required.
     """
 
+    # IDENTITY-1: hydrate the customer onto request.user so the ownership check runs through
+    # the shared IsOrderOwner predicate (below) instead of a hand-rolled session-PK compare.
+    # Stays AllowAny at the class level — the 403 "not_owner" response is preserved verbatim.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [MarketplaceOrderStatusThrottle]
 
@@ -5348,7 +5351,6 @@ class MarketplaceOrderCancelView(APIView):
         except Tenant.DoesNotExist:
             return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        session_customer_id = request.session.get("customer_id")
         try:
             with _sc(tenant.schema_name):
                 from menu.models import Order as _Order
@@ -5364,11 +5366,8 @@ class MarketplaceOrderCancelView(APIView):
                 order = _Order.objects.filter(order_number=order_number).first()
                 if order is None:
                     return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
-                try:
-                    owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
-                except (TypeError, ValueError):
-                    owns = False
-                if not owns:
+                # IDENTITY-1: single shared ownership predicate (request.user is the Customer).
+                if not IsOrderOwner().has_object_permission(request, self, order):
                     return Response({"detail": "Sign in to cancel this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
                 if order.status == _Order.Status.CANCELLED:
                     return Response({"detail": "Order already cancelled.", "status": order.status})  # idempotent
