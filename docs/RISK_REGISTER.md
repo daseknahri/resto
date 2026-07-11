@@ -25,7 +25,7 @@
 | **IDENTITY-1** | Auth | 🟠 High | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + **real threaded money/isolation DB tests** (MFA DB tests un-skipped). Residual: de-mock a low-value tail (cleanup, not risk) | M |
-| **DATA-1** | Data | 🟠 High | Loose cross-schema refs, no orphan protection, no `Order` delete handler | M |
+| **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`, detect+alert money, `--fix` cleans mirror); global-unique `order_number` remains | S/L |
 | **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
 | **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
 | **ASYNC-1** | Async | 🟠 High | Inline task fallback loses queued work on every deploy restart, no retry | M |
@@ -221,7 +221,7 @@ that gap is now closed. **Residual (low value):** a tail of older tests still mo
 duplicate control-flow coverage the real DB tests provide, so de-mocking them is cleanup, not risk.
 **Effort:** M (remaining). **Source:** testing/CI review.
 
-### DATA-1 — Cross-schema refs have no orphan protection
+### DATA-1 — Cross-schema refs have no orphan protection  ◑ PARTIALLY ADDRESSED (2026-07-11)
 **Where:** `(tenant_id, order_number)` on `DeliveryJob`, `WalletTransaction`, `CustomerOrderRef`,
 `CustomerRating`; **no `Order` `post_delete` handler anywhere**; `order_number` is only
 tenant-unique.
@@ -230,10 +230,26 @@ tenant-unique.
 paid for a delivery whose order no longer exists, with no FK to catch it. Separately, any code
 that ever queries these public tables by `order_number` **without** `tenant_id` cross-contaminates
 restaurants.
-**Fix:** Make `order_number` **globally unique** (`{tenant_id}-{seq}` or UUID) so public refs need
-one column and can't cross-contaminate; add a reconciliation job for orphaned refs (generalize
-`reconcile_driver_earnings`); add an `Order` soft-delete convention + `post_delete` cleanup.
-**Effort:** M.
+**Resolution (orphan reconciliation, 2026-07-11):** `reconcile_order_refs` scans each tenant's
+public refs (`DeliveryJob`/`CustomerOrderRef`/`CustomerRating`) against the `order_number`s that
+actually exist in that tenant's schema (`schema_context`, mirroring `backfill_order_index`) and
+reports orphans. **Detect-only by default** (Beat runs it daily with no `--fix`, mirroring
+`reconcile_wallet_balances`): a money-carrying **`DeliveryJob` orphan** (has a `driver_payout` —
+the exact "driver paid for a vanished order" hazard) is escalated to the `payments` channel for
+human triage and is **NEVER auto-deleted**; a `CustomerRating` orphan is reported only. `--fix`
+deletes ONLY the pure-mirror `CustomerOrderRef` orphans (safe; already removed on `Order`
+post_delete — this catches signal misses like a bulk delete / schema drop). `WalletTransaction` is
+out of scope (fuzzy free-text `reference`; a money ledger must never be reconciled by deletion).
+Tests: `tests/test_reconcile_order_refs.py` (4, no DB). Verified there is **no production Order
+hard-delete path today** (GDPR erase blanks-but-retains; no admin/teardown deletes), so this is
+defense-in-depth for out-of-band deletes.
+**Remaining (structural):** (1) make `order_number` **globally unique** (`{tenant_id}-{seq}` or
+UUID) so public refs need one column and can't cross-contaminate — a large ripple (URLs,
+serializers, frontend), deliberately deferred; (2) an `Order` **soft-delete convention** (no
+`deleted` field exists). The existing per-ref `tenant_id` scoping (audited: DeliveryJob /
+CustomerRating / CustomerOrderRef lookups already constrain `tenant_id`) plus this reconcile job
+cover the acute risk without the structural rewrite.
+**Effort:** S (reconcile, done) / L (global-unique order_number, remaining).
 **Source:** data-model review.
 
 ### API-1 — No API versioning

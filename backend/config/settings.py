@@ -339,6 +339,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 6 * 60 * 60.0,
         "args": ("reconcile_wallet_balances",),
     },
+    "reconcile-order-refs": {
+        "task": "accounts.tasks.run_management_command",
+        # daily — DATA-1: detect public order-refs (DeliveryJob/CustomerOrderRef/CustomerRating)
+        # orphaned by a removed Order. DETECT-ONLY here (no --fix): money-carrying DeliveryJob
+        # orphans escalate to the payments channel for human triage and are never auto-deleted;
+        # a human runs the command with --fix to clean the safe CustomerOrderRef mirror orphans.
+        "schedule": 24 * 60 * 60.0,
+        "args": ("reconcile_order_refs",),
+    },
     "sweep-ride-requests": {
         "task": "accounts.tasks.run_management_command",
         # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.
