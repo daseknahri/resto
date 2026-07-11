@@ -27,21 +27,31 @@ const assertNoHorizontalOverflow = async (page, label) => {
     const root = document.documentElement;
     const body = document.body;
     const clientWidth = root.clientWidth;
-    // On overflow, identify the culprits: the DEEPEST elements whose right edge
-    // crosses the viewport (an element with no overflowing children is the actual
-    // wide box, not just a container stretched by one). Reported in the assertion
-    // message so a failure names the offending nodes instead of only the width.
+    // On overflow, identify the TRUE culprits: the deepest elements whose right edge
+    // crosses the viewport AND are NOT clipped by a scroll/hidden ancestor. An element
+    // inside e.g. an overflow-x-auto rail extends past the viewport in layout but is
+    // clipped, so it does NOT push the body wide — only uncontained ones do. Reported
+    // in the assertion message so a failure names the real offending nodes.
+    const isClipped = (el) => {
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const ox = getComputedStyle(a).overflowX;
+        if ((ox === "hidden" || ox === "auto" || ox === "scroll") &&
+            a.getBoundingClientRect().right <= clientWidth + 2) return true;
+      }
+      return false;
+    };
     const offenders = [];
     const max = Math.max(root.scrollWidth, body ? body.scrollWidth : root.scrollWidth);
     if (max > clientWidth + 2) {
       for (const el of document.querySelectorAll("body *")) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.right <= clientWidth + 2) continue;
+        if (isClipped(el)) continue; // clipped by an ancestor — not a real cause
         const childOverflows = Array.from(el.children).some((c) => {
           const cr = c.getBoundingClientRect();
-          return cr.width > 0 && cr.right > clientWidth + 2;
+          return cr.width > 0 && cr.right > clientWidth + 2 && !isClipped(c);
         });
-        if (childOverflows) continue; // a parent stretched by a child — skip
+        if (childOverflows) continue; // a parent stretched by a real child — skip
         // Ancestor chain (tag.class up to body) to locate the owning component.
         const path = [];
         for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
@@ -71,7 +81,7 @@ const assertNoHorizontalOverflow = async (page, label) => {
   expect(
     Math.max(dimensions.rootScrollWidth, dimensions.bodyScrollWidth),
     `${label} should not overflow horizontally on mobile viewport (clientWidth=${dimensions.clientWidth}). ` +
-      `Overflowing leaf elements: ${JSON.stringify(dimensions.offenders, null, 2)}`
+      `Overflowing (uncontained) elements: ${JSON.stringify(dimensions.offenders, null, 2)}`
   ).toBeLessThanOrEqual(dimensions.clientWidth + 2);
 };
 
