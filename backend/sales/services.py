@@ -296,12 +296,19 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                 )
                 raise ValueError("Tenant slug/domain is no longer available. Please retry provisioning.")
 
-            tenant = Tenant.objects.create(
+            # Create the tenant ROW only. Physical-schema creation is deferred to
+            # phase 2 (below), OUTSIDE this transaction — a new tenant's migrations
+            # include AddIndexConcurrently (CREATE INDEX CONCURRENTLY), which Postgres
+            # forbids inside a transaction. Building it in-transaction is the
+            # MULTITENANCY-1 landmine that made every signup 500.
+            tenant = Tenant(
                 slug=slug,
                 schema_name=slug,
                 name=lead.name or slug,
                 plan=plan,
             )
+            tenant.auto_create_schema = False
+            tenant.save()
             Domain.objects.create(domain=domain_name, tenant=tenant, is_primary=True)
 
             owner_email = lead.email or f"{slug}@example.com"
@@ -319,6 +326,39 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
 
             Subscription.objects.get_or_create(tenant=tenant, plan=plan)
 
+            job = ProvisioningJob.objects.create(
+                lead=lead, tenant=tenant, status=ProvisioningJob.Status.RUNNING
+            )
+            job.append_log("Tenant, domain, owner and subscription created; building schema")
+
+        # ── Phase 2: build the physical schema OUTSIDE the transaction ────────────
+        # phase 1 has committed the public-schema rows; now run the tenant's
+        # migrations (incl. the AddIndexConcurrently ones) with no transaction open.
+        try:
+            tenant.create_schema(check_if_exists=True)
+        except Exception as exc:
+            logger.exception("Schema creation failed for tenant %s (lead %s)", slug, lead.id)
+            _log_provisioning_event(
+                "lead_provision_schema_failed",
+                lead_id=lead.id,
+                tenant_slug=slug,
+                error=str(exc),
+            )
+            with transaction.atomic():
+                job.status = ProvisioningJob.Status.FAILED
+                job.append_log(f"Schema creation failed: {exc}")
+                job.save(update_fields=["status", "updated_at"])
+                # Free the slug/domain so the lead can be retried: deleting the tenant
+                # CASCADEs its Domain + Subscription and SET_NULLs this job + the owner.
+                Tenant.objects.filter(pk=tenant.pk).delete()
+            raise
+
+        # ── Phase 3: schema exists — issue activation + finalize success ──────────
+        # issue_activation SENDS the owner's activation email/WhatsApp, so it must run
+        # only after the schema is real (a schema failure must not send a live link to
+        # a tenant that no longer exists — this preserves the original ordering, where
+        # activation ran after the in-transaction schema create).
+        with transaction.atomic():
             (
                 activation,
                 admin_url,
@@ -330,7 +370,6 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                 whatsapp_message_template,
             ) = issue_activation(tenant, user, phone=lead.phone)
 
-            job = ProvisioningJob.objects.create(lead=lead, tenant=tenant, status=ProvisioningJob.Status.SUCCESS)
             job.append_log("Provisioning completed")
             job.append_log(f"Activation token: {mask_secret(activation.token)}")
             job.append_log(f"Workspace URL: {workspace_url}")
@@ -339,24 +378,26 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 job.append_log(f"WhatsApp link: {whatsapp_link}")
+            job.status = ProvisioningJob.Status.SUCCESS
+            job.save(update_fields=["status", "updated_at"])
 
             lead.status = Lead.Status.LIVE
             if lead.onboarded_at is None:
                 lead.onboarded_at = timezone.now()
             lead.save(update_fields=["status", "onboarded_at", "updated_at"])
 
-            logger.info("Provisioned tenant %s for lead %s", tenant.slug, lead.id)
-            _log_provisioning_event(
-                "lead_provision_success",
-                lead_id=lead.id,
-                tenant_id=tenant.id,
-                tenant_slug=tenant.slug,
-                schema_name=tenant.schema_name,
-                domain=domain_name,
-                plan_code=getattr(plan, "code", ""),
-                owner_user_id=getattr(user, "id", None),
-                provisioning_job_id=job.id,
-            )
+        logger.info("Provisioned tenant %s for lead %s", tenant.slug, lead.id)
+        _log_provisioning_event(
+            "lead_provision_success",
+            lead_id=lead.id,
+            tenant_id=tenant.id,
+            tenant_slug=tenant.slug,
+            schema_name=tenant.schema_name,
+            domain=domain_name,
+            plan_code=getattr(plan, "code", ""),
+            owner_user_id=getattr(user, "id", None),
+            provisioning_job_id=job.id,
+        )
 
     return ProvisionResult(
         tenant=tenant,

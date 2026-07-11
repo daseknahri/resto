@@ -22,6 +22,18 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  // Dev-only dependency pre-bundling. Pin esbuild's target to esnext so it does
+  // NOT try to lower modern syntax (destructuring, etc.) to Vite's default
+  // "modules" baseline (chrome87/es2020/…): esbuild 0.28.x — pinned via the
+  // `overrides` below for a CVE fix — regressed that lowering and aborts dep
+  // optimization with "Transforming destructuring … is not supported yet",
+  // which crashes `vite dev` on startup (the browser is modern; no lowering is
+  // needed here anyway, and `build.target` is already esnext).
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "esnext",
+    },
+  },
   server: {
     host: "0.0.0.0",
     port: 5180,
