@@ -88,6 +88,13 @@ class EnqueueRoutingTests(SimpleTestCase):
 
 
 class TaskWrapperTests(SimpleTestCase):
+    def setUp(self):
+        # ASYNC-4: several notification tasks now claim a one-time cache key to dedupe
+        # redelivered/retried sends. These tests reuse identical args (same key), so a
+        # claim from one test would dedupe the next into a no-op — reset per test.
+        from django.core.cache import cache
+        cache.clear()
+
     @patch("menu.push._push_to_tenant")
     def test_web_push_tenant_calls_sync(self, push):
         from accounts.tasks import web_push_tenant

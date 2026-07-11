@@ -34,7 +34,7 @@
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook would credit metadata, not settled `amount_total`~~ — now credits `amount_total`, paid-only | ~~S~~ |
 | **OPS-3** | Ops | 🟡 Med | One Redis SPOF; sessions cache-only (eviction logs users out) — ⚠️ naive `cached_db` fix BREAKS (django-tenants schema); needs a schema-pinned backend | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
-| **ASYNC-4** | Async | 🟡 Med | `acks_late` + no reject-on-worker-lost + no DLQ → duplicate SMS/email on worker loss | S |
+| **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped** (one-time claim on the SMS/WhatsApp/push tasks); DLQ/reject-alert remains | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
 | **FE-2** | Frontend | 🟡 Med | Six 2,500–3,700-line page components (single-writer bottleneck) | L |
 | **FE-3** | Frontend | 🟡 Med | ~500KB locale catalogs block first paint; Sentry not lazy | S–M |
@@ -357,15 +357,27 @@ substitutive.
 up); wire `useOwnerRealtime` into `OwnerOrders`.
 **Effort:** M. **Source:** async/realtime review.
 
-### ASYNC-4 — `acks_late` without dedupe → duplicate sends
-**Where:** `acks_late=True`, no `task_reject_on_worker_lost`, no DLQ; `_sync` senders have no
-dedupe key.
+### ASYNC-4 — `acks_late` without dedupe → duplicate sends  ◑ PARTIALLY ADDRESSED (2026-07-11)
+**Where:** `CELERY_TASK_ACKS_LATE = True` (global) + `CELERY_TASK_TIME_LIMIT = 120`, no
+`task_reject_on_worker_lost`, no DLQ; the notification tasks had no dedupe key.
 **Failure scenario:** A worker is killed mid-`sms_order_ready` (by the 120s time-limit or OOM) →
 the task is redelivered and re-run → the customer gets a duplicate SMS (real cost + trust hit),
 exactly under the load when redelivery happens.
-**Fix:** Add an idempotency/dedupe key to notification sends (e.g. on `NotificationLog`); add a
-DLQ or a rejected→alert path.
-**Effort:** S. **Source:** async/realtime review.
+**Resolution (dedupe, 2026-07-11):** the trust/cost-sensitive tasks (`sms_order_ready`,
+`recipient_track_sms`, `whatsapp_new_order`, `customer_order_milestone`) now **claim a one-time
+send key** (`accounts/tasks._claim_send`, an atomic `cache.add`/SETNX) BEFORE dispatching — a
+redelivered / autoretried duplicate finds the key already claimed and skips, so the customer never
+sees a double SMS/WhatsApp/status-push. The claim is **released on exception** so a genuine
+transient-failure retry (`SmsProviderError` → `autoretry_for`) still re-sends; it **fails open** so
+a cache blip never silently drops a notification; and keys embed the global `tenant_id` so a
+tenant-local `order_number` can't collide across schemas. TTL 1h ≫ the retry+redelivery window.
+Tests: `tests/test_notification_dedupe.py` (9, no DB) — dedupe, distinct-notification isolation,
+retry-preservation, fail-open.
+**Remaining:** a true **DLQ / rejected→alert path** for tasks that exhaust retries (the failure
+audit already lands in `NotificationLog` with `status=failed`, but there is no active alert). That
+is broker/infra work (dead-letter exchange), not a code S-fix; `task_reject_on_worker_lost` was
+left off deliberately — it is global and would also requeue non-idempotent cron/management tasks.
+**Effort:** S (dedupe, done) / M (DLQ, remaining). **Source:** async/realtime review.
 
 ### FE-1 — i18n dual-source footgun
 **Where:** `messages.js` (inline en+fr, read by runtime + gates) **and** `messages-ar.js` **and**
