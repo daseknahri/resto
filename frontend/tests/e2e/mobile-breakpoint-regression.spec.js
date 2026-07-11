@@ -26,15 +26,62 @@ const assertNoHorizontalOverflow = async (page, label) => {
   const dimensions = await page.evaluate(() => {
     const root = document.documentElement;
     const body = document.body;
+    const clientWidth = root.clientWidth;
+    // On overflow, identify the TRUE culprits: the deepest elements whose right edge
+    // crosses the viewport AND are NOT clipped by a scroll/hidden ancestor. An element
+    // inside e.g. an overflow-x-auto rail extends past the viewport in layout but is
+    // clipped, so it does NOT push the body wide — only uncontained ones do. Reported
+    // in the assertion message so a failure names the real offending nodes.
+    const isClipped = (el) => {
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const ox = getComputedStyle(a).overflowX;
+        if ((ox === "hidden" || ox === "auto" || ox === "scroll") &&
+            a.getBoundingClientRect().right <= clientWidth + 2) return true;
+      }
+      return false;
+    };
+    const offenders = [];
+    const max = Math.max(root.scrollWidth, body ? body.scrollWidth : root.scrollWidth);
+    if (max > clientWidth + 2) {
+      for (const el of document.querySelectorAll("body *")) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.right <= clientWidth + 2) continue;
+        if (isClipped(el)) continue; // clipped by an ancestor — not a real cause
+        const childOverflows = Array.from(el.children).some((c) => {
+          const cr = c.getBoundingClientRect();
+          return cr.width > 0 && cr.right > clientWidth + 2 && !isClipped(c);
+        });
+        if (childOverflows) continue; // a parent stretched by a real child — skip
+        // Ancestor chain (tag.class up to body) to locate the owning component.
+        const path = [];
+        for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+          const c = String(a.className || "").trim().split(/\s+/).slice(0, 2).join(".");
+          path.unshift(a.tagName.toLowerCase() + (c ? "." + c : ""));
+          if (path.length >= 6) break;
+        }
+        offenders.push({
+          tag: el.tagName.toLowerCase(),
+          cls: String(el.className || "").slice(0, 140),
+          right: Math.round(r.right),
+          width: Math.round(r.width),
+          text: (el.textContent || "").trim().slice(0, 40),
+          html: el.outerHTML.slice(0, 240),
+          path: path.join(" > "),
+        });
+      }
+      offenders.sort((a, b) => b.right - a.right);
+    }
     return {
-      clientWidth: root.clientWidth,
+      clientWidth,
       rootScrollWidth: root.scrollWidth,
       bodyScrollWidth: body ? body.scrollWidth : root.scrollWidth,
+      offenders: offenders.slice(0, 8),
     };
   });
   expect(
     Math.max(dimensions.rootScrollWidth, dimensions.bodyScrollWidth),
-    `${label} should not overflow horizontally on mobile viewport`
+    `${label} should not overflow horizontally on mobile viewport (clientWidth=${dimensions.clientWidth}). ` +
+      `Overflowing (uncontained) elements: ${JSON.stringify(dimensions.offenders, null, 2)}`
   ).toBeLessThanOrEqual(dimensions.clientWidth + 2);
 };
 
