@@ -1,8 +1,11 @@
 Django==4.2.30
 psycopg2==2.9.9
 djangorestframework==3.15.2
-# Optional DRF deps required by `manage.py generateschema` (the CI "Export OpenAPI
-# schema" step): inflection for operationId bases, uritemplate for path parameters.
+# OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
+# generateschema` with drf-spectacular, used by the CI "Export OpenAPI schema"
+# step (`manage.py spectacular --validate`) and by tests/test_openapi_schema.py.
+# inflection/uritemplate/PyYAML/jsonschema are its (transitively pinned) deps.
+drf-spectacular==0.30.0
 inflection==0.5.1
 uritemplate==4.1.1
 django-tenants==3.6.0

@@ -95,6 +95,20 @@ REST_FRAMEWORK = {
         "mfa_disable": "10/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
+    # RISK SCHEMA-1: drf-spectacular replaces the legacy (deprecated) DRF
+    # `generateschema`/CoreAPI schema generation.
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# RISK SCHEMA-1: drf-spectacular settings — read by `manage.py spectacular` and by
+# tests/test_openapi_schema.py (via drf_spectacular.generators.SchemaGenerator).
+# SERVE_INCLUDE_SCHEMA=False: we don't mount a live /schema/ endpoint (no urls.py
+# wiring in this slice) — the CI step generates the file directly via the command.
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Kepoli API",
+    "VERSION": "1.0.0",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 

@@ -132,6 +132,10 @@ SHARED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # RISK SCHEMA-1: OpenAPI generation via `manage.py spectacular` (replaces the
+    # legacy `generateschema`). Provides the management command only here — the
+    # DEFAULT_SCHEMA_CLASS + SPECTACULAR_SETTINGS wiring lives in rest_framework.py.
+    "drf_spectacular",
     "corsheaders",
     "accounts",
     "tenancy",
@@ -454,10 +458,10 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 AUTH_USER_MODEL = "accounts.User"
 
-# Defines the REST_FRAMEWORK Django setting (consumed by DRF, not by Python code in
-# this module) — so it reads as "unused" to a linter but removing it reverts DRF to
-# defaults and breaks auth/permissions/throttling. Keep the noqa.
-from .rest_framework import REST_FRAMEWORK  # noqa: F401, E402
+# Defines the REST_FRAMEWORK / SPECTACULAR_SETTINGS Django settings (consumed by DRF /
+# drf-spectacular, not by Python code in this module) — so they read as "unused" to a
+# linter but removing them reverts DRF to defaults / breaks OpenAPI generation. Keep the noqa.
+from .rest_framework import REST_FRAMEWORK, SPECTACULAR_SETTINGS  # noqa: F401, E402
 
 cors_origins = set(
     parse_csv_env(
