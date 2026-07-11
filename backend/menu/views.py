@@ -9706,16 +9706,15 @@ def _is_tenant_owner(request) -> bool:
     (revenue, promotions, settings, billing, loyalty, float, customer directory…)
     must not be reachable by staff. Staff capabilities go through the perm-specific
     helpers (_can_edit_tenant_order / _can_view_revenue / _can_edit_menu).
+
+    RISK AUTHZ-1: thin delegate to `sales.permissions.user_owns_tenant_id` — the single owner
+    check now shared with `IsTenantOwner` and accounts' `_is_tenant_owner` (was three divergent
+    copies). Function-local import keeps this file's circular-import discipline. The ~50 call
+    sites and their tests are unchanged; semantics are identical.
     """
-    user = request.user
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser or getattr(user, "is_platform_admin", False):
-        return True
+    from sales.permissions import user_owns_tenant_id
     tenant = getattr(request, "tenant", None)
-    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
-        return False
-    return user.role == user.Roles.TENANT_OWNER
+    return user_owns_tenant_id(getattr(request, "user", None), getattr(tenant, "id", None))
 
 
 def _bust_meta_cache_for_request(request) -> None:

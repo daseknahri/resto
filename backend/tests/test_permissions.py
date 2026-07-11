@@ -14,7 +14,7 @@ from django.test import SimpleTestCase
 
 from accounts.models import User
 from menu.permissions import IsTenantEditorOrReadOnly
-from sales.permissions import IsPlatformAdmin, IsTenantEditor, IsTenantOwner
+from sales.permissions import IsPlatformAdmin, IsTenantEditor, IsTenantOwner, user_owns_tenant_id
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -193,6 +193,39 @@ class IsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
         obj = SimpleNamespace()
         self.assertFalse(self.perm.has_object_permission(req, self.view, obj))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# user_owns_tenant_id — the single owner-check shared by IsTenantOwner and the two
+# _is_tenant_owner view helpers (RISK AUTHZ-1 consolidation)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class UserOwnsTenantIdTests(SimpleTestCase):
+    def test_owner_with_matching_tenant_allowed(self):
+        self.assertTrue(user_owns_tenant_id(_user(role=User.Roles.TENANT_OWNER, tenant_id=1), 1))
+
+    def test_staff_with_matching_tenant_denied(self):
+        self.assertFalse(user_owns_tenant_id(_user(role=User.Roles.TENANT_STAFF, tenant_id=1), 1))
+
+    def test_owner_wrong_tenant_denied(self):
+        self.assertFalse(user_owns_tenant_id(_user(role=User.Roles.TENANT_OWNER, tenant_id=99), 1))
+
+    def test_none_tenant_id_denied_for_owner(self):
+        self.assertFalse(user_owns_tenant_id(_user(role=User.Roles.TENANT_OWNER, tenant_id=1), None))
+
+    def test_unauthenticated_denied(self):
+        self.assertFalse(user_owns_tenant_id(_user(authenticated=False), 1))
+
+    def test_none_user_denied(self):
+        self.assertFalse(user_owns_tenant_id(None, 1))
+
+    def test_superuser_bypasses_tenant(self):
+        # superuser is allowed even with a mismatched / absent tenant id
+        self.assertTrue(user_owns_tenant_id(_user(superuser=True, tenant_id=99), 1))
+        self.assertTrue(user_owns_tenant_id(_user(superuser=True, tenant_id=99), None))
+
+    def test_platform_admin_bypasses_tenant(self):
+        self.assertTrue(user_owns_tenant_id(_user(platform_admin=True, tenant_id=99), None))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -22,7 +22,7 @@ from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
-from sales.permissions import IsPlatformAdmin
+from sales.permissions import IsPlatformAdmin, user_owns_tenant_id
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -1566,17 +1566,14 @@ from django.contrib.auth import update_session_auth_hash as _update_session_auth
 
 
 def _is_tenant_owner(request, tenant) -> bool:
-    """Return True if the request user is the owner of the given tenant."""
-    user = getattr(request, "user", None)
-    if not user or not user.is_authenticated:
-        return False
-    # OPS-5d: is_staff (Django /admin/ flag) dropped — it is not a business-admin role
-    # and let a staff-only account act as owner on ANY tenant (cross-tenant priv-esc).
-    if user.is_superuser or getattr(user, "is_platform_admin", False):
-        return True
-    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
-        return False
-    return user.role == user.Roles.TENANT_OWNER
+    """Return True if the request user is the owner of the given tenant.
+
+    RISK AUTHZ-1: thin delegate to `sales.permissions.user_owns_tenant_id` (the single owner
+    check shared with `IsTenantOwner` and menu's `_is_tenant_owner`). Kept as a named helper so
+    the ~8 call sites and their tests stay stable. Semantics unchanged: superuser / platform-admin
+    bypass (OPS-5d dropped Django `is_staff` as an owner signal), else tenant-match AND owner role.
+    """
+    return user_owns_tenant_id(getattr(request, "user", None), getattr(tenant, "id", None))
 
 
 class OwnerStaffListCreateView(APIView):
