@@ -21,7 +21,7 @@ sentry-sdk==2.16.0
 django-storages==1.14.4
 boto3==1.35.36
 django-redis==5.4.0
-redis==5.0.8
+redis==8.0.1
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
 # Optional at runtime: without a broker the app falls back to in-process dispatch.
 celery==5.4.0
