@@ -3,6 +3,7 @@ Direct unit tests for DRF permission classes:
   - menu.permissions.IsTenantEditorOrReadOnly
   - sales.permissions.IsPlatformAdmin
   - sales.permissions.IsTenantEditor
+  - sales.permissions.IsTenantOwner
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
@@ -13,7 +14,7 @@ from django.test import SimpleTestCase
 
 from accounts.models import User
 from menu.permissions import IsTenantEditorOrReadOnly
-from sales.permissions import IsPlatformAdmin, IsTenantEditor
+from sales.permissions import IsPlatformAdmin, IsTenantEditor, IsTenantOwner
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -117,6 +118,81 @@ class IsTenantEditorTests(SimpleTestCase):
     def test_inactive_tenant_denied(self):
         req = _request(user=_user(tenant_id=1), tenant=_tenant(1, is_active=False))
         self.assertFalse(self.perm.has_permission(req, self.view))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# IsTenantOwner
+# ══════════════════════════════════════════════════════════════════════════════
+
+class IsTenantOwnerTests(SimpleTestCase):
+    perm = IsTenantOwner()
+    view = None
+
+    def test_tenant_owner_with_matching_tenant_allowed(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        self.assertTrue(self.perm.has_permission(req, self.view))
+
+    def test_tenant_staff_with_matching_tenant_denied(self):
+        """Owner-exclusive: staff with a matching tenant must still be denied."""
+        req = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
+        self.assertFalse(self.perm.has_permission(req, self.view))
+
+    def test_wrong_tenant_owner_denied(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=99), tenant=_tenant(1))
+        self.assertFalse(self.perm.has_permission(req, self.view))
+
+    def test_no_tenant_denied(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=None)
+        self.assertFalse(self.perm.has_permission(req, self.view))
+
+    def test_unauthenticated_denied(self):
+        req = _request(user=_user(authenticated=False), tenant=_tenant(1))
+        self.assertFalse(self.perm.has_permission(req, self.view))
+
+    def test_superuser_bypasses_tenant_check(self):
+        req = _request(user=_user(superuser=True, tenant_id=99), tenant=_tenant(1))
+        self.assertTrue(self.perm.has_permission(req, self.view))
+
+    def test_platform_admin_bypasses_tenant_check(self):
+        req = _request(user=_user(platform_admin=True, tenant_id=99), tenant=_tenant(1))
+        self.assertTrue(self.perm.has_permission(req, self.view))
+
+    # ── has_object_permission ──────────────────────────────────────────────
+
+    def test_object_matching_tenant_owner_allowed(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=1)
+        self.assertTrue(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_mismatched_tenant_denied(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=99)
+        self.assertFalse(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_staff_with_matching_tenant_denied(self):
+        req = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=1)
+        self.assertFalse(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_superuser_bypasses_tenant_check(self):
+        req = _request(user=_user(superuser=True, tenant_id=99), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=1)
+        self.assertTrue(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_platform_admin_bypasses_tenant_check(self):
+        req = _request(user=_user(platform_admin=True, tenant_id=99), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=1)
+        self.assertTrue(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_unauthenticated_denied(self):
+        req = _request(user=_user(authenticated=False), tenant=_tenant(1))
+        obj = SimpleNamespace(tenant_id=1)
+        self.assertFalse(self.perm.has_object_permission(req, self.view, obj))
+
+    def test_object_no_obj_tenant_id_denied(self):
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        obj = SimpleNamespace()
+        self.assertFalse(self.perm.has_object_permission(req, self.view, obj))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -32,3 +32,39 @@ class IsTenantEditor(BasePermission):
         if getattr(user, "tenant_id", None) != tenant.id:
             return False
         return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+
+
+class IsTenantOwner(BasePermission):
+    """Owner-only tenant permission.
+
+    Mirrors the `_is_tenant_owner` helpers duplicated in accounts/views.py and
+    menu/views.py: superuser / platform-admin bypass, else the request's tenant
+    must match the user's tenant AND the user's role must be TENANT_OWNER.
+
+    Unlike IsTenantEditor, TENANT_STAFF is NOT included here — this class is
+    for owner-exclusive endpoints (revenue, promotions, settings, billing,
+    staff management…) where a staff account with a matching tenant must still
+    be denied.
+    """
+
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or getattr(user, "is_platform_admin", False):
+            return True
+        tenant = getattr(request, "tenant", None)
+        if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+            return False
+        return user.role == User.Roles.TENANT_OWNER
+
+    def has_object_permission(self, request, view, obj):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser or getattr(user, "is_platform_admin", False):
+            return True
+        obj_tenant_id = getattr(obj, "tenant_id", None)
+        if obj_tenant_id is None or getattr(user, "tenant_id", None) != obj_tenant_id:
+            return False
+        return user.role == User.Roles.TENANT_OWNER
