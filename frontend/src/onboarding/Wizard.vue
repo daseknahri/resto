@@ -1,5 +1,12 @@
 <template>
-  <div class="ui-shell ui-safe-bottom">
+  <!-- overflow-x-clip: defensive mobile-overflow containment. The e2e mobile
+       breakpoint spec measured a 390px horizontal overflow on this page in CI that
+       is NOT reproducible locally across any step/data/timing (the shell, journey
+       nav, and step content all clip correctly) — so it comes from a stray,
+       data-dependent element in the real backend. `clip` contains any such stray
+       horizontal overflow without creating a scroll container or forcing overflow-y
+       (unlike `hidden`), and does not affect the nav's own overflow-x-auto scroll. -->
+  <div class="ui-shell ui-safe-bottom overflow-x-clip">
     <div class="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <!-- Page header -->
       <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
