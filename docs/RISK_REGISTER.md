@@ -11,6 +11,11 @@
 > that concentrated debt. Fix the 3 critical items before onboarding paying tenants at volume.
 >
 > Effort key: **S** = hours · **M** = a few days · **L** = weeks · **XL** = multi-week project.
+>
+> **Execution tracker:** the multi-branch campaign working through these items — waves, lanes,
+> collision map, and per-item real-vs-register status — lives in
+> [`CAMPAIGN_PLAN.md`](CAMPAIGN_PLAN.md) (code-verified 2026-07-11; note several items there are
+> corrected to their true state, e.g. FE-3 and OPS-2 are further along than this register said).
 
 ---
 
@@ -110,6 +115,13 @@ gone is not a backup.
 **Fix:** Ship every backup **off-box** immediately after creation (S3-compatible object store
 with versioning + lifecycle + a restore drill). This single change also materially mitigates
 OPS-1's blast radius.
+**Status (code-verified 2026-07-11):** the shipping *mechanism* is already built and wired —
+`infra/coolify/install_backup_cron.sh --remote-copy-cmd` runs an owner-supplied rclone/rsync/scp
+after each daily `pg_dump`, alerts on copy failure, and `backup_freshness_probe.sh` catches a
+silently-dead cron (see `infra/COOLIFY_DB_BACKUP_RUNBOOK.md`). What remains is **OWNER-only** and
+un-automatable by an agent: create an S3-compatible bucket + credentials, install/configure rclone
+on the prod VPS, re-run the installer with `--remote-copy-cmd`, and perform a restore drill. Reframe
+as "mechanism built, disabled by default, awaiting owner enablement," not "not started."
 **Effort:** S. **This is the cheapest critical fix — do it first.**
 **Source:** ops/scale review (CRITICAL).
 
@@ -442,10 +454,18 @@ generate the parity files, or move to a keyed catalog with one file per locale. 
 **Fix:** Split each into feature child-components + composables.
 **Effort:** L. **Source:** frontend review.
 
-### FE-3 — Locale catalogs block first paint
+### FE-3 — Locale catalogs block first paint  ◑ MOSTLY SHIPPED (verified 2026-07-11)
 **Where:** ~500KB of locale data loaded up front; Sentry not lazy.
 **Failure scenario:** An Arabic visitor waits on ~500KB of JS before first meaningful paint.
 **Fix:** Split catalogs by namespace/route and lazy-load; lazy-init Sentry.
+**Status (code-verified):** the two named problems were already fixed by commit `a84cc7d`
+("perf(R24): code-split i18n locale catalogs out of the initial bundle"). `src/i18n/localeLoader.js`
+now dynamically imports each locale (`messages-{en,fr,ar}.js`) as its own Vite chunk (~69–82KB gz
+each, down from one always-loaded ~800KB file), and `src/lib/sentry.js` fires a non-awaited dynamic
+`import('@sentry/vue')` before mount (its own async chunk). **Residual (small):** `main.js` still
+`await`s the active locale before `app.mount()`, so an AR first paint blocks on ~82KB gz; and
+`localeLoader.js` has no test. Namespace/route splitting (the original Fix) trades a
+flash-of-raw-keys risk → leave for a deliberate later slice.
 **Effort:** S–M. **Source:** frontend review.
 
 ### SER-1 — Writes bypass serializers
