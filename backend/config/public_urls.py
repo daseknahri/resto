@@ -5,7 +5,7 @@ from django.urls import path, re_path
 from django.views.static import serve as static_serve
 
 from accounts.views import EmailUnsubscribeView
-from config.shared_api_urls import shared_api_urlpatterns
+from config.shared_api_urls import build_v1_urlpatterns, shared_api_urlpatterns
 from config.sitemap import sitemap_view
 
 urlpatterns = [
@@ -19,6 +19,10 @@ urlpatterns = [
     path("sitemap.xml", sitemap_view, name="sitemap"),
     path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]
+
+# RISK API-1: additive /api/v1/ alias — same views as the api/ routes above,
+# derived generically (not hand-duplicated). See build_v1_urlpatterns().
+urlpatterns += build_v1_urlpatterns(urlpatterns)
 
 # OPS-5d B: only register a Django /media handler in DEBUG (dev) or when an
 # operator explicitly opts in via SERVE_MEDIA_FROM_DJANGO.  In a normal prod
