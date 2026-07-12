@@ -877,82 +877,14 @@
       </template>
     </section>
 
-    <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.provisioningJobs") }}</h2>
-        </div>
-        <div class="ui-scroll-row">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.jobs = !adminPanels.jobs">
-            {{ adminPanels.jobs ? t("adminConsole.hide") : t("adminConsole.show") }}
-          </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="loading || !adminPanels.jobs" @click="fetchJobs">{{ t("common.refresh") }}</button>
-        </div>
-      </div>
-      <template v-if="adminPanels.jobs">
-      <div v-if="loading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <article v-for="n in 3" :key="`job-skeleton-${n}`" class="ui-admin-card space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <div class="ui-skeleton h-4 w-32 rounded-full"></div>
-            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
-          </div>
-          <div class="space-y-2">
-            <div class="ui-skeleton h-3 w-5/6 rounded-full"></div>
-            <div class="ui-skeleton h-16 rounded-2xl"></div>
-          </div>
-        </article>
-      </div>
-      <article v-else-if="!jobs.length" class="ui-empty-state">
-        <p class="ui-kicker">{{ t("adminConsole.provisioningJobs") }}</p>
-        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noJobsYet") }}</h3>
-        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.provisioningOperations") }}</p>
-      </article>
-      <div v-else class="space-y-2 md:hidden">
-        <article
-          v-for="(job, index) in jobs"
-          :key="`job-mobile-${job.id}`"
-          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
-          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <p class="min-w-0 truncate text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
-            <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
-          </div>
-          <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
-          <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
-          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
-        </article>
-      </div>
-
-      <div v-if="jobs.length" class="ui-table-wrap hidden md:block">
-        <table class="w-full min-w-[920px] text-sm">
-          <thead class="bg-slate-900/70 text-slate-300">
-            <tr>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.id") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.lead") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.tenant") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("common.status") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.log") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.updated") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="job in jobs" :key="job.id" class="border-t border-slate-800">
-              <td class="px-4 py-3 text-slate-100">#{{ job.id }}</td>
-              <td class="px-4 py-3 text-slate-200">{{ job.lead_name }}</td>
-              <td class="px-4 py-3 text-slate-200">{{ job.tenant_slug || '-' }}</td>
-              <td class="px-4 py-3">
-                <span class="ui-status-pill text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
-              </td>
-              <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
-              <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      </template>
-    </section>
+    <AdminConsoleProvisioningJobs
+      v-if="activeAdminView === 'monitoring'"
+      :jobs="jobs"
+      :loading="loading"
+      :expanded="adminPanels.jobs"
+      @toggle-expanded="adminPanels.jobs = !adminPanels.jobs"
+      @refresh="fetchJobs"
+    />
 
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -1420,6 +1352,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import AdminConsoleOnboardingPackage from "../components/AdminConsoleOnboardingPackage.vue";
+import AdminConsoleProvisioningJobs from "../components/AdminConsoleProvisioningJobs.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
@@ -2484,13 +2417,6 @@ const slaLabel = (lead) => {
   if (state === "due_soon") return t("adminConsole.dueSoon");
   if (state === "on_track") return t("adminConsole.onTrack");
   return t("adminConsole.sla");
-};
-
-const statusClass = (status) => {
-  if (status === "success") return "bg-emerald-600/30 text-emerald-200";
-  if (status === "running") return "bg-amber-500/30 text-amber-200";
-  if (status === "failed") return "bg-red-600/30 text-red-200";
-  return "bg-slate-700/50 text-slate-200";
 };
 
 const upgradeStatusClass = (status) => {
