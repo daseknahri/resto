@@ -8,24 +8,30 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.views import CustomerProfileUpdateView
 
 
 class ProfileUpdatePrefsTests(SimpleTestCase):
+    """RISK IDENTITY-1: CustomerProfileUpdateView now authenticates via
+    CustomerSessionAuthentication + IsCustomer, so the signed-in Customer arrives
+    as request.user. Force-authenticate a real Customer principal instead of
+    mocking Customer.objects.get."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerProfileUpdateView.as_view()
 
-    @patch("accounts.views.Customer.objects")
-    def test_updates_notification_prefs(self, objects_mock):
-        cust = MagicMock(pk=5, email="a@b.co", notify_order_updates=True, notify_review_prompts=True)
-        objects_mock.get.return_value = cust
+    def test_updates_notification_prefs(self):
+        cust = Customer(id=5, email="a@b.co", notify_order_updates=True, notify_review_prompts=True)
+        cust.save = MagicMock()
         req = self.factory.patch("/api/customer/profile/", {
             "notify_order_updates": False, "notify_review_prompts": False,
         }, format="json")
         req.session = {"customer_id": 5}
+        force_authenticate(req, user=cust)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(cust.notify_order_updates)

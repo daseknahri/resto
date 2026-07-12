@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import (
     CustomerEmailRequestView,
@@ -614,57 +614,71 @@ class CustomerGoogleAuthViewTests(SimpleTestCase):
 
 
 # ── CustomerProfileUpdateView ─────────────────────────────────────────────────
+#
+# RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication +
+# IsCustomer, so the signed-in Customer arrives as request.user (previously
+# hand-rolled via request.session.get("customer_id") + Customer.objects.get(pk=...)).
+# Here we force-authenticate a real Customer principal, matching the production
+# auth path.
+
+def _real_customer(customer_id=1, **kwargs):
+    """A real (unsaved) Customer so it passes IsCustomer's principal check
+    (is_authenticated + class name). No DB is touched — save is monkeypatched."""
+    from accounts.models import Customer as CustomerModel
+
+    c = CustomerModel(id=customer_id, **kwargs)
+    c.save = MagicMock()
+    return c
+
 
 class CustomerProfileUpdateViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
-    def _patch(self, data, session=None):
+    def _patch(self, data, customer=None):
         req = self.factory.patch("/api/customer/profile/", data, format="json")
-        req.session = session or _session()
+        req.session = {"customer_id": customer.id} if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return CustomerProfileUpdateView.as_view()(req)
 
     def test_returns_401_when_not_authenticated(self):
         resp = self._patch({"name": "Alice"})
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.views.Customer.objects")
-    def test_returns_404_on_stale_session(self, objects_mock):
-        from accounts.models import Customer
-        objects_mock.get.side_effect = Customer.DoesNotExist
-        resp = self._patch({"name": "Alice"}, session=_session(customer_id=99))
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+    def test_returns_401_on_stale_session(self):
+        """RISK IDENTITY-1: a stale/forged customer_id now 401s at the auth layer
+        (CustomerSessionAuthentication fails closed) instead of the view's own 404 —
+        the sanctioned 404-to-401 carve-out."""
+        req = self.factory.patch("/api/customer/profile/", {"name": "Alice"}, format="json")
+        req.session = _session(customer_id=99)
+        with patch("accounts.models.Customer.objects") as mock_objs:
+            mock_objs.filter.return_value.first.return_value = None
+            resp = CustomerProfileUpdateView.as_view()(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.views.Customer.objects")
-    def test_updates_name_successfully(self, objects_mock):
-        customer = _make_customer(name="Old")
-        objects_mock.get.return_value = customer
-        resp = self._patch({"name": "New Name"}, session=_session(customer_id=1))
+    def test_updates_name_successfully(self):
+        customer = _real_customer(name="Old")
+        resp = self._patch({"name": "New Name"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(customer.name, "New Name")
         customer.save.assert_called_once()
 
-    @patch("accounts.views.Customer.objects")
-    def test_ignores_blank_name_and_does_not_save(self, objects_mock):
-        customer = _make_customer(name="Existing")
-        objects_mock.get.return_value = customer
-        resp = self._patch({"name": "   "}, session=_session(customer_id=1))
+    def test_ignores_blank_name_and_does_not_save(self):
+        customer = _real_customer(name="Existing")
+        resp = self._patch({"name": "   "}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         customer.save.assert_not_called()
 
-    @patch("accounts.views.Customer.objects")
-    def test_truncates_name_to_80_chars(self, objects_mock):
-        customer = _make_customer(name="Old")
-        objects_mock.get.return_value = customer
-        resp = self._patch({"name": "A" * 120}, session=_session(customer_id=1))
+    def test_truncates_name_to_80_chars(self):
+        customer = _real_customer(name="Old")
+        resp = self._patch({"name": "A" * 120}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(customer.name), 80)
 
-    @patch("accounts.views.Customer.objects")
-    def test_returns_serialized_customer_after_update(self, objects_mock):
-        customer = _make_customer(name="Old")
-        objects_mock.get.return_value = customer
-        resp = self._patch({"name": "Updated"}, session=_session(customer_id=1))
+    def test_returns_serialized_customer_after_update(self):
+        customer = _real_customer(name="Old")
+        resp = self._patch({"name": "Updated"}, customer=customer)
         self.assertIn("customer", resp.data)
         for field in ("id", "name", "email", "phone", "phone_verified", "email_verified", "has_google"):
             self.assertIn(field, resp.data["customer"])

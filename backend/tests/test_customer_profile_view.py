@@ -12,8 +12,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.views import (
     CustomerEmailRequestView,
     CustomerEmailVerifyView,
@@ -52,93 +53,95 @@ def _make_customer(customer_id=1, name="Alice", email="alice@example.com",
     return c
 
 
+def _real_customer(customer_id=1, **kwargs):
+    """A real (unsaved) Customer so it passes IsCustomer's principal check
+    (is_authenticated + class name). No DB is touched — the view never saves it
+    (save is monkeypatched to a MagicMock)."""
+    c = Customer(id=customer_id, **kwargs)
+    c.save = MagicMock()
+    return c
+
+
 # ── CustomerProfileUpdateView ─────────────────────────────────────────────────
+#
+# RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication +
+# IsCustomer, so the signed-in Customer arrives as request.user (previously
+# hand-rolled via request.session.get("customer_id") + Customer.objects.get(pk=...)).
+# Here we force-authenticate a real Customer principal, matching the production
+# auth path (mirrors the rewrite of test_customer_voucher_redeem.py).
 
 class CustomerProfileUpdateViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerProfileUpdateView.as_view()
 
-    def _patch(self, data, session=None):
+    def _patch(self, data, customer=None):
         req = self.factory.patch("/api/customer/profile/", data, format="json")
-        req.user = MagicMock(is_authenticated=False)
-        req.session = session or _session()
+        req.session = {"customer_id": customer.id} if customer is not None else {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return self.view(req)
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     def test_no_session_returns_401(self):
-        resp = self._patch({"name": "Bob"}, session=_session(customer_id=None))
+        resp = self._patch({"name": "Bob"})
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_stale_session_returns_404(self):
-        import accounts.views as _av
-        from accounts.models import Customer as CustomerModel
-        with patch.object(_av.Customer, "objects") as mock_objs:
-            mock_objs.get.side_effect = CustomerModel.DoesNotExist
-            resp = self._patch({"name": "Bob"}, session=_session(customer_id=999))
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+    def test_stale_session_returns_401(self):
+        """RISK IDENTITY-1: a stale/forged customer_id now 401s at the auth layer
+        (CustomerSessionAuthentication fails closed before the view runs) instead
+        of the view's own 404 — the sanctioned 404-to-401 carve-out."""
+        req = self.factory.patch("/api/customer/profile/", {"name": "Bob"}, format="json")
+        req.session = {"customer_id": 999}
+        with patch("accounts.models.Customer.objects") as mock_objs:
+            mock_objs.filter.return_value.first.return_value = None
+            resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     # ── Happy path ────────────────────────────────────────────────────────────
 
-    @patch("accounts.models.Customer.objects")
-    def test_name_update_returns_200(self, mock_objs):
-        customer = _make_customer(name="Old Name")
-        mock_objs.get.return_value = customer
-        mock_objs.filter.return_value.exclude.return_value.exists.return_value = False
-
-        resp = self._patch({"name": "New Name"}, session=_session(customer_id=1))
+    def test_name_update_returns_200(self):
+        customer = _real_customer(name="Old Name")
+        resp = self._patch({"name": "New Name"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("customer", resp.data)
         customer.save.assert_called_once()
 
-    @patch("accounts.models.Customer.objects")
-    def test_valid_locale_update_returns_200(self, mock_objs):
-        customer = _make_customer(locale="en")
-        mock_objs.get.return_value = customer
-
-        resp = self._patch({"locale": "fr"}, session=_session(customer_id=1))
+    def test_valid_locale_update_returns_200(self):
+        customer = _real_customer(locale="en")
+        resp = self._patch({"locale": "fr"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(customer.locale, "fr")
 
-    @patch("accounts.models.Customer.objects")
-    def test_invalid_locale_is_ignored(self, mock_objs):
-        customer = _make_customer(locale="en")
-        mock_objs.get.return_value = customer
-
-        resp = self._patch({"locale": "zh"}, session=_session(customer_id=1))
+    def test_invalid_locale_is_ignored(self):
+        customer = _real_customer(locale="en")
+        resp = self._patch({"locale": "zh"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # locale unchanged, save not called (only updated_at in update_fields == len 1)
         self.assertEqual(customer.locale, "en")
 
-    @patch("accounts.models.Customer.objects")
-    def test_email_taken_returns_400(self, mock_objs):
-        customer = _make_customer(email="alice@example.com")
-        mock_objs.get.return_value = customer
+    def test_email_taken_returns_400(self):
+        customer = _real_customer(email="alice@example.com")
         # Simulate the uniqueness check returning True (email already used)
-        mock_objs.filter.return_value.exclude.return_value.exists.return_value = True
-
-        resp = self._patch({"email": "taken@example.com"}, session=_session(customer_id=1))
+        with patch("accounts.models.Customer.objects") as mock_objs:
+            mock_objs.filter.return_value.exclude.return_value.exists.return_value = True
+            resp = self._patch({"email": "taken@example.com"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "email_taken")
 
-    @patch("accounts.models.Customer.objects")
-    def test_email_change_marks_unverified(self, mock_objs):
-        customer = _make_customer(email="alice@example.com", email_verified=True)
-        mock_objs.get.return_value = customer
-        mock_objs.filter.return_value.exclude.return_value.exists.return_value = False
-
-        resp = self._patch({"email": "new@example.com"}, session=_session(customer_id=1))
+    def test_email_change_marks_unverified(self):
+        customer = _real_customer(email="alice@example.com", email_verified=True)
+        with patch("accounts.models.Customer.objects") as mock_objs:
+            mock_objs.filter.return_value.exclude.return_value.exists.return_value = False
+            resp = self._patch({"email": "new@example.com"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.email_verified)
 
-    @patch("accounts.models.Customer.objects")
-    def test_no_changes_does_not_call_save(self, mock_objs):
+    def test_no_changes_does_not_call_save(self):
         """Sending an empty payload should not call save()."""
-        customer = _make_customer()
-        mock_objs.get.return_value = customer
-
-        resp = self._patch({}, session=_session(customer_id=1))
+        customer = _real_customer()
+        resp = self._patch({}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         customer.save.assert_not_called()
 

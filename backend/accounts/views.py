@@ -907,21 +907,16 @@ class CustomerServiceProfilesView(APIView):
     False only adds suppression — see P2b). See KEPOLI_ACCOUNT_ARCHITECTURE.md L2.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read/update; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        from .models import Customer, CustomerServiceProfile
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
+        cust = request.user
+        from .models import CustomerServiceProfile
         from .verticals import ALL_VERTICALS
-
-        try:
-            cust = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profiles = {
             p.vertical: p
@@ -941,9 +936,8 @@ class CustomerServiceProfilesView(APIView):
         return Response({"service_profiles": out})
 
     def patch(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import CustomerServiceProfile
         from .verticals import ALL_VERTICALS
 
@@ -1488,18 +1482,14 @@ class CustomerEmailVerifyView(APIView):
 class CustomerProfileUpdateView(APIView):
     """PATCH /api/customer/profile/ — update name, locale, or email for the current customer session."""
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [CustomerProfileUpdateThrottle]
 
     def patch(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         update_fields = ["updated_at"]
 
@@ -7220,13 +7210,14 @@ class CustomerLinkReferralView(APIView):
       next order check).
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
         from .models import Customer
-        customer, err = _resolve_customer_from_request(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         code = (request.data.get("code") or "").strip().upper()
         if not code:
@@ -8571,20 +8562,14 @@ class CustomerDataExportView(APIView):
     addresses (limited to the most recent 200 rows each to stay < 1 MB).
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response(
-                {"detail": "Not authenticated."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        customer_id = customer.id
 
         wallet_txns = list(
             WalletTransaction.objects.filter(customer_id=customer_id)
@@ -8652,20 +8637,14 @@ class CustomerErasureRequestView(APIView):
     On guard failure: HTTP 409 with {"detail": "...", "errors": ["…", "…"]}.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response(
-                {"detail": "Not authenticated."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        customer_id = customer.id
 
         from accounts.management.commands.erase_customer import _check_guard_rails
 
