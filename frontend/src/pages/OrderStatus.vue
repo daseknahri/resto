@@ -242,59 +242,16 @@
       </div>
 
       <!-- Status timeline -->
-      <div class="ui-journey-rail ui-reveal p-4 sm:p-5" :style="{ '--ui-delay': '70ms' }">
-        <ol class="flex items-center justify-between gap-1">
-          <li
-            v-for="(step, idx) in statusSteps"
-            :key="step.value"
-            class="flex flex-1 flex-col items-center gap-1.5"
-          >
-            <!-- step circle with optional pulse ring on the active step -->
-            <div class="relative flex items-center justify-center">
-              <div
-                v-if="idx === currentStepIndex && currentStepIndex >= 0 && orderData.status !== 'completed'"
-                class="absolute -inset-1.5 motion-safe:animate-ping rounded-full border border-[var(--color-secondary)]/35"
-                aria-hidden="true"
-              />
-              <div
-                class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-500"
-                :class="stepClass(step.value)"
-                :aria-current="idx === currentStepIndex ? 'step' : undefined"
-              >
-                <span v-if="isStepDone(step.value) && idx !== currentStepIndex">✓</span>
-                <span v-else-if="idx === currentStepIndex">
-                  <!-- pulsing dot for current step -->
-                  <span class="block h-2.5 w-2.5 rounded-full bg-current motion-safe:animate-pulse" aria-hidden="true" />
-                  <span class="sr-only">{{ step.label }}</span>
-                </span>
-                <span v-else>{{ idx + 1 }}</span>
-              </div>
-            </div>
-            <p class="text-center text-[10px] leading-tight text-slate-400 sm:text-xs">{{ step.label }}</p>
-            <!-- Timestamp under reached steps (task 5) -->
-            <p
-              v-if="stepTimestamp(step.value, idx)"
-              class="text-center text-[9px] leading-none tabular-nums text-slate-600"
-              :aria-label="stepTimestamp(step.value, idx) || ''"
-            >{{ stepTimestamp(step.value, idx) }}</p>
-          </li>
-        </ol>
-        <!-- Progress bar -->
-        <div
-          class="mt-4 ui-journey-progress"
-          role="progressbar"
-          :aria-valuenow="progressPercent"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          :aria-label="statusLabel(orderData?.status)"
-          :aria-valuetext="statusLabel(orderData?.status)"
-        >
-          <span
-            class="absolute inset-y-0 start-0 rounded-full transition-all duration-500"
-            :style="{ width: `${progressPercent}%` }"
-          />
-        </div>
-      </div>
+      <OrderStatusTimeline
+        :steps="statusSteps"
+        :current-step-index="currentStepIndex"
+        :progress-percent="progressPercent"
+        :order-status="orderData.status"
+        :step-class="stepClass"
+        :is-step-done="isStepDone"
+        :step-timestamp="stepTimestamp"
+        :status-label="statusLabel"
+      />
 
       <!-- Status context hint (pending / confirmed / preparing) -->
       <p
@@ -754,6 +711,7 @@ import AppIcon from "../components/AppIcon.vue";
 import ConnectionDot from "../components/ConnectionDot.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
+import OrderStatusTimeline from "../components/OrderStatusTimeline.vue";
 import PushPrimingSheet from "../components/PushPrimingSheet.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderRealtime } from "../composables/useOrderRealtime";
