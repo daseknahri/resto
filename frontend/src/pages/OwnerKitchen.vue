@@ -116,35 +116,15 @@
       </div>
     </Transition>
 
-    <!-- Station filter bar -->
-    <nav class="kitchen-filter-bar" :aria-label="t('kitchen.stationFilterNav')">
-      <button
-        v-for="f in stationFilters"
-        :key="f.value"
-        class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-        :class="stationFilter === f.value ? 'kitchen-filter-btn--active' : ''"
-        :aria-pressed="stationFilter === f.value"
-        @click="stationFilter = f.value"
-      >
-        {{ f.label }}
-        <span v-if="f.count > 0" class="kitchen-filter-count" aria-hidden="true">{{ f.count }}</span>
-      </button>
-    </nav>
-
-    <!-- Prep station filter bar (only shown when station-tagged items exist) -->
-    <nav v-if="prepStationFilters.length > 1" class="kitchen-filter-bar" :aria-label="t('kitchen.prepStationNav')">
-      <button
-        v-for="f in prepStationFilters"
-        :key="f.value"
-        class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-        :class="prepStation === f.value ? 'kitchen-filter-btn--active' : ''"
-        :aria-pressed="prepStation === f.value"
-        @click="prepStation = f.value"
-      >
-        {{ f.label }}
-        <span v-if="f.count > 0" class="kitchen-filter-count" aria-hidden="true">{{ f.count }}</span>
-      </button>
-    </nav>
+    <!-- Station / prep-station filter bars -->
+    <OwnerKitchenFilterBars
+      :station-filters="stationFilters"
+      :active-station-filter="stationFilter"
+      :prep-station-filters="prepStationFilters"
+      :active-prep-station="prepStation"
+      @set-station-filter="stationFilter = $event"
+      @set-prep-station="prepStation = $event"
+    />
 
     <!-- Search -->
     <div class="px-3 pb-1 pt-0.5 sm:px-4">
@@ -551,6 +531,7 @@
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import BusyModeControl from "../components/BusyModeControl.vue";
+import OwnerKitchenFilterBars from "../components/OwnerKitchenFilterBars.vue";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
@@ -1367,15 +1348,10 @@ const djChipLabel = (dj) => {
   font-size: 1rem;
 }
 
-/* Station filter bar */
-.kitchen-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
+/* .kitchen-filter-btn/--active: still used here by the all-day toggle
+   (topbar) and the includeHeld toggle (all-day section). Also duplicated in
+   OwnerKitchenFilterBars.vue for its own station/prep-station nav buttons —
+   see the comment in that file for why. */
 .kitchen-filter-btn {
   display: inline-flex;
   align-items: center;
@@ -1454,25 +1430,6 @@ const djChipLabel = (dj) => {
 .kitchen-flash-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-0.5rem);
-}
-
-.kitchen-filter-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35rem;
-  height: 1.35rem;
-  border-radius: 9999px;
-  background: rgba(51, 65, 85, 0.9);
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: rgb(148, 163, 184);
-  padding: 0 0.3rem;
-}
-
-.kitchen-filter-btn--active .kitchen-filter-count {
-  background: rgba(245, 158, 11, 0.25);
-  color: rgb(251, 191, 36);
 }
 
 /* All-day aggregate view */
