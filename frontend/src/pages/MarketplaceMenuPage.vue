@@ -219,26 +219,11 @@
         >{{ loyaltyPoints }}</span>
       </div>
 
-      <!-- Customer reviews — horizontal scroll, only shown when restaurant has review comments -->
-      <div
+      <!-- Customer reviews rail (presentational; RISK FE-2) -->
+      <MarketplaceMenuReviews
         v-if="restaurant.recent_reviews?.length"
-        class="ui-reveal mb-2 space-y-2"
-        :style="{ '--ui-delay': '90ms' }"
-      >
-        <p class="ui-kicker px-4">{{ t('mktMenu.reviewsTitle') }}</p>
-        <div class="flex gap-2.5 overflow-x-auto px-4 pb-0.5 snap-x">
-          <div
-            v-for="(review, idx) in restaurant.recent_reviews"
-            :key="idx"
-            class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
-          >
-            <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
-              <span :aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
-            </div>
-            <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
-          </div>
-        </div>
-      </div>
+        :reviews="restaurant.recent_reviews"
+      />
 
       <!-- Sticky category/search/allergen-filter nav (presentational; RISK FE-2) -->
       <MarketplaceMenuCategoryNav
@@ -1243,6 +1228,7 @@ import { useVocabulary } from '../composables/useVocabulary';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import MarketplaceMenuCategoryNav from '../components/MarketplaceMenuCategoryNav.vue';
+import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
