@@ -442,6 +442,22 @@ if _REDIS_URL:
     SESSION_ENGINE = "django.contrib.sessions.backends.cache"
     SESSION_CACHE_ALIAS = "default"
 
+# RISK OPS-3: accounts.session_backends.SessionStore is a schema-pinned cached_db
+# store (Redis fast path + durable django_session row, so a Redis eviction/restart
+# no longer force-logs-out every user) — see that module's docstring for the full
+# django-tenants hazard (django_session lives only in the public schema) and the
+# exact set of overridden methods. NOT YET ACTIVATED — this is additive only.
+# Before flipping the line below, an owner must validate against a real/staging DB:
+#   1. django_session exists in the public schema (sessions migration has run there —
+#      automatic since django.contrib.sessions is in SHARED_APPS, but confirm on the
+#      target environment).
+#   2. Login + mid-session Redis key eviction (or a Redis restart) survives with no
+#      forced logout and no 500s on subsequent requests while a tenant is active.
+#   3. Watch error tracking for a full deploy cycle before treating it as load-bearing.
+# To activate, replace the SESSION_ENGINE assignment above with:
+#     SESSION_ENGINE = "accounts.session_backends"
+# (keep SESSION_CACHE_ALIAS = "default" — the new store still uses it for cache reads/writes.)
+
 # Keep customers logged in for 90 days unless they explicitly sign out.
 # Use `or` so an empty/unset env var falls back to the default safely.
 # OPS-5c item 5: Declare TRUSTED_PROXY_COUNT explicitly so it appears in
