@@ -15,7 +15,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from menu.models import Order
-from menu.order_service import compute_order_delivery_fee
+from menu.order_service import compute_order_delivery_fee, compute_order_tip
 
 
 class ComputeOrderDeliveryFeeTests(SimpleTestCase):
@@ -77,3 +77,29 @@ class ComputeOrderDeliveryFeeTests(SimpleTestCase):
         self.assertEqual(err, "delivery_out_of_range")
         self.assertEqual(dist, 25.0)
         self.assertEqual(fee, Decimal("0"))
+
+
+class ComputeOrderTipTests(SimpleTestCase):
+    """RISK STRUCT-1 slice 2: gratuity parse/clamp, byte-identical to the former inline block."""
+
+    def test_valid_tip_below_cap_returned(self):
+        self.assertEqual(compute_order_tip("5.00", Decimal("50.00")), Decimal("5.00"))
+        self.assertEqual(compute_order_tip(5, Decimal("50.00")), Decimal("5.00"))
+
+    def test_over_precision_is_quantized(self):
+        self.assertEqual(compute_order_tip("5.017", Decimal("50.00")), Decimal("5.02"))
+
+    def test_tip_capped_at_food_subtotal(self):
+        # fat-finger guard: tip > subtotal → clamped to subtotal
+        self.assertEqual(compute_order_tip("999.00", Decimal("40.00")), Decimal("40.00"))
+
+    def test_negative_tip_becomes_zero(self):
+        self.assertEqual(compute_order_tip("-5.00", Decimal("50.00")), Decimal("0"))
+
+    def test_non_numeric_becomes_zero(self):
+        for bad in ("abc", "5,00", [1, 2], None):
+            self.assertEqual(compute_order_tip(bad, Decimal("50.00")), Decimal("0"))
+
+    def test_zero_subtotal_does_not_cap(self):
+        # matches the original `if _food_subtotal > 0 and ...` — no cap when subtotal is 0
+        self.assertEqual(compute_order_tip("100.00", Decimal("0")), Decimal("100.00"))
