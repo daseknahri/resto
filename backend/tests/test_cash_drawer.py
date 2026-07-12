@@ -330,6 +330,49 @@ class DrawerTransactionViewTests(SimpleTestCase):
         resp = DrawerTransactionView().post(req)
         self.assertEqual(resp.status_code, 400)
 
+    @patch("menu.views.DrawerTransaction")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    def test_oversized_amount_returns_400_not_500(self, mock_owner, mock_ds, mock_dt):
+        # SER-1: an amount beyond the DrawerTransaction.amount column (max_digits=10) used to sail
+        # past the hand-rolled quantize and 500 on DB insert; QuantizedMoneyField now makes it a
+        # clean 400 and the row is never created.
+        session = MagicMock()
+        mock_ds.Status.OPEN = "open"
+        mock_ds.objects.filter.return_value.order_by.return_value.first.return_value = session
+        mock_dt.Kind.PAY_IN = "pay_in"
+        mock_dt.Kind.PAY_OUT = "pay_out"
+
+        req = _make_owner_request("POST", {"kind": "pay_in", "amount": "999999999999.99"})
+        resp = DrawerTransactionView().post(req)
+        self.assertEqual(resp.status_code, 400)
+        mock_dt.objects.create.assert_not_called()
+
+    @patch("menu.views.DrawerTransaction")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    def test_over_precision_amount_is_rounded_not_rejected(self, mock_owner, mock_ds, mock_dt):
+        # SER-1 behavior-preservation: the legacy code silently quantized >2dp input to 2dp and
+        # proceeded; the serializer must ROUND (not 400) so no currently-accepted input regresses.
+        session = MagicMock()
+        mock_ds.Status.OPEN = "open"
+        mock_ds.objects.filter.return_value.order_by.return_value.first.return_value = session
+        mock_dt.Kind.PAY_IN = "pay_in"
+        mock_dt.Kind.PAY_OUT = "pay_out"
+        mock_dt.objects.create.return_value = MagicMock(
+            id=1, kind="pay_in", amount=Decimal("25.02"), reason="",
+            recorded_by_name="", at=datetime(2024, 1, 1, 9, 0, tzinfo=_tz.utc),
+        )
+
+        req = _make_owner_request("POST", {"kind": "pay_in", "amount": "25.017"})
+        with patch("menu.views.timezone") as mock_tz:
+            mock_tz.now.return_value = datetime(2024, 1, 1, 9, 0, tzinfo=_tz.utc)
+            resp = DrawerTransactionView().post(req)
+
+        self.assertEqual(resp.status_code, 201)
+        # The persisted amount is the 2dp-rounded value, exactly like the legacy quantize.
+        self.assertEqual(mock_dt.objects.create.call_args.kwargs["amount"], Decimal("25.02"))
+
 
 class DrawerCloseViewTests(SimpleTestCase):
     """DrawerCloseView performs blind-count close and computes over/short."""

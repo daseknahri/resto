@@ -1,9 +1,11 @@
 ﻿import re
+from decimal import Decimal
 from urllib.parse import urlparse
 
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from config.drf_fields import QuantizedMoneyField
 from .models import Category, ComboComponent, Dish, DishOption, HappyHour, Ingredient, OptionGroup, RecipeLine, SuperCategory, TableLink
 
 
@@ -963,3 +965,16 @@ class RecipeLineSerializer(serializers.ModelSerializer):
         model = RecipeLine
         fields = ["id", "dish_id", "ingredient", "ingredient_name", "ingredient_unit", "quantity"]
         read_only_fields = ["id", "dish_id", "ingredient_name", "ingredient_unit"]
+
+
+class DrawerAmountSerializer(serializers.Serializer):
+    """RISK SER-1: validates the money input of DrawerTransactionView.
+
+    ``amount`` uses ``QuantizedMoneyField(max_digits=10)`` matching the ``DrawerTransaction.amount``
+    column width, so an oversized amount is a clean 400 instead of the previous DB-overflow 500,
+    while every value the legacy ``Decimal(str(x)).quantize(...)`` + ``<= 0`` guard accepted still
+    validates identically. ``kind`` (an enum, already gated inline with a whitespace-tolerant
+    check) and ``reason`` (freeform, truncated) stay view-side — SER-1 targets the money field.
+    """
+
+    amount = QuantizedMoneyField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
