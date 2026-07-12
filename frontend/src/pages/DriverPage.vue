@@ -1164,57 +1164,16 @@
       />
 
       <!-- Cash-out history (resolved requests: paid / cancelled / expired) -->
-      <div class="ui-panel p-4 space-y-3 ui-reveal">
-        <button
-          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          :aria-expanded="showCashoutHistory"
-          aria-controls="driver-cashout-history-panel"
-          @click="toggleCashoutHistory"
-        >
-          <p class="text-sm font-semibold text-slate-200">{{ t('driver.cashOutHistoryTitle') }}</p>
-          <AppIcon :name="showCashoutHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-        </button>
-        <div id="driver-cashout-history-panel">
-          <template v-if="showCashoutHistory">
-            <div v-if="loadingCashoutHistory && !cashoutHistory.length" class="space-y-2" aria-busy="true">
-              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
-            </div>
-            <div v-else-if="!cashoutHistory.length" class="ui-empty-state text-center py-4 space-y-1">
-              <p class="text-sm font-semibold text-slate-100">{{ t('driver.cashOutHistoryEmpty') }}</p>
-            </div>
-            <ul v-else class="space-y-2">
-              <li
-                v-for="(c, index) in cashoutHistory"
-                :key="c.id"
-                class="ui-reveal flex items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
-                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm text-slate-200">{{ c.settled_by || t('driver.cashOutHistoryUnsettled') }}</p>
-                  <p class="text-[11px] text-slate-500">{{ fmtDate(c.resolved_at || c.created_at) }}</p>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <span
-                    class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                    :class="{
-                      'bg-emerald-500/15 text-emerald-300': c.status === 'paid',
-                      'bg-slate-700/60 text-slate-400': c.status === 'cancelled',
-                      'bg-red-500/15 text-red-300': c.status === 'expired',
-                    }"
-                  >{{ t(`driver.cashOutStatus_${c.status}`) }}</span>
-                  <span class="text-sm font-semibold tabular-nums" :class="c.status === 'paid' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(c.amount) }}</span>
-                </div>
-              </li>
-            </ul>
-            <button
-              v-if="cashoutHistoryHasMore"
-              :disabled="loadingCashoutHistory"
-              class="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
-              @click="loadMoreCashoutHistory"
-            >{{ loadingCashoutHistory ? t('common.loading') : t('driver.historyLoadMore') }}</button>
-          </template>
-        </div>
-      </div>
+      <DriverPageCashoutHistory
+        :show="showCashoutHistory"
+        :loading="loadingCashoutHistory"
+        :items="cashoutHistory"
+        :has-more="cashoutHistoryHasMore"
+        :fmt-date="fmtDate"
+        :fmt-money="fmtMoney"
+        @toggle="toggleCashoutHistory"
+        @load-more="loadMoreCashoutHistory"
+      />
 
       <!-- Ride history (car drivers only) -->
       <div v-if="driverVehicleType === 'car'" class="ui-panel p-4 space-y-3 ui-reveal">
@@ -1566,6 +1525,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue';
 import DriverOfferModal from '../components/DriverOfferModal.vue';
 import DriverPageDeliveryHistory from '../components/DriverPageDeliveryHistory.vue';
+import DriverPageCashoutHistory from '../components/DriverPageCashoutHistory.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
