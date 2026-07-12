@@ -1,4 +1,5 @@
 from django.urls import include, path
+from django.urls.resolvers import URLResolver
 from rest_framework import routers
 
 from accounts.og_views import OGView
@@ -287,3 +288,44 @@ shared_api_urlpatterns = [
     ),
     path("api/", include(shared_api_router.urls)),
 ]
+
+
+def build_v1_urlpatterns(urlpatterns, namespace="v1", app_name="api_v1"):
+    """RISK API-1 — additive `/api/v1/` alias, zero behavior change.
+
+    Given a fully-built `urlpatterns` list (tenant or public urlconf), return
+    a single-item list containing a namespaced `include()` that mirrors every
+    `api/...` entry in `urlpatterns` under `api/v1/...` instead — reusing the
+    *exact same* view callables (and, for DRF router includes, the exact same
+    cached `router.urls` list) as the legacy `api/...` patterns.
+
+    This is a pure alias, not a second route table:
+      - Nothing is hand-copied. Each v1 pattern is derived from the matching
+        legacy pattern's `.callback` / `.default_args` / `.name`, so the two
+        can never drift apart — add or change a route once, above, and both
+        `api/...` and `api/v1/...` pick it up.
+      - The v1 patterns are wrapped in `namespace="v1"` precisely so that
+        existing `reverse("some-name")` / `{% url "some-name" %}` calls keep
+        resolving to the legacy `/api/...` URL exactly as before (Django's
+        `reverse()` prefers the un-namespaced match when a name is
+        registered more than once). The v1 alias is reachable only via its
+        `/api/v1/...` path, or explicitly via `reverse("v1:some-name")`.
+      - Non-API entries (admin, sitemap, static/media, `app-manifest.json`,
+        ...) are left untouched — they simply don't start with `api/` and
+        are skipped below.
+    """
+    v1_only = []
+    for p in urlpatterns:
+        route = getattr(p.pattern, "_route", None)
+        if route is None or not route.startswith("api/"):
+            continue  # not an `api/` path (or not a path()-style pattern) — leave alone
+        rest = route[len("api/"):]
+        if isinstance(p, URLResolver):
+            # A nested include (e.g. a DRF router) — reuse its resolved
+            # url_patterns verbatim so v1 gets identical view callbacks.
+            v1_only.append(path(rest, include(p.url_patterns)))
+        else:
+            v1_only.append(path(rest, p.callback, kwargs=p.default_args, name=p.name))
+    if not v1_only:
+        return []
+    return [path("api/v1/", include((v1_only, app_name), namespace=namespace))]

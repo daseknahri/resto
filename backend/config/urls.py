@@ -14,7 +14,7 @@ from accounts.views import (
     StaffChangePasswordView,
     RepairTenantLinkView,
 )
-from config.shared_api_urls import shared_api_urlpatterns
+from config.shared_api_urls import build_v1_urlpatterns, shared_api_urlpatterns
 from menu.chat_views import StaffChatView
 from menu.waiter_views import (
     OwnerWaiterCallAcknowledgeView,
@@ -285,6 +285,10 @@ urlpatterns = [
     path("api/", include(tenant_router.urls)),
     path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]
+
+# RISK API-1: additive /api/v1/ alias — same views as the api/ routes above,
+# derived generically (not hand-duplicated). See build_v1_urlpatterns().
+urlpatterns += build_v1_urlpatterns(urlpatterns)
 
 if settings.DEBUG:
     # The DRF browsable API login/logout is only needed during development.
