@@ -13236,16 +13236,18 @@ class DrawerTransactionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        amount_raw = request.data.get("amount", "0")
-        try:
-            amount = Decimal(str(amount_raw)).quantize(Decimal("0.01"))
-            if amount <= 0:
-                raise ValueError("non-positive")
-        except Exception:
+        # SER-1: validate the money field through QuantizedMoneyField — turns the previous
+        # oversized-amount DB-overflow 500 into a clean 400 while preserving every input the
+        # legacy Decimal(str(x)).quantize + `<= 0` guard accepted. (kind stays inline above;
+        # SER-1 targets the money field only.)
+        from .serializers import DrawerAmountSerializer
+        _amt = DrawerAmountSerializer(data=request.data)
+        if not _amt.is_valid():
             return Response(
                 {"detail": "amount must be a positive number."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        amount = _amt.validated_data["amount"]
 
         reason = (request.data.get("reason") or "").strip()[:200]
         user = request.user
