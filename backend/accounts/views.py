@@ -660,12 +660,13 @@ class CustomerServicesView(APIView):
     vertical, RideRequest by kind). See KEPOLI_ACCOUNT_ARCHITECTURE.md §5 / P2.
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from django.db.models import Count, Max
         from accounts.models import CustomerOrderRef, DeliveryJob, RideRequest
@@ -732,15 +733,16 @@ class CustomerActiveItemsView(APIView):
     active-status set used by CustomerAccount's live-order banner.
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     # Order statuses that are still in-flight (mirror of the FE ACTIVE_STATUSES set).
     _ACTIVE_ORDER_STATUSES = ("pending", "confirmed", "preparing", "ready", "out_for_delivery")
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from .models import CustomerOrderRef, RideRequest
 
@@ -818,14 +820,15 @@ class CustomerNotificationsView(APIView):
     cursor (newest-first). ``?count_only=1`` skips the list for the badge poll.
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     PAGE_SIZE = 30
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from .models import CustomerNotification
 
@@ -866,12 +869,13 @@ class CustomerNotificationsMarkReadView(APIView):
     Returns the updated ``unread_count``.
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer action; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from django.utils import timezone
         from .models import CustomerNotification
@@ -7076,24 +7080,20 @@ class CustomerSavedAddressListCreateView(APIView):
     """GET  /api/customer/addresses/  — list saved addresses (newest first, max 10).
        POST /api/customer/addresses/  — save a new address."""
 
-    permission_classes = [AllowAny]
-
-    def _get_customer(self, request):
-        return _resolve_customer_from_request(request)
+    # IDENTITY-1 sweep: single-role customer CRUD; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
         from .models import SavedAddress
-        customer, err = self._get_customer(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         addresses = SavedAddress.objects.filter(customer=customer)[:10]
         return Response([_serialize_address(a) for a in addresses])
 
     def post(self, request, *args, **kwargs):
         from .models import SavedAddress
-        customer, err = self._get_customer(request)
-        if err:
-            return err
+        customer = request.user
         # Enforce max 10 saved addresses per customer
         if SavedAddress.objects.filter(customer=customer).count() >= 10:
             return Response(
@@ -7123,13 +7123,14 @@ class CustomerSavedAddressDeleteView(APIView):
        PATCH  /api/customer/addresses/<id>/ — update label/address/lat/lng/location_url
        for the signed-in customer's OWN saved address (partial update; B4)."""
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer CRUD; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def delete(self, request, address_id, *args, **kwargs):
         from .models import SavedAddress
-        customer, err = _resolve_customer_from_request(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         try:
             addr = SavedAddress.objects.get(pk=address_id, customer=customer)
         except SavedAddress.DoesNotExist:
@@ -7143,9 +7144,8 @@ class CustomerSavedAddressDeleteView(APIView):
         (same ownership scoping as delete/get — never leaks another customer's
         row via a 403 vs 404 timing/response difference)."""
         from .models import SavedAddress
-        customer, err = _resolve_customer_from_request(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         try:
             addr = SavedAddress.objects.get(pk=address_id, customer=customer)
         except SavedAddress.DoesNotExist:
