@@ -52,15 +52,7 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!promotions.length" class="ui-panel ui-reveal text-center px-6 py-12 space-y-2">
-      <p class="text-sm font-semibold text-slate-100">{{ t('ownerPromotions.noPromotions') }}</p>
-      <p class="text-xs text-slate-400 max-w-xs mx-auto">{{ t('ownerPromotions.noPromotionsHint') }}</p>
-      <div class="pt-2">
-        <button class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-5 py-2 text-sm" @click="openCreate">
-          {{ t('ownerPromotions.newPromotion') }}
-        </button>
-      </div>
-    </div>
+    <OwnerPromotionsEmptyState v-else-if="!promotions.length" @create="openCreate" />
 
     <!-- List -->
     <div v-else class="space-y-2">
@@ -753,6 +745,7 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed, watch } from 'vue';
+import OwnerPromotionsEmptyState from '../components/OwnerPromotionsEmptyState.vue';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
