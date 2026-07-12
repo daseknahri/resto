@@ -23,35 +23,35 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie → forgotten guard = cross-tenant breach. **Backstop middleware shipped** (foreign-tenant staff sessions downgraded to anonymous); policy layer + IDENTITY-1 remain | L |
-| **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure | M |
-| **OPS-2** | DR | 🔴 Critical | Backups written on-host, not off-box → VPS loss = DB + backups lost together | S |
-| ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation → silent wallet drift~~ — `reconcile_wallet_balances` shipped (detect-only on Beat, `--fix` for triage) | ~~S–M~~ |
-| **IDENTITY-1** | Auth | ◑ Partial | Dual identity: customer lives in `session`, invisible to DRF → forces manual checks. **Keystone shipped** (`CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`; customer is now `request.user`), proven on 3 views (incl. a live voucher `FieldError` fix); ~55-view sweep remains | L |
-| **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method | L |
-| **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + **real threaded money/isolation DB tests** (MFA DB tests un-skipped). Residual: de-mock a low-value tail (cleanup, not risk) | M |
-| **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`, detect+alert money, `--fix` cleans mirror); global-unique `order_number` remains | S/L |
-| **API-1** | API | 🟠 High | No API versioning → can't evolve safely once a client is pinned | S (now) / XL (later) |
-| **ASYNC-2** | Async | 🟠 High | One generic cron task on a shared 2-worker queue → sweeps starve notifications | M |
-| **ASYNC-1** | Async | 🟠 High | Inline task fallback loses queued work on every deploy restart, no retry | M |
-| **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale (O(N) migrations, no PgBouncer, atomic-index landmine) | XL |
-| ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout "owed" check reads an unlocked aggregate → double-pay race~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
-| ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook would credit metadata, not settled `amount_total`~~ — now credits `amount_total`, paid-only | ~~S~~ |
-| **OPS-3** | Ops | 🟡 Med | One Redis SPOF; sessions cache-only (eviction logs users out) — ⚠️ naive `cached_db` fix BREAKS (django-tenants schema); needs a schema-pinned backend | M |
+| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class + single `user_owns_tenant_id` owner-check** shipped (3 divergent helpers → 1); call-site→`permission_classes` migration remains | L |
+| **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
+| **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
+| ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
+| **IDENTITY-1** | Auth | ◑ Partial | Dual identity: customer invisible to DRF. **Keystone shipped** (`CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`; customer is now `request.user`), proven on 3 views (incl. a live voucher `FieldError` fix); ~55-view sweep remains | L |
+| **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method. **Awaiting owner go-ahead** (money-path refactor) | L |
+| **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + real threaded money/isolation DB tests | M |
+| **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
+| ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
+| **ASYNC-2** | Async | ◑ Partial | One generic cron task starves notifications — **dedicated `cron` queue routing shipped**; per-command retry + named-task split remain | M |
+| **ASYNC-1** | Async | ◑ Partial | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; durable-outbox/runtime-dispatch remains | M |
+| **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
+| ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
+| ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook trusts metadata~~ — now credits settled `amount_total`, paid-only | ~~S~~ |
+| **OPS-3** | Ops | 🟡 Med | Redis SPOF; sessions cache-only (eviction logs users out) — needs a **schema-pinned session backend** (naive `cached_db` BREAKS under django-tenants). Not yet started | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
-| **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped** (one-time claim on the SMS/WhatsApp/push tasks); DLQ/reject-alert remains | S/M |
+| **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | 🟡 Med | Six 2,500–3,700-line page components (single-writer bottleneck) | L |
-| **FE-3** | Frontend | 🟡 Med | ~500KB locale catalogs block first paint; Sentry not lazy | S–M |
-| **SER-1** | API | 🟡 Med | 242 raw `request.data` reads vs 41 serializer writes → validation/price-manip class | L |
-| **SCHEMA-1** | API | 🟡 Med | OpenAPI via legacy `generateschema` → duplicate operationIds, unusable for client-gen | S |
-| **DATA-2** | Data | ◑ Partial | `CustomerOrderRef` mirror had no `post_delete` (phantom orders) — **fixed**; item-mutation re-mirror + periodic reconcile remain | S |
-| **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog | L |
-| ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in fields nullable with no "opt-in requires them" rule~~ — serializer now requires city+coords to opt in | ~~S~~ |
-| **DATA-5** | Data | 🟡 Med | Four denormalized `Profile` mirrors kept by scattered signals → drift on a missed one | M |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **3 CustomerAccount tabs extracted** (reservations/reviews/profile; 3654→2963 lines); more tabs + other pages in progress | L |
+| **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
+| **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
+| ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
+| **DATA-2** | Data | ◑ Partial | `CustomerOrderRef` mirror drift — `post_delete` + **voided/comped item filter** + **content-drift reconcile** shipped; effectively complete | S |
+| **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog. **Product decision** (build when a non-food tenant is real) | L |
+| ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in has no data prerequisite~~ — serializer now requires city+coords to opt in | ~~S~~ |
+| ~~**DATA-5**~~ | Data | ✅ Done | ~~Four `Profile` mirrors, no periodic reconcile~~ — **`reconcile_profile_denorms` shipped** (per-tenant, reuses the 3 recompute fns) | ~~M~~ |
 | **STRUCT-2** | Structure | 🟡 Med | 215 migrations, `Order` field sprawl, no squashing → slow per-schema deploys | M |
-| **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files | M |
-| **OPS-4** | Ops | 🟢 Low | ⏭️ Re-scoped — `daphne` is a registered `INSTALLED_APP` (ASGI runserver), NOT dead weight; removing it is a dev-tooling change, not a freebie | S |
+| **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files (client-breaking renames — defer) | M |
+| **OPS-4** | Ops | 🟢 Low | ⏭️ Re-scoped — `daphne` is a registered `INSTALLED_APP` (ASGI runserver), NOT dead weight; skipped as low-value | S |
 
 \* MULTITENANCY-1 is "high" as a *strategic* decision to make consciously, not an urgent bug.
 
@@ -468,14 +468,30 @@ each, down from one always-loaded ~800KB file), and `src/lib/sentry.js` fires a 
 flash-of-raw-keys risk → leave for a deliberate later slice.
 **Effort:** S–M. **Source:** frontend review.
 
-### SER-1 — Writes bypass serializers
+### SER-1 — Writes bypass serializers  ◑ PRIMITIVE SHIPPED (2026-07-12)
 **Where:** 242 raw `request.data.get(...)` reads vs 41 serializer-mediated writes.
 **Failure scenario:** Validation/type-coercion is hand-rolled per handler; a money endpoint
 reads a price/amount from `request.data` without a serializer guard → price-manipulation class
 (cf. the DishOption price-manip bug already fixed).
 **Fix:** Route writes — especially money/price endpoints — through serializers with explicit
 fields + `read_only_fields`.
-**Effort:** L (incremental; start with money endpoints). **Source:** API/auth review.
+**Scout finding (5-agent money-endpoint sweep, 2026-07-12):** SER-1 is largely
+**defense-in-depth, not a live exploit** — nearly all wallet/order amounts already funnel through
+`wallet_service._money()` (Decimal coercion + positivity → 400) plus downstream caps (order-
+outstanding 409, promo clamp, admin caps). The candidate money endpoints (tip_amount, promo
+discount, split-payment) are **not** cleanly hardenable behavior-preservingly: their current code
+silently *coerces* (never rejects), so a naive serializer would 400 currently-succeeding requests.
+**Shipped:** `config/drf_fields.QuantizedMoneyField` — the reusable migration primitive that
+pre-quantizes to 2dp (matching the legacy silent round) before DRF enforces type/`max_digits`/
+`min_value`, so a handler migrates onto a serializer with **zero change to accepted inputs**.
+Applied to `DrawerTransactionView` (the one genuine gap: an oversized amount used to overflow the
+`NUMERIC(10,2)` column → uncaught **500**; now a clean **400**). Independently verified
+behavior-preserving by a 3-lens adversarial pass (legacy-vs-new across ~50 inputs). Tests:
+`test_ser1_money_field.py` (contract matrix) + drawer regression tests.
+**Remaining:** migrate the other hand-rolled money reads onto `QuantizedMoneyField`
+**opportunistically** (low urgency — defense-in-depth), each behavior-preserving with a regression
+test. Not a high-priority sweep.
+**Effort:** L (incremental). **Source:** API/auth review.
 
 ### SCHEMA-1 — OpenAPI has duplicate operationIds
 **Where:** CI exports via legacy `generateschema`; ~239 view classes, zero `operationId` overrides.

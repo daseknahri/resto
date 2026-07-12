@@ -78,3 +78,16 @@ MULTITENANCY-1 (ceiling decision), DATA-3 (catalog decision).
 ## Status log
 
 - 2026-07-11 — 28-agent verification sweep complete; Wave 1 launched (4 code worktrees + this doc).
+- 2026-07-11 — **Wave 1 merged** (#54–#58): AUTHZ-1 `IsTenantOwner`, SCHEMA-1 drf-spectacular, DATA-5 reconcile, DATA-2 item-filter, register truth-up.
+- 2026-07-12 — **Wave 2 merged** (#59–#62): AUTHZ-1b/c owner-check consolidation, API-1 `/api/v1/` alias, ASYNC-2 cron-queue routing, FE-2 reservations tab.
+- 2026-07-12 — **Wave 3a merged** (#63–#65): FE-2b reviews tab, DATA-2b content reconcile, ASYNC-1 broker deploy-guard (kept as blocking Error per owner).
+- 2026-07-12 — **Wave 3b merged** (#66–#67): FE-2c profile tab, SER-1 `QuantizedMoneyField` + drawer amount (3-lens adversarial-verified). CustomerAccount.vue now 2963 lines (was 3654).
+- 2026-07-12 — **Wave 4 in flight:** FE-2d orders tab, FE-2e OwnerOrders section, this register/plan refresh.
+
+## What's left (post-Wave-4)
+
+- **Owner-only / infra:** OPS-1 (Postgres PITR), OPS-2 (S3 creds + restore drill), plus the standing launch TODOs (DNS/TLS, prod env, Stripe PSP, schedule the sweep commands on Coolify).
+- **Owner decisions:** MULTITENANCY-1 (tenant ceiling), DATA-3 (multi-vertical catalog), the commission-basis / refund-policy / rides-go-live product calls.
+- **Focused code (need care, one at a time):** OPS-3 (schema-pinned session backend), **STRUCT-1 `OrderService`** (awaiting explicit go-ahead — the money-path refactor), the IDENTITY-1 ~55-view sweep, the AUTHZ-1 call-site → `permission_classes` migration.
+- **Incremental / opportunistic:** remaining FE-2 tabs & mega-pages, SER-1 money-read migrations onto `QuantizedMoneyField`, ASYNC-2 retry split, ASYNC-4 DLQ.
+- **Low priority / deferred:** API-2 naming, DATA-1 global `order_number`, STRUCT-2 migration squash, FE-1 i18n single-source, ASYNC-3 poll-gating.
