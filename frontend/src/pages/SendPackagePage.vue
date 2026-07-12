@@ -719,72 +719,12 @@
           </ul>
         </section>
 
-        <!-- ══════════════════════════ PACKAGE HISTORY ══════════════════════════ -->
-        <section v-if="packageHistory.length > 0 || historyLoading" class="space-y-2 pt-2">
-          <p class="ui-kicker px-1">{{ t('sendPackage.historyTitle') }}</p>
-
-          <!-- Loading skeleton -->
-          <template v-if="historyLoading && packageHistory.length === 0">
-            <div
-              v-for="n in 3"
-              :key="n"
-              class="h-14 w-full animate-pulse rounded-2xl bg-slate-800/60"
-            />
-          </template>
-
-          <!-- History rows -->
-          <ul v-else class="space-y-1.5">
-            <li
-              v-for="pkg in packageHistory"
-              :key="pkg.id"
-              class="ui-panel flex items-center gap-3 px-3 py-2.5"
-            >
-              <!-- Route: dropoff (primary) -->
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-slate-200">
-                  {{ pkg.recipient_name || pkg.dropoff_address || pkg.pickup_address }}
-                </p>
-                <p class="mt-0.5 truncate text-[11px] text-slate-500">
-                  {{ fmtDate(pkg.created_at) }}
-                </p>
-              </div>
-
-              <!-- Fare -->
-              <span class="shrink-0 text-sm font-bold tabular-nums text-slate-200">
-                {{ formatPrice(pkg.fare) }}
-              </span>
-
-              <!-- Status chip -->
-              <span
-                class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                :class="pkg.status === 'completed'
-                  ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  : 'border border-red-500/30 bg-red-500/10 text-red-300'"
-              >
-                {{ historyStatusLabel(pkg.status) }}
-              </span>
-
-              <!-- Rebook — completed deliveries only -->
-              <button
-                v-if="pkg.status === 'completed'"
-                type="button"
-                class="shrink-0 rounded-xl border border-sky-500/30 bg-sky-500/8 px-2.5 py-1.5 text-xs font-semibold text-sky-300 transition hover:bg-sky-500/15 ui-press"
-                :aria-label="t('sendPackage.rebookAriaLabel')"
-                @click="rebookPackage(pkg)"
-              >
-                {{ t('sendPackage.rebookCta') }}
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <!-- Empty state — only show after load attempt with no results -->
-        <p
-          v-else-if="!historyLoading && packageHistory.length === 0 && customerStore.isAuthenticated"
-          class="px-1 text-center text-xs text-slate-600"
-        >
-          {{ t('sendPackage.historyEmpty') }}
-        </p>
+        <SendPackageHistory
+          :history="packageHistory"
+          :loading="historyLoading"
+          :is-authenticated="customerStore.isAuthenticated"
+          @rebook="rebookPackage"
+        />
       </div>
 
     </template>
@@ -805,6 +745,7 @@ import { recentRecipients, recentDropoffs } from '../lib/recentRecipients';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import PushPrimingSheet from '../components/PushPrimingSheet.vue';
+import SendPackageHistory from '../components/SendPackageHistory.vue';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const toast = useToastStore();
@@ -1017,25 +958,6 @@ const packageStatusLabel = computed(() => {
 const hasDriverPos = computed(
   () => activePackage.value?.driver?.driver_lat != null && activePackage.value?.driver?.driver_lng != null,
 );
-
-// ── Date helper ───────────────────────────────────────────────────────────────
-const fmtDate = (iso) => {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString(currentLocale.value || undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return '';
-  }
-};
-
-// ── Status label for history chips ────────────────────────────────────────────
-const historyStatusLabel = (status) => {
-  switch (status) {
-    case 'completed': return t('sendPackage.delivered');
-    case 'cancelled': return t('sendPackage.cancelled');
-    default:          return status;
-  }
-};
 
 // ── Geolocation ───────────────────────────────────────────────────────────────
 const useMyLocation = () => {
