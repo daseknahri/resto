@@ -16,8 +16,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.ride_views import (
     RideEstimateView,
     RideCreateView,
@@ -50,7 +51,10 @@ def _make_customer(pk=1, is_driver=False, driver_approved=False, is_driver_onlin
                    driver_vehicle_type="", wallet_balance=Decimal("100.00"), name="Test User",
                    phone="0600000001", driver_lat=None, driver_lng=None,
                    driver_car_approved=False, driver_licence_url="", driver_insurance_url=""):
-    c = MagicMock()
+    # IDENTITY-1 sweep: spec=Customer so this object's __class__.__name__ == "Customer",
+    # letting it be force_authenticate'd as request.user and pass IsCustomer's principal
+    # check (permissions._is_customer_principal duck-types on the class name).
+    c = MagicMock(spec=Customer)
     c.pk = pk
     c.id = pk
     c.is_driver = is_driver
@@ -231,38 +235,46 @@ class RideServiceEstimateTests(SimpleTestCase):
 
 @override_settings(VERTICALS_ENABLED=frozenset({"rides", "courier", "food", "shops", "pharmacy", "driver"}))
 class RideCreateViewTests(SimpleTestCase):
+    """RISK IDENTITY-1: RideCreateView now authenticates via CustomerSessionAuthentication +
+    IsCustomer, so the signed-in Customer arrives as request.user. We force-authenticate a
+    real Customer principal, matching the production auth path (mirrors the accounts/views.py
+    sweep's rewrite of test_customer_saved_addresses.py)."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = RideCreateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/rides/", data, format="json")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     def test_no_session_returns_401(self):
-        req = self._post({}, session=_session(customer_id=None))
+        req = self._post({})
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.models.Customer.objects")
+    def test_stale_customer_session_returns_401(self, mock_cust_objs):
+        """IDENTITY-1 sanctioned carve-out: a session pointing at a since-deleted Customer
+        row now fails authentication (401) instead of the old hand-rolled
+        Customer.DoesNotExist 404 — CustomerSessionAuthentication.authenticate() resolves
+        an unknown pk to None (unauthenticated) rather than raising."""
+        mock_cust_objs.filter.return_value.first.return_value = None
+        req = self.factory.post("/api/rides/", {}, format="json")
+        req.session = _session(customer_id=99)  # stale id; deliberately not force-authenticated
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
-    @patch("accounts.models.Customer.objects")
-    def test_no_customer_returns_404(self, mock_objs, _throttle):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        req = self._post({}, session=_session(customer_id=99))
-        resp = self.view(req)
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-
-    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_duplicate_active_ride_returns_409(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         # Simulate existing active ride
@@ -270,25 +282,24 @@ class RideCreateViewTests(SimpleTestCase):
         req = self._post({
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
-        }, session=_session(customer_id=1))
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "active_ride_exists")
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_insufficient_wallet_returns_400(self, mock_est, mock_cust_objs, mock_ride_objs, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("5.00"))
-        mock_cust_objs.get.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
         req = self._post({
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "payment_method": "wallet",
-        }, session=_session(customer_id=1))
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "insufficient_wallet")
@@ -296,11 +307,10 @@ class RideCreateViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_successful_creation_returns_201(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -311,7 +321,7 @@ class RideCreateViewTests(SimpleTestCase):
                 "pickup_lat": 33.5, "pickup_lng": -7.6,
                 "dropoff_lat": 33.55, "dropoff_lng": -7.65,
                 "payment_method": "wallet",
-            }, session=_session(customer_id=1))
+            }, customer=rider)
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
@@ -497,24 +507,23 @@ class RideRateViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideRateView.as_view()
 
-    def _post(self, ride_id, data, session=None):
+    def _post(self, ride_id, data, customer=None):
         req = self.factory.post(f"/api/rides/{ride_id}/rate/", data, format="json")
-        req.session = session or _session(customer_id=10)
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_rate_non_completed_ride_returns_409(self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
+    def test_rate_non_completed_ride_returns_409(self, mock_ride_objs, mock_tx, _throttle):
         rider = _make_customer(pk=10)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         ride = _make_ride(pk=1, status_val="in_progress", rider=rider)
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        req = self._post(ride_id=1, data={"rating": 4}, session=_session(customer_id=10))
+        req = self._post(ride_id=1, data={"rating": 4}, customer=rider)
         resp = self.view(req, ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "not_completed")
@@ -522,15 +531,13 @@ class RideRateViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_double_rate_returns_409(self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
+    def test_double_rate_returns_409(self, mock_ride_objs, mock_tx, _throttle):
         rider = _make_customer(pk=10)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         ride = _make_ride(pk=1, status_val="completed", rider=rider, rider_driver_rating=4)
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        req = self._post(ride_id=1, data={"rating": 5}, session=_session(customer_id=10))
+        req = self._post(ride_id=1, data={"rating": 5}, customer=rider)
         resp = self.view(req, ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "already_rated")
@@ -722,12 +729,10 @@ class PIIGatingTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideActiveView.as_view()
 
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.ride_views.RideRequest.objects")
-    def test_driver_phone_absent_while_searching(self, mock_ride_objs, mock_cust_objs):
+    def test_driver_phone_absent_while_searching(self, mock_ride_objs):
         rider = _make_customer(pk=10, phone="0600000001")
         driver = _make_customer(pk=2, phone="0611111111", is_driver=True)
-        mock_cust_objs.get.return_value = rider
 
         ride = _make_ride(pk=1, status_val="searching", rider=rider, driver=driver)
 
@@ -751,7 +756,7 @@ class PIIGatingTests(SimpleTestCase):
 
         req = self.factory.get("/api/rides/active/")
         req.session = _session(customer_id=10)
-        req.user = MagicMock(is_authenticated=False)
+        force_authenticate(req, user=rider)
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -1548,22 +1553,21 @@ class RideHistoryViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideHistoryView.as_view()
 
-    def _get(self, session=None):
+    def _get(self, customer=None):
         req = self.factory.get("/api/rides/history/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     def test_no_session_returns_401(self):
-        req = self._get(session=_session(customer_id=None))
+        req = self._get()
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_rider_sees_only_own_terminal_rides(self, mock_cust_objs, mock_ride_objs):
+    def test_rider_sees_only_own_terminal_rides(self, mock_ride_objs):
         rider = _make_customer(pk=1)
-        mock_cust_objs.get.return_value = rider
 
         r1 = _make_ride(pk=10, status_val="completed", rider=rider, fare=Decimal("20.00"))
         r1.completed_at = MagicMock()
@@ -1576,7 +1580,7 @@ class RideHistoryViewTests(SimpleTestCase):
         mock_ride_objs.filter.return_value.select_related.return_value \
             .order_by.return_value.__getitem__.return_value = [r1, r2]
 
-        req = self._get(session=_session(customer_id=1))
+        req = self._get(customer=rider)
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -1596,16 +1600,14 @@ class RideHistoryViewTests(SimpleTestCase):
             self.assertNotIn("driver_lng", ride_data)
 
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_filter_is_scoped_to_rider(self, mock_cust_objs, mock_ride_objs):
+    def test_filter_is_scoped_to_rider(self, mock_ride_objs):
         """The queryset filter must include rider=rider."""
         rider = _make_customer(pk=1)
-        mock_cust_objs.get.return_value = rider
 
         mock_ride_objs.filter.return_value.select_related.return_value \
             .order_by.return_value.__getitem__.return_value = []
 
-        req = self._get(session=_session(customer_id=1))
+        req = self._get(customer=rider)
         self.view(req)
 
         call_kwargs = mock_ride_objs.filter.call_args[1]
@@ -1936,33 +1938,30 @@ class PackageCreateViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideCreateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/rides/", data, format="json")
-        req.session = session or _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
-    @patch("accounts.models.Customer.objects")
-    def test_unknown_kind_returns_400(self, mock_cust_objs, _throttle):
+    def test_unknown_kind_returns_400(self, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
 
         req = self._post({
             "kind": "express",
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data.get("code"), "bad_kind")
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.ride_service.estimate_ride")
-    def test_package_missing_recipient_name_returns_400(self, mock_est, mock_cust_objs, _throttle):
+    def test_package_missing_recipient_name_returns_400(self, mock_est, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_est.return_value = {"distance_km": 2.0, "fare": Decimal("12.00")}
 
         req = self._post({
@@ -1971,18 +1970,16 @@ class PackageCreateViewTests(SimpleTestCase):
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             # recipient_name omitted
             "recipient_phone": "0699999999",
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data.get("code"), "missing_field")
         self.assertIn("recipient_name", resp.data["detail"])
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.ride_service.estimate_ride")
-    def test_package_missing_recipient_phone_returns_400(self, mock_est, mock_cust_objs, _throttle):
+    def test_package_missing_recipient_phone_returns_400(self, mock_est, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_est.return_value = {"distance_km": 2.0, "fare": Decimal("12.00")}
 
         req = self._post({
@@ -1991,7 +1988,7 @@ class PackageCreateViewTests(SimpleTestCase):
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "recipient_name": "Jane Doe",
             # recipient_phone omitted
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data.get("code"), "missing_field")
@@ -2000,12 +1997,11 @@ class PackageCreateViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_package_create_succeeds_201(self, mock_est, mock_cust_objs,
                                          mock_ride_objs, mock_tx, _throttle):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -2021,7 +2017,7 @@ class PackageCreateViewTests(SimpleTestCase):
                 "recipient_phone": "0699999999",
                 "package_note": "Handle with care",
                 "payment_method": "wallet",
-            })
+            }, customer=rider)
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -2034,13 +2030,12 @@ class PackageCreateViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_ride_kind_default_unchanged(self, mock_est, mock_cust_objs,
                                           mock_ride_objs, mock_tx, _throttle):
         """Omitting kind= still creates a 'ride' (default behaviour unchanged)."""
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -2052,12 +2047,10 @@ class PackageCreateViewTests(SimpleTestCase):
         mock_ride_objs.create.return_value = ride
 
         with patch("accounts.ride_views.push_new_ride_to_drivers"):
-            req = self.factory.post("/api/rides/", {
+            req = self._post({
                 "pickup_lat": 33.5, "pickup_lng": -7.6,
                 "dropoff_lat": 33.55, "dropoff_lng": -7.65,
-            }, format="json")
-            req.session = _session(customer_id=1)
-            req.user = MagicMock(is_authenticated=False)
+            }, customer=rider)
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -2365,15 +2358,13 @@ class PackageKindInHistoryAndAdminTests(SimpleTestCase):
         r1.driver = None
         r1.driver_id = None
 
-        with patch("accounts.models.Customer.objects") as mock_cust, \
-             patch("accounts.ride_views.RideRequest.objects") as mock_ride_objs:
-            mock_cust.get.return_value = rider
+        with patch("accounts.ride_views.RideRequest.objects") as mock_ride_objs:
             mock_ride_objs.filter.return_value.select_related.return_value \
                 .order_by.return_value.__getitem__.return_value = [r1]
 
             req = factory.get("/api/rides/history/")
             req.session = _session(customer_id=1)
-            req.user = MagicMock(is_authenticated=False)
+            force_authenticate(req, user=rider)
             resp = view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -2447,16 +2438,17 @@ class ScheduledTripCreateTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideCreateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/rides/", data, format="json")
-        req.session = session or _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tz")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_too_soon_returns_400(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tz, _throttle):
         """scheduled_for < now+20min must return 400 code=too_soon."""
@@ -2467,7 +2459,6 @@ class ScheduledTripCreateTests(SimpleTestCase):
         mock_tz.is_naive.return_value = False
 
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
 
         # scheduled_for = now + 10 minutes (too soon)
@@ -2476,7 +2467,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "scheduled_for": sf,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data.get("code"), "too_soon")
@@ -2484,7 +2475,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tz")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_too_far_returns_400(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tz, _throttle):
         """scheduled_for > now+7days must return 400 code=too_far."""
@@ -2495,7 +2486,6 @@ class ScheduledTripCreateTests(SimpleTestCase):
         mock_tz.is_naive.return_value = False
 
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
 
         sf = (now + datetime.timedelta(days=8)).isoformat()
@@ -2503,7 +2493,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "scheduled_for": sf,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data.get("code"), "too_far")
@@ -2527,7 +2517,6 @@ class ScheduledTripCreateTests(SimpleTestCase):
         mock_tx.atomic.return_value = _noop_atomic()
 
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
 
@@ -2546,7 +2535,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "scheduled_for": sf,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, 201)
         # Confirm create was called with status=SCHEDULED and dispatched_at=None
@@ -2574,7 +2563,6 @@ class ScheduledTripCreateTests(SimpleTestCase):
         mock_tx.atomic.return_value = _noop_atomic()
 
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
 
@@ -2587,7 +2575,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
             "scheduled_for": sf,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data.get("code"), "too_many_scheduled")
@@ -2609,7 +2597,6 @@ class ScheduledTripCreateTests(SimpleTestCase):
         mock_tx.atomic.return_value = _noop_atomic()
 
         rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
-        mock_cust_objs.get.return_value = rider
         mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -2621,7 +2608,7 @@ class ScheduledTripCreateTests(SimpleTestCase):
         req = self._post({
             "pickup_lat": 33.5, "pickup_lng": -7.6,
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
-        })
+        }, customer=rider)
         resp = self.view(req)
         self.assertEqual(resp.status_code, 201)
         create_kwargs = mock_ride_objs.create.call_args[1]
@@ -2641,11 +2628,9 @@ class ScheduledTripCancelTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_cancel_scheduled_ok(self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
+    def test_cancel_scheduled_ok(self, mock_ride_objs, mock_tx, _throttle):
         """Cancelling a SCHEDULED trip must return 200 with status=cancelled."""
         rider = _make_customer(pk=1)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
 
         ride = _make_ride(pk=20, status_val="scheduled", rider=rider)
@@ -2654,7 +2639,7 @@ class ScheduledTripCancelTests(SimpleTestCase):
 
         req = self.factory.post("/api/rides/20/cancel/")
         req.session = _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        force_authenticate(req, user=rider)
         resp = self.view(req, ride_id=20)
 
         self.assertEqual(resp.status_code, 200)
@@ -2668,12 +2653,10 @@ class ScheduledTripActivePayloadTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideActiveView.as_view()
 
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.ride_views.RideRequest.objects")
-    def test_active_response_contains_scheduled_list(self, mock_ride_objs, mock_cust_objs):
+    def test_active_response_contains_scheduled_list(self, mock_ride_objs):
         """Response must have 'ride' (null when no active trip) and 'scheduled' list."""
         rider = _make_customer(pk=5)
-        mock_cust_objs.get.return_value = rider
 
         # Chain 1: active (non-scheduled) trip query -- returns None (no active trip)
         active_chain = MagicMock()
@@ -2708,7 +2691,7 @@ class ScheduledTripActivePayloadTests(SimpleTestCase):
 
         req = self.factory.get("/api/rides/active/")
         req.session = _session(customer_id=5)
-        req.user = MagicMock(is_authenticated=False)
+        force_authenticate(req, user=rider)
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, 200)
@@ -2935,22 +2918,22 @@ class PackageCodeGenerationTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = RideCreateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/rides/", data, format="json")
-        req.session = session or _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        req.session = _session(customer_id=customer.id) if customer is not None else _session()
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return req
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_package_create_generates_six_digit_code(self, mock_est, mock_cust_objs,
                                                        mock_ride_objs, mock_tx, _throttle):
         """Creating a package trip must pass a 6-digit delivery_code to RideRequest.objects.create."""
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -2966,7 +2949,7 @@ class PackageCodeGenerationTests(SimpleTestCase):
                 "recipient_name": "Jane Doe",
                 "recipient_phone": "0699999999",
                 "payment_method": "wallet",
-            })
+            }, customer=rider)
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -2979,13 +2962,12 @@ class PackageCodeGenerationTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_ride_kind_delivery_code_is_empty(self, mock_est, mock_cust_objs,
                                                mock_ride_objs, mock_tx, _throttle):
         """Creating a ride trip must pass an empty delivery_code to RideRequest.objects.create."""
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -3002,7 +2984,7 @@ class PackageCodeGenerationTests(SimpleTestCase):
                 "pickup_lat": 33.5, "pickup_lng": -7.6,
                 "dropoff_lat": 33.55, "dropoff_lng": -7.65,
                 "payment_method": "wallet",
-            })
+            }, customer=rider)
             resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

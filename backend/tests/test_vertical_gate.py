@@ -10,7 +10,9 @@ All tests are SimpleTestCase (no DB). Verifies:
 from unittest.mock import MagicMock
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from accounts.models import Customer
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -24,6 +26,15 @@ def _session(customer_id=None):
     m.__setitem__ = lambda s, key, value: d.__setitem__(key, value)
     m.pop = lambda key, default=None: d.pop(key, default)
     return m
+
+
+def _make_customer(pk=1):
+    # IDENTITY-1 sweep: spec=Customer so __class__.__name__ == "Customer", satisfying
+    # IsCustomer's principal check when force_authenticate'd as request.user.
+    c = MagicMock(spec=Customer)
+    c.pk = pk
+    c.id = pk
+    return c
 
 
 # ── _vertical_gate unit tests ─────────────────────────────────────────────────
@@ -111,6 +122,7 @@ class RideCreateVerticalGateTests(SimpleTestCase):
             format="json",
         )
         req.session = _session(customer_id=1)
+        force_authenticate(req, user=_make_customer(pk=1))
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(resp.data["code"], "vertical_disabled")
@@ -126,6 +138,7 @@ class RideCreateVerticalGateTests(SimpleTestCase):
             format="json",
         )
         req.session = _session(customer_id=1)
+        force_authenticate(req, user=_make_customer(pk=1))
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(resp.data["code"], "vertical_disabled")

@@ -40,7 +40,9 @@ from rest_framework.views import APIView
 
 from tenancy.delivery_pricing import haversine_km, valid_coord
 
+from .authentication import CustomerSessionAuthentication
 from .models import Customer, RideRequest
+from .permissions import IsCustomer
 from .push import push_new_ride_to_drivers, push_ride_event_to_rider
 from .throttles import (
     AdminPIIThrottle,
@@ -297,8 +299,9 @@ class RideCreateView(APIView):
         (Scheduled trips: no dispatch at create; sweep_ride_requests rule (d) releases them.)
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider create; no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, *args, **kwargs):
@@ -317,9 +320,8 @@ class RideCreateView(APIView):
         if (gate := _vertical_gate(_kind_enum)) is not None:
             return gate
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         # kind already resolved and gated above.
         kind = _raw_kind
@@ -503,17 +505,17 @@ class RideActiveView(APIView):
     "scheduled" always contains the rider's upcoming scheduled trips (max 3, soonest first).
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider read; no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
         if (gate := _vertical_gate(None)) is not None:
             return gate
 
         from datetime import timedelta
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         # Current active trip: non-terminal and NOT scheduled
         ride = (
@@ -563,17 +565,17 @@ class RideActiveView(APIView):
 class RideCancelView(APIView):
     """POST /api/rides/<id>/cancel/ — rider cancels (searching or accepted only)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider mutation (own ride only); no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
         if (gate := _vertical_gate(None)) is not None:
             return gate
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         now = _tz.now()
         with _tx.atomic():
@@ -618,17 +620,17 @@ class RideCancelView(APIView):
 class RideRateView(APIView):
     """POST /api/rides/<id>/rate/ — rider rates the driver (1-5, once)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider mutation (own ride only); no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
         if (gate := _vertical_gate(None)) is not None:
             return gate
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         try:
             rating = int(request.data.get("rating", 0))
@@ -1478,16 +1480,16 @@ class RideHistoryView(APIView):
     No driver PII beyond driver name.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider read; no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
         if (gate := _vertical_gate(None)) is not None:
             return gate
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         rides = (
             RideRequest.objects.filter(
