@@ -96,6 +96,20 @@ def enqueue(task, *args, **kwargs) -> None:
         except Exception:  # broker unreachable → don't lose the notification
             logger.warning("Celery enqueue failed for %s; running inline",
                            getattr(task, "name", task), exc_info=True)
+    # RISK ASYNC-1: in production this fallback means the work is running in-process
+    # with NO durability — it is lost outright on the next deploy/restart, silently,
+    # unless something screams about it. config.checks.celery_broker_configured_for_durability
+    # blocks a *new* deploy from shipping without a broker (deploy=True check, so it
+    # never runs in dev/tests); this log line is the equivalent signal for a box that
+    # already booted (e.g. the broker died after startup) so it shows up in prod logs
+    # / alerting instead of vanishing quietly.
+    if not settings.DEBUG:
+        logger.error(
+            "PROD inline task fallback: %s is running on the in-process ThreadPoolExecutor "
+            "(no durable Celery broker) — this work will be LOST on the next deploy/restart. "
+            "Set CELERY_BROKER_URL. (RISK ASYNC-1)",
+            getattr(task, "name", task),
+        )
     # Submit to the bounded pool (not a raw unbounded Thread): excess work queues
     # instead of opening a connection-per-call all at once.
     _inline_executor.submit(_run_inline, task, args, kwargs)

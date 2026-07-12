@@ -22,16 +22,18 @@ from django.core.checks import Error, Warning, register
 
 @register(deploy=True)
 def redis_and_celery_configured(app_configs, **kwargs):
-    """In production REDIS_URL is REQUIRED (cache + channel layer); CELERY_BROKER_URL
-    is recommended (durable task queue). Missing Redis is an Error (broken realtime
-    on multi-worker prod); missing broker is a Warning (degraded-but-functional
-    inline-thread mode — kept opt-in by design)."""
+    """In production REDIS_URL is REQUIRED (cache + channel layer). Missing Redis is
+    an Error (broken realtime on multi-worker prod).
+
+    The Celery-broker half of this used to live here too (kepoli.W001, a Warning).
+    RISK ASYNC-1 replaced it with ``celery_broker_configured_for_durability`` below,
+    which is an Error (kepoli.E002) instead of a Warning — see that function for why.
+    """
     if settings.DEBUG:
         return []
 
     issues = []
     redis_url = os.getenv("REDIS_URL", "").strip()
-    broker_url = os.getenv("CELERY_BROKER_URL", "").strip()
 
     if not redis_url:
         issues.append(Error(
@@ -48,19 +50,49 @@ def redis_and_celery_configured(app_configs, **kwargs):
             id="kepoli.E001",
         ))
 
-    if not broker_url:
-        issues.append(Warning(
-            "CELERY_BROKER_URL is not set in production.",
-            hint=(
-                "The durable task queue is OFF, so accounts.tasks.enqueue() runs work inline "
-                "in a daemon thread with no retry — in-flight notifications are dropped on a "
-                "restart. Set CELERY_BROKER_URL (typically = REDIS_URL) AND run a worker "
-                "(celery -A config worker) + Beat to make notifications durable."
-            ),
-            id="kepoli.W001",
-        ))
-
     return issues
+
+
+@register(deploy=True)
+def celery_broker_configured_for_durability(app_configs, **kwargs):
+    """RISK ASYNC-1: accounts.tasks.enqueue() falls back to an in-process
+    ThreadPoolExecutor whenever ``settings.CELERY_BROKER_URL`` is unset — so every
+    notification / scheduled job in flight is silently LOST on each deploy or worker
+    restart (no durability, no operator-visible signal). enqueue() also lands here on
+    a broker hiccup (``.delay()`` raising), but that path is transient by nature and
+    deliberately NOT hard-failed at runtime — a broker blip must never turn into a
+    user-facing 500. A *permanently* missing broker in production, however, is a
+    misconfiguration we can and should catch before it ships, so it is an Error here
+    at deploy time instead.
+
+    This supersedes the old kepoli.W001 Warning on ``redis_and_celery_configured``
+    above: the identical condition is now an Error, so
+    ``check --deploy --fail-level ERROR`` (docker/entrypoint.sh) refuses to boot a
+    build that would silently run production on the lossy inline fallback. Escape
+    hatch: SKIP_DEPLOY_CHECK=1 on the entrypoint, same as kepoli.E001.
+
+    Reads ``settings.CELERY_BROKER_URL`` (not ``os.environ``, unlike the checks
+    above) so it mirrors EXACTLY the condition ``accounts.tasks.enqueue()`` branches
+    on at runtime.
+    """
+    if settings.DEBUG:
+        return []
+
+    if getattr(settings, "CELERY_BROKER_URL", ""):
+        return []
+
+    return [Error(
+        "CELERY_BROKER_URL is not set in production.",
+        hint=(
+            "Without a broker, accounts.tasks.enqueue() dispatches every notification / "
+            "scheduled job inline on an in-process ThreadPoolExecutor — that queued work "
+            "is silently LOST on every deploy or worker restart (RISK ASYNC-1). Set "
+            "CELERY_BROKER_URL (typically = REDIS_URL) and run a worker "
+            "(celery -A config worker) + Beat before shipping. Bypass only in an emergency "
+            "with SKIP_DEPLOY_CHECK=1 on the entrypoint."
+        ),
+        id="kepoli.E002",
+    )]
 
 
 @register(deploy=True)
