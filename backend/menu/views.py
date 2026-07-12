@@ -3053,17 +3053,10 @@ class PlaceOrderView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             total = max(Decimal("0"), total - _loyalty_discount)
 
-        # Tip — optional gratuity; must be non-negative and capped at a sane ceiling
-        _tip_raw = request.data.get("tip_amount", 0)
-        try:
-            _tip_amount = Decimal(str(_tip_raw)).quantize(Decimal("0.01"))
-        except Exception:
-            _tip_amount = Decimal("0")
-        if _tip_amount < Decimal("0"):
-            _tip_amount = Decimal("0")
-        # Sanity cap: tip ≤ 100% of food subtotal (prevents fat-finger runaway amounts)
-        if _food_subtotal > Decimal("0") and _tip_amount > _food_subtotal:
-            _tip_amount = _food_subtotal
+        # Tip — optional gratuity; non-negative, capped at 100% of the food subtotal.
+        # RISK STRUCT-1: extracted verbatim into menu.order_service (OrderService seam, slice 2).
+        from menu.order_service import compute_order_tip
+        _tip_amount = compute_order_tip(request.data.get("tip_amount", 0), _food_subtotal)
         total = total + _tip_amount
 
         # Pickup & delivery are pay-now: for now the bill must be settled in full from

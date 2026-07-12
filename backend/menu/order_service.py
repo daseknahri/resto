@@ -48,3 +48,22 @@ def compute_order_delivery_fee(profile, *, fulfillment_type, food_subtotal, deli
     if pricing["out_of_range"]:
         return Decimal("0"), distance_km, "delivery_out_of_range"
     return pricing["fee"], distance_km, None
+
+
+def compute_order_tip(tip_raw, food_subtotal) -> Decimal:
+    """Parse + clamp the customer gratuity (RISK STRUCT-1, extracted from PlaceOrderView.post).
+
+    Behavior is byte-identical to the former inline block: coerce to 2 dp; any parse failure or a
+    negative value → ``Decimal("0")``; capped at 100% of the food subtotal when the subtotal is
+    positive (a fat-finger runaway guard). When the subtotal is 0 (or negative) the cap does not
+    apply, matching the original ``if _food_subtotal > 0 and ...`` guard.
+    """
+    try:
+        tip = Decimal(str(tip_raw)).quantize(Decimal("0.01"))
+    except Exception:
+        return Decimal("0")
+    if tip < Decimal("0"):
+        return Decimal("0")
+    if food_subtotal > Decimal("0") and tip > food_subtotal:
+        return food_subtotal
+    return tip
