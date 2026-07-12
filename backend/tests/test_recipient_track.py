@@ -14,8 +14,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.ride_views import (
     RideCreateView,
     DriverRideStatusView,
@@ -37,7 +38,9 @@ def _session(customer_id=None):
 def _make_customer(pk=1, is_driver=False, driver_approved=False,
                    wallet_balance=Decimal("100.00"), name="Test User",
                    driver_vehicle="", driver_lat=None, driver_lng=None, locale="en"):
-    c = MagicMock()
+    # IDENTITY-1 sweep: spec=Customer so __class__.__name__ == "Customer", satisfying
+    # IsCustomer's principal check when force_authenticate'd as request.user.
+    c = MagicMock(spec=Customer)
     c.pk = pk
     c.id = pk
     c.is_driver = is_driver
@@ -228,13 +231,12 @@ class PackageCreateTokenSmsTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_create_sets_token_and_fires_dispatched_sms(
         self, mock_est, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -249,7 +251,7 @@ class PackageCreateTokenSmsTests(SimpleTestCase):
             "recipient_phone": "0699999999",
         }, format="json")
         req.session = _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        force_authenticate(req, user=rider)
 
         with patch("accounts.ride_views.push_new_ride_to_drivers"), \
              patch("accounts.push.push_recipient_track_sms") as mock_sms:
@@ -266,13 +268,12 @@ class PackageCreateTokenSmsTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.Customer.objects")  # unrelated TOCTOU select_for_update lock only
     @patch("accounts.ride_service.estimate_ride")
     def test_ride_kind_gets_no_token_no_recipient_sms(
         self, mock_est, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
         mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
@@ -285,7 +286,7 @@ class PackageCreateTokenSmsTests(SimpleTestCase):
             "dropoff_lat": 33.55, "dropoff_lng": -7.65,
         }, format="json")
         req.session = _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        force_authenticate(req, user=rider)
 
         with patch("accounts.ride_views.push_new_ride_to_drivers"), \
              patch("accounts.push.push_recipient_track_sms") as mock_sms:
