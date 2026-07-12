@@ -3,6 +3,24 @@ from rest_framework.permissions import BasePermission
 from accounts.models import User
 
 
+def user_owns_tenant_id(user, tenant_id) -> bool:
+    """Single source of truth for the tenant-owner check (RISK AUTHZ-1).
+
+    True iff ``user`` is authenticated AND (superuser / platform-admin, OR the user's own
+    ``tenant_id`` equals ``tenant_id`` AND their role is ``TENANT_OWNER``). ``tenant_id`` is a
+    plain id (or ``None``). This backs both ``IsTenantOwner`` and the ``_is_tenant_owner`` view
+    helpers in ``accounts/views.py`` and ``menu/views.py`` — previously three divergent
+    copies — so the owner semantics now live in exactly one place.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant_id is None or getattr(user, "tenant_id", None) != tenant_id:
+        return False
+    return user.role == User.Roles.TENANT_OWNER
+
+
 class IsPlatformAdmin(BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
@@ -48,23 +66,8 @@ class IsTenantOwner(BasePermission):
     """
 
     def has_permission(self, request, view):
-        user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
-            return False
-        if user.is_superuser or getattr(user, "is_platform_admin", False):
-            return True
         tenant = getattr(request, "tenant", None)
-        if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
-            return False
-        return user.role == User.Roles.TENANT_OWNER
+        return user_owns_tenant_id(getattr(request, "user", None), getattr(tenant, "id", None))
 
     def has_object_permission(self, request, view, obj):
-        user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
-            return False
-        if user.is_superuser or getattr(user, "is_platform_admin", False):
-            return True
-        obj_tenant_id = getattr(obj, "tenant_id", None)
-        if obj_tenant_id is None or getattr(user, "tenant_id", None) != obj_tenant_id:
-            return False
-        return user.role == User.Roles.TENANT_OWNER
+        return user_owns_tenant_id(getattr(request, "user", None), getattr(obj, "tenant_id", None))
