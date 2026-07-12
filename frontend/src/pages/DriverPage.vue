@@ -1151,47 +1151,17 @@
       </template>
 
       <!-- Recent deliveries (history) -->
-      <div class="ui-panel p-4 space-y-3 ui-reveal">
-        <button
-          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          :aria-expanded="showHistory"
-          aria-controls="driver-history-panel"
-          @click="toggleHistory"
-        >
-          <p class="text-sm font-semibold text-slate-200">{{ t('driver.historyTitle') }}</p>
-          <AppIcon :name="showHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-        </button>
-        <div id="driver-history-panel">
-          <template v-if="showHistory">
-            <div v-if="loadingHistory && !history.length" class="space-y-2" aria-busy="true">
-              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
-            </div>
-            <div v-else-if="!history.length" class="ui-empty-state text-center py-4 space-y-1">
-              <p class="text-sm font-semibold text-slate-100">{{ t('driver.historyEmpty') }}</p>
-            </div>
-            <ul v-else class="space-y-2">
-              <li
-                v-for="(d, index) in history"
-                :key="d.id"
-                class="ui-reveal flex items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
-                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm text-slate-200" :title="d.restaurant_name || ('#' + d.order_number)">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
-                  <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
-                </div>
-                <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
-              </li>
-            </ul>
-            <button
-              v-if="historyHasMore"
-              :disabled="loadingHistory"
-              class="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
-              @click="loadMoreHistory"
-            >{{ loadingHistory ? t('common.loading') : t('driver.historyLoadMore') }}</button>
-          </template>
-        </div>
-      </div>
+      <DriverPageDeliveryHistory
+        :show="showHistory"
+        :loading="loadingHistory"
+        :items="history"
+        :has-more="historyHasMore"
+        :status-label="statusLabel"
+        :fmt-date="fmtDate"
+        :fmt-money="fmtMoney"
+        @toggle="toggleHistory"
+        @load-more="loadMoreHistory"
+      />
 
       <!-- Cash-out history (resolved requests: paid / cancelled / expired) -->
       <div class="ui-panel p-4 space-y-3 ui-reveal">
@@ -1595,6 +1565,7 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import DriverOfferModal from '../components/DriverOfferModal.vue';
+import DriverPageDeliveryHistory from '../components/DriverPageDeliveryHistory.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';

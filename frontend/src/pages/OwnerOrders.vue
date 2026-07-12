@@ -1273,114 +1273,25 @@
     </div>
 
     <!-- ── FILTER SHEET — bottom drawer for fulfillment / payment / date filters ── -->
-    <Teleport to="body">
-      <Transition name="ui-fade">
-        <div
-          v-if="filterSheetOpen"
-          class="fixed inset-0 z-[2200] flex items-end justify-center"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="t('ownerOrders.filterSheetTitle')"
-          @keydown.esc="filterSheetOpen = false"
-        >
-          <!-- Backdrop -->
-          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" @click="filterSheetOpen = false" />
-          <!-- Panel -->
-          <div class="relative z-10 w-full max-w-lg rounded-t-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col max-h-[80dvh]">
-            <!-- Handle + header -->
-            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 shrink-0">
-              <h2 class="text-base font-bold text-white">{{ t('ownerOrders.filterSheetTitle') }}</h2>
-              <div class="flex items-center gap-2">
-                <button
-                  v-if="activeFilterCount > 0"
-                  class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
-                  @click="activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
-                >{{ t('ownerOrders.clearFilters') }}</button>
-                <button
-                  class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:text-slate-200"
-                  :aria-label="t('common.close')"
-                  @click="filterSheetOpen = false"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
-                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <!-- Filter content -->
-            <div class="overflow-y-auto flex-1 px-4 py-4 space-y-5">
-              <!-- Date filter -->
-              <div class="space-y-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.dateAll') }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="d in dateTabs"
-                    :key="d.value"
-                    type="button"
-                    :aria-pressed="activeDateFilter === d.value"
-                    class="ui-state-chip ui-press"
-                    :data-active="activeDateFilter === d.value || undefined"
-                    @click="activeDateFilter = d.value"
-                  >{{ d.label }}</button>
-                </div>
-                <!-- Custom date-range inputs -->
-                <div v-if="activeDateFilter === 'custom'" class="flex flex-wrap items-center gap-1.5 pt-1">
-                  <label class="text-xs text-slate-400" for="fs-date-from">{{ t('ownerOrders.dateFrom') }}</label>
-                  <input id="fs-date-from" v-model="customDateFrom" type="date" class="ui-input py-1 text-xs" :max="customDateTo || undefined" />
-                  <label class="text-xs text-slate-400" for="fs-date-to">{{ t('ownerOrders.dateTo') }}</label>
-                  <input id="fs-date-to" v-model="customDateTo" type="date" class="ui-input py-1 text-xs" :min="customDateFrom || undefined" />
-                </div>
-              </div>
-
-              <!-- Fulfillment-type filter (only when 2+ types in the order list) -->
-              <div v-if="fulfillmentTabs.length" class="space-y-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.fulfillmentFilter') }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="tab in fulfillmentTabs"
-                    :key="tab.value"
-                    type="button"
-                    :aria-pressed="activeFulfillmentType === tab.value"
-                    class="ui-state-chip ui-press"
-                    :data-active="activeFulfillmentType === tab.value || undefined"
-                    @click="activeFulfillmentType = tab.value"
-                  >{{ tab.label }}</button>
-                </div>
-              </div>
-
-              <!-- Payment status filter -->
-              <div class="space-y-2">
-                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerOrders.paymentFilter') }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="p in paymentStatusTabs"
-                    :key="p.value"
-                    type="button"
-                    :aria-pressed="activePaymentStatus === p.value"
-                    class="ui-state-chip ui-press"
-                    :data-active="activePaymentStatus === p.value || undefined"
-                    @click="activePaymentStatus = p.value"
-                  >
-                    {{ p.label }}
-                    <span
-                      v-if="p.count > 0"
-                      class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
-                    >{{ p.count }}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- Apply / close -->
-            <div class="border-t border-slate-800 px-4 py-3 shrink-0">
-              <button
-                class="ui-btn-primary w-full py-2.5 text-sm font-semibold"
-                @click="filterSheetOpen = false"
-              >{{ t('common.close') }}</button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <OwnerOrdersFilterSheet
+      :open="filterSheetOpen"
+      :active-date-filter="activeDateFilter"
+      :custom-date-from="customDateFrom"
+      :custom-date-to="customDateTo"
+      :active-fulfillment-type="activeFulfillmentType"
+      :active-payment-status="activePaymentStatus"
+      :active-filter-count="activeFilterCount"
+      :date-tabs="dateTabs"
+      :fulfillment-tabs="fulfillmentTabs"
+      :payment-status-tabs="paymentStatusTabs"
+      @close="filterSheetOpen = false"
+      @clear="activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
+      @set-date-filter="activeDateFilter = $event"
+      @set-custom-date-from="customDateFrom = $event"
+      @set-custom-date-to="customDateTo = $event"
+      @set-fulfillment-type="activeFulfillmentType = $event"
+      @set-payment-status="activePaymentStatus = $event"
+    />
 
     <!-- ── 86 BOARD MODAL — dish availability (opens from floating button) ───── -->
     <Teleport to="body">
@@ -1558,6 +1469,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
+import OwnerOrdersFilterSheet from "../components/OwnerOrdersFilterSheet.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useNowTicker } from "../composables/useNowTicker";

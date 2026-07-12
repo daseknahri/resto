@@ -2953,34 +2953,23 @@ class PlaceOrderView(APIView):
 
         # Apply delivery fee for delivery orders — distance-based when configured
         # (base + per-km from restaurant → address), else the flat fallback fee.
-        _delivery_fee = Decimal("0")
-        _delivery_distance_km = None
-        if fulfillment_type == Order.FulfillmentType.DELIVERY:
-            from tenancy.delivery_pricing import compute_delivery_fee, valid_coord
-            from tenancy.routing import road_distance_km
-            _dlat = validated.get("delivery_lat")
-            _dlng = validated.get("delivery_lng")
-            _plat = getattr(profile, "lat", None)
-            _plng = getattr(profile, "lng", None)
-            # Only compute distance when BOTH the restaurant and the delivery address
-            # have a valid, real coordinate. Missing / (0,0) / out-of-range coords →
-            # distance unknown → flat-fee fallback, never a false "outside area".
-            if valid_coord(_plat, _plng) and valid_coord(_dlat, _dlng):
-                # Road distance (haversine × factor, or a real OSRM route when
-                # DELIVERY_OSRM_URL is set) — closer to what the driver drives.
-                _delivery_distance_km = road_distance_km(_plat, _plng, _dlat, _dlng)
-            _pricing = compute_delivery_fee(
-                profile, distance_km=_delivery_distance_km, food_subtotal=_food_subtotal
+        # RISK STRUCT-1: extracted verbatim into menu.order_service (first OrderService seam).
+        from menu.order_service import compute_order_delivery_fee
+        _delivery_fee, _delivery_distance_km, _delivery_fee_error = compute_order_delivery_fee(
+            profile,
+            fulfillment_type=fulfillment_type,
+            food_subtotal=_food_subtotal,
+            delivery_lat=validated.get("delivery_lat"),
+            delivery_lng=validated.get("delivery_lng"),
+        )
+        if _delivery_fee_error == "delivery_out_of_range":
+            return Response(
+                {
+                    "detail": "This address is outside the restaurant's delivery area.",
+                    "code": "delivery_out_of_range",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            if _pricing["out_of_range"]:
-                return Response(
-                    {
-                        "detail": "This address is outside the restaurant's delivery area.",
-                        "code": "delivery_out_of_range",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            _delivery_fee = _pricing["fee"]
 
         # Apply promotion — either by customer-supplied code or best auto-applied promo.
         # Evaluate the promo window in the TENANT's local wall-clock time (a promo

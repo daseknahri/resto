@@ -13,6 +13,7 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 class TestCustomerServiceProfileModel(SimpleTestCase):
@@ -63,17 +64,31 @@ class TestVerticalMutedCustomerIds(SimpleTestCase):
 
 
 class TestCustomerServicesView(SimpleTestCase):
-    """P2c: per-vertical activity summary endpoint."""
+    """P2c: per-vertical activity summary endpoint.
+
+    RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication +
+    IsCustomer, so it must be driven through as_view()/dispatch (not a bare instance
+    .get() call) for the auth gate to run at all — force_authenticate injects a real
+    Customer principal, matching the production auth path.
+    """
+
+    def setUp(self):
+        from accounts.views import CustomerServicesView
+
+        self.factory = APIRequestFactory()
+        self.view = CustomerServicesView.as_view()
 
     def _req(self, customer_id=1):
-        req = MagicMock()
+        from accounts.models import Customer
+
+        req = self.factory.get("/api/customer/services/")
         req.session = {"customer_id": customer_id} if customer_id else {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return req
 
     def test_unauthenticated_returns_401(self):
-        from accounts.views import CustomerServicesView
-
-        resp = CustomerServicesView().get(self._req(customer_id=None))
+        resp = self.view(self._req(customer_id=None))
         self.assertEqual(resp.status_code, 401)
 
     @override_settings(
@@ -83,8 +98,6 @@ class TestCustomerServicesView(SimpleTestCase):
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.CustomerOrderRef")
     def test_summary_aggregates_orders_and_rides(self, mock_ref, mock_ride, mock_djob):
-        from accounts.views import CustomerServicesView
-
         d1 = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
         d2 = datetime.datetime(2026, 6, 10, tzinfo=datetime.timezone.utc)
         mock_ref.objects.filter.return_value.exclude.return_value.values.return_value.annotate.return_value = [
@@ -96,7 +109,7 @@ class TestCustomerServicesView(SimpleTestCase):
         ]
         mock_djob.objects.filter.return_value.aggregate.return_value = {"count": 0, "last": None}
 
-        resp = CustomerServicesView().get(self._req(1))
+        resp = self.view(self._req(1))
         svc = resp.data["services"]
 
         self.assertEqual(svc["food"]["count"], 3)
@@ -112,38 +125,46 @@ class TestCustomerServicesView(SimpleTestCase):
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.CustomerOrderRef")
     def test_driver_count_from_delivered_jobs(self, mock_ref, mock_ride, mock_djob):
-        from accounts.views import CustomerServicesView
-
         d = datetime.datetime(2026, 6, 5, tzinfo=datetime.timezone.utc)
         mock_ref.objects.filter.return_value.exclude.return_value.values.return_value.annotate.return_value = []
         mock_ride.objects.filter.return_value.values.return_value.annotate.return_value = []
         mock_djob.objects.filter.return_value.aggregate.return_value = {"count": 5, "last": d}
 
-        resp = CustomerServicesView().get(self._req(1))
+        resp = self.view(self._req(1))
         svc = resp.data["services"]
         self.assertEqual(svc["driver"]["count"], 5)
         self.assertEqual(svc["driver"]["last_activity"], d.isoformat())
 
 
 class TestCustomerActiveItemsView(SimpleTestCase):
-    """Super-app resume rail: active order / ride / package aggregator."""
+    """Super-app resume rail: active order / ride / package aggregator.
+
+    RISK IDENTITY-1: driven through as_view()/dispatch (not a bare instance .get()
+    call) so the CustomerSessionAuthentication + IsCustomer gate actually runs.
+    """
+
+    def setUp(self):
+        from accounts.views import CustomerActiveItemsView
+
+        self.factory = APIRequestFactory()
+        self.view = CustomerActiveItemsView.as_view()
 
     def _req(self, customer_id=1):
-        req = MagicMock()
+        from accounts.models import Customer
+
+        req = self.factory.get("/api/customer/active-items/")
         req.session = {"customer_id": customer_id} if customer_id else {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return req
 
     def test_unauthenticated_returns_401(self):
-        from accounts.views import CustomerActiveItemsView
-
-        resp = CustomerActiveItemsView().get(self._req(customer_id=None))
+        resp = self.view(self._req(customer_id=None))
         self.assertEqual(resp.status_code, 401)
 
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.CustomerOrderRef")
     def test_aggregates_active_order_ride_package(self, mock_ref, mock_ride):
-        from accounts.views import CustomerActiveItemsView
-
         created = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
 
         order = MagicMock()
@@ -175,7 +196,7 @@ class TestCustomerActiveItemsView(SimpleTestCase):
         chain = mock_ride.objects.filter.return_value.exclude.return_value.order_by.return_value
         chain.first.side_effect = [ride, None]
 
-        resp = CustomerActiveItemsView().get(self._req(1))
+        resp = self.view(self._req(1))
         self.assertEqual(len(resp.data["orders"]), 1)
         self.assertEqual(resp.data["orders"][0]["order_number"], "A123")
         self.assertEqual(resp.data["orders"][0]["status"], "preparing")

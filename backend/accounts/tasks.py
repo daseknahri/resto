@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from celery import shared_task
+from celery import Task, shared_task
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,31 @@ def _release_send(key: str) -> None:
         cache.delete(key)
     except Exception:
         logger.debug("notification dedupe release failed", exc_info=True)
+
+
+class _NotificationTask(Task):
+    """Base for customer-facing notification tasks — code-level DLQ alert (RISK ASYNC-4 residual).
+
+    Celery invokes ``on_failure`` ONLY on a terminal failure — i.e. after ``autoretry_for`` has
+    exhausted ``max_retries`` — never on an intermediate retry (that's ``on_retry``, which is left
+    unoverridden). So this fires exactly once, when a paid / customer-facing send is being dropped
+    for good, turning the otherwise-silent ``NotificationLog(status=failed)`` row into a loud ERROR
+    that surfaces in ops/error tracking. A true broker dead-letter exchange
+    (``task_reject_on_worker_lost`` + a DLX) is deferred infra work; this is the code-level signal.
+
+    PII rule (money/PII logging discipline): NEVER log the task's ``args``/``kwargs`` — they carry
+    phone numbers / message bodies. Only the task name + exception TYPE are logged; the correlating
+    ``NotificationLog`` row holds the rest.
+    """
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        logger.error(
+            "NOTIFICATION DROPPED (retries exhausted): task=%s exc=%s — a customer-facing "
+            "notification was NOT delivered; see the NotificationLog(status=failed) row "
+            "(args/kwargs omitted — they contain PII). RISK ASYNC-4.",
+            self.name, type(exc).__name__,
+        )
+        super().on_failure(exc, task_id, args, kwargs, einfo)
 
 # ── Inline (no-broker) dispatch pool ────────────────────────────────────────────
 # Inline mode is a DEV / DEGRADED fallback only — the durable path is Celery (see R3):
@@ -140,7 +165,7 @@ def web_push_tenant(schema_name, title, body, url="/owner/orders"):
     _push_to_tenant(schema_name, title, body, url)
 
 
-@shared_task(name="accounts.tasks.sms_order_ready", **_RETRY)
+@shared_task(name="accounts.tasks.sms_order_ready", base=_NotificationTask, **_RETRY)
 def sms_order_ready(phone, tenant_name, order_number, tenant_id=None):
     key = _dedupe_key("sms:order_ready", tenant_id, order_number, phone)
     if not _claim_send(key):
@@ -154,7 +179,7 @@ def sms_order_ready(phone, tenant_name, order_number, tenant_id=None):
         raise
 
 
-@shared_task(name="accounts.tasks.whatsapp_new_order", **_RETRY)
+@shared_task(name="accounts.tasks.whatsapp_new_order", base=_NotificationTask, **_RETRY)
 def whatsapp_new_order(schema_name, order_id, tenant_name, whatsapp_phone, tenant_id=None):
     key = _dedupe_key("whatsapp:new_order", schema_name, order_id)
     if not _claim_send(key):
@@ -203,7 +228,7 @@ def driver_job_offer(driver_id, restaurant_name=None):
     notify_driver_job_offer_sync(driver_id, restaurant_name)
 
 
-@shared_task(name="accounts.tasks.customer_order_milestone", **_RETRY)
+@shared_task(name="accounts.tasks.customer_order_milestone", base=_NotificationTask, **_RETRY)
 def customer_order_milestone(order_number, tenant_id, event):
     key = _dedupe_key("push:milestone", tenant_id, order_number, event)
     if not _claim_send(key):
@@ -299,7 +324,7 @@ def ride_notify_rider(rider_id, event):
     notify_rider_sync(rider_id, event)
 
 
-@shared_task(name="accounts.tasks.recipient_track_sms", **_RETRY)
+@shared_task(name="accounts.tasks.recipient_track_sms", base=_NotificationTask, **_RETRY)
 def recipient_track_sms(ride_id, event):
     """SMS the package recipient their public tracking link (dispatched | in_progress)."""
     key = _dedupe_key("sms:track", ride_id, event)

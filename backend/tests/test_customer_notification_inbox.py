@@ -13,9 +13,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from accounts.models import CustomerNotification
+from accounts.models import Customer, CustomerNotification
 from accounts.views import (
     CustomerNotificationsView,
     CustomerNotificationsMarkReadView,
@@ -116,6 +116,8 @@ class CustomerNotificationsListTests(SimpleTestCase):
     def _get(self, customer_id=5, query=""):
         req = self.factory.get(f"/api/customer/notifications/{query}")
         req.session = {"customer_id": customer_id} if customer_id else {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req)
 
     def test_unauthenticated_401(self):
@@ -165,6 +167,8 @@ class CustomerNotificationsMarkReadTests(SimpleTestCase):
     def _post(self, body=None, customer_id=5):
         req = self.factory.post("/api/customer/notifications/mark-read/", body or {}, format="json")
         req.session = {"customer_id": customer_id} if customer_id else {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req)
 
     def test_unauthenticated_401(self):

@@ -2117,37 +2117,11 @@ class="min-w-0 flex-1 leading-snug"
   </Teleport>
 
   <!-- Table QR code modal -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0 scale-95"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0 scale-95"
-    >
-      <div
-        v-if="qrDataUrl"
-        class="fixed inset-0 z-[5000] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-        @click.self="qrDataUrl = ''"
-        @keydown.esc="qrDataUrl = ''"
-      >
-        <div
-          class="flex flex-col items-center gap-4 rounded-2xl bg-slate-50 p-6 shadow-2xl"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="t('waiterPage.showQR')"
-        >
-          <p class="text-sm font-semibold text-slate-700">{{ qrTableLabel }}</p>
-          <img :src="qrDataUrl" :alt="t('waiterPage.qrCodeAlt', { label: qrTableLabel })" class="h-56 w-56 rounded-lg" />
-          <p class="text-[11px] text-slate-400">{{ t('waiterPage.qrScanHint') }}</p>
-          <button
-            type="button"
-            class="rounded-lg bg-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300 focus-visible:outline-none"
-            @click="qrDataUrl = ''"
-          >{{ t('common.close') }}</button>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <WaiterTableQRModal
+    :qr-data-url="qrDataUrl"
+    :qr-table-label="qrTableLabel"
+    @close="qrDataUrl = ''"
+  />
 </template>
 
 <script setup>
@@ -2161,6 +2135,7 @@ import { useTenantStore } from "../stores/tenant";
 import { useSessionStore } from "../stores/session";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
+import WaiterTableQRModal from "../components/WaiterTableQRModal.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
