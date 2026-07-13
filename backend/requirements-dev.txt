@@ -4,6 +4,6 @@
 # Kept out of requirements.txt so these never reach production or the prod CVE scan.
 # Pinned to the versions used locally.
 pytest==8.3.5
-pytest-django==4.9.0
+pytest-django==4.12.0
 pytz==2024.2
 pypdf==5.4.0
