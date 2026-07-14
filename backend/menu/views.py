@@ -3067,54 +3067,23 @@ class PlaceOrderView(APIView):
         # Staff-created orders (a waiter taking a phone/counter order via the new-order
         # screen) are EXEMPT: the waiter collects cash/card in person and settles via
         # the Settle action, so they must not be blocked by the customer-wallet rule.
-        from accounts.models import User as _UPrepay
-        _ru_prepay = getattr(request, "user", None)
-        _is_staff_order = bool(
-            _ru_prepay is not None
-            and getattr(_ru_prepay, "is_authenticated", False)
-            and getattr(_ru_prepay, "role", None) in (_UPrepay.Roles.TENANT_OWNER, _UPrepay.Roles.TENANT_STAFF)
+        # RISK STRUCT-1: prepay / cash-on-handover / wallet money-gate extracted verbatim into
+        # menu.order_service (OrderService seam, slice 3). Returns the 4 downstream locals plus an
+        # optional (detail, status) error the view surfaces as-is (403 auth_required / 402
+        # wallet_insufficient). _cod_eligible stays patched at menu.views (function-local import there).
+        from menu.order_service import resolve_prepay_and_wallet
+        _requires_prepay, _cod_order, _use_wallet, _wallet_deduction, _pw_error = resolve_prepay_and_wallet(
+            user=request.user,
+            linked_customer=_linked_customer,
+            profile=profile,
+            fulfillment_type=fulfillment_type,
+            total=total,
+            is_scheduled=_is_scheduled,
+            payment_method=request.data.get("payment_method"),
+            use_wallet_flag=request.data.get("use_wallet"),
         )
-        _requires_prepay = (
-            not _is_staff_order
-            and fulfillment_type in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY)
-        )
-        # Trusted-customer cash-on-handover: a repeat customer (COD enabled + enough
-        # completed/paid orders) may choose to pay cash to the staff/driver instead of
-        # prepaying from their wallet. Such orders are created UNPAID and settled at
-        # handover via the Settle action.
-        _cod_order = False
-        if _requires_prepay and total > Decimal("0"):
-            if _linked_customer is None:
-                return Response(
-                    {"detail": "Sign in and top up your wallet to place a pickup or delivery order.",
-                     "code": "auth_required"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            _payment_method = str(request.data.get("payment_method") or "").strip().lower()
-            # Advance/scheduled orders are prepaid at placement (no cash-on-handover) so
-            # the slot is genuinely committed and no-shows can't tie up stock unpaid.
-            if _payment_method == "cash" and not _is_scheduled and _cod_eligible(profile, _linked_customer.id):
-                _cod_order = True
-            else:
-                _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
-                if _wallet_avail < total:
-                    return Response(
-                        {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
-                         "code": "wallet_insufficient",
-                         "balance": str(_wallet_avail), "amount_due": str(total)},
-                        status=status.HTTP_402_PAYMENT_REQUIRED,
-                    )
-
-        # Wallet payment — pickup/delivery prepay by wallet (enforced above) UNLESS the
-        # customer opted into trusted cash-on-handover; dine-in customers may opt in.
-        _use_wallet = ((_requires_prepay and not _cod_order) or bool(request.data.get("use_wallet"))) and _linked_customer is not None
-        _wallet_deduction = Decimal("0")
-        if _use_wallet:
-            _available = Decimal(str(_linked_customer.wallet_balance or "0"))
-            _wallet_deduction = min(_available, total)
-            if _wallet_deduction <= Decimal("0"):
-                _use_wallet = False
-                _wallet_deduction = Decimal("0")
+        if _pw_error is not None:
+            return Response(_pw_error[0], status=_pw_error[1])
 
         class _PrepayUnpaid(Exception):
             """Raised inside the atomic block when a pickup/delivery order can't be
