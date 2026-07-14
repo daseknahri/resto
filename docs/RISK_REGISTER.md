@@ -189,6 +189,12 @@ any multi-role view that hydrates the customer onto `request.user` **and** has a
 branch) would let a customer principal pass the staff gate. Such branches must additionally check
 the principal is a `User` (not a `Customer`) before the sweep flips their `authentication_classes`.
 
+**Update (2026-07-14):** `RideTipView` (`accounts/ride_views.py`) — the last single-role
+customer view living outside the two hot files (`menu/views.py`, `accounts/views.py`) — is now
+migrated (dead `_get_rider` helper removed). The remaining sweep is entirely inside those two
+hot files (partially done across two prior rounds) plus the permanently-skipped landmine views
+(6 driver views in `ride_views.py`, `DeliveryRatingView`, staff/owner multi-role branches).
+
 **Remaining:** the ~55-view mechanical sweep (customer/driver endpoints still reading
 `session["customer_id"]` by hand), per-branch hardening of multi-role views (the landmine above),
 then optional customer-CSRF hardening as a deliberate, separate step.
