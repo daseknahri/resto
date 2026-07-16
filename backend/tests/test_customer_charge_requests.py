@@ -78,13 +78,20 @@ class ListChargeRequestsTests(SimpleTestCase):
 
 
 class ApproveChargeRequestTests(SimpleTestCase):
+    """RISK IDENTITY-1: CustomerWalletChargeApproveView now authenticates via
+    CustomerSessionAuthentication + IsCustomer. The old handler 401'd unconditionally
+    before any other check, so IsCustomer is an exact swap (unlike the flag-gated
+    transfer/top-up views, which must keep AllowAny)."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerWalletChargeApproveView.as_view()
 
     def _post(self, request_id=1, customer_id=5):
         req = self.factory.post(f"/api/customer/wallet/charge-requests/{request_id}/approve/")
-        req.session = {"customer_id": customer_id} if customer_id else {}
+        req.session = {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req, request_id=request_id)
 
     def test_unauthenticated_401(self):

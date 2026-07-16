@@ -266,15 +266,47 @@ Shipped with it:
   — the ownership gate already proves `request.user` is the owner — and its docstring no longer
   claims "No authentication required" (false since OPS-5e added the gate).
 
-**Remaining:** the optional-auth money views (`PlaceOrderView`/`MarketplacePlaceOrderView` — now
-have a proven pattern to follow: `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`),
-the 3 anon-degrading list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`,
-`CustomerReservationsView` — return `[]` for anonymous today; flipping to `IsCustomer` is a real
-behavior change, needs a frontend check), the remaining money-mutating single-role customer views
-(`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerTopUpIntentView`, plus
-`CustomerOrderCancelView` / `CustomerOrderPayWalletView` in `menu/views.py` — both re-implement the
-ownership predicate and should move onto `IsOrderOwner`), per-branch hardening of multi-role views
-(the landmine above), then optional customer-CSRF hardening as a deliberate, separate step.
+**Update (2026-07-16, money slice):** the money-mutating customer views are migrated —
+`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerTopUpIntentView`
+(`accounts/views.py`), `CustomerOrderCancelView`, `CustomerOrderPayWalletView` (`menu/views.py`).
+The slice split three ways, and **the ordering of each view's own checks decided the treatment**:
+- `IsCustomer` only where the handler already 401'd *unconditionally, first*
+  (`CustomerWalletChargeApproveView`).
+- **`AllowAny` + `customer_or_none`** where a **feature-flag gate must answer before auth**:
+  `CustomerWalletTransferView` (`WALLET_P2P_ENABLED` → 403 "not enabled") and
+  `CustomerTopUpIntentView` (`PSP_TOPUP_ENABLED` → `{"enabled": False}`, its docstring's "safe to
+  call always" contract). A permission class runs in `initial()`, *ahead of* `post()`, so
+  `IsCustomer` would turn those into 401s. `test_customer_wallet_transfer.py::
+  test_disabled_returns_403_before_anything_else` ("Even with a valid-looking session, the flag
+  gate wins") pins that ordering deliberately — the test caught the intent, not review.
+- **`AllowAny` + `IsOrderOwner`** for the two order views, whose non-owner 403 **is the sign-in
+  prompt** ("Sign in to cancel this order") an anonymous caller is meant to receive, and which
+  check order-existence (404) first. Both had re-implemented the ownership comparison inline.
+
+**Known cost, accepted:** mounting `CustomerSessionAuthentication` makes DRF hydrate the principal
+in `initial()`, so views that previously used only the raw session *id* (transfer, charge-approve)
+now do one extra `Customer` lookup — including on the flag-disabled path, which used to be DB-free
+(that test file's "runs before any DB access" premise is now only true because the tests
+force-authenticate). This is the keystone's uniform cost, already paid by every converted view, and
+it buys the declarative gate. Response ordering is unchanged.
+
+**Bug found and fixed separately** (see the `fix(api): throttled customer requests 500 instead of
+429` commit): `config/exceptions.exception_handler` — the **global** DRF handler — logged
+`user.username` on `Throttled`. `Customer.is_authenticated` is True but `Customer` has no
+`username`, so the handler raised `AttributeError` and a throttled customer/driver request returned
+**500 instead of 429**. Live on `main` since the keystone via `CustomerWalletRedeemVoucherView`
+(+ `VoucherRedeemThrottle`). This is the same family as the multi-role landmine above — **code that
+assumes an authenticated principal is a staff `User`** — and it will keep biting; audit any
+`request.user.<User-only-attr>` on a path a customer can now reach.
+
+**Remaining:** `PlaceOrderView`/`MarketplacePlaceOrderView` (optional-auth money, now with a proven
+pattern: `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`), the 3 anon-degrading
+list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`, `CustomerReservationsView` —
+return `[]` for anonymous today; flipping to `IsCustomer` is a real behavior change, needs a
+frontend check), `MarketplaceOrderStatusView` + `MarketplaceMenuView` (optional-auth reads), the
+`_resolve_customer_from_request` / `_tracking_request_owns_order` module-level helpers, per-branch
+hardening of multi-role views (the landmine above), then optional customer-CSRF hardening as a
+deliberate, separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

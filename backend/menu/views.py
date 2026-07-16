@@ -3911,8 +3911,12 @@ class CustomerOrderStatusView(APIView):
 class CustomerOrderCancelView(APIView):
     """POST /api/order-status/<order_number>/cancel/ — the signed-in customer cancels
     their OWN early pickup/delivery order. Refunds any wallet payment and returns reserved
-    stock. Session ownership is required; dine-in and already-started orders are refused.
+    stock. Ownership is required; dine-in and already-started orders are refused.
     """
+    # IDENTITY-1 sweep: stays AllowAny deliberately — order-existence (404) is checked
+    # before ownership, and the non-owner 403 below is the SIGN-IN PROMPT the anonymous
+    # caller is meant to receive. IsCustomer would 401 ahead of both.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def post(self, request, order_number, *args, **kwargs):
@@ -3921,12 +3925,9 @@ class CustomerOrderCancelView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        session_customer_id = request.session.get("customer_id")
-        try:
-            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            owns = False
-        if not owns:
+        # IsOrderOwner is the shared home for this comparison; used as a plain predicate so
+        # the view keeps its own coded 403 rather than DRF's generic denial.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to cancel this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
         if order.status == Order.Status.CANCELLED:
@@ -11898,7 +11899,11 @@ class CustomerOrderPayWalletView(APIView):
     on the wallet debit, so a double-tap never double-charges.
     """
 
-    permission_classes = [AllowAny]  # gated below: session customer must own the order
+    # IDENTITY-1 sweep: stays AllowAny deliberately — order-existence (404) is checked
+    # before ownership, and the non-owner 403 below is the SIGN-IN PROMPT the anonymous
+    # caller is meant to receive. IsCustomer would 401 ahead of both.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [AllowAny]  # gated below: the principal must own the order
 
     def post(self, request, order_number, *args, **kwargs):
         order_number = (order_number or "").strip().upper()
@@ -11906,12 +11911,9 @@ class CustomerOrderPayWalletView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        session_customer_id = request.session.get("customer_id")
-        try:
-            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            owns = False
-        if not owns:
+        # IsOrderOwner is the shared home for this comparison; used as a plain predicate so
+        # the view keeps its own coded 403 rather than DRF's generic denial.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to pay this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
         if order.payment_status == Order.PaymentStatus.PAID:

@@ -34,7 +34,7 @@ from django.core.management import call_command
 from .authentication import CustomerSessionAuthentication
 from .messaging import send_password_reset_email
 from .models import Customer, CustomerOrderRef, SavedAddress, WalletTransaction
-from .permissions import IsCustomer, IsOrderOwner
+from .permissions import IsCustomer, IsOrderOwner, customer_or_none
 from .throttles import (
     ActivationThrottle,
     AdminPIIThrottle,
@@ -2017,13 +2017,14 @@ class CustomerWalletChargeApproveView(APIView):
     debiting the wallet. Idempotent: the request carries the debit key, and a re-approve
     of an already-charged request replays the result instead of charging again."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer money write. The old handler 401'd
+    # unconditionally before any other check, so IsCustomer is an exact swap.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from .models import WalletChargeRequest
         from .wallet_service import debit_wallet, InsufficientFunds, WalletError
@@ -2239,8 +2240,13 @@ class CustomerWalletTransferView(APIView):
     Rate-limited per customer (WalletTransferThrottle) so a burst can't drain a wallet.
     """
 
+    # IDENTITY-1 sweep: stays AllowAny deliberately — the WALLET_P2P_ENABLED gate below
+    # must answer BEFORE auth ("this feature doesn't exist" outranks "who are you"), an
+    # ordering pinned by test_customer_wallet_transfer.test_disabled_returns_403_before_
+    # anything_else. IsCustomer runs in initial(), ahead of post(), and would turn the
+    # feature-disabled 403 into a 401 for an anonymous caller.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [WalletTransferThrottle]
 
     def post(self, request, *args, **kwargs):
@@ -2251,9 +2257,10 @@ class CustomerWalletTransferView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        _customer = customer_or_none(request)
+        if _customer is None:
             return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        customer_id = _customer.id
 
         from accounts.wallet_service import (
             transfer_between_customers,
@@ -8366,6 +8373,11 @@ class CustomerTopUpIntentView(APIView):
     ``{"enabled": True, "url": "<stripe_url>"}``. The frontend redirects to that URL.
     """
 
+    # IDENTITY-1 sweep: stays AllowAny deliberately — the docstring's "safe to call
+    # always" contract means the PSP_TOPUP_ENABLED probe below must answer {"enabled":
+    # False} BEFORE auth. IsCustomer runs in initial(), ahead of post(), and would 401 an
+    # anonymous/expired caller instead. (Same ordering rule as CustomerWalletTransferView.)
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = []
 
@@ -8373,13 +8385,12 @@ class CustomerTopUpIntentView(APIView):
         if not settings.PSP_TOPUP_ENABLED:
             return Response({"enabled": False})
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        # A stale/forged session now 401s here rather than the old 404 "Customer not
+        # found." — the sanctioned 404-to-401 carve-out used across the sweep.
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = customer.id
 
         from decimal import Decimal as _D, InvalidOperation as _IO
         raw = str(request.data.get("amount") or "").strip()
