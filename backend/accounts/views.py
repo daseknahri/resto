@@ -6034,17 +6034,14 @@ class DriverRegisterView(APIView):
     before the driver can go online. Body: { "vehicle"?: str }
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write (the applicant is NOT a driver yet,
+    # so this gates on IsCustomer, not driver status).
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         fields = []
         vehicle = str(request.data.get("vehicle") or "").strip()[:120]
@@ -6078,17 +6075,15 @@ class DriverStatusView(APIView):
        PATCH /api/driver/status/ — toggle driver online/offline. Body: { "online": bool }
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer view. GET is deliberately IsCustomer-only
+    # (it reports driver_status="none" for a customer who never applied); PATCH keeps its
+    # own is_driver gate below.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         # A driver reads as "rejected" when an admin has rejected them (driver_rejected_at
         # set) and they haven't since been approved. AdminDriverApprovalView clears
         # driver_rejected_at on a later approve, so this is naturally False for drivers who
@@ -6120,12 +6115,10 @@ class DriverStatusView(APIView):
         })
 
     def patch(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal; the
+        # driver gate stays here so the 404 contract is preserved.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         online = bool(request.data.get("online", False))
@@ -6209,19 +6202,17 @@ class DriverPositionUpdateView(APIView):
     Also accepts optional job_id to update the specific job context.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverPositionThrottle]
 
     def post(self, request, *args, **kwargs):
         from django.utils import timezone as _tz
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.data.get("lat") is None or request.data.get("lng") is None:
@@ -6256,16 +6247,14 @@ class DriverJobListView(APIView):
     plus any currently active job assigned to this driver.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from .models import DeliveryJob
@@ -6365,8 +6354,9 @@ class DriverJobListView(APIView):
 class DriverJobAcceptView(APIView):
     """POST /api/driver/jobs/<job_id>/accept/ — driver accepts a pending delivery job."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own approved+online 403 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
@@ -6374,14 +6364,10 @@ class DriverJobAcceptView(APIView):
         from django.db import transaction as _tx
         from .models import DeliveryJob
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(
-                pk=customer_id, is_driver=True, driver_approved=True, is_driver_online=True
-            )
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal; the
+        # approved-and-online gate stays here so the 403 contract is preserved.
+        customer = request.user
+        if not (customer.is_driver and customer.driver_approved and customer.is_driver_online):
             return Response({"detail": "Driver must be approved and online to accept jobs."}, status=status.HTTP_403_FORBIDDEN)
 
         # Check driver doesn't already have an active job
@@ -6446,17 +6432,15 @@ class DriverJobDeclineView(APIView):
     for anyone else it's a harmless no-op success.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
         from accounts.dispatch import decline_offer
         decline_offer(job_id, customer.id)
@@ -6647,8 +6631,9 @@ class DriverJobStatusUpdateView(APIView):
         "picked_up": ["delivered", "failed"],
     }
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverStatusUpdateThrottle]
     # Accept multipart so drivers can attach a proof photo (leave-at-door fallback).
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -6659,12 +6644,9 @@ class DriverJobStatusUpdateView(APIView):
         from django.db import transaction as _dbtx
         from .models import DeliveryJob
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         new_status = request.data.get("status", "").strip()
@@ -7485,17 +7467,16 @@ class AdminDriverEarningsView(APIView):
 class DriverEarningsView(APIView):
     """GET /api/driver/earnings/ — the signed-in driver's own earnings summary."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            cust = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        cust = request.user
+        if not cust.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = cust.id
 
         from .driver_service import driver_earnings_summary, CASHOUT_MIN
         from .models import DeliveryJob
@@ -7541,15 +7522,14 @@ class DriverCashoutView(APIView):
     """GET  /api/driver/cashout/  → the driver's current PENDING cash-out (or null).
     POST /api/driver/cashout/  → create a cash-out request {amount} (wallet ≥ min)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def _driver(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return None, Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        cust = Customer.objects.filter(pk=customer_id, is_driver=True).first()
-        if cust is None:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        cust = request.user
+        if not cust.is_driver:
             return None, Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
         return cust, None
 
@@ -7593,13 +7573,14 @@ class DriverCashoutView(APIView):
 class DriverCashoutCancelView(APIView):
     """POST /api/driver/cashout/<id>/cancel/ — driver cancels their own pending request."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view. Deliberately no is_driver gate (matching
+    # the previous behavior) — ownership is already enforced by the driver_id filter below.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from django.utils import timezone as _tz
         from .models import DriverCashoutRequest
         req = DriverCashoutRequest.objects.filter(pk=request_id, driver_id=customer_id).first()
@@ -7618,17 +7599,15 @@ class DriverCashoutHistoryView(APIView):
     DriverCashoutView.get for that), newest first. Mirrors DriverDeliveriesView's
     page/has_more pagination."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        if not request.user.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = request.user.id
 
         from .models import DriverCashoutRequest
         PAGE_SIZE = 20
@@ -7662,17 +7641,15 @@ class DriverDeliveriesView(APIView):
     """GET /api/driver/deliveries/ — the signed-in driver's recent finished jobs
     (delivered or failed), newest first, for an in-app history view."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        if not request.user.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = request.user.id
 
         from .models import DeliveryJob
         PAGE_SIZE = 20

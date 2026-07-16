@@ -209,12 +209,47 @@ degrade to an empty list for anonymous callers rather than 401 — flipping to `
 be a real behavior change, deferred pending a frontend check; the rest are the already-known
 landmine/money views (`DeliveryRatingView`, `CustomerOrderCancelView`, wallet transfer/approve).
 
-**Remaining:** the driver-role slice (needs `IsDriver` first), the optional-auth money views
-(`PlaceOrderView`/`MarketplacePlaceOrderView`, need a duck-typed principal design), the 3
-anon-degrading list views (behavior-change flag), the remaining money-mutating single-role views
-(`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerOrderCancelView`,
-`CustomerOrderPayWalletView`), per-branch hardening of multi-role views (the landmine above), then
-optional customer-CSRF hardening as a deliberate, separate step.
+**Update (2026-07-16, driver slice):** all **12 driver views** in `accounts/views.py`
+(`DriverRegisterView`, `DriverStatusView`, `DriverPositionUpdateView`, `DriverJobListView`,
+`DriverJobAcceptView`, `DriverJobDeclineView`, `DriverJobStatusUpdateView`, `DriverEarningsView`,
+`DriverCashoutView`, `DriverCashoutCancelView`, `DriverCashoutHistoryView`, `DriverDeliveriesView`)
+now authenticate via `CustomerSessionAuthentication` + `IsCustomer`.
+
+**Design decision — no `IsDriver` permission class (deliberate).** The earlier survey assumed the
+driver slice was blocked on building `IsDriver`. On reading the code that is the *wrong* shape: the
+driver gates are **not uniform** and each carries its own response contract — `is_driver` → **404**
+`"Driver account not found."`, while `DriverJobAcceptView` needs `is_driver + driver_approved +
+is_driver_online` → **403** `"Driver must be approved and online to accept jobs."`, and
+`DriverStatusView.get` is deliberately ungated (it reports `driver_status:"none"` to a customer who
+never applied). A permission class returns DRF's generic 403 and would silently break all three
+contracts for the driver app. So `IsCustomer` gates the *principal* and each view keeps its own
+gate reading `request.user` — which still achieves IDENTITY-1's goal (no raw session read; the
+driver is `request.user`) and **removes one DB query per driver request**. A real `IsDriver` policy
+class belongs to AUTHZ-1 and needs a response-contract decision + a frontend audit first.
+
+Two things deliberately left as real DB queries (they are NOT identity reads and must not be
+"optimized" onto the principal): (1) `DriverJobStatusUpdateView`'s approval **re-check** at the
+DELIVERED transition (`Customer.objects.filter(pk=..., driver_approved=True).exists()`) — the
+principal was hydrated at auth time and approval may have been revoked since, and this gate guards
+the earnings credit (RISK OPS-5f); (2) `DriverJobAcceptView`'s `select_for_update` driver-row mutex.
+
+**Follow-up noted:** `accounts/throttles.py::_CustomerThrottle` still keys on
+`request.session["customer_id"]` rather than `request.user`. Behavior is unchanged today (login
+still populates the session), but it is now a latent inconsistency: if a later slice drops the
+session dependency (e.g. customer-CSRF/token hardening), every customer/driver throttle would
+silently fall back to per-IP bucketing. Migrate it when that slice lands.
+
+**Remaining:** the optional-auth money views (`PlaceOrderView`/`MarketplacePlaceOrderView` — must
+keep serving anonymous guest orders, so they need `CustomerSessionAuthentication` + `AllowAny` and a
+duck-typed principal, not a plain flip), the 3 anon-degrading list views (`CustomerOrdersView`,
+`CustomerMarketplaceOrdersView`, `CustomerReservationsView` — return `[]` for anonymous today;
+flipping to `IsCustomer` is a real behavior change, needs a frontend check), the remaining
+money-mutating single-role customer views (`CustomerWalletChargeApproveView`,
+`CustomerWalletTransferView`, `CustomerTopUpIntentView`, plus `CustomerOrderCancelView` /
+`CustomerOrderPayWalletView` in `menu/views.py`), the `menu/views.py` read views
+(`OrderEligibilityView`, `CustomerOrderStatusView`, `CustomerOrderRateView`), per-branch hardening
+of multi-role views (the landmine above), then optional customer-CSRF hardening as a deliberate,
+separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`
