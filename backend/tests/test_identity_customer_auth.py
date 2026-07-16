@@ -16,7 +16,7 @@ from django.test import SimpleTestCase
 
 from accounts.authentication import CustomerSessionAuthentication
 from accounts.models import Customer, User
-from accounts.permissions import IsCustomer, IsOrderOwner
+from accounts.permissions import IsCustomer, IsOrderOwner, customer_or_none
 
 
 def _req(session=None, user=None):
@@ -55,6 +55,32 @@ class CustomerSessionAuthenticationTests(SimpleTestCase):
         # Non-None header → DRF renders permission denials as 401 (matching the old
         # hand-rolled "Not authenticated" responses) rather than 403.
         self.assertIsNotNone(CustomerSessionAuthentication().authenticate_header(_req()))
+
+    def test_request_without_a_session_is_anonymous_not_an_error(self):
+        """Session-safe: this class is also mounted on AllowAny/optional-auth views
+        (e.g. CustomerOrderStatusView) that previously read the session behind their own
+        try/except and degraded to anonymous. An unguarded request.session would turn
+        that tolerated case into a 500 raised from inside the auth stack."""
+        no_session = SimpleNamespace(user=None)  # no `session` attribute at all
+        self.assertIsNone(CustomerSessionAuthentication().authenticate(no_session))
+
+
+class CustomerOrNoneTests(SimpleTestCase):
+    """The optional-auth primitive: personalise for a customer, tolerate anonymous."""
+
+    def test_returns_the_customer_principal(self):
+        c = Customer(id=7)
+        self.assertIs(customer_or_none(_req(user=c)), c)
+
+    def test_anonymous_returns_none(self):
+        self.assertIsNone(customer_or_none(_req(user=AnonymousUser())))
+
+    def test_staff_user_returns_none(self):
+        # A staff principal must never be mistaken for the customer on an optional-auth view.
+        self.assertIsNone(customer_or_none(_req(user=User(id=7, is_staff=True))))
+
+    def test_missing_user_attribute_returns_none(self):
+        self.assertIsNone(customer_or_none(SimpleNamespace()))
 
 
 class IsCustomerTests(SimpleTestCase):

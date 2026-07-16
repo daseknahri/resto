@@ -47,6 +47,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 import qrcode
 
+# RISK IDENTITY-1: safe at module level — accounts.authentication / accounts.permissions
+# import nothing from this app (rest_framework only), so they don't feed the
+# menu/views.py <-> accounts/views.py circular-import web that forces local imports here.
+from accounts.authentication import CustomerSessionAuthentication
+from accounts.permissions import IsOrderOwner, customer_or_none
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
@@ -2530,11 +2535,15 @@ class OrderEligibilityView(APIView):
     pay-now (pickup/delivery) order at this restaurant. Lets the cart offer trusted
     customers a 'pay cash on handover' choice alongside wallet prepayment.
     """
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — an anonymous shopper still gets a
+    # 200 (paid_orders=0, cod_eligible=False); the customer session only personalises it.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
         profile = Profile.objects.filter(tenant=getattr(request, "tenant", None)).first()
-        cust_id = request.session.get("customer_id")
+        _customer = customer_or_none(request)
+        cust_id = _customer.id if _customer else None
         paid = 0
         if cust_id:
             try:
@@ -3663,6 +3672,10 @@ class PlaceOrderView(APIView):
 
 class CustomerOrderStatusView(APIView):
     """GET /api/order-status/<order_number>/ — customer polls order status."""
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny by design — see the ownership gate
+    # below: a non-owner (incl. anonymous) still gets the minimal status payload, and an
+    # order with no linked customer is readable by the table-QR viewer.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -3685,14 +3698,11 @@ class CustomerOrderStatusView(APIView):
         # Delivery/pickup are wallet-only pay-now so they always carry a customer_id and
         # are always protected here. Any other caller gets a minimal status-only payload
         # (whitelisted at the return below).
-        try:
-            session_customer_id = request.session.get("customer_id")
-        except Exception:
-            session_customer_id = None
-        try:
-            _owns = bool(order.customer_id) and bool(session_customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            _owns = False
+        # IsOrderOwner is the single home for this customer_id comparison (it fails closed
+        # on a missing/unparseable id on either side, and on a non-Customer principal). Used
+        # as a plain predicate, not via permission_classes, so this view keeps its
+        # degrade-to-minimal-payload behavior instead of raising DRF's generic 403.
+        _owns = IsOrderOwner().has_object_permission(request, self, order)
         _show_details = _owns or not order.customer_id
 
         items = [
@@ -3729,34 +3739,29 @@ class CustomerOrderStatusView(APIView):
         # number would expose private feedback. We require the session customer
         # to match the order's linked customer.
         restaurant_feedback = None
-        if order.customer_id and session_customer_id:
+        if _owns:
+            _tenant = getattr(request, "tenant", None)
+            _tenant_id = _tenant.id if _tenant else 0
             try:
-                same_customer = int(session_customer_id) == int(order.customer_id)
-            except (TypeError, ValueError):
-                same_customer = False
-            if same_customer:
-                _tenant = getattr(request, "tenant", None)
-                _tenant_id = _tenant.id if _tenant else 0
-                try:
-                    from accounts.models import CustomerRating as _CR
-                    _cr = (
-                        _CR.objects
-                        .filter(
-                            customer_id=order.customer_id,
-                            tenant_id=_tenant_id,
-                            order_number=order.order_number,
-                        )
-                        .order_by("-created_at")
-                        .first()
+                from accounts.models import CustomerRating as _CR
+                _cr = (
+                    _CR.objects
+                    .filter(
+                        customer_id=order.customer_id,
+                        tenant_id=_tenant_id,
+                        order_number=order.order_number,
                     )
-                    if _cr is not None:
-                        restaurant_feedback = {
-                            "score": _cr.score,
-                            "note": _cr.note,
-                            "created_at": _cr.created_at.isoformat(),
-                        }
-                except Exception:
-                    restaurant_feedback = None
+                    .order_by("-created_at")
+                    .first()
+                )
+                if _cr is not None:
+                    restaurant_feedback = {
+                        "score": _cr.score,
+                        "note": _cr.note,
+                        "created_at": _cr.created_at.isoformat(),
+                    }
+            except Exception:
+                restaurant_feedback = None
 
         # Pull the receipt message + VAT settings from the tenant profile (safe fallbacks).
         # Also expose the tenant's public contact phone so the customer can call the
@@ -3788,18 +3793,17 @@ class CustomerOrderStatusView(APIView):
         except Exception:
             order_outstanding = Decimal("0")
         if (
-            session_customer_id and order.customer_id
+            _owns
             and order.payment_status != Order.PaymentStatus.PAID
             and order.status != Order.Status.CANCELLED
             and order_outstanding > Decimal("0")
         ):
             try:
-                if int(session_customer_id) == int(order.customer_id):
-                    from accounts.models import Customer as _Cust
-                    _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
-                    if _c is not None:
-                        wallet_balance = str(_c.wallet_balance)
-                        can_pay_with_wallet = True
+                from accounts.models import Customer as _Cust
+                _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
+                if _c is not None:
+                    wallet_balance = str(_c.wallet_balance)
+                    can_pay_with_wallet = True
             except Exception:
                 pass  # balance lookup is best-effort; never breaks order status
 
@@ -3810,8 +3814,7 @@ class CustomerOrderStatusView(APIView):
         delivery_block = None
         if (
             order.fulfillment_type == Order.FulfillmentType.DELIVERY
-            and session_customer_id and order.customer_id
-            and str(session_customer_id) == str(order.customer_id)
+            and _owns
         ):
             try:
                 _dtenant = getattr(request, "tenant", None)
@@ -3850,11 +3853,7 @@ class CustomerOrderStatusView(APIView):
             "requires_prepayment": order.requires_prepayment,
             # Self-cancel affordance — only for the signed-in owner of an early
             # pickup/delivery order (server-driven so the UI button matches the rule).
-            "can_cancel": bool(
-                _customer_can_cancel(order)
-                and session_customer_id and order.customer_id
-                and str(session_customer_id) == str(order.customer_id)
-            ),
+            "can_cancel": bool(_customer_can_cancel(order) and _owns),
             # Wallet self-pay affordance (only for the signed-in order owner).
             "can_pay_with_wallet": can_pay_with_wallet,
             "wallet_balance": wallet_balance,
@@ -3871,8 +3870,7 @@ class CustomerOrderStatusView(APIView):
                 if (order.delivery_code
                     and order.fulfillment_type == Order.FulfillmentType.DELIVERY
                     and order.status not in (Order.Status.COMPLETED, Order.Status.CANCELLED)
-                    and session_customer_id and order.customer_id
-                    and str(session_customer_id) == str(order.customer_id))
+                    and _owns)
                 else None
             ),
             "items_count": sum(i["qty"] for i in items),
@@ -9236,8 +9234,9 @@ class CustomerOrderRateView(APIView):
     POST /api/orders/<order_number>/rate/
 
     Customers submit a 1–5 star rating (+ optional comment) after their order
-    reaches 'completed' status.  No authentication required — any caller who
-    knows the order number can rate it once.
+    reaches 'completed' status. Only the order's own signed-in customer may rate it
+    (OPS-5e: without that gate, anyone who guessed an order number could rate it —
+    review fraud).
 
     Request body:
         { "score": 4, "comment": "Great food!" }
@@ -9245,10 +9244,16 @@ class CustomerOrderRateView(APIView):
     Responses:
         201 Created — rating stored; body: {score, comment, created_at}
         400 Bad Request — invalid score / already rated / order not complete
-        403 Forbidden — the session customer doesn't own this order
+        403 Forbidden — the signed-in customer doesn't own this order (also the
+                        anonymous case, preserving the coded response below)
         404 Not Found — unknown order_number
     """
 
+    # IDENTITY-1 sweep: deliberately AllowAny rather than IsCustomer — the view returns
+    # its own coded 403 ("not_order_owner") for a non-owner INCLUDING an anonymous caller,
+    # and checks order-existence (404) first. IsCustomer would 401 anonymous callers ahead
+    # of both, changing the contract.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [CustomerOrderRateThrottle]  # OPS-5e: stop bulk order-number probing
 
@@ -9264,10 +9269,10 @@ class CustomerOrderRateView(APIView):
             )
 
         # OPS-5e: ownership gate. Without this, any caller who guesses an order number
-        # could rate it (review fraud). Require the session customer to own the order —
-        # the customer record exists once they've ordered, so order.customer_id is set.
-        _session_cid = request.session.get("customer_id")
-        if not _session_cid or order.customer_id is None or int(_session_cid) != int(order.customer_id):
+        # could rate it (review fraud). IsOrderOwner is the shared home for the comparison
+        # (fails closed on a non-Customer principal or a missing/unparseable id on either
+        # side); used as a plain predicate so this view keeps its own coded 403.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response(
                 {"detail": "You can only rate your own order.", "code": "not_order_owner"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -9302,15 +9307,10 @@ class CustomerOrderRateView(APIView):
 
         comment = str(request.data.get("comment", "") or "").strip()[:1000]
 
-        # Link to platform customer when one is in session
-        from accounts.models import Customer as _CustM
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = _CustM.objects.get(pk=_customer_id)
-            except _CustM.DoesNotExist:
-                pass
+        # Link to the platform customer. The ownership gate above already proved
+        # request.user IS this order's customer, so the principal is the link — no need to
+        # re-fetch it (and it can no longer be None here, unlike the old session read).
+        _linked_customer = request.user
 
         rating = Rating.objects.create(
             order=order,

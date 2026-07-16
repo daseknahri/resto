@@ -11,9 +11,23 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from menu.views import CustomerOrderStatusView
+
+
+def _customer(pk=42):
+    """A real (unsaved) Customer principal — IsOrderOwner duck-types on class name.
+
+    RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication and
+    resolves ownership through the shared IsOrderOwner predicate off request.user, so
+    tests force-authenticate a principal instead of hand-setting request.session.
+    It stays AllowAny: a non-owner (incl. anonymous) still gets the minimal payload.
+    """
+    c = Customer(id=pk)
+    c.save = MagicMock()
+    return c
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -233,7 +247,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
         cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr()
         req = self.factory.get("/api/order-status/ORD123/")
-        req.session = {"customer_id": 99}  # a different customer
+        force_authenticate(req, user=_customer(99))  # a different customer
         req.tenant = MagicMock(id=7)
         resp = self.view(req, order_number="ORD123")
         # A different customer is a non-owner → minimal payload, nothing to leak.
@@ -248,7 +262,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
         cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr(score=5, note="Great")
         req = self.factory.get("/api/order-status/ORD123/")
-        req.session = {"customer_id": 42}  # the order's owner
+        force_authenticate(req, user=_customer(42))  # the order's owner
         req.tenant = MagicMock(id=7)
         resp = self.view(req, order_number="ORD123")
         fb = resp.data["restaurant_feedback"]
@@ -280,7 +294,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         order.customer_id = 42
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
         req = self.factory.get("/api/order-status/ORD123/")
-        req.session = {"customer_id": 42}  # the owner
+        force_authenticate(req, user=_customer(42))  # the owner
         req.tenant = MagicMock(id=7)
         resp = self.view(req, order_number="ORD123")
         self.assertIn("customer_name", resp.data)

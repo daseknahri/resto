@@ -35,7 +35,13 @@ class CustomerSessionAuthentication(BaseAuthentication):
     """
 
     def authenticate(self, request):
-        cid = request.session.get("customer_id")
+        # Session-safe by design: this class is also mounted on AllowAny/optional-auth
+        # endpoints (e.g. CustomerOrderStatusView), which previously read the session
+        # behind their own `try/except` and degraded to "anonymous" rather than erroring.
+        # An unguarded `request.session` would turn that tolerated case into a 500 inside
+        # the auth stack, so absent/unusable session state fails closed to anonymous.
+        session = getattr(request, "session", None)
+        cid = session.get("customer_id") if session is not None else None
         if not cid:
             return None
         from .models import Customer

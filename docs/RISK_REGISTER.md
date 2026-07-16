@@ -239,17 +239,42 @@ still populates the session), but it is now a latent inconsistency: if a later s
 session dependency (e.g. customer-CSRF/token hardening), every customer/driver throttle would
 silently fall back to per-IP bucketing. Migrate it when that slice lands.
 
-**Remaining:** the optional-auth money views (`PlaceOrderView`/`MarketplacePlaceOrderView` — must
-keep serving anonymous guest orders, so they need `CustomerSessionAuthentication` + `AllowAny` and a
-duck-typed principal, not a plain flip), the 3 anon-degrading list views (`CustomerOrdersView`,
-`CustomerMarketplaceOrdersView`, `CustomerReservationsView` — return `[]` for anonymous today;
-flipping to `IsCustomer` is a real behavior change, needs a frontend check), the remaining
-money-mutating single-role customer views (`CustomerWalletChargeApproveView`,
-`CustomerWalletTransferView`, `CustomerTopUpIntentView`, plus `CustomerOrderCancelView` /
-`CustomerOrderPayWalletView` in `menu/views.py`), the `menu/views.py` read views
-(`OrderEligibilityView`, `CustomerOrderStatusView`, `CustomerOrderRateView`), per-branch hardening
-of multi-role views (the landmine above), then optional customer-CSRF hardening as a deliberate,
-separate step.
+**Update (2026-07-16, optional-auth slice — first `menu/views.py` conversions):**
+`OrderEligibilityView`, `CustomerOrderStatusView` and `CustomerOrderRateView` migrated. These are
+**optional-auth**, not single-role: each must keep serving anonymous callers (a guest cart, a
+table-QR diner, the coded `not_order_owner` 403), so they pair
+`authentication_classes = [CustomerSessionAuthentication]` with **`permission_classes = [AllowAny]`**
+and branch on the principal rather than gating on it. `IsCustomer` would 401 anonymous callers and
+break all three contracts. This establishes the pattern the remaining optional-auth money views
+(`PlaceOrderView`/`MarketplacePlaceOrderView`) need.
+
+Shipped with it:
+- **`accounts/permissions.customer_or_none(request)`** — the optional-auth primitive (returns the
+  `Customer` principal or `None`; never a staff `User`), so views stop re-reading the raw session.
+- **`CustomerSessionAuthentication` is now session-safe.** It did an unguarded
+  `request.session.get(...)`; `CustomerOrderStatusView` had previously read the session behind its
+  own `try/except` and degraded to anonymous, so mounting the auth class on it would have turned
+  that tolerated case into a **500 raised from inside the auth stack**. Absent/unusable session
+  state now fails closed to anonymous. (Latent for every already-converted view too.)
+- **Six duplicated ownership comparisons collapsed into one `IsOrderOwner` call.**
+  `CustomerOrderStatusView` re-implemented the `customer_id` check **five more times** below its
+  gate — in two subtly different forms (`int()==int()` and `str()==str()`) — each guarding a
+  separate leak (restaurant feedback, wallet balance, delivery/driver block, `can_cancel`,
+  `delivery_code`). All now read the single `_owns` predicate. This duplication is exactly the
+  IDOR class AUTHZ-1/IDENTITY-1 exist to kill; `ruff` caught it (the removed variable was still
+  referenced), not the tests. `CustomerOrderRateView` also stopped re-fetching the linked customer
+  — the ownership gate already proves `request.user` is the owner — and its docstring no longer
+  claims "No authentication required" (false since OPS-5e added the gate).
+
+**Remaining:** the optional-auth money views (`PlaceOrderView`/`MarketplacePlaceOrderView` — now
+have a proven pattern to follow: `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`),
+the 3 anon-degrading list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`,
+`CustomerReservationsView` — return `[]` for anonymous today; flipping to `IsCustomer` is a real
+behavior change, needs a frontend check), the remaining money-mutating single-role customer views
+(`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerTopUpIntentView`, plus
+`CustomerOrderCancelView` / `CustomerOrderPayWalletView` in `menu/views.py` — both re-implement the
+ownership predicate and should move onto `IsOrderOwner`), per-branch hardening of multi-role views
+(the landmine above), then optional customer-CSRF hardening as a deliberate, separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

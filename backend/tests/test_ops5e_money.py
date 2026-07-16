@@ -357,7 +357,12 @@ class OwnerWalletChargeKeyNamespaceTests(SimpleTestCase):
 # ═════════════════════════════════════════════════════════════════════════════
 
 class CustomerOrderRateOwnershipTests(SimpleTestCase):
-    """Only the session customer who owns an order may rate it."""
+    """Only the signed-in customer who owns an order may rate it.
+
+    RISK IDENTITY-1: the gate is now the shared IsOrderOwner predicate reading
+    request.user (force-authenticated below) instead of a hand-rolled session read.
+    The view stays AllowAny so the anonymous case still yields this coded 403.
+    """
 
     def setUp(self):
         self.factory = APIRequestFactory()
@@ -365,25 +370,28 @@ class CustomerOrderRateOwnershipTests(SimpleTestCase):
         self.view = CustomerOrderRateView.as_view()
 
     def _post(self, *, session_cid, order_customer_id):
+        from accounts.models import Customer
         from menu.views import Order
         order = SimpleNamespace(
             order_number="ORD-1", customer_id=order_customer_id,
             status=Order.Status.COMPLETED,
         )
         req = self.factory.post("/api/orders/ORD-1/rate/", {"score": 5}, format="json")
-        req.session = {"customer_id": session_cid} if session_cid is not None else {}
+        req.session = {}
+        if session_cid is not None:
+            force_authenticate(req, user=Customer(id=session_cid))
         req.tenant = None
         with patch.object(Order.objects, "get", return_value=order):
             return self.view(req, order_number="ORD-1")
 
     def test_non_owner_session_rejected(self):
-        """A session customer that doesn't own the order is 403."""
+        """A signed-in customer that doesn't own the order is 403."""
         resp = self._post(session_cid=2, order_customer_id=999)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "not_order_owner")
 
     def test_no_session_customer_rejected(self):
-        """An anonymous caller (no session customer) cannot rate."""
+        """An anonymous caller (no customer principal) cannot rate."""
         resp = self._post(session_cid=None, order_customer_id=999)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
