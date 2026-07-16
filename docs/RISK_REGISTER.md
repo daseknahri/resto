@@ -195,9 +195,26 @@ migrated (dead `_get_rider` helper removed). The remaining sweep is entirely ins
 hot files (partially done across two prior rounds) plus the permanently-skipped landmine views
 (6 driver views in `ride_views.py`, `DeliveryRatingView`, staff/owner multi-role branches).
 
-**Remaining:** the ~55-view mechanical sweep (customer/driver endpoints still reading
-`session["customer_id"]` by hand), per-branch hardening of multi-role views (the landmine above),
-then optional customer-CSRF hardening as a deliberate, separate step.
+**Update (2026-07-16):** first hot-file slice — 5 single-role, non-money `accounts/views.py`
+wallet/push views (`CustomerWalletPayTokenView`, `CustomerWalletChargeRequestsView`,
+`CustomerWalletChargeDeclineView`, `CustomerPushSubscribeView`, `CustomerWalletView`) migrated.
+A full survey of the ~40 remaining raw `session["customer_id"]` reads across both hot files
+classified the rest: 11 driver-role views (`accounts/views.py` `Driver*`) need a not-yet-built
+`IsDriver` permission first (a plain `IsCustomer` would under-authorize — any customer, not just
+drivers, would pass); `PlaceOrderView`/`MarketplacePlaceOrderView` are money-mutating **and** must
+keep serving anonymous/guest orders, so they need `CustomerSessionAuthentication` added while
+keeping `permission_classes=[AllowAny]` and duck-typing `request.user`, not a plain flip; 3 views
+(`CustomerOrdersView`, `CustomerMarketplaceOrdersView`, `CustomerReservationsView`) currently
+degrade to an empty list for anonymous callers rather than 401 — flipping to `IsCustomer` would
+be a real behavior change, deferred pending a frontend check; the rest are the already-known
+landmine/money views (`DeliveryRatingView`, `CustomerOrderCancelView`, wallet transfer/approve).
+
+**Remaining:** the driver-role slice (needs `IsDriver` first), the optional-auth money views
+(`PlaceOrderView`/`MarketplacePlaceOrderView`, need a duck-typed principal design), the 3
+anon-degrading list views (behavior-change flag), the remaining money-mutating single-role views
+(`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerOrderCancelView`,
+`CustomerOrderPayWalletView`), per-branch hardening of multi-role views (the landmine above), then
+optional customer-CSRF hardening as a deliberate, separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

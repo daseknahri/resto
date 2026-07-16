@@ -165,7 +165,9 @@ class CustomerPushSubscribeHijackTests(SimpleTestCase):
             {"endpoint": "https://push/shared", "p256dh": "key", "auth": "secret"},
             format="json",
         )
-        req.session = {"customer_id": 7}
+        req.session = {}
+        from accounts.models import Customer
+        force_authenticate(req, user=Customer(id=7))
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

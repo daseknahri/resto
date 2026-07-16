@@ -1963,16 +1963,15 @@ class CustomerWalletPayTokenView(APIView):
     customer, rendered as a QR ("pay code") so a restaurant can scan it to top up the
     customer's wallet without searching by phone. Expires in 5 minutes."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
         from django.core import signing
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        token = signing.dumps({"cid": customer_id}, salt=_WALLET_PAY_SALT)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        token = signing.dumps({"cid": request.user.id}, salt=_WALLET_PAY_SALT)
         return Response({"token": token, "expires_in": _WALLET_PAY_TTL})
 
 
@@ -1980,13 +1979,13 @@ class CustomerWalletChargeRequestsView(APIView):
     """GET /api/customer/wallet/charge-requests/ — pending wallet charges awaiting this
     customer's approval (above-threshold charges a restaurant initiated)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import WalletChargeRequest
         from django.utils import timezone as _tz
         now = _tz.now()
@@ -2079,13 +2078,13 @@ class CustomerWalletChargeApproveView(APIView):
 class CustomerWalletChargeDeclineView(APIView):
     """POST /api/customer/wallet/charge-requests/<id>/decline/ — decline a pending charge."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write, status-only (no money mutation).
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import WalletChargeRequest
         from django.utils import timezone as _tz
         cr = WalletChargeRequest.objects.filter(pk=request_id, customer_id=customer_id).first()
@@ -2115,13 +2114,13 @@ class CustomerPushSubscribeView(APIView):
     """POST/DELETE /api/customer/push-subscribe/ — register or remove a customer's browser
     Web Push subscription (session-authenticated customer)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write; no staff/owner branch, no money.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         endpoint = (request.data.get("endpoint") or "").strip()
         p256dh = (request.data.get("p256dh") or "").strip()
         auth = (request.data.get("auth") or "").strip()
@@ -2142,9 +2141,8 @@ class CustomerPushSubscribeView(APIView):
         return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         endpoint = (request.data.get("endpoint") or "").strip()
         if endpoint:
             from .models import CustomerPushSubscription
@@ -2159,18 +2157,15 @@ class CustomerWalletView(APIView):
     paginates the transactions list only; balance/spend_by_vertical/etc. are
     unaffected (they're not page-scoped)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal
+        # (a stale/forged session now 401s at auth time instead of this view's old
+        # hand-rolled 404 — the same sanctioned carve-out as the rest of the sweep).
+        customer = request.user
 
         from django.conf import settings
         from django.db.models import Sum
