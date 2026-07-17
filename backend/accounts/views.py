@@ -3934,8 +3934,10 @@ class MarketplaceMenuView(APIView):
     Only published, available items are included.
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — an anonymous shopper still gets the
+    # full public menu; the customer session only personalises COD eligibility below.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request, slug, *args, **kwargs):
         from tenancy.models import Tenant
@@ -4083,11 +4085,12 @@ class MarketplaceMenuView(APIView):
 
                 # Trusted-customer cash-on-handover eligibility for the marketplace cart —
                 # mirrors menu.views.OrderEligibilityView. The Order count lives in this
-                # tenant schema, so compute it inside schema_context. The customer id comes
-                # from the marketplace session (authentication_classes is empty, but the
-                # session cookie still resolves so request.session is available).
+                # tenant schema, so compute it inside schema_context. customer_or_none reads
+                # request.user (hydrated by CustomerSessionAuthentication in initial(), before
+                # this schema_context) — no query here, so the public/tenant split is a non-issue.
                 from menu.views import _cod_eligible as _mkt_menu_cod_eligible
-                _mkt_menu_cust_id = request.session.get("customer_id")
+                _mkt_menu_customer = customer_or_none(request)
+                _mkt_menu_cust_id = _mkt_menu_customer.id if _mkt_menu_customer else None
                 cod_enabled = bool(getattr(profile, "cod_enabled", False))
                 cod_eligible = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
 
@@ -5171,8 +5174,10 @@ class MarketplacePlaceOrderView(APIView):
 class MarketplaceOrderStatusView(APIView):
     """GET /api/marketplace/order/<order_number>/?restaurant=<slug> — poll order status."""
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny by design — see the ownership gate
+    # below: a non-owner (incl. anonymous) still gets the minimal status payload.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [MarketplaceOrderStatusThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -5219,15 +5224,13 @@ class MarketplaceOrderStatusView(APIView):
                 # Ownership gate — this endpoint is AllowAny and order numbers are
                 # ORD-+token_hex(3) (24 bits → enumerable), so the financial body
                 # (items, totals, payment_status, wallet/loyalty/promo, schedule)
-                # MUST be confined to the session customer who owns the order.
-                # A non-owner gets only a minimal, non-sensitive status. The items
-                # query is built INSIDE the schema_context, so compute ownership
-                # here before deciding whether to materialise it.
-                _scid = getattr(request, "session", None) and request.session.get("customer_id")
-                try:
-                    _owns = bool(_scid and order.customer_id and int(_scid) == int(order.customer_id))
-                except (TypeError, ValueError):
-                    _owns = False
+                # MUST be confined to the customer who owns the order. A non-owner gets
+                # only a minimal, non-sensitive status. The items query is built INSIDE
+                # the schema_context, so compute ownership here before materialising it.
+                # IsOrderOwner is the shared home for the comparison (fails closed on a
+                # non-Customer principal or a missing/unparseable id on either side); used
+                # as a plain predicate so this view keeps its degrade-to-minimal behavior.
+                _owns = IsOrderOwner().has_object_permission(request, self, order)
 
                 items = []
                 existing_rating = None

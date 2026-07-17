@@ -299,11 +299,28 @@ it buys the declarative gate. Response ordering is unchanged.
 assumes an authenticated principal is a staff `User`** — and it will keep biting; audit any
 `request.user.<User-only-attr>` on a path a customer can now reach.
 
-**Remaining:** `PlaceOrderView`/`MarketplacePlaceOrderView` (optional-auth money, now with a proven
-pattern: `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`), the 3 anon-degrading
-list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`, `CustomerReservationsView` —
-return `[]` for anonymous today; flipping to `IsCustomer` is a real behavior change, needs a
-frontend check), `MarketplaceOrderStatusView` + `MarketplaceMenuView` (optional-auth reads), the
+**Update (2026-07-17, marketplace-reads slice):** the two marketplace optional-auth reads —
+`MarketplaceMenuView` (COD eligibility → `customer_or_none`) and `MarketplaceOrderStatusView`
+(inline `_owns` → `IsOrderOwner`) — migrated. Exact mirrors of `OrderEligibilityView` /
+`CustomerOrderStatusView` from the earlier optional-auth slice: `CustomerSessionAuthentication` +
+`AllowAny`, personalise/gate on the principal rather than gating access. `MarketplaceOrderStatusView`
+runs its ownership check *inside* a `schema_context(tenant.schema_name)`, which is safe because the
+principal is hydrated in `initial()` (public schema, before the view switches schema) and
+`customer_or_none` / `IsOrderOwner` do no query at call time. `MarketplaceOrderCancelView` right
+after was already converted in an earlier round.
+
+**Remaining:** `PlaceOrderView`/`MarketplacePlaceOrderView` — optional-auth money, but **genuinely
+multi-role**, unlike everything converted so far: `PlaceOrderView` reads `request.user` for a
+**staff-preview** check (`is_superuser`/`is_platform_admin`/`tenant_id`) AND the customer from the
+session, separately. Because `Customer.is_authenticated` is now True, a naive conversion would
+evaluate `user.is_superuser` on a `Customer` principal → **500** (the multi-role landmine, and the
+same "assumes the principal is a staff `User`" family as the throttle-handler 500 already fixed).
+It needs `CustomerSessionAuthentication` added *alongside* the default `SessionAuthentication` (so a
+staff session still lands a `User` on `request.user` for the preview branch), the customer read
+moved to `customer_or_none`, and the preview branch hardened to treat only a `User` as staff. Give
+it its own slice. Also remaining: the 3 anon-degrading list views (`CustomerOrdersView`,
+`CustomerMarketplaceOrdersView`, `CustomerReservationsView` — return `[]` for anonymous today;
+flipping to `IsCustomer` is a real behavior change, needs a frontend check), the
 `_resolve_customer_from_request` / `_tracking_request_owns_order` module-level helpers, per-branch
 hardening of multi-role views (the landmine above), then optional customer-CSRF hardening as a
 deliberate, separate step.

@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import MarketplacePlaceOrderView, MarketplaceMenuView
 
@@ -304,9 +304,15 @@ class MarketplaceMenuCodExposureTests(SimpleTestCase):
         self.view = MarketplaceMenuView.as_view()
 
     def _get(self, slug="bistro", customer_id=None):
+        from accounts.models import Customer
         req = self.factory.get(f"/api/marketplace/menu/{slug}/")
-        req.user = _anon()
-        req.session = {"customer_id": customer_id} if customer_id is not None else {}
+        # RISK IDENTITY-1: COD eligibility now reads customer_or_none(request.user),
+        # hydrated by CustomerSessionAuthentication. force_authenticate a real Customer
+        # principal instead of hand-setting the session id (which would trigger the auth
+        # class's DB lookup on this no-DB SimpleTestCase).
+        req.session = {}
+        if customer_id is not None:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req, slug=slug)
 
     def _run(self, *, cod_enabled, cod_eligible, customer_id):
