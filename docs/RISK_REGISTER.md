@@ -309,21 +309,42 @@ principal is hydrated in `initial()` (public schema, before the view switches sc
 `customer_or_none` / `IsOrderOwner` do no query at call time. `MarketplaceOrderCancelView` right
 after was already converted in an earlier round.
 
-**Remaining:** `PlaceOrderView`/`MarketplacePlaceOrderView` — optional-auth money, but **genuinely
-multi-role**, unlike everything converted so far: `PlaceOrderView` reads `request.user` for a
-**staff-preview** check (`is_superuser`/`is_platform_admin`/`tenant_id`) AND the customer from the
-session, separately. Because `Customer.is_authenticated` is now True, a naive conversion would
-evaluate `user.is_superuser` on a `Customer` principal → **500** (the multi-role landmine, and the
-same "assumes the principal is a staff `User`" family as the throttle-handler 500 already fixed).
-It needs `CustomerSessionAuthentication` added *alongside* the default `SessionAuthentication` (so a
-staff session still lands a `User` on `request.user` for the preview branch), the customer read
-moved to `customer_or_none`, and the preview branch hardened to treat only a `User` as staff. Give
-it its own slice. Also remaining: the 3 anon-degrading list views (`CustomerOrdersView`,
-`CustomerMarketplaceOrdersView`, `CustomerReservationsView` — return `[]` for anonymous today;
-flipping to `IsCustomer` is a real behavior change, needs a frontend check), the
-`_resolve_customer_from_request` / `_tracking_request_owns_order` module-level helpers, per-branch
-hardening of multi-role views (the landmine above), then optional customer-CSRF hardening as a
-deliberate, separate step.
+**Update (2026-07-17, place-order slice — the crown-jewel money path):**
+`PlaceOrderView` (`menu/views.py`) and `MarketplacePlaceOrderView` (`accounts/views.py`) migrated.
+The two turned out to be **different shapes**, which is the whole lesson of this slice:
+
+- **`MarketplacePlaceOrderView` is pure optional-auth** — it runs on the public marketplace host,
+  has **no** `request.user`/preview branch, only a session-`customer_id` link. Straight
+  `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`, like the earlier optional-auth
+  views.
+- **`PlaceOrderView` is genuinely MULTI-ROLE** — it reads `request.user` in *two* places: a
+  staff-preview gate (`can_preview`: `is_superuser`/`is_platform_admin`/`tenant_id`) AND
+  `resolve_prepay_and_wallet`'s staff-exemption (`user.role`). Its auth stack is now
+  **`[SessionAuthentication, CustomerSessionAuthentication]`** — SessionAuthentication first so a
+  staff session still lands a `User` (and keeps its CSRF enforcement, which the customer path never
+  had), CustomerSessionAuthentication second so a customer session lands a `Customer`. A session
+  carries EITHER a staff user OR a `customer_id` (never both, per `_staff_session_conflict`), so
+  exactly one principal resolves.
+
+**The landmine was real and confirmed:** `Customer` has no `is_superuser` field, so the bare
+`user.is_superuser` in `can_preview` would raise `AttributeError → 500` for a customer principal now
+that `Customer.is_authenticated` is True. Hardened by gating on `_is_staff_user` (authenticated AND
+`customer_or_none(request) is None` — i.e. a staff `User`) *before* reading any User-only attribute.
+`resolve_prepay_and_wallet` was already safe (`getattr(user, "role", None)` → None for a Customer →
+`is_staff=False`, same as the old AnonymousUser), so its behavior is unchanged. Regression test
+`test_customer_principal_is_not_a_previewer` pins both halves (no 500; a customer does not get the
+preview bypass). The test churn was significant — five money/order test files
+(`test_place_order_view`, `test_a4_marketplace_cod`, `test_a5_commission`,
+`test_r15b_r16_money_hardening`) had to move from "hand-set `request.session` + patch
+`Customer.objects.get`" to force-authenticating a **real** `Customer` principal (a MagicMock no
+longer passes `customer_or_none`'s class-name check).
+
+**Remaining:** the 3 anon-degrading list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`,
+`CustomerReservationsView` — return `[]` for anonymous today; flipping to `IsCustomer` is a real
+behavior change, needs a frontend check), the `_resolve_customer_from_request` /
+`_tracking_request_owns_order` module-level helpers, per-branch hardening of the remaining multi-role
+views (the landmine above — audit any `request.user.<User-only-attr>` a customer can now reach),
+then optional customer-CSRF hardening as a deliberate, separate step.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

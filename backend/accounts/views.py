@@ -4190,6 +4190,10 @@ class MarketplacePlaceOrderView(APIView):
       use_wallet (bool)
     """
 
+    # IDENTITY-1 sweep: optional-auth money view. Stays AllowAny — the marketplace serves
+    # guest (anonymous) orders; a signed-in customer is linked for wallet/loyalty. Runs on
+    # the public marketplace host, so there is no staff-preview branch (unlike PlaceOrderView).
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [MarketplaceOrderThrottle]
 
@@ -4217,13 +4221,9 @@ class MarketplacePlaceOrderView(APIView):
         if tenant.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
             return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = Customer.objects.get(pk=_customer_id)
-            except Customer.DoesNotExist:
-                request.session.pop("customer_id", None)
+        # IDENTITY-1: the signed-in customer (if any) is request.user, hydrated by
+        # CustomerSessionAuthentication. customer_or_none returns None for a guest order.
+        _linked_customer = customer_or_none(request)
 
         items_raw = request.data.get("items") or []
         if not items_raw or not isinstance(items_raw, list):

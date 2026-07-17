@@ -41,6 +41,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from rest_framework import serializers, status, viewsets
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -2608,6 +2609,15 @@ class PlaceOrderView(APIView):
     the discount was offered and accepted at submission, not at the future pick-up/delivery
     slot.
     """
+    # IDENTITY-1 sweep: this view is genuinely MULTI-ROLE — a tenant owner/admin previews
+    # the menu (staff User principal, needed by the can_preview gate below) AND a customer
+    # places an order (Customer principal, linked for wallet/loyalty). SessionAuthentication
+    # runs first so a staff session still lands a User on request.user (and keeps its CSRF
+    # enforcement); CustomerSessionAuthentication then hydrates a Customer when there's no
+    # staff user. Stays AllowAny (guest orders). A session carries EITHER a staff user OR a
+    # customer_id, never both (enforced at login by _staff_session_conflict), so exactly one
+    # of the two principals is ever resolved.
+    authentication_classes = [SessionAuthentication, CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [PlaceOrderThrottle]
 
@@ -2624,8 +2634,18 @@ class PlaceOrderView(APIView):
         if profile is None:
             return Response({"detail": "Restaurant not configured.", "code": "profile_missing"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve the two possible principals up front. Exactly one is ever non-None
+        # (staff/customer sessions are mutually exclusive). _linked_customer is reused
+        # below for the wallet/loyalty link.
+        _linked_customer = customer_or_none(request)
         user = getattr(request, "user", None)
-        can_preview = bool(user and user.is_authenticated and (
+        # can_preview is a STAFF-ONLY affordance. A customer principal is authenticated
+        # too now (Customer.is_authenticated is True), so gate on "authenticated AND not
+        # the customer" — i.e. a staff User — before reading User-only attributes like
+        # is_superuser (a Customer has no such field; a bare read would 500). RISK
+        # IDENTITY-1 landmine: an authenticated principal is no longer necessarily a User.
+        _is_staff_user = bool(user and user.is_authenticated and _linked_customer is None)
+        can_preview = bool(_is_staff_user and (
             user.is_superuser or
             getattr(user, "is_platform_admin", False) or
             (getattr(user, "tenant_id", None) == tenant.id)
@@ -2898,15 +2918,8 @@ class PlaceOrderView(APIView):
             )
         _is_scheduled = _scheduled_for is not None
 
-        # Resolve linked customer from session
-        from accounts.models import Customer as CustomerModel
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = CustomerModel.objects.get(pk=_customer_id)
-            except CustomerModel.DoesNotExist:
-                request.session.pop("customer_id", None)
+        # _linked_customer was resolved up front (customer_or_none) alongside can_preview —
+        # it's the signed-in Customer principal, or None for a guest / staff-preview request.
 
         # Delivery orders require an authenticated, verified customer
         if fulfillment_type == Order.FulfillmentType.DELIVERY:

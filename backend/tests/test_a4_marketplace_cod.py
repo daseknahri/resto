@@ -73,13 +73,18 @@ def _dish(slug="burger", price="10.00", currency="MAD", stock_qty=None):
 
 
 def _customer(cid=7, wallet="0"):
-    c = MagicMock()
-    c.id = cid
-    c.pk = cid
-    c.wallet_balance = wallet
-    c.name = "Repeat Diner"
-    c.phone = "+212600000000"
-    c.loyalty_points = 0
+    """A real (unsaved) Customer principal — RISK IDENTITY-1: MarketplacePlaceOrderView
+    now reads the linked customer via customer_or_none(request.user), which duck-types on
+    the model class name, so a MagicMock no longer passes."""
+    from accounts.models import Customer
+    c = Customer(
+        id=cid,
+        wallet_balance=Decimal(wallet),
+        name="Repeat Diner",
+        phone="+212600000000",
+        loyalty_points=0,
+    )
+    c.save = MagicMock()
     return c
 
 
@@ -131,10 +136,14 @@ class MarketplaceCodPlaceOrderTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = MarketplacePlaceOrderView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/marketplace/order/", data, format="json")
-        req.user = _anon()
-        req.session = session or {}
+        # RISK IDENTITY-1: MarketplacePlaceOrderView reads the linked customer from
+        # request.user (customer_or_none). force_authenticate the principal instead of
+        # hand-setting request.session (which triggers the auth class's DB lookup here).
+        req.session = {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return self.view(req)
 
     def _run_order(self, *, cod_eligible, profile, customer, payload, created_order=None):
@@ -178,7 +187,7 @@ class MarketplaceCodPlaceOrderTests(SimpleTestCase):
                 # locked customer fetch inside the wallet-deduction block
                 mock_cust_cls.objects.select_for_update.return_value.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
-                    resp = self._post(payload, session={"customer_id": customer.id})
+                    resp = self._post(payload, customer=customer)
         return resp, order_cls, wtx_cls
 
     def test_cod_eligible_cash_pickup_places_unpaid_no_wallet_deduction(self):
@@ -289,7 +298,7 @@ class MarketplaceCodPlaceOrderTests(SimpleTestCase):
                 mock_cust_cls.DoesNotExist = _FakeDNE
                 mock_cust_cls.objects.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
-                    resp = self._post(payload, session={"customer_id": 7})
+                    resp = self._post(payload, customer=customer)
 
         # Scheduled → cash ignored → wallet gate applies → short balance → 402.
         self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
