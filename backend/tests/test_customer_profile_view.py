@@ -153,60 +153,44 @@ class CustomerOrdersViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = CustomerOrdersView.as_view()
 
-    def _get(self, session=None, schema_name="tenant_demo"):
+    def _call(self, customer=None, schema_name="tenant_demo"):
         req = self.factory.get("/api/customer/orders/")
-        req.user = MagicMock(is_authenticated=False)
-        req.session = session or _session()
-        req._cached_connection = None
-        return req, schema_name
-
-    def _call(self, session=None, schema_name="tenant_demo"):
-        req = self.factory.get("/api/customer/orders/")
-        req.user = MagicMock(is_authenticated=False)
-        req.session = session or _session()
+        req.session = {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
         with patch("django.db.connection") as mock_conn:
             mock_conn.schema_name = schema_name
             return self.view(req)
 
     def test_public_schema_returns_empty_list(self):
-        resp = self._call(schema_name="public")
+        # RISK IDENTITY-1: even with a signed-in customer, the public-schema guard wins.
+        resp = self._call(customer=_real_customer(customer_id=5), schema_name="public")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["orders"], [])
         self.assertEqual(resp.data["count"], 0)
 
     def test_no_session_returns_empty_list(self):
-        resp = self._call(session=_session(customer_id=None))
+        # RISK IDENTITY-1: optional-auth — an anonymous caller gets [] (not 401).
+        resp = self._call(customer=None)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["orders"], [])
 
-    @patch("accounts.models.Customer.objects")
-    def test_stale_session_returns_empty_list(self, mock_objs):
-        from accounts.models import Customer as CustomerModel
-        mock_objs.get.side_effect = CustomerModel.DoesNotExist
-        with patch("django.db.connection") as mock_conn:
-            mock_conn.schema_name = "tenant_demo"
-            resp = self.view.__func__(
-                self.view.view_class(),
-                self._get(session=_session(customer_id=999))[0]
-            ) if False else None
-
-        # Use the _call helper properly
+    def test_stale_session_returns_empty_list(self):
+        """A stale/forged customer_id fails closed at the auth layer (customer_or_none →
+        None), so the view degrades to an empty list just as before."""
         req = self.factory.get("/api/customer/orders/")
-        req.user = MagicMock(is_authenticated=False)
-        req.session = _session(customer_id=999)
+        req.session = {"customer_id": 999}
         with patch("django.db.connection") as mock_conn:
             mock_conn.schema_name = "tenant_demo"
-            with patch.object(__import__("accounts.views", fromlist=["Customer"]).Customer, "objects") as mock_cust:
-                mock_cust.get.side_effect = __import__("accounts.models", fromlist=["Customer"]).Customer.DoesNotExist
+            with patch("accounts.models.Customer.objects") as mock_cust:
+                mock_cust.filter.return_value.first.return_value = None
                 resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["orders"], [])
 
     @patch("menu.models.Order.objects")
-    @patch("accounts.models.Customer.objects")
-    def test_returns_orders_for_authenticated_customer(self, mock_cust_objs, mock_order_objs):
-        customer = _make_customer(customer_id=5)
-        mock_cust_objs.get.return_value = customer
+    def test_returns_orders_for_authenticated_customer(self, mock_order_objs):
+        customer = _real_customer(customer_id=5)
 
         order = MagicMock()
         order.order_number = "ORD-001"
@@ -236,8 +220,8 @@ class CustomerOrdersViewTests(SimpleTestCase):
         mock_order_objs.filter.return_value.prefetch_related.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = [order]
 
         req = self.factory.get("/api/customer/orders/")
-        req.user = MagicMock(is_authenticated=False)
-        req.session = _session(customer_id=5)
+        req.session = {}
+        force_authenticate(req, user=customer)
         with patch("django.db.connection") as mock_conn:
             mock_conn.schema_name = "tenant_demo"
             resp = self.view(req)

@@ -341,23 +341,21 @@ class TestCustomerReservationsHardening(SimpleTestCase):
             cancel_token="SECRET-UUID", created_at=None,
         )
 
-        # Build the request with a customer session.
+        # RISK IDENTITY-1: the view reads the customer via customer_or_none(request.user).
+        # force_authenticate a real Customer principal (carrying email/phone) instead of
+        # hand-setting request.session + patching Customer.objects.get.
+        from accounts.models import Customer
         factory = APIRequestFactory()
         req = factory.get("/api/customer/reservations/")
-        req.user = _anon()
-        # APIRequestFactory requests have no session by default — attach one.
-        req.session = {"customer_id": 1}
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1, email="a@b.com", phone="+212600000000"))
 
-        customer = SimpleNamespace(email="a@b.com", phone="+212600000000")
-
-        # Patch the ORM hops: Customer.objects.get + Lead queryset chain.
+        # Patch the Lead queryset chain.
         fake_qs = MagicMock()
         chain = fake_qs.filter.return_value.exclude.return_value.select_related.return_value
         chain.order_by.return_value.__getitem__.return_value = [lead]
 
-        with patch("accounts.models.Customer.objects") as mock_cust, \
-                patch("sales.models.Lead") as mock_lead:
-            mock_cust.get.return_value = customer
+        with patch("sales.models.Lead") as mock_lead:
             mock_lead.objects = fake_qs
             mock_lead.Status = SimpleNamespace(PROVISIONING="p", LIVE="l", PAID="paid")
             # Disable throttling for the unit assertion on payload shape.

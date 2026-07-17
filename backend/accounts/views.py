@@ -1181,6 +1181,11 @@ class CustomerOrdersView(APIView):
     tenant domain). Returns an empty list when called from the public schema
     because Order lives in tenant schemas, not the public schema.
     """
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — a signed-out caller still gets an
+    # empty list (the graceful degradation this view is built on), NOT a 401. Only the raw
+    # session read is removed; the customer is now request.user. (Flipping to IsCustomer —
+    # 401 for anonymous — is a separate product change that would need a frontend check.)
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -1189,13 +1194,8 @@ class CustomerOrdersView(APIView):
         if connection.schema_name == "public":
             return Response({"orders": [], "count": 0})
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"orders": [], "count": 0})
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"orders": [], "count": 0})
 
         # Import Order + OrderItem from menu app — cross-app import is intentional here.
@@ -1276,13 +1276,15 @@ class CustomerMarketplaceOrdersView(APIView):
     history — unlike CustomerOrdersView which only sees the active tenant's orders.
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — anonymous → empty list, not 401.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        _customer = customer_or_none(request)
+        if _customer is None:
             return Response({"orders": [], "count": 0})
+        customer_id = _customer.id
 
         from .models import CustomerOrderRef
         from .verticals import ALL_VERTICALS
@@ -1337,18 +1339,14 @@ class CustomerReservationsView(APIView):
     (booked_for set, excluding provisioning/live/paid tenant-signup leads).
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — anonymous → empty list, not 401.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [CustomerReservationsThrottle]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"reservations": [], "count": 0})
-
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"reservations": [], "count": 0})
 
         from sales.models import Lead

@@ -339,12 +339,23 @@ preview bypass). The test churn was significant — five money/order test files
 `Customer.objects.get`" to force-authenticating a **real** `Customer` principal (a MagicMock no
 longer passes `customer_or_none`'s class-name check).
 
-**Remaining:** the 3 anon-degrading list views (`CustomerOrdersView`, `CustomerMarketplaceOrdersView`,
-`CustomerReservationsView` — return `[]` for anonymous today; flipping to `IsCustomer` is a real
-behavior change, needs a frontend check), the `_resolve_customer_from_request` /
-`_tracking_request_owns_order` module-level helpers, per-branch hardening of the remaining multi-role
-views (the landmine above — audit any `request.user.<User-only-attr>` a customer can now reach),
-then optional customer-CSRF hardening as a deliberate, separate step.
+**Update (2026-07-17, anon-degrading list views):** `CustomerOrdersView`,
+`CustomerMarketplaceOrdersView`, `CustomerReservationsView` migrated. The register framed these as
+blocked on a frontend check because *flipping to `IsCustomer`* (401 for anonymous) is a real
+behavior change — but that framing conflated two things. The IDENTITY-1 goal (kill the raw
+`session["customer_id"]` read, put the customer on `request.user`) is achieved by the **optional-auth
+pattern** (`CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`) with the `[]`-for-
+anonymous degradation preserved **byte-for-byte** — no 401, no frontend change. Done that way. The
+`IsCustomer` flip (make them 401) stays a **separate, optional** product hardening that would need
+the frontend check; it is NOT required for IDENTITY-1 and is deferred.
+
+**Remaining (the tail):** the `_resolve_customer_from_request` / `_tracking_request_owns_order`
+module-level helpers (function-based, not class views — need their own treatment), per-branch
+hardening of the remaining multi-role views (the landmine — audit any `request.user.<User-only-attr>`
+a customer can now reach; `DeliveryRatingView`'s `role=="restaurant"` branch is the known one), the
+deliberately-skipped `CustomerSessionView` probe (must stay AllowAny + `{customer: null}`), and the
+`CustomerPhoneVerifyView` session-link branch. Then optional customer-CSRF hardening as a deliberate,
+separate step. The ~55-view mechanical sweep is otherwise complete.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`
