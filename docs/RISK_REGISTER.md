@@ -349,13 +349,34 @@ anonymous degradation preserved **byte-for-byte** — no 401, no frontend change
 `IsCustomer` flip (make them 401) stays a **separate, optional** product hardening that would need
 the frontend check; it is NOT required for IDENTITY-1 and is deferred.
 
-**Remaining (the tail):** the `_resolve_customer_from_request` / `_tracking_request_owns_order`
-module-level helpers (function-based, not class views — need their own treatment), per-branch
-hardening of the remaining multi-role views (the landmine — audit any `request.user.<User-only-attr>`
-a customer can now reach; `DeliveryRatingView`'s `role=="restaurant"` branch is the known one), the
-deliberately-skipped `CustomerSessionView` probe (must stay AllowAny + `{customer: null}`), and the
-`CustomerPhoneVerifyView` session-link branch. Then optional customer-CSRF hardening as a deliberate,
-separate step. The ~55-view mechanical sweep is otherwise complete.
+**Update (2026-07-17, helpers + the DeliveryRatingView landmine):**
+- **`_resolve_customer_from_request` DELETED** — it was dead code (no view has called it since
+  `CustomerLinkReferralView` stopped in an earlier round; only a direct unit test remained). Removed
+  the function + its `ResolveCustomerFromRequestTests`; that was the last raw session read in a
+  helper.
+- **`_tracking_request_owns_order`** now reads `customer_or_none(request)` instead of the raw
+  session id; `OrderTrackingView` gained `CustomerSessionAuthentication` (stays AllowAny — a
+  non-owner still gets basic tracking, the owner-only driver phone/live position stays gated). Added
+  a direct unit test (the helper was previously only ever `patch`ed, never exercised).
+- **`DeliveryRatingView`** — the multi-role landmine — converted. `role="customer"` and
+  `role="driver"` now read the principal via `customer_or_none`; `role="restaurant"` is **hardened**:
+  it required a staff owner via a bare `user.is_authenticated`, which a `Customer` principal now
+  passes (`Customer.is_authenticated` is True). Guard added: `customer_or_none(request) is not None`
+  → reject (a Customer can't write the owner→driver rating). Kept `[CustomerSessionAuthentication]`
+  only (NOT `+ SessionAuthentication`): the `restaurant` branch was already unreachable in production
+  through this `AllowAny` path (no authenticator loaded the staff user — tests reach it only via
+  `force_authenticate`), so this is behavior-preserving AND closes the landmine. Regression test
+  `test_restaurant_role_rejects_customer_principal` pins it.
+
+**Remaining (deliberately out of scope):** the throttle-helper session reads
+(`VoucherRedeemThrottle` fallback `get_cache_key`, `_voucher_redeem_fail_cache_key`) — these key the
+rate-limit bucket per session and are fine as raw reads; `CustomerSessionView` (the "am I logged in"
+probe — must stay AllowAny + `{customer: null}`); and `CustomerPhoneVerifyView`'s OTP session-link
+branch (it *writes* the session during registration/link, not a customer-principal read). Then the
+optional **customer-CSRF hardening** as a deliberate, separate step. **The customer/driver view sweep
+is complete** — every request-handling view that read `session["customer_id"]` now goes through
+`CustomerSessionAuthentication`; what's left are throttle key-builders, the session probe, and the
+login/OTP writers.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`

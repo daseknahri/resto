@@ -12,6 +12,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.views import OrderTrackingView, DeliveryRatingView
 
 
@@ -61,6 +62,42 @@ def _make_job(pk=1, status_val="assigned", order_number="ORD-001", tenant_id=1):
     j.created_at = MagicMock()
     j.created_at.isoformat.return_value = "2026-05-01T10:00:00+00:00"
     return j
+
+
+# ── _tracking_request_owns_order helper ───────────────────────────────────────
+
+class TrackingOwnsOrderHelperTests(SimpleTestCase):
+    """RISK IDENTITY-1: the helper now reads the customer off request.user
+    (customer_or_none) instead of request.session["customer_id"]. It only touches
+    request.user, so a plain namespace carrying the principal is enough to drive it."""
+
+    def _run(self, *, principal, order_customer_id):
+        from contextlib import contextmanager
+        import menu.models as mm
+        from django.contrib.auth.models import AnonymousUser
+        from accounts.views import _tracking_request_owns_order
+
+        @contextmanager
+        def _noop_sc(*a, **k):
+            yield
+
+        request = SimpleNamespace(user=principal if principal is not None else AnonymousUser())
+        tenant = SimpleNamespace(schema_name="bistro")
+        vl = MagicMock()
+        vl.values_list.return_value.first.return_value = order_customer_id
+        with patch("django_tenants.utils.schema_context", _noop_sc), \
+             patch.object(mm.Order, "objects") as mock_objs:
+            mock_objs.filter.return_value = vl
+            return _tracking_request_owns_order(request, tenant, "ORD-1")
+
+    def test_no_principal_is_not_owner(self):
+        self.assertFalse(self._run(principal=None, order_customer_id=5))
+
+    def test_matching_customer_is_owner(self):
+        self.assertTrue(self._run(principal=Customer(id=5), order_customer_id=5))
+
+    def test_non_matching_customer_is_not_owner(self):
+        self.assertFalse(self._run(principal=Customer(id=9), order_customer_id=5))
 
 
 # ── OrderTrackingView ─────────────────────────────────────────────────────────
@@ -285,7 +322,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "customer", "score": 5, "note": "Fast!"},
-                    session=_session(customer_id=42),
+                    user=Customer(id=42),
                 )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["score"], 5)
@@ -317,7 +354,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "customer", "score": 1, "note": "trying to overwrite"},
-                    session=_session(customer_id=42),
+                    user=Customer(id=42),
                 )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "already_rated")
@@ -348,7 +385,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "customer", "score": 5, "note": "Fast!"},
-                    session=_session(customer_id=42),
+                    user=Customer(id=42),
                 )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "not_order_owner")
@@ -368,7 +405,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "driver", "score": 4},
-                    session=_session(customer_id=42),
+                    user=Customer(id=42),
                 )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -385,7 +422,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "driver", "score": 4},
-                    session=_session(customer_id=7),  # driver id = 7
+                    user=Customer(id=7),  # driver id = 7
                 )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["score"], 4)
@@ -406,7 +443,7 @@ class DeliveryRatingViewTests(SimpleTestCase):
                 resp = self._post_with_restaurant(
                     "ORD-001",
                     {"role": "driver", "score": 5},
-                    session=_session(customer_id=7),
+                    user=Customer(id=7),
                 )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "already_rated")
@@ -461,6 +498,26 @@ class DeliveryRatingViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["score"], 5)
         job.save.assert_called_once()
+
+    def test_restaurant_role_rejects_customer_principal(self):
+        """RISK IDENTITY-1 landmine: a Customer principal is authenticated too now
+        (Customer.is_authenticated is True), so the role=restaurant STAFF gate must reject
+        it — a customer must not write the owner→driver rating even with a matching tenant
+        context. This is the exact 'assumes the principal is a staff User' hazard."""
+        tenant = _make_tenant(tenant_id=1)
+        job = _make_job(status_val="delivered", tenant_id=1)
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.get.return_value = job
+                resp = self._post_with_restaurant(
+                    "ORD-001",
+                    {"role": "restaurant", "score": 5},
+                    user=Customer(id=42),           # a customer principal, NOT a staff owner
+                    tenant=SimpleNamespace(id=1),   # even with a matching tenant context
+                )
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        job.save.assert_not_called()
 
     def test_restaurant_role_already_rated_returns_400(self):
         """B14: a second restaurant-role POST for an already-rated leg must not

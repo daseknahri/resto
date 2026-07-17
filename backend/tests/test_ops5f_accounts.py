@@ -312,7 +312,7 @@ class DeliveryRatingOwnershipTests(SimpleTestCase):
 
     def _drive(self, *, session_cid, order_customer_id):
         import accounts.models as am
-        from accounts.models import DeliveryJob
+        from accounts.models import Customer, DeliveryJob
         import menu.models as mm
 
         tenant = SimpleNamespace(id=1, slug="bistro", schema_name="bistro")
@@ -339,7 +339,10 @@ class DeliveryRatingOwnershipTests(SimpleTestCase):
                 "/api/marketplace/track/ORD-1/rate/?restaurant=bistro",
                 {"role": "customer", "score": 5, "note": "great"}, format="json",
             )
-            req.session = {"customer_id": session_cid} if session_cid is not None else {}
+            # RISK IDENTITY-1: the customer branch reads the principal via customer_or_none.
+            req.session = {}
+            if session_cid is not None:
+                force_authenticate(req, user=Customer(id=session_cid))
             resp = self.view(req, order_number="ORD-1")
             return resp, job
 

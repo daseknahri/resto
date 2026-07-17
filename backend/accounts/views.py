@@ -6812,18 +6812,19 @@ class DriverJobStatusUpdateView(APIView):
 
 
 def _tracking_request_owns_order(request, tenant, order_number) -> bool:
-    """True when the requesting session customer owns this order (tenant-schema lookup).
+    """True when the requesting customer owns this order (tenant-schema lookup).
 
     Delivery orders always have a signed-in owner, so this never hides tracking from a
     legitimate customer — it just stops anyone who guesses an order number from reading the
     driver's phone + live position.
+
+    RISK IDENTITY-1: reads the principal via customer_or_none (hydrated by
+    CustomerSessionAuthentication on OrderTrackingView) instead of the raw session id.
     """
-    try:
-        sid = request.session.get("customer_id")
-    except Exception:
-        sid = None
-    if not sid:
+    _customer = customer_or_none(request)
+    if _customer is None:
         return False
+    sid = _customer.id
     try:
         from django_tenants.utils import schema_context
         from menu.models import Order as _O
@@ -6849,8 +6850,11 @@ class OrderTrackingView(APIView):
     have elapsed (to avoid holding Gunicorn workers indefinitely).
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — a non-owner still gets the basic
+    # tracking, but the owner-only detail (driver phone + live position) is gated by
+    # _tracking_request_owns_order, which now reads the customer off request.user.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [DeliveryTrackingThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -6936,8 +6940,14 @@ class DeliveryRatingView(APIView):
       { "role": "restaurant", "score": 5, "note": "On time" }
     """
 
+    # IDENTITY-1 sweep: MULTI-ROLE, so it stays AllowAny and each role branch gates
+    # itself. CustomerSessionAuthentication hydrates the customer/driver principal onto
+    # request.user; a staff owner (role=restaurant) is force_authenticated in tests and,
+    # in production, is not reachable through this AllowAny path (request.user stays
+    # anonymous without SessionAuthentication) — behavior preserved. The role=restaurant
+    # branch is hardened below so a Customer principal can't pass its staff gate.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [DeliveryRatingThrottle]
 
     def post(self, request, order_number, *args, **kwargs):
@@ -6975,14 +6985,16 @@ class DeliveryRatingView(APIView):
 
         update_fields = []
         if role == "customer":
-            customer_id = request.session.get("customer_id")
-            if not customer_id:
+            # IDENTITY-1: the rater is the signed-in customer principal (request.user).
+            _rater = customer_or_none(request)
+            if _rater is None:
                 return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+            customer_id = _rater.id
             # OPS-5f: ownership gate. Without this, any session holder who guesses a
             # delivered order number could write the customer→driver rating (review
             # fraud / driver-reputation tampering). The order's customer_id lives in the
             # tenant schema (the DeliveryJob is public-schema), so resolve it there and
-            # require the session customer to OWN the order (mirrors CustomerOrderRate).
+            # require the customer to OWN the order (mirrors CustomerOrderRate).
             from django_tenants.utils import schema_context as _sc
             from menu.models import Order as _O
             with _sc(tenant.schema_name):
@@ -7005,9 +7017,11 @@ class DeliveryRatingView(APIView):
             job.customer_driver_note = note
             update_fields = ["customer_driver_rating", "customer_driver_note"]
         elif role == "driver":
-            customer_id = request.session.get("customer_id")
+            # IDENTITY-1: the rater is the signed-in driver (a Customer principal). The gate
+            # is that the principal IS this job's assigned driver.
+            _rater = customer_or_none(request)
             driver = getattr(job, "driver", None)
-            if not customer_id or not driver or driver.id != customer_id:
+            if _rater is None or not driver or driver.id != _rater.id:
                 return Response({"detail": "Driver session required."}, status=status.HTTP_403_FORBIDDEN)
             if job.driver_customer_rating is not None:
                 return Response(
@@ -7020,7 +7034,12 @@ class DeliveryRatingView(APIView):
         elif role == "restaurant":
             user = getattr(request, "user", None)
             tenant_ctx = getattr(request, "tenant", None)
-            if not user or not user.is_authenticated:
+            # RISK IDENTITY-1 landmine: this branch requires a STAFF owner, but a Customer
+            # principal is now also authenticated (Customer.is_authenticated is True), so a
+            # bare is_authenticated check would let a customer through. customer_or_none is
+            # non-None iff the principal is a Customer — reject that here so only a real
+            # staff User can rate as the restaurant.
+            if not user or not user.is_authenticated or customer_or_none(request) is not None:
                 return Response({"detail": "Owner session required."}, status=status.HTTP_401_UNAUTHORIZED)
             if not tenant_ctx or tenant_ctx.id != tenant.id:
                 return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
@@ -7037,18 +7056,6 @@ class DeliveryRatingView(APIView):
 
         job.save(update_fields=update_fields)
         return Response({"detail": "Rating saved.", "score": score})
-
-
-def _resolve_customer_from_request(request):
-    """Return (Customer, error_response) from a customer-session request."""
-    customer_id = request.session.get("customer_id") if hasattr(request, "session") else None
-    if not customer_id:
-        return None, Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-    try:
-        customer = Customer.objects.get(pk=customer_id)
-    except Customer.DoesNotExist:
-        return None, Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
-    return customer, None
 
 
 class CustomerSavedAddressListCreateView(APIView):
