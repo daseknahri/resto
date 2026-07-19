@@ -19,6 +19,7 @@ from sales.permissions import (
     IsTenantEditor,
     IsTenantOwner,
     IsTenantOwnerAccessDenied,
+    IsTenantOwnerForbidden,
     user_owns_tenant_id,
 )
 
@@ -207,6 +208,14 @@ class IsTenantOwnerTests(SimpleTestCase):
         self.assertTrue(IsTenantOwnerAccessDenied().has_permission(req, None))
         staff = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
         self.assertFalse(IsTenantOwnerAccessDenied().has_permission(staff, None))
+
+    def test_forbidden_variant_same_policy_different_body(self):
+        self.assertTrue(issubclass(IsTenantOwnerForbidden, IsTenantOwner))
+        self.assertEqual(IsTenantOwnerForbidden.message, "Forbidden.")
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        self.assertTrue(IsTenantOwnerForbidden().has_permission(req, None))
+        staff = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
+        self.assertFalse(IsTenantOwnerForbidden().has_permission(staff, None))
 
     def test_object_unauthenticated_denied(self):
         req = _request(user=_user(authenticated=False), tenant=_tenant(1))

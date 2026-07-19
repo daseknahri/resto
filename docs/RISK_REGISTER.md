@@ -192,8 +192,21 @@ patches, it migrated **transparently** — both test files (`test_owner_campaign
 every patch-using file needs the landmine fix; only ones whose denial tests fake denial via the
 patch, or whose fixtures aren't independently owner-valid.) 36 tests, no changes.
 
-**Remaining:** the shared owner/lookup-helper cases (`OwnerPromotionDetailView` `_get_promo`,
-`OwnerStaffDeleteView` `_get_staff` — 403 moves to the class, 404 lookup stays inline);
+**Slice 10 (2026-07-17):** `OwnerPromotionDetailView` (first shared-lookup-helper case) +
+`OwnerWaitlistView`. In `OwnerPromotionDetailView` the 403 lived inside `_get_promo` (called by
+get/patch/delete); moved it to `permission_classes = [IsTenantOwnerAccessDenied]` and slimmed
+`_get_promo` to the 404 lookup only (dropped its now-unused `request` arg + updated 3 callers). Order
+preserved: a non-owner still 403s before the method (permission runs first), and the 404 only reaches
+a real owner — same as the old helper checking owner-then-existence. `OwnerWaitlistView` needed a
+**third message variant** — added `IsTenantOwnerForbidden` (`message="Forbidden."`) alongside the
+`IsTenantOwner`/`...AccessDenied` pair; its `test_permissions` message-contract test added. Both
+files (`test_owner_promotions.py`, `test_waitlist_and_push.py`) are 0-patch → transparent.
+
+**Remaining (menu):** `OwnerAnalyticsExportView` (public-schema 400 runs before the owner check —
+`get_permissions()` or keep inline). **Remaining (accounts/views.py):** the 2-arg
+`_is_tenant_owner(request, tenant)` sites (`OwnerFlashSale*`, `OwnerDeliveryZone/Radius`) and the
+staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView` — `code:"forbidden"` body, needs a
+code-carrying denial; `_get_staff` shared-helper).
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so

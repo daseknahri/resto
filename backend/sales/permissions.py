@@ -89,3 +89,10 @@ class IsTenantOwnerAccessDenied(IsTenantOwner):
     """
 
     message = "Access denied."
+
+
+class IsTenantOwnerForbidden(IsTenantOwner):
+    """Same owner policy, preserving the legacy ``{"detail": "Forbidden."}`` 403 body
+    (RISK AUTHZ-1 exact-body preservation — e.g. OwnerWaitlistView)."""
+
+    message = "Forbidden."

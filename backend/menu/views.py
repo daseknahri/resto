@@ -56,7 +56,7 @@ from accounts.permissions import IsOrderOwner, customer_or_none
 # RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
 # sales.permissions imports only rest_framework + accounts.models.User (accounts.models
 # does not import menu), the same import accounts/views.py already does at module level.
-from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied
+from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
@@ -7538,18 +7538,18 @@ class OwnerPromotionDetailView(APIView):
        PATCH /api/owner/promotions/<id>/ — update.
        DELETE /api/owner/promotions/<id>/ — delete."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was the 403 check inside _get_promo, which now
+    # does only the 404 lookup). "Access denied." body preserved via the permission class.
+    permission_classes = [IsTenantOwnerAccessDenied]
 
-    def _get_promo(self, request, promo_id):
-        if not _is_tenant_owner(request):
-            return None, Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+    def _get_promo(self, promo_id):
         p = Promotion.objects.filter(pk=promo_id).first()
         if p is None:
             return None, Response({"detail": "Promotion not found."}, status=status.HTTP_404_NOT_FOUND)
         return p, None
 
     def get(self, request, promo_id, *args, **kwargs):
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
         return Response(_serialize_promotion(p))
@@ -7558,7 +7558,7 @@ class OwnerPromotionDetailView(APIView):
         from decimal import Decimal as _Dec, InvalidOperation
         from datetime import date as _date
 
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
 
@@ -7623,7 +7623,7 @@ class OwnerPromotionDetailView(APIView):
         return Response(_serialize_promotion(p))
 
     def delete(self, request, promo_id, *args, **kwargs):
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
         p.delete()
@@ -10584,14 +10584,12 @@ class OwnerWaitlistView(APIView):
     GET /api/owner/waitlist/?date=YYYY-MM-DD
     Owner only. Returns waitlist entries (filtered by date if provided).
     """
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Forbidden.").
+    permission_classes = [IsTenantOwnerForbidden]
 
     def get(self, request):
         from datetime import date as date_cls
         from django.utils.timezone import make_aware, get_current_timezone
-
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
 
         date_raw = request.query_params.get("date", "").strip()
         qs = WaitlistEntry.objects.all()
