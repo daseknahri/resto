@@ -12858,25 +12858,20 @@ class OwnerCampaignView(APIView):
 
 # ── B3 Phase 2: Ingredient inventory + recipe BOM ────────────────────────────
 
-from rest_framework.permissions import IsAuthenticated as _IsAuthenticated
-
 
 class OwnerIngredientListCreateView(APIView):
     """GET /api/owner/ingredients/  — list active ingredients (owner only).
     POST /api/owner/ingredients/ — create a new ingredient.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         qs = Ingredient.objects.filter(is_active=True)
         return Response(IngredientSerializer(qs, many=True).data)
 
     def post(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         serializer = IngredientSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -12902,7 +12897,9 @@ class OwnerIngredientLowStockView(APIView):
 class OwnerIngredientDetailView(APIView):
     """GET/PATCH/DELETE /api/owner/ingredients/<pk>/"""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    # The _get(pk) helper does the 404 lookup only; the 403 moved to the permission class.
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def _get(self, pk):
         try:
@@ -12911,16 +12908,12 @@ class OwnerIngredientDetailView(APIView):
             return None
 
     def get(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(IngredientSerializer(ing).data)
 
     def patch(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -12931,8 +12924,6 @@ class OwnerIngredientDetailView(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -12948,11 +12939,10 @@ class OwnerIngredientAdjustView(APIView):
     Positive delta = receiving stock; negative delta = manual waste/count correction.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             ing = Ingredient.objects.get(pk=pk, is_active=True)
         except Ingredient.DoesNotExist:
@@ -12978,11 +12968,10 @@ class OwnerDishRecipeView(APIView):
     DELETE per-line is handled via OwnerRecipeLineDetailView.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, dish_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             Dish.objects.get(pk=dish_id)
         except Dish.DoesNotExist:
@@ -12991,8 +12980,6 @@ class OwnerDishRecipeView(APIView):
         return Response(RecipeLineSerializer(qs, many=True).data)
 
     def post(self, request, dish_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             dish = Dish.objects.get(pk=dish_id)
         except Dish.DoesNotExist:

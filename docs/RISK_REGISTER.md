@@ -137,9 +137,22 @@ worth recording:
   "worked" before via a now-dead `_is_tenant_owner=False` patch; fixed the fixture + dropped the
   patch. This is a landmine for every future denial test in this migration.
 
+**Slice 4 (2026-07-17):** the ingredient/recipe owner views — `OwnerIngredientListCreateView`,
+`OwnerIngredientDetailView`, `OwnerIngredientAdjustView`, `OwnerDishRecipeView` (all →
+`IsTenantOwnerAccessDenied`), completing the ingredient group (`OwnerIngredientLowStockView` +
+`OwnerRecipeLineDetailView` landed in slice 1). First **multi-method** classes in the migration:
+every method was owner-gated with a per-method guard, so class-level `permission_classes` collapses
+2–3 guards into one declaration without over-gating. `OwnerIngredientDetailView`'s `_get(pk)` helper
+does only the 404 lookup (the 403 was per-method, now on the class) so it stays. Migrated
+**transparently** — `test_ingredients.py` already force-authenticates real owner/staff fixtures that
+correctly pin `is_superuser=False`/`is_platform_admin=False` (the slice-3 landmine is absent here).
+Also removed the now-unused `_IsAuthenticated` alias import.
+
 **Remaining:** more single-method owner views whose tests go through `.as_view()` (need per-test
-owner-principal rewrites); the multi-method owner classes (every method owner-gated, so class-level is
-safe) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays inline);
+owner-principal rewrites, e.g. the customer + wallet views — their fixtures/patches need the slice-3
+`is_superuser=False` check); the remaining multi-method owner classes (promotion, section, loyalty,
+campaign, push-subscribe, closure-date-list) + the shared owner/lookup-helper cases (403 moves to the
+class, 404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
