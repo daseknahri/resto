@@ -1566,14 +1566,20 @@ class AnalyticsSummaryView(APIView):
 class OwnerAnalyticsExportView(APIView):
     """CSV export of analytics events grouped by date and event type."""
 
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        # RISK AUTHZ-1: owner-only, BUT the public-schema/no-tenant 400 must answer BEFORE
+        # the owner check (a class-level permission runs first and would flip 400→403). So
+        # gate dynamically: AllowAny on the public schema (let the method return its 400),
+        # IsTenantOwner otherwise (403 "Owner access required." for a non-owner, unchanged).
+        tenant = getattr(self.request, "tenant", None)
+        if tenant is None or getattr(tenant, "schema_name", "") == "public":
+            return [AllowAny()]
+        return [IsTenantOwner()]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
         if tenant is None or getattr(tenant, "schema_name", "") == "public":
             return Response({"detail": "Not available on public schema."}, status=status.HTTP_400_BAD_REQUEST)
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             requested_days = int(request.query_params.get("days", "30"))

@@ -222,11 +222,24 @@ stays. All 8 `accounts/views.py` call sites are now migrated — the accounts `_
 is **dead** (no view calls it) but retained for now (3 test files still patch/unit-test it;
 deleting it is a separate cleanup).
 
-**Remaining:** only `OwnerAnalyticsExportView` (menu) — the ordering gotcha: a public-schema **400**
-runs before the owner check, and a class-level permission runs first, so it would flip 400→403. Needs
-`get_permissions()` (gate only the non-public path) or stays inline as a documented exception. Then
-the 3 Category-C predicates stay by design, and the two `_is_tenant_owner` helpers can be reduced to
-(or, for accounts, deleted with their test cleanup).
+**Slice 13 — call-site migration COMPLETE (2026-07-17):** `OwnerAnalyticsExportView` (the ordering
+gotcha) migrated via a **`get_permissions()`** override — it returns `AllowAny` on the public
+schema / no-tenant path (so the view's own `400 "Not available on public schema."` still answers
+first) and `IsTenantOwner` otherwise (403 for a non-owner). This preserves the 400-before-403
+ordering a class-level attribute would have broken. `test_analytics_and_chart_views` green (400 for
+no-tenant + public, 403 for outsider, CSV for owner), no test change.
+
+**Call-site migration is done.** Every method-entry `_is_tenant_owner` guard across `menu/views.py`
+and `accounts/views.py` (58 sites) is now a declarative permission (`IsTenantOwner` +
+`...AccessDenied` / `...Forbidden` / `...StaffForbidden` message variants for exact-body
+preservation, and `get_permissions()` for the one ordering exception). What remains is **by design**:
+the **3 Category-C predicates** (`_can_access_order`/`CustomerOrdersByPhoneView` line ~4206,
+`StaffOrderListView` line ~4341, `OwnerZReportView._require_owner`) that use `_is_tenant_owner`
+mid-logic where a non-owner gets a *different valid response*, not a 403 — so the `menu`
+`_is_tenant_owner` helper stays (serves those). The **accounts** `_is_tenant_owner` helper is now
+**dead** (no view calls it) but retained pending a small test-cleanup slice (3 test files still
+patch/unit-test it). This closes AUTHZ-1's core deliverable: authorization is a tested policy layer,
+not a copy-pasted convention.
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
