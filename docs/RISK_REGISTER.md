@@ -159,10 +159,13 @@ False) and pointing the denial tests at it; the happy-path `_is_tenant_owner=Tru
 harmless no-ops (left in place). This is the confirmed template for the remaining `.as_view()`-heavy
 files.
 
-**Remaining:** the wallet owner views (`OwnerWalletTopupView`, `OwnerWalletHistoryView`); the
-remaining multi-method owner classes (promotion, section, loyalty, campaign, push-subscribe,
-closure-date-list) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays
-inline);
+**Slice 6 (2026-07-17):** the wallet owner views — `OwnerWalletTopupView`,
+`OwnerWalletHistoryView` (→ `IsTenantOwnerAccessDenied`). Transparent (no `_is_tenant_owner` patch,
+landmine-safe fixtures in `test_owner_wallet_views.py`).
+
+**Remaining:** the remaining multi-method owner classes (promotion, section, loyalty, campaign,
+push-subscribe, closure-date-list) + the shared owner/lookup-helper cases (403 moves to the class,
+404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so

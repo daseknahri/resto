@@ -12297,12 +12297,10 @@ class OwnerWalletTopupView(APIView):
     up to the funded float — the transfer is blocked (402) if the float is too low.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from decimal import Decimal as _Dec, InvalidOperation
         from accounts.models import Customer
         from accounts.wallet_service import (
@@ -12405,12 +12403,10 @@ class OwnerWalletHistoryView(APIView):
     customers who have placed at least one order at this restaurant.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
