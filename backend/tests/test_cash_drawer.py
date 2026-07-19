@@ -459,43 +459,37 @@ class DrawerCloseViewTests(SimpleTestCase):
 class DrawerAccessControlTests(SimpleTestCase):
     """Non-owner requests are rejected with 403."""
 
-    def test_current_requires_owner(self):
-        # RISK AUTHZ-1: DrawerCurrentView's owner check moved from an inline
-        # _is_tenant_owner guard to permission_classes = [IsTenantOwner], which runs in
-        # DRF dispatch — so drive the full view (.as_view()) rather than calling .get()
-        # directly. An AUTHENTICATED non-owner (staff, matching tenant) is force-
-        # authenticated so IsTenantOwner denies with 403 (an anonymous caller would 401).
+    # RISK AUTHZ-1: the drawer views' owner check moved from an inline _is_tenant_owner
+    # guard to permission_classes = [IsTenantOwner], which runs in DRF dispatch. So drive
+    # the full view (.as_view()) with an AUTHENTICATED non-owner (staff, matching tenant)
+    # so IsTenantOwner denies with 403 — rather than calling .method() directly and
+    # patching _is_tenant_owner, which the migrated views no longer call. (An anonymous
+    # caller would 401, not 403; a staff principal exercises the 403 path.)
+    def _assert_owner_required(self, view, method="get", data=None):
         factory = APIRequestFactory()
-        req = factory.get("/api/owner/drawer/current/")
+        if method == "post":
+            req = factory.post("/api/owner/drawer/", data or {}, format="json")
+        else:
+            req = factory.get("/api/owner/drawer/")
         req.tenant = SimpleNamespace(id=1)
-        staff = User(id=7, role=User.Roles.TENANT_STAFF, tenant_id=1)
-        force_authenticate(req, user=staff)
-        resp = DrawerCurrentView.as_view()(req)
+        force_authenticate(req, user=User(id=7, role=User.Roles.TENANT_STAFF, tenant_id=1))
+        resp = view.as_view()(req)
         self.assertEqual(resp.status_code, 403)
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_open_requires_owner(self, _):
-        req = _make_owner_request("POST", {"opening_float": "100"})
-        resp = DrawerOpenView().post(req)
-        self.assertEqual(resp.status_code, 403)
+    def test_current_requires_owner(self):
+        self._assert_owner_required(DrawerCurrentView)
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_transaction_requires_owner(self, _):
-        req = _make_owner_request("POST", {"kind": "pay_in", "amount": "10"})
-        resp = DrawerTransactionView().post(req)
-        self.assertEqual(resp.status_code, 403)
+    def test_open_requires_owner(self):
+        self._assert_owner_required(DrawerOpenView, "post", {"opening_float": "100"})
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_close_requires_owner(self, _):
-        req = _make_owner_request("POST", {"counted_total": "100"})
-        resp = DrawerCloseView().post(req)
-        self.assertEqual(resp.status_code, 403)
+    def test_transaction_requires_owner(self):
+        self._assert_owner_required(DrawerTransactionView, "post", {"kind": "pay_in", "amount": "10"})
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_history_requires_owner(self, _):
-        req = _make_owner_request()
-        resp = DrawerHistoryView().get(req)
-        self.assertEqual(resp.status_code, 403)
+    def test_close_requires_owner(self):
+        self._assert_owner_required(DrawerCloseView, "post", {"counted_total": "100"})
+
+    def test_history_requires_owner(self):
+        self._assert_owner_required(DrawerHistoryView)
 
 
 class DefaultPreservingNoDrawerTest(SimpleTestCase):

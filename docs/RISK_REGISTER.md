@@ -107,7 +107,20 @@ predicates (`_can_access_order`, `StaffOrderListView`, `OwnerZReportView._requir
 `_is_tenant_owner` mid-logic where non-owners get a *different valid response*, not a 403 — those
 **stay** and the helpers can't be fully deleted.
 
-**Remaining:** slice 2 = the multi-method owner classes (every method owner-gated, so class-level is
+**Slice 2 (2026-07-17):** the 4 remaining cash-drawer views (`DrawerOpenView`,
+`DrawerTransactionView`, `DrawerCloseView`, `DrawerHistoryView`) migrated to
+`permission_classes = [IsTenantOwner]`, completing the cash-drawer feature's owner-gating
+(`DrawerCurrentView` landed in slice 1). Chosen as a coherent, low-risk batch because their
+tests all live in `test_cash_drawer.py` and call the view **methods directly** — so the happy-path
+tests (which `@patch("menu.views._is_tenant_owner")` and bypass dispatch) keep passing unchanged,
+and only the 4 owner-denial tests needed the `.as_view()` + force-authenticated-non-owner rewrite
+(shared `_assert_owner_required` helper). **Deliberately NOT batched:** the `.as_view()`-heavy test
+files (e.g. `test_customer_notes_views.py` — 18 dispatch-level tests that patch `_is_tenant_owner`)
+would each need every happy-path test rewritten to a real owner principal, so those views get their
+own slices.
+
+**Remaining:** more single-method owner views whose tests go through `.as_view()` (need per-test
+owner-principal rewrites); the multi-method owner classes (every method owner-gated, so class-level is
 safe) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the

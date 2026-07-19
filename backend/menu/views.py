@@ -13129,12 +13129,10 @@ class DrawerOpenView(APIView):
     Body: { "opening_float": "100.00", "note": "" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         if DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).exists():
             return Response(
                 {"detail": "A drawer session is already open.", "code": "already_open"},
@@ -13176,12 +13174,10 @@ class DrawerTransactionView(APIView):
     Body: { "kind": "pay_in"|"pay_out", "amount": "25.00", "reason": "Milk supplier" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
         if session is None:
             return Response(
@@ -13235,12 +13231,10 @@ class DrawerCloseView(APIView):
     Body: { "counted_total": "345.00", "note": "" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         counted_raw = request.data.get("counted_total")
         if counted_raw is None:
             return Response(
@@ -13312,12 +13306,10 @@ class DrawerHistoryView(APIView):
     Auth: owner only.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         profile = getattr(getattr(request, "tenant", None), "profile", None)
         if profile is None:
             return Response({"detail": "Tenant profile not found."}, status=status.HTTP_400_BAD_REQUEST)
