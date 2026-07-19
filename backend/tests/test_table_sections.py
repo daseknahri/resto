@@ -11,14 +11,47 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import User as _AuthUser  # module-level: real class, so _owner()/_staff()
+# keep the real role enum even inside tests that patch.dict sys.modules["accounts.models"].
 from menu.views import OwnerSectionListCreateView, OwnerSectionDetailView
 from menu.waiter_views import _section_slugs_for, OwnerWaiterCallAcknowledgeView
 
 
-def _req(factory, method, path, data=None):
+def _owner():
+    """A landmine-safe tenant owner (RISK AUTHZ-1: pin is_superuser / is_platform_admin
+    False — user_owns_tenant_id short-circuits True on a truthy value, and a MagicMock
+    returns a truthy Mock for any unset attribute). Uses the module-level real User enum so
+    the role stays real even when a test patch.dict-mocks sys.modules['accounts.models']."""
+    u = MagicMock()
+    u.id = 9
+    u.pk = 9
+    u.is_authenticated = True
+    u.is_active = True
+    u.is_superuser = False
+    u.is_staff = False
+    u.is_platform_admin = False
+    u.role = _AuthUser.Roles.TENANT_OWNER
+    u.tenant_id = 1
+    u.Roles = _AuthUser.Roles
+    return u
+
+
+def _staff():
+    """An authenticated NON-owner (tenant staff), matching tenant."""
+    u = _owner()
+    u.id = 20
+    u.pk = 20
+    u.role = _AuthUser.Roles.TENANT_STAFF
+    return u
+
+
+def _req(factory, method, path, data=None, user=None):
     fn = getattr(factory, method)
     req = fn(path, data or {}, format="json") if data is not None else fn(path)
-    req.user = MagicMock(id=9, is_authenticated=True)
+    # RISK AUTHZ-1: the section views now gate via permission_classes=[IsTenantOwner...]
+    # (DRF dispatch), so the request must carry a real owner principal + tenant, not a
+    # bare mock that only "passed" the old inline guard via a patch.
+    req.user = user or _owner()
     req.tenant = SimpleNamespace(id=1)
     return req
 
@@ -28,9 +61,10 @@ class OwnerSectionListCreateTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = OwnerSectionListCreateView.as_view()
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_non_owner_denied(self, _gate):
-        resp = self.view(_req(self.factory, "post", "/api/owner/sections/", {"name": "Terrace"}))
+    def test_non_owner_denied(self):
+        # RISK AUTHZ-1: owner check is now permission_classes (DRF dispatch); drive a REAL
+        # non-owner (staff) principal — the old _is_tenant_owner=False patch is a no-op now.
+        resp = self.view(_req(self.factory, "post", "/api/owner/sections/", {"name": "Terrace"}, user=_staff()))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch("menu.views._is_tenant_owner", return_value=True)

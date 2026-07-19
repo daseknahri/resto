@@ -9384,11 +9384,10 @@ def _serialize_section(section, server_map):
 class OwnerSectionListCreateView(APIView):
     """GET/POST /api/owner/sections/ — list or create floor sections (owner only)."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         sections = list(
             TableSection.objects.prefetch_related("tables", "servers").order_by("position", "name", "id")
         )
@@ -9397,8 +9396,6 @@ class OwnerSectionListCreateView(APIView):
         return Response({"sections": [_serialize_section(s, server_map) for s in sections]})
 
     def post(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         name = str(request.data.get("name", "") or "").strip()[:60]
         if not name:
             return Response({"detail": "Name is required.", "code": "name_required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -9414,11 +9411,10 @@ class OwnerSectionListCreateView(APIView):
 class OwnerSectionDetailView(APIView):
     """PATCH/DELETE /api/owner/sections/<id>/ — edit, assign tables/waiters, delete."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def patch(self, request, section_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         section = TableSection.objects.filter(id=section_id).first()
         if section is None:
             return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -9488,8 +9484,6 @@ class OwnerSectionDetailView(APIView):
         return Response(_serialize_section(section, server_map))
 
     def delete(self, request, section_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         section = TableSection.objects.filter(id=section_id).first()
         if section is None:
             return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)

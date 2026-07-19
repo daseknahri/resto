@@ -172,12 +172,22 @@ class-level collapses the pair. **Key heuristic confirmed: a test file with ZERO
 green. The slice-3 landmine only lives in files that *patch* `_is_tenant_owner` (the patch masks
 whether the fixture independently yields the right result). 96 tests across 5 files, no changes.
 
-**Remaining:** the patch-using multi-method classes — `OwnerSectionListCreateView` /
-`OwnerSectionDetailView` (`test_table_sections.py`, 13 `_is_tenant_owner` patches) and
-`OwnerCampaignView` (`test_owner_campaigns.py` + `test_b1_email_retention.py`, ~4 patches) — need the
-slice-5 landmine treatment (real non-owner fixtures for the denial tests); the shared owner/lookup-
-helper cases (`OwnerPromotionDetailView` `_get_promo`, `OwnerStaffDeleteView` `_get_staff` — 403 moves
-to the class, 404 lookup stays inline);
+**Slice 8 (2026-07-17):** `OwnerSectionListCreateView` / `OwnerSectionDetailView` (→
+`IsTenantOwnerAccessDenied`) — the first patch-using file (`test_table_sections.py`, 13 patches).
+Its shared `_req()` used a **bare `MagicMock`** user (truthy `is_superuser` → the slice-3 landmine),
+which the happy paths only survived via the `_is_tenant_owner=True` patch bypass, and the one
+`test_non_owner_denied` faked denial via `_is_tenant_owner=False`. Upgraded `_req()` to a real
+landmine-safe `_owner()` (+ a `_staff()` for the denial test). **New wrinkle:** one happy-path test
+`patch.dict`-mocks `sys.modules["accounts.models"]` (to stub the tenant-member whitelist query), so a
+function-local `from accounts.models import User` in the fixture got the *mocked* User and its `role`
+stopped equalling the real `TENANT_OWNER` enum → owner denied. Fixed by importing `User` at the test
+module level (bound to the real class before any test runs), so the fixture keeps the real role even
+inside the `patch.dict` block. The waiter-ack tests in the same file patch `_is_tenant_owner` for a
+*different* (un-migrated) view and are untouched.
+
+**Remaining:** `OwnerCampaignView` (`test_owner_campaigns.py` + `test_b1_email_retention.py`, ~4
+patches — same landmine treatment); the shared owner/lookup-helper cases (`OwnerPromotionDetailView`
+`_get_promo`, `OwnerStaffDeleteView` `_get_staff` — 403 moves to the class, 404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
