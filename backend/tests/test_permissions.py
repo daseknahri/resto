@@ -14,7 +14,13 @@ from django.test import SimpleTestCase
 
 from accounts.models import User
 from menu.permissions import IsTenantEditorOrReadOnly
-from sales.permissions import IsPlatformAdmin, IsTenantEditor, IsTenantOwner, user_owns_tenant_id
+from sales.permissions import (
+    IsPlatformAdmin,
+    IsTenantEditor,
+    IsTenantOwner,
+    IsTenantOwnerAccessDenied,
+    user_owns_tenant_id,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -183,6 +189,24 @@ class IsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(platform_admin=True, tenant_id=99), tenant=_tenant(1))
         obj = SimpleNamespace(tenant_id=1)
         self.assertTrue(self.perm.has_object_permission(req, self.view, obj))
+
+    # ── RISK AUTHZ-1: exact-body preservation for the call-site migration ────────
+    # DRF renders `permission.message` as the 403 {"detail": ...} when has_permission
+    # returns False for an authenticated non-owner. These lock the exact legacy bodies
+    # the inline _is_tenant_owner guards returned, so migrating a view to these classes
+    # is byte-for-byte behavior-preserving.
+
+    def test_message_is_the_legacy_owner_body(self):
+        self.assertEqual(IsTenantOwner.message, "Owner access required.")
+
+    def test_access_denied_variant_same_policy_different_body(self):
+        # Same owner policy (subclass), only the 403 text differs.
+        self.assertTrue(issubclass(IsTenantOwnerAccessDenied, IsTenantOwner))
+        self.assertEqual(IsTenantOwnerAccessDenied.message, "Access denied.")
+        req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
+        self.assertTrue(IsTenantOwnerAccessDenied().has_permission(req, None))
+        staff = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
+        self.assertFalse(IsTenantOwnerAccessDenied().has_permission(staff, None))
 
     def test_object_unauthenticated_denied(self):
         req = _request(user=_user(authenticated=False), tenant=_tenant(1))

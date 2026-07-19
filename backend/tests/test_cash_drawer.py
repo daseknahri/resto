@@ -9,10 +9,14 @@ from decimal import Decimal
 from datetime import datetime, timezone as _tz
 from unittest.mock import MagicMock, patch
 
+from types import SimpleNamespace
+
 from django.test import SimpleTestCase
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.request import Request as DRFRequest
 from rest_framework.parsers import JSONParser
+
+from accounts.models import User
 
 from menu.views import (
     _drawer_session_dict,
@@ -455,10 +459,18 @@ class DrawerCloseViewTests(SimpleTestCase):
 class DrawerAccessControlTests(SimpleTestCase):
     """Non-owner requests are rejected with 403."""
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_current_requires_owner(self, _):
-        req = _make_owner_request()
-        resp = DrawerCurrentView().get(req)
+    def test_current_requires_owner(self):
+        # RISK AUTHZ-1: DrawerCurrentView's owner check moved from an inline
+        # _is_tenant_owner guard to permission_classes = [IsTenantOwner], which runs in
+        # DRF dispatch — so drive the full view (.as_view()) rather than calling .get()
+        # directly. An AUTHENTICATED non-owner (staff, matching tenant) is force-
+        # authenticated so IsTenantOwner denies with 403 (an anonymous caller would 401).
+        factory = APIRequestFactory()
+        req = factory.get("/api/owner/drawer/current/")
+        req.tenant = SimpleNamespace(id=1)
+        staff = User(id=7, role=User.Roles.TENANT_STAFF, tenant_id=1)
+        force_authenticate(req, user=staff)
+        resp = DrawerCurrentView.as_view()(req)
         self.assertEqual(resp.status_code, 403)
 
     @patch("menu.views._is_tenant_owner", return_value=False)

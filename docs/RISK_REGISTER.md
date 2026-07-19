@@ -92,8 +92,29 @@ marketplace, wallet ledger, admin, reconcile/GDPR commands), so auto-scoping wou
 app for marginal gain; revisit after IDENTITY-1 lands. The one flagged query
 (`menu/views.py` CustomerRating average) is by-design platform-wide (per model docstring) and
 now commented as such.
-**Remaining:** (1) IDENTITY-1, (2) the policy-class layer (`IsTenantOwner` etc.) + delete both
-`_is_tenant_owner` helpers.
+**Progress (call-site migration, slice 1 — 2026-07-17):** IDENTITY-1 is done (the customer/driver
+view sweep completed), unblocking this. `IsTenantOwner` now carries a `message` (`"Owner access
+required."`) so DRF renders the exact legacy 403 body when it denies an *authenticated* non-owner;
+a sibling `IsTenantOwnerAccessDenied` preserves the other legacy text (`"Access denied."`). First 8
+`menu/views.py` owner views migrated from an inline `if not _is_tenant_owner(request): return 403`
+to declarative `permission_classes = [IsTenantOwner|…AccessDenied]` (OwnerInvoiceView,
+OwnerCommissionStatementView, OwnerDataExportView, OwnerWalletFloatView, DrawerCurrentView,
+OwnerIngredientLowStockView, OwnerRecipeLineDetailView, OwnerClosureDateDeleteView). Byte-for-byte
+behavior-preserving: authenticated non-owner → 403 same body; anonymous → 401 (`NotAuthenticated`)
+same as the old `IsAuthenticated` gate. A scout classified all ~56 sites first: **zero** were
+plain-403 (every guard has a custom body, hence the `message` approach); **3 are Category-C**
+predicates (`_can_access_order`, `StaffOrderListView`, `OwnerZReportView._require_owner`) that use
+`_is_tenant_owner` mid-logic where non-owners get a *different valid response*, not a 403 — those
+**stay** and the helpers can't be fully deleted.
+
+**Remaining:** slice 2 = the multi-method owner classes (every method owner-gated, so class-level is
+safe) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays inline);
+slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
+carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
+`accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
+`IsTenantOwner` is equivalent); and the `OwnerAnalyticsExportView` ordering gotcha (a public-schema
+400 runs before the owner check — keep inline or use `get_permissions()`). The two `_is_tenant_owner`
+helpers shrink to serving only the Category-C predicates.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
 ### OPS-1 — Single Postgres, no replica, no PITR

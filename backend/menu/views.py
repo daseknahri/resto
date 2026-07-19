@@ -53,6 +53,10 @@ import qrcode
 # menu/views.py <-> accounts/views.py circular-import web that forces local imports here.
 from accounts.authentication import CustomerSessionAuthentication
 from accounts.permissions import IsOrderOwner, customer_or_none
+# RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
+# sales.permissions imports only rest_framework + accounts.models.User (accounts.models
+# does not import menu), the same import accounts/views.py already does at module level.
+from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
@@ -9746,11 +9750,12 @@ class OwnerClosureDateDeleteView(APIView):
     DELETE /api/owner/closure-dates/<closure_id>/  — remove a closure date
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, was an inline _is_tenant_owner guard (403 "Owner access
+    # required."). IsTenantOwner enforces the same policy declaratively and reproduces the
+    # exact body; an anonymous caller still 401s first (unchanged).
+    permission_classes = [IsTenantOwner]
 
     def delete(self, request, closure_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         from .models import ClosureDate
         try:
             obj = ClosureDate.objects.get(id=closure_id)
@@ -9774,12 +9779,10 @@ class OwnerInvoiceView(APIView):
     Returns HTTP 400 if invoice_amount is not set (admin must fill it in first).
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=403)
-
         request_id = request.query_params.get("request_id", "")
         if not request_id:
             return Response({"detail": "request_id query parameter is required."}, status=400)
@@ -9910,11 +9913,10 @@ class OwnerCommissionStatementView(APIView):
     payout, plus summary totals.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=403)
 
         from calendar import month_name
         from datetime import datetime as _dt
@@ -10256,12 +10258,10 @@ class OwnerDataExportView(APIView):
         - closure_dates        Holiday / closure date records
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         import json
         from django.db import connection as _conn
 
@@ -12472,12 +12472,10 @@ class OwnerWalletFloatView(APIView):
     how much they can still hand out and where it went.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
@@ -12895,11 +12893,10 @@ class OwnerIngredientListCreateView(APIView):
 class OwnerIngredientLowStockView(APIView):
     """GET /api/owner/ingredients/low-stock/ — ingredients at or below their threshold."""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         qs = Ingredient.objects.filter(
             is_active=True,
             low_stock_threshold__isnull=False,
@@ -13031,11 +13028,10 @@ class OwnerDishRecipeView(APIView):
 class OwnerRecipeLineDetailView(APIView):
     """DELETE /api/owner/recipe-lines/<pk>/ — remove one ingredient from a recipe."""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def delete(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             rl = RecipeLine.objects.get(pk=pk)
         except RecipeLine.DoesNotExist:
@@ -13108,12 +13104,10 @@ class DrawerCurrentView(APIView):
     Auth: owner only.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
         if session is None:
             return Response({"open": False, "session": None})
