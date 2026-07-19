@@ -1299,58 +1299,18 @@
     </Transition>
   </Teleport>
 
-  <!-- Dry-run import review modal -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="dryRunReview"
-        tabindex="-1"
-        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
-        @click.self="cancelDryRun"
-        @keydown.esc="cancelDryRun"
-      >
-        <div ref="dryRunDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-console-dry-run-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
-          <div class="border-b border-slate-800 px-5 py-4">
-            <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
-            <h3 id="admin-console-dry-run-dialog-title" class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>
-          </div>
-          <div class="px-5 py-4 space-y-2 text-sm text-slate-300">
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.categories') }}</span><span class="font-semibold">{{ dryRunReview.summary.categories || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.dishes') }}</span><span class="font-semibold">{{ dryRunReview.summary.dishes || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.optionsLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.options || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.tableLinksLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.table_links || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.profileLabel') }}</span><span class="font-semibold" :class="dryRunReview.summary.profile_updated ? 'text-emerald-400' : 'text-slate-500'">{{ dryRunReview.summary.profile_updated ? t('adminConsole.yes') : t('adminConsole.no') }}</span></div>
-          </div>
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
-            <button
-              class="ui-btn-outline ui-press px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="applyingImport"
-              @click="cancelDryRun"
-            >{{ t('common.cancel') }}</button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="applyingImport"
-              :aria-busy="applyingImport"
-              @click="applyTenantImport"
-            >
-              <svg v-if="applyingImport" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ applyingImport ? t('common.loading') : t('adminConsole.applyImport') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <AdminConsoleDryRunImportModal
+    :review="dryRunReview"
+    :applying="applyingImport"
+    @cancel="cancelDryRun"
+    @apply="applyTenantImport"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
+import AdminConsoleDryRunImportModal from "../components/AdminConsoleDryRunImportModal.vue";
 import AdminConsoleOnboardingPackage from "../components/AdminConsoleOnboardingPackage.vue";
 import AdminConsoleProvisioningJobs from "../components/AdminConsoleProvisioningJobs.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -1414,39 +1374,8 @@ const tenantLifecycleLoading = ref({});
 const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
-const dryRunReview = ref(null); // { tenant, summary, replaceBody }
-const dryRunDialogRef = ref(null);
-
-const FOCUSABLE_DR = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-const trapDryRunFocus = (e) => {
-  if (!dryRunDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(dryRunDialogRef.value.querySelectorAll(FOCUSABLE_DR));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last  = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
-  }
-};
-
-watch(dryRunReview, async (val) => {
-  if (val) {
-    await nextTick();
-    dryRunDialogRef.value?.querySelector(FOCUSABLE_DR)?.focus();
-    document.addEventListener('keydown', trapDryRunFocus);
-  } else {
-    document.removeEventListener('keydown', trapDryRunFocus);
-  }
-});
+const dryRunReview = ref(null); // { tenant, summary, replaceBody } — focus trap lives in AdminConsoleDryRunImportModal
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', trapDryRunFocus);
   document.removeEventListener('keydown', trapDeliveryFocus);
   document.removeEventListener('keydown', trapLiveOrdersFocus);
 });
