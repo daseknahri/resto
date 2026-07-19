@@ -22,7 +22,7 @@ from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
-from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerStaffForbidden, user_owns_tenant_id
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerStaffForbidden
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -1555,17 +1555,6 @@ import re as _re
 import secrets as _secrets
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import update_session_auth_hash as _update_session_auth_hash
-
-
-def _is_tenant_owner(request, tenant) -> bool:
-    """Return True if the request user is the owner of the given tenant.
-
-    RISK AUTHZ-1: thin delegate to `sales.permissions.user_owns_tenant_id` (the single owner
-    check shared with `IsTenantOwner` and menu's `_is_tenant_owner`). Kept as a named helper so
-    the ~8 call sites and their tests stay stable. Semantics unchanged: superuser / platform-admin
-    bypass (OPS-5d dropped Django `is_staff` as an owner signal), else tenant-match AND owner role.
-    """
-    return user_owns_tenant_id(getattr(request, "user", None), getattr(tenant, "id", None))
 
 
 class OwnerStaffListCreateView(APIView):

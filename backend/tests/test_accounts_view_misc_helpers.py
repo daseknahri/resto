@@ -1,6 +1,5 @@
 """
 Unit tests for remaining private helpers in accounts/views.py:
-  - _is_tenant_owner(request, tenant)  [two-arg form in accounts.views]
   - _serialize_address
   - build_frontend_base_url
 
@@ -12,95 +11,15 @@ from unittest.mock import MagicMock
 from django.test import SimpleTestCase, override_settings
 
 from accounts.views import (
-    _is_tenant_owner,
     _serialize_address,
     build_frontend_base_url,
 )
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
-def _user(
-    *,
-    authenticated=True,
-    superuser=False,
-    staff=False,
-    platform_admin=False,
-    role=None,
-    tenant_id=1,
-    tenant=None,
-):
-    from accounts.models import User as UserModel
-    u = MagicMock(spec=UserModel)
-    u.is_authenticated = authenticated
-    u.is_superuser = superuser
-    u.is_staff = staff
-    u.is_platform_admin = platform_admin
-    u.role = role or UserModel.Roles.TENANT_OWNER
-    u.tenant_id = tenant_id
-    u.tenant = tenant
-    u.Roles = UserModel.Roles
-    return u
-
-
-def _tenant_ns(tenant_id=1):
-    return SimpleNamespace(id=tenant_id)
-
-
-def _request(user=None, tenant=None):
-    return SimpleNamespace(user=user or _user(), tenant=tenant)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# _is_tenant_owner(request, tenant)  — accounts.views, two-arg form
-# ══════════════════════════════════════════════════════════════════════════════
-
-class IsTenantOwnerAccountsTests(SimpleTestCase):
-    """
-    The accounts.views._is_tenant_owner takes (request, tenant) unlike the
-    menu.views version that takes only (request).  It also only grants access
-    to TENANT_OWNER role (not TENANT_STAFF), unless the user is a superuser/admin.
-    """
-
-    def test_unauthenticated_returns_false(self):
-        req = _request(user=_user(authenticated=False))
-        self.assertFalse(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_superuser_returns_true_regardless_of_tenant(self):
-        req = _request(user=_user(superuser=True, tenant_id=99))
-        self.assertTrue(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_staff_alone_returns_false(self):
-        # OPS-5d: a Django is_staff flag is no longer a cross-tenant owner bypass.
-        req = _request(user=_user(staff=True, tenant_id=99))
-        self.assertFalse(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_platform_admin_returns_true(self):
-        req = _request(user=_user(platform_admin=True, tenant_id=99))
-        self.assertTrue(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_none_tenant_returns_false(self):
-        req = _request(user=_user(tenant_id=1))
-        self.assertFalse(_is_tenant_owner(req, None))
-
-    def test_wrong_tenant_id_returns_false(self):
-        req = _request(user=_user(tenant_id=99))
-        self.assertFalse(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_tenant_owner_matching_tenant_returns_true(self):
-        from accounts.models import User as UserModel
-        req = _request(user=_user(role=UserModel.Roles.TENANT_OWNER, tenant_id=1))
-        self.assertTrue(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_tenant_staff_with_matching_tenant_returns_false(self):
-        """Staff role is explicitly excluded from this check (owner only)."""
-        from accounts.models import User as UserModel
-        req = _request(user=_user(role=UserModel.Roles.TENANT_STAFF, tenant_id=1))
-        self.assertFalse(_is_tenant_owner(req, _tenant_ns(1)))
-
-    def test_no_user_attribute_returns_false(self):
-        req = SimpleNamespace(tenant=_tenant_ns(1))
-        self.assertFalse(_is_tenant_owner(req, _tenant_ns(1)))
+# NOTE: the two-arg accounts.views._is_tenant_owner helper was deleted after the
+# AUTHZ-1 call-site migration (owner-gating is now permission_classes=[IsTenantOwner]).
+# Its owner-check semantics live in sales.permissions.user_owns_tenant_id, covered by
+# tests/test_permissions.py::UserOwnsTenantIdTests.
 
 
 # ══════════════════════════════════════════════════════════════════════════════

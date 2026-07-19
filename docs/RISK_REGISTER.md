@@ -23,7 +23,7 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | ◑ Core done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices). Residual is by design: 3 Category-C predicates + a dead-helper test-cleanup | L |
+| **AUTHZ-1** | Auth | ◑ Core done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices); dead `accounts._is_tenant_owner` helper deleted. Residual is by design: 3 Category-C predicates (mid-logic owner checks that return a *different* response, not 403) | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
@@ -236,9 +236,13 @@ preservation, and `get_permissions()` for the one ordering exception). What rema
 the **3 Category-C predicates** (`_can_access_order`/`CustomerOrdersByPhoneView` line ~4206,
 `StaffOrderListView` line ~4341, `OwnerZReportView._require_owner`) that use `_is_tenant_owner`
 mid-logic where a non-owner gets a *different valid response*, not a 403 — so the `menu`
-`_is_tenant_owner` helper stays (serves those). The **accounts** `_is_tenant_owner` helper is now
-**dead** (no view calls it) but retained pending a small test-cleanup slice (3 test files still
-patch/unit-test it). This closes AUTHZ-1's core deliverable: authorization is a tested policy layer,
+`_is_tenant_owner` helper stays (serves those). The **accounts** `_is_tenant_owner` helper (dead
+after the migration — no view called it) has now been **deleted** (2026-07-19): its owner-check
+semantics live in `sales.permissions.user_owns_tenant_id`, fully covered by
+`tests/test_permissions.py::UserOwnsTenantIdTests`; the 9 delegate unit-tests were removed and two
+now-dead `patch("accounts.views._is_tenant_owner", …)` no-ops (in `test_ops5b_admin_security.py` /
+`test_ops5_billing.py`, both of which call `view.post()` directly and so never hit the permission
+layer) were dropped. This closes AUTHZ-1's core deliverable: authorization is a tested policy layer,
 not a copy-pasted convention.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
