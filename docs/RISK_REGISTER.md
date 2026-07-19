@@ -743,14 +743,22 @@ backend** (force `schema_context("public")` around session DB writes) or **signe
 (size/invalidation tradeoffs) — a deliberate custom component, not a one-line setting.
 **Effort:** M. **Source:** async/realtime review.
 
-### ASYNC-3 — Realtime and polling both run at full rate
+### ASYNC-3 — Realtime and polling both run at full rate  ✅ ADDRESSED (2026-07-17)
 **Where:** `OrderStatus.vue` polls every 15s even when the WS is live; `OwnerOrders.vue` polls
 15s and doesn't instantiate the (already-built) `useOwnerRealtime` at all.
 **Failure scenario:** You pay for `channels_redis` + WS fan-out **and** keep full-rate polling —
 backend request volume is ~unchanged from poll-only, plus the WS cost. Realtime is additive, not
 substitutive.
-**Fix:** Gate polling on `connectionState !== 'live'` (drop to a 60s safety net when the socket is
-up); wire `useOwnerRealtime` into `OwnerOrders`.
+**Resolution:** both pages now poll via a **self-rescheduling `setTimeout`** (not a fixed
+`setInterval`) that reads the WS `connectionState` each cycle: `'live'` → a **60s safety-net**,
+otherwise the original fast 15s primary rate — so the cadence adapts if the socket flips mid-session.
+`OrderStatus.vue` reuses the `connectionState` its existing `useOrderRealtime` already exposes.
+`OwnerOrders.vue` now instantiates `useOwnerRealtime` (mirroring `OwnerKitchen`'s own `/ws/owner/`
+subscription): `order.*` events push a `doPoll()` — the same refresh the timer runs — and its poll
+gates on that channel's `connectionState`. Behavior is unchanged for users whose socket never
+connects (still 15s + the background-tab skip). Net: 4× fewer HTTP polls when live, for one extra
+(cheap) WS subscription — the intended substitutive tradeoff. All four frontend gates green
+(verify:i18n, lint, build, vitest 519).
 **Effort:** M. **Source:** async/realtime review.
 
 ### ASYNC-4 — `acks_late` without dedupe → duplicate sends  ◑ PARTIALLY ADDRESSED (2026-07-11)

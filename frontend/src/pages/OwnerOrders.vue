@@ -1479,6 +1479,7 @@ import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { usePrintTicket } from "../composables/usePrintTicket";
+import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { isAutoAcceptOn } from "../lib/orderHandling";
 import { bustCache } from "../lib/staleCache";
@@ -2469,6 +2470,31 @@ const doPoll = async () => {
   }
 };
 
+// ── Realtime channel (RISK ASYNC-3) ───────────────────────────────────────────
+// Own `/ws/owner/` subscription (mirrors OwnerKitchen) so order events arrive by
+// push and trigger the same refresh the poll does. When the socket is 'live' the
+// poll below drops to a slow safety-net; otherwise it runs full-rate.
+const ordersRealtime = useOwnerRealtime((event) => {
+  if (typeof event === "string" && event.startsWith("order.")) {
+    doPoll();
+  }
+});
+
+// Self-rescheduling poll so the cadence adapts when the WS connection flips.
+// 'live' → 60s safety-net; otherwise the fast 15s primary rate.
+const POLL_SAFETY_NET_MS = 60000;
+const POLL_FAST_MS = 15000; // faster than layout's 30 s
+const scheduleNextPoll = () => {
+  const live = ordersRealtime.connectionState?.value === "live";
+  pollTimer = setTimeout(() => {
+    // Skip the API call when the tab is in the background — runs on resume instead
+    if (typeof document === "undefined" || document.visibilityState !== "hidden") {
+      doPoll();
+    }
+    scheduleNextPoll();
+  }, live ? POLL_SAFETY_NET_MS : POLL_FAST_MS);
+};
+
 const onPageVisible = () => {
   // Immediately refresh when the owner switches back to this tab
   if (typeof document !== "undefined" && document.visibilityState === "visible") {
@@ -2492,15 +2518,13 @@ onMounted(async () => {
     document.addEventListener("visibilitychange", onPageVisible);
   }
 
-  pollTimer = setInterval(() => {
-    // Skip the API call when the tab is in the background — runs on resume instead
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    doPoll();
-  }, 15000); // 15 s — faster than layout's 30 s
+  ordersRealtime.connect(); // instant order updates when WS is available (else polling)
+  scheduleNextPoll();
 });
 
 onUnmounted(() => {
-  clearInterval(pollTimer);
+  clearTimeout(pollTimer);
+  ordersRealtime.disconnect();
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onPageVisible);
   }
