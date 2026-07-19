@@ -416,6 +416,11 @@ def prune_auth_tokens():
     _run_command("prune_auth_tokens")
 
 
+@shared_task(name="cron.prune_customer_ratings", acks_late=True, **_CRON_RETRY)
+def prune_customer_ratings():
+    _run_command("prune_customer_ratings")
+
+
 # ── Ride-hailing push tasks ──────────────────────────────────────────────────────
 
 @shared_task(name="accounts.tasks.ride_dispatch_to_drivers", **_RETRY)

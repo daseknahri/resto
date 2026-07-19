@@ -221,6 +221,17 @@ class TaskQueueRoutingTests(SimpleTestCase):
         self.assertFalse(hasattr(tasks, "run_management_command"))
         self.assertFalse(hasattr(tasks, "_MANAGEMENT_COMMAND_ALLOWLIST"))
 
+    def test_customer_ratings_retention_is_scheduled(self):
+        """The public CustomerRating table has an ACTIVE retention prune. It was orphaned
+        (scheduled nowhere) when ASYNC-2 deleted the old allowlist, so it grew unbounded;
+        this pins the daily Beat entry so a removal regresses loudly rather than silently
+        letting the table grow again."""
+        from django.conf import settings
+        entry = settings.CELERY_BEAT_SCHEDULE.get("prune-customer-ratings")
+        self.assertIsNotNone(entry, "CustomerRating retention prune is not scheduled")
+        self.assertEqual(entry["task"], "cron.prune_customer_ratings")
+        self.assertEqual(entry["schedule"], 86400.0)  # daily
+
 
 class ChargeRequestDispatchTests(SimpleTestCase):
     """R14b FIX1: push_charge_request now routes through accounts.tasks.enqueue (bounded

@@ -404,6 +404,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "cron.prune_auth_tokens",
         "schedule": 86400.0,  # daily — delete rows older than 30 days
     },
+    # Retention for the public CustomerRating table (one row per customer × tenant × order);
+    # left unscheduled when ASYNC-2 deleted the old allowlist, so it grew unbounded.
+    "prune-customer-ratings": {
+        "task": "cron.prune_customer_ratings",
+        "schedule": 86400.0,  # daily — delete rows older than 365 days (command default)
+    },
 }
 
 # ── Session store ──────────────────────────────────────────────────────────────
