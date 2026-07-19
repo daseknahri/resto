@@ -808,6 +808,14 @@ generate the parity files, or move to a keyed catalog with one file per locale. 
 **Where:** `WaiterPage.vue` 3,722, `CustomerAccount.vue` 3,654, + four more 2,500–3,700 lines.
 **Failure scenario:** Single-writer bottleneck; merge conflicts; hard to test; slow to reason about.
 **Fix:** Split each into feature child-components + composables.
+**Progress (ongoing, extract-and-test pattern):** each slice lifts a self-contained block from a
+mega-page into a `src/components/` child (props-in / events-out) with its own isolated vitest test —
+the parent shrinks and the extracted unit gains real coverage. Landed so far: 3 `CustomerAccount`
+tabs (reservations/reviews/profile), `DriverPage*History`, `OwnerOrdersFilterSheet`,
+`MarketplaceMenu*`, `WaiterTableQRModal`, and (2026-07-19) `OwnerOrdersCashierModal` (the cashier
+big-total settle modal — parent `cashierOrder`/settle logic stays in `OwnerOrders.vue`; 10-case
+test; no new i18n keys). `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are held for
+supervised slices, not autonomous ones.
 **Effort:** L. **Source:** frontend review.
 
 ### FE-3 — Locale catalogs block first paint  ◑ MOSTLY SHIPPED (verified 2026-07-11)
