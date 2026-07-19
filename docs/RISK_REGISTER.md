@@ -211,11 +211,22 @@ its `if tenant is None: 400` guard stay (the bodies use `tenant`); only the owne
 Transparent (both `test_flash_sales.py` / `test_admin_delivery_views.py` are 0-patch, landmine-safe
 fixtures). `accounts._is_tenant_owner` is now used only by the 3 staff sites.
 
-**Remaining (menu):** `OwnerAnalyticsExportView` (public-schema 400 runs before the owner check —
-`get_permissions()` or keep inline). **Remaining (accounts):** the staff endpoints
-(`OwnerStaffListCreateView`/`OwnerStaffDeleteView` — `code:"forbidden"` body, needs a code-carrying
-denial; `_get_staff` shared-helper). Then the 3 Category-C predicates stay and the two
-`_is_tenant_owner` helpers shrink to serving only those.
+**Slice 12 (2026-07-17):** the staff endpoints — `OwnerStaffListCreateView` (get+post),
+`OwnerStaffDeleteView` (`_get_staff` shared helper) → `IsTenantOwnerStaffForbidden`. Their 403 body
+uniquely carries a `code` (`{"detail": "Owner access required.", "code": "forbidden"}`, asserted by
+a test), which a string `message` can't reproduce. Solved by giving the permission class a **dict**
+`message`: DRF's `permission_denied` raises `PermissionDenied(detail=message)` and the exception
+handler uses a dict `detail` as the response body verbatim — confirmed (`test_owner_staff_views`
+green, `resp.data["code"]=="forbidden"`). `_get_staff`'s 403 moved to the class; its 404 lookup
+stays. All 8 `accounts/views.py` call sites are now migrated — the accounts `_is_tenant_owner` helper
+is **dead** (no view calls it) but retained for now (3 test files still patch/unit-test it;
+deleting it is a separate cleanup).
+
+**Remaining:** only `OwnerAnalyticsExportView` (menu) — the ordering gotcha: a public-schema **400**
+runs before the owner check, and a class-level permission runs first, so it would flip 400→403. Needs
+`get_permissions()` (gate only the non-public path) or stays inline as a documented exception. Then
+the 3 Category-C predicates stay by design, and the two `_is_tenant_owner` helpers can be reduced to
+(or, for accounts, deleted with their test cleanup).
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so

@@ -22,7 +22,7 @@ from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
-from sales.permissions import IsPlatformAdmin, IsTenantOwner, user_owns_tenant_id
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerStaffForbidden, user_owns_tenant_id
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -1572,13 +1572,13 @@ class OwnerStaffListCreateView(APIView):
     """GET /api/owner/staff/ — list staff accounts for this tenant.
        POST /api/owner/staff/ — create a new staff (waiter) account."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403
+    # {"detail": "Owner access required.", "code": "forbidden"} — the code is preserved by
+    # IsTenantOwnerStaffForbidden's dict message, which DRF renders as the body verbatim).
+    permission_classes = [IsTenantOwnerStaffForbidden]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
-
         from .models import User
         staff = list(
             User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF)
@@ -1666,8 +1666,6 @@ class OwnerStaffListCreateView(APIView):
 
     def post(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         name = (request.data.get("name") or "").strip()
         email = (request.data.get("email") or "").strip().lower()
@@ -1812,13 +1810,14 @@ class OwnerStaffDeleteView(APIView):
     """DELETE /api/owner/staff/<staff_id>/ — remove a staff account from this tenant.
        PATCH  /api/owner/staff/<staff_id>/ — update staff permissions."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was the code:"forbidden" 403 inside _get_staff,
+    # which now does only the 404 lookup). Body preserved by IsTenantOwnerStaffForbidden.
+    permission_classes = [IsTenantOwnerStaffForbidden]
 
     def _get_staff(self, request, staff_id):
-        """Return (tenant, staff_user) or raise a Response on error."""
+        """Return (staff_user, error_response). Owner-gating is now on the class; this does
+        only the tenant-scoped 404 lookup."""
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return None, Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
         from .models import User
         staff_user = User.objects.filter(id=staff_id, tenant=tenant, role=User.Roles.TENANT_STAFF).first()
         if staff_user is None:
