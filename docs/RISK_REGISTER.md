@@ -819,9 +819,11 @@ tabs (reservations/reviews/profile), `DriverPage*History`, `OwnerOrdersFilterShe
 markup, self-contained + lifecycle-tested; parent keeps the settings-import apply call; 13-case
 test), plus `DriverPageRideHistory` (the car-driver ride-history accordion — third sibling to the
 delivery/cashout history children; parent keeps the fetch + lazy-load + car-only gate; 11-case test).
-All three no new i18n keys. The driver **cash-out request / wallet money path was explicitly left
-untouched**. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are held for supervised
-slices, not autonomous ones.
+plus `MarketplaceMenuHeader` (the customer menu page's restaurant header/about section — logo, chips,
+opening-hours disclosure, share-via-emit; 16-case test; the add-to-cart/checkout path was left
+untouched). All no new i18n keys. Money/order paths (driver cash-out, customer cart/checkout) were
+explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
+held for supervised slices, not autonomous ones.
 **Effort:** L. **Source:** frontend review.
 
 ### FE-3 — Locale catalogs block first paint  ◑ MOSTLY SHIPPED (verified 2026-07-11)
