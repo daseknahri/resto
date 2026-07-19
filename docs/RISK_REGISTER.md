@@ -23,7 +23,7 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class + single `user_owns_tenant_id` owner-check** shipped (3 divergent helpers → 1); call-site→`permission_classes` migration remains | L |
+| **AUTHZ-1** | Auth | ◑ Core done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices). Residual is by design: 3 Category-C predicates + a dead-helper test-cleanup | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
@@ -240,12 +240,6 @@ mid-logic where a non-owner gets a *different valid response*, not a 403 — so 
 **dead** (no view calls it) but retained pending a small test-cleanup slice (3 test files still
 patch/unit-test it). This closes AUTHZ-1's core deliverable: authorization is a tested policy layer,
 not a copy-pasted convention.
-slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
-carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
-`accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
-`IsTenantOwner` is equivalent); and the `OwnerAnalyticsExportView` ordering gotcha (a public-schema
-400 runs before the owner check — keep inline or use `get_permissions()`). The two `_is_tenant_owner`
-helpers shrink to serving only the Category-C predicates.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
 ### OPS-1 — Single Postgres, no replica, no PITR
