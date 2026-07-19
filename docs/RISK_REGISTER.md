@@ -807,10 +807,14 @@ generate the parity files, or move to a keyed catalog with one file per locale. 
 ("perf(R24): code-split i18n locale catalogs out of the initial bundle"). `src/i18n/localeLoader.js`
 now dynamically imports each locale (`messages-{en,fr,ar}.js`) as its own Vite chunk (~69–82KB gz
 each, down from one always-loaded ~800KB file), and `src/lib/sentry.js` fires a non-awaited dynamic
-`import('@sentry/vue')` before mount (its own async chunk). **Residual (small):** `main.js` still
-`await`s the active locale before `app.mount()`, so an AR first paint blocks on ~82KB gz; and
-`localeLoader.js` has no test. Namespace/route splitting (the original Fix) trades a
-flash-of-raw-keys risk → leave for a deliberate later slice.
+`import('@sentry/vue')` before mount (its own async chunk). **Residual update (2026-07-17):**
+`localeLoader.js` now has a test — `src/i18n/__tests__/localeLoader.test.js` (8 cases, mocks the 3
+dynamically-imported catalog chunks): EN/FR load, the AR = EN-base + AR-overrides merge with
+corrupted-value filtering, unknown-locale no-op, concurrent-load dedup (chunk fetched once),
+`getMessages` EN fallback, and the retry-eviction of a failed in-flight load. The only remaining
+residual is the deliberate one: `main.js` still `await`s the active locale before `app.mount()` (an
+AR first paint blocks on ~82KB gz) — and namespace/route splitting (the original Fix) trades a
+flash-of-raw-keys risk, so both are left for a deliberate later slice.
 **Effort:** S–M. **Source:** frontend review.
 
 ### SER-1 — Writes bypass serializers  ◑ PRIMITIVE SHIPPED (2026-07-12)
