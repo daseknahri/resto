@@ -7442,18 +7442,14 @@ class OwnerPromotionListCreateView(APIView):
     """GET /api/owner/promotions/ — list promotions.
        POST /api/owner/promotions/ — create a promotion."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         promos = Promotion.objects.all()
         return Response([_serialize_promotion(p) for p in promos])
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from decimal import Decimal as _Dec, InvalidOperation
         from datetime import date as _date
 
@@ -9699,19 +9695,16 @@ class OwnerClosureDateListCreateView(APIView):
     POST /api/owner/closure-dates/  — add a new closure date
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         from .models import ClosureDate
         qs = ClosureDate.objects.order_by("date")
         data = [{"id": c.id, "date": c.date.isoformat(), "label": c.label} for c in qs]
         return Response(data)
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         date_str = (request.data.get("date") or "").strip()
         label = (request.data.get("label") or "").strip()[:100]
         if not date_str:
@@ -10656,12 +10649,10 @@ class OwnerPushSubscribeView(APIView):
     POST   /api/owner/push-subscribe/   — register a browser push subscription
     DELETE /api/owner/push-subscribe/   — remove a browser push subscription
     """
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         endpoint = (request.data.get("endpoint") or "").strip()
         p256dh = (request.data.get("p256dh") or "").strip()
         auth_key = (request.data.get("auth") or "").strip()
@@ -10680,9 +10671,6 @@ class OwnerPushSubscribeView(APIView):
         return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         endpoint = (request.data.get("endpoint") or "").strip()
         if endpoint:
             from .models import PushSubscription
@@ -11098,7 +11086,8 @@ class OwnerLoyaltyView(APIView):
     """GET /api/owner/loyalty/  — retrieve loyalty config (creates default if missing).
        PATCH /api/owner/loyalty/ — update loyalty config."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def _get_or_create_config(self):
         cfg, _ = LoyaltyConfig.objects.get_or_create(
@@ -11136,14 +11125,10 @@ class OwnerLoyaltyView(APIView):
         return data
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         cfg = self._get_or_create_config()
         return Response(self._serialize(cfg, include_stats=True))
 
     def patch(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         from decimal import Decimal as _Dec, InvalidOperation
         cfg = self._get_or_create_config()
         data = request.data

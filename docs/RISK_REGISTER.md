@@ -163,9 +163,21 @@ files.
 `OwnerWalletHistoryView` (→ `IsTenantOwnerAccessDenied`). Transparent (no `_is_tenant_owner` patch,
 landmine-safe fixtures in `test_owner_wallet_views.py`).
 
-**Remaining:** the remaining multi-method owner classes (promotion, section, loyalty, campaign,
-push-subscribe, closure-date-list) + the shared owner/lookup-helper cases (403 moves to the class,
-404 lookup stays inline);
+**Slice 7 (2026-07-17):** four multi-method owner classes — `OwnerPromotionListCreateView`,
+`OwnerPushSubscribeView`, `OwnerLoyaltyView` (→ `IsTenantOwnerAccessDenied`),
+`OwnerClosureDateListCreateView` (→ `IsTenantOwner`). All per-method-guarded on every method, so
+class-level collapses the pair. **Key heuristic confirmed: a test file with ZERO
+`_is_tenant_owner` patches migrates transparently** — the inline guard already delegated to
+`user_owns_tenant_id` (the exact function `IsTenantOwner` uses), so any denial test green today stays
+green. The slice-3 landmine only lives in files that *patch* `_is_tenant_owner` (the patch masks
+whether the fixture independently yields the right result). 96 tests across 5 files, no changes.
+
+**Remaining:** the patch-using multi-method classes — `OwnerSectionListCreateView` /
+`OwnerSectionDetailView` (`test_table_sections.py`, 13 `_is_tenant_owner` patches) and
+`OwnerCampaignView` (`test_owner_campaigns.py` + `test_b1_email_retention.py`, ~4 patches) — need the
+slice-5 landmine treatment (real non-owner fixtures for the denial tests); the shared owner/lookup-
+helper cases (`OwnerPromotionDetailView` `_get_promo`, `OwnerStaffDeleteView` `_get_staff` — 403 moves
+to the class, 404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
