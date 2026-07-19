@@ -10708,7 +10708,8 @@ class OwnerCustomerListView(APIView):
       format   = json | csv                                 (default: json)
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     # Statuses that count as real completed orders
     _COUNTED = [
@@ -10723,9 +10724,6 @@ class OwnerCustomerListView(APIView):
     _MAX_LIMIT = 500
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from django.db.models import Count, Sum, Max, Avg, FloatField, Q
         from django.db.models.functions import Coalesce
         from django.utils import timezone as _tz
@@ -11036,11 +11034,10 @@ class OwnerCustomerNotesView(APIView):
     with other restaurants that may have served the same customer.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def patch(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         notes_text = (request.data.get("notes") or "").strip()
         obj, _ = CustomerNote.objects.update_or_create(
             customer_id=customer_id,
@@ -11061,13 +11058,11 @@ class OwnerCustomerLoyaltyGrantView(APIView):
     Response: { "customer_id": N, "loyalty_points": <new balance> }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
     _MAX_DELTA = 100_000   # sanity cap per single grant
 
     def post(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         raw_delta = request.data.get("delta")
         try:
             delta = int(raw_delta)

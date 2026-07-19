@@ -148,11 +148,21 @@ does only the 404 lookup (the 403 was per-method, now on the class) so it stays.
 correctly pin `is_superuser=False`/`is_platform_admin=False` (the slice-3 landmine is absent here).
 Also removed the now-unused `_IsAuthenticated` alias import.
 
-**Remaining:** more single-method owner views whose tests go through `.as_view()` (need per-test
-owner-principal rewrites, e.g. the customer + wallet views — their fixtures/patches need the slice-3
-`is_superuser=False` check); the remaining multi-method owner classes (promotion, section, loyalty,
-campaign, push-subscribe, closure-date-list) + the shared owner/lookup-helper cases (403 moves to the
-class, 404 lookup stays inline);
+**Slice 5 (2026-07-17):** the customer owner views — `OwnerCustomerNotesView`,
+`OwnerCustomerLoyaltyGrantView`, `OwnerCustomerListView` (all → `IsTenantOwnerAccessDenied`).
+`test_owner_customer_list.py` migrated transparently (no `_is_tenant_owner` patch, landmine-safe
+fixtures). `test_customer_notes_views.py` hit the slice-3 landmine head-on: its two
+`test_non_owner_gets_403` tests used a **real `_owner()`** principal + relied on a
+`_is_tenant_owner=False` patch to force the denial — once that patch goes dead, the owner would
+*pass*. Fixed by adding a landmine-safe `_staff()` fixture (pinned `is_superuser`/`is_platform_admin`
+False) and pointing the denial tests at it; the happy-path `_is_tenant_owner=True` patches are now
+harmless no-ops (left in place). This is the confirmed template for the remaining `.as_view()`-heavy
+files.
+
+**Remaining:** the wallet owner views (`OwnerWalletTopupView`, `OwnerWalletHistoryView`); the
+remaining multi-method owner classes (promotion, section, loyalty, campaign, push-subscribe,
+closure-date-list) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays
+inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so
