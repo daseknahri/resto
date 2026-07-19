@@ -32,7 +32,7 @@
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + real threaded money/isolation DB tests | M |
 | **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
 | ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
-| **ASYNC-2** | Async | ◑ Partial | One generic cron task starves notifications — **dedicated `cron` queue routing shipped**; per-command retry + named-task split remain | M |
+| **ASYNC-2** | Async | ✅ Addressed | Named `cron.<command>` tasks (name *is* the allowlist), `cron.*`→`cron` queue route, transient-DB retry/backoff; worker consumes `-Q notifications,cron` | M |
 | **ASYNC-1** | Async | ◑ Partial | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; durable-outbox/runtime-dispatch remains | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
@@ -643,16 +643,29 @@ trivial. Retrofitting after a client is pinned is near-impossible.
 **Effort:** S now / XL if deferred.
 **Source:** API/auth review.
 
-### ASYNC-2 — One generic cron task on a shared 2-worker queue
-**Where:** `run_management_command` (single task, 23-entry allowlist) wired to ~23 beat entries;
-`--concurrency 2`; no `CELERY_TASK_ROUTES`; the sweep task has no retry decorator.
+### ASYNC-2 — One generic cron task on a shared 2-worker queue  ✅ ADDRESSED (2026-07-19)
+**Where:** `run_management_command` (single task, 25-entry allowlist) wired to ~24 beat entries;
+`--concurrency 2`; the sweep task had no retry decorator. (A dedicated `cron` queue *route* had
+already shipped, but pointed at the single generic task; the worker still ran `-Q notifications,default`.)
 **Failure scenario:** A slow `sweep_delivery_jobs` (the dispatch heartbeat) occupies one of the
 two worker slots; because every cron and every push notification share the single default queue,
 customers' "order ready" SMS are starved behind it. And the sweeps carry no retry, so a
-transient DB blip during a tick just drops that tick.
-**Fix:** Replace the generic task with named `@shared_task`s per command; add `task_routes` so
-sweeps go to a `cron` queue and notifications to their own; add retry/backoff to sweeps. The
-task name *becomes* the allowlist, deleting the drift-prone parallel list.
+transient DB blip during a tick just drops that tick. Separately, the generic task accepted a
+**caller-supplied command name off the (unauthenticated) broker**, guarded only by a hand-maintained
+allowlist that could drift from the beat schedule.
+**Resolution:** The generic `run_management_command` + `_MANAGEMENT_COMMAND_ALLOWLIST` are deleted.
+Each of the 24 beat entries now dispatches a dedicated `@shared_task(name="cron.<command>", …)`
+that bakes in its own command name (and `apply=True` for `enforce_subscriptions`) — **the task name
+IS the allowlist**, so no broker message field selects what runs. The route is now `cron.*` → `cron`
+queue (whole namespace, not one task); notifications stay on the default `notifications` queue. All
+24 cron tasks carry `_CRON_RETRY` = `autoretry_for=(OperationalError, InterfaceError)` + bounded
+jittered backoff (`retry_backoff_max=60`, `max_retries=3`) — a transient Postgres blip retries, a
+genuine bug still fails fast (no 3× re-run). **Schedules unchanged.** Deploy: the Coolify worker
+now runs `-Q notifications,cron` (was `-Q notifications,default`, a dead queue) so cron tasks are
+actually consumed once a broker is set; `config/celery.py` documents running a second `-Q cron`
+worker for full slot-isolation. Tests: `tests/test_celery_tasks.py` (named-task dispatch, retry
+config, routing, "every scheduled cron task is registered", "generic runner + allowlist are gone")
++ `tests/test_ops5d_app.py::TestCronCommandTasks`.
 **Effort:** M.
 **Source:** async/realtime review.
 

@@ -265,14 +265,14 @@ if HAS_CHANNELS:
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "").strip()
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "").strip() or (CELERY_BROKER_URL or None)
 CELERY_TASK_DEFAULT_QUEUE = "notifications"
-# RISK ASYNC-2: every Beat cron/sweep entry below shares the single
-# accounts.tasks.run_management_command task. Without a route it would land on the
-# same "notifications" queue as customer-facing SMS/WhatsApp/push, so a slow sweep
-# (e.g. reconcile_driver_earnings) can starve time-sensitive notifications behind it.
-# Route it to a dedicated "cron" queue instead — see config/celery.py docstring for
-# the worker command that must consume both queues.
+# RISK ASYNC-2: every Beat cron/sweep entry dispatches a dedicated "cron.<command>" task
+# (accounts/tasks.py). Route the whole "cron.*" namespace to a dedicated "cron" queue so a
+# slow sweep (e.g. reconcile_driver_earnings) can't sit ahead of customer-facing
+# SMS/WhatsApp/push in the notifications FIFO. Everything else falls to the default
+# "notifications" queue (their own queue). A production worker MUST consume BOTH queues
+# (celery -A config worker -Q notifications,cron) — see config/celery.py.
 CELERY_TASK_ROUTES = {
-    "accounts.tasks.run_management_command": {"queue": "cron"},
+    "cron.*": {"queue": "cron"},
 }
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_TIME_LIMIT = 120          # hard kill a stuck send after 2 min
@@ -292,142 +292,117 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
     },
     "release-scheduled-orders": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.release_scheduled_orders",
         "schedule": 300.0,  # every 5 min
-        "args": ("release_scheduled_orders",),
     },
     "escalate-stale-pending-orders": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.escalate_stale_pending_orders",
         "schedule": 180.0,  # every 3 min — catch unconfirmed orders past the tenant SLA
-        "args": ("escalate_stale_pending_orders",),
     },
     "send-predispatch-reminders": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_predispatch_reminders",
         "schedule": 900.0,  # every 15 min — window is 35 min wide so every order is caught
-        "args": ("send_predispatch_reminders",),
     },
     "send-ride-predispatch-reminders": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_ride_predispatch_reminders",
         "schedule": 900.0,  # every 15 min — window is 20 min wide so every trip is caught
-        "args": ("send_ride_predispatch_reminders",),
     },
     "check-car-doc-expiry": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.check_car_doc_expiry",
         "schedule": 86400.0,  # daily
-        "args": ("check_car_doc_expiry",),
     },
     "send-review-prompts": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_review_prompts",
         "schedule": 900.0,  # every 15 min
-        "args": ("send_review_prompts",),
     },
     "send-reservation-reminders": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_reservation_reminders",
         "schedule": 3600.0,  # hourly
-        "args": ("send_reservation_reminders",),
     },
     "expire-charge-requests": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.expire_charge_requests",
         "schedule": 600.0,  # every 10 min
-        "args": ("expire_charge_requests",),
     },
     "sweep-delivery-jobs": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.sweep_delivery_jobs",
         # every 60s — advance ranked-offer cascades (60s offer window) + recover stuck jobs.
         "schedule": 60.0,
-        "args": ("sweep_delivery_jobs",),
     },
     "reconcile-driver-earnings": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.reconcile_driver_earnings",
         # every 15 min — backfill any delivery earnings whose wallet credit failed after
         # DELIVERED (idempotent; light scan, so a lower cadence than the 60s job sweep).
         "schedule": 900.0,
-        "args": ("reconcile_driver_earnings",),
     },
     "reconcile-wallet-balances": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.reconcile_wallet_balances",
         # every 6h — MONEY-1: assert denormalized wallet/float balances == their ledger head
         # and alert on drift. DETECT-ONLY here (no --fix): Beat must never auto-mutate money;
         # a flagged drift is repaired by a human running the command with --fix after triage.
         "schedule": 6 * 60 * 60.0,
-        "args": ("reconcile_wallet_balances",),
     },
     "reconcile-order-refs": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.reconcile_order_refs",
         # daily — DATA-1: detect public order-refs (DeliveryJob/CustomerOrderRef/CustomerRating)
         # orphaned by a removed Order. DETECT-ONLY here (no --fix): money-carrying DeliveryJob
         # orphans escalate to the payments channel for human triage and are never auto-deleted;
         # a human runs the command with --fix to clean the safe CustomerOrderRef mirror orphans.
         "schedule": 24 * 60 * 60.0,
-        "args": ("reconcile_order_refs",),
     },
     "sweep-ride-requests": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.sweep_ride_requests",
         # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.
         "schedule": 120.0,
-        "args": ("sweep_ride_requests",),
     },
     "enforce-subscriptions": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.enforce_subscriptions",  # apply=True is baked into the task
         "schedule": 86400.0,  # daily
-        "args": ("enforce_subscriptions",),
-        "kwargs": {"apply": True},
     },
     # ── Daily maintenance — bound table growth + keep FX rates fresh ──────────────
     "fetch-currency-rates": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.fetch_currency_rates",
         "schedule": 86400.0,  # daily — refresh MAD exchange rates
-        "args": ("fetch_currency_rates",),
     },
     "send-daily-summary": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_daily_summary",
         # 23:30 UTC ≈ 00:30 Morocco (UTC+1) — after the last orders of the day have settled.
         "schedule": crontab(hour=23, minute=30),
-        "args": ("send_daily_summary",),
     },
     "auto-reset-availability": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.auto_reset_availability",
         # Hourly sweep — each tenant's local 05:00 is checked inside the command.
         "schedule": 3600.0,
-        "args": ("auto_reset_availability",),
     },
     "send-winback-nudges": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_winback_nudges",
         # Hourly sweep — each tenant's local 11:00 is checked inside the command.
         "schedule": 3600.0,
-        "args": ("send_winback_nudges",),
     },
     "prune-analytics-events": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_analytics_events",
         "schedule": 86400.0,  # daily — delete analytics events older than 90 days
-        "args": ("prune_analytics_events",),
     },
     "prune-admin-audit-logs": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_admin_audit_logs",
         "schedule": 86400.0,  # daily — honour ADMIN_AUDIT_RETENTION_DAYS (default 180)
-        "args": ("prune_admin_audit_logs",),
     },
     # OPS-4 E: retention crons for unbounded shared/tenant tables.
     "prune-notification-logs": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_notification_logs",
         "schedule": 86400.0,  # daily — delete NotificationLog rows older than 180 days
-        "args": ("prune_notification_logs",),
     },
     "prune-winback-nudges": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_winback_nudges",
         "schedule": 86400.0,  # daily — delete WinbackNudge rows older than 120 days
-        "args": ("prune_winback_nudges",),
     },
     "prune-staff-messages": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_staff_messages",
         "schedule": 86400.0,  # daily — delete StaffMessage rows older than 90 days
-        "args": ("prune_staff_messages",),
     },
     # OPS-5c item 4: prune consumed/expired auth tokens (PasswordResetToken + ActivationToken)
     "prune-auth-tokens": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.prune_auth_tokens",
         "schedule": 86400.0,  # daily — delete rows older than 30 days
-        "args": ("prune_auth_tokens",),
     },
 }
 

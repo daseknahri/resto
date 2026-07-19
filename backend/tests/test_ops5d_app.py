@@ -2,9 +2,10 @@
 
 Covers the HIGH-severity application-logic fixes in the OPS-5d batch:
 
-  A. Celery run_management_command allowlist (accounts/tasks.py)
-       - an allowlisted command name reaches call_command
-       - a disallowed name is logged + dropped (call_command NOT invoked, no raise)
+  A. Celery cron command tasks (accounts/tasks.py) — RISK ASYNC-2
+       - each Beat entry has a dedicated cron.<command> task that reaches call_command
+       - the task NAME is the allowlist: no task runs a caller-supplied command name, and
+         the old run_management_command + _MANAGEMENT_COMMAND_ALLOWLIST guard is deleted
 
   B. Google One-Tap email_verified enforcement (_verify_google_token, accounts/views.py)
        - tokeninfo string "false" is rejected (returns None)
@@ -60,54 +61,45 @@ def _staff_user(pk=1):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# A. Celery run_management_command allowlist
+# A. Celery cron command tasks (RISK ASYNC-2)
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestRunManagementCommandAllowlist(SimpleTestCase):
-    """Only allowlisted command names may reach django.core.management.call_command."""
+class TestCronCommandTasks(SimpleTestCase):
+    """The task NAME is the allowlist: each Beat entry has a dedicated cron.<command>
+    task that bakes in its own command name, so the (unauthenticated) broker can only
+    trigger these exact, fixed commands. This replaces the run_management_command +
+    _MANAGEMENT_COMMAND_ALLOWLIST guard, deleting the drift-prone parallel list."""
 
     @patch("django.core.management.call_command")
-    def test_allowlisted_command_runs(self, mock_call):
-        from accounts.tasks import run_management_command
-        run_management_command("prune_notification_logs")
+    def test_cron_task_reaches_call_command(self, mock_call):
+        from accounts.tasks import prune_notification_logs
+        prune_notification_logs.run()
         mock_call.assert_called_once_with("prune_notification_logs")
 
     @patch("django.core.management.call_command")
-    def test_allowlisted_command_forwards_args_kwargs(self, mock_call):
-        from accounts.tasks import run_management_command
-        run_management_command("enforce_subscriptions", apply=True)
+    def test_enforce_subscriptions_bakes_apply_flag(self, mock_call):
+        """apply=True was a Beat kwarg; it's now baked into the task body so no broker
+        message field controls it."""
+        from accounts.tasks import enforce_subscriptions
+        enforce_subscriptions.run()
         mock_call.assert_called_once_with("enforce_subscriptions", apply=True)
 
-    @patch("accounts.tasks.logger")
-    @patch("django.core.management.call_command")
-    def test_disallowed_command_is_skipped(self, mock_call, mock_logger):
-        """A name outside the allowlist (e.g. 'flush') is logged + dropped, never run."""
-        from accounts.tasks import run_management_command
-        result = run_management_command("flush")
-        self.assertIsNone(result)
-        mock_call.assert_not_called()
-        mock_logger.warning.assert_called_once()
-        # the rejected name must appear in the warning args
-        self.assertIn("flush", repr(mock_logger.warning.call_args))
+    def test_no_generic_command_runner(self):
+        """The broker can no longer be handed 'flush'/'shell'/'migrate': there is no task
+        that accepts a command name, and the parallel allowlist is deleted."""
+        import accounts.tasks as tasks
+        self.assertFalse(hasattr(tasks, "run_management_command"))
+        self.assertFalse(hasattr(tasks, "_MANAGEMENT_COMMAND_ALLOWLIST"))
 
-    @patch("django.core.management.call_command")
-    def test_shell_like_command_is_skipped(self, mock_call):
-        from accounts.tasks import run_management_command
-        for evil in ("shell", "dbshell", "migrate", "createsuperuser"):
-            run_management_command(evil)
-        mock_call.assert_not_called()
-
-    def test_allowlist_matches_beat_schedule(self):
-        """Every command scheduled in CELERY_BEAT_SCHEDULE must be allowlisted."""
+    def test_every_scheduled_cron_task_is_registered(self):
+        """The name IS the allowlist: every cron.* task scheduled in CELERY_BEAT_SCHEDULE
+        must be a registered Celery task (else it would fail loudly at dispatch)."""
         from django.conf import settings
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
-        scheduled = {
-            entry["args"][0]
-            for entry in settings.CELERY_BEAT_SCHEDULE.values()
-            if entry.get("task") == "accounts.tasks.run_management_command" and entry.get("args")
-        }
-        missing = scheduled - _MANAGEMENT_COMMAND_ALLOWLIST
-        self.assertEqual(missing, set(), f"Scheduled commands not allowlisted: {missing}")
+        from config.celery import app
+        for entry in settings.CELERY_BEAT_SCHEDULE.values():
+            name = entry["task"]
+            if name.startswith("cron."):
+                self.assertIn(name, app.tasks, f"{name} scheduled but not registered")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

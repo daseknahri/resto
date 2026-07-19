@@ -19,7 +19,7 @@ Covers:
     - no scheduled trips → clean output
     - output line contains ride id and minutes
 
-  _MANAGEMENT_COMMAND_ALLOWLIST contains send_ride_predispatch_reminders
+  send_ride_predispatch_reminders is scheduled in Beat as its cron.* task (RISK ASYNC-2)
 """
 from __future__ import annotations
 
@@ -253,7 +253,9 @@ class TestSendRidePredispatchRemindersCommand(SimpleTestCase):
         self.assertIn("999", out)
 
 
-class TestAllowlistContainsSendRidePredispatch(SimpleTestCase):
-    def test_command_in_allowlist(self):
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
-        self.assertIn("send_ride_predispatch_reminders", _MANAGEMENT_COMMAND_ALLOWLIST)
+class TestSendRidePredispatchScheduled(SimpleTestCase):
+    def test_command_scheduled_as_cron_task(self):
+        # RISK ASYNC-2: the command is wired to Beat via its dedicated cron.* task.
+        from django.conf import settings
+        tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.send_ride_predispatch_reminders", tasks)
