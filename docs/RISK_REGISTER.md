@@ -202,11 +202,20 @@ a real owner — same as the old helper checking owner-then-existence. `OwnerWai
 `IsTenantOwner`/`...AccessDenied` pair; its `test_permissions` message-contract test added. Both
 files (`test_owner_promotions.py`, `test_waitlist_and_push.py`) are 0-patch → transparent.
 
+**Slice 11 (2026-07-17):** the `accounts/views.py` non-staff 2-arg sites — `OwnerFlashSaleListView`,
+`OwnerFlashSaleOptInView` (post+delete), `OwnerDeliveryZoneView`, `OwnerDeliveryRadiusUpdateView`
+(all → `IsTenantOwner`). The accounts `_is_tenant_owner(request, tenant)` helper is
+`user_owns_tenant_id(request.user, request.tenant.id)` — identical to `IsTenantOwner` since the
+`tenant` passed is always `request.tenant`. The `tenant = getattr(request, "tenant", None)` line +
+its `if tenant is None: 400` guard stay (the bodies use `tenant`); only the owner 403 moved.
+Transparent (both `test_flash_sales.py` / `test_admin_delivery_views.py` are 0-patch, landmine-safe
+fixtures). `accounts._is_tenant_owner` is now used only by the 3 staff sites.
+
 **Remaining (menu):** `OwnerAnalyticsExportView` (public-schema 400 runs before the owner check —
-`get_permissions()` or keep inline). **Remaining (accounts/views.py):** the 2-arg
-`_is_tenant_owner(request, tenant)` sites (`OwnerFlashSale*`, `OwnerDeliveryZone/Radius`) and the
-staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView` — `code:"forbidden"` body, needs a
-code-carrying denial; `_get_staff` shared-helper).
+`get_permissions()` or keep inline). **Remaining (accounts):** the staff endpoints
+(`OwnerStaffListCreateView`/`OwnerStaffDeleteView` — `code:"forbidden"` body, needs a code-carrying
+denial; `_get_staff` shared-helper). Then the 3 Category-C predicates stay and the two
+`_is_tenant_owner` helpers shrink to serving only those.
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so

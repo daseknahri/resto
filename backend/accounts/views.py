@@ -22,7 +22,7 @@ from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
-from sales.permissions import IsPlatformAdmin, user_owns_tenant_id
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, user_owns_tenant_id
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -5584,12 +5584,11 @@ class OwnerFlashSaleListView(APIView):
     whether this tenant has opted in.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -5621,12 +5620,11 @@ class OwnerFlashSaleOptInView(APIView):
     DELETE /api/owner/flash-sales/<id>/opt-in/   — opt out
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, fs_id, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -5659,8 +5657,6 @@ class OwnerFlashSaleOptInView(APIView):
 
     def delete(self, request, fs_id, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -8026,13 +8022,11 @@ class AdminDeliveryZoneDetailView(APIView):
 class OwnerDeliveryZoneView(APIView):
     """GET /api/owner/delivery-zone/ — return the zone this restaurant is assigned to (if any)."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
-
         from django_tenants.utils import schema_context
         from tenancy.models import Profile
 
@@ -8059,13 +8053,11 @@ class OwnerDeliveryZoneView(APIView):
 class OwnerDeliveryRadiusUpdateView(APIView):
     """PATCH /api/owner/delivery-radius/ — update delivery radius for this restaurant."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def patch(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
-
         try:
             radius = float(request.data.get("delivery_radius_km", 0))
             if radius < 0:
