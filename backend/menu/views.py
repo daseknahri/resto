@@ -1356,7 +1356,8 @@ class OwnerBestSellersView(APIView):
     derived from OrderItem rows on completed orders.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     _COUNTED = [
         "confirmed", "preparing", "ready", "out_for_delivery",
@@ -1364,9 +1365,6 @@ class OwnerBestSellersView(APIView):
     ]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             period = int(request.query_params.get("period", "30"))
         except (TypeError, ValueError):
@@ -1436,7 +1434,8 @@ class OwnerRevenueChartView(APIView):
     based on completed/delivered orders.  Used by the owner dashboard chart.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     _COUNTED = [
         "confirmed", "preparing", "ready", "out_for_delivery",
@@ -1444,9 +1443,6 @@ class OwnerRevenueChartView(APIView):
     ]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             period = int(request.query_params.get("period", "14"))
         except (TypeError, ValueError):
@@ -1620,12 +1616,10 @@ class OwnerRepeatAnalyticsView(APIView):
       - total_revenue: all paid revenue in the window
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from django.db.models import Count, Sum
         from django.utils import timezone as _tz
         from decimal import Decimal as _D

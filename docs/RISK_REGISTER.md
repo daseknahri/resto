@@ -119,6 +119,24 @@ files (e.g. `test_customer_notes_views.py` — 18 dispatch-level tests that patc
 would each need every happy-path test rewritten to a real owner principal, so those views get their
 own slices.
 
+**Slice 3 (2026-07-17):** the 3 owner analytics views — `OwnerBestSellersView`,
+`OwnerRevenueChartView` (→ `IsTenantOwnerAccessDenied`), `OwnerRepeatAnalyticsView`
+(→ `IsTenantOwner`). Their `test_analytics_and_chart_views.py` tests migrated **transparently**
+(they set a real non-owner principal and the inline guard already delegated to
+`user_owns_tenant_id`, so `IsTenantOwner` yields identical results). Two nuances confirmed here,
+worth recording:
+- **Anonymous → 403, not 401** (corrects the slice-1/2 commit phrasing). With only
+  `SessionAuthentication` in the stack, a permission failure raises `NotAuthenticated`, but DRF's
+  `handle_exception` **downgrades it to 403** because `SessionAuthentication.authenticate_header`
+  returns `None` (no `WWW-Authenticate`). So both the old `[IsAuthenticated]` gate and the new
+  `[IsTenantOwner]` gate return **403** for anonymous — behavior preserved, mechanism now understood.
+- **`MagicMock(spec=User)` non-owner fixtures must pin `is_superuser=False` / `is_platform_admin=
+  False`.** `user_owns_tenant_id` short-circuits `True` on a truthy value there, and a `spec=User`
+  mock returns a truthy `Mock` for any unset attribute — so a "staff" fixture that only sets
+  `role=STAFF` reads as a **superuser** and is *allowed*. `test_repeat_analytics._staff()` only
+  "worked" before via a now-dead `_is_tenant_owner=False` patch; fixed the fixture + dropped the
+  patch. This is a landmine for every future denial test in this migration.
+
 **Remaining:** more single-method owner views whose tests go through `.as_view()` (need per-test
 owner-principal rewrites); the multi-method owner classes (every method owner-gated, so class-level is
 safe) + the shared owner/lookup-helper cases (403 moves to the class, 404 lookup stays inline);
