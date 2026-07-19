@@ -185,9 +185,15 @@ module level (bound to the real class before any test runs), so the fixture keep
 inside the `patch.dict` block. The waiter-ack tests in the same file patch `_is_tenant_owner` for a
 *different* (un-migrated) view and are untouched.
 
-**Remaining:** `OwnerCampaignView` (`test_owner_campaigns.py` + `test_b1_email_retention.py`, ~4
-patches — same landmine treatment); the shared owner/lookup-helper cases (`OwnerPromotionDetailView`
-`_get_promo`, `OwnerStaffDeleteView` `_get_staff` — 403 moves to the class, 404 lookup stays inline);
+**Slice 9 (2026-07-17):** `OwnerCampaignView` (→ `IsTenantOwner`). Despite the `_is_tenant_owner`
+patches, it migrated **transparently** — both test files (`test_owner_campaigns.py`,
+`test_b1_email_retention.py`) already force-authenticate a landmine-safe `_owner_user()` and set
+`req.tenant`, and there are no denial tests — so the `=True` patches are now harmless no-ops. (Not
+every patch-using file needs the landmine fix; only ones whose denial tests fake denial via the
+patch, or whose fixtures aren't independently owner-valid.) 36 tests, no changes.
+
+**Remaining:** the shared owner/lookup-helper cases (`OwnerPromotionDetailView` `_get_promo`,
+`OwnerStaffDeleteView` `_get_staff` — 403 moves to the class, 404 lookup stays inline);
 slice 3 = the two staff endpoints (`OwnerStaffListCreateView`/`OwnerStaffDeleteView`, whose body
 carries `code:"forbidden"` — a test depends on it, so preserve via a code-carrying denial); the
 `accounts/views.py` 2-arg `_is_tenant_owner(request, tenant)` sites (always `request.tenant`, so

@@ -12591,7 +12591,8 @@ class OwnerCampaignView(APIView):
     record_notification rows written per dispatch (channel push / email).
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def _audience_ids(self):
         """Return a list of distinct customer_ids eligible for a PUSH campaign.
@@ -12672,9 +12673,6 @@ class OwnerCampaignView(APIView):
             }
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = request.tenant
         day_start, day_end = _campaign_day_window(tenant)
         today_count = Campaign.objects.filter(
@@ -12708,9 +12706,6 @@ class OwnerCampaignView(APIView):
         })
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         # ── Validate inputs ───────────────────────────────────────────────────
         title = (request.data.get("title") or "").strip()
         message = (request.data.get("message") or "").strip()
