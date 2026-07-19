@@ -824,7 +824,9 @@ opening-hours disclosure, share-via-emit; 16-case test; the add-to-cart/checkout
 untouched), plus `OwnerReservationsCalendarDetail` (the calendar quick-panel; display-only,
 close-via-emit; 7-case test), plus `AdminConsoleLiveOrdersModal` (the read-only live-orders support
 modal — mobile-card + desktop-table branches, self-contained focus-trap, `liveOrderStatusClass`/
-`formatAge` helpers moved in; parent keeps the fetch + open/close state; −156 lines; 17-case test).
+`formatAge` helpers moved in; parent keeps the fetch + open/close state; −156 lines; 17-case test),
+plus `DriverPagePerformanceStats` (the avg-rating/acceptance/completion stats strip; display-only,
+single `earnings` prop, no emit; parent keeps the `total_deliveries > 0` gate; 9-case test).
 All no new i18n keys. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
 held for supervised slices, not autonomous ones.
