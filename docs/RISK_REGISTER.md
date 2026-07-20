@@ -952,11 +952,25 @@ Props `tiles`/`expandedKey` + 4 display-helper fns (`floorTileClass`/`floorDotCl
 actions stay in the parent. 7-case test. **Preview concern:** tiles render + tap expands/collapses.
 No new i18n keys.
 
-**Tally: 27 slices across all eight mega-pages, ~2230 lines lifted into 30 tested child components;
-frontend vitest 527 → 775.** The only FE-2 work left is the per-variant order-card *wrappers* (the 4
-divergent card shells / the expanded-floor-tile order group — a variant-unification refactor, ~30-symbol
-interface) and the **held** `Cart.vue` (money/checkout). Both are genuinely preview-critical — best done
-with the app running, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Finally, the **order-card variant unification** — `WaiterOrderCard`. The waiter "order card" had existed
+as **three near-identical ~150-line copies** (table-grouped / non-table / flat-list) that differed by
+exactly two features: the non-table variant shows an elapsed-time badge (`showElapsed`), and the
+grouped/non-table variants render combo sub-lines while the flat list does not (`showCombos`). Both are
+gated (`v-if`/`v-else`) so each variant's DOM is preserved; one component now backs all three loops
+(DRYing ~450 lines). It embeds `WaiterOrderItem` and re-emits its events; the parent keeps the order
+data / waiter store / every action / all ~18 display helpers (function props). Wide interface
+(~30 props / 9 emits) — the honest cost of the card's coupling, but used 3×. Built via transform-script
++ grep-completeness; the combo sub-lines use a wrapping `<template v-for>` so `item` scopes correctly.
+17-case test. **HIGHEST preview priority of the whole campaign:** verify all three card contexts render
+identically — the header/badges/status chip, the item list, combo sub-lines under combo items, the
+elapsed badge (non-table only), and every action-footer button. The stripped floor-tile 4th variant was
+left inline (too different). No new i18n keys.
+
+**FE-2 is functionally complete.** **Tally: 28 slices across all eight mega-pages, ~2680 lines lifted /
+DRY'd into 31 tested child components; frontend vitest 527 → 785.** The only page left is the **held**
+`Cart.vue` (money/checkout). Everything extractable across the seven other mega-pages — including the
+hardest variant-unification — is done; what remains is the 14+ preview-pending components' visual QA and
+the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
