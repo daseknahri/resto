@@ -785,19 +785,12 @@
             </div>
           </div>
 
-          <!-- Errors -->
-          <div v-if="placeOrderError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ placeOrderError }}</p>
-          </div>
-          <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
-          </div>
-          <div v-if="handoffError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ handoffError }}</p>
-          </div>
+          <!-- Errors (RISK FE-2) -->
+          <CartCheckoutErrors
+            :place-order-error="placeOrderError"
+            :checkout-error="checkoutError"
+            :handoff-error="handoffError"
+          />
 
         </section>
       </aside>
@@ -897,6 +890,7 @@ import CartBrowseOnlyBanner from '../components/CartBrowseOnlyBanner.vue';
 import CartEmptyState from '../components/CartEmptyState.vue';
 import CartOrderSummary from '../components/CartOrderSummary.vue';
 import CartTotalHeader from '../components/CartTotalHeader.vue';
+import CartCheckoutErrors from '../components/CartCheckoutErrors.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';

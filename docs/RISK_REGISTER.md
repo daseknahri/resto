@@ -998,10 +998,21 @@ line-item card, 3 state banners, the total header, the order-summary breakdown);
 CTA + payment / pricing-calculation logic** in the checkout column remains — deliberately held for a
 preview-driven session.
 
-**Tally: 35 slices across all eight mega-pages, ~2870 lines lifted / DRY'd into 38 tested child
-components; frontend vitest 527 → 808.** FE-2 extraction is effectively complete — every mega-page is
-decomposed and only the Cart place-order/payment core is intentionally left. What remains is the
-preview-pending components' visual QA and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus `CartCheckoutErrors` — the checkout error alerts (place-order / checkout / handoff), DRY'd to a
+`v-for` over the non-empty messages. Display-only, 3 string props, no logic. 3-case test. No new i18n keys.
+
+**Line drawn at the checkout CTA:** the place-order **button + payment/order-placement logic**
+(`placeInAppOrder`, `startCheckout`, the disabled conditions, wallet/prepay checks, the fulfillment/tip
+controls) is deliberately **NOT extracted** — it is the app's money path, unpreviewable by an autonomous
+agent, and the modest parent-size win doesn't justify the risk of a blind checkout change. That block is
+reserved for a preview-driven session at the keyboard. Everything display-only around it (total header,
+order-summary breakdown, error alerts) has been lifted.
+
+**Tally: 36 slices across all eight mega-pages, ~2900 lines lifted / DRY'd into 39 tested child
+components; frontend vitest 527 → 811.** FE-2 autonomous extraction is complete — every mega-page is
+decomposed down to the money-path Cart's display chrome; only the Cart checkout CTA/payment logic is
+intentionally left for a supervised session. What remains is the preview-pending components' visual QA
+and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
