@@ -705,50 +705,38 @@
 
           <!-- ── CTA buttons ── -->
           <div class="space-y-2.5">
-            <button
+            <!-- Primary place-order CTA (RISK FE-2). The button is a dumb presentational
+                 child; placeInAppOrder + the disabled condition + the label expression
+                 all stay here in the parent, passed in verbatim. -->
+            <CartPlaceOrderButton
               v-if="!isBrowseOnlyPlan"
-              class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
+              :busy="placingOrder"
               :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || closedBlocksOrder || closedNeedsSchedule || unavailableSlugs.length > 0"
-              :aria-busy="placingOrder"
-              @click="placeInAppOrder"
-            >
-              <svg v-if="placingOrder" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="cart" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              {{ placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))))) }}
-            </button>
-            <button
+              :label="placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder'))))))"
+              @place="placeInAppOrder"
+            />
+            <!-- WhatsApp handoff CTA (RISK FE-2) — dumb button; openWhatsApp + state stay here. -->
+            <CartWhatsAppButton
               v-if="cart.canWhatsapp && isBrowseOnlyPlan"
-              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
-              :disabled="sendingWhatsapp"
-              :aria-busy="sendingWhatsapp"
-              @click="openWhatsApp"
-            >
-              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="chat" class="h-4 w-4" />
-              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
-            </button>
-            <button
+              variant="primary"
+              :busy="sendingWhatsapp"
+              :label="sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp')"
+              @whatsapp="openWhatsApp"
+            />
+            <CartWhatsAppButton
               v-else-if="cart.canWhatsapp"
-              class="ui-top-link ui-touch-target ui-press flex w-full items-center justify-center gap-1.5 text-xs font-medium underline decoration-slate-600 underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none disabled:opacity-50"
-              :disabled="sendingWhatsapp"
-              :aria-busy="sendingWhatsapp"
-              @click="openWhatsApp"
-            >
-              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="chat" class="h-3.5 w-3.5" />
-              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
-            </button>
-            <button
+              variant="link"
+              :busy="sendingWhatsapp"
+              :label="sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp')"
+              @whatsapp="openWhatsApp"
+            />
+            <!-- Proceed-to-checkout (PSP) CTA (RISK FE-2) — dumb button; startCheckout + state stay here. -->
+            <CartCheckoutButton
               v-if="cart.canCheckout"
-              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
-              :disabled="processingCheckout"
-              :aria-busy="processingCheckout"
-              @click="startCheckout"
-            >
-              <svg v-if="processingCheckout" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="card" class="h-4 w-4" />
-              {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
-            </button>
+              :busy="processingCheckout"
+              :label="processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout')"
+              @checkout="startCheckout"
+            />
             <button
               v-if="isBrowseOnlyPlan"
               class="ui-btn-outline w-full justify-center opacity-50 cursor-not-allowed"
@@ -891,6 +879,9 @@ import CartEmptyState from '../components/CartEmptyState.vue';
 import CartOrderSummary from '../components/CartOrderSummary.vue';
 import CartTotalHeader from '../components/CartTotalHeader.vue';
 import CartCheckoutErrors from '../components/CartCheckoutErrors.vue';
+import CartPlaceOrderButton from '../components/CartPlaceOrderButton.vue';
+import CartCheckoutButton from '../components/CartCheckoutButton.vue';
+import CartWhatsAppButton from '../components/CartWhatsAppButton.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
