@@ -59,21 +59,13 @@
       >
         <section class="ui-glass p-4 sm:p-5 space-y-4">
 
-          <!-- Compact total header -->
-          <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/60 px-4 py-3.5 border border-slate-800/60">
-            <div>
-              <p class="text-[10px] font-medium uppercase tracking-widest text-slate-500">{{ t('cartPage.total') }}</p>
-              <p class="text-3xl font-bold tabular-nums leading-tight text-[var(--color-secondary)]">
-                {{ formatPrice(orderGrandTotal) }}
-              </p>
-            </div>
-            <div class="text-end text-[11px] text-slate-500 space-y-0.5">
-              <p class="font-medium text-slate-400">{{ itemCountLabel(cart.count) }}</p>
-              <p v-if="fulfillmentType" class="capitalize text-slate-400">
-                {{ fulfillmentType === 'delivery' ? t('cartPage.delivery') : t('cartPage.pickup') }}
-              </p>
-            </div>
-          </div>
+          <!-- Compact total header (RISK FE-2) -->
+          <CartTotalHeader
+            :grand-total="orderGrandTotal"
+            :count-label="itemCountLabel(cart.count)"
+            :fulfillment-type="fulfillmentType"
+            :format-price="formatPrice"
+          />
 
           <div class="border-t border-slate-800/50" />
 
@@ -904,6 +896,7 @@ import CartClosedBanner from '../components/CartClosedBanner.vue';
 import CartBrowseOnlyBanner from '../components/CartBrowseOnlyBanner.vue';
 import CartEmptyState from '../components/CartEmptyState.vue';
 import CartOrderSummary from '../components/CartOrderSummary.vue';
+import CartTotalHeader from '../components/CartTotalHeader.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
