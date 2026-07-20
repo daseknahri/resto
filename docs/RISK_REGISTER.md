@@ -837,12 +837,19 @@ emits; `isOvernight`/`dayLabels` fn props; `deleting` in-flight prop; 8-case tes
 `OwnerFlashSaleOptInCard` (a single platform flash-sale opt-in card — display + one `toggle` emit;
 `fmtFlashDate` fn prop; `busy` in-flight prop; 6-case test), plus `OwnerKitchenNewOrderBanner` (the
 transient new-order flash banner; single `show` prop, no emit; parent keeps the newOrderFlash timer;
-2-case test). All no new i18n keys.
+2-case test), plus — the first **supervised `v-model` drawer** — `OwnerHappyHourFormDrawer` (the
+happy-hour create/edit modal; the `hhForm` reactive object is passed via `v-model:form`
+(`defineModel`) so its field bindings + the day/category toggles mutate the parent's same object,
+lint-clean; validation + save API (`submitHHForm`) + open/edit state stay in the parent behind
+`close`/`submit` emits; a11y focus-trap moved in self-contained; 13-case test incl. write-back,
+number coercion, toggles, focus-trap lifecycle). **This one needs a visual preview before merge to
+main** (form reactivity can't be fully gate-verified). No new i18n keys.
 
-**Tally so far: 13 slices across eight mega-pages, ~750 lines lifted into tested child components;
-frontend vitest 527 → 645.** The remaining FE-2 blocks are the genuinely-entangled ones (OwnerKitchen
-order card + 86-board, OwnerPromotions/Kitchen form drawers with two-way `v-model`, and the held
-`Cart`/`WaiterPage`) — those want supervised, previewable extraction, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+**Tally so far: 14 slices across eight mega-pages, ~870 lines lifted into tested child components;
+frontend vitest 527 → 658.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
+(OwnerKitchen order card + 86-board, OwnerOrders track modal), the other form drawers (promotions
+create/edit, win-back, referral), and the held `Cart`/`WaiterPage` — all supervised/previewable
+work, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are

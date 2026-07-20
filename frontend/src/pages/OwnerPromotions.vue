@@ -290,126 +290,18 @@
       </div>
     </section>
 
-    <!-- Happy Hour create/edit drawer -->
-    <Teleport to="body">
-      <div v-if="hhDrawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="hhDrawerOpen = false" @click.self="hhDrawerOpen = false">
-        <div ref="hhDrawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-hh-form-dialog-title" class="ui-panel-soft w-full max-w-md max-h-[92vh] overflow-y-auto">
-
-          <!-- Dialog header -->
-          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-[var(--color-elevated)] px-5 py-4">
-            <h2 id="owner-hh-form-dialog-title" class="text-base font-bold tracking-tight text-white">
-              {{ hhEditing ? t('happyHour.edit') : t('happyHour.add') }}
-            </h2>
-            <button
-              class="ui-press rounded-lg border border-slate-700/50 bg-slate-800/50 p-1.5 text-slate-400 hover:border-slate-600 hover:text-white transition-colors ui-touch-target"
-              :aria-label="t('common.close')"
-              @click="hhDrawerOpen = false"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-            </button>
-          </div>
-
-          <!-- Form body -->
-          <div class="space-y-5 px-5 py-5">
-            <!-- Name -->
-            <div class="space-y-1.5">
-              <label for="hh-name" class="block text-xs font-semibold text-slate-300">{{ t('happyHour.nameLabel') }}</label>
-              <input id="hh-name" v-model="hhForm.name" type="text" :placeholder="t('happyHour.namePlaceholder')" class="ui-input w-full" />
-            </div>
-
-            <div class="border-t border-slate-700/40" />
-
-            <!-- Percent off -->
-            <div class="space-y-1.5">
-              <label for="hh-pct" class="block text-xs font-semibold text-slate-300">{{ t('happyHour.percentOffLabel') }}</label>
-              <input id="hh-pct" v-model.number="hhForm.percent_off" type="number" min="1" max="90" step="1" class="ui-input w-full" />
-              <p class="text-[11px] text-slate-500">{{ t('happyHour.percentOffHint') }}</p>
-            </div>
-
-            <div class="border-t border-slate-700/40" />
-
-            <!-- Time window -->
-            <div class="space-y-1.5">
-              <p id="hh-time-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</p>
-              <div role="group" aria-labelledby="hh-time-label" class="flex items-center gap-2">
-                <input v-model="hhForm.start_time" type="time" class="ui-input flex-1" :aria-label="t('happyHour.startTimeLabel')" />
-                <span class="text-slate-500 shrink-0" aria-hidden="true">—</span>
-                <input v-model="hhForm.end_time" type="time" class="ui-input flex-1" :aria-label="t('happyHour.endTimeLabel')" />
-              </div>
-              <p v-if="hhForm.start_time && hhForm.end_time && hhForm.start_time > hhForm.end_time" class="text-[11px] text-amber-400">{{ t('happyHour.overnightHint') }}</p>
-            </div>
-
-            <div class="border-t border-slate-700/40" />
-
-            <!-- Active days (0=Mon…6=Sun) -->
-            <div class="space-y-1.5">
-              <p id="hh-days-label" class="block text-xs font-semibold text-slate-300">{{ t('happyHour.daysLabel') }}</p>
-              <div role="group" aria-labelledby="hh-days-label" class="flex flex-wrap gap-1.5">
-                <button
-                  v-for="d in HH_DAYS"
-                  :key="d.value"
-                  type="button"
-                  :aria-pressed="hhForm.days.includes(d.value)"
-                  class="inline-flex min-h-[36px] items-center rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
-                  :class="hhForm.days.includes(d.value)
-                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                    : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                  @click="toggleHHDay(d.value)"
-                >{{ d.label }}</button>
-              </div>
-              <p class="text-[11px] text-slate-500">{{ t('happyHour.daysHint') }}</p>
-            </div>
-
-            <div class="border-t border-slate-700/40" />
-
-            <!-- Category scope -->
-            <div class="space-y-1.5">
-              <p id="hh-cat-label" class="block text-xs font-semibold text-slate-300">{{ t('happyHour.categoryLabel') }}</p>
-              <div role="group" aria-labelledby="hh-cat-label" class="flex flex-wrap gap-1.5">
-                <button
-                  v-for="cat in hhCategories"
-                  :key="cat.id"
-                  type="button"
-                  :aria-pressed="hhForm.category_ids.includes(cat.id)"
-                  class="inline-flex min-h-[36px] items-center rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
-                  :class="hhForm.category_ids.includes(cat.id)
-                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                    : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                  @click="toggleHHCategory(cat.id)"
-                >{{ cat.name }}</button>
-              </div>
-              <p class="text-[11px] text-slate-500">{{ t('happyHour.categoryHint') }}</p>
-            </div>
-
-            <div class="border-t border-slate-700/40" />
-
-            <!-- Active toggle -->
-            <label class="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3 ui-touch-target transition-colors hover:border-slate-600/60">
-              <input v-model="hhForm.is_active" type="checkbox" class="rounded" />
-              <span class="text-sm font-medium text-slate-300">{{ t('happyHour.isActiveLabel') }}</span>
-            </label>
-
-            <!-- Error -->
-            <div v-if="hhDrawerError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-              <p class="flex-1 text-sm text-red-300">{{ hhDrawerError }}</p>
-            </div>
-
-            <!-- Submit -->
-            <button
-              class="ui-btn-primary w-full justify-center"
-              :disabled="hhSubmitting"
-              @click="submitHHForm"
-            >
-              {{ hhSubmitting
-                ? (hhEditing ? t('happyHour.saving') : t('happyHour.creating'))
-                : (hhEditing ? t('happyHour.save') : t('happyHour.create'))
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- Happy Hour create/edit drawer (RISK FE-2) -->
+    <OwnerHappyHourFormDrawer
+      v-model:form="hhForm"
+      :open="hhDrawerOpen"
+      :is-edit="!!hhEditing"
+      :error="hhDrawerError"
+      :submitting="hhSubmitting"
+      :day-options="HH_DAYS"
+      :categories="hhCategories"
+      @close="hhDrawerOpen = false"
+      @submit="submitHHForm"
+    />
 
     <!-- Create / Edit drawer -->
     <Teleport to="body">
@@ -610,6 +502,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed, watch } from 'vue';
 import OwnerFlashSaleOptInCard from '../components/OwnerFlashSaleOptInCard.vue';
+import OwnerHappyHourFormDrawer from '../components/OwnerHappyHourFormDrawer.vue';
 import OwnerHappyHourRuleCard from '../components/OwnerHappyHourRuleCard.vue';
 import OwnerPromotionCard from '../components/OwnerPromotionCard.vue';
 import OwnerPromotionsEmptyState from '../components/OwnerPromotionsEmptyState.vue';
@@ -1073,7 +966,6 @@ const hhRules = ref([]);
 const hhLoading = ref(false);
 const hhFetchError = ref(false);
 const hhDrawerOpen = ref(false);
-const hhDrawerDialogRef = ref(null);
 const hhEditing = ref(null);
 const hhSubmitting = ref(false);
 const hhDeletingId = ref(null);
@@ -1108,18 +1000,6 @@ const hhDayLabels = (days) => {
   return days
     .map((d) => HH_DAYS.value.find((x) => x.value === d)?.label || String(d))
     .join(', ');
-};
-
-const toggleHHDay = (val) => {
-  const idx = hhForm.days.indexOf(val);
-  if (idx >= 0) hhForm.days.splice(idx, 1);
-  else hhForm.days.push(val);
-};
-
-const toggleHHCategory = (id) => {
-  const idx = hhForm.category_ids.indexOf(id);
-  if (idx >= 0) hhForm.category_ids.splice(idx, 1);
-  else hhForm.category_ids.push(id);
 };
 
 const openCreateHH = () => {
@@ -1232,28 +1112,4 @@ const deleteHHRule = async (rule) => {
   }
 };
 
-// Focus trap for happy-hour drawer (mirrors promotions drawer)
-watch(hhDrawerOpen, async (open) => {
-  if (open) {
-    await nextTick();
-    hhDrawerDialogRef.value?.querySelector(FOCUSABLE)?.focus();
-    document.addEventListener('keydown', trapHHFocus);
-  } else {
-    document.removeEventListener('keydown', trapHHFocus);
-  }
-});
-onBeforeUnmount(() => document.removeEventListener('keydown', trapHHFocus));
-
-const trapHHFocus = (e) => {
-  if (!hhDrawerDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(hhDrawerDialogRef.value.querySelectorAll(FOCUSABLE));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last  = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
-  }
-};
 </script>
