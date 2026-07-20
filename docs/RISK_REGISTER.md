@@ -937,11 +937,19 @@ DRYing ~200 lines of duplicated markup. Crucially, the combo `<template>` siblin
 so combo scoping is byte-preserved. 11-case test. **Preview concern:** the tap-to-ready / comp / void
 affordances + combo sub-lines still render correctly in all three card contexts. No new i18n keys.
 
-**Tally: 25 slices across all eight mega-pages, ~2050 lines lifted into 28 tested child components;
-frontend vitest 527 → 758.** WaiterPage's clean + shared blocks are now extracted; what remains is the
-per-variant order-card *wrappers* (the 4 divergent card shells, ~30-symbol interface each) and the
-status-tab bar / floor tile grid — plus the **held** `Cart.vue`. These are the genuinely
-preview-critical remainder (variant unification wants the app running), not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus `WaiterStatusTabBar` (the status-tab bar + action toolbar — status tabs + recent/shift, sound
+toggle, clock-in/out, charge, new-order, floor/list view). `activeTab`/`soundOn`/`floorView` round-trip
+via `v-model`; `tabs`/`currentShift`/`clockBusy`/`shiftElapsed`/`formatDateTime` are props; `selectShift`
+(the shift tab, since the parent's openShiftSummary also loads) / `clock('in'|'out')` / `charge` /
+`newOrder` (parent keeps the clock-in guard + toast) are emits. The tablist arrow-key focus-nav moved in
+self-contained. 10-case test. **Preview concern:** tab switching + arrow-key nav, the clock/charge/
+new-order actions, and the floor/list toggle. No new i18n keys.
+
+**Tally: 26 slices across all eight mega-pages, ~2160 lines lifted into 29 tested child components;
+frontend vitest 527 → 768.** What remains on WaiterPage is the per-variant order-card *wrappers* (the 4
+divergent card shells, ~30-symbol interface each — variant-unification refactor) and the floor
+table-tile grid; plus the **held** `Cart.vue`. These are the genuinely preview-critical remainder — best
+done with the app running, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are

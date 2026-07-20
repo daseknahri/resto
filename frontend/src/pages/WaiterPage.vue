@@ -27,118 +27,22 @@
       >✕</button>
     </div>
 
-    <!-- Status tabs + action buttons — single scroll row so nothing clips on narrow screens -->
-    <div class="overflow-x-auto" style="scrollbar-width:none;-webkit-overflow-scrolling:touch">
-      <div class="flex min-w-max items-center gap-2 pb-0.5">
-        <!-- Tablist (ARIA-correct container for the tab buttons) -->
-        <div
-          class="flex shrink-0 items-center gap-2"
-          role="tablist"
-          :aria-label="t('waiterPage.tablistLabel')"
-          @keydown.left.prevent="focusPrevTab"
-          @keydown.right.prevent="focusNextTab"
-        >
-          <button
-            v-for="tab in tabs"
-            :id="`waiter-tab-${tab.key}`"
-            :key="tab.key"
-            role="tab"
-            :aria-selected="activeTab === tab.key"
-            :aria-controls="`waiter-panel-${tab.key}`"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === tab.key"
-            @click="activeTab = tab.key"
-          >
-            {{ tab.label }}
-            <span
-              v-if="tab.count > 0"
-              class="ms-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums leading-none"
-              :class="['pending', 'unpaid'].includes(tab.key) ? 'bg-amber-500 text-white shadow-sm shadow-amber-900/30' : 'bg-slate-700/80 text-slate-100'"
-            >{{ tab.count }}</span>
-          </button>
-          <!-- Recent / past orders tab -->
-          <button
-            id="waiter-tab-recent"
-            role="tab"
-            :aria-selected="activeTab === 'recent'"
-            aria-controls="waiter-panel-recent"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === 'recent'"
-            @click="activeTab = 'recent'"
-          >
-            {{ t('waiterPage.tabRecent') }}
-          </button>
-          <!-- Shift summary tab -->
-          <button
-            id="waiter-tab-shift"
-            role="tab"
-            :aria-selected="activeTab === 'shift'"
-            aria-controls="waiter-panel-shift"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === 'shift'"
-            @click="openShiftSummary"
-          >
-            {{ t('waiterPage.tabShift') }}
-          </button>
-        </div>
-        <!-- Separator -->
-        <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-600/50" aria-hidden="true" />
-        <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
-        <div class="flex shrink-0 items-center gap-2">
-          <!-- Sound mute toggle -->
-          <button
-            class="ui-btn-outline ui-press ui-touch-target px-3 py-1.5 text-sm"
-            :class="waiterSoundOn ? '' : 'opacity-50'"
-            :aria-label="waiterSoundOn ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
-            @click="waiterSoundOn = !waiterSoundOn"
-          >
-            <span aria-hidden="true">{{ waiterSoundOn ? '🔔' : '🔕' }}</span>
-          </button>
-          <!-- Clock-in / clock-out (B4) -->
-          <button
-            v-if="canManageOrders && !currentShift"
-            :disabled="clockBusy"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-sky-500/40 bg-sky-500/8 font-semibold text-sky-300 disabled:opacity-50"
-            @click="doClock('in')"
-          >{{ t('waiterPage.clockIn') }}</button>
-          <button
-            v-if="canManageOrders && currentShift"
-            :disabled="clockBusy"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-amber-500/40 bg-amber-500/8 font-semibold text-amber-300 disabled:opacity-50"
-            :title="currentShift?.clock_in ? t('waiterPage.clockedInSince', { time: formatDateTime(currentShift.clock_in) }) : ''"
-            @click="doClock('out')"
-          >{{ t('waiterPage.clockedIn') }}<template v-if="shiftElapsed"> · {{ shiftElapsed }}</template> ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
-          <button
-            v-if="canManageOrders"
-            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            @click="openCharge()"
-          >
-            {{ t('waiterPage.chargeWalletBtn') }}
-          </button>
-          <button
-            v-if="canManageOrders"
-            class="ui-btn-primary ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            @click="currentShift ? (showNewOrder = true) : toast.show(t('waiterPage.mustClockInFirst'), 'warning')"
-          >
-            + {{ t('waiterPage.newOrderBtn') }}
-          </button>
-          <!-- Floor / List view toggle -->
-          <button
-            v-if="activeTab !== 'shift' && activeTab !== 'recent'"
-            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            :class="floorView ? 'border-[var(--color-secondary)]/60 text-[var(--color-secondary)]' : ''"
-            :data-active="floorView"
-            :aria-pressed="floorView"
-            :aria-label="floorView ? t('waiterPage.listViewToggle') : t('waiterPage.floorViewToggle')"
-            @click="floorView = !floorView"
-          >
-            <svg v-if="!floorView" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-            <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><path fill-rule="evenodd" d="M2 3.5A.5.5 0 0 1 2.5 3h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 3.5Zm0 4A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7.5Zm0 4A.5.5 0 0 1 2.5 11h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 11.5Z" clip-rule="evenodd"/></svg>
-            {{ floorView ? t('waiterPage.listViewToggle') : t('waiterPage.tabFloor') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Status tabs + action buttons (RISK FE-2) -->
+    <WaiterStatusTabBar
+      v-model:active-tab="activeTab"
+      v-model:sound-on="waiterSoundOn"
+      v-model:floor-view="floorView"
+      :tabs="tabs"
+      :can-manage="canManageOrders"
+      :current-shift="currentShift"
+      :clock-busy="clockBusy"
+      :shift-elapsed="shiftElapsed"
+      :format-date-time="formatDateTime"
+      @select-shift="openShiftSummary"
+      @clock="doClock"
+      @charge="openCharge"
+      @new-order="onNewOrderClick"
+    />
 
     <!-- Quick search (shown on non-shift tabs, fades in when there's something to search) -->
     <Transition name="fade">
@@ -1875,6 +1779,7 @@ import WaiterTableQRModal from "../components/WaiterTableQRModal.vue";
 import WaiterShiftPanel from "../components/WaiterShiftPanel.vue";
 import WaiterOfflineIndicator from "../components/WaiterOfflineIndicator.vue";
 import WaiterOrderItem from "../components/WaiterOrderItem.vue";
+import WaiterStatusTabBar from "../components/WaiterStatusTabBar.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
@@ -3079,20 +2984,10 @@ watch(activeTab, (tab) => {
 
 // Arrow-key navigation within the tablist (ARIA APG tab pattern).
 // Only moves focus — activation stays on click/Enter to match existing behavior.
-const _allTabKeys = ["needs_action", "all", "pending", "confirmed", "preparing", "ready", "unpaid", "recent", "shift"];
-const _focusTabByKey = (key) => {
-  const el = document.getElementById(`waiter-tab-${key}`);
-  el?.focus();
-};
-const focusPrevTab = () => {
-  const idx = _allTabKeys.indexOf(activeTab.value);
-  const prev = _allTabKeys[(idx - 1 + _allTabKeys.length) % _allTabKeys.length];
-  _focusTabByKey(prev);
-};
-const focusNextTab = () => {
-  const idx = _allTabKeys.indexOf(activeTab.value);
-  const next = _allTabKeys[(idx + 1) % _allTabKeys.length];
-  _focusTabByKey(next);
+// New-order button (in WaiterStatusTabBar) — guard on an open shift before opening.
+const onNewOrderClick = () => {
+  if (currentShift.value) showNewOrder.value = true;
+  else toast.show(t('waiterPage.mustClockInFirst'), 'warning');
 };
 
 // ── Polling ────────────────────────────────────────────────────────────────────
