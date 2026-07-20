@@ -49,54 +49,18 @@
 
       <!-- ── Left: item list ─────────────────────────────────────────────── -->
       <div class="space-y-2">
-        <article
+        <CartLineItem
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden ps-4 pe-3.5 py-3.5"
-          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        >
-          <!-- left accent bar -->
-          <div
-            class="pointer-events-none absolute inset-y-0 start-0 w-[3px] ltr:rounded-l-xl rtl:rounded-r-xl"
-            style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
-          />
-          <div class="flex items-center gap-3">
-            <!-- Name + meta -->
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold leading-snug text-slate-100 tracking-tight" :title="item.name">{{ item.name }}</p>
-              <p v-if="item.note" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.note">{{ item.note }}</p>
-              <p v-else-if="item.option_labels?.length" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.option_labels.join(' · ')">{{ item.option_labels.join(' · ') }}</p>
-              <p class="mt-1 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
-            </div>
-            <!-- Stepper pill -->
-            <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
-              <QtyStepperButton :aria-label="t('cartPage.decreaseQuantity')" @click="cart.decrement(item.key)">
-                <span class="text-base leading-none" aria-hidden="true">−</span>
-              </QtyStepperButton>
-              <span class="w-7 text-center text-sm font-bold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
-              <QtyStepperButton :aria-label="t('cartPage.increaseQuantity')" @click="cart.increment(item.key)">
-                <span class="text-base leading-none" aria-hidden="true">+</span>
-              </QtyStepperButton>
-            </div>
-            <!-- Subtotal + edit/remove -->
-            <div class="shrink-0 min-w-[4.5rem] text-end">
-              <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
-              <div class="mt-1 flex items-center justify-end gap-1.5">
-                <button
-                  v-if="isLineEditable(item)"
-                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-[var(--color-secondary)] transition-colors focus-visible:text-[var(--color-secondary)] focus:outline-none rounded-md"
-                  :aria-label="`${t('cartPage.editItem')} ${item.name}`"
-                  @click="openEditLine(item)"
-                >{{ t('cartPage.editItem') }}</button>
-                <button
-                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
-                  :aria-label="`${t('cartPage.remove')} ${item.name}`"
-                  @click="cart.remove(item.key)"
-                >{{ t('cartPage.remove') }}</button>
-              </div>
-            </div>
-          </div>
-        </article>
+          :item="item"
+          :index="index"
+          :editable="isLineEditable(item)"
+          :format-price="formatPrice"
+          @decrement="cart.decrement(item.key)"
+          @increment="cart.increment(item.key)"
+          @remove="cart.remove(item.key)"
+          @edit="openEditLine(item)"
+        />
 
         <!-- Unavailable items warning -->
         <div
@@ -993,9 +957,9 @@ import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CartPromoCode from '../components/CartPromoCode.vue';
 import CartHeader from '../components/CartHeader.vue';
+import CartLineItem from '../components/CartLineItem.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
-import QtyStepperButton from '../components/QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useCartStore } from '../stores/cart';
