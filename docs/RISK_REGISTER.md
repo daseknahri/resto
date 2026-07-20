@@ -983,13 +983,19 @@ Plus the three small Cart state banners — `CartClosedBanner`, `CartBrowseOnlyB
 menu link). Each keeps its `v-if`/`v-else-if` on the parent component tag so the browse/empty/main chain
 is preserved; no props, no state. 3 tests. No new i18n keys.
 
-**Cart.vue's presentational chrome is now fully decomposed** (header, line-item card, 3 state banners);
-only the pricing/payment/order-placement **order panel** (the right-side checkout column) remains — and
-it is deliberately held for a preview-driven session.
+Plus `CartOrderSummary` — the checkout panel's **order-summary breakdown** (subtotal / loyalty discount /
+delivery-fee [distance/pending/free/flat] / tip / wallet-credit rows, the grand total, and the pre-order
+ETA). DISPLAY ONLY: it computes nothing and mutates nothing — every pricing value is computed in the
+parent (Cart.vue keeps the whole pricing + place-order flow) and passed as a prop (~14 value props +
+`formatPrice` fn). The place-order CTA / payment flow are untouched. 7-case test. No new i18n keys.
 
-**Tally: 33 slices across all eight mega-pages, ~2790 lines lifted / DRY'd into 36 tested child
-components; frontend vitest 527 → 798.** FE-2 extraction is effectively complete — every mega-page is
-decomposed and only the Cart checkout order-panel is intentionally left. What remains is the
+**Cart.vue's presentational chrome + its order-summary display are now decomposed** (header, line-item
+card, 3 state banners, order-summary breakdown); only the **place-order CTA + payment/pricing-calculation
+logic** in the checkout column remains — deliberately held for a preview-driven session.
+
+**Tally: 34 slices across all eight mega-pages, ~2840 lines lifted / DRY'd into 37 tested child
+components; frontend vitest 527 → 805.** FE-2 extraction is effectively complete — every mega-page is
+decomposed and only the Cart place-order/payment core is intentionally left. What remains is the
 preview-pending components' visual QA and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were

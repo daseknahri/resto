@@ -683,56 +683,23 @@
             class="text-[11px] text-violet-400/80 ps-1"
           >{{ t('cartPage.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
 
-          <!-- ── Order summary breakdown ── -->
-          <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
-              <span>{{ t('cartPage.subtotal') }}</span>
-              <span class="tabular-nums font-medium">{{ formatPrice(cart.total) }}</span>
-            </div>
-            <div v-if="loyaltyDiscount > 0" class="flex items-center justify-between text-amber-300">
-              <span>{{ t('cartPage.loyaltyDiscount') }}</span>
-              <span class="tabular-nums font-semibold">-{{ formatPrice(loyaltyDiscount) }}</span>
-            </div>
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
-              <span>
-                {{ t('cartPage.deliveryFee') }}
-                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500">· {{ deliveryDistanceKm }} km</span>
-              </span>
-              <span class="tabular-nums font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
-            </div>
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeePending" class="flex items-center justify-between text-slate-400">
-              <span>{{ t('cartPage.deliveryFee') }}</span>
-              <span class="text-[11px]">{{ t('cartPage.deliveryFeeByDistanceShort') }}</span>
-            </div>
-            <div v-else-if="fulfillmentType === 'delivery' && !deliveryOutOfRange && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
-              <span>{{ t('cartPage.deliveryFee') }}</span>
-              <span class="font-semibold">{{ t('cartPage.free') }}</span>
-            </div>
-            <div v-if="tipAmount > 0" class="flex items-center justify-between text-[var(--color-secondary)]/75">
-              <span>{{ t('cartPage.tipLabel') }}</span>
-              <span class="tabular-nums font-medium">+{{ formatPrice(tipAmount) }}</span>
-            </div>
-            <div v-if="walletApplied && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
-              <span>{{ t('cartPage.payWithCredits') }}</span>
-              <span class="tabular-nums font-semibold">-{{ formatPrice(walletDeduction) }}</span>
-            </div>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-700/50">
-              <span class="text-sm font-bold text-slate-200 tracking-tight">{{ t('cartPage.total') }}</span>
-              <span class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
-            </div>
-            <!-- Pre-order ETA: a time estimate shown BEFORE the customer pays -->
-            <div
-              v-if="checkoutEta && !deliveryOutOfRange"
-              class="flex items-center gap-1.5 pt-1 text-sky-300"
-            >
-              <AppIcon name="clock" class="h-3.5 w-3.5 shrink-0" />
-              <span class="font-medium">
-                {{ checkoutEta.type === 'delivery'
-                  ? t('cartPage.etaDelivery', { min: checkoutEta.min, max: checkoutEta.max })
-                  : t('menu.etaReadyIn', { min: checkoutEta.min, max: checkoutEta.max }) }}
-              </span>
-            </div>
-          </div>
+          <!-- ── Order summary breakdown (RISK FE-2) ── -->
+          <CartOrderSummary
+            :fulfillment-type="fulfillmentType"
+            :subtotal="cart.total"
+            :delivery-fee-amount="deliveryFeeAmount"
+            :delivery-fee-is-distance="deliveryFeeIsDistance"
+            :delivery-distance-km="deliveryDistanceKm"
+            :delivery-fee-pending="deliveryFeePending"
+            :delivery-out-of-range="deliveryOutOfRange"
+            :loyalty-discount="loyaltyDiscount"
+            :tip-amount="tipAmount"
+            :wallet-applied="walletApplied"
+            :wallet-deduction="walletDeduction"
+            :grand-total="orderGrandTotal"
+            :checkout-eta="checkoutEta"
+            :format-price="formatPrice"
+          />
 
           <!-- Payment-timing note: pickup/delivery pay now, dine-in pays at the table -->
           <p
@@ -936,6 +903,7 @@ import CartLineItem from '../components/CartLineItem.vue';
 import CartClosedBanner from '../components/CartClosedBanner.vue';
 import CartBrowseOnlyBanner from '../components/CartBrowseOnlyBanner.vue';
 import CartEmptyState from '../components/CartEmptyState.vue';
+import CartOrderSummary from '../components/CartOrderSummary.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
