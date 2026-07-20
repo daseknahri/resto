@@ -882,10 +882,20 @@ status PATCH / earnings / rating), `busy`, the computeds (`nextAction`/`activeRe
 clearing; (b) the fail-reason flow; (c) the detail disclosure both on click AND auto-expanding when a
 new job arrives / collapsing when it clears. No new i18n keys.
 
-**Tally so far: 19 slices across eight mega-pages, ~1450 lines lifted into tested child components;
-frontend vitest 527 → 704.** Remaining FE-2 blocks: the OwnerKitchen order card + 86-board, the
-OwnerOrders 86-board, and the held `Cart`/`WaiterPage` — each needs a case-by-case decomposition and a
-visual preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Third **entangled-block** slice, **`OwnerKitchen86Board`** (the 86-board modal): the complexity stays
+in the parent — the dish data (`eightySixDishes`), the fetch (`fetch86Dishes`), the availability
+toggle API (`toggle86Dish`, mutates `dish.is_available` in place), and the snapshotted sort-order Map
+(`_eightySixOrderKey`) + the `eightySixFiltered` computed all remain in `OwnerKitchen.vue`. The child
+is the presentational shell: it receives the filtered dishes as `:dishes`, round-trips the search via
+`v-model:search` (defineModel), and emits `close` / `toggle(dish)`. Template block replaced via a
+line-range script (87 lines → 10-line child usage); 9-case test. **Preview concerns:** the search
+filter, and that toggling a dish flips available↔sold-out *without the row jumping position mid tap-
+sequence* (the stable-sort snapshot). No new i18n keys.
+
+**Tally so far: 20 slices across eight mega-pages, ~1520 lines lifted into tested child components;
+frontend vitest 527 → 713.** Remaining FE-2 blocks: the OwnerKitchen order card, the OwnerOrders
+86-board, and the held `Cart`/`WaiterPage` — each needs a case-by-case decomposition and a visual
+preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
