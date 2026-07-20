@@ -103,18 +103,7 @@
     </div>
 
     <!-- New-order flash banner (supplements audio alert in noisy kitchens) -->
-    <Transition name="kitchen-flash">
-      <div
-        v-if="newOrderFlash"
-        class="kitchen-new-order-banner"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <span class="h-2.5 w-2.5 rounded-full bg-amber-300 animate-ping" aria-hidden="true" />
-        {{ t('kitchen.newOrderAlert') }}
-      </div>
-    </Transition>
+    <OwnerKitchenNewOrderBanner :show="newOrderFlash" />
 
     <!-- Station / prep-station filter bars -->
     <OwnerKitchenFilterBars
@@ -532,6 +521,7 @@ import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watc
 import { useI18n } from "../composables/useI18n";
 import BusyModeControl from "../components/BusyModeControl.vue";
 import OwnerKitchenFilterBars from "../components/OwnerKitchenFilterBars.vue";
+import OwnerKitchenNewOrderBanner from "../components/OwnerKitchenNewOrderBanner.vue";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";

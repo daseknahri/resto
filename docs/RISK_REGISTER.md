@@ -835,10 +835,14 @@ parent keeps every CRUD mutation; `promoLabel` a fn prop; `toggling`/`deleting` 
 10-case test), plus `OwnerHappyHourRuleCard` (a single happy-hour rule card — display + edit/delete
 emits; `isOvernight`/`dayLabels` fn props; `deleting` in-flight prop; 8-case test), plus
 `OwnerFlashSaleOptInCard` (a single platform flash-sale opt-in card — display + one `toggle` emit;
-`fmtFlashDate` fn prop; `busy` in-flight prop; 6-case test). All no new i18n keys.
+`fmtFlashDate` fn prop; `busy` in-flight prop; 6-case test), plus `OwnerKitchenNewOrderBanner` (the
+transient new-order flash banner; single `show` prop, no emit; parent keeps the newOrderFlash timer;
+2-case test). All no new i18n keys.
 
-**Tally so far: 12 slices, ~740 lines lifted from seven mega-pages into tested child components;
-frontend vitest 527 → 643.** Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+**Tally so far: 13 slices across eight mega-pages, ~750 lines lifted into tested child components;
+frontend vitest 527 → 645.** The remaining FE-2 blocks are the genuinely-entangled ones (OwnerKitchen
+order card + 86-board, OwnerPromotions/Kitchen form drawers with two-way `v-model`, and the held
+`Cart`/`WaiterPage`) — those want supervised, previewable extraction, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
