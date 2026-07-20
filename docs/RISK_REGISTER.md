@@ -892,10 +892,19 @@ line-range script (87 lines → 10-line child usage); 9-case test. **Preview con
 filter, and that toggling a dish flips available↔sold-out *without the row jumping position mid tap-
 sequence* (the stable-sort snapshot). No new i18n keys.
 
-**Tally so far: 20 slices across eight mega-pages, ~1520 lines lifted into tested child components;
-frontend vitest 527 → 713.** Remaining FE-2 blocks: the OwnerKitchen order card, the OwnerOrders
-86-board, and the held `Cart`/`WaiterPage` — each needs a case-by-case decomposition and a visual
-preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Fourth **entangled-block** slice, **`OwnerOrders86Board`** (the OwnerOrders 86-board modal — sibling of
+`OwnerKitchen86Board` plus a sold-out count badge + bulk mark-all-unavailable / reset-all actions).
+Same split: the dish data / fetch / toggle API / bulk actions / sort-order Map + `orders86Filtered`
+computed all stay in `OwnerOrders.vue`; the child takes `dishes`/`soldOutCount`/`hasAvailable`/flags as
+props, round-trips search via `v-model:search`, and emits `close`/`toggle`/`markAllUnavailable`/
+`resetAll`. Template block replaced via a line-range script (104 lines → 16-line child usage); 10-case
+test. **Preview concerns:** search filter, stable-sort on toggle, and the two bulk actions. No new
+i18n keys.
+
+**Tally so far: 21 slices across eight mega-pages, ~1600 lines lifted into tested child components;
+frontend vitest 527 → 723.** Remaining FE-2 blocks: only the OwnerKitchen order card (the most coupled
+— fire-course / mark-ready / per-item hold wired into `activeOrders`/`prepStation`/`isItemHeld`/timeline
+maps) and the held `Cart`/`WaiterPage`. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
