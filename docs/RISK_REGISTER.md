@@ -829,10 +829,13 @@ plus `DriverPagePerformanceStats` (the avg-rating/acceptance/completion stats st
 single `earnings` prop, no emit; parent keeps the `total_deliveries > 0` gate; 9-case test), plus
 `MarketplaceMenuFlashSaleBanner` (display-only; parent keeps the flash_sale gate + countdown timer;
 4-case test), plus `MarketplaceMenuLoyaltyTeaser` (display-only points teaser; parent keeps the
-loyalty-enabled/authenticated gate; 6-case test). All no new i18n keys.
+loyalty-enabled/authenticated gate; 6-case test), plus `OwnerPromotionCard` (a single promotion
+list card — display + four action buttons forwarded as `toggle`/`clone`/`edit`/`delete` emits so the
+parent keeps every CRUD mutation; `promoLabel` a fn prop; `toggling`/`deleting` in-flight props;
+10-case test). All no new i18n keys.
 
-**Tally so far: 9 slices, ~570 lines lifted from six mega-pages into tested child components;
-frontend vitest 527 → 620.** Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+**Tally so far: 10 slices, ~660 lines lifted from seven mega-pages into tested child components;
+frontend vitest 527 → 629.** Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
