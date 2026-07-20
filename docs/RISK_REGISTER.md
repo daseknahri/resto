@@ -945,11 +945,18 @@ via `v-model`; `tabs`/`currentShift`/`clockBusy`/`shiftElapsed`/`formatDateTime`
 self-contained. 10-case test. **Preview concern:** tab switching + arrow-key nav, the clock/charge/
 new-order actions, and the floor/list toggle. No new i18n keys.
 
-**Tally: 26 slices across all eight mega-pages, ~2160 lines lifted into 29 tested child components;
-frontend vitest 527 → 768.** What remains on WaiterPage is the per-variant order-card *wrappers* (the 4
-divergent card shells, ~30-symbol interface each — variant-unification refactor) and the floor
-table-tile grid; plus the **held** `Cart.vue`. These are the genuinely preview-critical remainder — best
-done with the app running, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus `WaiterFloorTileGrid` (the floor view's tappable table-tile grid — status dot / ready pulse, table
+label + order count, capacity, status label, outstanding + longest-elapsed badge, expand indicator).
+Props `tiles`/`expandedKey` + 4 display-helper fns (`floorTileClass`/`floorDotClass`/
+`tableStatusBadgeClass`/`fmtOrderPrice`); emits `toggle(tile)`. The floor data + expanded-tile state +
+actions stay in the parent. 7-case test. **Preview concern:** tiles render + tap expands/collapses.
+No new i18n keys.
+
+**Tally: 27 slices across all eight mega-pages, ~2230 lines lifted into 30 tested child components;
+frontend vitest 527 → 775.** The only FE-2 work left is the per-variant order-card *wrappers* (the 4
+divergent card shells / the expanded-floor-tile order group — a variant-unification refactor, ~30-symbol
+interface) and the **held** `Cart.vue` (money/checkout). Both are genuinely preview-critical — best done
+with the app running, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are

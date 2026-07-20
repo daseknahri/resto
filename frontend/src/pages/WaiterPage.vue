@@ -140,77 +140,16 @@
         </div>
 
         <!-- Table tile grid -->
-        <div
+        <WaiterFloorTileGrid
           v-else
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))"
-        >
-          <button
-            v-for="tile in filteredFloorTiles"
-            :key="tile.tableKey"
-            class="ui-press ui-touch-target relative flex min-h-[120px] flex-col items-start gap-1 overflow-hidden rounded-2xl border p-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-            :class="floorTileClass(tile.tableStatus)"
-            :aria-label="t('waiterPage.floorTileAriaLabel', { label: tile.tableLabel, status: t(`waiterPage.tableStatus_${tile.tableStatus}`) })"
-            :aria-pressed="expandedFloorTable === tile.tableKey"
-            @click="toggleFloorTile(tile)"
-          >
-            <!-- "Ready to serve" pulse ring — overlays the status dot when food is ready -->
-            <span
-              v-if="tile.orders.some(o => o.status === 'ready')"
-              class="absolute end-2 top-2 flex h-4 w-4 items-center justify-center"
-              :title="t('waiterPage.floorReadyToServe')"
-              aria-hidden="true"
-            >
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </span>
-            <!-- Status dot (hidden when ready pulse is shown) -->
-            <span
-              v-else
-              class="absolute end-2.5 top-2.5 h-2.5 w-2.5 rounded-full"
-              :class="floorDotClass(tile.tableStatus)"
-              aria-hidden="true"
-            />
-
-            <!-- Table label + active order count -->
-            <span class="pe-4 text-base font-bold leading-tight text-white">{{ tile.tableLabel }}</span>
-            <span
-              v-if="tile.orders.length > 0"
-              class="ms-auto me-6 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500/20 px-1 text-[9px] font-bold tabular-nums text-amber-300"
-              :title="t('waiterPage.floorOrderCount', { n: tile.orders.length })"
-            >{{ tile.orders.length }}</span>
-
-            <!-- Capacity badge -->
-            <span v-if="tile.tableCapacity" class="text-[10px] text-slate-400 tabular-nums">{{ t('waiterPage.floorCapacity', { n: tile.tableCapacity }) }}</span>
-
-            <!-- Status label -->
-            <span
-              class="mt-auto rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-              :class="tableStatusBadgeClass(tile.tableStatus)"
-            >{{ t(`waiterPage.tableStatus_${tile.tableStatus}`) }}</span>
-
-            <!-- Outstanding + elapsed (when occupied) -->
-            <template v-if="tile.orders.length > 0">
-              <span class="tabular-nums text-xs font-bold text-white">
-                {{ fmtOrderPrice(tile.totalOutstanding, tile.orders[0]?.currency) }}
-              </span>
-              <span
-                v-if="tile.longestElapsedLabel"
-                class="rounded-full border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums"
-                :class="tile.longestElapsedClass"
-              >{{ tile.longestElapsedLabel }}</span>
-            </template>
-            <span v-else class="text-[10px] text-slate-500">{{ t('waiterPage.floorNoOrders') }}</span>
-
-            <!-- Expand indicator -->
-            <span
-              v-if="tile.orders.length > 0"
-              class="absolute bottom-2 end-2 text-[10px] text-slate-400 transition-transform"
-              :class="expandedFloorTable === tile.tableKey ? 'rotate-180' : ''"
-              aria-hidden="true"
-            >▾</span>
-          </button>
-        </div>
+          :tiles="filteredFloorTiles"
+          :expanded-key="expandedFloorTable"
+          :floor-tile-class="floorTileClass"
+          :floor-dot-class="floorDotClass"
+          :table-status-badge-class="tableStatusBadgeClass"
+          :fmt-order-price="fmtOrderPrice"
+          @toggle="toggleFloorTile"
+        />
 
         <!-- Expanded floor tile — shows the table's order group inline -->
         <Transition name="fade">
@@ -1780,6 +1719,7 @@ import WaiterShiftPanel from "../components/WaiterShiftPanel.vue";
 import WaiterOfflineIndicator from "../components/WaiterOfflineIndicator.vue";
 import WaiterOrderItem from "../components/WaiterOrderItem.vue";
 import WaiterStatusTabBar from "../components/WaiterStatusTabBar.vue";
+import WaiterFloorTileGrid from "../components/WaiterFloorTileGrid.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
