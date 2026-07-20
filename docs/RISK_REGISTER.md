@@ -978,11 +978,19 @@ parent (`cart.decrement`/`increment`/`remove` + `openEditLine`), forwarded via `
 `remove`/`edit` emits; `formatPrice` a fn prop, `editable` (isLineEditable) a prop. 5-case test. No new
 i18n keys.
 
-**Tally: 30 slices across all eight mega-pages, ~2740 lines lifted / DRY'd into 33 tested child
-components; frontend vitest 527 → 795.** `Cart.vue`'s pricing/payment/order-placement **order panel**
-(the right-side checkout column) is deliberately untouched; only its presentational chrome (header,
-line-item card, the closed/browse/empty banners) is a candidate, and each such block should be
-previewed. What remains is the 16+ preview-pending components' visual QA and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus the three small Cart state banners — `CartClosedBanner`, `CartBrowseOnlyBanner`, `CartEmptyState`
+(pure presentational: the restaurant-closed / browse-only-plan notices and the empty-cart message +
+menu link). Each keeps its `v-if`/`v-else-if` on the parent component tag so the browse/empty/main chain
+is preserved; no props, no state. 3 tests. No new i18n keys.
+
+**Cart.vue's presentational chrome is now fully decomposed** (header, line-item card, 3 state banners);
+only the pricing/payment/order-placement **order panel** (the right-side checkout column) remains — and
+it is deliberately held for a preview-driven session.
+
+**Tally: 33 slices across all eight mega-pages, ~2790 lines lifted / DRY'd into 36 tested child
+components; frontend vitest 527 → 798.** FE-2 extraction is effectively complete — every mega-page is
+decomposed and only the Cart checkout order-panel is intentionally left. What remains is the
+preview-pending components' visual QA and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are

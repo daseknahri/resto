@@ -10,36 +10,11 @@
       @clear="clearCart"
     />
 
-    <!-- ── Restaurant closed notice ─────────────────────────────────────────── -->
-    <div
-      v-if="!isRestaurantOpen && !isBrowseOnlyPlan"
-      class="ui-section-band border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-100 space-y-0.5"
-      role="status"
-    >
-      <p class="text-sm font-semibold">{{ t('cartPage.restaurantClosed') }}</p>
-      <p class="text-xs text-amber-200/75">{{ t('cartPage.restaurantClosedBody') }}</p>
-    </div>
+    <!-- ── Status banners + empty state (RISK FE-2) ────────────────────────── -->
+    <CartClosedBanner v-if="!isRestaurantOpen && !isBrowseOnlyPlan" />
 
-    <!-- ── Browse-only notice ───────────────────────────────────────────────── -->
-    <div
-      v-if="isBrowseOnlyPlan"
-      class="ui-section-band border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sky-100 space-y-0.5"
-    >
-      <p class="text-sm font-semibold">{{ t('cartPage.orderingDisabled') }}</p>
-      <p class="text-xs text-sky-200/75">{{ t('cartPage.browseOnlyBody') }}</p>
-    </div>
-
-    <!-- ── Empty state ──────────────────────────────────────────────────────── -->
-    <div
-      v-else-if="!cart.items.length"
-      class="ui-empty-state ui-reveal text-center space-y-2"
-    >
-      <p class="text-base font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
-      <p class="text-sm text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
-      <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary mt-4 inline-flex items-center gap-1.5 px-6 py-2.5 text-sm font-semibold tracking-wide">
-        <AppIcon name="menu" class="h-4 w-4" />{{ t('cartPage.browseMenu') }}
-      </RouterLink>
-    </div>
+    <CartBrowseOnlyBanner v-if="isBrowseOnlyPlan" />
+    <CartEmptyState v-else-if="!cart.items.length" />
 
     <!-- ── Main ─────────────────────────────────────────────────────────────── -->
     <div
@@ -958,6 +933,9 @@ import AppIcon from '../components/AppIcon.vue';
 import CartPromoCode from '../components/CartPromoCode.vue';
 import CartHeader from '../components/CartHeader.vue';
 import CartLineItem from '../components/CartLineItem.vue';
+import CartClosedBanner from '../components/CartClosedBanner.vue';
+import CartBrowseOnlyBanner from '../components/CartBrowseOnlyBanner.vue';
+import CartEmptyState from '../components/CartEmptyState.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
