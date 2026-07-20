@@ -901,10 +901,25 @@ props, round-trips search via `v-model:search`, and emits `close`/`toggle`/`mark
 test. **Preview concerns:** search filter, stable-sort on toggle, and the two bulk actions. No new
 i18n keys.
 
-**Tally so far: 21 slices across eight mega-pages, ~1600 lines lifted into tested child components;
-frontend vitest 527 → 723.** Remaining FE-2 blocks: only the OwnerKitchen order card (the most coupled
-— fire-course / mark-ready / per-item hold wired into `activeOrders`/`prepStation`/`isItemHeld`/timeline
-maps) and the held `Cart`/`WaiterPage`. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Fifth (and hardest) **entangled-block** slice, **`OwnerKitchenOrderCard`** (the kitchen order tile —
+the single most coupled block in the app): headline + badges, the tap-to-ready item list (held/station/
+course chips + combo sub-lines), notes, and the action bar (fire-course / mark-all-ready / advance /
+print). The coupling stays in the parent — the `activeOrders` grid, `prepStation`, the `waiter` store
+(`nextStatus`/`updatingOrderIds`), `firingCourseOrderId`, and every action are emitted; the ~20 display
+helpers are passed as **function props** (which keeps the parent's reactive deps live — e.g. the
+elapsed-time now-ticker read inside `elapsedLabel` is tracked by the card's render, so the timer badge
+still ticks). Extracted via a script that transforms the exact parent block → child (markup can't
+drift), with a grep completeness-check that every helper the child uses is a declared prop; 11-case
+test. **Note:** the ~25-prop interface is wide — a follow-up could push the card-only display helpers
+*into* the child to slim it, but that's a simplification, not behavior. **Preview concerns (highest of
+all):** the full order lifecycle (tap items ready → progress pill → mark-all-ready → advance through
+statuses → card updates), fire-course, the live-ticking elapsed badge, and the prepStation item-dimming.
+No new i18n keys.
+
+**FE-2 extractable blocks are now complete.** **Tally: 22 slices across eight mega-pages, ~1810 lines
+lifted into 25 tested child components; frontend vitest 527 → 734.** The only FE-2 work left is the
+deliberately-**held** `Cart.vue` (money/checkout path) and `WaiterPage.vue` (most entangled overall) —
+both flagged for supervised, previewable sessions rather than autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
