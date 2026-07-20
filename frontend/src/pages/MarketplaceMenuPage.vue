@@ -99,20 +99,12 @@
         </button>
       </div>
 
-      <!-- Flash sale banner -->
-      <div
+      <!-- Flash sale banner (presentational; RISK FE-2) -->
+      <MarketplaceMenuFlashSaleBanner
         v-if="restaurant.flash_sale"
-        class="ui-reveal mx-4 mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm"
-        :style="{ '--ui-delay': '40ms' }"
-        role="status"
-      >
-        <p class="font-semibold text-amber-200">
-          {{ t('mktMenu.flashSaleBanner', { pct: restaurant.flash_sale.discount_pct }) }}
-        </p>
-        <p v-if="flashSaleCountdown" class="shrink-0 font-mono text-[11px] tabular-nums text-amber-300/80">
-          {{ t('mktMenu.flashSaleEnds', { time: flashSaleCountdown }) }}
-        </p>
-      </div>
+        :flash-sale="restaurant.flash_sale"
+        :countdown="flashSaleCountdown"
+      />
 
       <!-- Loyalty points teaser — shown when signed in + loyalty enabled -->
       <div
@@ -1146,6 +1138,7 @@ import { useVocabulary } from '../composables/useVocabulary';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import MarketplaceMenuCategoryNav from '../components/MarketplaceMenuCategoryNav.vue';
+import MarketplaceMenuFlashSaleBanner from '../components/MarketplaceMenuFlashSaleBanner.vue';
 import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
 import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
