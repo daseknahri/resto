@@ -871,10 +871,21 @@ Because `trackModal` is a deep-reactive ref, `:delivery="trackModal.delivery"` s
 poll ticks. `DeliveryTracker` import moved from the parent into the child; 6-case test. **Preview
 concern:** confirm the map/tracker keeps updating live while the modal is open. No new i18n keys.
 
-**Tally so far: 18 slices across eight mega-pages, ~1220 lines lifted into tested child components;
-frontend vitest 527 → 693.** Remaining FE-2 blocks are the *truly* core-state-coupled ones
-(OwnerKitchen order card + 86-board, OwnerOrders 86-board, DriverPage active-job hero) and the held
-`Cart`/`WaiterPage` — each needs a case-by-case decomposition and a visual preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Second (and hardest) **entangled-block** slice, **`DriverPageActiveJob`** (the 252-line sticky
+active-job hero): the coupling stays in the parent — `activeJob`, the `advance` action (code modal /
+status PATCH / earnings / rating), `busy`, the computeds (`nextAction`/`activeReadyEta`/
+`activeJobNavigateHref`) and `showActiveJobDetail` (+ its auto-expand-on-new-job watcher) all remain in
+`DriverPage.vue`; the child receives them as props and forwards intent via `advance(to)` /
+`fail({reason,note})` / `toggleDetail` emits. Only the fail-picker UI state (`failingOpen`/`failNote`/
+`FAIL_REASONS`) moved in. `statusLabel`/`fmtMoney`/`mapsLink` are fn props. 11-case test.
+**Preview concerns:** (a) the full advance flow assigned→picked_up→delivered (code modal) and job
+clearing; (b) the fail-reason flow; (c) the detail disclosure both on click AND auto-expanding when a
+new job arrives / collapsing when it clears. No new i18n keys.
+
+**Tally so far: 19 slices across eight mega-pages, ~1450 lines lifted into tested child components;
+frontend vitest 527 → 704.** Remaining FE-2 blocks: the OwnerKitchen order card + 86-board, the
+OwnerOrders 86-board, and the held `Cart`/`WaiterPage` — each needs a case-by-case decomposition and a
+visual preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
