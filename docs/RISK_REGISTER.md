@@ -845,11 +845,17 @@ lint-clean; validation + save API (`submitHHForm`) + open/edit state stay in the
 number coercion, toggles, focus-trap lifecycle). **This one needs a visual preview before merge to
 main** (form reactivity can't be fully gate-verified). No new i18n keys.
 
-**Tally so far: 14 slices across eight mega-pages, ~870 lines lifted into tested child components;
-frontend vitest 527 → 658.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
-(OwnerKitchen order card + 86-board, OwnerOrders track modal), the other form drawers (promotions
-create/edit, win-back, referral), and the held `Cart`/`WaiterPage` — all supervised/previewable
-work, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+The second supervised `v-model` drawer, **`OwnerPromotionFormDrawer`** (the promotion create/edit
+modal — same `defineModel('form')` pattern; `promoPreview` computed + `toggleDay` moved in; parent
+keeps validation + save + open/edit state; the parent's *last* focus-trap left, so `FOCUSABLE` +
+`nextTick`/`watch`/`onBeforeUnmount` imports were cleaned out of the parent; 14-case test incl.
+name/code-uppercase write-back, type-select re-render, day toggle, promo-preview, focus-trap
+lifecycle). **Also needs a visual preview before merge.** No new i18n keys.
+
+**Tally so far: 15 slices across eight mega-pages, ~1060 lines lifted into tested child components;
+frontend vitest 527 → 672.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
+(OwnerKitchen order card + 86-board, OwnerOrders track modal), the win-back / referral cards, and
+the held `Cart`/`WaiterPage` — all supervised/previewable work. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
