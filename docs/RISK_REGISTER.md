@@ -857,10 +857,17 @@ inline, no modal/trap; `winbackForm` via `defineModel`; save-on-change forwarded
 emit; parent keeps the save API + saving/error flags; 8-case test). Needs a visual preview before
 merge. No new i18n keys.
 
-**Tally so far: 16 slices across eight mega-pages, ~1130 lines lifted into tested child components;
-frontend vitest 527 → 680.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
-(OwnerKitchen order card + 86-board, OwnerOrders track modal), the referral card, and the held
-`Cart`/`WaiterPage` — all supervised/previewable work. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+A fourth supervised `v-model` slice, **`OwnerReferralCard`** (the referral-programme config card —
+same inline `defineModel` shape as win-back; `referralForm` via `defineModel`; save-on-change → `save`
+emit; 7-case test). Needs a visual preview before merge. No new i18n keys. **`OwnerPromotions.vue` is
+now fully decomposed** — 7 children extracted (3 list cards + 2 form drawers + 2 config cards); the
+page dropped from ~1291 lines to ~600.
+
+**Tally so far: 17 slices across eight mega-pages, ~1200 lines lifted into tested child components;
+frontend vitest 527 → 687.** Remaining FE-2 blocks are the genuinely-entangled reactive-state ones
+(OwnerKitchen order card + 86-board, OwnerOrders track modal / 86-board, DriverPage active-job hero)
+and the held `Cart`/`WaiterPage` — these are coupled to core page state, not a single form object, so
+they need a different (non-`defineModel`) decomposition and a visual preview, not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
