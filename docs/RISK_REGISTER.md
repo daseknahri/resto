@@ -852,10 +852,15 @@ keeps validation + save + open/edit state; the parent's *last* focus-trap left, 
 name/code-uppercase write-back, type-select re-render, day toggle, promo-preview, focus-trap
 lifecycle). **Also needs a visual preview before merge.** No new i18n keys.
 
-**Tally so far: 15 slices across eight mega-pages, ~1060 lines lifted into tested child components;
-frontend vitest 527 → 672.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
-(OwnerKitchen order card + 86-board, OwnerOrders track modal), the win-back / referral cards, and
-the held `Cart`/`WaiterPage` — all supervised/previewable work. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+A third supervised `v-model` slice, **`OwnerWinbackCard`** (the win-back automation config card —
+inline, no modal/trap; `winbackForm` via `defineModel`; save-on-change forwarded as a single `save`
+emit; parent keeps the save API + saving/error flags; 8-case test). Needs a visual preview before
+merge. No new i18n keys.
+
+**Tally so far: 16 slices across eight mega-pages, ~1130 lines lifted into tested child components;
+frontend vitest 527 → 680.** Remaining FE-2 blocks: the genuinely-entangled reactive-state blocks
+(OwnerKitchen order card + 86-board, OwnerOrders track modal), the referral card, and the held
+`Cart`/`WaiterPage` — all supervised/previewable work. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
