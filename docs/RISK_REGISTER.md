@@ -916,10 +916,18 @@ all):** the full order lifecycle (tap items ready → progress pill → mark-all
 statuses → card updates), fire-course, the live-ticking elapsed badge, and the prepStation item-dimming.
 No new i18n keys.
 
-**FE-2 extractable blocks are now complete.** **Tally: 22 slices across eight mega-pages, ~1810 lines
-lifted into 25 tested child components; frontend vitest 527 → 734.** The only FE-2 work left is the
-deliberately-**held** `Cart.vue` (money/checkout path) and `WaiterPage.vue` (most entangled overall) —
-both flagged for supervised, previewable sessions rather than autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+First **`WaiterPage.vue`** slice (the most entangled page, 3.7k lines — now being decomposed too):
+**`WaiterShiftPanel`** (the shift-summary + change-password tab panel). The `waiter` store, the summary
+fetch (`loadShiftSummary`) and the password submit (`submitPasswordChange`) stay in the parent; the two
+form values round-trip via `v-model:since` / `v-model:pw-form` (defineModel), and the panel emits
+`refresh` / `submitPassword`. The `activeTab === 'shift'` `v-else-if` gate stays in the parent's tab
+chain. Extracted via the transform-script + grep-completeness pattern; 9-case test. **Preview concern:**
+the shift-summary refresh + the change-password submit. No new i18n keys.
+
+**Tally: 23 slices across all eight mega-pages, ~1900 lines lifted into 26 tested child components;
+frontend vitest 527 → 743.** `WaiterPage.vue` (3.7k→3.6k so far) and `Cart.vue` (money/checkout, still
+**held**) are the two remaining FE-2 pages — WaiterPage now has an incremental decomposition underway;
+Cart stays supervised/previewable. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
