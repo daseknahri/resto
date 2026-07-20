@@ -924,10 +924,14 @@ form values round-trip via `v-model:since` / `v-model:pw-form` (defineModel), an
 chain. Extracted via the transform-script + grep-completeness pattern; 9-case test. **Preview concern:**
 the shift-summary refresh + the change-password submit. No new i18n keys.
 
-**Tally: 23 slices across all eight mega-pages, ~1900 lines lifted into 26 tested child components;
-frontend vitest 527 → 743.** `WaiterPage.vue` (3.7k→3.6k so far) and `Cart.vue` (money/checkout, still
-**held**) are the two remaining FE-2 pages — WaiterPage now has an incremental decomposition underway;
-Cart stays supervised/previewable. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus `WaiterOfflineIndicator` (the offline / queue-sync banner — display-only, props online/queueLength;
+4-case test). The New-Order / Append / Charge-wallet modals were already extracted components.
+
+**Tally: 24 slices across all eight mega-pages, ~1920 lines lifted into 27 tested child components;
+frontend vitest 527 → 747.** `WaiterPage.vue` (now ~3.5k) and `Cart.vue` (money/checkout, still **held**)
+are the two remaining FE-2 pages. WaiterPage's clean blocks are now largely extracted; what's left there
+is its entangled core (the status-tab bar, the floor table-tile grid, and the waiter order cards),
+same tier as the OwnerKitchen order card — case-by-case + preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
