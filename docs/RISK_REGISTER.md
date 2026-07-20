@@ -966,11 +966,17 @@ identically — the header/badges/status chip, the item list, combo sub-lines un
 elapsed badge (non-table only), and every action-footer button. The stripped floor-tile 4th variant was
 left inline (too different). No new i18n keys.
 
-**FE-2 is functionally complete.** **Tally: 28 slices across all eight mega-pages, ~2680 lines lifted /
-DRY'd into 31 tested child components; frontend vitest 527 → 785.** The only page left is the **held**
-`Cart.vue` (money/checkout). Everything extractable across the seven other mega-pages — including the
-hardest variant-unification — is done; what remains is the 14+ preview-pending components' visual QA and
-the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Finally, the first **`Cart.vue`** slice (the money/checkout page — approached maximally conservatively):
+**`CartHeader`** (the page header — kicker/title + item-count/plan/table chips + clear-cart button).
+Display-only: the count/plan/table labels are props (derived in the parent from the cart store), and the
+clear button emits `clear` so the parent keeps `clearCart`. Nothing here touches pricing / payment /
+checkout — those (the entire right-side order panel) stay in the parent. 5-case test. No new i18n keys.
+
+**Tally: 29 slices across all eight mega-pages, ~2700 lines lifted / DRY'd into 32 tested child
+components; frontend vitest 527 → 790.** `Cart.vue`'s pricing/payment/order-placement core is
+deliberately untouched — only its presentational chrome is a candidate, and each such block should be
+previewed. Everything else across the eight mega-pages is extracted; what remains is the 15+
+preview-pending components' visual QA and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are

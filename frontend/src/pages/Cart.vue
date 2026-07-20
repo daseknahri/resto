@@ -1,32 +1,14 @@
 ﻿<template>
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
 
-    <!-- ── Header ──────────────────────────────────────────────────────────── -->
-    <header class="ui-hero-ribbon ui-reveal px-4 py-4 md:px-5 md:py-5">
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div>
-            <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
-            <h1 class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl leading-tight">
-              {{ t('common.cart') }}
-            </h1>
-          </div>
-          <div v-if="cart.items.length" class="flex items-center gap-1.5">
-            <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
-            <span class="ui-chip">{{ planLabel }}</span>
-            <span v-if="tableLabelModel" class="ui-chip">{{ t('cartPage.table', { table: tableLabelModel }) }}</span>
-          </div>
-        </div>
-        <button
-          v-if="cart.items.length"
-          class="shrink-0 ui-btn-outline px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/50"
-          @click="clearCart"
-        >
-          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
-          {{ t('common.clear') }}
-        </button>
-      </div>
-    </header>
+    <!-- ── Header (RISK FE-2) ──────────────────────────────────────────────── -->
+    <CartHeader
+      :has-items="cart.items.length > 0"
+      :count-label="itemCountLabel(cart.count)"
+      :plan-label="planLabel"
+      :table-label="tableLabelModel"
+      @clear="clearCart"
+    />
 
     <!-- ── Restaurant closed notice ─────────────────────────────────────────── -->
     <div
@@ -1010,6 +992,7 @@ import {
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CartPromoCode from '../components/CartPromoCode.vue';
+import CartHeader from '../components/CartHeader.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import QtyStepperButton from '../components/QtyStepperButton.vue';
