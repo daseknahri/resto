@@ -86,40 +86,15 @@
         >{{ t('ownerPromotions.retry') }}</button>
       </div>
       <!-- Sale cards -->
-      <article
+      <OwnerFlashSaleOptInCard
         v-for="(fs, index) in flashSales"
         :key="fs.id"
-        class="ui-panel ui-reveal flex items-center justify-between gap-3 p-4"
-        :style="{ '--ui-delay': `${Math.min(index, 5) * 24}ms` }"
-      >
-        <div class="min-w-0 space-y-0.5">
-          <div class="flex flex-wrap items-center gap-2 min-w-0">
-            <span class="truncate text-sm font-semibold text-white" :title="fs.name">{{ fs.name }}</span>
-            <span class="ui-chip tabular-nums text-amber-300">−{{ fs.discount_value }}%</span>
-            <span v-if="fs.is_live" class="ui-status-pill border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-              <span class="ui-live-dot bg-emerald-400" aria-hidden="true" />
-              {{ t('adminFlashSales.live') }}
-            </span>
-          </div>
-          <p v-if="fs.description" class="truncate text-xs text-slate-400" :title="fs.description">{{ fs.description }}</p>
-          <p class="text-[11px] tabular-nums text-slate-500">
-            {{ t('ownerPromotions.flashUntil', { date: fmtFlashDate(fs.active_until) }) }}
-          </p>
-        </div>
-        <button
-          class="ui-btn-outline ui-press ui-touch-target shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
-          :class="fs.opted_in
-            ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/40 hover:text-red-300'
-            : 'hover:border-amber-400/50 hover:text-amber-300'"
-          :disabled="flashBusyId === fs.id"
-          :aria-pressed="fs.opted_in"
-          :aria-label="`${fs.opted_in ? t('ownerPromotions.flashOptOut') : t('ownerPromotions.flashOptIn')} ${fs.name}`"
-          @click="toggleFlashOptIn(fs)"
-        >
-          <svg v-if="flashBusyId === fs.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-          {{ flashBusyId === fs.id ? t('common.loading') : (fs.opted_in ? t('ownerPromotions.flashOptOut') : t('ownerPromotions.flashOptIn')) }}
-        </button>
-      </article>
+        :sale="fs"
+        :index="index"
+        :fmt-flash-date="fmtFlashDate"
+        :busy="flashBusyId === fs.id"
+        @toggle="toggleFlashOptIn"
+      />
     </section>
 
     <!-- ── Happy Hours section ─────────────────────────────────────────────── -->
@@ -634,6 +609,7 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed, watch } from 'vue';
+import OwnerFlashSaleOptInCard from '../components/OwnerFlashSaleOptInCard.vue';
 import OwnerHappyHourRuleCard from '../components/OwnerHappyHourRuleCard.vue';
 import OwnerPromotionCard from '../components/OwnerPromotionCard.vue';
 import OwnerPromotionsEmptyState from '../components/OwnerPromotionsEmptyState.vue';
