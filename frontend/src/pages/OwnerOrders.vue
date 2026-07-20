@@ -1248,29 +1248,14 @@
       </article>
     </div>
 
-    <!-- Live delivery tracking modal (owner follows the driver on a map) -->
-    <div
-      v-if="trackModal.open"
-      class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
-      @click.self="closeTrack"
-      @keydown.esc="closeTrack"
-    >
-      <div class="ui-panel w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl" role="dialog" aria-modal="true" aria-labelledby="track-modal-heading">
-        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h3 id="track-modal-heading" class="text-sm font-semibold text-slate-100">
-            {{ t("ownerOrders.trackTitle") }} <span class="text-slate-500">#{{ trackModal.orderNumber }}</span>
-          </h3>
-          <button class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="closeTrack">{{ t("common.close") }}</button>
-        </div>
-        <div class="p-4">
-          <p v-if="trackModal.error" class="ui-empty-state py-6 text-center text-sm text-slate-400">
-            {{ trackModal.error }}
-          </p>
-          <DeliveryTracker v-else-if="trackModal.delivery" :delivery="trackModal.delivery" />
-          <div v-else class="ui-skeleton h-48" aria-busy="true" :aria-label="t('common.loading')" />
-        </div>
-      </div>
-    </div>
+    <!-- Live delivery tracking modal (owner follows the driver on a map) — RISK FE-2 -->
+    <OwnerOrdersTrackModal
+      :open="trackModal.open"
+      :order-number="trackModal.orderNumber"
+      :delivery="trackModal.delivery"
+      :error="trackModal.error"
+      @close="closeTrack"
+    />
 
     <!-- ── FILTER SHEET — bottom drawer for fulfillment / payment / date filters ── -->
     <OwnerOrdersFilterSheet
@@ -1436,7 +1421,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import DeliveryTracker from "../components/DeliveryTracker.vue";
+import OwnerOrdersTrackModal from "../components/OwnerOrdersTrackModal.vue";
 import OwnerOrdersFilterSheet from "../components/OwnerOrdersFilterSheet.vue";
 import OwnerOrdersCashierModal from "../components/OwnerOrdersCashierModal.vue";
 import { useI18n } from "../composables/useI18n";
