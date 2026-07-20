@@ -738,72 +738,22 @@
               </div>
               <!-- Items -->
               <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-                <li
+                <WaiterOrderItem
                   v-for="(item, idx) in order.items"
                   :key="idx"
-                  class="flex items-start gap-2.5 py-0.5 text-sm"
-                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-                >
-                  <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                    :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-                    {{ item.qty }}
-                  </span>
-                  <span
-class="min-w-0 flex-1 leading-snug"
-                    :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-                    {{ item.dish_name }}
-                  </span>
-                  <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-                  <!-- Course chip -->
-                  <span
-                    v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-                    class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-                    :class="isItemHeld(item, order)
-                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                      : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-                  >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-                  <span
-                    v-if="item.is_voided"
-                    class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-                  >{{ t('waiterPage.voidedBadge') }}</span>
-                  <span
-                    v-else-if="item.is_comped"
-                    class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-                  >{{ t('waiterPage.compedBadge') }}</span>
-                  <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-                  <button
-                    v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-                    class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                    :class="item.is_ready
-                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                      : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-                    :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-                    :aria-pressed="item.is_ready"
-                    @click.stop="doToggleItemReady(order, item)"
-                  >
-                    <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-                  </button>
-                  <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-                  <button
-                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-                    :aria-label="t('waiterPage.compItem')"
-                    :disabled="compingItemId === item.id"
-                    @click.stop="compItem(order, item)"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-                  </button>
-                  <button
-                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-                    :aria-label="t('waiterPage.voidItem')"
-                    :disabled="voidingItemId === item.id"
-                    @click.stop="voidItem(order, item)"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-                  </button>
-                </li>
+                  :item="item"
+                  :held="isItemHeld(item, order)"
+                  :can-manage="canManageOrders"
+                  :can-comp="canCompPaidOrder(order)"
+                  :can-void="canVoidPaidOrder(order)"
+                  :ready-toggleable="ITEM_READY_STATUSES.has(order.status)"
+                  :not-terminal="!TERMINAL_STATUSES.has(order.status)"
+                  :comping="compingItemId === item.id"
+                  :voiding="voidingItemId === item.id"
+                  @toggle-ready="doToggleItemReady(order, item)"
+                  @comp="compItem(order, item)"
+                  @void="voidItem(order, item)"
+                />
                 <!-- Combo sub-lines -->
                 <template v-if="item.combo_components?.length">
                   <li
@@ -964,72 +914,22 @@ class="min-w-0 flex-1 leading-snug"
             </div>
             <!-- Items -->
             <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-              <li
+              <WaiterOrderItem
                 v-for="(item, idx) in order.items"
                 :key="idx"
-                class="flex items-start gap-2.5 py-0.5 text-sm"
-                :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-              >
-                <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-                  {{ item.qty }}
-                </span>
-                <span
-class="min-w-0 flex-1 leading-snug"
-                  :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-                  {{ item.dish_name }}
-                </span>
-                <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-                <!-- Course chip -->
-                <span
-                  v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-                  class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-                  :class="isItemHeld(item, order)
-                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                    : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-                >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-                <span
-                  v-if="item.is_voided"
-                  class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-                >{{ t('waiterPage.voidedBadge') }}</span>
-                <span
-                  v-else-if="item.is_comped"
-                  class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-                >{{ t('waiterPage.compedBadge') }}</span>
-                <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-                <button
-                  v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-                  class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                  :class="item.is_ready
-                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                    : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-                  :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-                  :aria-pressed="item.is_ready"
-                  @click.stop="doToggleItemReady(order, item)"
-                >
-                  <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-                </button>
-                <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-                <button
-                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-                  :aria-label="t('waiterPage.compItem')"
-                  :disabled="compingItemId === item.id"
-                  @click.stop="compItem(order, item)"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-                </button>
-                <button
-                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-                  :aria-label="t('waiterPage.voidItem')"
-                  :disabled="voidingItemId === item.id"
-                  @click.stop="voidItem(order, item)"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-                </button>
-              </li>
+                :item="item"
+                :held="isItemHeld(item, order)"
+                :can-manage="canManageOrders"
+                :can-comp="canCompPaidOrder(order)"
+                :can-void="canVoidPaidOrder(order)"
+                :ready-toggleable="ITEM_READY_STATUSES.has(order.status)"
+                :not-terminal="!TERMINAL_STATUSES.has(order.status)"
+                :comping="compingItemId === item.id"
+                :voiding="voidingItemId === item.id"
+                @toggle-ready="doToggleItemReady(order, item)"
+                @comp="compItem(order, item)"
+                @void="voidItem(order, item)"
+              />
               <!-- Combo sub-lines -->
               <template v-if="item.combo_components?.length">
                 <li
@@ -1188,76 +1088,22 @@ class="min-w-0 flex-1 leading-snug"
 
         <!-- Items -->
         <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-          <li
+          <WaiterOrderItem
             v-for="(item, idx) in order.items"
             :key="idx"
-            class="flex items-start gap-2.5 py-0.5 text-sm"
-            :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-          >
-            <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-              :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-              {{ item.qty }}
-            </span>
-            <span
-class="min-w-0 flex-1 leading-snug"
-              :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-              {{ item.dish_name }}
-            </span>
-            <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-            <!-- Course chip -->
-            <span
-              v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-              class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-              :class="isItemHeld(item, order)
-                ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-            >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-            <!-- Voided badge -->
-            <span
-              v-if="item.is_voided"
-              class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-            >{{ t('waiterPage.voidedBadge') }}</span>
-            <!-- Comped badge -->
-            <span
-              v-else-if="item.is_comped"
-              class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-            >{{ t('waiterPage.compedBadge') }}</span>
-            <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-            <button
-              v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-              class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-              :class="item.is_ready
-                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-              :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-              :aria-pressed="item.is_ready"
-              @click.stop="doToggleItemReady(order, item)"
-            >
-              <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-            </button>
-            <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-            <!-- Comp affordance — only for non-voided, non-comped items when waiter can manage orders -->
-            <button
-              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-              :aria-label="t('waiterPage.compItem')"
-              :disabled="compingItemId === item.id"
-              @click.stop="compItem(order, item)"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-            </button>
-            <!-- Void affordance — only for non-voided, non-comped items when waiter can manage orders -->
-            <button
-              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-              :aria-label="t('waiterPage.voidItem')"
-              :disabled="voidingItemId === item.id"
-              @click.stop="voidItem(order, item)"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-            </button>
-          </li>
+            :item="item"
+            :held="isItemHeld(item, order)"
+            :can-manage="canManageOrders"
+            :can-comp="canCompPaidOrder(order)"
+            :can-void="canVoidPaidOrder(order)"
+            :ready-toggleable="ITEM_READY_STATUSES.has(order.status)"
+            :not-terminal="!TERMINAL_STATUSES.has(order.status)"
+            :comping="compingItemId === item.id"
+            :voiding="voidingItemId === item.id"
+            @toggle-ready="doToggleItemReady(order, item)"
+            @comp="compItem(order, item)"
+            @void="voidItem(order, item)"
+          />
         </ul>
 
         <!-- Notes row -->
@@ -2028,6 +1874,7 @@ import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 import WaiterTableQRModal from "../components/WaiterTableQRModal.vue";
 import WaiterShiftPanel from "../components/WaiterShiftPanel.vue";
 import WaiterOfflineIndicator from "../components/WaiterOfflineIndicator.vue";
+import WaiterOrderItem from "../components/WaiterOrderItem.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";

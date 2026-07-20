@@ -927,11 +927,21 @@ the shift-summary refresh + the change-password submit. No new i18n keys.
 Plus `WaiterOfflineIndicator` (the offline / queue-sync banner — display-only, props online/queueLength;
 4-case test). The New-Order / Append / Charge-wallet modals were already extracted components.
 
-**Tally: 24 slices across all eight mega-pages, ~1920 lines lifted into 27 tested child components;
-frontend vitest 527 → 747.** `WaiterPage.vue` (now ~3.5k) and `Cart.vue` (money/checkout, still **held**)
-are the two remaining FE-2 pages. WaiterPage's clean blocks are now largely extracted; what's left there
-is its entangled core (the status-tab bar, the floor table-tile grid, and the waiter order cards),
-same tier as the OwnerKitchen order card — case-by-case + preview. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
+Plus `WaiterOrderItem` — the **highest-value DRY win** of the campaign. Investigation showed the waiter
+"order card" is really **4 divergent variants** (not one card), so a shared full-card component isn't
+safe blind; but the item `<li>` inside them was byte-identical (bar comments) across **3 of the 4**
+loops (table-grouped / non-table / flat-list). Extracted one `WaiterOrderItem` (tight interface: `item`
++ 8 order-derived boolean/held props + `toggleReady`/`comp`/`void` emits) and used it in all three,
+DRYing ~200 lines of duplicated markup. Crucially, the combo `<template>` siblings were **left in place**
+— they read `item` from the `<WaiterOrderItem v-for>` scope exactly as they did from the old `<li v-for>`,
+so combo scoping is byte-preserved. 11-case test. **Preview concern:** the tap-to-ready / comp / void
+affordances + combo sub-lines still render correctly in all three card contexts. No new i18n keys.
+
+**Tally: 25 slices across all eight mega-pages, ~2050 lines lifted into 28 tested child components;
+frontend vitest 527 → 758.** WaiterPage's clean + shared blocks are now extracted; what remains is the
+per-variant order-card *wrappers* (the 4 divergent card shells, ~30-symbol interface each) and the
+status-tab bar / floor tile grid — plus the **held** `Cart.vue`. These are the genuinely
+preview-critical remainder (variant unification wants the app running), not autonomous slices. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
 drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
 previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
 explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
