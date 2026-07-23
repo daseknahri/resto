@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **42 slices → 48 tested child components** (~3180 lines lifted; vitest 527→840). Cart fully componentized to its money-path logic core; WaiterPage display chrome + rating-form lifted, expanded floor-tile card DRY'd onto WaiterOrderCard. Only the WaiterPage settle modal (money) + form-heavy drawers + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **43 slices → 49 tested child components** (~3340 lines lifted; vitest 527→851). Cart + **WaiterPage now fully decomposed** (both money-path pages' modals split into fragment bodies, logic kept in the parent). Remaining: form-heavy `v-model` drawers on other pages + preview QA + merge | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1027,6 +1027,17 @@ keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `Waiter
 untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
 `t()` in the idle-alert label.)
 
+Plus `WaiterSettleSheet` — the inner body of the settle sheet (cash-received + change calc, split-by-seat,
+quick-split accordion, cancel), the last and most-bound WaiterPage block and a **money path**. Same
+fragment-child pattern as the rating form (no wrapper root → the panel's `space-y-3` + the parent focus
+trap via `settleDialogRef` stay intact). The child owns **zero payment logic**: `payCash` / `payWallet` /
+`payCashForSeat` / `payWalletForSeat` / `loadSeatGroups` all stay in the parent and are invoked via emits;
+`settleOutstanding` / `fmtOrderPrice` / `seatGroupLabel` / `cashChange` come in as props; the four form
+fields (`cashReceived` / `splitAmount` / `splitBySeatMode` / `splitSectionOpen`) are two-way `defineModel`s
+so the parent's refs — and its idempotency-key minting, seat-split fetch, and cash-clear watch — read the
+exact same values. Reviewed + previewed before commit. Net −141 lines in the parent; 11 test cases.
+**WaiterPage is now fully decomposed.**
+
 Plus `WaiterCustomerRatingForm` — the inner form body of the customer trust-rating modal (header identity
 line + 5-star picker + note input + cancel/submit). Deliberately a **fragment** child (no wrapper root)
 so its blocks stay direct children of the parent's `role="dialog"` panel — the panel's `space-y-3` and,
@@ -1046,8 +1057,11 @@ orders — combo sub-lines, `section_name`, and the partial-payment "paid so far
 previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
 `WaiterOrderItem` are already covered.
 
-**Tally: 42 slices across all eight mega-pages, ~3180 lines lifted / DRY'd into 48 tested child
-components; frontend vitest 527 → 840.** Every mega-page is decomposed; the Cart money-path page is fully
+**Tally: 43 slices across all eight mega-pages, ~3340 lines lifted / DRY'd into 49 tested child
+components; frontend vitest 527 → 851.** **WaiterPage.vue is now fully decomposed** — all display chrome
+lifted, the expanded floor-tile card DRY'd onto `WaiterOrderCard`, and both its modals (customer-rating,
+settle) split into fragment form-bodies with the shells + focus traps + all money/order handlers kept in
+the parent. Every mega-page is decomposed; the Cart money-path page is fully
 componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
 lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
 safe display-only chrome (onboarding banners + floor legend) is now lifted too; what remains there is
