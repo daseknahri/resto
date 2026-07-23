@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **41 slices → 47 tested child components** (~3150 lines lifted; vitest 527→833). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted + expanded floor-tile card DRY'd onto WaiterOrderCard. Only money blocks (WaiterPage settle modal, form-heavy drawers) + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **42 slices → 48 tested child components** (~3180 lines lifted; vitest 527→840). Cart fully componentized to its money-path logic core; WaiterPage display chrome + rating-form lifted, expanded floor-tile card DRY'd onto WaiterOrderCard. Only the WaiterPage settle modal (money) + form-heavy drawers + preview QA + merge remain | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1027,6 +1027,15 @@ keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `Waiter
 untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
 `t()` in the idle-alert label.)
 
+Plus `WaiterCustomerRatingForm` — the inner form body of the customer trust-rating modal (header identity
+line + 5-star picker + note input + cancel/submit). Deliberately a **fragment** child (no wrapper root)
+so its blocks stay direct children of the parent's `role="dialog"` panel — the panel's `space-y-3` and,
+crucially, the parent-owned **focus trap** (which queries that dialog via `ratingDialogRef` + the shared
+`FOCUSABLE_BILL` selector, used by the settle/bill dialogs too) are untouched; that's why only the body
+was lifted, not the whole modal. score + note are two-way `defineModel`s (bound to the parent's refs, so
+`submitCustomerRating` reads them verbatim); the shell (Teleport / Transition / backdrop / focus trap /
+submit handler) stays in the parent. Non-money (server-only reputation rating). 7 test cases.
+
 Plus a **DRY unification** (not a new component): the expanded floor-tile view rendered its order cards
 from a **138-line inline copy** of the order-card markup — a drifted 4th duplicate — which was replaced
 with the canonical `<WaiterOrderCard>` bound exactly like the table-grouped list (`show-elapsed=false`,
@@ -1037,8 +1046,8 @@ orders — combo sub-lines, `section_name`, and the partial-payment "paid so far
 previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
 `WaiterOrderItem` are already covered.
 
-**Tally: 41 slices across all eight mega-pages, ~3150 lines lifted / DRY'd into 47 tested child
-components; frontend vitest 527 → 833.** Every mega-page is decomposed; the Cart money-path page is fully
+**Tally: 42 slices across all eight mega-pages, ~3180 lines lifted / DRY'd into 48 tested child
+components; frontend vitest 527 → 840.** Every mega-page is decomposed; the Cart money-path page is fully
 componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
 lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
 safe display-only chrome (onboarding banners + floor legend) is now lifted too; what remains there is
