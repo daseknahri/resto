@@ -554,43 +554,15 @@
           aria-modal="true"
           :aria-label="t('ownerOrders.customerRatingTitle')"
         >
-          <div>
-            <p class="ui-kicker">{{ t('ownerOrders.customerRatingTitle') }}</p>
-            <p class="mt-0.5 text-xs text-slate-400">
-              {{ ratingOrder.customer_name || ratingOrder.table_label || ('#' + ratingOrder.order_number) }}
-            </p>
-            <p class="mt-1 text-[11px] text-slate-500">{{ t('ownerOrders.customerRatingHint') }}</p>
-          </div>
-          <div class="flex items-center gap-1.5" role="group" :aria-label="t('ownerOrders.customerRatingTitle')">
-            <button
-              v-for="n in 5" :key="n" type="button"
-              class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-              :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
-              :aria-label="t('common.rateNStars', { n })"
-              :aria-pressed="n <= custRatingScore"
-              @click="custRatingScore = n"
-            >★</button>
-          </div>
-          <input
-            v-model="custRatingNote" type="text" maxlength="200"
-            class="ui-input"
-            :aria-label="t('ownerOrders.customerRatingNote')"
-            :placeholder="t('ownerOrders.customerRatingNote')"
+          <!-- Inner form body extracted (RISK FE-2); the shell + focus trap stay here. -->
+          <WaiterCustomerRatingForm
+            v-model:score="custRatingScore"
+            v-model:note="custRatingNote"
+            :order="ratingOrder"
+            :busy="submittingCustRating"
+            @close="ratingOrder = null"
+            @submit="submitCustomerRating"
           />
-          <div class="flex items-center justify-end gap-2 pt-1">
-            <button class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/60" @click="ratingOrder = null">
-              {{ t('common.cancel') }}
-            </button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="!custRatingScore || submittingCustRating"
-              :aria-busy="submittingCustRating"
-              @click="submitCustomerRating"
-            >
-              <svg v-if="submittingCustRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ submittingCustRating ? t('common.loading') : t('ownerOrders.customerRatingSubmit') }}
-            </button>
-          </div>
         </div>
       </div>
     </Transition>
@@ -1218,6 +1190,7 @@ import WaiterInstallBanner from "../components/WaiterInstallBanner.vue";
 import WaiterFloorLegend from "../components/WaiterFloorLegend.vue";
 import WaiterIdleTableAlert from "../components/WaiterIdleTableAlert.vue";
 import WaiterStaleTablesWarning from "../components/WaiterStaleTablesWarning.vue";
+import WaiterCustomerRatingForm from "../components/WaiterCustomerRatingForm.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
