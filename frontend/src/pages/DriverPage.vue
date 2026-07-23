@@ -1033,52 +1033,15 @@
     </div>
   </Teleport>
 
-  <!-- Rate the customer after delivery (driver → customer, private) -->
-  <Teleport to="body">
-    <div
-      v-if="ratingJob"
-      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
-      @click.self="ratingJob = null"
-      @keydown.esc="ratingJob = null"
-    >
-      <div ref="ratingDialogFirstFocus" class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" role="dialog" aria-modal="true" :aria-label="t('driver.rateCustomerTitle')" tabindex="-1">
-        <div>
-          <p class="text-sm font-semibold text-white">{{ t('driver.rateCustomerTitle') }}</p>
-          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.order') }} #{{ ratingJob.order_number }}</p>
-          <p class="mt-1 text-[11px] text-slate-500">{{ t('driver.rateCustomerHint') }}</p>
-        </div>
-        <div class="flex items-center gap-2" role="group" :aria-label="t('driver.rateCustomerTitle')">
-          <button
-            v-for="n in 5" :key="n" type="button"
-            class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
-            :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
-            :aria-label="t('common.rateNStars', { n })"
-            @click="custRatingScore = n"
-          >★</button>
-        </div>
-        <input
-          v-model="custRatingNote" type="text" maxlength="200"
-          class="ui-input"
-          :aria-label="t('driver.rateCustomerNote')"
-          :placeholder="t('driver.rateCustomerNote')"
-        />
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="ratingJob = null">
-            {{ t('driver.rateSkip') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-            :disabled="!custRatingScore || submittingRating"
-            :aria-busy="submittingRating"
-            @click="submitCustomerRating"
-          >
-            <svg v-if="submittingRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ submittingRating ? t('common.loading') : t('driver.rateSubmit') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Rate the customer after delivery (driver → customer, private) (RISK FE-2) -->
+  <DriverRateCustomerModal
+    v-model:score="custRatingScore"
+    v-model:note="custRatingNote"
+    :job="ratingJob"
+    :busy="submittingRating"
+    @close="ratingJob = null"
+    @submit="submitCustomerRating"
+  />
 
   <!-- Delivery code modal -->
   <Teleport to="body">
@@ -1231,6 +1194,7 @@ import DriverPageCashoutHistory from '../components/DriverPageCashoutHistory.vue
 import DriverPageRideHistory from '../components/DriverPageRideHistory.vue';
 import DriverPagePerformanceStats from '../components/DriverPagePerformanceStats.vue';
 import DriverPageActiveJob from '../components/DriverPageActiveJob.vue';
+import DriverRateCustomerModal from '../components/DriverRateCustomerModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
@@ -2190,9 +2154,7 @@ const ratingJob = ref(null);
 const custRatingScore = ref(0);
 const custRatingNote = ref('');
 const submittingRating = ref(false);
-const ratingDialogFirstFocus = ref(null);
-// D-8: Tab focus-trap + open/return focus handling (shared helper).
-useFocusTrap(ratingDialogFirstFocus, ratingJob);
+// (The rating modal's focus trap now lives inside DriverRateCustomerModal.)
 
 const openCustomerRating = (job) => {
   ratingJob.value = job;
