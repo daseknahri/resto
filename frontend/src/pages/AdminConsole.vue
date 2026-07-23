@@ -1041,160 +1041,17 @@
     @refresh="reloadLiveOrders"
   />
 
-  <!-- Delivery pricing modal -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="deliveryModal.open"
-        tabindex="-1"
-        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-        @click.self="closeDeliveryModal"
-        @keydown.esc="closeDeliveryModal"
-      >
-        <div
-          ref="deliveryDialogRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="admin-delivery-dialog-title"
-          class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
-        >
-          <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ deliveryModal.tenant?.name }}</p>
-              <h3 id="admin-delivery-dialog-title" class="mt-0.5 text-base font-semibold text-white">{{ t("adminConsole.delivery.title") }}</h3>
-              <p class="mt-0.5 text-xs text-slate-400">{{ t("adminConsole.delivery.subtitle") }}</p>
-            </div>
-            <button
-              class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
-              @click="closeDeliveryModal"
-            >{{ t("adminConsole.delivery.close") }}</button>
-          </div>
-          <div v-if="deliveryModal.loading" class="space-y-3 px-5 py-4">
-            <div v-for="n in 6" :key="`dl-sk-${n}`" class="ui-skeleton h-8 rounded-lg"></div>
-          </div>
-          <div v-else class="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-            <div v-if="deliveryFormError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-              <p class="flex-1 text-sm text-red-300">{{ deliveryFormError }}</p>
-            </div>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.fee") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_fee"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.baseFee") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_base_fee"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.perKm") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_per_km"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.freeOver") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_free_over"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.minimumOrder") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_minimum_order"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.radiusKm") }}</span>
-              <input
-                v-model="deliveryForm.delivery_radius_km_raw"
-                type="number"
-                min="0"
-                step="0.5"
-                class="ui-input w-full px-3 py-2 text-sm"
-                placeholder="—"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.zoneDescription") }}</span>
-              <input
-                v-model="deliveryForm.delivery_zone_description"
-                type="text"
-                maxlength="200"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.commissionPct") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_commission_pct"
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-              <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.commissionHint") }}</span>
-            </label>
-            <label class="flex cursor-pointer items-start gap-3">
-              <input
-                v-model="deliveryForm.platform_delivery_enabled"
-                type="checkbox"
-                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-800 accent-[var(--color-primary)]"
-              />
-              <span class="space-y-0.5">
-                <span class="block text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.platformDelivery") }}</span>
-                <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.platformDeliveryHint") }}</span>
-              </span>
-            </label>
-          </div>
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
-            <button
-              class="ui-btn-outline ui-press px-4 py-2 text-sm"
-              @click="closeDeliveryModal"
-            >{{ t("adminConsole.delivery.close") }}</button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="deliveryModal.saving || deliveryModal.loading"
-              :aria-busy="deliveryModal.saving"
-              @click="saveDeliveryPricing"
-            >
-              <svg v-if="deliveryModal.saving" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ deliveryModal.saving ? t('common.loading') : t("adminConsole.delivery.save") }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <!-- Delivery pricing modal (RISK FE-2) -->
+  <AdminConsoleDeliveryPricingDrawer
+    v-model:form="deliveryForm"
+    :open="deliveryModal.open"
+    :tenant="deliveryModal.tenant"
+    :loading="deliveryModal.loading"
+    :saving="deliveryModal.saving"
+    :error="deliveryFormError"
+    @close="closeDeliveryModal"
+    @submit="saveDeliveryPricing"
+  />
 
   <AdminConsoleDryRunImportModal
     :review="dryRunReview"
@@ -1205,10 +1062,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import AdminConsoleDryRunImportModal from "../components/AdminConsoleDryRunImportModal.vue";
 import AdminConsoleLiveOrdersModal from "../components/AdminConsoleLiveOrdersModal.vue";
+import AdminConsoleDeliveryPricingDrawer from "../components/AdminConsoleDeliveryPricingDrawer.vue";
 import AdminConsoleOnboardingPackage from "../components/AdminConsoleOnboardingPackage.vue";
 import AdminConsoleProvisioningJobs from "../components/AdminConsoleProvisioningJobs.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -1273,9 +1131,6 @@ const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
 const dryRunReview = ref(null); // { tenant, summary, replaceBody } — focus trap lives in AdminConsoleDryRunImportModal
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', trapDeliveryFocus);
-});
 const applyingImport = ref(false);
 const tenantTools = ref({});
 const tenantTimeline = ref({});
@@ -2345,7 +2200,6 @@ const closeLiveOrdersModal = () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 // ── Delivery pricing modal ─────────────────────────────────────────────────
-const deliveryDialogRef = ref(null);
 const deliveryModal = ref({ open: false, tenant: null, loading: false, saving: false });
 const deliveryFormError = ref("");
 const deliveryForm = ref({
@@ -2360,34 +2214,7 @@ const deliveryForm = ref({
   platform_delivery_enabled: false,
 });
 
-const FOCUSABLE_DL = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-const trapDeliveryFocus = (e) => {
-  if (!deliveryDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(deliveryDialogRef.value.querySelectorAll(FOCUSABLE_DL));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-};
-
-watch(() => deliveryModal.value.open, async (open) => {
-  if (open) {
-    await nextTick();
-    deliveryDialogRef.value?.querySelector(FOCUSABLE_DL)?.focus();
-    document.addEventListener('keydown', trapDeliveryFocus);
-  } else {
-    document.removeEventListener('keydown', trapDeliveryFocus);
-  }
-});
+// (The delivery modal's a11y focus trap now lives inside AdminConsoleDeliveryPricingDrawer.)
 
 const openDeliveryModal = async (tenant) => {
   deliveryModal.value = { open: true, tenant, loading: true, saving: false };
