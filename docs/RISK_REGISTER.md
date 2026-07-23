@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **43 slices → 49 tested child components** (~3340 lines lifted; vitest 527→851). Cart + **WaiterPage now fully decomposed** (both money-path pages' modals split into fragment bodies, logic kept in the parent). Remaining: form-heavy `v-model` drawers on other pages + preview QA + merge | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **44 slices → 50 tested child components** (~3490 lines lifted; vitest 527→859). Cart + WaiterPage fully decomposed; form-drawer pass on the other pages underway (AdminConsole delivery-pricing done). Remaining: DriverPage rate/code/cashout + Marketplace option-group/checkout drawers + preview QA + merge | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1027,6 +1027,15 @@ keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `Waiter
 untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
 `t()` in the idle-alert label.)
 
+Plus `AdminConsoleDeliveryPricingDrawer` — the tenant delivery-pricing modal (delivery fee / commission /
+radius config, 9 fields), lifted from `AdminConsole.vue` as a **fully self-contained drawer** matching the
+`OwnerHappyHourFormDrawer` pattern: it owns the whole modal (Teleport / Transition / backdrop / dialog)
+**and** its focus trap (moved in self-contained, replicated exactly — the parent's `deliveryDialogRef` /
+`FOCUSABLE_DL` / trap / watch were removed). `deliveryForm` is a `v-model:form` `defineModel` (nine fields
+mutated in place on the parent's object, lint-clean); open/tenant/loading/saving/error are props; the
+parent keeps the fetch, clamp/validation, and save. Non-money (pricing **config**, moves no funds). 8 test
+cases. This begins the **remaining form-drawer pass on the other pages** (post-WaiterPage).
+
 Plus `WaiterSettleSheet` — the inner body of the settle sheet (cash-received + change calc, split-by-seat,
 quick-split accordion, cancel), the last and most-bound WaiterPage block and a **money path**. Same
 fragment-child pattern as the rating form (no wrapper root → the panel's `space-y-3` + the parent focus
@@ -1057,8 +1066,8 @@ orders — combo sub-lines, `section_name`, and the partial-payment "paid so far
 previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
 `WaiterOrderItem` are already covered.
 
-**Tally: 43 slices across all eight mega-pages, ~3340 lines lifted / DRY'd into 49 tested child
-components; frontend vitest 527 → 851.** **WaiterPage.vue is now fully decomposed** — all display chrome
+**Tally: 44 slices across all eight mega-pages, ~3490 lines lifted / DRY'd into 50 tested child
+components; frontend vitest 527 → 859.** **WaiterPage.vue is now fully decomposed** — all display chrome
 lifted, the expanded floor-tile card DRY'd onto `WaiterOrderCard`, and both its modals (customer-rating,
 settle) split into fragment form-bodies with the shells + focus traps + all money/order handlers kept in
 the parent. Every mega-page is decomposed; the Cart money-path page is fully
