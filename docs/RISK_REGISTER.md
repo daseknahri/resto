@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **39 slices → 45 tested child components** (~3000 lines lifted; vitest 527→830). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted. Only entangled/money blocks (WaiterPage settle+floor-tile, form-heavy drawers) + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **40 slices → 47 tested child components** (~3050 lines lifted; vitest 527→833). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted. Only entangled/money blocks (WaiterPage settle+floor-tile, form-heavy drawers) + preview QA + merge remain | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1020,11 +1020,15 @@ done under human review + browser preview, not by an autonomous slice.
 Plus the first **WaiterPage.vue** slices (the held, most-entangled page, now under supervised
 extraction): `WaiterFirstRunBanner` + `WaiterInstallBanner` (the two dismissible onboarding banners at the
 top — display + emit, the parent keeps `useInstallPrompt` + the seen/dismissed state and the mounting
-v-ifs), and `WaiterFloorLegend` (the static floor-status `<details>` legend — no props/state/emits). All
-non-money, non-order chrome; the WaiterPage order/settle logic is untouched. 3 components, 7 test cases.
+v-ifs), `WaiterFloorLegend` (the static floor-status `<details>` legend — no props/state/emits), and the
+two floor-view alert banners `WaiterIdleTableAlert` (idle ≥20 min — count + labels, dismiss emit; parent
+keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `WaiterStaleTablesWarning`
+(static poll-failed warning). All non-money, non-order chrome; the WaiterPage order/settle logic is
+untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
+`t()` in the idle-alert label.)
 
-**Tally: 39 slices across all eight mega-pages, ~3000 lines lifted / DRY'd into 45 tested child
-components; frontend vitest 527 → 830.** Every mega-page is decomposed; the Cart money-path page is fully
+**Tally: 40 slices across all eight mega-pages, ~3050 lines lifted / DRY'd into 47 tested child
+components; frontend vitest 527 → 833.** Every mega-page is decomposed; the Cart money-path page is fully
 componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
 lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
 safe display-only chrome (onboarding banners + floor legend) is now lifted too; what remains there is
