@@ -1043,95 +1043,16 @@
     @submit="submitCustomerRating"
   />
 
-  <!-- Delivery code modal -->
-  <Teleport to="body">
-    <div
-      v-if="codeModalOpen"
-      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
-      @click.self="closeCodeModal"
-      @keydown.esc="closeCodeModal"
-    >
-      <div
-        ref="codeDialogRef"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('driver.enterDeliveryCode')"
-        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
-      >
-        <div>
-          <p class="text-sm font-semibold text-white">{{ t('driver.enterDeliveryCode') }}</p>
-          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.codeReminder') }}</p>
-        </div>
-        <input
-          ref="codeFirstRef"
-          v-model="codeInput"
-          type="text"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          class="ui-input text-center text-lg tracking-[0.3em] font-bold"
-          :placeholder="t('driver.enterDeliveryCode')"
-          :aria-label="t('driver.enterDeliveryCode')"
-          autocomplete="one-time-code"
-          maxlength="6"
-          @keydown.enter="submitDeliveryCode"
-        />
-        <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-          <p class="text-sm text-red-300">{{ codeError }}</p>
-        </div>
-
-        <!-- Photo fallback: driver can't get the code → take a photo instead -->
-        <div v-if="proofPhotoPreview" class="space-y-2">
-          <img :src="proofPhotoPreview" alt="" class="w-full rounded-xl object-cover" style="max-height:120px" />
-          <p class="text-[11px] text-slate-400">{{ t('driver.proofPhotoReady') }}</p>
-        </div>
-        <div v-else class="flex items-center gap-2">
-          <div class="flex-1 border-t border-slate-700/60" />
-          <span class="text-[11px] text-slate-500 shrink-0">{{ t('driver.proofPhotoOr') }}</span>
-          <div class="flex-1 border-t border-slate-700/60" />
-        </div>
-        <label
-          v-if="!proofPhotoPreview"
-          class="ui-touch-target flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600 py-2.5 text-xs text-slate-300 hover:border-slate-400 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-slate-400"
-          :class="{ 'opacity-50 pointer-events-none': codeSubmitting }"
-        >
-          <AppIcon name="camera" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-          {{ t('driver.leaveAtDoor') }}
-          <input
-            ref="proofPhotoInputRef"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            class="sr-only"
-            :disabled="codeSubmitting"
-            @change="onProofPhotoSelected"
-          />
-        </label>
-        <button
-          v-else
-          class="ui-touch-target w-full text-[11px] text-slate-400 hover:text-slate-200"
-          @click="clearProofPhoto"
-        >
-          {{ t('driver.proofPhotoRetake') }}
-        </button>
-
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCodeModal">
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-            style="min-height: 48px"
-            :disabled="(!codeInput.trim() && !proofPhotoFile) || codeSubmitting"
-            :aria-busy="codeSubmitting"
-            @click="submitDeliveryCode"
-          >
-            <svg v-if="codeSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ codeSubmitting ? t('common.loading') : t('common.confirm') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Delivery code modal (RISK FE-2) -->
+  <DriverDeliveryCodeModal
+    v-model:code-input="codeInput"
+    v-model:code-error="codeError"
+    v-model:proof-photo-file="proofPhotoFile"
+    :open="codeModalOpen"
+    :submitting="codeSubmitting"
+    @close="closeCodeModal"
+    @submit="submitDeliveryCode"
+  />
 
   <!-- Cash-out amount modal -->
   <Teleport to="body">
@@ -1195,6 +1116,7 @@ import DriverPageRideHistory from '../components/DriverPageRideHistory.vue';
 import DriverPagePerformanceStats from '../components/DriverPagePerformanceStats.vue';
 import DriverPageActiveJob from '../components/DriverPageActiveJob.vue';
 import DriverRateCustomerModal from '../components/DriverRateCustomerModal.vue';
+import DriverDeliveryCodeModal from '../components/DriverDeliveryCodeModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
@@ -1562,34 +1484,13 @@ const codeModalOpen = ref(false);
 const codeInput = ref('');
 const codeError = ref('');
 const codeSubmitting = ref(false);
-const codeFirstRef = ref(null);
-const codeDialogRef = ref(null);
-useFocusTrap(codeDialogRef, codeModalOpen); // D-8: Tab focus-trap
-const proofPhotoInputRef = ref(null);
-const proofPhotoFile = ref(null);   // File object selected by the camera
-const proofPhotoPreview = ref('');  // Object URL for the in-modal thumbnail
+// The delivery-code modal UI (dialog + focus trap + proof-photo lifecycle) lives in
+// DriverDeliveryCodeModal; the parent keeps the code / error / selected-file state
+// (read by submitDeliveryCode) and the open / return-focus handling.
+const proofPhotoFile = ref(null);   // File object selected by the camera (set by the modal)
 let _codeReturnFocus = null;
 
-const clearProofPhoto = () => {
-  if (proofPhotoPreview.value) URL.revokeObjectURL(proofPhotoPreview.value);
-  proofPhotoFile.value = null;
-  proofPhotoPreview.value = '';
-  if (proofPhotoInputRef.value) proofPhotoInputRef.value.value = '';
-};
-
-const onProofPhotoSelected = (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  clearProofPhoto();
-  proofPhotoFile.value = file;
-  proofPhotoPreview.value = URL.createObjectURL(file);
-  // Clear the code input so only one proof path is active at a time.
-  codeInput.value = '';
-  codeError.value = '';
-};
-
 const closeCodeModal = () => {
-  clearProofPhoto();
   codeModalOpen.value = false;
   _codeReturnFocus?.focus();
   _codeReturnFocus = null;
@@ -2111,12 +2012,11 @@ const advance = async (toStatus, extra = {}) => {
   errorMsg.value = '';
   if (toStatus === 'delivered') {
     // Proof of delivery — open the code modal instead of window.prompt().
+    // (The modal's focus trap moves focus into the dialog on open.)
     _codeReturnFocus = document.activeElement;
     codeInput.value = '';
     codeError.value = '';
     codeModalOpen.value = true;
-    await nextTick();
-    codeFirstRef.value?.focus();
     return;
   }
   const payload = { status: toStatus, ...extra };
