@@ -731,8 +731,9 @@ class TestPlanLimitLocking(SimpleTestCase):
         orig = _am.User
         _am.User = MockUser
         try:
-            with patch("accounts.views._is_tenant_owner", return_value=True), \
-                 patch("django.db.transaction.atomic", _fake_atomic):
+            # Owner-gating is a permission_class now; this test calls view.post()
+            # directly (bypassing DRF dispatch/permissions), so no owner patch is needed.
+            with patch("django.db.transaction.atomic", _fake_atomic):
                 view = OwnerStaffListCreateView()
                 resp = view.post(request)
         finally:

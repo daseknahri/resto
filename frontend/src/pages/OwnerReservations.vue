@@ -225,29 +225,12 @@
       />
 
       <!-- Selected calendar reservation detail (quick panel) -->
-      <div
+      <OwnerReservationsCalendarDetail
         v-if="viewMode === 'calendar' && selectedCalendarRes"
-        class="ui-panel ui-reveal p-4 space-y-2.5 text-sm"
-      >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <p class="truncate font-bold text-white leading-snug">{{ selectedCalendarRes.name }}</p>
-            <p class="truncate text-xs text-slate-400 mt-0.5">{{ selectedCalendarRes.phone }} · {{ selectedCalendarRes.email }}</p>
-          </div>
-          <button
-            class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-            :aria-label="t('common.close')"
-            @click="selectedCalendarRes = null"
-          >
-            <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-        <p v-if="selectedCalendarRes.booked_for" class="text-xs text-slate-300 tabular-nums">
-          {{ t("ownerReservations.bookedFor") }}: {{ formatDateTime(selectedCalendarRes.booked_for) }}
-          <span v-if="selectedCalendarRes.party_size"> · {{ selectedCalendarRes.party_size }} {{ t("ownerReservations.guests") }}</span>
-        </p>
-        <p v-if="selectedCalendarRes.notes" class="rounded-xl border border-slate-800/80 bg-slate-950/50 px-3 py-2.5 text-xs text-slate-300 whitespace-pre-line leading-relaxed">{{ selectedCalendarRes.notes }}</p>
-      </div>
+        :reservation="selectedCalendarRes"
+        :format-date-time="formatDateTime"
+        @close="selectedCalendarRes = null"
+      />
 
       <template v-if="viewMode === 'list'">
       <div v-if="error" role="alert" class="ui-reveal flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3.5">
@@ -585,6 +568,7 @@
 <script setup>
 import { computed, onActivated, onMounted, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
+import OwnerReservationsCalendarDetail from "../components/OwnerReservationsCalendarDetail.vue";
 import OwnerReservationsWaitlist from "../components/OwnerReservationsWaitlist.vue";
 import ReservationCalendar from "../components/ReservationCalendar.vue";
 import { useConfirmModal } from "../composables/useConfirmModal";

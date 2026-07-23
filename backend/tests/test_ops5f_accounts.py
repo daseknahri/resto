@@ -42,7 +42,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -233,8 +233,14 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
 
     def _drive(self, *, still_approved):
         import accounts.models as am
+        from accounts.models import Customer as _Customer
 
-        customer = MagicMock(pk=5, id=5, name="Drv", is_driver_online=True)
+        # RISK IDENTITY-1: the driver principal now arrives via
+        # CustomerSessionAuthentication, so this must be a real (unsaved) Customer to
+        # pass IsCustomer. The approval RE-CHECK below still hits the DB on purpose —
+        # request.user was hydrated at auth time and approval may since be revoked.
+        customer = _Customer(id=5, name="Drv", is_driver=True, is_driver_online=True)
+        customer.save = MagicMock()
 
         job = MagicMock()
         job.status = "picked_up"  # picked_up → delivered is the credit transition
@@ -246,9 +252,9 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
         sfu = MagicMock()
         sfu.get.return_value = job
 
-        # Customer manager: the initial is_driver lookup and the approval re-check.
+        # Customer manager: only the approval re-check now (the initial is_driver
+        # lookup is gone — the view reads the principal off request.user).
         cust_mgr = MagicMock()
-        cust_mgr.get.return_value = customer
         cust_mgr.filter.return_value.exists.return_value = still_approved
 
         @contextmanager
@@ -269,7 +275,8 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
             req = self.factory.patch(
                 "/api/driver/jobs/1/status/", {"status": "delivered"}, format="json"
             )
-            req.session = {"customer_id": 5}
+            req.session = {}
+            force_authenticate(req, user=customer)
             resp = self.view(req, job_id=1)
             return resp, _cdo, _odc
 
@@ -305,7 +312,7 @@ class DeliveryRatingOwnershipTests(SimpleTestCase):
 
     def _drive(self, *, session_cid, order_customer_id):
         import accounts.models as am
-        from accounts.models import DeliveryJob
+        from accounts.models import Customer, DeliveryJob
         import menu.models as mm
 
         tenant = SimpleNamespace(id=1, slug="bistro", schema_name="bistro")
@@ -332,7 +339,10 @@ class DeliveryRatingOwnershipTests(SimpleTestCase):
                 "/api/marketplace/track/ORD-1/rate/?restaurant=bistro",
                 {"role": "customer", "score": 5, "note": "great"}, format="json",
             )
-            req.session = {"customer_id": session_cid} if session_cid is not None else {}
+            # RISK IDENTITY-1: the customer branch reads the principal via customer_or_none.
+            req.session = {}
+            if session_cid is not None:
+                force_authenticate(req, user=Customer(id=session_cid))
             resp = self.view(req, order_number="ORD-1")
             return resp, job
 

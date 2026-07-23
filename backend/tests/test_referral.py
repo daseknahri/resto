@@ -9,7 +9,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import RequestFactory, SimpleTestCase
+from rest_framework.test import force_authenticate
 
+from accounts.models import Customer
 from accounts.views import ReferralCodeLookupView, CustomerLinkReferralView
 from rest_framework import status
 
@@ -161,73 +163,77 @@ class ReferralCodeLookupViewTests(SimpleTestCase):
 
 
 # ── CustomerLinkReferralView ──────────────────────────────────────────────────
+#
+# RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication +
+# IsCustomer, so the signed-in Customer arrives as request.user (previously
+# hand-rolled via the shared _resolve_customer_from_request() helper). Here we
+# force-authenticate a real (unsaved) Customer principal, matching the production
+# auth path.
+
+def _real_customer(customer_id=1, **kwargs):
+    """A real (unsaved) Customer so it passes IsCustomer's principal check
+    (is_authenticated + class name). No DB is touched — save is monkeypatched."""
+    c = Customer(id=customer_id, **kwargs)
+    c.save = MagicMock()
+    return c
+
 
 class CustomerLinkReferralViewTests(SimpleTestCase):
     factory = RequestFactory()
 
-    def _post(self, data, customer_id=1):
+    def _post(self, data, customer=None):
         view = CustomerLinkReferralView.as_view()
         req = self.factory.post("/api/customer/link-referral/", data, content_type="application/json")
-        req.session = _session(customer_id=customer_id)
+        req.session = _session(customer_id=customer.id if customer is not None else None)
         req.data = data
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return view(req)
 
     @patch("accounts.views.Customer.objects")
     def test_links_referral_successfully(self, objects_mock):
-        customer = _make_customer(referred_by_id=None)
-        referrer = _make_customer(pk=2, referral_code="ZZZZ9999")
-        objects_mock.get.return_value = customer
+        customer = _real_customer(1, referred_by_id=None)
+        referrer = Customer(id=2, referral_code="ZZZZ9999")
         objects_mock.only.return_value.get.return_value = referrer
-        resp = self._post({"code": "ZZZZ9999"})
+        resp = self._post({"code": "ZZZZ9999"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         customer.save.assert_called_once_with(update_fields=["referred_by"])
 
     @patch("accounts.views.Customer.objects")
     def test_already_linked_returns_400(self, objects_mock):
-        customer = _make_customer(referred_by_id=99)
-        objects_mock.get.return_value = customer
-        resp = self._post({"code": "ZZZZ9999"})
+        customer = _real_customer(1, referred_by_id=99)
+        resp = self._post({"code": "ZZZZ9999"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "already_linked")
 
     @patch("accounts.views.Customer.objects")
     def test_invalid_code_returns_400(self, objects_mock):
-        from accounts.models import Customer
-        customer = _make_customer(referred_by_id=None)
-        objects_mock.get.return_value = customer
+        customer = _real_customer(1, referred_by_id=None)
         objects_mock.only.return_value.get.side_effect = Customer.DoesNotExist
-        resp = self._post({"code": "BADCODE1"})
+        resp = self._post({"code": "BADCODE1"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "code_invalid")
 
     @patch("accounts.views.Customer.objects")
     def test_self_referral_returns_400(self, objects_mock):
-        customer = _make_customer(pk=1, referred_by_id=None)
+        customer = _real_customer(1, referred_by_id=None)
         referrer = _make_customer(pk=1, referral_code="SELF1234")  # same pk!
-        objects_mock.get.return_value = customer
         objects_mock.only.return_value.get.return_value = referrer
-        resp = self._post({"code": "SELF1234"})
+        resp = self._post({"code": "SELF1234"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "self_referral")
 
     def test_missing_code_returns_400(self):
-        with patch("accounts.views._resolve_customer_from_request") as mock_resolve:
-            mock_resolve.return_value = (_make_customer(referred_by_id=None), None)
-            view = CustomerLinkReferralView.as_view()
-            req = self.factory.post("/api/customer/link-referral/", {}, content_type="application/json")
-            req.session = _session(customer_id=1)
-            req.data = {}
-            resp = view(req)
+        customer = _real_customer(1, referred_by_id=None)
+        resp = self._post({}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_unauthenticated_returns_error(self):
-        view = CustomerLinkReferralView.as_view()
-        req = self.factory.post("/api/customer/link-referral/", {"code": "ABCD1234"}, content_type="application/json")
-        req.session = _session()  # no customer_id
-        req.data = {"code": "ABCD1234"}
-        resp = view(req)
-        # _resolve_customer_from_request returns an error response when no session
-        self.assertIn(resp.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST])
+    def test_unauthenticated_returns_401(self):
+        """RISK IDENTITY-1: IsCustomer deterministically 401s an anonymous caller
+        (previously _resolve_customer_from_request's own 401, kept via a defensive
+        assertIn — this is now the sanctioned single-status behavior)."""
+        resp = self._post({"code": "ABCD1234"}, customer=None)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 # ── Profile referral fields ───────────────────────────────────────────────────

@@ -215,9 +215,12 @@ services:
         limits:
           memory: ${API_MEM_LIMIT:-768m}
 
-  # ── Celery worker — processes the notification queue ──────────────────────────
+  # ── Celery worker — processes the notification + cron queues ──────────────────
   # Idle (no-op) unless CELERY_BROKER_URL is set, so it's safe to deploy either way.
   # Shares the api environment via the &django_env anchor above.
+  # RISK ASYNC-2: consumes BOTH the default "notifications" queue AND the "cron" queue
+  # (the cron.* sweep/reconcile/prune tasks route there — see backend/config/celery.py).
+  # For full slot-isolation of a slow sweep, run a SECOND worker with -Q cron instead.
   worker:
     build:
       context: ./backend
@@ -226,7 +229,7 @@ services:
     init: true
     # R13: match the non-root UID from the Dockerfile.
     user: "10001:10001"
-    command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config worker -l info -Q notifications,default --concurrency 2; else echo 'Celery OFF (CELERY_BROKER_URL unset) — worker idle'; exec sleep infinity; fi"]
+    command: ["sh", "-c", "if [ -n \"$$CELERY_BROKER_URL\" ]; then exec celery -A config worker -l info -Q notifications,cron --concurrency 2; else echo 'Celery OFF (CELERY_BROKER_URL unset) — worker idle'; exec sleep infinity; fi"]
     # Celery worker is NOT an HTTP service — disable the inherited Dockerfile
     # HEALTHCHECK (it probes the web server on :8000, which this container does not
     # run, so it would always report unhealthy). Liveness is covered by

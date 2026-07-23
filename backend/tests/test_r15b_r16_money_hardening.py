@@ -35,7 +35,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -232,43 +232,42 @@ class MenuPlaceOrderCurrencyGuardTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = PlaceOrderView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, principal=None):
         req = self.factory.post("/api/place-order/", data, format="json")
         req.tenant = _tenant()
-        req.user = _anon()
-        req.session = session or _session()
+        req.session = {}
+        if principal is not None:
+            force_authenticate(req, user=principal)
         return req
 
     def _drive(self, currency, debit_side_effect=None):
         """Drive a funded pickup order to the wallet-debit chokepoint with the dish in the
         given currency. Returns (response, debit_mock)."""
+        from accounts.models import Customer
         dish = _menu_dish(currency=currency)
-        customer = MagicMock()
-        customer.phone_verified = True
-        customer.phone = "+212600000000"
-        customer.name = "Alice"
-        customer.wallet_balance = Decimal("1000")  # funds the pay-now requirement
+        # RISK IDENTITY-1: the linked customer is request.user (customer_or_none). A real
+        # Customer principal carries the verification/phone/wallet the gate reads.
+        customer = Customer(id=7, phone_verified=True, phone="+212600000000",
+                            name="Alice", wallet_balance=Decimal("1000"))
+        customer.save = MagicMock()
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
-        req = self._post(payload, session=_session(customer_id=7))
+        req = self._post(payload, principal=customer)
 
         # R16b: debit now goes through wallet_service.debit_wallet; mock it so the unit
         # test does not touch a real DB. The returned tx.amount drives _actual.
         fake_wallet_tx = MagicMock()
         fake_wallet_tx.amount = Decimal("10.00")
 
-        import accounts.models as _accts
         with patch("menu.views.Profile.objects") as profile_mock, \
              patch("menu.views.Dish.objects") as dish_mock, \
              patch("menu.views.Promotion.objects") as promo_mock:
             profile_mock.filter.return_value.first.return_value = _profile()
             promo_mock.filter.return_value = []
             dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
-            with patch.object(_accts.Customer, "objects") as cust_mock, \
-                 patch("accounts.wallet_service.debit_wallet",
+            with patch("accounts.wallet_service.debit_wallet",
                        return_value=fake_wallet_tx,
                        side_effect=debit_side_effect) as debit_mock:
-                cust_mock.get.return_value = customer
                 with patch("menu.views.DishOption.objects") as opt_mock, \
                      patch("menu.views.Order.objects") as order_mock, \
                      patch("menu.views.OrderItem.objects"), \
@@ -348,16 +347,12 @@ def _mkt_dish(currency="MAD"):
 
 
 def _mkt_customer(cid=7, wallet="1000"):
-    c = MagicMock()
-    c.id = cid
-    c.pk = cid
-    # The inline debit does `wallet_balance - Decimal(...)`, so the locked-row balance
-    # must be a Decimal (the real model field is a DecimalField).
-    c.wallet_balance = Decimal(str(wallet))
-    c.name = "Repeat Diner"
-    c.phone = "+212600000000"
-    c.phone_verified = True
-    c.loyalty_points = 0
+    """A real (unsaved) Customer principal (RISK IDENTITY-1: read via customer_or_none).
+    The inline debit does `wallet_balance - Decimal(...)`; DecimalField holds a Decimal."""
+    from accounts.models import Customer
+    c = Customer(id=cid, wallet_balance=Decimal(str(wallet)), name="Repeat Diner",
+                 phone="+212600000000", phone_verified=True, loyalty_points=0)
+    c.save = MagicMock()
     return c
 
 
@@ -409,10 +404,11 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = MarketplacePlaceOrderView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/marketplace/order/", data, format="json")
-        req.user = _anon()
-        req.session = session or {}
+        req.session = {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return self.view(req)
 
     def _run_order(self, *, currency, customer, created_order=None, debit_side_effect=None):
@@ -463,7 +459,7 @@ class MarketplacePlaceOrderCurrencyGuardTests(SimpleTestCase):
                 mock_cust_cls.DoesNotExist = _FakeDNE
                 mock_cust_cls.objects.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
-                    resp = self._post(payload, session={"customer_id": customer.id})
+                    resp = self._post(payload, customer=customer)
         return resp, order_cls, debit_mock
 
     def _created_order(self, currency="MAD"):

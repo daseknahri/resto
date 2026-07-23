@@ -877,82 +877,14 @@
       </template>
     </section>
 
-    <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.provisioningJobs") }}</h2>
-        </div>
-        <div class="ui-scroll-row">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.jobs = !adminPanels.jobs">
-            {{ adminPanels.jobs ? t("adminConsole.hide") : t("adminConsole.show") }}
-          </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="loading || !adminPanels.jobs" @click="fetchJobs">{{ t("common.refresh") }}</button>
-        </div>
-      </div>
-      <template v-if="adminPanels.jobs">
-      <div v-if="loading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <article v-for="n in 3" :key="`job-skeleton-${n}`" class="ui-admin-card space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <div class="ui-skeleton h-4 w-32 rounded-full"></div>
-            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
-          </div>
-          <div class="space-y-2">
-            <div class="ui-skeleton h-3 w-5/6 rounded-full"></div>
-            <div class="ui-skeleton h-16 rounded-2xl"></div>
-          </div>
-        </article>
-      </div>
-      <article v-else-if="!jobs.length" class="ui-empty-state">
-        <p class="ui-kicker">{{ t("adminConsole.provisioningJobs") }}</p>
-        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noJobsYet") }}</h3>
-        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.provisioningOperations") }}</p>
-      </article>
-      <div v-else class="space-y-2 md:hidden">
-        <article
-          v-for="(job, index) in jobs"
-          :key="`job-mobile-${job.id}`"
-          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
-          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <p class="min-w-0 truncate text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
-            <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
-          </div>
-          <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
-          <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
-          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
-        </article>
-      </div>
-
-      <div v-if="jobs.length" class="ui-table-wrap hidden md:block">
-        <table class="w-full min-w-[920px] text-sm">
-          <thead class="bg-slate-900/70 text-slate-300">
-            <tr>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.id") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.lead") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.tenant") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("common.status") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.log") }}</th>
-              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.updated") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="job in jobs" :key="job.id" class="border-t border-slate-800">
-              <td class="px-4 py-3 text-slate-100">#{{ job.id }}</td>
-              <td class="px-4 py-3 text-slate-200">{{ job.lead_name }}</td>
-              <td class="px-4 py-3 text-slate-200">{{ job.tenant_slug || '-' }}</td>
-              <td class="px-4 py-3">
-                <span class="ui-status-pill text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
-              </td>
-              <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
-              <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      </template>
-    </section>
+    <AdminConsoleProvisioningJobs
+      v-if="activeAdminView === 'monitoring'"
+      :jobs="jobs"
+      :loading="loading"
+      :expanded="adminPanels.jobs"
+      @toggle-expanded="adminPanels.jobs = !adminPanels.jobs"
+      @refresh="fetchJobs"
+    />
 
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -1098,328 +1030,45 @@
   </div>
 
   <!-- Live orders support modal (read-only) -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="liveOrdersModal.open"
-        tabindex="-1"
-        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-        @click.self="closeLiveOrdersModal"
-        @keydown.esc="closeLiveOrdersModal"
-      >
-        <div
-          ref="liveOrdersDialogRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="admin-live-orders-dialog-title"
-          class="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
-        >
-          <div class="flex items-start justify-between gap-3 border-b border-slate-800 px-5 py-4">
-            <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ liveOrdersModal.tenant?.name }}</p>
-              <h3 id="admin-live-orders-dialog-title" class="mt-0.5 text-base font-semibold text-white">{{ t("adminConsole.liveOrders.title") }}</h3>
-              <p class="mt-0.5 text-xs text-slate-400">{{ t("adminConsole.liveOrders.subtitle") }}</p>
-              <span class="mt-1.5 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-                {{ t("adminConsole.liveOrders.readOnlyBadge") }}
-              </span>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <button
-                class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-50"
-                :disabled="liveOrdersModal.loading"
-                @click="reloadLiveOrders"
-              >{{ t("common.refresh") }}</button>
-              <button
-                class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
-                @click="closeLiveOrdersModal"
-              >{{ t("adminConsole.liveOrders.close") }}</button>
-            </div>
-          </div>
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <div v-if="liveOrdersModal.loading" class="space-y-2">
-              <div v-for="n in 5" :key="`lo-sk-${n}`" class="ui-skeleton h-12 rounded-lg"></div>
-            </div>
-            <div v-else-if="liveOrdersModal.error" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-              <p class="flex-1 text-sm text-red-300">{{ liveOrdersModal.error }}</p>
-            </div>
-            <article v-else-if="!liveOrders.length" class="ui-empty-state">
-              <p class="ui-kicker">{{ t("adminConsole.liveOrders.title") }}</p>
-              <h3 class="text-lg font-semibold text-white">{{ t("adminConsole.liveOrders.empty") }}</h3>
-              <p class="max-w-xl text-sm text-slate-400">{{ t("adminConsole.liveOrders.emptyHint") }}</p>
-            </article>
-            <template v-else>
-              <p class="mb-3 text-xs text-slate-500">{{ t("adminConsole.liveOrders.activeCount", { count: liveOrdersCount }) }}</p>
-              <!-- Mobile: cards -->
-              <div class="space-y-2 md:hidden">
-                <article
-                  v-for="(order, index) in liveOrders"
-                  :key="`lo-mobile-${order.order_number}-${index}`"
-                  class="ui-admin-card space-y-1.5"
-                >
-                  <div class="flex items-center justify-between gap-2">
-                    <p class="font-semibold text-slate-100">#{{ order.order_number }}</p>
-                    <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ order.status }}</span>
-                  </div>
-                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.type") }}: {{ order.order_type || "-" }}</p>
-                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.total") }}: {{ order.total }}</p>
-                  <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.age") }}: {{ formatAge(order.created_at) }}</p>
-                  <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.phone") }}: {{ order.customer_phone || "-" }}</p>
-                </article>
-              </div>
-              <!-- Desktop: table -->
-              <div class="ui-table-wrap hidden md:block">
-                <table class="w-full min-w-[640px] text-sm">
-                  <thead class="bg-slate-900/70 text-slate-300">
-                    <tr>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("adminConsole.liveOrders.orderNumber") }}</th>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("common.status") }}</th>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("adminConsole.liveOrders.type") }}</th>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("adminConsole.liveOrders.total") }}</th>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("adminConsole.liveOrders.age") }}</th>
-                      <th scope="col" class="px-3 py-2.5 text-start">{{ t("adminConsole.liveOrders.phone") }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(order, index) in liveOrders" :key="`lo-row-${order.order_number}-${index}`" class="border-t border-slate-800">
-                      <td class="px-3 py-2.5 font-medium text-slate-100">#{{ order.order_number }}</td>
-                      <td class="px-3 py-2.5">
-                        <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ order.status }}</span>
-                      </td>
-                      <td class="px-3 py-2.5 text-slate-300">{{ order.order_type || "-" }}</td>
-                      <td class="px-3 py-2.5 text-slate-300 tabular-nums">{{ order.total }}</td>
-                      <td class="px-3 py-2.5 text-slate-400">{{ formatAge(order.created_at) }}</td>
-                      <td class="px-3 py-2.5 text-slate-400">{{ order.customer_phone || "-" }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
-          </div>
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
-            <button
-              class="ui-btn-outline ui-press px-4 py-2 text-sm"
-              @click="closeLiveOrdersModal"
-            >{{ t("adminConsole.liveOrders.close") }}</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <AdminConsoleLiveOrdersModal
+    :open="liveOrdersModal.open"
+    :tenant="liveOrdersModal.tenant"
+    :loading="liveOrdersModal.loading"
+    :error="liveOrdersModal.error"
+    :orders="liveOrders"
+    :count="liveOrdersCount"
+    @close="closeLiveOrdersModal"
+    @refresh="reloadLiveOrders"
+  />
 
-  <!-- Delivery pricing modal -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="deliveryModal.open"
-        tabindex="-1"
-        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-        @click.self="closeDeliveryModal"
-        @keydown.esc="closeDeliveryModal"
-      >
-        <div
-          ref="deliveryDialogRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="admin-delivery-dialog-title"
-          class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
-        >
-          <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ deliveryModal.tenant?.name }}</p>
-              <h3 id="admin-delivery-dialog-title" class="mt-0.5 text-base font-semibold text-white">{{ t("adminConsole.delivery.title") }}</h3>
-              <p class="mt-0.5 text-xs text-slate-400">{{ t("adminConsole.delivery.subtitle") }}</p>
-            </div>
-            <button
-              class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
-              @click="closeDeliveryModal"
-            >{{ t("adminConsole.delivery.close") }}</button>
-          </div>
-          <div v-if="deliveryModal.loading" class="space-y-3 px-5 py-4">
-            <div v-for="n in 6" :key="`dl-sk-${n}`" class="ui-skeleton h-8 rounded-lg"></div>
-          </div>
-          <div v-else class="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
-            <div v-if="deliveryFormError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-              <p class="flex-1 text-sm text-red-300">{{ deliveryFormError }}</p>
-            </div>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.fee") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_fee"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.baseFee") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_base_fee"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.perKm") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_per_km"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.freeOver") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_free_over"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.minimumOrder") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_minimum_order"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.radiusKm") }}</span>
-              <input
-                v-model="deliveryForm.delivery_radius_km_raw"
-                type="number"
-                min="0"
-                step="0.5"
-                class="ui-input w-full px-3 py-2 text-sm"
-                placeholder="—"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.zoneDescription") }}</span>
-              <input
-                v-model="deliveryForm.delivery_zone_description"
-                type="text"
-                maxlength="200"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.commissionPct") }}</span>
-              <input
-                v-model.number="deliveryForm.delivery_commission_pct"
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                class="ui-input w-full px-3 py-2 text-sm"
-              />
-              <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.commissionHint") }}</span>
-            </label>
-            <label class="flex cursor-pointer items-start gap-3">
-              <input
-                v-model="deliveryForm.platform_delivery_enabled"
-                type="checkbox"
-                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-800 accent-[var(--color-primary)]"
-              />
-              <span class="space-y-0.5">
-                <span class="block text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.platformDelivery") }}</span>
-                <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.platformDeliveryHint") }}</span>
-              </span>
-            </label>
-          </div>
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
-            <button
-              class="ui-btn-outline ui-press px-4 py-2 text-sm"
-              @click="closeDeliveryModal"
-            >{{ t("adminConsole.delivery.close") }}</button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="deliveryModal.saving || deliveryModal.loading"
-              :aria-busy="deliveryModal.saving"
-              @click="saveDeliveryPricing"
-            >
-              <svg v-if="deliveryModal.saving" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ deliveryModal.saving ? t('common.loading') : t("adminConsole.delivery.save") }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <!-- Delivery pricing modal (RISK FE-2) -->
+  <AdminConsoleDeliveryPricingDrawer
+    v-model:form="deliveryForm"
+    :open="deliveryModal.open"
+    :tenant="deliveryModal.tenant"
+    :loading="deliveryModal.loading"
+    :saving="deliveryModal.saving"
+    :error="deliveryFormError"
+    @close="closeDeliveryModal"
+    @submit="saveDeliveryPricing"
+  />
 
-  <!-- Dry-run import review modal -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition-all duration-200"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-all duration-150"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="dryRunReview"
-        tabindex="-1"
-        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
-        @click.self="cancelDryRun"
-        @keydown.esc="cancelDryRun"
-      >
-        <div ref="dryRunDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-console-dry-run-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
-          <div class="border-b border-slate-800 px-5 py-4">
-            <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
-            <h3 id="admin-console-dry-run-dialog-title" class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>
-          </div>
-          <div class="px-5 py-4 space-y-2 text-sm text-slate-300">
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.categories') }}</span><span class="font-semibold">{{ dryRunReview.summary.categories || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.dishes') }}</span><span class="font-semibold">{{ dryRunReview.summary.dishes || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.optionsLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.options || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.tableLinksLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.table_links || 0 }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.profileLabel') }}</span><span class="font-semibold" :class="dryRunReview.summary.profile_updated ? 'text-emerald-400' : 'text-slate-500'">{{ dryRunReview.summary.profile_updated ? t('adminConsole.yes') : t('adminConsole.no') }}</span></div>
-          </div>
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
-            <button
-              class="ui-btn-outline ui-press px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="applyingImport"
-              @click="cancelDryRun"
-            >{{ t('common.cancel') }}</button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="applyingImport"
-              :aria-busy="applyingImport"
-              @click="applyTenantImport"
-            >
-              <svg v-if="applyingImport" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ applyingImport ? t('common.loading') : t('adminConsole.applyImport') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <AdminConsoleDryRunImportModal
+    :review="dryRunReview"
+    :applying="applyingImport"
+    @cancel="cancelDryRun"
+    @apply="applyTenantImport"
+  />
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
+import AdminConsoleDryRunImportModal from "../components/AdminConsoleDryRunImportModal.vue";
+import AdminConsoleLiveOrdersModal from "../components/AdminConsoleLiveOrdersModal.vue";
+import AdminConsoleDeliveryPricingDrawer from "../components/AdminConsoleDeliveryPricingDrawer.vue";
 import AdminConsoleOnboardingPackage from "../components/AdminConsoleOnboardingPackage.vue";
+import AdminConsoleProvisioningJobs from "../components/AdminConsoleProvisioningJobs.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
@@ -1481,42 +1130,7 @@ const tenantLifecycleLoading = ref({});
 const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
-const dryRunReview = ref(null); // { tenant, summary, replaceBody }
-const dryRunDialogRef = ref(null);
-
-const FOCUSABLE_DR = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-const trapDryRunFocus = (e) => {
-  if (!dryRunDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(dryRunDialogRef.value.querySelectorAll(FOCUSABLE_DR));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last  = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
-  }
-};
-
-watch(dryRunReview, async (val) => {
-  if (val) {
-    await nextTick();
-    dryRunDialogRef.value?.querySelector(FOCUSABLE_DR)?.focus();
-    document.addEventListener('keydown', trapDryRunFocus);
-  } else {
-    document.removeEventListener('keydown', trapDryRunFocus);
-  }
-});
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', trapDryRunFocus);
-  document.removeEventListener('keydown', trapDeliveryFocus);
-  document.removeEventListener('keydown', trapLiveOrdersFocus);
-});
+const dryRunReview = ref(null); // { tenant, summary, replaceBody } — focus trap lives in AdminConsoleDryRunImportModal
 const applyingImport = ref(false);
 const tenantTools = ref({});
 const tenantTimeline = ref({});
@@ -2486,13 +2100,6 @@ const slaLabel = (lead) => {
   return t("adminConsole.sla");
 };
 
-const statusClass = (status) => {
-  if (status === "success") return "bg-emerald-600/30 text-emerald-200";
-  if (status === "running") return "bg-amber-500/30 text-amber-200";
-  if (status === "failed") return "bg-red-600/30 text-red-200";
-  return "bg-slate-700/50 text-slate-200";
-};
-
 const upgradeStatusClass = (status) => {
   if (status === "approved") return "bg-emerald-600/30 text-emerald-200";
   if (status === "rejected") return "bg-rose-500/20 text-rose-200";
@@ -2549,65 +2156,12 @@ const selectAdminView = async (view) => {
 };
 
 // ── Live orders support modal (read-only) ──────────────────────────────────
-const liveOrdersDialogRef = ref(null);
+// Data-fetching + open/close state stay here; the modal itself (cards/table,
+// focus trap, liveOrderStatusClass/formatAge display helpers) lives in
+// AdminConsoleLiveOrdersModal.vue.
 const liveOrdersModal = ref({ open: false, tenant: null, loading: false, error: null });
 const liveOrders = ref([]);
 const liveOrdersCount = ref(0);
-
-const FOCUSABLE_LO = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-const trapLiveOrdersFocus = (e) => {
-  if (!liveOrdersDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(liveOrdersDialogRef.value.querySelectorAll(FOCUSABLE_LO));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-};
-
-watch(() => liveOrdersModal.value.open, async (open) => {
-  if (open) {
-    await nextTick();
-    liveOrdersDialogRef.value?.querySelector(FOCUSABLE_LO)?.focus();
-    document.addEventListener('keydown', trapLiveOrdersFocus);
-  } else {
-    document.removeEventListener('keydown', trapLiveOrdersFocus);
-  }
-});
-
-const liveOrderStatusClass = (status) => {
-  if (status === "ready") return "bg-emerald-500/20 text-emerald-200";
-  if (status === "out_for_delivery") return "bg-sky-500/20 text-sky-200";
-  if (status === "preparing") return "bg-amber-500/20 text-amber-200";
-  if (status === "confirmed") return "bg-indigo-500/20 text-indigo-200";
-  if (status === "scheduled") return "bg-violet-500/20 text-violet-200";
-  if (status === "pending") return "bg-slate-700/60 text-slate-200";
-  return "bg-slate-700/60 text-slate-300";
-};
-
-const formatAge = (value) => {
-  if (!value) return "-";
-  const created = new Date(value);
-  if (Number.isNaN(created.getTime())) return "-";
-  const diffMs = Date.now() - created.getTime();
-  if (diffMs < 0) return t("adminConsole.liveOrders.ageNow");
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return t("adminConsole.liveOrders.ageNow");
-  if (minutes < 60) return t("adminConsole.liveOrders.ageMinutes", { minutes });
-  const hours = Math.floor(minutes / 60);
-  const remMinutes = minutes % 60;
-  if (hours < 24) return t("adminConsole.liveOrders.ageHours", { hours, minutes: remMinutes });
-  const days = Math.floor(hours / 24);
-  return t("adminConsole.liveOrders.ageDays", { days });
-};
 
 const fetchLiveOrders = async (tenantId) => {
   liveOrdersModal.value.loading = true;
@@ -2646,7 +2200,6 @@ const closeLiveOrdersModal = () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 // ── Delivery pricing modal ─────────────────────────────────────────────────
-const deliveryDialogRef = ref(null);
 const deliveryModal = ref({ open: false, tenant: null, loading: false, saving: false });
 const deliveryFormError = ref("");
 const deliveryForm = ref({
@@ -2661,34 +2214,7 @@ const deliveryForm = ref({
   platform_delivery_enabled: false,
 });
 
-const FOCUSABLE_DL = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-const trapDeliveryFocus = (e) => {
-  if (!deliveryDialogRef.value || e.key !== 'Tab') return;
-  const focusable = Array.from(deliveryDialogRef.value.querySelectorAll(FOCUSABLE_DL));
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-  } else {
-    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-};
-
-watch(() => deliveryModal.value.open, async (open) => {
-  if (open) {
-    await nextTick();
-    deliveryDialogRef.value?.querySelector(FOCUSABLE_DL)?.focus();
-    document.addEventListener('keydown', trapDeliveryFocus);
-  } else {
-    document.removeEventListener('keydown', trapDeliveryFocus);
-  }
-});
+// (The delivery modal's a11y focus trap now lives inside AdminConsoleDeliveryPricingDrawer.)
 
 const openDeliveryModal = async (tenant) => {
   deliveryModal.value = { open: true, tenant, loading: true, saving: false };

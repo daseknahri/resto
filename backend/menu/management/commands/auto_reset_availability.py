@@ -13,9 +13,8 @@ never double-resets.
 Beat entry (add to CELERY_BEAT_SCHEDULE in settings.py):
 
     "auto-reset-availability": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.auto_reset_availability",
         "schedule": 3600.0,  # hourly
-        "args": ("auto_reset_availability",),
     },
 
 LAUNCH_CHECKLIST:

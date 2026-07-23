@@ -96,10 +96,13 @@ class TestBackfillOrderRefVertical(SimpleTestCase):
         self.assertIn("(dry)", out)
 
 
-class TestAllowlistContainsBackfill(SimpleTestCase):
-    def test_backfill_not_required_in_allowlist(self):
-        # backfill is a one-shot ops command (not Beat-scheduled), so it is
-        # intentionally NOT in the Celery management-command allowlist.
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
+class TestBackfillNotScheduled(SimpleTestCase):
+    def test_backfill_is_not_a_cron_task(self):
+        # backfill is a one-shot ops command (not Beat-scheduled), so it has no
+        # dedicated cron.* task — the broker cannot trigger it (RISK ASYNC-2).
+        from django.conf import settings
+        import accounts.tasks as tasks
 
-        self.assertNotIn("backfill_order_ref_vertical", _MANAGEMENT_COMMAND_ALLOWLIST)
+        scheduled = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertNotIn("cron.backfill_order_ref_vertical", scheduled)
+        self.assertFalse(hasattr(tasks, "backfill_order_ref_vertical"))

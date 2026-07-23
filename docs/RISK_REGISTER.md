@@ -23,7 +23,7 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | ◑ Partial | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class + single `user_owns_tenant_id` owner-check** shipped (3 divergent helpers → 1); call-site→`permission_classes` migration remains | L |
+| **AUTHZ-1** | Auth | ◑ Core done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices); dead `accounts._is_tenant_owner` helper deleted. Residual is by design: 3 Category-C predicates (mid-logic owner checks that return a *different* response, not 403) | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
@@ -32,7 +32,7 @@
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + real threaded money/isolation DB tests | M |
 | **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
 | ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
-| **ASYNC-2** | Async | ◑ Partial | One generic cron task starves notifications — **dedicated `cron` queue routing shipped**; per-command retry + named-task split remain | M |
+| **ASYNC-2** | Async | ✅ Addressed | Named `cron.<command>` tasks (name *is* the allowlist), `cron.*`→`cron` queue route, transient-DB retry/backoff; worker consumes `-Q notifications,cron` | M |
 | **ASYNC-1** | Async | ◑ Partial | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; durable-outbox/runtime-dispatch remains | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **3 CustomerAccount tabs extracted** (reservations/reviews/profile; 3654→2963 lines); more tabs + other pages in progress | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **47 slices → 53 tested child components** (~3780 lines lifted; vitest 527→881). Cart + WaiterPage fully decomposed; form-drawer pass underway (AdminConsole delivery-pricing, DriverPage rate/code, Marketplace option-group done). Remaining money drawers: DriverPage cashout + Marketplace checkout (prep-for-review) + preview QA + merge | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -92,8 +92,158 @@ marketplace, wallet ledger, admin, reconcile/GDPR commands), so auto-scoping wou
 app for marginal gain; revisit after IDENTITY-1 lands. The one flagged query
 (`menu/views.py` CustomerRating average) is by-design platform-wide (per model docstring) and
 now commented as such.
-**Remaining:** (1) IDENTITY-1, (2) the policy-class layer (`IsTenantOwner` etc.) + delete both
-`_is_tenant_owner` helpers.
+**Progress (call-site migration, slice 1 — 2026-07-17):** IDENTITY-1 is done (the customer/driver
+view sweep completed), unblocking this. `IsTenantOwner` now carries a `message` (`"Owner access
+required."`) so DRF renders the exact legacy 403 body when it denies an *authenticated* non-owner;
+a sibling `IsTenantOwnerAccessDenied` preserves the other legacy text (`"Access denied."`). First 8
+`menu/views.py` owner views migrated from an inline `if not _is_tenant_owner(request): return 403`
+to declarative `permission_classes = [IsTenantOwner|…AccessDenied]` (OwnerInvoiceView,
+OwnerCommissionStatementView, OwnerDataExportView, OwnerWalletFloatView, DrawerCurrentView,
+OwnerIngredientLowStockView, OwnerRecipeLineDetailView, OwnerClosureDateDeleteView). Byte-for-byte
+behavior-preserving: authenticated non-owner → 403 same body; anonymous → 401 (`NotAuthenticated`)
+same as the old `IsAuthenticated` gate. A scout classified all ~56 sites first: **zero** were
+plain-403 (every guard has a custom body, hence the `message` approach); **3 are Category-C**
+predicates (`_can_access_order`, `StaffOrderListView`, `OwnerZReportView._require_owner`) that use
+`_is_tenant_owner` mid-logic where non-owners get a *different valid response*, not a 403 — those
+**stay** and the helpers can't be fully deleted.
+
+**Slice 2 (2026-07-17):** the 4 remaining cash-drawer views (`DrawerOpenView`,
+`DrawerTransactionView`, `DrawerCloseView`, `DrawerHistoryView`) migrated to
+`permission_classes = [IsTenantOwner]`, completing the cash-drawer feature's owner-gating
+(`DrawerCurrentView` landed in slice 1). Chosen as a coherent, low-risk batch because their
+tests all live in `test_cash_drawer.py` and call the view **methods directly** — so the happy-path
+tests (which `@patch("menu.views._is_tenant_owner")` and bypass dispatch) keep passing unchanged,
+and only the 4 owner-denial tests needed the `.as_view()` + force-authenticated-non-owner rewrite
+(shared `_assert_owner_required` helper). **Deliberately NOT batched:** the `.as_view()`-heavy test
+files (e.g. `test_customer_notes_views.py` — 18 dispatch-level tests that patch `_is_tenant_owner`)
+would each need every happy-path test rewritten to a real owner principal, so those views get their
+own slices.
+
+**Slice 3 (2026-07-17):** the 3 owner analytics views — `OwnerBestSellersView`,
+`OwnerRevenueChartView` (→ `IsTenantOwnerAccessDenied`), `OwnerRepeatAnalyticsView`
+(→ `IsTenantOwner`). Their `test_analytics_and_chart_views.py` tests migrated **transparently**
+(they set a real non-owner principal and the inline guard already delegated to
+`user_owns_tenant_id`, so `IsTenantOwner` yields identical results). Two nuances confirmed here,
+worth recording:
+- **Anonymous → 403, not 401** (corrects the slice-1/2 commit phrasing). With only
+  `SessionAuthentication` in the stack, a permission failure raises `NotAuthenticated`, but DRF's
+  `handle_exception` **downgrades it to 403** because `SessionAuthentication.authenticate_header`
+  returns `None` (no `WWW-Authenticate`). So both the old `[IsAuthenticated]` gate and the new
+  `[IsTenantOwner]` gate return **403** for anonymous — behavior preserved, mechanism now understood.
+- **`MagicMock(spec=User)` non-owner fixtures must pin `is_superuser=False` / `is_platform_admin=
+  False`.** `user_owns_tenant_id` short-circuits `True` on a truthy value there, and a `spec=User`
+  mock returns a truthy `Mock` for any unset attribute — so a "staff" fixture that only sets
+  `role=STAFF` reads as a **superuser** and is *allowed*. `test_repeat_analytics._staff()` only
+  "worked" before via a now-dead `_is_tenant_owner=False` patch; fixed the fixture + dropped the
+  patch. This is a landmine for every future denial test in this migration.
+
+**Slice 4 (2026-07-17):** the ingredient/recipe owner views — `OwnerIngredientListCreateView`,
+`OwnerIngredientDetailView`, `OwnerIngredientAdjustView`, `OwnerDishRecipeView` (all →
+`IsTenantOwnerAccessDenied`), completing the ingredient group (`OwnerIngredientLowStockView` +
+`OwnerRecipeLineDetailView` landed in slice 1). First **multi-method** classes in the migration:
+every method was owner-gated with a per-method guard, so class-level `permission_classes` collapses
+2–3 guards into one declaration without over-gating. `OwnerIngredientDetailView`'s `_get(pk)` helper
+does only the 404 lookup (the 403 was per-method, now on the class) so it stays. Migrated
+**transparently** — `test_ingredients.py` already force-authenticates real owner/staff fixtures that
+correctly pin `is_superuser=False`/`is_platform_admin=False` (the slice-3 landmine is absent here).
+Also removed the now-unused `_IsAuthenticated` alias import.
+
+**Slice 5 (2026-07-17):** the customer owner views — `OwnerCustomerNotesView`,
+`OwnerCustomerLoyaltyGrantView`, `OwnerCustomerListView` (all → `IsTenantOwnerAccessDenied`).
+`test_owner_customer_list.py` migrated transparently (no `_is_tenant_owner` patch, landmine-safe
+fixtures). `test_customer_notes_views.py` hit the slice-3 landmine head-on: its two
+`test_non_owner_gets_403` tests used a **real `_owner()`** principal + relied on a
+`_is_tenant_owner=False` patch to force the denial — once that patch goes dead, the owner would
+*pass*. Fixed by adding a landmine-safe `_staff()` fixture (pinned `is_superuser`/`is_platform_admin`
+False) and pointing the denial tests at it; the happy-path `_is_tenant_owner=True` patches are now
+harmless no-ops (left in place). This is the confirmed template for the remaining `.as_view()`-heavy
+files.
+
+**Slice 6 (2026-07-17):** the wallet owner views — `OwnerWalletTopupView`,
+`OwnerWalletHistoryView` (→ `IsTenantOwnerAccessDenied`). Transparent (no `_is_tenant_owner` patch,
+landmine-safe fixtures in `test_owner_wallet_views.py`).
+
+**Slice 7 (2026-07-17):** four multi-method owner classes — `OwnerPromotionListCreateView`,
+`OwnerPushSubscribeView`, `OwnerLoyaltyView` (→ `IsTenantOwnerAccessDenied`),
+`OwnerClosureDateListCreateView` (→ `IsTenantOwner`). All per-method-guarded on every method, so
+class-level collapses the pair. **Key heuristic confirmed: a test file with ZERO
+`_is_tenant_owner` patches migrates transparently** — the inline guard already delegated to
+`user_owns_tenant_id` (the exact function `IsTenantOwner` uses), so any denial test green today stays
+green. The slice-3 landmine only lives in files that *patch* `_is_tenant_owner` (the patch masks
+whether the fixture independently yields the right result). 96 tests across 5 files, no changes.
+
+**Slice 8 (2026-07-17):** `OwnerSectionListCreateView` / `OwnerSectionDetailView` (→
+`IsTenantOwnerAccessDenied`) — the first patch-using file (`test_table_sections.py`, 13 patches).
+Its shared `_req()` used a **bare `MagicMock`** user (truthy `is_superuser` → the slice-3 landmine),
+which the happy paths only survived via the `_is_tenant_owner=True` patch bypass, and the one
+`test_non_owner_denied` faked denial via `_is_tenant_owner=False`. Upgraded `_req()` to a real
+landmine-safe `_owner()` (+ a `_staff()` for the denial test). **New wrinkle:** one happy-path test
+`patch.dict`-mocks `sys.modules["accounts.models"]` (to stub the tenant-member whitelist query), so a
+function-local `from accounts.models import User` in the fixture got the *mocked* User and its `role`
+stopped equalling the real `TENANT_OWNER` enum → owner denied. Fixed by importing `User` at the test
+module level (bound to the real class before any test runs), so the fixture keeps the real role even
+inside the `patch.dict` block. The waiter-ack tests in the same file patch `_is_tenant_owner` for a
+*different* (un-migrated) view and are untouched.
+
+**Slice 9 (2026-07-17):** `OwnerCampaignView` (→ `IsTenantOwner`). Despite the `_is_tenant_owner`
+patches, it migrated **transparently** — both test files (`test_owner_campaigns.py`,
+`test_b1_email_retention.py`) already force-authenticate a landmine-safe `_owner_user()` and set
+`req.tenant`, and there are no denial tests — so the `=True` patches are now harmless no-ops. (Not
+every patch-using file needs the landmine fix; only ones whose denial tests fake denial via the
+patch, or whose fixtures aren't independently owner-valid.) 36 tests, no changes.
+
+**Slice 10 (2026-07-17):** `OwnerPromotionDetailView` (first shared-lookup-helper case) +
+`OwnerWaitlistView`. In `OwnerPromotionDetailView` the 403 lived inside `_get_promo` (called by
+get/patch/delete); moved it to `permission_classes = [IsTenantOwnerAccessDenied]` and slimmed
+`_get_promo` to the 404 lookup only (dropped its now-unused `request` arg + updated 3 callers). Order
+preserved: a non-owner still 403s before the method (permission runs first), and the 404 only reaches
+a real owner — same as the old helper checking owner-then-existence. `OwnerWaitlistView` needed a
+**third message variant** — added `IsTenantOwnerForbidden` (`message="Forbidden."`) alongside the
+`IsTenantOwner`/`...AccessDenied` pair; its `test_permissions` message-contract test added. Both
+files (`test_owner_promotions.py`, `test_waitlist_and_push.py`) are 0-patch → transparent.
+
+**Slice 11 (2026-07-17):** the `accounts/views.py` non-staff 2-arg sites — `OwnerFlashSaleListView`,
+`OwnerFlashSaleOptInView` (post+delete), `OwnerDeliveryZoneView`, `OwnerDeliveryRadiusUpdateView`
+(all → `IsTenantOwner`). The accounts `_is_tenant_owner(request, tenant)` helper is
+`user_owns_tenant_id(request.user, request.tenant.id)` — identical to `IsTenantOwner` since the
+`tenant` passed is always `request.tenant`. The `tenant = getattr(request, "tenant", None)` line +
+its `if tenant is None: 400` guard stay (the bodies use `tenant`); only the owner 403 moved.
+Transparent (both `test_flash_sales.py` / `test_admin_delivery_views.py` are 0-patch, landmine-safe
+fixtures). `accounts._is_tenant_owner` is now used only by the 3 staff sites.
+
+**Slice 12 (2026-07-17):** the staff endpoints — `OwnerStaffListCreateView` (get+post),
+`OwnerStaffDeleteView` (`_get_staff` shared helper) → `IsTenantOwnerStaffForbidden`. Their 403 body
+uniquely carries a `code` (`{"detail": "Owner access required.", "code": "forbidden"}`, asserted by
+a test), which a string `message` can't reproduce. Solved by giving the permission class a **dict**
+`message`: DRF's `permission_denied` raises `PermissionDenied(detail=message)` and the exception
+handler uses a dict `detail` as the response body verbatim — confirmed (`test_owner_staff_views`
+green, `resp.data["code"]=="forbidden"`). `_get_staff`'s 403 moved to the class; its 404 lookup
+stays. All 8 `accounts/views.py` call sites are now migrated — the accounts `_is_tenant_owner` helper
+is **dead** (no view calls it) but retained for now (3 test files still patch/unit-test it;
+deleting it is a separate cleanup).
+
+**Slice 13 — call-site migration COMPLETE (2026-07-17):** `OwnerAnalyticsExportView` (the ordering
+gotcha) migrated via a **`get_permissions()`** override — it returns `AllowAny` on the public
+schema / no-tenant path (so the view's own `400 "Not available on public schema."` still answers
+first) and `IsTenantOwner` otherwise (403 for a non-owner). This preserves the 400-before-403
+ordering a class-level attribute would have broken. `test_analytics_and_chart_views` green (400 for
+no-tenant + public, 403 for outsider, CSV for owner), no test change.
+
+**Call-site migration is done.** Every method-entry `_is_tenant_owner` guard across `menu/views.py`
+and `accounts/views.py` (58 sites) is now a declarative permission (`IsTenantOwner` +
+`...AccessDenied` / `...Forbidden` / `...StaffForbidden` message variants for exact-body
+preservation, and `get_permissions()` for the one ordering exception). What remains is **by design**:
+the **3 Category-C predicates** (`_can_access_order`/`CustomerOrdersByPhoneView` line ~4206,
+`StaffOrderListView` line ~4341, `OwnerZReportView._require_owner`) that use `_is_tenant_owner`
+mid-logic where a non-owner gets a *different valid response*, not a 403 — so the `menu`
+`_is_tenant_owner` helper stays (serves those). The **accounts** `_is_tenant_owner` helper (dead
+after the migration — no view called it) has now been **deleted** (2026-07-19): its owner-check
+semantics live in `sales.permissions.user_owns_tenant_id`, fully covered by
+`tests/test_permissions.py::UserOwnsTenantIdTests`; the 9 delegate unit-tests were removed and two
+now-dead `patch("accounts.views._is_tenant_owner", …)` no-ops (in `test_ops5b_admin_security.py` /
+`test_ops5_billing.py`, both of which call `view.post()` directly and so never hit the permission
+layer) were dropped. This closes AUTHZ-1's core deliverable: authorization is a tested policy layer,
+not a copy-pasted convention.
 **Source:** API/auth review (rated the authz *architecture* **poor**), security-isolation review.
 
 ### OPS-1 — Single Postgres, no replica, no PITR
@@ -189,9 +339,194 @@ any multi-role view that hydrates the customer onto `request.user` **and** has a
 branch) would let a customer principal pass the staff gate. Such branches must additionally check
 the principal is a `User` (not a `Customer`) before the sweep flips their `authentication_classes`.
 
-**Remaining:** the ~55-view mechanical sweep (customer/driver endpoints still reading
-`session["customer_id"]` by hand), per-branch hardening of multi-role views (the landmine above),
-then optional customer-CSRF hardening as a deliberate, separate step.
+**Update (2026-07-14):** `RideTipView` (`accounts/ride_views.py`) — the last single-role
+customer view living outside the two hot files (`menu/views.py`, `accounts/views.py`) — is now
+migrated (dead `_get_rider` helper removed). The remaining sweep is entirely inside those two
+hot files (partially done across two prior rounds) plus the permanently-skipped landmine views
+(6 driver views in `ride_views.py`, `DeliveryRatingView`, staff/owner multi-role branches).
+
+**Update (2026-07-16):** first hot-file slice — 5 single-role, non-money `accounts/views.py`
+wallet/push views (`CustomerWalletPayTokenView`, `CustomerWalletChargeRequestsView`,
+`CustomerWalletChargeDeclineView`, `CustomerPushSubscribeView`, `CustomerWalletView`) migrated.
+A full survey of the ~40 remaining raw `session["customer_id"]` reads across both hot files
+classified the rest: 11 driver-role views (`accounts/views.py` `Driver*`) need a not-yet-built
+`IsDriver` permission first (a plain `IsCustomer` would under-authorize — any customer, not just
+drivers, would pass); `PlaceOrderView`/`MarketplacePlaceOrderView` are money-mutating **and** must
+keep serving anonymous/guest orders, so they need `CustomerSessionAuthentication` added while
+keeping `permission_classes=[AllowAny]` and duck-typing `request.user`, not a plain flip; 3 views
+(`CustomerOrdersView`, `CustomerMarketplaceOrdersView`, `CustomerReservationsView`) currently
+degrade to an empty list for anonymous callers rather than 401 — flipping to `IsCustomer` would
+be a real behavior change, deferred pending a frontend check; the rest are the already-known
+landmine/money views (`DeliveryRatingView`, `CustomerOrderCancelView`, wallet transfer/approve).
+
+**Update (2026-07-16, driver slice):** all **12 driver views** in `accounts/views.py`
+(`DriverRegisterView`, `DriverStatusView`, `DriverPositionUpdateView`, `DriverJobListView`,
+`DriverJobAcceptView`, `DriverJobDeclineView`, `DriverJobStatusUpdateView`, `DriverEarningsView`,
+`DriverCashoutView`, `DriverCashoutCancelView`, `DriverCashoutHistoryView`, `DriverDeliveriesView`)
+now authenticate via `CustomerSessionAuthentication` + `IsCustomer`.
+
+**Design decision — no `IsDriver` permission class (deliberate).** The earlier survey assumed the
+driver slice was blocked on building `IsDriver`. On reading the code that is the *wrong* shape: the
+driver gates are **not uniform** and each carries its own response contract — `is_driver` → **404**
+`"Driver account not found."`, while `DriverJobAcceptView` needs `is_driver + driver_approved +
+is_driver_online` → **403** `"Driver must be approved and online to accept jobs."`, and
+`DriverStatusView.get` is deliberately ungated (it reports `driver_status:"none"` to a customer who
+never applied). A permission class returns DRF's generic 403 and would silently break all three
+contracts for the driver app. So `IsCustomer` gates the *principal* and each view keeps its own
+gate reading `request.user` — which still achieves IDENTITY-1's goal (no raw session read; the
+driver is `request.user`) and **removes one DB query per driver request**. A real `IsDriver` policy
+class belongs to AUTHZ-1 and needs a response-contract decision + a frontend audit first.
+
+Two things deliberately left as real DB queries (they are NOT identity reads and must not be
+"optimized" onto the principal): (1) `DriverJobStatusUpdateView`'s approval **re-check** at the
+DELIVERED transition (`Customer.objects.filter(pk=..., driver_approved=True).exists()`) — the
+principal was hydrated at auth time and approval may have been revoked since, and this gate guards
+the earnings credit (RISK OPS-5f); (2) `DriverJobAcceptView`'s `select_for_update` driver-row mutex.
+
+**Follow-up noted:** `accounts/throttles.py::_CustomerThrottle` still keys on
+`request.session["customer_id"]` rather than `request.user`. Behavior is unchanged today (login
+still populates the session), but it is now a latent inconsistency: if a later slice drops the
+session dependency (e.g. customer-CSRF/token hardening), every customer/driver throttle would
+silently fall back to per-IP bucketing. Migrate it when that slice lands.
+
+**Update (2026-07-16, optional-auth slice — first `menu/views.py` conversions):**
+`OrderEligibilityView`, `CustomerOrderStatusView` and `CustomerOrderRateView` migrated. These are
+**optional-auth**, not single-role: each must keep serving anonymous callers (a guest cart, a
+table-QR diner, the coded `not_order_owner` 403), so they pair
+`authentication_classes = [CustomerSessionAuthentication]` with **`permission_classes = [AllowAny]`**
+and branch on the principal rather than gating on it. `IsCustomer` would 401 anonymous callers and
+break all three contracts. This establishes the pattern the remaining optional-auth money views
+(`PlaceOrderView`/`MarketplacePlaceOrderView`) need.
+
+Shipped with it:
+- **`accounts/permissions.customer_or_none(request)`** — the optional-auth primitive (returns the
+  `Customer` principal or `None`; never a staff `User`), so views stop re-reading the raw session.
+- **`CustomerSessionAuthentication` is now session-safe.** It did an unguarded
+  `request.session.get(...)`; `CustomerOrderStatusView` had previously read the session behind its
+  own `try/except` and degraded to anonymous, so mounting the auth class on it would have turned
+  that tolerated case into a **500 raised from inside the auth stack**. Absent/unusable session
+  state now fails closed to anonymous. (Latent for every already-converted view too.)
+- **Six duplicated ownership comparisons collapsed into one `IsOrderOwner` call.**
+  `CustomerOrderStatusView` re-implemented the `customer_id` check **five more times** below its
+  gate — in two subtly different forms (`int()==int()` and `str()==str()`) — each guarding a
+  separate leak (restaurant feedback, wallet balance, delivery/driver block, `can_cancel`,
+  `delivery_code`). All now read the single `_owns` predicate. This duplication is exactly the
+  IDOR class AUTHZ-1/IDENTITY-1 exist to kill; `ruff` caught it (the removed variable was still
+  referenced), not the tests. `CustomerOrderRateView` also stopped re-fetching the linked customer
+  — the ownership gate already proves `request.user` is the owner — and its docstring no longer
+  claims "No authentication required" (false since OPS-5e added the gate).
+
+**Update (2026-07-16, money slice):** the money-mutating customer views are migrated —
+`CustomerWalletChargeApproveView`, `CustomerWalletTransferView`, `CustomerTopUpIntentView`
+(`accounts/views.py`), `CustomerOrderCancelView`, `CustomerOrderPayWalletView` (`menu/views.py`).
+The slice split three ways, and **the ordering of each view's own checks decided the treatment**:
+- `IsCustomer` only where the handler already 401'd *unconditionally, first*
+  (`CustomerWalletChargeApproveView`).
+- **`AllowAny` + `customer_or_none`** where a **feature-flag gate must answer before auth**:
+  `CustomerWalletTransferView` (`WALLET_P2P_ENABLED` → 403 "not enabled") and
+  `CustomerTopUpIntentView` (`PSP_TOPUP_ENABLED` → `{"enabled": False}`, its docstring's "safe to
+  call always" contract). A permission class runs in `initial()`, *ahead of* `post()`, so
+  `IsCustomer` would turn those into 401s. `test_customer_wallet_transfer.py::
+  test_disabled_returns_403_before_anything_else` ("Even with a valid-looking session, the flag
+  gate wins") pins that ordering deliberately — the test caught the intent, not review.
+- **`AllowAny` + `IsOrderOwner`** for the two order views, whose non-owner 403 **is the sign-in
+  prompt** ("Sign in to cancel this order") an anonymous caller is meant to receive, and which
+  check order-existence (404) first. Both had re-implemented the ownership comparison inline.
+
+**Known cost, accepted:** mounting `CustomerSessionAuthentication` makes DRF hydrate the principal
+in `initial()`, so views that previously used only the raw session *id* (transfer, charge-approve)
+now do one extra `Customer` lookup — including on the flag-disabled path, which used to be DB-free
+(that test file's "runs before any DB access" premise is now only true because the tests
+force-authenticate). This is the keystone's uniform cost, already paid by every converted view, and
+it buys the declarative gate. Response ordering is unchanged.
+
+**Bug found and fixed separately** (see the `fix(api): throttled customer requests 500 instead of
+429` commit): `config/exceptions.exception_handler` — the **global** DRF handler — logged
+`user.username` on `Throttled`. `Customer.is_authenticated` is True but `Customer` has no
+`username`, so the handler raised `AttributeError` and a throttled customer/driver request returned
+**500 instead of 429**. Live on `main` since the keystone via `CustomerWalletRedeemVoucherView`
+(+ `VoucherRedeemThrottle`). This is the same family as the multi-role landmine above — **code that
+assumes an authenticated principal is a staff `User`** — and it will keep biting; audit any
+`request.user.<User-only-attr>` on a path a customer can now reach.
+
+**Update (2026-07-17, marketplace-reads slice):** the two marketplace optional-auth reads —
+`MarketplaceMenuView` (COD eligibility → `customer_or_none`) and `MarketplaceOrderStatusView`
+(inline `_owns` → `IsOrderOwner`) — migrated. Exact mirrors of `OrderEligibilityView` /
+`CustomerOrderStatusView` from the earlier optional-auth slice: `CustomerSessionAuthentication` +
+`AllowAny`, personalise/gate on the principal rather than gating access. `MarketplaceOrderStatusView`
+runs its ownership check *inside* a `schema_context(tenant.schema_name)`, which is safe because the
+principal is hydrated in `initial()` (public schema, before the view switches schema) and
+`customer_or_none` / `IsOrderOwner` do no query at call time. `MarketplaceOrderCancelView` right
+after was already converted in an earlier round.
+
+**Update (2026-07-17, place-order slice — the crown-jewel money path):**
+`PlaceOrderView` (`menu/views.py`) and `MarketplacePlaceOrderView` (`accounts/views.py`) migrated.
+The two turned out to be **different shapes**, which is the whole lesson of this slice:
+
+- **`MarketplacePlaceOrderView` is pure optional-auth** — it runs on the public marketplace host,
+  has **no** `request.user`/preview branch, only a session-`customer_id` link. Straight
+  `CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`, like the earlier optional-auth
+  views.
+- **`PlaceOrderView` is genuinely MULTI-ROLE** — it reads `request.user` in *two* places: a
+  staff-preview gate (`can_preview`: `is_superuser`/`is_platform_admin`/`tenant_id`) AND
+  `resolve_prepay_and_wallet`'s staff-exemption (`user.role`). Its auth stack is now
+  **`[SessionAuthentication, CustomerSessionAuthentication]`** — SessionAuthentication first so a
+  staff session still lands a `User` (and keeps its CSRF enforcement, which the customer path never
+  had), CustomerSessionAuthentication second so a customer session lands a `Customer`. A session
+  carries EITHER a staff user OR a `customer_id` (never both, per `_staff_session_conflict`), so
+  exactly one principal resolves.
+
+**The landmine was real and confirmed:** `Customer` has no `is_superuser` field, so the bare
+`user.is_superuser` in `can_preview` would raise `AttributeError → 500` for a customer principal now
+that `Customer.is_authenticated` is True. Hardened by gating on `_is_staff_user` (authenticated AND
+`customer_or_none(request) is None` — i.e. a staff `User`) *before* reading any User-only attribute.
+`resolve_prepay_and_wallet` was already safe (`getattr(user, "role", None)` → None for a Customer →
+`is_staff=False`, same as the old AnonymousUser), so its behavior is unchanged. Regression test
+`test_customer_principal_is_not_a_previewer` pins both halves (no 500; a customer does not get the
+preview bypass). The test churn was significant — five money/order test files
+(`test_place_order_view`, `test_a4_marketplace_cod`, `test_a5_commission`,
+`test_r15b_r16_money_hardening`) had to move from "hand-set `request.session` + patch
+`Customer.objects.get`" to force-authenticating a **real** `Customer` principal (a MagicMock no
+longer passes `customer_or_none`'s class-name check).
+
+**Update (2026-07-17, anon-degrading list views):** `CustomerOrdersView`,
+`CustomerMarketplaceOrdersView`, `CustomerReservationsView` migrated. The register framed these as
+blocked on a frontend check because *flipping to `IsCustomer`* (401 for anonymous) is a real
+behavior change — but that framing conflated two things. The IDENTITY-1 goal (kill the raw
+`session["customer_id"]` read, put the customer on `request.user`) is achieved by the **optional-auth
+pattern** (`CustomerSessionAuthentication` + `AllowAny` + `customer_or_none`) with the `[]`-for-
+anonymous degradation preserved **byte-for-byte** — no 401, no frontend change. Done that way. The
+`IsCustomer` flip (make them 401) stays a **separate, optional** product hardening that would need
+the frontend check; it is NOT required for IDENTITY-1 and is deferred.
+
+**Update (2026-07-17, helpers + the DeliveryRatingView landmine):**
+- **`_resolve_customer_from_request` DELETED** — it was dead code (no view has called it since
+  `CustomerLinkReferralView` stopped in an earlier round; only a direct unit test remained). Removed
+  the function + its `ResolveCustomerFromRequestTests`; that was the last raw session read in a
+  helper.
+- **`_tracking_request_owns_order`** now reads `customer_or_none(request)` instead of the raw
+  session id; `OrderTrackingView` gained `CustomerSessionAuthentication` (stays AllowAny — a
+  non-owner still gets basic tracking, the owner-only driver phone/live position stays gated). Added
+  a direct unit test (the helper was previously only ever `patch`ed, never exercised).
+- **`DeliveryRatingView`** — the multi-role landmine — converted. `role="customer"` and
+  `role="driver"` now read the principal via `customer_or_none`; `role="restaurant"` is **hardened**:
+  it required a staff owner via a bare `user.is_authenticated`, which a `Customer` principal now
+  passes (`Customer.is_authenticated` is True). Guard added: `customer_or_none(request) is not None`
+  → reject (a Customer can't write the owner→driver rating). Kept `[CustomerSessionAuthentication]`
+  only (NOT `+ SessionAuthentication`): the `restaurant` branch was already unreachable in production
+  through this `AllowAny` path (no authenticator loaded the staff user — tests reach it only via
+  `force_authenticate`), so this is behavior-preserving AND closes the landmine. Regression test
+  `test_restaurant_role_rejects_customer_principal` pins it.
+
+**Remaining (deliberately out of scope):** the throttle-helper session reads
+(`VoucherRedeemThrottle` fallback `get_cache_key`, `_voucher_redeem_fail_cache_key`) — these key the
+rate-limit bucket per session and are fine as raw reads; `CustomerSessionView` (the "am I logged in"
+probe — must stay AllowAny + `{customer: null}`); and `CustomerPhoneVerifyView`'s OTP session-link
+branch (it *writes* the session during registration/link, not a customer-principal read). Then the
+optional **customer-CSRF hardening** as a deliberate, separate step. **The customer/driver view sweep
+is complete** — every request-handling view that read `session["customer_id"]` now goes through
+`CustomerSessionAuthentication`; what's left are throttle key-builders, the session probe, and the
+login/OTP writers.
 **Source:** API/auth review.
 
 ### STRUCT-1 — God-files and no `OrderService`
@@ -306,16 +641,29 @@ trivial. Retrofitting after a client is pinned is near-impossible.
 **Effort:** S now / XL if deferred.
 **Source:** API/auth review.
 
-### ASYNC-2 — One generic cron task on a shared 2-worker queue
-**Where:** `run_management_command` (single task, 23-entry allowlist) wired to ~23 beat entries;
-`--concurrency 2`; no `CELERY_TASK_ROUTES`; the sweep task has no retry decorator.
+### ASYNC-2 — One generic cron task on a shared 2-worker queue  ✅ ADDRESSED (2026-07-19)
+**Where:** `run_management_command` (single task, 25-entry allowlist) wired to ~24 beat entries;
+`--concurrency 2`; the sweep task had no retry decorator. (A dedicated `cron` queue *route* had
+already shipped, but pointed at the single generic task; the worker still ran `-Q notifications,default`.)
 **Failure scenario:** A slow `sweep_delivery_jobs` (the dispatch heartbeat) occupies one of the
 two worker slots; because every cron and every push notification share the single default queue,
 customers' "order ready" SMS are starved behind it. And the sweeps carry no retry, so a
-transient DB blip during a tick just drops that tick.
-**Fix:** Replace the generic task with named `@shared_task`s per command; add `task_routes` so
-sweeps go to a `cron` queue and notifications to their own; add retry/backoff to sweeps. The
-task name *becomes* the allowlist, deleting the drift-prone parallel list.
+transient DB blip during a tick just drops that tick. Separately, the generic task accepted a
+**caller-supplied command name off the (unauthenticated) broker**, guarded only by a hand-maintained
+allowlist that could drift from the beat schedule.
+**Resolution:** The generic `run_management_command` + `_MANAGEMENT_COMMAND_ALLOWLIST` are deleted.
+Each of the 24 beat entries now dispatches a dedicated `@shared_task(name="cron.<command>", …)`
+that bakes in its own command name (and `apply=True` for `enforce_subscriptions`) — **the task name
+IS the allowlist**, so no broker message field selects what runs. The route is now `cron.*` → `cron`
+queue (whole namespace, not one task); notifications stay on the default `notifications` queue. All
+24 cron tasks carry `_CRON_RETRY` = `autoretry_for=(OperationalError, InterfaceError)` + bounded
+jittered backoff (`retry_backoff_max=60`, `max_retries=3`) — a transient Postgres blip retries, a
+genuine bug still fails fast (no 3× re-run). **Schedules unchanged.** Deploy: the Coolify worker
+now runs `-Q notifications,cron` (was `-Q notifications,default`, a dead queue) so cron tasks are
+actually consumed once a broker is set; `config/celery.py` documents running a second `-Q cron`
+worker for full slot-isolation. Tests: `tests/test_celery_tasks.py` (named-task dispatch, retry
+config, routing, "every scheduled cron task is registered", "generic runner + allowlist are gone")
++ `tests/test_ops5d_app.py::TestCronCommandTasks`.
 **Effort:** M.
 **Source:** async/realtime review.
 
@@ -406,14 +754,22 @@ backend** (force `schema_context("public")` around session DB writes) or **signe
 (size/invalidation tradeoffs) — a deliberate custom component, not a one-line setting.
 **Effort:** M. **Source:** async/realtime review.
 
-### ASYNC-3 — Realtime and polling both run at full rate
+### ASYNC-3 — Realtime and polling both run at full rate  ✅ ADDRESSED (2026-07-17)
 **Where:** `OrderStatus.vue` polls every 15s even when the WS is live; `OwnerOrders.vue` polls
 15s and doesn't instantiate the (already-built) `useOwnerRealtime` at all.
 **Failure scenario:** You pay for `channels_redis` + WS fan-out **and** keep full-rate polling —
 backend request volume is ~unchanged from poll-only, plus the WS cost. Realtime is additive, not
 substitutive.
-**Fix:** Gate polling on `connectionState !== 'live'` (drop to a 60s safety net when the socket is
-up); wire `useOwnerRealtime` into `OwnerOrders`.
+**Resolution:** both pages now poll via a **self-rescheduling `setTimeout`** (not a fixed
+`setInterval`) that reads the WS `connectionState` each cycle: `'live'` → a **60s safety-net**,
+otherwise the original fast 15s primary rate — so the cadence adapts if the socket flips mid-session.
+`OrderStatus.vue` reuses the `connectionState` its existing `useOrderRealtime` already exposes.
+`OwnerOrders.vue` now instantiates `useOwnerRealtime` (mirroring `OwnerKitchen`'s own `/ws/owner/`
+subscription): `order.*` events push a `doPoll()` — the same refresh the timer runs — and its poll
+gates on that channel's `connectionState`. Behavior is unchanged for users whose socket never
+connects (still 15s + the background-tab skip). Net: 4× fewer HTTP polls when live, for one extra
+(cheap) WS subscription — the intended substitutive tradeoff. All four frontend gates green
+(verify:i18n, lint, build, vitest 519).
 **Effort:** M. **Source:** async/realtime review.
 
 ### ASYNC-4 — `acks_late` without dedupe → duplicate sends  ◑ PARTIALLY ADDRESSED (2026-07-11)
@@ -452,6 +808,299 @@ generate the parity files, or move to a keyed catalog with one file per locale. 
 **Where:** `WaiterPage.vue` 3,722, `CustomerAccount.vue` 3,654, + four more 2,500–3,700 lines.
 **Failure scenario:** Single-writer bottleneck; merge conflicts; hard to test; slow to reason about.
 **Fix:** Split each into feature child-components + composables.
+**Progress (ongoing, extract-and-test pattern):** each slice lifts a self-contained block from a
+mega-page into a `src/components/` child (props-in / events-out) with its own isolated vitest test —
+the parent shrinks and the extracted unit gains real coverage. Landed so far: 3 `CustomerAccount`
+tabs (reservations/reviews/profile), `DriverPage*History`, `OwnerOrdersFilterSheet`,
+`MarketplaceMenu*`, `WaiterTableQRModal`, `AdminConsole{ProvisioningJobs,OnboardingPackage}`, and
+(2026-07-19) two more: `OwnerOrdersCashierModal` (cashier big-total settle modal; parent
+`cashierOrder`/settle logic stays in `OwnerOrders.vue`; 10-case test) and
+`AdminConsoleDryRunImportModal` (dry-run import review modal; the a11y focus-trap moved in with the
+markup, self-contained + lifecycle-tested; parent keeps the settings-import apply call; 13-case
+test), plus `DriverPageRideHistory` (the car-driver ride-history accordion — third sibling to the
+delivery/cashout history children; parent keeps the fetch + lazy-load + car-only gate; 11-case test).
+plus `MarketplaceMenuHeader` (the customer menu page's restaurant header/about section — logo, chips,
+opening-hours disclosure, share-via-emit; 16-case test; the add-to-cart/checkout path was left
+untouched), plus `OwnerReservationsCalendarDetail` (the calendar quick-panel; display-only,
+close-via-emit; 7-case test), plus `AdminConsoleLiveOrdersModal` (the read-only live-orders support
+modal — mobile-card + desktop-table branches, self-contained focus-trap, `liveOrderStatusClass`/
+`formatAge` helpers moved in; parent keeps the fetch + open/close state; −156 lines; 17-case test),
+plus `DriverPagePerformanceStats` (the avg-rating/acceptance/completion stats strip; display-only,
+single `earnings` prop, no emit; parent keeps the `total_deliveries > 0` gate; 9-case test), plus
+`MarketplaceMenuFlashSaleBanner` (display-only; parent keeps the flash_sale gate + countdown timer;
+4-case test), plus `MarketplaceMenuLoyaltyTeaser` (display-only points teaser; parent keeps the
+loyalty-enabled/authenticated gate; 6-case test), plus `OwnerPromotionCard` (a single promotion
+list card — display + four action buttons forwarded as `toggle`/`clone`/`edit`/`delete` emits so the
+parent keeps every CRUD mutation; `promoLabel` a fn prop; `toggling`/`deleting` in-flight props;
+10-case test), plus `OwnerHappyHourRuleCard` (a single happy-hour rule card — display + edit/delete
+emits; `isOvernight`/`dayLabels` fn props; `deleting` in-flight prop; 8-case test), plus
+`OwnerFlashSaleOptInCard` (a single platform flash-sale opt-in card — display + one `toggle` emit;
+`fmtFlashDate` fn prop; `busy` in-flight prop; 6-case test), plus `OwnerKitchenNewOrderBanner` (the
+transient new-order flash banner; single `show` prop, no emit; parent keeps the newOrderFlash timer;
+2-case test), plus — the first **supervised `v-model` drawer** — `OwnerHappyHourFormDrawer` (the
+happy-hour create/edit modal; the `hhForm` reactive object is passed via `v-model:form`
+(`defineModel`) so its field bindings + the day/category toggles mutate the parent's same object,
+lint-clean; validation + save API (`submitHHForm`) + open/edit state stay in the parent behind
+`close`/`submit` emits; a11y focus-trap moved in self-contained; 13-case test incl. write-back,
+number coercion, toggles, focus-trap lifecycle). **This one needs a visual preview before merge to
+main** (form reactivity can't be fully gate-verified). No new i18n keys.
+
+The second supervised `v-model` drawer, **`OwnerPromotionFormDrawer`** (the promotion create/edit
+modal — same `defineModel('form')` pattern; `promoPreview` computed + `toggleDay` moved in; parent
+keeps validation + save + open/edit state; the parent's *last* focus-trap left, so `FOCUSABLE` +
+`nextTick`/`watch`/`onBeforeUnmount` imports were cleaned out of the parent; 14-case test incl.
+name/code-uppercase write-back, type-select re-render, day toggle, promo-preview, focus-trap
+lifecycle). **Also needs a visual preview before merge.** No new i18n keys.
+
+A third supervised `v-model` slice, **`OwnerWinbackCard`** (the win-back automation config card —
+inline, no modal/trap; `winbackForm` via `defineModel`; save-on-change forwarded as a single `save`
+emit; parent keeps the save API + saving/error flags; 8-case test). Needs a visual preview before
+merge. No new i18n keys.
+
+A fourth supervised `v-model` slice, **`OwnerReferralCard`** (the referral-programme config card —
+same inline `defineModel` shape as win-back; `referralForm` via `defineModel`; save-on-change → `save`
+emit; 7-case test). Needs a visual preview before merge. No new i18n keys. **`OwnerPromotions.vue` is
+now fully decomposed** — 7 children extracted (3 list cards + 2 form drawers + 2 config cards); the
+page dropped from ~1291 lines to ~600.
+
+First **entangled-block** slice, **`OwnerOrdersTrackModal`** (the live delivery-tracking modal): it
+looked entangled (a 10s poll + embedded `DeliveryTracker`), but the poll (`_trackPoll`/`fetchTrack`/
+`openTrack`/`closeTrack` + the `trackModal` ref) stays entirely in the parent — the modal is purely
+presentational (props `open`/`orderNumber`/`delivery`/`error`, emits `close`; imports `DeliveryTracker`).
+Because `trackModal` is a deep-reactive ref, `:delivery="trackModal.delivery"` stays reactive across
+poll ticks. `DeliveryTracker` import moved from the parent into the child; 6-case test. **Preview
+concern:** confirm the map/tracker keeps updating live while the modal is open. No new i18n keys.
+
+Second (and hardest) **entangled-block** slice, **`DriverPageActiveJob`** (the 252-line sticky
+active-job hero): the coupling stays in the parent — `activeJob`, the `advance` action (code modal /
+status PATCH / earnings / rating), `busy`, the computeds (`nextAction`/`activeReadyEta`/
+`activeJobNavigateHref`) and `showActiveJobDetail` (+ its auto-expand-on-new-job watcher) all remain in
+`DriverPage.vue`; the child receives them as props and forwards intent via `advance(to)` /
+`fail({reason,note})` / `toggleDetail` emits. Only the fail-picker UI state (`failingOpen`/`failNote`/
+`FAIL_REASONS`) moved in. `statusLabel`/`fmtMoney`/`mapsLink` are fn props. 11-case test.
+**Preview concerns:** (a) the full advance flow assigned→picked_up→delivered (code modal) and job
+clearing; (b) the fail-reason flow; (c) the detail disclosure both on click AND auto-expanding when a
+new job arrives / collapsing when it clears. No new i18n keys.
+
+Third **entangled-block** slice, **`OwnerKitchen86Board`** (the 86-board modal): the complexity stays
+in the parent — the dish data (`eightySixDishes`), the fetch (`fetch86Dishes`), the availability
+toggle API (`toggle86Dish`, mutates `dish.is_available` in place), and the snapshotted sort-order Map
+(`_eightySixOrderKey`) + the `eightySixFiltered` computed all remain in `OwnerKitchen.vue`. The child
+is the presentational shell: it receives the filtered dishes as `:dishes`, round-trips the search via
+`v-model:search` (defineModel), and emits `close` / `toggle(dish)`. Template block replaced via a
+line-range script (87 lines → 10-line child usage); 9-case test. **Preview concerns:** the search
+filter, and that toggling a dish flips available↔sold-out *without the row jumping position mid tap-
+sequence* (the stable-sort snapshot). No new i18n keys.
+
+Fourth **entangled-block** slice, **`OwnerOrders86Board`** (the OwnerOrders 86-board modal — sibling of
+`OwnerKitchen86Board` plus a sold-out count badge + bulk mark-all-unavailable / reset-all actions).
+Same split: the dish data / fetch / toggle API / bulk actions / sort-order Map + `orders86Filtered`
+computed all stay in `OwnerOrders.vue`; the child takes `dishes`/`soldOutCount`/`hasAvailable`/flags as
+props, round-trips search via `v-model:search`, and emits `close`/`toggle`/`markAllUnavailable`/
+`resetAll`. Template block replaced via a line-range script (104 lines → 16-line child usage); 10-case
+test. **Preview concerns:** search filter, stable-sort on toggle, and the two bulk actions. No new
+i18n keys.
+
+Fifth (and hardest) **entangled-block** slice, **`OwnerKitchenOrderCard`** (the kitchen order tile —
+the single most coupled block in the app): headline + badges, the tap-to-ready item list (held/station/
+course chips + combo sub-lines), notes, and the action bar (fire-course / mark-all-ready / advance /
+print). The coupling stays in the parent — the `activeOrders` grid, `prepStation`, the `waiter` store
+(`nextStatus`/`updatingOrderIds`), `firingCourseOrderId`, and every action are emitted; the ~20 display
+helpers are passed as **function props** (which keeps the parent's reactive deps live — e.g. the
+elapsed-time now-ticker read inside `elapsedLabel` is tracked by the card's render, so the timer badge
+still ticks). Extracted via a script that transforms the exact parent block → child (markup can't
+drift), with a grep completeness-check that every helper the child uses is a declared prop; 11-case
+test. **Note:** the ~25-prop interface is wide — a follow-up could push the card-only display helpers
+*into* the child to slim it, but that's a simplification, not behavior. **Preview concerns (highest of
+all):** the full order lifecycle (tap items ready → progress pill → mark-all-ready → advance through
+statuses → card updates), fire-course, the live-ticking elapsed badge, and the prepStation item-dimming.
+No new i18n keys.
+
+First **`WaiterPage.vue`** slice (the most entangled page, 3.7k lines — now being decomposed too):
+**`WaiterShiftPanel`** (the shift-summary + change-password tab panel). The `waiter` store, the summary
+fetch (`loadShiftSummary`) and the password submit (`submitPasswordChange`) stay in the parent; the two
+form values round-trip via `v-model:since` / `v-model:pw-form` (defineModel), and the panel emits
+`refresh` / `submitPassword`. The `activeTab === 'shift'` `v-else-if` gate stays in the parent's tab
+chain. Extracted via the transform-script + grep-completeness pattern; 9-case test. **Preview concern:**
+the shift-summary refresh + the change-password submit. No new i18n keys.
+
+Plus `WaiterOfflineIndicator` (the offline / queue-sync banner — display-only, props online/queueLength;
+4-case test). The New-Order / Append / Charge-wallet modals were already extracted components.
+
+Plus `WaiterOrderItem` — the **highest-value DRY win** of the campaign. Investigation showed the waiter
+"order card" is really **4 divergent variants** (not one card), so a shared full-card component isn't
+safe blind; but the item `<li>` inside them was byte-identical (bar comments) across **3 of the 4**
+loops (table-grouped / non-table / flat-list). Extracted one `WaiterOrderItem` (tight interface: `item`
++ 8 order-derived boolean/held props + `toggleReady`/`comp`/`void` emits) and used it in all three,
+DRYing ~200 lines of duplicated markup. Crucially, the combo `<template>` siblings were **left in place**
+— they read `item` from the `<WaiterOrderItem v-for>` scope exactly as they did from the old `<li v-for>`,
+so combo scoping is byte-preserved. 11-case test. **Preview concern:** the tap-to-ready / comp / void
+affordances + combo sub-lines still render correctly in all three card contexts. No new i18n keys.
+
+Plus `WaiterStatusTabBar` (the status-tab bar + action toolbar — status tabs + recent/shift, sound
+toggle, clock-in/out, charge, new-order, floor/list view). `activeTab`/`soundOn`/`floorView` round-trip
+via `v-model`; `tabs`/`currentShift`/`clockBusy`/`shiftElapsed`/`formatDateTime` are props; `selectShift`
+(the shift tab, since the parent's openShiftSummary also loads) / `clock('in'|'out')` / `charge` /
+`newOrder` (parent keeps the clock-in guard + toast) are emits. The tablist arrow-key focus-nav moved in
+self-contained. 10-case test. **Preview concern:** tab switching + arrow-key nav, the clock/charge/
+new-order actions, and the floor/list toggle. No new i18n keys.
+
+Plus `WaiterFloorTileGrid` (the floor view's tappable table-tile grid — status dot / ready pulse, table
+label + order count, capacity, status label, outstanding + longest-elapsed badge, expand indicator).
+Props `tiles`/`expandedKey` + 4 display-helper fns (`floorTileClass`/`floorDotClass`/
+`tableStatusBadgeClass`/`fmtOrderPrice`); emits `toggle(tile)`. The floor data + expanded-tile state +
+actions stay in the parent. 7-case test. **Preview concern:** tiles render + tap expands/collapses.
+No new i18n keys.
+
+Finally, the **order-card variant unification** — `WaiterOrderCard`. The waiter "order card" had existed
+as **three near-identical ~150-line copies** (table-grouped / non-table / flat-list) that differed by
+exactly two features: the non-table variant shows an elapsed-time badge (`showElapsed`), and the
+grouped/non-table variants render combo sub-lines while the flat list does not (`showCombos`). Both are
+gated (`v-if`/`v-else`) so each variant's DOM is preserved; one component now backs all three loops
+(DRYing ~450 lines). It embeds `WaiterOrderItem` and re-emits its events; the parent keeps the order
+data / waiter store / every action / all ~18 display helpers (function props). Wide interface
+(~30 props / 9 emits) — the honest cost of the card's coupling, but used 3×. Built via transform-script
++ grep-completeness; the combo sub-lines use a wrapping `<template v-for>` so `item` scopes correctly.
+17-case test. **HIGHEST preview priority of the whole campaign:** verify all three card contexts render
+identically — the header/badges/status chip, the item list, combo sub-lines under combo items, the
+elapsed badge (non-table only), and every action-footer button. The stripped floor-tile 4th variant was
+left inline (too different). No new i18n keys.
+
+Finally, the first **`Cart.vue`** slice (the money/checkout page — approached maximally conservatively):
+**`CartHeader`** (the page header — kicker/title + item-count/plan/table chips + clear-cart button).
+Display-only: the count/plan/table labels are props (derived in the parent from the cart store), and the
+clear button emits `clear` so the parent keeps `clearCart`. Nothing here touches pricing / payment /
+checkout — those (the entire right-side order panel) stay in the parent. 5-case test. No new i18n keys.
+
+Plus `CartLineItem` (a single cart line-item card — name/note/options, price-each, qty stepper, line
+subtotal, edit/remove). Display-only: it **mutates nothing** — the cart-store mutations stay in the
+parent (`cart.decrement`/`increment`/`remove` + `openEditLine`), forwarded via `decrement`/`increment`/
+`remove`/`edit` emits; `formatPrice` a fn prop, `editable` (isLineEditable) a prop. 5-case test. No new
+i18n keys.
+
+Plus the three small Cart state banners — `CartClosedBanner`, `CartBrowseOnlyBanner`, `CartEmptyState`
+(pure presentational: the restaurant-closed / browse-only-plan notices and the empty-cart message +
+menu link). Each keeps its `v-if`/`v-else-if` on the parent component tag so the browse/empty/main chain
+is preserved; no props, no state. 3 tests. No new i18n keys.
+
+Plus `CartOrderSummary` — the checkout panel's **order-summary breakdown** (subtotal / loyalty discount /
+delivery-fee [distance/pending/free/flat] / tip / wallet-credit rows, the grand total, and the pre-order
+ETA). DISPLAY ONLY: it computes nothing and mutates nothing — every pricing value is computed in the
+parent (Cart.vue keeps the whole pricing + place-order flow) and passed as a prop (~14 value props +
+`formatPrice` fn). The place-order CTA / payment flow are untouched. 7-case test. No new i18n keys.
+
+Plus `CartTotalHeader` — the checkout panel's compact total header (the big grand-total figure +
+item-count label + fulfillment caption). Display-only, parent-computed props (`grandTotal`/`countLabel`/
+`fulfillmentType` + `formatPrice` fn). 3-case test. No new i18n keys.
+
+**Cart.vue's presentational chrome + both its checkout DISPLAY blocks are now decomposed** (header,
+line-item card, 3 state banners, the total header, the order-summary breakdown); only the **place-order
+CTA + payment / pricing-calculation logic** in the checkout column remains — deliberately held for a
+preview-driven session.
+
+Plus `CartCheckoutErrors` — the checkout error alerts (place-order / checkout / handoff), DRY'd to a
+`v-for` over the non-empty messages. Display-only, 3 string props, no logic. 3-case test. No new i18n keys.
+
+Plus the three checkout **CTA buttons** — `CartPlaceOrderButton` (primary place-order),
+`CartCheckoutButton` (proceed-to-checkout / PSP) and `CartWhatsAppButton` (send-via-WhatsApp, a `variant`
+prop DRYs its prominent-outline + compact-link styles into one component). **DUMB buttons only:** each
+takes the parent's `busy`/`disabled`/`label` values **verbatim** as props and forwards the tap via an
+emit (`place`/`checkout`/`whatsapp`) that the parent binds to its existing handler
+(`placeInAppOrder`/`startCheckout`/`openWhatsApp`). The full 7-term place-order disabled condition, the
+status-aware label ternaries and all payment/order logic stay in `Cart.vue`; the buttons own only the
+busy-spinner-vs-icon (and, for WhatsApp, the variant classes + icon size). Done in a **preview-driven,
+user-reviewed** session — not autonomously. 3 tests (~4 cases each). No new i18n keys.
+
+**Line held at the checkout LOGIC (not the buttons):** the CTA *buttons* are now dumb components (above),
+but the **payment/order-placement logic** — `placeInAppOrder`, `startCheckout`, `openWhatsApp`, the
+disabled/label expressions, wallet/prepay checks, the fulfillment/tip controls — stays entirely in
+`Cart.vue`. That logic is the app's money path and was **not** extracted; the button componentization was
+done under human review + browser preview, not by an autonomous slice.
+
+Plus the first **WaiterPage.vue** slices (the held, most-entangled page, now under supervised
+extraction): `WaiterFirstRunBanner` + `WaiterInstallBanner` (the two dismissible onboarding banners at the
+top — display + emit, the parent keeps `useInstallPrompt` + the seen/dismissed state and the mounting
+v-ifs), `WaiterFloorLegend` (the static floor-status `<details>` legend — no props/state/emits), and the
+two floor-view alert banners `WaiterIdleTableAlert` (idle ≥20 min — count + labels, dismiss emit; parent
+keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `WaiterStaleTablesWarning`
+(static poll-failed warning). All non-money, non-order chrome; the WaiterPage order/settle logic is
+untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
+`t()` in the idle-alert label.)
+
+Plus `MarketplaceOptionGroupSheet` — the dish option-group selection bottom sheet (~160 lines), lifted
+from `MarketplaceMenuPage.vue` as a **presentational** child. Zero selection logic moved: the parent keeps
+`panelSelections`, toggle/valid/unit-price, and the add-to-cart confirm; the two selection helpers
+(`isOptionSelected` / `isGroupAtMax`) are **function props** read during the child's render (so a toggle
+re-renders it, same mechanism as `WaiterOrderCard`'s helper props). Option taps / confirm / close are
+emits. Initial-focus-on-open moved in self-contained. Non-money (configures a cart item; price is
+display-only until checkout). 6 test cases.
+
+Plus `DriverDeliveryCodeModal` — the proof-of-delivery code modal (enter the 6-digit PIN, or fall back to
+a proof photo), lifted from `DriverPage.vue` as a self-contained drawer. It owns the modal + focus trap +
+the whole proof-photo UI (camera file input, object-URL thumbnail lifecycle, file-input reset). The
+critical delivery-completion path is **untouched** — `submitDeliveryCode` still reads `codeInput` +
+`proofPhotoFile` and writes `codeError` verbatim (code / error / file are two-way models); open /
+submitting are props; close / submit are emits. The old explicit `codeFirstRef.focus()` on open was
+dropped (the trap focuses the first field anyway). Non-money. 9 test cases (a browser preview of both
+proof paths is still worth doing — unit tests can't drive real camera capture / multipart upload).
+
+Plus `DriverRateCustomerModal` — the driver → customer post-delivery rating modal, lifted from
+`DriverPage.vue` as a fully self-contained drawer: it owns the whole modal + its focus trap via the shared
+`useFocusTrap` composable (keyed on `job`, same signal as before; the parent's `ratingDialogFirstFocus` +
+that `useFocusTrap` call were removed). score + note are two-way `defineModel`s; `job` + `busy` are props;
+skip/submit are emits. Non-money (private reputation rating). 7 test cases.
+
+Plus `AdminConsoleDeliveryPricingDrawer` — the tenant delivery-pricing modal (delivery fee / commission /
+radius config, 9 fields), lifted from `AdminConsole.vue` as a **fully self-contained drawer** matching the
+`OwnerHappyHourFormDrawer` pattern: it owns the whole modal (Teleport / Transition / backdrop / dialog)
+**and** its focus trap (moved in self-contained, replicated exactly — the parent's `deliveryDialogRef` /
+`FOCUSABLE_DL` / trap / watch were removed). `deliveryForm` is a `v-model:form` `defineModel` (nine fields
+mutated in place on the parent's object, lint-clean); open/tenant/loading/saving/error are props; the
+parent keeps the fetch, clamp/validation, and save. Non-money (pricing **config**, moves no funds). 8 test
+cases. This begins the **remaining form-drawer pass on the other pages** (post-WaiterPage).
+
+Plus `WaiterSettleSheet` — the inner body of the settle sheet (cash-received + change calc, split-by-seat,
+quick-split accordion, cancel), the last and most-bound WaiterPage block and a **money path**. Same
+fragment-child pattern as the rating form (no wrapper root → the panel's `space-y-3` + the parent focus
+trap via `settleDialogRef` stay intact). The child owns **zero payment logic**: `payCash` / `payWallet` /
+`payCashForSeat` / `payWalletForSeat` / `loadSeatGroups` all stay in the parent and are invoked via emits;
+`settleOutstanding` / `fmtOrderPrice` / `seatGroupLabel` / `cashChange` come in as props; the four form
+fields (`cashReceived` / `splitAmount` / `splitBySeatMode` / `splitSectionOpen`) are two-way `defineModel`s
+so the parent's refs — and its idempotency-key minting, seat-split fetch, and cash-clear watch — read the
+exact same values. Reviewed + previewed before commit. Net −141 lines in the parent; 11 test cases.
+**WaiterPage is now fully decomposed.**
+
+Plus `WaiterCustomerRatingForm` — the inner form body of the customer trust-rating modal (header identity
+line + 5-star picker + note input + cancel/submit). Deliberately a **fragment** child (no wrapper root)
+so its blocks stay direct children of the parent's `role="dialog"` panel — the panel's `space-y-3` and,
+crucially, the parent-owned **focus trap** (which queries that dialog via `ratingDialogRef` + the shared
+`FOCUSABLE_BILL` selector, used by the settle/bill dialogs too) are untouched; that's why only the body
+was lifted, not the whole modal. score + note are two-way `defineModel`s (bound to the parent's refs, so
+`submitCustomerRating` reads them verbatim); the shell (Teleport / Transition / backdrop / focus trap /
+submit handler) stays in the parent. Non-money (server-only reputation rating). 7 test cases.
+
+Plus a **DRY unification** (not a new component): the expanded floor-tile view rendered its order cards
+from a **138-line inline copy** of the order-card markup — a drifted 4th duplicate — which was replaced
+with the canonical `<WaiterOrderCard>` bound exactly like the table-grouped list (`show-elapsed=false`,
+`show-combos=true`). Net **−95 lines**, bundle 4131→4122 KiB. Behaviour-preserving for the shared parts
+(header / items / notes / total / full action footer, all via the emits the list already uses); it also
+**fixes the drift** by making the expanded tile show what the list already shows for the same table
+orders — combo sub-lines, `section_name`, and the partial-payment "paid so far / left" line. Reviewed +
+previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
+`WaiterOrderItem` are already covered.
+
+**Tally: 47 slices across all eight mega-pages, ~3780 lines lifted / DRY'd into 53 tested child
+components; frontend vitest 527 → 881.** **WaiterPage.vue is now fully decomposed** — all display chrome
+lifted, the expanded floor-tile card DRY'd onto `WaiterOrderCard`, and both its modals (customer-rating,
+settle) split into fragment form-bodies with the shells + focus traps + all money/order handlers kept in
+the parent. Every mega-page is decomposed; the Cart money-path page is fully
+componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
+lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
+safe display-only chrome (onboarding banners + floor legend) is now lifted too; what remains there is
+progressively more entangled (the expanded floor-tile block that duplicates the order-card markup, and
+the **settle modal** which is money-path) and wants supervised, previewable slices. What remains overall
+is the preview-pending components' visual QA and the merge to main. Money/order *logic* (driver cash-out,
+customer cart/checkout, waiter settle) is explicitly left in the parents.
 **Effort:** L. **Source:** frontend review.
 
 ### FE-3 — Locale catalogs block first paint  ◑ MOSTLY SHIPPED (verified 2026-07-11)
@@ -462,10 +1111,14 @@ generate the parity files, or move to a keyed catalog with one file per locale. 
 ("perf(R24): code-split i18n locale catalogs out of the initial bundle"). `src/i18n/localeLoader.js`
 now dynamically imports each locale (`messages-{en,fr,ar}.js`) as its own Vite chunk (~69–82KB gz
 each, down from one always-loaded ~800KB file), and `src/lib/sentry.js` fires a non-awaited dynamic
-`import('@sentry/vue')` before mount (its own async chunk). **Residual (small):** `main.js` still
-`await`s the active locale before `app.mount()`, so an AR first paint blocks on ~82KB gz; and
-`localeLoader.js` has no test. Namespace/route splitting (the original Fix) trades a
-flash-of-raw-keys risk → leave for a deliberate later slice.
+`import('@sentry/vue')` before mount (its own async chunk). **Residual update (2026-07-17):**
+`localeLoader.js` now has a test — `src/i18n/__tests__/localeLoader.test.js` (8 cases, mocks the 3
+dynamically-imported catalog chunks): EN/FR load, the AR = EN-base + AR-overrides merge with
+corrupted-value filtering, unknown-locale no-op, concurrent-load dedup (chunk fetched once),
+`getMessages` EN fallback, and the retry-eviction of a failed in-flight load. The only remaining
+residual is the deliberate one: `main.js` still `await`s the active locale before `app.mount()` (an
+AR first paint blocks on ~82KB gz) — and namespace/route splitting (the original Fix) trades a
+flash-of-raw-keys risk, so both are left for a deliberate later slice.
 **Effort:** S–M. **Source:** frontend review.
 
 ### SER-1 — Writes bypass serializers  ◑ PRIMITIVE SHIPPED (2026-07-12)

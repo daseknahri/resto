@@ -218,258 +218,22 @@
            below. The single dominant next-action button is here; all
            earnings/settings chrome is collapsed below the fold.
            ═══════════════════════════════════════════════════════════ -->
-      <div
+      <!-- ── ACTIVE JOB HERO (sticky) — RISK FE-2 ── -->
+      <DriverPageActiveJob
         v-if="activeJob"
-        class="sticky top-0 z-30 ui-panel p-0 overflow-hidden ui-reveal border-emerald-600/40"
-      >
-        <!-- Hero header: status pill + payout always visible at a glance -->
-        <div class="flex items-center justify-between gap-2 border-b border-slate-700/40 bg-slate-950/90 px-4 py-3 backdrop-blur-sm">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="ui-status-pill shrink-0">
-              {{ statusLabel(activeJob.status, activeJob.business_type) }}
-            </span>
-            <p v-if="activeJob.restaurant_name" class="truncate text-sm font-semibold text-slate-100">{{ activeJob.restaurant_name }}</p>
-            <p v-else class="text-xs text-slate-500">{{ t('driver.order') }} #{{ activeJob.order_number }}</p>
-          </div>
-          <span class="shrink-0 text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(activeJob.driver_payout) }}</span>
-        </div>
-
-        <div class="p-4 space-y-3 bg-slate-950/60">
-          <!-- Order meta: distance + items count -->
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-            <p class="text-[11px] text-slate-500 shrink-0">{{ t('driver.order') }} #{{ activeJob.order_number }}</p>
-            <span v-if="activeJob.distance_km != null" class="inline-flex items-center gap-1">
-              <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: activeJob.distance_km }) }}
-            </span>
-            <span v-if="activeJob.items_count">{{ t('driver.itemsCount', { n: activeJob.items_count }) }}</span>
-          </div>
-
-          <!-- Active address: one always-visible truncated line for the relevant destination.
-               Before pickup → pickup address (amber); after pickup → dropoff address (emerald). -->
-          <p
-            v-if="activeJob.status === 'picked_up' ? (activeJob.delivery_address || activeJob.delivery_lat) : (activeJob.pickup_address || activeJob.pickup_lat)"
-            class="flex items-center gap-1.5 truncate text-sm"
-            :title="activeJob.status === 'picked_up' ? activeJob.delivery_address : activeJob.pickup_address"
-          >
-            <span
-              class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
-              :class="activeJob.status === 'picked_up' ? 'bg-emerald-500/15' : 'bg-amber-500/15'"
-              aria-hidden="true"
-            >
-              <AppIcon name="location" class="h-3 w-3" :class="activeJob.status === 'picked_up' ? 'text-emerald-300' : 'text-amber-300'" aria-hidden="true" />
-            </span>
-            <span class="truncate" :class="activeJob.status === 'picked_up' ? 'text-emerald-200' : 'text-amber-200'">
-              {{ activeJob.status === 'picked_up' ? (activeJob.delivery_address || t('driver.dropoff')) : (activeJob.pickup_address || t('driver.pickup')) }}
-            </span>
-          </p>
-
-          <!-- Food-ready ETA (owner's prep estimate) — when to be at the restaurant -->
-          <div
-            v-if="activeReadyEta"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-900/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
-          >
-            <span aria-hidden="true">⏱</span>
-            <span>{{ t('driver.foodReady', { time: activeReadyEta.clock }) }}</span>
-            <span v-if="activeReadyEta.mins > 0" class="font-normal text-emerald-400/70">· {{ t('driver.foodReadyIn', { minutes: activeReadyEta.mins }) }}</span>
-          </div>
-
-          <!-- Cash to collect (COD) vs already paid — the driver must know -->
-          <div
-            v-if="activeJob.collect_cash"
-            class="flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5"
-          >
-            <span class="text-xs font-semibold text-amber-200">{{ t('driver.collectCash') }}</span>
-            <span class="text-lg font-bold tabular-nums text-amber-200">{{ fmtMoney(activeJob.order_total) }}</span>
-          </div>
-          <div
-            v-else-if="activeJob.order_total"
-            class="flex items-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-900/15 px-3 py-2.5 text-xs font-semibold text-emerald-300"
-          >
-            <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />{{ t('driver.prepaid', { amount: fmtMoney(activeJob.order_total) }) }}
-          </div>
-
-          <!-- ── PRIMARY HERO ACTIONS ── -->
-          <!-- Reminder: confirm delivery with the customer's code -->
-          <div
-            v-if="nextAction && nextAction.to === 'delivered'"
-            class="flex items-start gap-1.5 rounded-xl border border-sky-700/30 bg-sky-900/15 px-3 py-2.5 text-xs text-sky-300"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            <AppIcon name="info" class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>{{ t('driver.codeReminder') }}</span>
-          </div>
-
-          <!-- BIG advance button — the ONE next action, 56px min for propped phone -->
-          <button
-            v-if="nextAction"
-            class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-base font-bold"
-            style="min-height: 56px"
-            :disabled="busy"
-            :aria-busy="busy"
-            @click="advance(nextAction.to)"
-          >
-            <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ busy ? t('common.loading') : nextAction.label }}
-          </button>
-
-          <!-- Correct-leg Navigate link — pinned below the advance button.
-               Before pickup → link to pickup; after pickup → link to dropoff. -->
-          <a
-            v-if="activeJobNavigateHref"
-            :href="activeJobNavigateHref"
-            target="_blank" rel="noopener"
-            class="ui-touch-target flex w-full items-center justify-center gap-2 rounded-xl border border-slate-600/60 bg-slate-900/50 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500/80 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-            style="min-height: 48px"
-            :aria-label="t('driver.navigateTo')"
-          >
-            <AppIcon name="location" class="h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
-            {{ t('driver.navigateTo') }}
-          </a>
-
-          <!-- Fail / can't complete -->
-          <button
-            v-if="!failingOpen"
-            class="ui-touch-target w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-            :disabled="busy"
-            @click="openFail"
-          >
-            {{ t('driver.actionFailed') }}
-          </button>
-          <!-- Failure-reason picker -->
-          <div v-else class="space-y-2 rounded-xl border border-red-500/40 bg-red-900/10 p-3">
-            <p class="text-xs font-semibold text-red-200">{{ t('driver.failReasonTitle') }}</p>
-            <button
-              v-for="r in FAIL_REASONS"
-              :key="r"
-              class="ui-touch-target w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-start text-sm text-slate-200 hover:border-slate-500 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              :disabled="busy"
-              @click="submitFail(r)"
-            >
-              {{ t(`driver.failReason_${r}`) }}
-            </button>
-            <input
-              v-model="failNote"
-              maxlength="500"
-              :placeholder="t('driver.failNotePlaceholder')"
-              :aria-label="t('driver.failNotePlaceholder')"
-              class="ui-input"
-            />
-            <button
-              class="ui-touch-target w-full py-1 text-xs text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              :disabled="busy"
-              @click="failingOpen = false"
-            >
-              {{ t('driver.failCancel') }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Supporting detail (expandable) — below the fold under the hero -->
-        <div class="border-t border-slate-700/30">
-          <button
-            class="flex w-full items-center justify-between gap-2 px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-            :aria-expanded="showActiveJobDetail"
-            aria-controls="active-job-detail-panel"
-            @click="showActiveJobDetail = !showActiveJobDetail"
-          >
-            <p class="text-xs font-medium text-slate-400">{{ t('driver.activeTitle') }}</p>
-            <AppIcon :name="showActiveJobDetail ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-          </button>
-          <div id="active-job-detail-panel">
-            <template v-if="showActiveJobDetail">
-              <div class="px-4 pb-4 space-y-3">
-                <!-- Pickup / dropoff address links -->
-                <div class="space-y-2">
-                  <a
-                    v-if="activeJob.pickup_address || activeJob.pickup_lat"
-                    :href="mapsLink(activeJob.pickup_lat, activeJob.pickup_lng, activeJob.pickup_address)"
-                    target="_blank" rel="noopener"
-                    class="flex items-center gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-3 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                    :aria-label="t('driver.pickup')"
-                  >
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
-                      <AppIcon name="location" class="h-4 w-4 text-amber-300" aria-hidden="true" />
-                    </span>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.pickup') }}</p>
-                      <p class="truncate text-sm text-slate-200" :title="activeJob.pickup_address || undefined">{{ activeJob.pickup_address || t('driver.openMaps') }}</p>
-                    </div>
-                    <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
-                  </a>
-                  <a
-                    v-if="activeJob.delivery_address || activeJob.delivery_lat"
-                    :href="mapsLink(activeJob.delivery_lat, activeJob.delivery_lng, activeJob.delivery_address)"
-                    target="_blank" rel="noopener"
-                    class="flex items-center gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-3 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                    :aria-label="t('driver.dropoff')"
-                  >
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
-                      <AppIcon name="location" class="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                    </span>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.dropoff') }}</p>
-                      <p class="truncate text-sm text-slate-200" :title="activeJob.delivery_address || undefined">{{ activeJob.delivery_address || t('driver.openMaps') }}</p>
-                    </div>
-                    <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
-                  </a>
-
-                  <!-- Call the customer (only the assigned driver sees the phone) -->
-                  <a
-                    v-if="activeJob.customer_phone"
-                    :href="`tel:${activeJob.customer_phone}`"
-                    class="flex items-center gap-3 rounded-xl border border-sky-700/50 bg-sky-900/20 px-3 py-3 transition-colors hover:border-sky-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-                    :aria-label="`${t('driver.callCustomer')}: ${activeJob.customer_name || activeJob.customer_phone}`"
-                  >
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15">
-                      <AppIcon name="phone" class="h-4 w-4 text-sky-300" aria-hidden="true" />
-                    </span>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.callCustomer') }}</p>
-                      <p class="truncate text-sm text-slate-200" :title="activeJob.customer_name || activeJob.customer_phone || undefined">{{ activeJob.customer_name || activeJob.customer_phone }}</p>
-                    </div>
-                    <span class="shrink-0 text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
-                  </a>
-                  <!-- Call the restaurant / merchant — lets the driver check if food is ready -->
-                  <a
-                    v-if="activeJob.restaurant_phone"
-                    :href="`tel:${activeJob.restaurant_phone}`"
-                    class="flex items-center gap-3 rounded-xl border border-amber-700/50 bg-amber-900/15 px-3 py-3 transition-colors hover:border-amber-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
-                    :aria-label="`${t('driver.callRestaurant')}: ${activeJob.restaurant_name || activeJob.restaurant_phone}`"
-                  >
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
-                      <AppIcon name="phone" class="h-4 w-4 text-amber-300" aria-hidden="true" />
-                    </span>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.callRestaurant') }}</p>
-                      <p class="truncate text-sm text-slate-200" :title="activeJob.restaurant_name || activeJob.restaurant_phone || undefined">{{ activeJob.restaurant_name || activeJob.restaurant_phone }}</p>
-                    </div>
-                    <span class="shrink-0 text-xs font-semibold text-amber-300">{{ t('driver.call') }}</span>
-                  </a>
-                </div>
-
-                <!-- What's in the order -->
-                <div v-if="activeJob.items && activeJob.items.length" class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-3">
-                  <p class="mb-2 text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.itemsTitle') }}</p>
-                  <ul class="space-y-1">
-                    <li v-for="(it, idx) in activeJob.items" :key="idx" class="flex justify-between gap-2 text-sm text-slate-300">
-                      <span class="truncate" :title="it.name">{{ it.name }}</span>
-                      <span class="shrink-0 tabular-nums text-slate-400">×{{ it.qty }}</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <!-- Payout row -->
-                <div class="flex items-center justify-between rounded-xl border border-emerald-700/30 bg-emerald-900/10 px-3 py-2.5">
-                  <span class="text-xs font-medium text-slate-400">{{ t('driver.payout') }}</span>
-                  <span class="text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(activeJob.driver_payout) }}</span>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
+        :job="activeJob"
+        :next-action="nextAction"
+        :ready-eta="activeReadyEta"
+        :navigate-href="activeJobNavigateHref"
+        :busy="busy"
+        :detail-open="showActiveJobDetail"
+        :status-label="statusLabel"
+        :fmt-money="fmtMoney"
+        :maps-link="mapsLink"
+        @advance="advance"
+        @fail="onActiveJobFail"
+        @toggle-detail="showActiveJobDetail = !showActiveJobDetail"
+      />
 
       <!-- ── Online toggle — high prominence when NO active job ── -->
       <div
@@ -620,30 +384,10 @@
       </div>
 
       <!-- ── Driver performance stats strip ── -->
-      <div
+      <DriverPagePerformanceStats
         v-if="earnings && earnings.total_deliveries > 0"
-        class="ui-panel grid grid-cols-3 divide-x divide-slate-700/40 p-0 overflow-hidden ui-reveal"
-        :aria-label="t('driver.statsCard')"
-      >
-        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
-          <p class="ui-stat-label">{{ t('driver.avgRating') }}</p>
-          <p class="mt-1 text-base font-bold text-amber-300">
-            {{ earnings.avg_rating != null ? `★ ${earnings.avg_rating}` : '—' }}
-          </p>
-        </div>
-        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
-          <p class="ui-stat-label">{{ t('driver.acceptanceRate') }}</p>
-          <p class="mt-1 text-base font-bold tabular-nums text-slate-200">
-            {{ earnings.acceptance_rate != null ? `${earnings.acceptance_rate}%` : '—' }}
-          </p>
-        </div>
-        <div class="flex flex-col items-center justify-center px-3 py-3.5 text-center">
-          <p class="ui-stat-label">{{ t('driver.completionRate') }}</p>
-          <p class="mt-1 text-base font-bold tabular-nums text-emerald-400">
-            {{ earnings.completion_rate != null ? `${earnings.completion_rate}%` : '—' }}
-          </p>
-        </div>
-      </div>
+        :earnings="earnings"
+      />
 
       <!-- ── Driver settings accordion (vehicle picker + docs) ──
            Collapsed by default; rarely-changed controls out of the way. -->
@@ -1164,110 +908,27 @@
       />
 
       <!-- Cash-out history (resolved requests: paid / cancelled / expired) -->
-      <div class="ui-panel p-4 space-y-3 ui-reveal">
-        <button
-          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          :aria-expanded="showCashoutHistory"
-          aria-controls="driver-cashout-history-panel"
-          @click="toggleCashoutHistory"
-        >
-          <p class="text-sm font-semibold text-slate-200">{{ t('driver.cashOutHistoryTitle') }}</p>
-          <AppIcon :name="showCashoutHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-        </button>
-        <div id="driver-cashout-history-panel">
-          <template v-if="showCashoutHistory">
-            <div v-if="loadingCashoutHistory && !cashoutHistory.length" class="space-y-2" aria-busy="true">
-              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
-            </div>
-            <div v-else-if="!cashoutHistory.length" class="ui-empty-state text-center py-4 space-y-1">
-              <p class="text-sm font-semibold text-slate-100">{{ t('driver.cashOutHistoryEmpty') }}</p>
-            </div>
-            <ul v-else class="space-y-2">
-              <li
-                v-for="(c, index) in cashoutHistory"
-                :key="c.id"
-                class="ui-reveal flex items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
-                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm text-slate-200">{{ c.settled_by || t('driver.cashOutHistoryUnsettled') }}</p>
-                  <p class="text-[11px] text-slate-500">{{ fmtDate(c.resolved_at || c.created_at) }}</p>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <span
-                    class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                    :class="{
-                      'bg-emerald-500/15 text-emerald-300': c.status === 'paid',
-                      'bg-slate-700/60 text-slate-400': c.status === 'cancelled',
-                      'bg-red-500/15 text-red-300': c.status === 'expired',
-                    }"
-                  >{{ t(`driver.cashOutStatus_${c.status}`) }}</span>
-                  <span class="text-sm font-semibold tabular-nums" :class="c.status === 'paid' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(c.amount) }}</span>
-                </div>
-              </li>
-            </ul>
-            <button
-              v-if="cashoutHistoryHasMore"
-              :disabled="loadingCashoutHistory"
-              class="mt-2 w-full rounded-xl border border-slate-700/50 bg-slate-800/50 py-2.5 text-sm font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-40"
-              @click="loadMoreCashoutHistory"
-            >{{ loadingCashoutHistory ? t('common.loading') : t('driver.historyLoadMore') }}</button>
-          </template>
-        </div>
-      </div>
+      <DriverPageCashoutHistory
+        :show="showCashoutHistory"
+        :loading="loadingCashoutHistory"
+        :items="cashoutHistory"
+        :has-more="cashoutHistoryHasMore"
+        :fmt-date="fmtDate"
+        :fmt-money="fmtMoney"
+        @toggle="toggleCashoutHistory"
+        @load-more="loadMoreCashoutHistory"
+      />
 
       <!-- Ride history (car drivers only) -->
-      <div v-if="driverVehicleType === 'car'" class="ui-panel p-4 space-y-3 ui-reveal">
-        <button
-          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          :aria-expanded="showRideHistory"
-          aria-controls="driver-ride-history-panel"
-          @click="toggleRideHistory"
-        >
-          <p class="text-sm font-semibold text-slate-200">{{ t('driverRides.historyTitle') }}</p>
-          <AppIcon :name="showRideHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-        </button>
-        <div id="driver-ride-history-panel">
-          <template v-if="showRideHistory">
-            <div v-if="loadingRideHistory && !rideHistory.length" class="space-y-2" aria-busy="true">
-              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
-            </div>
-            <div v-else-if="!rideHistory.length" class="ui-empty-state text-center py-4 space-y-1">
-              <p class="text-sm font-semibold text-slate-100">{{ t('driverRides.historyEmpty') }}</p>
-            </div>
-            <ul v-else class="space-y-2">
-              <li
-                v-for="(r, index) in rideHistory"
-                :key="r.id"
-                class="ui-reveal rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 space-y-1"
-                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <p class="truncate text-sm text-slate-200" :title="r.dropoff_address"><span v-if="r.kind === 'package'" aria-hidden="true">📦 </span>{{ r.dropoff_address }}</p>
-                  <div class="flex shrink-0 items-center gap-1.5">
-                    <span
-                      v-if="r.payment_method === 'cash'"
-                      class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300"
-                    >{{ t('driverRides.collectCash', { amount: fmtMoney(r.fare) }) }}</span>
-                    <span
-                      v-else
-                      class="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
-                    >{{ t('driverRides.paidWallet') }}</span>
-                    <span class="text-sm font-bold tabular-nums text-emerald-300">{{ fmtMoney(r.fare) }}</span>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3 text-[11px] text-slate-500">
-                  <span>{{ fmtDate(r.completed_at) }}</span>
-                  <span v-if="r.driver_rider_rating != null" class="flex items-center gap-0.5 text-amber-400">
-                    <span aria-hidden="true">★</span>
-                    <span>{{ r.driver_rider_rating }}</span>
-                  </span>
-                </div>
-              </li>
-            </ul>
-          </template>
-        </div>
-      </div>
+      <DriverPageRideHistory
+        v-if="driverVehicleType === 'car'"
+        :show="showRideHistory"
+        :loading="loadingRideHistory"
+        :items="rideHistory"
+        :fmt-date="fmtDate"
+        :fmt-money="fmtMoney"
+        @toggle="toggleRideHistory"
+      />
     </template>
   </div>
 
@@ -1372,142 +1033,26 @@
     </div>
   </Teleport>
 
-  <!-- Rate the customer after delivery (driver → customer, private) -->
-  <Teleport to="body">
-    <div
-      v-if="ratingJob"
-      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
-      @click.self="ratingJob = null"
-      @keydown.esc="ratingJob = null"
-    >
-      <div ref="ratingDialogFirstFocus" class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" role="dialog" aria-modal="true" :aria-label="t('driver.rateCustomerTitle')" tabindex="-1">
-        <div>
-          <p class="text-sm font-semibold text-white">{{ t('driver.rateCustomerTitle') }}</p>
-          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.order') }} #{{ ratingJob.order_number }}</p>
-          <p class="mt-1 text-[11px] text-slate-500">{{ t('driver.rateCustomerHint') }}</p>
-        </div>
-        <div class="flex items-center gap-2" role="group" :aria-label="t('driver.rateCustomerTitle')">
-          <button
-            v-for="n in 5" :key="n" type="button"
-            class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
-            :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
-            :aria-label="t('common.rateNStars', { n })"
-            @click="custRatingScore = n"
-          >★</button>
-        </div>
-        <input
-          v-model="custRatingNote" type="text" maxlength="200"
-          class="ui-input"
-          :aria-label="t('driver.rateCustomerNote')"
-          :placeholder="t('driver.rateCustomerNote')"
-        />
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="ratingJob = null">
-            {{ t('driver.rateSkip') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-            :disabled="!custRatingScore || submittingRating"
-            :aria-busy="submittingRating"
-            @click="submitCustomerRating"
-          >
-            <svg v-if="submittingRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ submittingRating ? t('common.loading') : t('driver.rateSubmit') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Rate the customer after delivery (driver → customer, private) (RISK FE-2) -->
+  <DriverRateCustomerModal
+    v-model:score="custRatingScore"
+    v-model:note="custRatingNote"
+    :job="ratingJob"
+    :busy="submittingRating"
+    @close="ratingJob = null"
+    @submit="submitCustomerRating"
+  />
 
-  <!-- Delivery code modal -->
-  <Teleport to="body">
-    <div
-      v-if="codeModalOpen"
-      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
-      @click.self="closeCodeModal"
-      @keydown.esc="closeCodeModal"
-    >
-      <div
-        ref="codeDialogRef"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('driver.enterDeliveryCode')"
-        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
-      >
-        <div>
-          <p class="text-sm font-semibold text-white">{{ t('driver.enterDeliveryCode') }}</p>
-          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.codeReminder') }}</p>
-        </div>
-        <input
-          ref="codeFirstRef"
-          v-model="codeInput"
-          type="text"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          class="ui-input text-center text-lg tracking-[0.3em] font-bold"
-          :placeholder="t('driver.enterDeliveryCode')"
-          :aria-label="t('driver.enterDeliveryCode')"
-          autocomplete="one-time-code"
-          maxlength="6"
-          @keydown.enter="submitDeliveryCode"
-        />
-        <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-          <p class="text-sm text-red-300">{{ codeError }}</p>
-        </div>
-
-        <!-- Photo fallback: driver can't get the code → take a photo instead -->
-        <div v-if="proofPhotoPreview" class="space-y-2">
-          <img :src="proofPhotoPreview" alt="" class="w-full rounded-xl object-cover" style="max-height:120px" />
-          <p class="text-[11px] text-slate-400">{{ t('driver.proofPhotoReady') }}</p>
-        </div>
-        <div v-else class="flex items-center gap-2">
-          <div class="flex-1 border-t border-slate-700/60" />
-          <span class="text-[11px] text-slate-500 shrink-0">{{ t('driver.proofPhotoOr') }}</span>
-          <div class="flex-1 border-t border-slate-700/60" />
-        </div>
-        <label
-          v-if="!proofPhotoPreview"
-          class="ui-touch-target flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600 py-2.5 text-xs text-slate-300 hover:border-slate-400 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-slate-400"
-          :class="{ 'opacity-50 pointer-events-none': codeSubmitting }"
-        >
-          <AppIcon name="camera" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-          {{ t('driver.leaveAtDoor') }}
-          <input
-            ref="proofPhotoInputRef"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            class="sr-only"
-            :disabled="codeSubmitting"
-            @change="onProofPhotoSelected"
-          />
-        </label>
-        <button
-          v-else
-          class="ui-touch-target w-full text-[11px] text-slate-400 hover:text-slate-200"
-          @click="clearProofPhoto"
-        >
-          {{ t('driver.proofPhotoRetake') }}
-        </button>
-
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCodeModal">
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-            style="min-height: 48px"
-            :disabled="(!codeInput.trim() && !proofPhotoFile) || codeSubmitting"
-            :aria-busy="codeSubmitting"
-            @click="submitDeliveryCode"
-          >
-            <svg v-if="codeSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ codeSubmitting ? t('common.loading') : t('common.confirm') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Delivery code modal (RISK FE-2) -->
+  <DriverDeliveryCodeModal
+    v-model:code-input="codeInput"
+    v-model:code-error="codeError"
+    v-model:proof-photo-file="proofPhotoFile"
+    :open="codeModalOpen"
+    :submitting="codeSubmitting"
+    @close="closeCodeModal"
+    @submit="submitDeliveryCode"
+  />
 
   <!-- Cash-out amount modal -->
   <Teleport to="body">
@@ -1566,6 +1111,12 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue';
 import DriverOfferModal from '../components/DriverOfferModal.vue';
 import DriverPageDeliveryHistory from '../components/DriverPageDeliveryHistory.vue';
+import DriverPageCashoutHistory from '../components/DriverPageCashoutHistory.vue';
+import DriverPageRideHistory from '../components/DriverPageRideHistory.vue';
+import DriverPagePerformanceStats from '../components/DriverPagePerformanceStats.vue';
+import DriverPageActiveJob from '../components/DriverPageActiveJob.vue';
+import DriverRateCustomerModal from '../components/DriverRateCustomerModal.vue';
+import DriverDeliveryCodeModal from '../components/DriverDeliveryCodeModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
@@ -1933,34 +1484,13 @@ const codeModalOpen = ref(false);
 const codeInput = ref('');
 const codeError = ref('');
 const codeSubmitting = ref(false);
-const codeFirstRef = ref(null);
-const codeDialogRef = ref(null);
-useFocusTrap(codeDialogRef, codeModalOpen); // D-8: Tab focus-trap
-const proofPhotoInputRef = ref(null);
-const proofPhotoFile = ref(null);   // File object selected by the camera
-const proofPhotoPreview = ref('');  // Object URL for the in-modal thumbnail
+// The delivery-code modal UI (dialog + focus trap + proof-photo lifecycle) lives in
+// DriverDeliveryCodeModal; the parent keeps the code / error / selected-file state
+// (read by submitDeliveryCode) and the open / return-focus handling.
+const proofPhotoFile = ref(null);   // File object selected by the camera (set by the modal)
 let _codeReturnFocus = null;
 
-const clearProofPhoto = () => {
-  if (proofPhotoPreview.value) URL.revokeObjectURL(proofPhotoPreview.value);
-  proofPhotoFile.value = null;
-  proofPhotoPreview.value = '';
-  if (proofPhotoInputRef.value) proofPhotoInputRef.value.value = '';
-};
-
-const onProofPhotoSelected = (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  clearProofPhoto();
-  proofPhotoFile.value = file;
-  proofPhotoPreview.value = URL.createObjectURL(file);
-  // Clear the code input so only one proof path is active at a time.
-  codeInput.value = '';
-  codeError.value = '';
-};
-
 const closeCodeModal = () => {
-  clearProofPhoto();
   codeModalOpen.value = false;
   _codeReturnFocus?.focus();
   _codeReturnFocus = null;
@@ -2482,12 +2012,11 @@ const advance = async (toStatus, extra = {}) => {
   errorMsg.value = '';
   if (toStatus === 'delivered') {
     // Proof of delivery — open the code modal instead of window.prompt().
+    // (The modal's focus trap moves focus into the dialog on open.)
     _codeReturnFocus = document.activeElement;
     codeInput.value = '';
     codeError.value = '';
     codeModalOpen.value = true;
-    await nextTick();
-    codeFirstRef.value?.focus();
     return;
   }
   const payload = { status: toStatus, ...extra };
@@ -2515,26 +2044,17 @@ const advance = async (toStatus, extra = {}) => {
   }
 };
 
-const FAIL_REASONS = ['customer_no_show', 'bad_address', 'driver_unable', 'other'];
-const failingOpen = ref(false);
-const failNote = ref('');
-const openFail = () => {
-  failNote.value = '';
-  failingOpen.value = true;
-};
-const submitFail = async (reason) => {
-  failingOpen.value = false;
-  await advance('failed', { failure_reason: reason, failure_note: failNote.value.trim() });
-};
+// Failure handling — the fail-reason picker UI lives in DriverPageActiveJob, which
+// emits `fail` with the chosen reason + note; we run the same advance('failed', …).
+const onActiveJobFail = ({ reason, note }) =>
+  advance('failed', { failure_reason: reason, failure_note: (note || '').trim() });
 
 // ── Rate the customer (driver → customer, after delivery) ──────────────────────
 const ratingJob = ref(null);
 const custRatingScore = ref(0);
 const custRatingNote = ref('');
 const submittingRating = ref(false);
-const ratingDialogFirstFocus = ref(null);
-// D-8: Tab focus-trap + open/return focus handling (shared helper).
-useFocusTrap(ratingDialogFirstFocus, ratingJob);
+// (The rating modal's focus trap now lives inside DriverRateCustomerModal.)
 
 const openCustomerRating = (job) => {
   ratingJob.value = job;

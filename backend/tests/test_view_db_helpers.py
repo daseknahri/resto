@@ -12,9 +12,6 @@ Unit tests for three helpers that mix pure logic with DB calls:
     Creates a ReservationTimelineEvent record; resolves actor_id from the
     authenticated flag on the actor object.
 
-  accounts/views._resolve_customer_from_request(request)
-    Returns (Customer, None) or (None, Response) from session data.
-
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from decimal import Decimal
@@ -25,7 +22,6 @@ from django.test import SimpleTestCase
 
 from menu.views import _refund_wallet_for_cancelled_order, _sync_charged_request_bills
 from sales.views import _log_reservation_timeline_event
-from accounts.views import _resolve_customer_from_request
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -293,64 +289,3 @@ class LogReservationTimelineEventTests(SimpleTestCase):
             )
         kw = mock_rte.objects.create.call_args[1]
         self.assertEqual(kw["note"], "Arrived 10 min late.")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# _resolve_customer_from_request
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _request_with_session(customer_id=None):
-    session = {"customer_id": customer_id} if customer_id else {}
-    return SimpleNamespace(session=session)
-
-
-def _request_no_session():
-    return SimpleNamespace()  # no session attribute at all
-
-
-class ResolveCustomerFromRequestTests(SimpleTestCase):
-    """_resolve_customer_from_request: returns (customer, None) or (None, error response)."""
-
-    # ── missing / no session ─────────────────────────────────────────────────
-    def test_no_session_attribute_returns_none_and_401(self):
-        customer, err = _resolve_customer_from_request(_request_no_session())
-        self.assertIsNone(customer)
-        self.assertEqual(err.status_code, 401)
-
-    def test_session_without_customer_id_returns_none_and_401(self):
-        req = _request_with_session(customer_id=None)
-        customer, err = _resolve_customer_from_request(req)
-        self.assertIsNone(customer)
-        self.assertEqual(err.status_code, 401)
-
-    def test_session_with_zero_customer_id_returns_401(self):
-        """customer_id=0 is falsy → treated as missing."""
-        req = SimpleNamespace(session={"customer_id": 0})
-        customer, err = _resolve_customer_from_request(req)
-        self.assertIsNone(customer)
-        self.assertEqual(err.status_code, 401)
-
-    # ── customer found ────────────────────────────────────────────────────────
-    def test_valid_customer_id_returns_customer_and_none_error(self):
-        mock_customer = SimpleNamespace(pk=5, email="a@b.com")
-        with patch("accounts.views.Customer") as mock_cust_cls:
-            mock_cust_cls.objects.get.return_value = mock_customer
-            customer, err = _resolve_customer_from_request(_request_with_session(customer_id=5))
-        self.assertEqual(customer, mock_customer)
-        self.assertIsNone(err)
-
-    def test_get_called_with_correct_pk(self):
-        mock_customer = SimpleNamespace(pk=7)
-        with patch("accounts.views.Customer") as mock_cust_cls:
-            mock_cust_cls.objects.get.return_value = mock_customer
-            _resolve_customer_from_request(_request_with_session(customer_id=7))
-        mock_cust_cls.objects.get.assert_called_once_with(pk=7)
-
-    # ── customer not found ────────────────────────────────────────────────────
-    def test_customer_does_not_exist_returns_none_and_404(self):
-        with patch("accounts.views.Customer") as mock_cust_cls:
-            mock_cust_cls.DoesNotExist = Exception
-            mock_cust_cls.objects.get.side_effect = mock_cust_cls.DoesNotExist("gone")
-            customer, err = _resolve_customer_from_request(_request_with_session(customer_id=99))
-        self.assertIsNone(customer)
-        self.assertEqual(err.status_code, 404)

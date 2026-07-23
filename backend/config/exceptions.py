@@ -34,13 +34,32 @@ SENTRY_CAPTURE_THROTTLE = _bool_env("DJANGO_SENTRY_CAPTURE_THROTTLE", False)
 SENTRY_THROTTLE_MIN_WAIT_SECONDS = _float_env("DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS", 30.0)
 
 
+def _principal_label(user):
+    """Log label for the request principal, safe for BOTH identity types.
+
+    RISK IDENTITY-1: `request.user` is now either a staff `User` (which has `.username`)
+    or a `Customer` (which does NOT — it's a separate model, not an auth user). Because
+    `Customer.is_authenticated` is True, a bare `user.username` here raised
+    AttributeError *inside the exception handler*, turning an intended 429 into a 500 for
+    every throttled customer/driver endpoint. Fails soft: this is a log label, and it must
+    never be the thing that breaks an error response.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return "anonymous"
+    username = getattr(user, "username", None)
+    if username:
+        return username
+    # Non-User principal (Customer/driver) — identify it without assuming a username.
+    return f"{user.__class__.__name__.lower()}:{getattr(user, 'pk', '?')}"
+
+
 def exception_handler(exc, context):
     response = drf_exception_handler(exc, context)
     if isinstance(exc, Throttled):
         request = context.get("request")
         view = context.get("view")
         user = getattr(request, "user", None) if request else None
-        username = user.username if user and user.is_authenticated else "anonymous"
+        username = _principal_label(user)
         logger.warning(
             "throttle.blocked scope=%s path=%s method=%s ip=%s user=%s wait=%s",
             getattr(view, "throttle_scope", "unknown"),

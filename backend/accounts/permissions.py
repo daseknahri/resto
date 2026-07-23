@@ -22,6 +22,22 @@ def _is_customer_principal(user):
     )
 
 
+def customer_or_none(request):
+    """Return the signed-in `Customer` principal, or `None` for any other caller.
+
+    The primitive for **optional-auth** endpoints — views that stay `AllowAny` because they
+    must keep serving anonymous callers (a guest browsing the cart, a table-QR diner polling
+    their bill), but personalise or unlock detail for a signed-in customer. Those views pair
+    `authentication_classes = [CustomerSessionAuthentication]` with `permission_classes =
+    [AllowAny]` and branch on this instead of re-reading `session["customer_id"]` by hand.
+
+    Returns None (never raises) for `AnonymousUser` and for a staff `User`, so an
+    optional-auth view can't accidentally treat a staff principal as the customer.
+    """
+    user = getattr(request, "user", None)
+    return user if _is_customer_principal(user) else None
+
+
 class IsCustomer(BasePermission):
     """Allow only a signed-in Customer (request.user hydrated by CustomerSessionAuthentication).
 

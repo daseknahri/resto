@@ -41,12 +41,22 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from rest_framework import serializers, status, viewsets
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import qrcode
 
+# RISK IDENTITY-1: safe at module level — accounts.authentication / accounts.permissions
+# import nothing from this app (rest_framework only), so they don't feed the
+# menu/views.py <-> accounts/views.py circular-import web that forces local imports here.
+from accounts.authentication import CustomerSessionAuthentication
+from accounts.permissions import IsOrderOwner, customer_or_none
+# RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
+# sales.permissions imports only rest_framework + accounts.models.User (accounts.models
+# does not import menu), the same import accounts/views.py already does at module level.
+from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
@@ -1346,7 +1356,8 @@ class OwnerBestSellersView(APIView):
     derived from OrderItem rows on completed orders.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     _COUNTED = [
         "confirmed", "preparing", "ready", "out_for_delivery",
@@ -1354,9 +1365,6 @@ class OwnerBestSellersView(APIView):
     ]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             period = int(request.query_params.get("period", "30"))
         except (TypeError, ValueError):
@@ -1426,7 +1434,8 @@ class OwnerRevenueChartView(APIView):
     based on completed/delivered orders.  Used by the owner dashboard chart.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     _COUNTED = [
         "confirmed", "preparing", "ready", "out_for_delivery",
@@ -1434,9 +1443,6 @@ class OwnerRevenueChartView(APIView):
     ]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             period = int(request.query_params.get("period", "14"))
         except (TypeError, ValueError):
@@ -1560,14 +1566,20 @@ class AnalyticsSummaryView(APIView):
 class OwnerAnalyticsExportView(APIView):
     """CSV export of analytics events grouped by date and event type."""
 
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        # RISK AUTHZ-1: owner-only, BUT the public-schema/no-tenant 400 must answer BEFORE
+        # the owner check (a class-level permission runs first and would flip 400→403). So
+        # gate dynamically: AllowAny on the public schema (let the method return its 400),
+        # IsTenantOwner otherwise (403 "Owner access required." for a non-owner, unchanged).
+        tenant = getattr(self.request, "tenant", None)
+        if tenant is None or getattr(tenant, "schema_name", "") == "public":
+            return [AllowAny()]
+        return [IsTenantOwner()]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
         if tenant is None or getattr(tenant, "schema_name", "") == "public":
             return Response({"detail": "Not available on public schema."}, status=status.HTTP_400_BAD_REQUEST)
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             requested_days = int(request.query_params.get("days", "30"))
@@ -1610,12 +1622,10 @@ class OwnerRepeatAnalyticsView(APIView):
       - total_revenue: all paid revenue in the window
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from django.db.models import Count, Sum
         from django.utils import timezone as _tz
         from decimal import Decimal as _D
@@ -2530,11 +2540,15 @@ class OrderEligibilityView(APIView):
     pay-now (pickup/delivery) order at this restaurant. Lets the cart offer trusted
     customers a 'pay cash on handover' choice alongside wallet prepayment.
     """
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — an anonymous shopper still gets a
+    # 200 (paid_orders=0, cod_eligible=False); the customer session only personalises it.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
         profile = Profile.objects.filter(tenant=getattr(request, "tenant", None)).first()
-        cust_id = request.session.get("customer_id")
+        _customer = customer_or_none(request)
+        cust_id = _customer.id if _customer else None
         paid = 0
         if cust_id:
             try:
@@ -2599,6 +2613,15 @@ class PlaceOrderView(APIView):
     the discount was offered and accepted at submission, not at the future pick-up/delivery
     slot.
     """
+    # IDENTITY-1 sweep: this view is genuinely MULTI-ROLE — a tenant owner/admin previews
+    # the menu (staff User principal, needed by the can_preview gate below) AND a customer
+    # places an order (Customer principal, linked for wallet/loyalty). SessionAuthentication
+    # runs first so a staff session still lands a User on request.user (and keeps its CSRF
+    # enforcement); CustomerSessionAuthentication then hydrates a Customer when there's no
+    # staff user. Stays AllowAny (guest orders). A session carries EITHER a staff user OR a
+    # customer_id, never both (enforced at login by _staff_session_conflict), so exactly one
+    # of the two principals is ever resolved.
+    authentication_classes = [SessionAuthentication, CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [PlaceOrderThrottle]
 
@@ -2615,8 +2638,18 @@ class PlaceOrderView(APIView):
         if profile is None:
             return Response({"detail": "Restaurant not configured.", "code": "profile_missing"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve the two possible principals up front. Exactly one is ever non-None
+        # (staff/customer sessions are mutually exclusive). _linked_customer is reused
+        # below for the wallet/loyalty link.
+        _linked_customer = customer_or_none(request)
         user = getattr(request, "user", None)
-        can_preview = bool(user and user.is_authenticated and (
+        # can_preview is a STAFF-ONLY affordance. A customer principal is authenticated
+        # too now (Customer.is_authenticated is True), so gate on "authenticated AND not
+        # the customer" — i.e. a staff User — before reading User-only attributes like
+        # is_superuser (a Customer has no such field; a bare read would 500). RISK
+        # IDENTITY-1 landmine: an authenticated principal is no longer necessarily a User.
+        _is_staff_user = bool(user and user.is_authenticated and _linked_customer is None)
+        can_preview = bool(_is_staff_user and (
             user.is_superuser or
             getattr(user, "is_platform_admin", False) or
             (getattr(user, "tenant_id", None) == tenant.id)
@@ -2889,15 +2922,8 @@ class PlaceOrderView(APIView):
             )
         _is_scheduled = _scheduled_for is not None
 
-        # Resolve linked customer from session
-        from accounts.models import Customer as CustomerModel
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = CustomerModel.objects.get(pk=_customer_id)
-            except CustomerModel.DoesNotExist:
-                request.session.pop("customer_id", None)
+        # _linked_customer was resolved up front (customer_or_none) alongside can_preview —
+        # it's the signed-in Customer principal, or None for a guest / staff-preview request.
 
         # Delivery orders require an authenticated, verified customer
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
@@ -3067,54 +3093,23 @@ class PlaceOrderView(APIView):
         # Staff-created orders (a waiter taking a phone/counter order via the new-order
         # screen) are EXEMPT: the waiter collects cash/card in person and settles via
         # the Settle action, so they must not be blocked by the customer-wallet rule.
-        from accounts.models import User as _UPrepay
-        _ru_prepay = getattr(request, "user", None)
-        _is_staff_order = bool(
-            _ru_prepay is not None
-            and getattr(_ru_prepay, "is_authenticated", False)
-            and getattr(_ru_prepay, "role", None) in (_UPrepay.Roles.TENANT_OWNER, _UPrepay.Roles.TENANT_STAFF)
+        # RISK STRUCT-1: prepay / cash-on-handover / wallet money-gate extracted verbatim into
+        # menu.order_service (OrderService seam, slice 3). Returns the 4 downstream locals plus an
+        # optional (detail, status) error the view surfaces as-is (403 auth_required / 402
+        # wallet_insufficient). _cod_eligible stays patched at menu.views (function-local import there).
+        from menu.order_service import resolve_prepay_and_wallet
+        _requires_prepay, _cod_order, _use_wallet, _wallet_deduction, _pw_error = resolve_prepay_and_wallet(
+            user=request.user,
+            linked_customer=_linked_customer,
+            profile=profile,
+            fulfillment_type=fulfillment_type,
+            total=total,
+            is_scheduled=_is_scheduled,
+            payment_method=request.data.get("payment_method"),
+            use_wallet_flag=request.data.get("use_wallet"),
         )
-        _requires_prepay = (
-            not _is_staff_order
-            and fulfillment_type in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY)
-        )
-        # Trusted-customer cash-on-handover: a repeat customer (COD enabled + enough
-        # completed/paid orders) may choose to pay cash to the staff/driver instead of
-        # prepaying from their wallet. Such orders are created UNPAID and settled at
-        # handover via the Settle action.
-        _cod_order = False
-        if _requires_prepay and total > Decimal("0"):
-            if _linked_customer is None:
-                return Response(
-                    {"detail": "Sign in and top up your wallet to place a pickup or delivery order.",
-                     "code": "auth_required"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            _payment_method = str(request.data.get("payment_method") or "").strip().lower()
-            # Advance/scheduled orders are prepaid at placement (no cash-on-handover) so
-            # the slot is genuinely committed and no-shows can't tie up stock unpaid.
-            if _payment_method == "cash" and not _is_scheduled and _cod_eligible(profile, _linked_customer.id):
-                _cod_order = True
-            else:
-                _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
-                if _wallet_avail < total:
-                    return Response(
-                        {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
-                         "code": "wallet_insufficient",
-                         "balance": str(_wallet_avail), "amount_due": str(total)},
-                        status=status.HTTP_402_PAYMENT_REQUIRED,
-                    )
-
-        # Wallet payment — pickup/delivery prepay by wallet (enforced above) UNLESS the
-        # customer opted into trusted cash-on-handover; dine-in customers may opt in.
-        _use_wallet = ((_requires_prepay and not _cod_order) or bool(request.data.get("use_wallet"))) and _linked_customer is not None
-        _wallet_deduction = Decimal("0")
-        if _use_wallet:
-            _available = Decimal(str(_linked_customer.wallet_balance or "0"))
-            _wallet_deduction = min(_available, total)
-            if _wallet_deduction <= Decimal("0"):
-                _use_wallet = False
-                _wallet_deduction = Decimal("0")
+        if _pw_error is not None:
+            return Response(_pw_error[0], status=_pw_error[1])
 
         class _PrepayUnpaid(Exception):
             """Raised inside the atomic block when a pickup/delivery order can't be
@@ -3694,6 +3689,10 @@ class PlaceOrderView(APIView):
 
 class CustomerOrderStatusView(APIView):
     """GET /api/order-status/<order_number>/ — customer polls order status."""
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny by design — see the ownership gate
+    # below: a non-owner (incl. anonymous) still gets the minimal status payload, and an
+    # order with no linked customer is readable by the table-QR viewer.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -3716,14 +3715,11 @@ class CustomerOrderStatusView(APIView):
         # Delivery/pickup are wallet-only pay-now so they always carry a customer_id and
         # are always protected here. Any other caller gets a minimal status-only payload
         # (whitelisted at the return below).
-        try:
-            session_customer_id = request.session.get("customer_id")
-        except Exception:
-            session_customer_id = None
-        try:
-            _owns = bool(order.customer_id) and bool(session_customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            _owns = False
+        # IsOrderOwner is the single home for this customer_id comparison (it fails closed
+        # on a missing/unparseable id on either side, and on a non-Customer principal). Used
+        # as a plain predicate, not via permission_classes, so this view keeps its
+        # degrade-to-minimal-payload behavior instead of raising DRF's generic 403.
+        _owns = IsOrderOwner().has_object_permission(request, self, order)
         _show_details = _owns or not order.customer_id
 
         items = [
@@ -3760,34 +3756,29 @@ class CustomerOrderStatusView(APIView):
         # number would expose private feedback. We require the session customer
         # to match the order's linked customer.
         restaurant_feedback = None
-        if order.customer_id and session_customer_id:
+        if _owns:
+            _tenant = getattr(request, "tenant", None)
+            _tenant_id = _tenant.id if _tenant else 0
             try:
-                same_customer = int(session_customer_id) == int(order.customer_id)
-            except (TypeError, ValueError):
-                same_customer = False
-            if same_customer:
-                _tenant = getattr(request, "tenant", None)
-                _tenant_id = _tenant.id if _tenant else 0
-                try:
-                    from accounts.models import CustomerRating as _CR
-                    _cr = (
-                        _CR.objects
-                        .filter(
-                            customer_id=order.customer_id,
-                            tenant_id=_tenant_id,
-                            order_number=order.order_number,
-                        )
-                        .order_by("-created_at")
-                        .first()
+                from accounts.models import CustomerRating as _CR
+                _cr = (
+                    _CR.objects
+                    .filter(
+                        customer_id=order.customer_id,
+                        tenant_id=_tenant_id,
+                        order_number=order.order_number,
                     )
-                    if _cr is not None:
-                        restaurant_feedback = {
-                            "score": _cr.score,
-                            "note": _cr.note,
-                            "created_at": _cr.created_at.isoformat(),
-                        }
-                except Exception:
-                    restaurant_feedback = None
+                    .order_by("-created_at")
+                    .first()
+                )
+                if _cr is not None:
+                    restaurant_feedback = {
+                        "score": _cr.score,
+                        "note": _cr.note,
+                        "created_at": _cr.created_at.isoformat(),
+                    }
+            except Exception:
+                restaurant_feedback = None
 
         # Pull the receipt message + VAT settings from the tenant profile (safe fallbacks).
         # Also expose the tenant's public contact phone so the customer can call the
@@ -3819,18 +3810,17 @@ class CustomerOrderStatusView(APIView):
         except Exception:
             order_outstanding = Decimal("0")
         if (
-            session_customer_id and order.customer_id
+            _owns
             and order.payment_status != Order.PaymentStatus.PAID
             and order.status != Order.Status.CANCELLED
             and order_outstanding > Decimal("0")
         ):
             try:
-                if int(session_customer_id) == int(order.customer_id):
-                    from accounts.models import Customer as _Cust
-                    _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
-                    if _c is not None:
-                        wallet_balance = str(_c.wallet_balance)
-                        can_pay_with_wallet = True
+                from accounts.models import Customer as _Cust
+                _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
+                if _c is not None:
+                    wallet_balance = str(_c.wallet_balance)
+                    can_pay_with_wallet = True
             except Exception:
                 pass  # balance lookup is best-effort; never breaks order status
 
@@ -3841,8 +3831,7 @@ class CustomerOrderStatusView(APIView):
         delivery_block = None
         if (
             order.fulfillment_type == Order.FulfillmentType.DELIVERY
-            and session_customer_id and order.customer_id
-            and str(session_customer_id) == str(order.customer_id)
+            and _owns
         ):
             try:
                 _dtenant = getattr(request, "tenant", None)
@@ -3881,11 +3870,7 @@ class CustomerOrderStatusView(APIView):
             "requires_prepayment": order.requires_prepayment,
             # Self-cancel affordance — only for the signed-in owner of an early
             # pickup/delivery order (server-driven so the UI button matches the rule).
-            "can_cancel": bool(
-                _customer_can_cancel(order)
-                and session_customer_id and order.customer_id
-                and str(session_customer_id) == str(order.customer_id)
-            ),
+            "can_cancel": bool(_customer_can_cancel(order) and _owns),
             # Wallet self-pay affordance (only for the signed-in order owner).
             "can_pay_with_wallet": can_pay_with_wallet,
             "wallet_balance": wallet_balance,
@@ -3902,8 +3887,7 @@ class CustomerOrderStatusView(APIView):
                 if (order.delivery_code
                     and order.fulfillment_type == Order.FulfillmentType.DELIVERY
                     and order.status not in (Order.Status.COMPLETED, Order.Status.CANCELLED)
-                    and session_customer_id and order.customer_id
-                    and str(session_customer_id) == str(order.customer_id))
+                    and _owns)
                 else None
             ),
             "items_count": sum(i["qty"] for i in items),
@@ -3944,8 +3928,12 @@ class CustomerOrderStatusView(APIView):
 class CustomerOrderCancelView(APIView):
     """POST /api/order-status/<order_number>/cancel/ — the signed-in customer cancels
     their OWN early pickup/delivery order. Refunds any wallet payment and returns reserved
-    stock. Session ownership is required; dine-in and already-started orders are refused.
+    stock. Ownership is required; dine-in and already-started orders are refused.
     """
+    # IDENTITY-1 sweep: stays AllowAny deliberately — order-existence (404) is checked
+    # before ownership, and the non-owner 403 below is the SIGN-IN PROMPT the anonymous
+    # caller is meant to receive. IsCustomer would 401 ahead of both.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def post(self, request, order_number, *args, **kwargs):
@@ -3954,12 +3942,9 @@ class CustomerOrderCancelView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        session_customer_id = request.session.get("customer_id")
-        try:
-            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            owns = False
-        if not owns:
+        # IsOrderOwner is the shared home for this comparison; used as a plain predicate so
+        # the view keeps its own coded 403 rather than DRF's generic denial.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to cancel this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
         if order.status == Order.Status.CANCELLED:
@@ -7463,18 +7448,14 @@ class OwnerPromotionListCreateView(APIView):
     """GET /api/owner/promotions/ — list promotions.
        POST /api/owner/promotions/ — create a promotion."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         promos = Promotion.objects.all()
         return Response([_serialize_promotion(p) for p in promos])
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from decimal import Decimal as _Dec, InvalidOperation
         from datetime import date as _date
 
@@ -7563,18 +7544,18 @@ class OwnerPromotionDetailView(APIView):
        PATCH /api/owner/promotions/<id>/ — update.
        DELETE /api/owner/promotions/<id>/ — delete."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was the 403 check inside _get_promo, which now
+    # does only the 404 lookup). "Access denied." body preserved via the permission class.
+    permission_classes = [IsTenantOwnerAccessDenied]
 
-    def _get_promo(self, request, promo_id):
-        if not _is_tenant_owner(request):
-            return None, Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+    def _get_promo(self, promo_id):
         p = Promotion.objects.filter(pk=promo_id).first()
         if p is None:
             return None, Response({"detail": "Promotion not found."}, status=status.HTTP_404_NOT_FOUND)
         return p, None
 
     def get(self, request, promo_id, *args, **kwargs):
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
         return Response(_serialize_promotion(p))
@@ -7583,7 +7564,7 @@ class OwnerPromotionDetailView(APIView):
         from decimal import Decimal as _Dec, InvalidOperation
         from datetime import date as _date
 
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
 
@@ -7648,7 +7629,7 @@ class OwnerPromotionDetailView(APIView):
         return Response(_serialize_promotion(p))
 
     def delete(self, request, promo_id, *args, **kwargs):
-        p, err = self._get_promo(request, promo_id)
+        p, err = self._get_promo(promo_id)
         if err:
             return err
         p.delete()
@@ -9267,8 +9248,9 @@ class CustomerOrderRateView(APIView):
     POST /api/orders/<order_number>/rate/
 
     Customers submit a 1–5 star rating (+ optional comment) after their order
-    reaches 'completed' status.  No authentication required — any caller who
-    knows the order number can rate it once.
+    reaches 'completed' status. Only the order's own signed-in customer may rate it
+    (OPS-5e: without that gate, anyone who guessed an order number could rate it —
+    review fraud).
 
     Request body:
         { "score": 4, "comment": "Great food!" }
@@ -9276,10 +9258,16 @@ class CustomerOrderRateView(APIView):
     Responses:
         201 Created — rating stored; body: {score, comment, created_at}
         400 Bad Request — invalid score / already rated / order not complete
-        403 Forbidden — the session customer doesn't own this order
+        403 Forbidden — the signed-in customer doesn't own this order (also the
+                        anonymous case, preserving the coded response below)
         404 Not Found — unknown order_number
     """
 
+    # IDENTITY-1 sweep: deliberately AllowAny rather than IsCustomer — the view returns
+    # its own coded 403 ("not_order_owner") for a non-owner INCLUDING an anonymous caller,
+    # and checks order-existence (404) first. IsCustomer would 401 anonymous callers ahead
+    # of both, changing the contract.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [CustomerOrderRateThrottle]  # OPS-5e: stop bulk order-number probing
 
@@ -9295,10 +9283,10 @@ class CustomerOrderRateView(APIView):
             )
 
         # OPS-5e: ownership gate. Without this, any caller who guesses an order number
-        # could rate it (review fraud). Require the session customer to own the order —
-        # the customer record exists once they've ordered, so order.customer_id is set.
-        _session_cid = request.session.get("customer_id")
-        if not _session_cid or order.customer_id is None or int(_session_cid) != int(order.customer_id):
+        # could rate it (review fraud). IsOrderOwner is the shared home for the comparison
+        # (fails closed on a non-Customer principal or a missing/unparseable id on either
+        # side); used as a plain predicate so this view keeps its own coded 403.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response(
                 {"detail": "You can only rate your own order.", "code": "not_order_owner"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -9333,15 +9321,10 @@ class CustomerOrderRateView(APIView):
 
         comment = str(request.data.get("comment", "") or "").strip()[:1000]
 
-        # Link to platform customer when one is in session
-        from accounts.models import Customer as _CustM
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = _CustM.objects.get(pk=_customer_id)
-            except _CustM.DoesNotExist:
-                pass
+        # Link to the platform customer. The ownership gate above already proved
+        # request.user IS this order's customer, so the principal is the link — no need to
+        # re-fetch it (and it can no longer be None here, unlike the old session read).
+        _linked_customer = request.user
 
         rating = Rating.objects.create(
             order=order,
@@ -9407,11 +9390,10 @@ def _serialize_section(section, server_map):
 class OwnerSectionListCreateView(APIView):
     """GET/POST /api/owner/sections/ — list or create floor sections (owner only)."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         sections = list(
             TableSection.objects.prefetch_related("tables", "servers").order_by("position", "name", "id")
         )
@@ -9420,8 +9402,6 @@ class OwnerSectionListCreateView(APIView):
         return Response({"sections": [_serialize_section(s, server_map) for s in sections]})
 
     def post(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         name = str(request.data.get("name", "") or "").strip()[:60]
         if not name:
             return Response({"detail": "Name is required.", "code": "name_required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -9437,11 +9417,10 @@ class OwnerSectionListCreateView(APIView):
 class OwnerSectionDetailView(APIView):
     """PATCH/DELETE /api/owner/sections/<id>/ — edit, assign tables/waiters, delete."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def patch(self, request, section_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         section = TableSection.objects.filter(id=section_id).first()
         if section is None:
             return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -9511,8 +9490,6 @@ class OwnerSectionDetailView(APIView):
         return Response(_serialize_section(section, server_map))
 
     def delete(self, request, section_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         section = TableSection.objects.filter(id=section_id).first()
         if section is None:
             return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -9718,19 +9695,16 @@ class OwnerClosureDateListCreateView(APIView):
     POST /api/owner/closure-dates/  — add a new closure date
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         from .models import ClosureDate
         qs = ClosureDate.objects.order_by("date")
         data = [{"id": c.id, "date": c.date.isoformat(), "label": c.label} for c in qs]
         return Response(data)
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         date_str = (request.data.get("date") or "").strip()
         label = (request.data.get("label") or "").strip()[:100]
         if not date_str:
@@ -9763,11 +9737,12 @@ class OwnerClosureDateDeleteView(APIView):
     DELETE /api/owner/closure-dates/<closure_id>/  — remove a closure date
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, was an inline _is_tenant_owner guard (403 "Owner access
+    # required."). IsTenantOwner enforces the same policy declaratively and reproduces the
+    # exact body; an anonymous caller still 401s first (unchanged).
+    permission_classes = [IsTenantOwner]
 
     def delete(self, request, closure_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
         from .models import ClosureDate
         try:
             obj = ClosureDate.objects.get(id=closure_id)
@@ -9791,12 +9766,10 @@ class OwnerInvoiceView(APIView):
     Returns HTTP 400 if invoice_amount is not set (admin must fill it in first).
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=403)
-
         request_id = request.query_params.get("request_id", "")
         if not request_id:
             return Response({"detail": "request_id query parameter is required."}, status=400)
@@ -9927,11 +9900,10 @@ class OwnerCommissionStatementView(APIView):
     payout, plus summary totals.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=403)
 
         from calendar import month_name
         from datetime import datetime as _dt
@@ -10273,12 +10245,10 @@ class OwnerDataExportView(APIView):
         - closure_dates        Holiday / closure date records
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         import json
         from django.db import connection as _conn
 
@@ -10620,14 +10590,12 @@ class OwnerWaitlistView(APIView):
     GET /api/owner/waitlist/?date=YYYY-MM-DD
     Owner only. Returns waitlist entries (filtered by date if provided).
     """
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Forbidden.").
+    permission_classes = [IsTenantOwnerForbidden]
 
     def get(self, request):
         from datetime import date as date_cls
         from django.utils.timezone import make_aware, get_current_timezone
-
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
 
         date_raw = request.query_params.get("date", "").strip()
         qs = WaitlistEntry.objects.all()
@@ -10679,12 +10647,10 @@ class OwnerPushSubscribeView(APIView):
     POST   /api/owner/push-subscribe/   — register a browser push subscription
     DELETE /api/owner/push-subscribe/   — remove a browser push subscription
     """
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         endpoint = (request.data.get("endpoint") or "").strip()
         p256dh = (request.data.get("p256dh") or "").strip()
         auth_key = (request.data.get("auth") or "").strip()
@@ -10703,9 +10669,6 @@ class OwnerPushSubscribeView(APIView):
         return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         endpoint = (request.data.get("endpoint") or "").strip()
         if endpoint:
             from .models import PushSubscription
@@ -10731,7 +10694,8 @@ class OwnerCustomerListView(APIView):
       format   = json | csv                                 (default: json)
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     # Statuses that count as real completed orders
     _COUNTED = [
@@ -10746,9 +10710,6 @@ class OwnerCustomerListView(APIView):
     _MAX_LIMIT = 500
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from django.db.models import Count, Sum, Max, Avg, FloatField, Q
         from django.db.models.functions import Coalesce
         from django.utils import timezone as _tz
@@ -11059,11 +11020,10 @@ class OwnerCustomerNotesView(APIView):
     with other restaurants that may have served the same customer.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def patch(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         notes_text = (request.data.get("notes") or "").strip()
         obj, _ = CustomerNote.objects.update_or_create(
             customer_id=customer_id,
@@ -11084,13 +11044,11 @@ class OwnerCustomerLoyaltyGrantView(APIView):
     Response: { "customer_id": N, "loyalty_points": <new balance> }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
     _MAX_DELTA = 100_000   # sanity cap per single grant
 
     def post(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         raw_delta = request.data.get("delta")
         try:
             delta = int(raw_delta)
@@ -11126,7 +11084,8 @@ class OwnerLoyaltyView(APIView):
     """GET /api/owner/loyalty/  — retrieve loyalty config (creates default if missing).
        PATCH /api/owner/loyalty/ — update loyalty config."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def _get_or_create_config(self):
         cfg, _ = LoyaltyConfig.objects.get_or_create(
@@ -11164,14 +11123,10 @@ class OwnerLoyaltyView(APIView):
         return data
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         cfg = self._get_or_create_config()
         return Response(self._serialize(cfg, include_stats=True))
 
     def patch(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         from decimal import Decimal as _Dec, InvalidOperation
         cfg = self._get_or_create_config()
         data = request.data
@@ -11929,7 +11884,11 @@ class CustomerOrderPayWalletView(APIView):
     on the wallet debit, so a double-tap never double-charges.
     """
 
-    permission_classes = [AllowAny]  # gated below: session customer must own the order
+    # IDENTITY-1 sweep: stays AllowAny deliberately — order-existence (404) is checked
+    # before ownership, and the non-owner 403 below is the SIGN-IN PROMPT the anonymous
+    # caller is meant to receive. IsCustomer would 401 ahead of both.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [AllowAny]  # gated below: the principal must own the order
 
     def post(self, request, order_number, *args, **kwargs):
         order_number = (order_number or "").strip().upper()
@@ -11937,12 +11896,9 @@ class CustomerOrderPayWalletView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-        session_customer_id = request.session.get("customer_id")
-        try:
-            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
-        except (TypeError, ValueError):
-            owns = False
-        if not owns:
+        # IsOrderOwner is the shared home for this comparison; used as a plain predicate so
+        # the view keeps its own coded 403 rather than DRF's generic denial.
+        if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to pay this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
         if order.payment_status == Order.PaymentStatus.PAID:
@@ -12324,12 +12280,10 @@ class OwnerWalletTopupView(APIView):
     up to the funded float — the transfer is blocked (402) if the float is too low.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         from decimal import Decimal as _Dec, InvalidOperation
         from accounts.models import Customer
         from accounts.wallet_service import (
@@ -12432,12 +12386,10 @@ class OwnerWalletHistoryView(APIView):
     customers who have placed at least one order at this restaurant.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, customer_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
@@ -12488,12 +12440,10 @@ class OwnerWalletFloatView(APIView):
     how much they can still hand out and where it went.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
@@ -12645,7 +12595,8 @@ class OwnerCampaignView(APIView):
     record_notification rows written per dispatch (channel push / email).
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def _audience_ids(self):
         """Return a list of distinct customer_ids eligible for a PUSH campaign.
@@ -12726,9 +12677,6 @@ class OwnerCampaignView(APIView):
             }
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         tenant = request.tenant
         day_start, day_end = _campaign_day_window(tenant)
         today_count = Campaign.objects.filter(
@@ -12762,9 +12710,6 @@ class OwnerCampaignView(APIView):
         })
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         # ── Validate inputs ───────────────────────────────────────────────────
         title = (request.data.get("title") or "").strip()
         message = (request.data.get("message") or "").strip()
@@ -12882,25 +12827,20 @@ class OwnerCampaignView(APIView):
 
 # ── B3 Phase 2: Ingredient inventory + recipe BOM ────────────────────────────
 
-from rest_framework.permissions import IsAuthenticated as _IsAuthenticated
-
 
 class OwnerIngredientListCreateView(APIView):
     """GET /api/owner/ingredients/  — list active ingredients (owner only).
     POST /api/owner/ingredients/ — create a new ingredient.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         qs = Ingredient.objects.filter(is_active=True)
         return Response(IngredientSerializer(qs, many=True).data)
 
     def post(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         serializer = IngredientSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -12911,11 +12851,10 @@ class OwnerIngredientListCreateView(APIView):
 class OwnerIngredientLowStockView(APIView):
     """GET /api/owner/ingredients/low-stock/ — ingredients at or below their threshold."""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         qs = Ingredient.objects.filter(
             is_active=True,
             low_stock_threshold__isnull=False,
@@ -12927,7 +12866,9 @@ class OwnerIngredientLowStockView(APIView):
 class OwnerIngredientDetailView(APIView):
     """GET/PATCH/DELETE /api/owner/ingredients/<pk>/"""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    # The _get(pk) helper does the 404 lookup only; the 403 moved to the permission class.
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def _get(self, pk):
         try:
@@ -12936,16 +12877,12 @@ class OwnerIngredientDetailView(APIView):
             return None
 
     def get(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(IngredientSerializer(ing).data)
 
     def patch(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -12956,8 +12893,6 @@ class OwnerIngredientDetailView(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         ing = self._get(pk)
         if ing is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -12973,11 +12908,10 @@ class OwnerIngredientAdjustView(APIView):
     Positive delta = receiving stock; negative delta = manual waste/count correction.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def post(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             ing = Ingredient.objects.get(pk=pk, is_active=True)
         except Ingredient.DoesNotExist:
@@ -13003,11 +12937,10 @@ class OwnerDishRecipeView(APIView):
     DELETE per-line is handled via OwnerRecipeLineDetailView.
     """
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def get(self, request, dish_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             Dish.objects.get(pk=dish_id)
         except Dish.DoesNotExist:
@@ -13016,8 +12949,6 @@ class OwnerDishRecipeView(APIView):
         return Response(RecipeLineSerializer(qs, many=True).data)
 
     def post(self, request, dish_id):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             dish = Dish.objects.get(pk=dish_id)
         except Dish.DoesNotExist:
@@ -13047,11 +12978,10 @@ class OwnerDishRecipeView(APIView):
 class OwnerRecipeLineDetailView(APIView):
     """DELETE /api/owner/recipe-lines/<pk>/ — remove one ingredient from a recipe."""
 
-    permission_classes = [_IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Access denied.").
+    permission_classes = [IsTenantOwnerAccessDenied]
 
     def delete(self, request, pk):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         try:
             rl = RecipeLine.objects.get(pk=pk)
         except RecipeLine.DoesNotExist:
@@ -13124,12 +13054,10 @@ class DrawerCurrentView(APIView):
     Auth: owner only.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
         if session is None:
             return Response({"open": False, "session": None})
@@ -13151,12 +13079,10 @@ class DrawerOpenView(APIView):
     Body: { "opening_float": "100.00", "note": "" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         if DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).exists():
             return Response(
                 {"detail": "A drawer session is already open.", "code": "already_open"},
@@ -13198,12 +13124,10 @@ class DrawerTransactionView(APIView):
     Body: { "kind": "pay_in"|"pay_out", "amount": "25.00", "reason": "Milk supplier" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         session = DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
         if session is None:
             return Response(
@@ -13257,12 +13181,10 @@ class DrawerCloseView(APIView):
     Body: { "counted_total": "345.00", "note": "" }
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         counted_raw = request.data.get("counted_total")
         if counted_raw is None:
             return Response(
@@ -13334,12 +13256,10 @@ class DrawerHistoryView(APIView):
     Auth: owner only.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
-            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
-
         profile = getattr(getattr(request, "tenant", None), "profile", None)
         if profile is None:
             return Response({"detail": "Tenant profile not found."}, status=status.HTTP_400_BAD_REQUEST)

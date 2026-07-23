@@ -56,3 +56,45 @@ class ExceptionHandlerTests(SimpleTestCase):
         self.assertEqual(context_payload["scope"], "auth_sign_in")
         self.assertEqual(context_payload["wait_seconds"], 60.0)
         self.assertEqual(context_payload["user"], "owner-demo")
+
+
+class ThrottleLogPrincipalTests(SimpleTestCase):
+    """RISK IDENTITY-1: the throttle log label must tolerate BOTH identity types.
+
+    `request.user` is now either a staff `User` (has `.username`) or a `Customer`
+    (does not). `Customer.is_authenticated` is True, so the old
+    `user.username if user.is_authenticated` raised AttributeError *inside the
+    exception handler* — turning an intended 429 into a 500 on every throttled
+    customer/driver endpoint (voucher redeem, driver position/accept/status, order
+    rate, wallet transfer...).
+    """
+
+    def _ctx(self, user):
+        request = Mock()
+        request.path = "/api/driver/position/"
+        request.method = "POST"
+        request.META = {"REMOTE_ADDR": "203.0.113.42"}
+        request.user = user
+        return {"request": request, "view": SimpleNamespace(throttle_scope="driver_position")}
+
+    def test_customer_principal_throttles_429_not_500(self):
+        from accounts.models import Customer
+        response = app_exceptions.exception_handler(Throttled(wait=60), self._ctx(Customer(id=42)))
+        self.assertEqual(response.status_code, 429)
+
+    def test_customer_principal_is_labelled_without_a_username(self):
+        from accounts.models import Customer
+        self.assertEqual(app_exceptions._principal_label(Customer(id=42)), "customer:42")
+
+    def test_staff_user_still_labelled_by_username(self):
+        self.assertEqual(
+            app_exceptions._principal_label(SimpleNamespace(is_authenticated=True, username="owner-demo")),
+            "owner-demo",
+        )
+
+    def test_anonymous_labelled_anonymous(self):
+        self.assertEqual(
+            app_exceptions._principal_label(SimpleNamespace(is_authenticated=False, username="")),
+            "anonymous",
+        )
+        self.assertEqual(app_exceptions._principal_label(None), "anonymous")

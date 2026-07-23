@@ -20,10 +20,25 @@ from concurrent.futures import ThreadPoolExecutor
 
 from celery import Task, shared_task
 from django.conf import settings
+from django.db import InterfaceError, OperationalError
 
 logger = logging.getLogger(__name__)
 
 _RETRY = dict(autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
+
+# RISK ASYNC-2: retry policy for the scheduled cron/sweep tasks. Unlike the notification
+# tasks (which retry on ANY Exception because a paid send is worth re-attempting), the
+# cron tasks retry ONLY on a TRANSIENT DB error — so a brief Postgres blip during a tick
+# retries instead of silently dropping it, while a genuine bug in a command still fails
+# fast (no 3x re-run of broken logic). Backoff is bounded and jittered so a high-frequency
+# sweep (e.g. the 60s sweep_delivery_jobs) can't build a retry storm.
+_CRON_RETRY = dict(
+    autoretry_for=(OperationalError, InterfaceError),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 3},
+)
 
 # ── ASYNC-4: send dedupe (idempotent notifications) ──────────────────────────────
 # CELERY_TASK_ACKS_LATE is True globally (config/settings.py) and CELERY_TASK_TIME_LIMIT
@@ -242,40 +257,6 @@ def customer_order_milestone(order_number, tenant_id, event):
         raise
 
 
-# SECURITY: run_management_command is registered by name on the Celery broker, which
-# is unauthenticated by default — anyone who can enqueue could otherwise run shell /
-# dbshell / flush / migrate. We hardcode the ONLY commands Beat is allowed to invoke;
-# this is the exact set scheduled in config/settings.py CELERY_BEAT_SCHEDULE. Adding a
-# new scheduled command means adding its name here too.
-_MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
-    "release_scheduled_orders",
-    "escalate_stale_pending_orders",
-    "send_predispatch_reminders",
-    "send_ride_predispatch_reminders",
-    "check_car_doc_expiry",
-    "send_review_prompts",
-    "send_reservation_reminders",
-    "expire_charge_requests",
-    "sweep_delivery_jobs",
-    "reconcile_driver_earnings",
-    "reconcile_wallet_balances",
-    "reconcile_order_refs",
-    "sweep_ride_requests",
-    "enforce_subscriptions",
-    "fetch_currency_rates",
-    "send_daily_summary",
-    "auto_reset_availability",
-    "send_winback_nudges",
-    "prune_analytics_events",
-    "prune_admin_audit_logs",
-    "prune_notification_logs",
-    "prune_winback_nudges",
-    "prune_staff_messages",
-    "prune_auth_tokens",
-    "prune_customer_ratings",
-})
-
-
 @shared_task(name="accounts.tasks.write_beat_heartbeat", acks_late=True, ignore_result=True)
 def write_beat_heartbeat():
     """Write a freshness heartbeat that /api/health/ reads to detect a dead beat/worker.
@@ -292,20 +273,152 @@ def write_beat_heartbeat():
     cache.set("celery_beat_heartbeat", _now().isoformat(), timeout=300)
 
 
-@shared_task(name="accounts.tasks.run_management_command", acks_late=True)
-def run_management_command(name, *args, **kwargs):
-    """Run a Django management command from Beat (lets Beat own the cron jobs).
+# ── Scheduled cron / sweep tasks (RISK ASYNC-2) ──────────────────────────────────
+# Each Celery Beat entry dispatches a DEDICATED named "cron.<command>" task rather than
+# one generic run_management_command guarded by a parallel allowlist. Consequences:
+#   • The task NAME is the allowlist. No task accepts a caller-supplied command name off
+#     the (unauthenticated) broker anymore, so the broker can only trigger these exact,
+#     fixed commands — the drift-prone _MANAGEMENT_COMMAND_ALLOWLIST is deleted. Each task
+#     bakes in its own command name + args; no message field selects what runs.
+#   • They route to a dedicated "cron" queue (CELERY_TASK_ROUTES "cron.*") so a slow sweep
+#     can't sit ahead of customer-facing sends in the notifications FIFO — see
+#     config/celery.py for the worker that must consume BOTH queues (-Q notifications,cron).
+#   • _CRON_RETRY (transient-DB retry + backoff) means a brief Postgres blip during a tick
+#     retries instead of dropping it. Every command below is idempotent by design
+#     (periodic sweep / reconcile / prune), so a retry is always safe.
 
-    Only commands in ``_MANAGEMENT_COMMAND_ALLOWLIST`` may run. A rejected name is
-    logged and dropped WITHOUT raising — raising under acks_late would re-queue the
-    poisoned message and spin the worker. The guard lives in the task body so it
-    protects both the Celery path and the inline-thread ``enqueue`` fallback.
-    """
-    if name not in _MANAGEMENT_COMMAND_ALLOWLIST:
-        logger.warning("run_management_command refused disallowed command: %r", name)
-        return
+
+def _run_command(name, *args, **kwargs):
+    """Invoke a Django management command from a cron task (lazy import mirrors the
+    historical run_management_command body)."""
     from django.core.management import call_command
     call_command(name, *args, **kwargs)
+
+
+@shared_task(name="cron.release_scheduled_orders", acks_late=True, **_CRON_RETRY)
+def release_scheduled_orders():
+    _run_command("release_scheduled_orders")
+
+
+@shared_task(name="cron.escalate_stale_pending_orders", acks_late=True, **_CRON_RETRY)
+def escalate_stale_pending_orders():
+    _run_command("escalate_stale_pending_orders")
+
+
+@shared_task(name="cron.send_predispatch_reminders", acks_late=True, **_CRON_RETRY)
+def send_predispatch_reminders():
+    _run_command("send_predispatch_reminders")
+
+
+@shared_task(name="cron.send_ride_predispatch_reminders", acks_late=True, **_CRON_RETRY)
+def send_ride_predispatch_reminders():
+    _run_command("send_ride_predispatch_reminders")
+
+
+@shared_task(name="cron.check_car_doc_expiry", acks_late=True, **_CRON_RETRY)
+def check_car_doc_expiry():
+    _run_command("check_car_doc_expiry")
+
+
+@shared_task(name="cron.send_review_prompts", acks_late=True, **_CRON_RETRY)
+def send_review_prompts():
+    _run_command("send_review_prompts")
+
+
+@shared_task(name="cron.send_reservation_reminders", acks_late=True, **_CRON_RETRY)
+def send_reservation_reminders():
+    _run_command("send_reservation_reminders")
+
+
+@shared_task(name="cron.expire_charge_requests", acks_late=True, **_CRON_RETRY)
+def expire_charge_requests():
+    _run_command("expire_charge_requests")
+
+
+@shared_task(name="cron.sweep_delivery_jobs", acks_late=True, **_CRON_RETRY)
+def sweep_delivery_jobs():
+    _run_command("sweep_delivery_jobs")
+
+
+@shared_task(name="cron.reconcile_driver_earnings", acks_late=True, **_CRON_RETRY)
+def reconcile_driver_earnings():
+    _run_command("reconcile_driver_earnings")
+
+
+@shared_task(name="cron.reconcile_wallet_balances", acks_late=True, **_CRON_RETRY)
+def reconcile_wallet_balances():
+    _run_command("reconcile_wallet_balances")
+
+
+@shared_task(name="cron.reconcile_order_refs", acks_late=True, **_CRON_RETRY)
+def reconcile_order_refs():
+    _run_command("reconcile_order_refs")
+
+
+@shared_task(name="cron.sweep_ride_requests", acks_late=True, **_CRON_RETRY)
+def sweep_ride_requests():
+    _run_command("sweep_ride_requests")
+
+
+@shared_task(name="cron.enforce_subscriptions", acks_late=True, **_CRON_RETRY)
+def enforce_subscriptions():
+    # apply=True was baked in here (was a Beat kwarg) so no message field controls it.
+    _run_command("enforce_subscriptions", apply=True)
+
+
+@shared_task(name="cron.fetch_currency_rates", acks_late=True, **_CRON_RETRY)
+def fetch_currency_rates():
+    _run_command("fetch_currency_rates")
+
+
+@shared_task(name="cron.send_daily_summary", acks_late=True, **_CRON_RETRY)
+def send_daily_summary():
+    _run_command("send_daily_summary")
+
+
+@shared_task(name="cron.auto_reset_availability", acks_late=True, **_CRON_RETRY)
+def auto_reset_availability():
+    _run_command("auto_reset_availability")
+
+
+@shared_task(name="cron.send_winback_nudges", acks_late=True, **_CRON_RETRY)
+def send_winback_nudges():
+    _run_command("send_winback_nudges")
+
+
+@shared_task(name="cron.prune_analytics_events", acks_late=True, **_CRON_RETRY)
+def prune_analytics_events():
+    _run_command("prune_analytics_events")
+
+
+@shared_task(name="cron.prune_admin_audit_logs", acks_late=True, **_CRON_RETRY)
+def prune_admin_audit_logs():
+    _run_command("prune_admin_audit_logs")
+
+
+@shared_task(name="cron.prune_notification_logs", acks_late=True, **_CRON_RETRY)
+def prune_notification_logs():
+    _run_command("prune_notification_logs")
+
+
+@shared_task(name="cron.prune_winback_nudges", acks_late=True, **_CRON_RETRY)
+def prune_winback_nudges():
+    _run_command("prune_winback_nudges")
+
+
+@shared_task(name="cron.prune_staff_messages", acks_late=True, **_CRON_RETRY)
+def prune_staff_messages():
+    _run_command("prune_staff_messages")
+
+
+@shared_task(name="cron.prune_auth_tokens", acks_late=True, **_CRON_RETRY)
+def prune_auth_tokens():
+    _run_command("prune_auth_tokens")
+
+
+@shared_task(name="cron.prune_customer_ratings", acks_late=True, **_CRON_RETRY)
+def prune_customer_ratings():
+    _run_command("prune_customer_ratings")
 
 
 # ── Ride-hailing push tasks ──────────────────────────────────────────────────────

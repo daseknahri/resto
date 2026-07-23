@@ -235,7 +235,9 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
 
 # ── allowlist guard ──────────────────────────────────────────────────────────
 
-class TestAllowlistContainsSlaEscalation(SimpleTestCase):
-    def test_command_in_allowlist(self):
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
-        self.assertIn("escalate_stale_pending_orders", _MANAGEMENT_COMMAND_ALLOWLIST)
+class TestSlaEscalationScheduled(SimpleTestCase):
+    def test_command_scheduled_as_cron_task(self):
+        # RISK ASYNC-2: the command is wired to Beat via its dedicated cron.* task.
+        from django.conf import settings
+        tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.escalate_stale_pending_orders", tasks)

@@ -1,8 +1,9 @@
 """Tests for the customer-confirmed charge approval flow (no real DB).
 
-CustomerWalletChargeApproveView / DeclineView — a customer approves or declines an
-above-threshold wallet charge a restaurant initiated. Approval debits the wallet using
-the request's stored idempotency key; a re-approve replays instead of charging twice.
+CustomerWalletChargeRequestsView / ApproveView / DeclineView — a customer sees, then
+approves or declines, an above-threshold wallet charge a restaurant initiated.
+Approval debits the wallet using the request's stored idempotency key; a re-approve
+replays instead of charging twice.
 """
 from datetime import timedelta
 from decimal import Decimal
@@ -11,12 +12,13 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from accounts.models import WalletChargeRequest
+from accounts.models import Customer, WalletChargeRequest
 from accounts.views import (
     CustomerWalletChargeApproveView,
     CustomerWalletChargeDeclineView,
+    CustomerWalletChargeRequestsView,
 )
 
 
@@ -33,14 +35,63 @@ def _pending_cr():
     return cr
 
 
+class ListChargeRequestsTests(SimpleTestCase):
+    """GET /api/customer/wallet/charge-requests/ — pending charges awaiting approval.
+
+    Previously untested. RISK IDENTITY-1: authenticates via
+    CustomerSessionAuthentication + IsCustomer; force-authenticate a real
+    (unsaved) Customer principal."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = CustomerWalletChargeRequestsView.as_view()
+
+    def _get(self, customer_id=5):
+        req = self.factory.get("/api/customer/wallet/charge-requests/")
+        req.session = {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
+        return self.view(req)
+
+    def test_unauthenticated_401(self):
+        self.assertEqual(self._get(customer_id=None).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_returns_pending_requests_for_the_authenticated_customer(self):
+        cr = _pending_cr()
+        cr.id = 9
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_objs:
+            mock_objs.filter.return_value.order_by.return_value = [cr]
+            resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["requests"]), 1)
+        self.assertEqual(resp.data["requests"][0]["id"], 9)
+        self.assertEqual(resp.data["requests"][0]["amount"], "100.00")
+        # The lazy-expire sweep scoped its update() to this customer's pendings.
+        mock_objs.filter.return_value.update.assert_called_once()
+
+    def test_empty_when_no_pending_requests(self):
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_objs:
+            mock_objs.filter.return_value.order_by.return_value = []
+            resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["requests"], [])
+
+
 class ApproveChargeRequestTests(SimpleTestCase):
+    """RISK IDENTITY-1: CustomerWalletChargeApproveView now authenticates via
+    CustomerSessionAuthentication + IsCustomer. The old handler 401'd unconditionally
+    before any other check, so IsCustomer is an exact swap (unlike the flag-gated
+    transfer/top-up views, which must keep AllowAny)."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerWalletChargeApproveView.as_view()
 
     def _post(self, request_id=1, customer_id=5):
         req = self.factory.post(f"/api/customer/wallet/charge-requests/{request_id}/approve/")
-        req.session = {"customer_id": customer_id} if customer_id else {}
+        req.session = {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req, request_id=request_id)
 
     def test_unauthenticated_401(self):
@@ -89,14 +140,23 @@ class ApproveChargeRequestTests(SimpleTestCase):
 
 
 class DeclineChargeRequestTests(SimpleTestCase):
+    """RISK IDENTITY-1: CustomerWalletChargeDeclineView now authenticates via
+    CustomerSessionAuthentication + IsCustomer; force-authenticate a real
+    (unsaved) Customer principal instead of hand-setting request.session."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerWalletChargeDeclineView.as_view()
 
     def _post(self, request_id=1, customer_id=5):
         req = self.factory.post(f"/api/customer/wallet/charge-requests/{request_id}/decline/")
-        req.session = {"customer_id": customer_id} if customer_id else {}
+        req.session = {}
+        if customer_id:
+            force_authenticate(req, user=Customer(id=customer_id))
         return self.view(req, request_id=request_id)
+
+    def test_unauthenticated_401(self):
+        self.assertEqual(self._post(customer_id=None).status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_decline_marks_declined(self):
         cr = _pending_cr()

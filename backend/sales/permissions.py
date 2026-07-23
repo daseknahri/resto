@@ -63,7 +63,15 @@ class IsTenantOwner(BasePermission):
     for owner-exclusive endpoints (revenue, promotions, settings, billing,
     staff management…) where a staff account with a matching tenant must still
     be denied.
+
+    RISK AUTHZ-1 (call-site migration): ``message`` is the 403 body DRF renders when
+    ``has_permission`` returns False for an *authenticated* non-owner (an anonymous caller
+    still 401s via ``NotAuthenticated`` first, unchanged). It reproduces the text the
+    inline ``_is_tenant_owner`` guards returned so the migration is byte-for-byte
+    behavior-preserving; ``IsTenantOwnerAccessDenied`` below carries the other legacy text.
     """
+
+    message = "Owner access required."
 
     def has_permission(self, request, view):
         tenant = getattr(request, "tenant", None)
@@ -71,3 +79,33 @@ class IsTenantOwner(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return user_owns_tenant_id(getattr(request, "user", None), getattr(obj, "tenant_id", None))
+
+
+class IsTenantOwnerAccessDenied(IsTenantOwner):
+    """Identical owner policy to ``IsTenantOwner``, but preserving the legacy
+    ``{"detail": "Access denied."}`` 403 body of the endpoints that historically returned
+    that text (RISK AUTHZ-1 exact-body preservation). The two messages are the same denial;
+    the distinction is only kept to avoid a user-facing wording change during the migration.
+    """
+
+    message = "Access denied."
+
+
+class IsTenantOwnerForbidden(IsTenantOwner):
+    """Same owner policy, preserving the legacy ``{"detail": "Forbidden."}`` 403 body
+    (RISK AUTHZ-1 exact-body preservation — e.g. OwnerWaitlistView)."""
+
+    message = "Forbidden."
+
+
+class IsTenantOwnerStaffForbidden(IsTenantOwner):
+    """Same owner policy, preserving the staff endpoints' 403 body — which uniquely carries
+    a ``code`` key: ``{"detail": "Owner access required.", "code": "forbidden"}`` (a test
+    asserts ``resp.data["code"] == "forbidden"``).
+
+    A ``dict`` ``message`` is rendered VERBATIM as the response body: DRF's
+    ``permission_denied`` raises ``PermissionDenied(detail=message)``, and its exception
+    handler uses a dict ``detail`` as the response ``data`` unchanged — so this is the one
+    variant whose body is more than ``{"detail": <str>}`` (RISK AUTHZ-1 exact-body preservation)."""
+
+    message = {"detail": "Owner access required.", "code": "forbidden"}

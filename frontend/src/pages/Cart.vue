@@ -1,63 +1,20 @@
 ﻿<template>
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
 
-    <!-- ── Header ──────────────────────────────────────────────────────────── -->
-    <header class="ui-hero-ribbon ui-reveal px-4 py-4 md:px-5 md:py-5">
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div>
-            <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
-            <h1 class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl leading-tight">
-              {{ t('common.cart') }}
-            </h1>
-          </div>
-          <div v-if="cart.items.length" class="flex items-center gap-1.5">
-            <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
-            <span class="ui-chip">{{ planLabel }}</span>
-            <span v-if="tableLabelModel" class="ui-chip">{{ t('cartPage.table', { table: tableLabelModel }) }}</span>
-          </div>
-        </div>
-        <button
-          v-if="cart.items.length"
-          class="shrink-0 ui-btn-outline px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/50"
-          @click="clearCart"
-        >
-          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
-          {{ t('common.clear') }}
-        </button>
-      </div>
-    </header>
+    <!-- ── Header (RISK FE-2) ──────────────────────────────────────────────── -->
+    <CartHeader
+      :has-items="cart.items.length > 0"
+      :count-label="itemCountLabel(cart.count)"
+      :plan-label="planLabel"
+      :table-label="tableLabelModel"
+      @clear="clearCart"
+    />
 
-    <!-- ── Restaurant closed notice ─────────────────────────────────────────── -->
-    <div
-      v-if="!isRestaurantOpen && !isBrowseOnlyPlan"
-      class="ui-section-band border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-100 space-y-0.5"
-      role="status"
-    >
-      <p class="text-sm font-semibold">{{ t('cartPage.restaurantClosed') }}</p>
-      <p class="text-xs text-amber-200/75">{{ t('cartPage.restaurantClosedBody') }}</p>
-    </div>
+    <!-- ── Status banners + empty state (RISK FE-2) ────────────────────────── -->
+    <CartClosedBanner v-if="!isRestaurantOpen && !isBrowseOnlyPlan" />
 
-    <!-- ── Browse-only notice ───────────────────────────────────────────────── -->
-    <div
-      v-if="isBrowseOnlyPlan"
-      class="ui-section-band border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sky-100 space-y-0.5"
-    >
-      <p class="text-sm font-semibold">{{ t('cartPage.orderingDisabled') }}</p>
-      <p class="text-xs text-sky-200/75">{{ t('cartPage.browseOnlyBody') }}</p>
-    </div>
-
-    <!-- ── Empty state ──────────────────────────────────────────────────────── -->
-    <div
-      v-else-if="!cart.items.length"
-      class="ui-empty-state ui-reveal text-center space-y-2"
-    >
-      <p class="text-base font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
-      <p class="text-sm text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
-      <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary mt-4 inline-flex items-center gap-1.5 px-6 py-2.5 text-sm font-semibold tracking-wide">
-        <AppIcon name="menu" class="h-4 w-4" />{{ t('cartPage.browseMenu') }}
-      </RouterLink>
-    </div>
+    <CartBrowseOnlyBanner v-if="isBrowseOnlyPlan" />
+    <CartEmptyState v-else-if="!cart.items.length" />
 
     <!-- ── Main ─────────────────────────────────────────────────────────────── -->
     <div
@@ -67,54 +24,18 @@
 
       <!-- ── Left: item list ─────────────────────────────────────────────── -->
       <div class="space-y-2">
-        <article
+        <CartLineItem
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden ps-4 pe-3.5 py-3.5"
-          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        >
-          <!-- left accent bar -->
-          <div
-            class="pointer-events-none absolute inset-y-0 start-0 w-[3px] ltr:rounded-l-xl rtl:rounded-r-xl"
-            style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
-          />
-          <div class="flex items-center gap-3">
-            <!-- Name + meta -->
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold leading-snug text-slate-100 tracking-tight" :title="item.name">{{ item.name }}</p>
-              <p v-if="item.note" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.note">{{ item.note }}</p>
-              <p v-else-if="item.option_labels?.length" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.option_labels.join(' · ')">{{ item.option_labels.join(' · ') }}</p>
-              <p class="mt-1 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
-            </div>
-            <!-- Stepper pill -->
-            <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
-              <QtyStepperButton :aria-label="t('cartPage.decreaseQuantity')" @click="cart.decrement(item.key)">
-                <span class="text-base leading-none" aria-hidden="true">−</span>
-              </QtyStepperButton>
-              <span class="w-7 text-center text-sm font-bold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
-              <QtyStepperButton :aria-label="t('cartPage.increaseQuantity')" @click="cart.increment(item.key)">
-                <span class="text-base leading-none" aria-hidden="true">+</span>
-              </QtyStepperButton>
-            </div>
-            <!-- Subtotal + edit/remove -->
-            <div class="shrink-0 min-w-[4.5rem] text-end">
-              <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
-              <div class="mt-1 flex items-center justify-end gap-1.5">
-                <button
-                  v-if="isLineEditable(item)"
-                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-[var(--color-secondary)] transition-colors focus-visible:text-[var(--color-secondary)] focus:outline-none rounded-md"
-                  :aria-label="`${t('cartPage.editItem')} ${item.name}`"
-                  @click="openEditLine(item)"
-                >{{ t('cartPage.editItem') }}</button>
-                <button
-                  class="px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
-                  :aria-label="`${t('cartPage.remove')} ${item.name}`"
-                  @click="cart.remove(item.key)"
-                >{{ t('cartPage.remove') }}</button>
-              </div>
-            </div>
-          </div>
-        </article>
+          :item="item"
+          :index="index"
+          :editable="isLineEditable(item)"
+          :format-price="formatPrice"
+          @decrement="cart.decrement(item.key)"
+          @increment="cart.increment(item.key)"
+          @remove="cart.remove(item.key)"
+          @edit="openEditLine(item)"
+        />
 
         <!-- Unavailable items warning -->
         <div
@@ -138,21 +59,13 @@
       >
         <section class="ui-glass p-4 sm:p-5 space-y-4">
 
-          <!-- Compact total header -->
-          <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/60 px-4 py-3.5 border border-slate-800/60">
-            <div>
-              <p class="text-[10px] font-medium uppercase tracking-widest text-slate-500">{{ t('cartPage.total') }}</p>
-              <p class="text-3xl font-bold tabular-nums leading-tight text-[var(--color-secondary)]">
-                {{ formatPrice(orderGrandTotal) }}
-              </p>
-            </div>
-            <div class="text-end text-[11px] text-slate-500 space-y-0.5">
-              <p class="font-medium text-slate-400">{{ itemCountLabel(cart.count) }}</p>
-              <p v-if="fulfillmentType" class="capitalize text-slate-400">
-                {{ fulfillmentType === 'delivery' ? t('cartPage.delivery') : t('cartPage.pickup') }}
-              </p>
-            </div>
-          </div>
+          <!-- Compact total header (RISK FE-2) -->
+          <CartTotalHeader
+            :grand-total="orderGrandTotal"
+            :count-label="itemCountLabel(cart.count)"
+            :fulfillment-type="fulfillmentType"
+            :format-price="formatPrice"
+          />
 
           <div class="border-t border-slate-800/50" />
 
@@ -762,56 +675,23 @@
             class="text-[11px] text-violet-400/80 ps-1"
           >{{ t('cartPage.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
 
-          <!-- ── Order summary breakdown ── -->
-          <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
-              <span>{{ t('cartPage.subtotal') }}</span>
-              <span class="tabular-nums font-medium">{{ formatPrice(cart.total) }}</span>
-            </div>
-            <div v-if="loyaltyDiscount > 0" class="flex items-center justify-between text-amber-300">
-              <span>{{ t('cartPage.loyaltyDiscount') }}</span>
-              <span class="tabular-nums font-semibold">-{{ formatPrice(loyaltyDiscount) }}</span>
-            </div>
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
-              <span>
-                {{ t('cartPage.deliveryFee') }}
-                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500">· {{ deliveryDistanceKm }} km</span>
-              </span>
-              <span class="tabular-nums font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
-            </div>
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeePending" class="flex items-center justify-between text-slate-400">
-              <span>{{ t('cartPage.deliveryFee') }}</span>
-              <span class="text-[11px]">{{ t('cartPage.deliveryFeeByDistanceShort') }}</span>
-            </div>
-            <div v-else-if="fulfillmentType === 'delivery' && !deliveryOutOfRange && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
-              <span>{{ t('cartPage.deliveryFee') }}</span>
-              <span class="font-semibold">{{ t('cartPage.free') }}</span>
-            </div>
-            <div v-if="tipAmount > 0" class="flex items-center justify-between text-[var(--color-secondary)]/75">
-              <span>{{ t('cartPage.tipLabel') }}</span>
-              <span class="tabular-nums font-medium">+{{ formatPrice(tipAmount) }}</span>
-            </div>
-            <div v-if="walletApplied && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
-              <span>{{ t('cartPage.payWithCredits') }}</span>
-              <span class="tabular-nums font-semibold">-{{ formatPrice(walletDeduction) }}</span>
-            </div>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-700/50">
-              <span class="text-sm font-bold text-slate-200 tracking-tight">{{ t('cartPage.total') }}</span>
-              <span class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
-            </div>
-            <!-- Pre-order ETA: a time estimate shown BEFORE the customer pays -->
-            <div
-              v-if="checkoutEta && !deliveryOutOfRange"
-              class="flex items-center gap-1.5 pt-1 text-sky-300"
-            >
-              <AppIcon name="clock" class="h-3.5 w-3.5 shrink-0" />
-              <span class="font-medium">
-                {{ checkoutEta.type === 'delivery'
-                  ? t('cartPage.etaDelivery', { min: checkoutEta.min, max: checkoutEta.max })
-                  : t('menu.etaReadyIn', { min: checkoutEta.min, max: checkoutEta.max }) }}
-              </span>
-            </div>
-          </div>
+          <!-- ── Order summary breakdown (RISK FE-2) ── -->
+          <CartOrderSummary
+            :fulfillment-type="fulfillmentType"
+            :subtotal="cart.total"
+            :delivery-fee-amount="deliveryFeeAmount"
+            :delivery-fee-is-distance="deliveryFeeIsDistance"
+            :delivery-distance-km="deliveryDistanceKm"
+            :delivery-fee-pending="deliveryFeePending"
+            :delivery-out-of-range="deliveryOutOfRange"
+            :loyalty-discount="loyaltyDiscount"
+            :tip-amount="tipAmount"
+            :wallet-applied="walletApplied"
+            :wallet-deduction="walletDeduction"
+            :grand-total="orderGrandTotal"
+            :checkout-eta="checkoutEta"
+            :format-price="formatPrice"
+          />
 
           <!-- Payment-timing note: pickup/delivery pay now, dine-in pays at the table -->
           <p
@@ -825,50 +705,38 @@
 
           <!-- ── CTA buttons ── -->
           <div class="space-y-2.5">
-            <button
+            <!-- Primary place-order CTA (RISK FE-2). The button is a dumb presentational
+                 child; placeInAppOrder + the disabled condition + the label expression
+                 all stay here in the parent, passed in verbatim. -->
+            <CartPlaceOrderButton
               v-if="!isBrowseOnlyPlan"
-              class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
+              :busy="placingOrder"
               :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0 || closedBlocksOrder || closedNeedsSchedule || unavailableSlugs.length > 0"
-              :aria-busy="placingOrder"
-              @click="placeInAppOrder"
-            >
-              <svg v-if="placingOrder" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="cart" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              {{ placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))))) }}
-            </button>
-            <button
+              :label="placingOrder ? t('cartPage_order.placing') : (closedBlocksOrder ? t('cartPage.restaurantCurrentlyClosed') : (closedNeedsSchedule ? t('cartPage.closedScheduleToOrder') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder'))))))"
+              @place="placeInAppOrder"
+            />
+            <!-- WhatsApp handoff CTA (RISK FE-2) — dumb button; openWhatsApp + state stay here. -->
+            <CartWhatsAppButton
               v-if="cart.canWhatsapp && isBrowseOnlyPlan"
-              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
-              :disabled="sendingWhatsapp"
-              :aria-busy="sendingWhatsapp"
-              @click="openWhatsApp"
-            >
-              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="chat" class="h-4 w-4" />
-              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
-            </button>
-            <button
+              variant="primary"
+              :busy="sendingWhatsapp"
+              :label="sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp')"
+              @whatsapp="openWhatsApp"
+            />
+            <CartWhatsAppButton
               v-else-if="cart.canWhatsapp"
-              class="ui-top-link ui-touch-target ui-press flex w-full items-center justify-center gap-1.5 text-xs font-medium underline decoration-slate-600 underline-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none disabled:opacity-50"
-              :disabled="sendingWhatsapp"
-              :aria-busy="sendingWhatsapp"
-              @click="openWhatsApp"
-            >
-              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="chat" class="h-3.5 w-3.5" />
-              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
-            </button>
-            <button
+              variant="link"
+              :busy="sendingWhatsapp"
+              :label="sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp')"
+              @whatsapp="openWhatsApp"
+            />
+            <!-- Proceed-to-checkout (PSP) CTA (RISK FE-2) — dumb button; startCheckout + state stay here. -->
+            <CartCheckoutButton
               v-if="cart.canCheckout"
-              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
-              :disabled="processingCheckout"
-              :aria-busy="processingCheckout"
-              @click="startCheckout"
-            >
-              <svg v-if="processingCheckout" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              <AppIcon v-else name="card" class="h-4 w-4" />
-              {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
-            </button>
+              :busy="processingCheckout"
+              :label="processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout')"
+              @checkout="startCheckout"
+            />
             <button
               v-if="isBrowseOnlyPlan"
               class="ui-btn-outline w-full justify-center opacity-50 cursor-not-allowed"
@@ -905,19 +773,12 @@
             </div>
           </div>
 
-          <!-- Errors -->
-          <div v-if="placeOrderError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ placeOrderError }}</p>
-          </div>
-          <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
-          </div>
-          <div v-if="handoffError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p class="flex-1 text-sm text-red-300">{{ handoffError }}</p>
-          </div>
+          <!-- Errors (RISK FE-2) -->
+          <CartCheckoutErrors
+            :place-order-error="placeOrderError"
+            :checkout-error="checkoutError"
+            :handoff-error="handoffError"
+          />
 
         </section>
       </aside>
@@ -1010,9 +871,19 @@ import {
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CartPromoCode from '../components/CartPromoCode.vue';
+import CartHeader from '../components/CartHeader.vue';
+import CartLineItem from '../components/CartLineItem.vue';
+import CartClosedBanner from '../components/CartClosedBanner.vue';
+import CartBrowseOnlyBanner from '../components/CartBrowseOnlyBanner.vue';
+import CartEmptyState from '../components/CartEmptyState.vue';
+import CartOrderSummary from '../components/CartOrderSummary.vue';
+import CartTotalHeader from '../components/CartTotalHeader.vue';
+import CartCheckoutErrors from '../components/CartCheckoutErrors.vue';
+import CartPlaceOrderButton from '../components/CartPlaceOrderButton.vue';
+import CartCheckoutButton from '../components/CartCheckoutButton.vue';
+import CartWhatsAppButton from '../components/CartWhatsAppButton.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
-import QtyStepperButton from '../components/QtyStepperButton.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useCartStore } from '../stores/cart';

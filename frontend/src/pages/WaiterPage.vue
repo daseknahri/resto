@@ -1,144 +1,31 @@
 ﻿<template>
   <div class="space-y-4">
-    <!-- First-run welcome (one-time, dismissible) -->
-    <div v-if="!waiterFirstRunSeen" class="ui-reveal space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
-      <p class="text-sm font-semibold text-amber-100">{{ t('waiter.firstRunTitle') }}</p>
-      <p class="text-xs text-amber-200/80">{{ t('waiter.firstRunBody') }}</p>
-      <button class="ui-btn-primary ui-press px-4 py-1.5 text-xs" @click="dismissWaiterFirstRun">
-        {{ t('waiter.firstRunDismiss') }}
-      </button>
-    </div>
-    <!-- Install-the-app banner (waiters work from the installed app) -->
-    <div
+    <!-- First-run welcome (one-time, dismissible) (RISK FE-2) -->
+    <WaiterFirstRunBanner v-if="!waiterFirstRunSeen" @dismiss="dismissWaiterFirstRun" />
+    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2) -->
+    <WaiterInstallBanner
       v-if="!isStandalone && !installDismissed"
-      class="ui-reveal flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-4 py-3 text-xs"
-      role="status"
-    >
-      <span class="flex-1 font-medium text-indigo-200">
-        {{ canInstall ? t('waiterInstall.prompt') : t('waiterInstall.manual') }}
-      </span>
-      <button v-if="canInstall" class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-[11px]" @click="install">
-        {{ t('waiterInstall.cta') }}
-      </button>
-      <button
-        class="ui-touch-target ui-press flex shrink-0 items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-        :aria-label="t('waiterInstall.dismiss')"
-        @click="installDismissed = true"
-      >✕</button>
-    </div>
+      :can-install="canInstall"
+      @install="install"
+      @dismiss="installDismissed = true"
+    />
 
-    <!-- Status tabs + action buttons — single scroll row so nothing clips on narrow screens -->
-    <div class="overflow-x-auto" style="scrollbar-width:none;-webkit-overflow-scrolling:touch">
-      <div class="flex min-w-max items-center gap-2 pb-0.5">
-        <!-- Tablist (ARIA-correct container for the tab buttons) -->
-        <div
-          class="flex shrink-0 items-center gap-2"
-          role="tablist"
-          :aria-label="t('waiterPage.tablistLabel')"
-          @keydown.left.prevent="focusPrevTab"
-          @keydown.right.prevent="focusNextTab"
-        >
-          <button
-            v-for="tab in tabs"
-            :id="`waiter-tab-${tab.key}`"
-            :key="tab.key"
-            role="tab"
-            :aria-selected="activeTab === tab.key"
-            :aria-controls="`waiter-panel-${tab.key}`"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === tab.key"
-            @click="activeTab = tab.key"
-          >
-            {{ tab.label }}
-            <span
-              v-if="tab.count > 0"
-              class="ms-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums leading-none"
-              :class="['pending', 'unpaid'].includes(tab.key) ? 'bg-amber-500 text-white shadow-sm shadow-amber-900/30' : 'bg-slate-700/80 text-slate-100'"
-            >{{ tab.count }}</span>
-          </button>
-          <!-- Recent / past orders tab -->
-          <button
-            id="waiter-tab-recent"
-            role="tab"
-            :aria-selected="activeTab === 'recent'"
-            aria-controls="waiter-panel-recent"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === 'recent'"
-            @click="activeTab = 'recent'"
-          >
-            {{ t('waiterPage.tabRecent') }}
-          </button>
-          <!-- Shift summary tab -->
-          <button
-            id="waiter-tab-shift"
-            role="tab"
-            :aria-selected="activeTab === 'shift'"
-            aria-controls="waiter-panel-shift"
-            class="ui-state-chip ui-press ui-touch-target shrink-0"
-            :data-active="activeTab === 'shift'"
-            @click="openShiftSummary"
-          >
-            {{ t('waiterPage.tabShift') }}
-          </button>
-        </div>
-        <!-- Separator -->
-        <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-600/50" aria-hidden="true" />
-        <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
-        <div class="flex shrink-0 items-center gap-2">
-          <!-- Sound mute toggle -->
-          <button
-            class="ui-btn-outline ui-press ui-touch-target px-3 py-1.5 text-sm"
-            :class="waiterSoundOn ? '' : 'opacity-50'"
-            :aria-label="waiterSoundOn ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
-            @click="waiterSoundOn = !waiterSoundOn"
-          >
-            <span aria-hidden="true">{{ waiterSoundOn ? '🔔' : '🔕' }}</span>
-          </button>
-          <!-- Clock-in / clock-out (B4) -->
-          <button
-            v-if="canManageOrders && !currentShift"
-            :disabled="clockBusy"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-sky-500/40 bg-sky-500/8 font-semibold text-sky-300 disabled:opacity-50"
-            @click="doClock('in')"
-          >{{ t('waiterPage.clockIn') }}</button>
-          <button
-            v-if="canManageOrders && currentShift"
-            :disabled="clockBusy"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-amber-500/40 bg-amber-500/8 font-semibold text-amber-300 disabled:opacity-50"
-            :title="currentShift?.clock_in ? t('waiterPage.clockedInSince', { time: formatDateTime(currentShift.clock_in) }) : ''"
-            @click="doClock('out')"
-          >{{ t('waiterPage.clockedIn') }}<template v-if="shiftElapsed"> · {{ shiftElapsed }}</template> ·&nbsp;{{ t('waiterPage.clockOut') }}</button>
-          <button
-            v-if="canManageOrders"
-            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            @click="openCharge()"
-          >
-            {{ t('waiterPage.chargeWalletBtn') }}
-          </button>
-          <button
-            v-if="canManageOrders"
-            class="ui-btn-primary ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            @click="currentShift ? (showNewOrder = true) : toast.show(t('waiterPage.mustClockInFirst'), 'warning')"
-          >
-            + {{ t('waiterPage.newOrderBtn') }}
-          </button>
-          <!-- Floor / List view toggle -->
-          <button
-            v-if="activeTab !== 'shift' && activeTab !== 'recent'"
-            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1.5 text-sm"
-            :class="floorView ? 'border-[var(--color-secondary)]/60 text-[var(--color-secondary)]' : ''"
-            :data-active="floorView"
-            :aria-pressed="floorView"
-            :aria-label="floorView ? t('waiterPage.listViewToggle') : t('waiterPage.floorViewToggle')"
-            @click="floorView = !floorView"
-          >
-            <svg v-if="!floorView" aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-            <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 me-1 shrink-0 inline-block"><path fill-rule="evenodd" d="M2 3.5A.5.5 0 0 1 2.5 3h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 3.5Zm0 4A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7.5Zm0 4A.5.5 0 0 1 2.5 11h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 11.5Z" clip-rule="evenodd"/></svg>
-            {{ floorView ? t('waiterPage.listViewToggle') : t('waiterPage.tabFloor') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Status tabs + action buttons (RISK FE-2) -->
+    <WaiterStatusTabBar
+      v-model:active-tab="activeTab"
+      v-model:sound-on="waiterSoundOn"
+      v-model:floor-view="floorView"
+      :tabs="tabs"
+      :can-manage="canManageOrders"
+      :current-shift="currentShift"
+      :clock-busy="clockBusy"
+      :shift-elapsed="shiftElapsed"
+      :format-date-time="formatDateTime"
+      @select-shift="openShiftSummary"
+      @clock="doClock"
+      @charge="openCharge"
+      @new-order="onNewOrderClick"
+    />
 
     <!-- Quick search (shown on non-shift tabs, fades in when there's something to search) -->
     <Transition name="fade">
@@ -184,50 +71,20 @@
           >{{ sec }}</button>
         </div>
 
-        <!-- Idle table alert banner — tables waiting >= 20 min -->
+        <!-- Idle table alert banner — tables waiting >= 20 min (RISK FE-2) -->
         <Transition name="fade">
-          <div
+          <WaiterIdleTableAlert
             v-if="urgentFloorTiles.length > 0 && !idleAlertDismissed"
-            class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
-            role="alert"
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true"><path d="M8 2 1.5 13h13L8 2Zm0 4v3.5M8 11.5h.01"/></svg>
-            <p class="min-w-0 flex-1 text-[11px] leading-snug text-red-300">
-              {{ t('waiterPage.idleAlert', { n: urgentFloorTiles.length }) }}:
-              <span class="font-semibold">{{ urgentFloorTiles.map(t => t.tableLabel).join(', ') }}</span>
-            </p>
-            <button
-              class="ui-press shrink-0 text-red-400/60 hover:text-red-300 focus-visible:outline-none"
-              :aria-label="t('common.dismiss')"
-              @click="idleAlertDismissed = true"
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
-            </button>
-          </div>
+            :tiles="urgentFloorTiles"
+            @dismiss="idleAlertDismissed = true"
+          />
         </Transition>
 
-        <!-- Stale table statuses warning — last /staff/tables/ poll failed; next poll retries automatically -->
-        <div
-          v-if="tableStatusesStale"
-          class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
-          role="alert"
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true"><path d="M8 2 1.5 13h13L8 2Zm0 4v3.5M8 11.5h.01"/></svg>
-          <p class="min-w-0 flex-1 text-[11px] leading-snug text-amber-300">{{ t('waiterPage.tableStatusStale') }}</p>
-        </div>
+        <!-- Stale table statuses warning — last /staff/tables/ poll failed; next poll retries automatically (RISK FE-2) -->
+        <WaiterStaleTablesWarning v-if="tableStatusesStale" />
 
-        <!-- Floor status legend (collapsed by default) -->
-        <details class="group rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2 text-xs text-slate-400">
-          <summary class="cursor-pointer select-none list-none font-medium text-slate-300 [&::-webkit-details-marker]:hidden">
-            <span aria-hidden="true">ⓘ</span> {{ t('waiterPage.floorLegend') }}
-          </summary>
-          <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-            <li class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400"></span>{{ t('waiterPage.floorStatusOpen') }}</li>
-            <li class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400"></span>{{ t('waiterPage.floorStatusOccupied') }}</li>
-            <li class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-400"></span>{{ t('waiterPage.floorStatusDirty') }}</li>
-            <li class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 shrink-0 rounded-full bg-violet-400"></span>{{ t('waiterPage.floorStatusReserved') }}</li>
-          </ul>
-        </details>
+        <!-- Floor status legend (collapsed by default) (RISK FE-2) -->
+        <WaiterFloorLegend />
 
         <!-- Empty state: no tables at all -->
         <div v-if="filteredFloorTiles.length === 0" class="ui-empty-state py-10 text-center">
@@ -236,77 +93,16 @@
         </div>
 
         <!-- Table tile grid -->
-        <div
+        <WaiterFloorTileGrid
           v-else
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))"
-        >
-          <button
-            v-for="tile in filteredFloorTiles"
-            :key="tile.tableKey"
-            class="ui-press ui-touch-target relative flex min-h-[120px] flex-col items-start gap-1 overflow-hidden rounded-2xl border p-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-            :class="floorTileClass(tile.tableStatus)"
-            :aria-label="t('waiterPage.floorTileAriaLabel', { label: tile.tableLabel, status: t(`waiterPage.tableStatus_${tile.tableStatus}`) })"
-            :aria-pressed="expandedFloorTable === tile.tableKey"
-            @click="toggleFloorTile(tile)"
-          >
-            <!-- "Ready to serve" pulse ring — overlays the status dot when food is ready -->
-            <span
-              v-if="tile.orders.some(o => o.status === 'ready')"
-              class="absolute end-2 top-2 flex h-4 w-4 items-center justify-center"
-              :title="t('waiterPage.floorReadyToServe')"
-              aria-hidden="true"
-            >
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </span>
-            <!-- Status dot (hidden when ready pulse is shown) -->
-            <span
-              v-else
-              class="absolute end-2.5 top-2.5 h-2.5 w-2.5 rounded-full"
-              :class="floorDotClass(tile.tableStatus)"
-              aria-hidden="true"
-            />
-
-            <!-- Table label + active order count -->
-            <span class="pe-4 text-base font-bold leading-tight text-white">{{ tile.tableLabel }}</span>
-            <span
-              v-if="tile.orders.length > 0"
-              class="ms-auto me-6 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500/20 px-1 text-[9px] font-bold tabular-nums text-amber-300"
-              :title="t('waiterPage.floorOrderCount', { n: tile.orders.length })"
-            >{{ tile.orders.length }}</span>
-
-            <!-- Capacity badge -->
-            <span v-if="tile.tableCapacity" class="text-[10px] text-slate-400 tabular-nums">{{ t('waiterPage.floorCapacity', { n: tile.tableCapacity }) }}</span>
-
-            <!-- Status label -->
-            <span
-              class="mt-auto rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-              :class="tableStatusBadgeClass(tile.tableStatus)"
-            >{{ t(`waiterPage.tableStatus_${tile.tableStatus}`) }}</span>
-
-            <!-- Outstanding + elapsed (when occupied) -->
-            <template v-if="tile.orders.length > 0">
-              <span class="tabular-nums text-xs font-bold text-white">
-                {{ fmtOrderPrice(tile.totalOutstanding, tile.orders[0]?.currency) }}
-              </span>
-              <span
-                v-if="tile.longestElapsedLabel"
-                class="rounded-full border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums"
-                :class="tile.longestElapsedClass"
-              >{{ tile.longestElapsedLabel }}</span>
-            </template>
-            <span v-else class="text-[10px] text-slate-500">{{ t('waiterPage.floorNoOrders') }}</span>
-
-            <!-- Expand indicator -->
-            <span
-              v-if="tile.orders.length > 0"
-              class="absolute bottom-2 end-2 text-[10px] text-slate-400 transition-transform"
-              :class="expandedFloorTable === tile.tableKey ? 'rotate-180' : ''"
-              aria-hidden="true"
-            >▾</span>
-          </button>
-        </div>
+          :tiles="filteredFloorTiles"
+          :expanded-key="expandedFloorTable"
+          :floor-tile-class="floorTileClass"
+          :floor-dot-class="floorDotClass"
+          :table-status-badge-class="tableStatusBadgeClass"
+          :fmt-order-price="fmtOrderPrice"
+          @toggle="toggleFloorTile"
+        />
 
         <!-- Expanded floor tile — shows the table's order group inline -->
         <Transition name="fade">
@@ -381,145 +177,50 @@
                   @click="openNewOrderForTable(expandedFloorTileData)"
                 >+ {{ t('waiterPage.newOrderForTable', { label: expandedFloorTileData.tableLabel }) }}</button>
               </div>
-              <article
+              <WaiterOrderCard
                 v-for="(order, index) in expandedFloorTileData.orders"
                 :key="order.id"
-                class="ui-surface-lift ui-reveal overflow-hidden rounded-2xl border transition-colors"
-                :class="statusCardClass(order.status)"
-                :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-              >
-                <!-- Card header -->
-                <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-                  <div class="min-w-0">
-                    <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
-                      {{ orderHeadline(order) }}
-                    </p>
-                    <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                      <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
-                      <span aria-hidden="true" class="text-slate-600">·</span>
-                      <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
-                      <template v-if="order.customer_name">
-                        <span aria-hidden="true" class="text-slate-600">·</span>
-                        <span>{{ order.customer_name }}</span>
-                      </template>
-                    </p>
-                  </div>
-                  <span
-                    class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                    :class="statusChipClass(order.status)"
-                  >{{ t(`waiterPage.status_${order.status}`) }}</span>
-                </div>
-                <!-- Items -->
-                <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-                  <li
-                    v-for="(item, idx) in order.items"
-                    :key="idx"
-                    class="flex items-start gap-2.5 py-0.5 text-sm"
-                    :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-                  >
-                    <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums" :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">{{ item.qty }}</span>
-                    <span class="min-w-0 flex-1 leading-snug" :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">{{ item.dish_name }}</span>
-                    <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-                    <span
-                      v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-                      class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-                      :class="isItemHeld(item, order) ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-                    >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-                    <span v-if="item.is_voided" class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none">{{ t('waiterPage.voidedBadge') }}</span>
-                    <span v-else-if="item.is_comped" class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none">{{ t('waiterPage.compedBadge') }}</span>
-                    <button
-                      v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-                      class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                      :class="item.is_ready ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400' : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-                      :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-                      :aria-pressed="item.is_ready"
-                      @click.stop="doToggleItemReady(order, item)"
-                    ><span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span></button>
-                    <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-                    <button
-                      v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-                      class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-                      :aria-label="t('waiterPage.compItem')"
-                      :disabled="compingItemId === item.id"
-                      @click.stop="compItem(order, item)"
-                    ><svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg></button>
-                    <button
-                      v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-                      class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-                      :aria-label="t('waiterPage.voidItem')"
-                      :disabled="voidingItemId === item.id"
-                      @click.stop="voidItem(order, item)"
-                    ><svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg></button>
-                  </li>
-                </ul>
-                <!-- Notes row -->
-                <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-                  <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400"><span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span><span>{{ order.customer_note }}</span></p>
-                  <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90"><span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span><span>{{ order.owner_note }}</span></p>
-                </div>
-                <!-- ETA + total -->
-                <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
-                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">{{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}</span>
-                    <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-                    <span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold" :class="order.payment_status === 'paid' ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300' : 'border-amber-500/30 bg-amber-500/12 text-amber-300'">{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
-                  </div>
-                </div>
-                <!-- Action footer — primary CTA + compact secondaries + overflow -->
-                <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
-                  <!-- Primary: advance status -->
-                  <button
-                    v-if="canManageOrders && waiter.nextStatus(order)"
-                    class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                    :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
-                    :disabled="waiter.updatingOrderIds.has(order.id)"
-                    :aria-busy="waiter.updatingOrderIds.has(order.id)"
-                    @click="advance(order.id)"
-                  >
-                    <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg></span>
-                    <span v-else>{{ actionLabel(order) }}</span>
-                  </button>
-                  <!-- Primary: settle (when no further advance) -->
-                  <button
-                    v-else-if="canManageOrders && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                    :disabled="waiter.updatingOrderIds.has(order.id)"
-                    @click="settleChooser = order"
-                  ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-                  <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-                  <!-- Secondary row: settle (when advance exists) + add items + all-ready/fire + overflow -->
-                  <div class="flex items-center gap-1.5">
-                    <button
-                      v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
-                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                      :disabled="waiter.updatingOrderIds.has(order.id)"
-                      @click="settleChooser = order"
-                    ><span aria-hidden="true">💵</span></button>
-                    <button
-                      v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
-                      @click="openAppend(order)"
-                    ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-                    <button
-                      v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
-                      :disabled="firingCourseOrderId === order.id"
-                      @click="fireCourse(order)"
-                    >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-                    <button
-                      v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                      class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                      :disabled="allReadyBusyIds.has(order.id)"
-                      @click="doAllReady(order)"
-                    >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-                    <button
-                      class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
-                      :aria-label="t('common.more')"
-                      @click="overflowOrder = order"
-                    >…</button>
-                  </div>
-                </div>
-              </article>
+                :order="order"
+                :index="index"
+                :can-manage="canManageOrders"
+                :waiter="waiter"
+                :firing-course-order-id="firingCourseOrderId"
+                :all-ready-busy-ids="allReadyBusyIds"
+                :comping-item-id="compingItemId"
+                :voiding-item-id="voidingItemId"
+                :item-ready-statuses="ITEM_READY_STATUSES"
+                :terminal-statuses="TERMINAL_STATUSES"
+                :appendable-table-statuses="APPENDABLE_TABLE_STATUSES"
+                :show-elapsed="false"
+                :show-combos="true"
+                :status-card-class="statusCardClass"
+                :order-headline="orderHeadline"
+                :time-urgency-class="timeUrgencyClass"
+                :time-ago="timeAgo"
+                :format-scheduled-for="formatScheduledFor"
+                :waiter-dj-chip-class="waiterDjChipClass"
+                :waiter-dj-chip-label="waiterDjChipLabel"
+                :status-chip-class="statusChipClass"
+                :status-border-class="statusBorderClass"
+                :is-item-held="isItemHeld"
+                :can-comp-paid-order="canCompPaidOrder"
+                :can-void-paid-order="canVoidPaidOrder"
+                :fmt-order-price="fmtOrderPrice"
+                :action-btn-class="actionBtnClass"
+                :action-label="actionLabel"
+                :lowest-held-course="lowestHeldCourse"
+                :order-elapsed-label="orderElapsedLabel"
+                :order-elapsed-class="orderElapsedClass"
+                @advance="advance(order.id)"
+                @settle="settleChooser = order"
+                @append="openAppend(order)"
+                @fire-course="fireCourse(order)"
+                @all-ready="doAllReady(order)"
+                @overflow="overflowOrder = order"
+                @toggle-item-ready="doToggleItemReady(order, $event)"
+                @comp-item="compItem(order, $event)"
+                @void-item="voidItem(order, $event)"
+              />
             </div>
           </section>
         </Transition>
@@ -554,21 +255,8 @@
       @charged="onWalletCharged"
     />
 
-    <!-- Offline / queue indicator -->
-    <Transition name="ui-fade">
-      <div
-        v-if="!waiter.isOnline || waiter.offlineQueue.length > 0"
-        class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300"
-        role="status"
-        aria-live="polite"
-      >
-        <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0">
-          <path fill-rule="evenodd" d="M6.701 2.25c.577-1 2.02-1 2.598 0l5.196 9a1.5 1.5 0 0 1-1.299 2.25H2.804a1.5 1.5 0 0 1-1.3-2.25l5.197-9ZM8 4a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 8 4Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" clip-rule="evenodd"/>
-        </svg>
-        <span v-if="!waiter.isOnline">{{ t('waiterPage.offline') }}</span>
-        <span v-else>{{ t('waiterPage.syncingQueue', { n: waiter.offlineQueue.length }) }}</span>
-      </div>
-    </Transition>
+    <!-- Offline / queue indicator (RISK FE-2) -->
+    <WaiterOfflineIndicator :online="waiter.isOnline" :queue-length="waiter.offlineQueue.length" />
 
     <!-- Loading skeleton (orders only) -->
     <div
@@ -616,113 +304,16 @@
     </div>
 
     <!-- Shift summary panel -->
-    <div
+    <WaiterShiftPanel
       v-else-if="activeTab === 'shift'"
-      id="waiter-panel-shift"
-      role="tabpanel"
-      aria-labelledby="waiter-tab-shift"
-      class="space-y-4 ui-reveal"
-    >
-      <!-- Shift start picker -->
-      <div class="flex flex-wrap items-end gap-3">
-        <div class="min-w-0 flex-1 space-y-1 sm:flex-none">
-          <label class="ui-stat-label block" for="shift-since-input">{{ t('waiterPage.shiftSince') }}</label>
-          <input
-            id="shift-since-input"
-            v-model="shiftSinceInput"
-            type="datetime-local"
-            :aria-label="t('waiterPage.shiftSince')"
-            class="ui-input"
-          />
-        </div>
-        <button
-          class="ui-btn-outline ui-press ui-touch-target disabled:opacity-50"
-          :disabled="waiter.shiftSummaryLoading"
-          @click="loadShiftSummary"
-        >
-          {{ waiter.shiftSummaryLoading ? t('waiterPage.shiftLoading') : t('waiterPage.shiftRefresh') }}
-        </button>
-      </div>
-
-      <!-- Error -->
-      <div v-if="waiter.shiftSummaryError" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-        <p class="flex-1 text-sm text-red-300">{{ waiter.shiftSummaryError }}</p>
-      </div>
-
-      <!-- Stats grid -->
-      <div v-else-if="waiter.shiftSummary" class="grid gap-3" :class="showShiftRevenue ? 'grid-cols-3' : 'grid-cols-2'">
-        <div class="ui-stat-tile space-y-1.5 text-center">
-          <p class="ui-stat-value tabular-nums text-2xl font-bold">{{ waiter.shiftSummary.orders_handled }}</p>
-          <p class="ui-stat-label">{{ t('waiterPage.shiftOrders') }}</p>
-        </div>
-        <div v-if="showShiftRevenue" class="ui-stat-tile space-y-1.5 text-center">
-          <p class="ui-stat-value tabular-nums text-2xl font-bold text-emerald-300">{{ shiftRevenue }}</p>
-          <p class="ui-stat-label">{{ t('waiterPage.shiftRevenue') }}</p>
-        </div>
-        <div class="ui-stat-tile space-y-1.5 text-center">
-          <p class="ui-stat-value tabular-nums text-2xl font-bold text-sky-300">
-            {{ waiter.shiftSummary.average_prep_time_minutes != null ? waiter.shiftSummary.average_prep_time_minutes : '—' }}<span v-if="waiter.shiftSummary.average_prep_time_minutes != null" class="text-base font-normal text-sky-400/70">m</span>
-          </p>
-          <p class="ui-stat-label">{{ t('waiterPage.shiftAvgPrep') }}</p>
-        </div>
-      </div>
-
-      <!-- Period caption -->
-      <p v-if="waiter.shiftSummary" class="text-center text-xs text-slate-500 tabular-nums">
-        {{ t('waiterPage.shiftPeriod', { hours: waiter.shiftSummary.period_hours }) }}
-      </p>
-
-      <!-- Skeleton while loading shift summary -->
-      <div v-else-if="waiter.shiftSummaryLoading" class="grid grid-cols-2 gap-3" aria-busy="true" :aria-label="t('common.loading')">
-        <div v-for="i in 2" :key="i" class="ui-skeleton h-20 rounded-2xl" />
-      </div>
-
-      <!-- Empty state: no data yet (before first date filter is applied) -->
-      <div v-else class="ui-empty-state py-8 text-center">
-        <p class="text-sm text-slate-400">{{ t('waiterPage.shiftHint') }}</p>
-      </div>
-
-      <!-- Change password -->
-      <details class="group rounded-2xl border border-slate-700/50 bg-slate-800/30">
-        <summary class="flex cursor-pointer select-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-300 hover:text-slate-100">
-          {{ t('staffPassword.title') }}
-          <svg aria-hidden="true" class="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-        </summary>
-        <form class="space-y-3 px-4 pb-4" @submit.prevent="submitPasswordChange">
-          <div class="space-y-1">
-            <label class="ui-stat-label block" for="waiter-current-password">{{ t('staffPassword.currentLabel') }}</label>
-            <input
-              id="waiter-current-password"
-              v-model="pwForm.current"
-              type="password"
-              autocomplete="current-password"
-              class="ui-input"
-              :disabled="pwForm.loading"
-            />
-          </div>
-          <div class="space-y-1">
-            <label class="ui-stat-label block" for="waiter-new-password">{{ t('staffPassword.newLabel') }}</label>
-            <input
-              id="waiter-new-password"
-              v-model="pwForm.next"
-              type="password"
-              autocomplete="new-password"
-              class="ui-input"
-              :disabled="pwForm.loading"
-            />
-          </div>
-          <p v-if="pwForm.error" class="text-xs text-red-400" role="alert">{{ pwForm.error }}</p>
-          <button
-            type="submit"
-            class="ui-btn-primary ui-touch-target w-full justify-center disabled:opacity-50"
-            :disabled="pwForm.loading || !pwForm.current || !pwForm.next"
-          >
-            {{ pwForm.loading ? t('staffPassword.submitting') : t('staffPassword.submitBtn') }}
-          </button>
-        </form>
-      </details>
-    </div>
+      v-model:since="shiftSinceInput"
+      v-model:pw-form="pwForm"
+      :waiter="waiter"
+      :show-shift-revenue="showShiftRevenue"
+      :shift-revenue="shiftRevenue"
+      @refresh="loadShiftSummary"
+      @submit-password="submitPasswordChange"
+    />
 
     <!-- Order cards (with optional table grouping) -->
     <div
@@ -795,667 +386,148 @@
           </div>
           <!-- Orders within this table -->
           <div class="space-y-3 ps-2 border-s-2 border-slate-700/50">
-            <article
+            <WaiterOrderCard
               v-for="(order, index) in group.orders"
               :key="order.id"
-              class="ui-surface-lift ui-reveal overflow-hidden rounded-2xl border transition-colors"
-              :class="statusCardClass(order.status)"
-              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-            >
-              <!-- Card header -->
-              <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-                <div class="min-w-0">
-                  <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
-                    {{ orderHeadline(order) }}
-                  </p>
-                  <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                    <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
-                    <span aria-hidden="true" class="text-slate-600">·</span>
-                    <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
-                    <template v-if="order.customer_name">
-                      <span aria-hidden="true" class="text-slate-600">·</span>
-                      <span>{{ order.customer_name }}</span>
-                    </template>
-                    <template v-if="order.section_name">
-                      <span aria-hidden="true" class="text-slate-600">·</span>
-                      <span class="text-slate-500">{{ order.section_name }}</span>
-                    </template>
-                  </p>
-                  <span
-                    v-if="order.scheduled_for"
-                    class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
-                  >
-                    <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
-                  </span>
-                  <span
-                    v-if="order.fulfillment_type === 'delivery' && order.delivery_job"
-                    class="mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                    :class="waiterDjChipClass(order.delivery_job.status)"
-                  >
-                    <span
-                      v-if="order.delivery_job.status === 'searching'"
-                      class="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 motion-safe:animate-pulse"
-                      aria-hidden="true"
-                    />
-                    <span v-else aria-hidden="true">🛵</span>
-                    {{ waiterDjChipLabel(order.delivery_job) }}
-                  </span>
-                </div>
-                <span
-                  class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                  :class="statusChipClass(order.status)"
-                >{{ t(`waiterPage.status_${order.status}`) }}</span>
-              </div>
-              <!-- Items -->
-              <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-                <li
-                  v-for="(item, idx) in order.items"
-                  :key="idx"
-                  class="flex items-start gap-2.5 py-0.5 text-sm"
-                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-                >
-                  <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                    :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-                    {{ item.qty }}
-                  </span>
-                  <span
-class="min-w-0 flex-1 leading-snug"
-                    :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-                    {{ item.dish_name }}
-                  </span>
-                  <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-                  <!-- Course chip -->
-                  <span
-                    v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-                    class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-                    :class="isItemHeld(item, order)
-                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                      : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-                  >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-                  <span
-                    v-if="item.is_voided"
-                    class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-                  >{{ t('waiterPage.voidedBadge') }}</span>
-                  <span
-                    v-else-if="item.is_comped"
-                    class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-                  >{{ t('waiterPage.compedBadge') }}</span>
-                  <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-                  <button
-                    v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-                    class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                    :class="item.is_ready
-                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                      : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-                    :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-                    :aria-pressed="item.is_ready"
-                    @click.stop="doToggleItemReady(order, item)"
-                  >
-                    <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-                  </button>
-                  <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-                  <button
-                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-                    :aria-label="t('waiterPage.compItem')"
-                    :disabled="compingItemId === item.id"
-                    @click.stop="compItem(order, item)"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-                  </button>
-                  <button
-                    v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-                    class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-                    :aria-label="t('waiterPage.voidItem')"
-                    :disabled="voidingItemId === item.id"
-                    @click.stop="voidItem(order, item)"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-                  </button>
-                </li>
-                <!-- Combo sub-lines -->
-                <template v-if="item.combo_components?.length">
-                  <li
-                    v-for="comp in item.combo_components"
-                    :key="comp.dish_id"
-                    class="flex items-center gap-2 ps-6 py-0.5 text-[11px] text-slate-500"
-                  >
-                    <span aria-hidden="true">↳</span>
-                    <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
-                  </li>
-                </template>
-              </ul>
-              <!-- Notes row -->
-              <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-                <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400">
-                  <span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span>
-                  <span>{{ order.customer_note }}</span>
-                </p>
-                <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90">
-                  <span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span>
-                  <span>{{ order.owner_note }}</span>
-                </p>
-              </div>
-              <!-- ETA + total + payment status -->
-              <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-                    {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-                  </span>
-                  <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-                  <span
-                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                    :class="order.payment_status === 'paid'
-                      ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-                      : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-                  >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
-                </div>
-                <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
-                  {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
-                </p>
-              </div>
-              <!-- Action footer — primary CTA + compact secondaries + overflow -->
-              <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
-                <button
-                  v-if="canManageOrders && waiter.nextStatus(order)"
-                  class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                  :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
-                  :disabled="waiter.updatingOrderIds.has(order.id)"
-                  :aria-busy="waiter.updatingOrderIds.has(order.id)"
-                  @click="advance(order.id)"
-                >
-                  <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-                  </span>
-                  <span v-else>{{ actionLabel(order) }}</span>
-                </button>
-                <button
-                  v-else-if="canManageOrders && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                  :disabled="waiter.updatingOrderIds.has(order.id)"
-                  @click="settleChooser = order"
-                ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-                <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-                <div class="flex items-center gap-1.5">
-                  <button
-                    v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                    :disabled="waiter.updatingOrderIds.has(order.id)"
-                    @click="settleChooser = order"
-                  ><span aria-hidden="true">💵</span></button>
-                  <button
-                    v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
-                    @click="openAppend(order)"
-                  ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-                  <button
-                    v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
-                    :disabled="firingCourseOrderId === order.id"
-                    @click="fireCourse(order)"
-                  >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-                  <button
-                    v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                    class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                    :disabled="allReadyBusyIds.has(order.id)"
-                    @click="doAllReady(order)"
-                  >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-                  <button
-                    class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
-                    :aria-label="t('common.more')"
-                    @click="overflowOrder = order"
-                  >…</button>
-                </div>
-              </div>
-            </article>
+              :order="order"
+              :index="index"
+              :can-manage="canManageOrders"
+              :waiter="waiter"
+              :firing-course-order-id="firingCourseOrderId"
+              :all-ready-busy-ids="allReadyBusyIds"
+              :comping-item-id="compingItemId"
+              :voiding-item-id="voidingItemId"
+              :item-ready-statuses="ITEM_READY_STATUSES"
+              :terminal-statuses="TERMINAL_STATUSES"
+              :appendable-table-statuses="APPENDABLE_TABLE_STATUSES"
+              :show-elapsed="false"
+              :show-combos="true"
+              :status-card-class="statusCardClass"
+              :order-headline="orderHeadline"
+              :time-urgency-class="timeUrgencyClass"
+              :time-ago="timeAgo"
+              :format-scheduled-for="formatScheduledFor"
+              :waiter-dj-chip-class="waiterDjChipClass"
+              :waiter-dj-chip-label="waiterDjChipLabel"
+              :status-chip-class="statusChipClass"
+              :status-border-class="statusBorderClass"
+              :is-item-held="isItemHeld"
+              :can-comp-paid-order="canCompPaidOrder"
+              :can-void-paid-order="canVoidPaidOrder"
+              :fmt-order-price="fmtOrderPrice"
+              :action-btn-class="actionBtnClass"
+              :action-label="actionLabel"
+              :lowest-held-course="lowestHeldCourse"
+              :order-elapsed-label="orderElapsedLabel"
+              :order-elapsed-class="orderElapsedClass"
+              @advance="advance(order.id)"
+              @settle="settleChooser = order"
+              @append="openAppend(order)"
+              @fire-course="fireCourse(order)"
+              @all-ready="doAllReady(order)"
+              @overflow="overflowOrder = order"
+              @toggle-item-ready="doToggleItemReady(order, $event)"
+              @comp-item="compItem(order, $event)"
+              @void-item="voidItem(order, $event)"
+            />
           </div>
         </section>
 
         <!-- Non-table orders below groups (if any) -->
         <div v-if="tableGrouping.nonTableOrders.length" class="space-y-3">
-          <article
+          <WaiterOrderCard
             v-for="(order, index) in tableGrouping.nonTableOrders"
             :key="order.id"
-            class="ui-surface-lift ui-reveal overflow-hidden rounded-2xl border transition-colors"
-            :class="statusCardClass(order.status)"
-            :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-          >
-            <!-- Card header -->
-            <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-              <div class="min-w-0">
-                <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
-                  {{ orderHeadline(order) }}
-                </p>
-                <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                  <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
-                  <span aria-hidden="true" class="text-slate-600">·</span>
-                  <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
-                  <template v-if="order.customer_name">
-                    <span aria-hidden="true" class="text-slate-600">·</span>
-                    <span>{{ order.customer_name }}</span>
-                  </template>
-                  <template v-if="order.section_name">
-                    <span aria-hidden="true" class="text-slate-600">·</span>
-                    <span class="text-slate-500">{{ order.section_name }}</span>
-                  </template>
-                </p>
-                <span
-                  v-if="order.scheduled_for"
-                  class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
-                >
-                  <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
-                </span>
-                <span
-                  v-if="order.fulfillment_type === 'delivery' && order.delivery_job"
-                  class="mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                  :class="waiterDjChipClass(order.delivery_job.status)"
-                >
-                  <span
-                    v-if="order.delivery_job.status === 'searching'"
-                    class="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 motion-safe:animate-pulse"
-                    aria-hidden="true"
-                  />
-                  <span v-else aria-hidden="true">🛵</span>
-                  {{ waiterDjChipLabel(order.delivery_job) }}
-                </span>
-              </div>
-              <div class="mt-0.5 flex shrink-0 flex-col items-end gap-1">
-                <span
-                  class="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                  :class="statusChipClass(order.status)"
-                >{{ t(`waiterPage.status_${order.status}`) }}</span>
-                <span
-                  v-if="orderElapsedLabel(order)"
-                  class="rounded-full border px-2 py-0.5 text-[9px] font-semibold tabular-nums"
-                  :class="orderElapsedClass(order)"
-                >{{ orderElapsedLabel(order) }}</span>
-              </div>
-            </div>
-            <!-- Items -->
-            <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-              <li
-                v-for="(item, idx) in order.items"
-                :key="idx"
-                class="flex items-start gap-2.5 py-0.5 text-sm"
-                :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-              >
-                <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-                  :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-                  {{ item.qty }}
-                </span>
-                <span
-class="min-w-0 flex-1 leading-snug"
-                  :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-                  {{ item.dish_name }}
-                </span>
-                <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-                <!-- Course chip -->
-                <span
-                  v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-                  class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-                  :class="isItemHeld(item, order)
-                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                    : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-                >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-                <span
-                  v-if="item.is_voided"
-                  class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-                >{{ t('waiterPage.voidedBadge') }}</span>
-                <span
-                  v-else-if="item.is_comped"
-                  class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-                >{{ t('waiterPage.compedBadge') }}</span>
-                <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-                <button
-                  v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-                  class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                  :class="item.is_ready
-                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                    : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-                  :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-                  :aria-pressed="item.is_ready"
-                  @click.stop="doToggleItemReady(order, item)"
-                >
-                  <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-                </button>
-                <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-                <button
-                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-                  :aria-label="t('waiterPage.compItem')"
-                  :disabled="compingItemId === item.id"
-                  @click.stop="compItem(order, item)"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-                </button>
-                <button
-                  v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-                  class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-                  :aria-label="t('waiterPage.voidItem')"
-                  :disabled="voidingItemId === item.id"
-                  @click.stop="voidItem(order, item)"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-                </button>
-              </li>
-              <!-- Combo sub-lines -->
-              <template v-if="item.combo_components?.length">
-                <li
-                  v-for="comp in item.combo_components"
-                  :key="comp.dish_id"
-                  class="flex items-center gap-2 ps-6 py-0.5 text-[11px] text-slate-500"
-                >
-                  <span aria-hidden="true">↳</span>
-                  <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
-                </li>
-              </template>
-            </ul>
-            <!-- Notes row -->
-            <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-              <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400">
-                <span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span>
-                <span>{{ order.customer_note }}</span>
-              </p>
-              <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90">
-                <span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span>
-                <span>{{ order.owner_note }}</span>
-              </p>
-            </div>
-            <!-- ETA + total + payment status -->
-            <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-                  {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-                </span>
-                <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-                <span
-                  class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                  :class="order.payment_status === 'paid'
-                    ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-                    : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-                >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
-              </div>
-              <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
-                {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
-              </p>
-            </div>
-            <!-- Action footer — primary CTA + compact secondaries + overflow -->
-            <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
-              <button
-                v-if="canManageOrders && waiter.nextStatus(order)"
-                class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
-                :disabled="waiter.updatingOrderIds.has(order.id)"
-                :aria-busy="waiter.updatingOrderIds.has(order.id)"
-                @click="advance(order.id)"
-              >
-                <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-                </span>
-                <span v-else>{{ actionLabel(order) }}</span>
-              </button>
-              <button
-                v-else-if="canManageOrders && order.payment_status !== 'paid'"
-                class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :disabled="waiter.updatingOrderIds.has(order.id)"
-                @click="settleChooser = order"
-              ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-              <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-              <div class="flex items-center gap-1.5">
-                <button
-                  v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                  :disabled="waiter.updatingOrderIds.has(order.id)"
-                  @click="settleChooser = order"
-                ><span aria-hidden="true">💵</span></button>
-                <button
-                  v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
-                  @click="openAppend(order)"
-                ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-                <button
-                  v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
-                  :disabled="firingCourseOrderId === order.id"
-                  @click="fireCourse(order)"
-                >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-                <button
-                  v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-                  :disabled="allReadyBusyIds.has(order.id)"
-                  @click="doAllReady(order)"
-                >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-                <button
-                  class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
-                  :aria-label="t('common.more')"
-                  @click="overflowOrder = order"
-                >…</button>
-              </div>
-            </div>
-          </article>
+            :order="order"
+            :index="index"
+            :can-manage="canManageOrders"
+            :waiter="waiter"
+            :firing-course-order-id="firingCourseOrderId"
+            :all-ready-busy-ids="allReadyBusyIds"
+            :comping-item-id="compingItemId"
+            :voiding-item-id="voidingItemId"
+            :item-ready-statuses="ITEM_READY_STATUSES"
+            :terminal-statuses="TERMINAL_STATUSES"
+            :appendable-table-statuses="APPENDABLE_TABLE_STATUSES"
+            :show-elapsed="true"
+            :show-combos="true"
+            :status-card-class="statusCardClass"
+            :order-headline="orderHeadline"
+            :time-urgency-class="timeUrgencyClass"
+            :time-ago="timeAgo"
+            :format-scheduled-for="formatScheduledFor"
+            :waiter-dj-chip-class="waiterDjChipClass"
+            :waiter-dj-chip-label="waiterDjChipLabel"
+            :status-chip-class="statusChipClass"
+            :status-border-class="statusBorderClass"
+            :is-item-held="isItemHeld"
+            :can-comp-paid-order="canCompPaidOrder"
+            :can-void-paid-order="canVoidPaidOrder"
+            :fmt-order-price="fmtOrderPrice"
+            :action-btn-class="actionBtnClass"
+            :action-label="actionLabel"
+            :lowest-held-course="lowestHeldCourse"
+            :order-elapsed-label="orderElapsedLabel"
+            :order-elapsed-class="orderElapsedClass"
+            @advance="advance(order.id)"
+            @settle="settleChooser = order"
+            @append="openAppend(order)"
+            @fire-course="fireCourse(order)"
+            @all-ready="doAllReady(order)"
+            @overflow="overflowOrder = order"
+            @toggle-item-ready="doToggleItemReady(order, $event)"
+            @comp-item="compItem(order, $event)"
+            @void-item="voidItem(order, $event)"
+          />
         </div>
       </template>
 
       <!-- Flat list when no grouping applies -->
       <template v-else>
-      <article
+      <WaiterOrderCard
         v-for="(order, index) in visibleOrders"
         :key="order.id"
-        class="ui-surface-lift ui-reveal overflow-hidden rounded-2xl border transition-colors"
-        :class="statusCardClass(order.status)"
-        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-      >
-        <!-- Card header -->
-        <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-          <div class="min-w-0">
-            <!-- Table / fulfillment label (largest text — for quick scanning) -->
-            <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
-              {{ orderHeadline(order) }}
-            </p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-              <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
-              <span aria-hidden="true" class="text-slate-600">·</span>
-              <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
-              <template v-if="order.customer_name">
-                <span aria-hidden="true" class="text-slate-600">·</span>
-                <span>{{ order.customer_name }}</span>
-              </template>
-              <template v-if="order.section_name">
-                <span aria-hidden="true" class="text-slate-600">·</span>
-                <span class="text-slate-500">{{ order.section_name }}</span>
-              </template>
-            </p>
-            <!-- Scheduled-for badge — advance orders only -->
-            <span
-              v-if="order.scheduled_for"
-              class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
-            >
-              <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
-            </span>
-            <!-- Delivery job status chip — lets waiters see driver dispatch state -->
-            <span
-              v-if="order.fulfillment_type === 'delivery' && order.delivery_job"
-              class="mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-              :class="waiterDjChipClass(order.delivery_job.status)"
-            >
-              <span
-                v-if="order.delivery_job.status === 'searching'"
-                class="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 motion-safe:animate-pulse"
-                aria-hidden="true"
-              />
-              <span v-else aria-hidden="true">🛵</span>
-              {{ waiterDjChipLabel(order.delivery_job) }}
-            </span>
-          </div>
-          <!-- Status chip -->
-          <span
-            class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-            :class="statusChipClass(order.status)"
-          >{{ t(`waiterPage.status_${order.status}`) }}</span>
-        </div>
-
-        <!-- Items -->
-        <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-          <li
-            v-for="(item, idx) in order.items"
-            :key="idx"
-            class="flex items-start gap-2.5 py-0.5 text-sm"
-            :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
-          >
-            <span
-class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
-              :class="(item.is_voided || item.is_comped) ? 'text-slate-500' : 'text-slate-100'">
-              {{ item.qty }}
-            </span>
-            <span
-class="min-w-0 flex-1 leading-snug"
-              :class="[(item.is_voided || item.is_comped) ? 'line-through text-slate-500' : (item.is_ready ? 'line-through text-slate-500' : '')]">
-              {{ item.dish_name }}
-            </span>
-            <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
-            <!-- Course chip -->
-            <span
-              v-if="(item.course ?? 0) > 0 && !item.is_voided && !item.is_comped"
-              class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
-              :class="isItemHeld(item, order)
-                ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
-            >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
-            <!-- Voided badge -->
-            <span
-              v-if="item.is_voided"
-              class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
-            >{{ t('waiterPage.voidedBadge') }}</span>
-            <!-- Comped badge -->
-            <span
-              v-else-if="item.is_comped"
-              class="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400 leading-none"
-            >{{ t('waiterPage.compedBadge') }}</span>
-            <!-- Tap-to-ready: tappable when order is in a kitchen-active status -->
-            <button
-              v-else-if="canManageOrders && !item.is_voided && ITEM_READY_STATUSES.has(order.status)"
-              class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-full w-6 h-6 border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-              :class="item.is_ready
-                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400'
-                : 'border-slate-600/60 bg-slate-800/50 text-slate-600 hover:border-emerald-500/40 hover:text-emerald-500/60'"
-              :aria-label="item.is_ready ? t('waiterPage.markItemNotReady') : t('waiterPage.markItemReady')"
-              :aria-pressed="item.is_ready"
-              @click.stop="doToggleItemReady(order, item)"
-            >
-              <span class="text-[10px] font-bold leading-none" aria-hidden="true">✓</span>
-            </button>
-            <span v-else-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
-            <!-- Comp affordance — only for non-voided, non-comped items when waiter can manage orders -->
-            <button
-              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canCompPaidOrder(order)"
-              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
-              :aria-label="t('waiterPage.compItem')"
-              :disabled="compingItemId === item.id"
-              @click.stop="compItem(order, item)"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-            </button>
-            <!-- Void affordance — only for non-voided, non-comped items when waiter can manage orders -->
-            <button
-              v-if="canManageOrders && !item.is_voided && !item.is_comped && !TERMINAL_STATUSES.has(order.status) && canVoidPaidOrder(order)"
-              class="ui-press shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400 active:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
-              :aria-label="t('waiterPage.voidItem')"
-              :disabled="voidingItemId === item.id"
-              @click.stop="voidItem(order, item)"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
-            </button>
-          </li>
-        </ul>
-
-        <!-- Notes row -->
-        <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
-          <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400">
-            <span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span>
-            <span>{{ order.customer_note }}</span>
-          </p>
-          <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90">
-            <span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span>
-            <span>{{ order.owner_note }}</span>
-          </p>
-        </div>
-
-        <!-- ETA + total + payment status -->
-        <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-              {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-            </span>
-            <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-            <span
-              class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-              :class="order.payment_status === 'paid'
-                ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-                : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-            >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
-          </div>
-          <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
-            {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
-          </p>
-        </div>
-
-        <!-- Action footer — primary CTA + compact secondaries + overflow -->
-        <div class="space-y-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
-          <button
-            v-if="canManageOrders && waiter.nextStatus(order)"
-            class="ui-press ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-            :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
-            :disabled="waiter.updatingOrderIds.has(order.id)"
-            :aria-busy="waiter.updatingOrderIds.has(order.id)"
-            @click="advance(order.id)"
-          >
-            <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center justify-center gap-1.5" aria-hidden="true">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            </span>
-            <span v-else>{{ actionLabel(order) }}</span>
-          </button>
-          <button
-            v-else-if="canManageOrders && order.payment_status !== 'paid'"
-            class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-            :disabled="waiter.updatingOrderIds.has(order.id)"
-            @click="settleChooser = order"
-          ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
-          <span v-else-if="canManageOrders" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
-          <div class="flex items-center gap-1.5">
-            <button
-              v-if="canManageOrders && waiter.nextStatus(order) && order.payment_status !== 'paid'"
-              class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-              :disabled="waiter.updatingOrderIds.has(order.id)"
-              @click="settleChooser = order"
-            ><span aria-hidden="true">💵</span></button>
-            <button
-              v-if="canManageOrders && order.fulfillment_type === 'table' && APPENDABLE_TABLE_STATUSES.has(order.status) && order.payment_status !== 'paid'"
-              class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"
-              @click="openAppend(order)"
-            ><span aria-hidden="true">+</span> {{ t('waiterPage.addItems') }}</button>
-            <button
-              v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
-              class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
-              :disabled="firingCourseOrderId === order.id"
-              @click="fireCourse(order)"
-            >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
-            <button
-              v-else-if="canManageOrders && ITEM_READY_STATUSES.has(order.status) && order.items?.some(it => !it.is_voided && !it.is_ready)"
-              class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-600/50 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-              :disabled="allReadyBusyIds.has(order.id)"
-              @click="doAllReady(order)"
-            >✓ {{ t('waiterPage.allReadyBtn') }}</button>
-            <button
-              class="ui-press ui-touch-target ms-auto shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500/40"
-              :aria-label="t('common.more')"
-              @click="overflowOrder = order"
-            >…</button>
-          </div>
-        </div>
-
-      </article>
+        :order="order"
+        :index="index"
+        :can-manage="canManageOrders"
+        :waiter="waiter"
+        :firing-course-order-id="firingCourseOrderId"
+        :all-ready-busy-ids="allReadyBusyIds"
+        :comping-item-id="compingItemId"
+        :voiding-item-id="voidingItemId"
+        :item-ready-statuses="ITEM_READY_STATUSES"
+        :terminal-statuses="TERMINAL_STATUSES"
+        :appendable-table-statuses="APPENDABLE_TABLE_STATUSES"
+        :show-elapsed="false"
+        :show-combos="false"
+        :status-card-class="statusCardClass"
+        :order-headline="orderHeadline"
+        :time-urgency-class="timeUrgencyClass"
+        :time-ago="timeAgo"
+        :format-scheduled-for="formatScheduledFor"
+        :waiter-dj-chip-class="waiterDjChipClass"
+        :waiter-dj-chip-label="waiterDjChipLabel"
+        :status-chip-class="statusChipClass"
+        :status-border-class="statusBorderClass"
+        :is-item-held="isItemHeld"
+        :can-comp-paid-order="canCompPaidOrder"
+        :can-void-paid-order="canVoidPaidOrder"
+        :fmt-order-price="fmtOrderPrice"
+        :action-btn-class="actionBtnClass"
+        :action-label="actionLabel"
+        :lowest-held-course="lowestHeldCourse"
+        :order-elapsed-label="orderElapsedLabel"
+        :order-elapsed-class="orderElapsedClass"
+        @advance="advance(order.id)"
+        @settle="settleChooser = order"
+        @append="openAppend(order)"
+        @fire-course="fireCourse(order)"
+        @all-ready="doAllReady(order)"
+        @overflow="overflowOrder = order"
+        @toggle-item-ready="doToggleItemReady(order, $event)"
+        @comp-item="compItem(order, $event)"
+        @void-item="voidItem(order, $event)"
+      />
       </template>
     </div>
   </div>
@@ -1482,43 +554,15 @@ class="min-w-0 flex-1 leading-snug"
           aria-modal="true"
           :aria-label="t('ownerOrders.customerRatingTitle')"
         >
-          <div>
-            <p class="ui-kicker">{{ t('ownerOrders.customerRatingTitle') }}</p>
-            <p class="mt-0.5 text-xs text-slate-400">
-              {{ ratingOrder.customer_name || ratingOrder.table_label || ('#' + ratingOrder.order_number) }}
-            </p>
-            <p class="mt-1 text-[11px] text-slate-500">{{ t('ownerOrders.customerRatingHint') }}</p>
-          </div>
-          <div class="flex items-center gap-1.5" role="group" :aria-label="t('ownerOrders.customerRatingTitle')">
-            <button
-              v-for="n in 5" :key="n" type="button"
-              class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-              :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
-              :aria-label="t('common.rateNStars', { n })"
-              :aria-pressed="n <= custRatingScore"
-              @click="custRatingScore = n"
-            >★</button>
-          </div>
-          <input
-            v-model="custRatingNote" type="text" maxlength="200"
-            class="ui-input"
-            :aria-label="t('ownerOrders.customerRatingNote')"
-            :placeholder="t('ownerOrders.customerRatingNote')"
+          <!-- Inner form body extracted (RISK FE-2); the shell + focus trap stay here. -->
+          <WaiterCustomerRatingForm
+            v-model:score="custRatingScore"
+            v-model:note="custRatingNote"
+            :order="ratingOrder"
+            :busy="submittingCustRating"
+            @close="ratingOrder = null"
+            @submit="submitCustomerRating"
           />
-          <div class="flex items-center justify-end gap-2 pt-1">
-            <button class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/60" @click="ratingOrder = null">
-              {{ t('common.cancel') }}
-            </button>
-            <button
-              class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-              :disabled="!custRatingScore || submittingCustRating"
-              :aria-busy="submittingCustRating"
-              @click="submitCustomerRating"
-            >
-              <svg v-if="submittingCustRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-              {{ submittingCustRating ? t('common.loading') : t('ownerOrders.customerRatingSubmit') }}
-            </button>
-          </div>
         </div>
       </div>
     </Transition>
@@ -1545,169 +589,27 @@ class="min-w-0 flex-1 leading-snug"
           aria-modal="true"
           :aria-label="t('waiterPage.settleTitle')"
         >
-          <div>
-            <p class="ui-kicker">{{ t('waiterPage.settleTitle') }}</p>
-            <p class="mt-0.5 tabular-nums text-xs text-slate-400">
-              {{ settleChooser.table_label || ('#' + settleChooser.order_number) }} ·
-              {{ fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency) }}
-            </p>
-          </div>
-          <!-- Item breakdown -->
-          <ul v-if="settleChooser.items?.length" class="max-h-28 overflow-y-auto divide-y divide-slate-700/40 rounded-lg border border-slate-700/50 bg-slate-800/50" aria-label="Order items">
-            <li
-              v-for="item in settleChooser.items"
-              :key="item.id"
-              class="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
-            >
-              <span class="min-w-0 truncate text-slate-300"><span class="text-slate-500">{{ item.qty }}×</span> {{ item.dish_name }}</span>
-              <span class="shrink-0 tabular-nums text-slate-400">{{ fmtOrderPrice((item.subtotal ?? item.unit_price * item.qty), settleChooser.currency) }}</span>
-            </li>
-          </ul>
-          <!-- Split-by-seat toggle (only for dine-in/table orders with seat data) -->
-          <div
-            v-if="settleChooser.fulfillment_type === 'table'"
-            class="flex items-center gap-1.5"
-          >
-            <button
-              type="button"
-              class="ui-press ui-touch-target flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500/60"
-              :class="splitBySeatMode
-                ? 'border-violet-500/60 bg-violet-500/15 text-violet-300'
-                : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
-              @click="splitBySeatMode = !splitBySeatMode; if (splitBySeatMode) loadSeatGroups(settleChooser)"
-            >{{ t('waiterPage.splitBySeat') }}</button>
-          </div>
-
-          <!-- Seat-split view -->
-          <template v-if="splitBySeatMode">
-            <div v-if="seatGroupsLoading" class="space-y-1.5">
-              <div v-for="i in 2" :key="i" class="ui-skeleton h-10 rounded-lg" />
-            </div>
-            <div v-else-if="seatGroupsError" class="text-xs text-red-400">{{ seatGroupsError }}</div>
-            <div v-else-if="seatGroups.length" class="space-y-1.5">
-              <div
-                v-for="seat in seatGroups"
-                :key="seat.seat"
-                class="flex items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2"
-              >
-                <div class="min-w-0 flex-1">
-                  <p class="text-xs font-semibold text-slate-200">{{ seatGroupLabel(seat) }}</p>
-                  <p class="text-[10px] text-slate-500">{{ seat.items.length }} {{ seat.items.length === 1 ? 'item' : 'items' }}</p>
-                </div>
-                <div class="flex shrink-0 items-center gap-1.5">
-                  <button
-                    class="ui-press ui-touch-target shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60"
-                    @click="payCashForSeat(settleChooser, seat)"
-                  >{{ t('waiterPage.payCash') }}</button>
-                  <button
-                    class="ui-press ui-touch-target shrink-0 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2.5 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                    @click="payWalletForSeat(settleChooser, seat)"
-                  >{{ t('waiterPage.payWalletForSeat') }}</button>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- Standard settle controls (hidden when seat-split mode is on) -->
-          <template v-else>
-            <!-- Cash received input + change calculator -->
-            <div class="rounded-lg border border-slate-700/50 bg-slate-800/40 p-3 space-y-2">
-              <label class="block text-[11px] font-medium text-slate-400" for="waiter-cash-received">{{ t('waiterPage.cashReceived') }}</label>
-              <input
-                id="waiter-cash-received"
-                v-model="cashReceived"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
-                :placeholder="fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency)"
-              />
-              <div v-if="cashChange !== null" class="flex items-center justify-between text-sm tabular-nums">
-                <span class="text-slate-400">{{ t('waiterPage.cashChange') }}</span>
-                <span :class="Number(cashChange) >= 0 ? 'font-bold text-emerald-300' : 'font-bold text-red-400'">
-                  {{ Number(cashChange) >= 0 ? '+' : '' }}{{ fmtOrderPrice(Number(cashChange), settleChooser.currency) }}
-                </span>
-              </div>
-            </div>
-            <!-- Primary CTA: Cash full amount — one tap -->
-            <button
-              class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-4 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-              @click="payCash(settleChooser)"
-            >
-              <span class="text-xl" aria-hidden="true">💵</span>
-              <span class="text-base font-bold">{{ t('waiterPage.cashFull', { amount: fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency) }) }}</span>
-            </button>
-            <!-- Secondary CTA: Wallet — equally prominent -->
-            <button
-              class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-4 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-              @click="payWallet(settleChooser)"
-            >
-              <span class="text-xl" aria-hidden="true">💳</span>
-              <span class="text-base font-bold">{{ t('waiterPage.payWalletMethod') }}</span>
-            </button>
-            <!-- Collapsible split section -->
-            <div class="rounded-lg border border-slate-700/60 bg-slate-800/40">
-              <button
-                type="button"
-                class="ui-press ui-touch-target flex w-full items-center justify-between px-3 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-200 focus-visible:outline-none"
-                :aria-expanded="splitSectionOpen"
-                @click="splitSectionOpen = !splitSectionOpen"
-              >
-                <span>{{ t('waiterPage.splitSection') }}</span>
-                <span class="text-slate-500 transition-transform" :class="splitSectionOpen ? 'rotate-180' : ''">▾</span>
-              </button>
-              <div v-if="splitSectionOpen" class="space-y-2 px-3 pb-3">
-                <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
-                  {{ t('waiterPage.splitAmount') }}
-                </label>
-                <!-- Quick-split buttons: ÷2 ÷3 ÷4 ÷5 -->
-                <div class="flex gap-1.5">
-                  <button
-                    v-for="n in [2, 3, 4, 5]"
-                    :key="n"
-                    type="button"
-                    class="ui-press ui-touch-target flex-1 rounded-lg border border-slate-600/70 bg-slate-800/60 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                    @click="splitAmount = (settleOutstanding(settleChooser) / n).toFixed(2)"
-                  >÷{{ n }}</button>
-                </div>
-                <input
-                  :id="'settle-amount-' + settleChooser.id"
-                  v-model="splitAmount"
-                  type="number"
-                  inputmode="decimal"
-                  step="0.01"
-                  min="0.01"
-                  :max="settleOutstanding(settleChooser)"
-                  class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
-                />
-                <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
-                <div class="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                    @click="payCash(settleChooser)"
-                  >
-                    <span class="text-xl" aria-hidden="true">💵</span>
-                    <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
-                  </button>
-                  <button
-                    class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-3 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                    @click="payWallet(settleChooser)"
-                  >
-                    <span class="text-xl" aria-hidden="true">💳</span>
-                    <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <button
-            class="ui-press ui-touch-target w-full px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none"
-            @click="settleChooser = null"
-          >
-            {{ t('common.cancel') }}
-          </button>
+          <!-- Inner body extracted (RISK FE-2); the shell + focus trap + all settle handlers stay here. -->
+          <WaiterSettleSheet
+            v-model:split-by-seat-mode="splitBySeatMode"
+            v-model:cash-received="cashReceived"
+            v-model:split-section-open="splitSectionOpen"
+            v-model:split-amount="splitAmount"
+            :order="settleChooser"
+            :seat-groups="seatGroups"
+            :seat-groups-loading="seatGroupsLoading"
+            :seat-groups-error="seatGroupsError"
+            :cash-change="cashChange"
+            :settle-outstanding="settleOutstanding"
+            :fmt-order-price="fmtOrderPrice"
+            :seat-group-label="seatGroupLabel"
+            @close="settleChooser = null"
+            @load-seat-groups="loadSeatGroups(settleChooser)"
+            @pay-cash="payCash(settleChooser)"
+            @pay-wallet="payWallet(settleChooser)"
+            @pay-cash-for-seat="payCashForSeat(settleChooser, $event)"
+            @pay-wallet-for-seat="payWalletForSeat(settleChooser, $event)"
+          />
         </div>
       </div>
     </Transition>
@@ -2136,6 +1038,18 @@ import { useSessionStore } from "../stores/session";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 import WaiterTableQRModal from "../components/WaiterTableQRModal.vue";
+import WaiterShiftPanel from "../components/WaiterShiftPanel.vue";
+import WaiterOfflineIndicator from "../components/WaiterOfflineIndicator.vue";
+import WaiterStatusTabBar from "../components/WaiterStatusTabBar.vue";
+import WaiterFloorTileGrid from "../components/WaiterFloorTileGrid.vue";
+import WaiterOrderCard from "../components/WaiterOrderCard.vue";
+import WaiterFirstRunBanner from "../components/WaiterFirstRunBanner.vue";
+import WaiterInstallBanner from "../components/WaiterInstallBanner.vue";
+import WaiterFloorLegend from "../components/WaiterFloorLegend.vue";
+import WaiterIdleTableAlert from "../components/WaiterIdleTableAlert.vue";
+import WaiterStaleTablesWarning from "../components/WaiterStaleTablesWarning.vue";
+import WaiterCustomerRatingForm from "../components/WaiterCustomerRatingForm.vue";
+import WaiterSettleSheet from "../components/WaiterSettleSheet.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
@@ -3340,20 +2254,10 @@ watch(activeTab, (tab) => {
 
 // Arrow-key navigation within the tablist (ARIA APG tab pattern).
 // Only moves focus — activation stays on click/Enter to match existing behavior.
-const _allTabKeys = ["needs_action", "all", "pending", "confirmed", "preparing", "ready", "unpaid", "recent", "shift"];
-const _focusTabByKey = (key) => {
-  const el = document.getElementById(`waiter-tab-${key}`);
-  el?.focus();
-};
-const focusPrevTab = () => {
-  const idx = _allTabKeys.indexOf(activeTab.value);
-  const prev = _allTabKeys[(idx - 1 + _allTabKeys.length) % _allTabKeys.length];
-  _focusTabByKey(prev);
-};
-const focusNextTab = () => {
-  const idx = _allTabKeys.indexOf(activeTab.value);
-  const next = _allTabKeys[(idx + 1) % _allTabKeys.length];
-  _focusTabByKey(next);
+// New-order button (in WaiterStatusTabBar) — guard on an open shift before opening.
+const onNewOrderClick = () => {
+  if (currentShift.value) showNewOrder.value = true;
+  else toast.show(t('waiterPage.mustClockInFirst'), 'warning');
 };
 
 // ── Polling ────────────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
-from sales.permissions import IsPlatformAdmin, user_owns_tenant_id
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerStaffForbidden
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -34,7 +34,7 @@ from django.core.management import call_command
 from .authentication import CustomerSessionAuthentication
 from .messaging import send_password_reset_email
 from .models import Customer, CustomerOrderRef, SavedAddress, WalletTransaction
-from .permissions import IsCustomer, IsOrderOwner
+from .permissions import IsCustomer, IsOrderOwner, customer_or_none
 from .throttles import (
     ActivationThrottle,
     AdminPIIThrottle,
@@ -907,21 +907,16 @@ class CustomerServiceProfilesView(APIView):
     False only adds suppression — see P2b). See KEPOLI_ACCOUNT_ARCHITECTURE.md L2.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read/update; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        from .models import Customer, CustomerServiceProfile
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
+        cust = request.user
+        from .models import CustomerServiceProfile
         from .verticals import ALL_VERTICALS
-
-        try:
-            cust = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profiles = {
             p.vertical: p
@@ -941,9 +936,8 @@ class CustomerServiceProfilesView(APIView):
         return Response({"service_profiles": out})
 
     def patch(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import CustomerServiceProfile
         from .verticals import ALL_VERTICALS
 
@@ -1187,6 +1181,11 @@ class CustomerOrdersView(APIView):
     tenant domain). Returns an empty list when called from the public schema
     because Order lives in tenant schemas, not the public schema.
     """
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — a signed-out caller still gets an
+    # empty list (the graceful degradation this view is built on), NOT a 401. Only the raw
+    # session read is removed; the customer is now request.user. (Flipping to IsCustomer —
+    # 401 for anonymous — is a separate product change that would need a frontend check.)
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -1195,13 +1194,8 @@ class CustomerOrdersView(APIView):
         if connection.schema_name == "public":
             return Response({"orders": [], "count": 0})
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"orders": [], "count": 0})
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"orders": [], "count": 0})
 
         # Import Order + OrderItem from menu app — cross-app import is intentional here.
@@ -1282,13 +1276,15 @@ class CustomerMarketplaceOrdersView(APIView):
     history — unlike CustomerOrdersView which only sees the active tenant's orders.
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — anonymous → empty list, not 401.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        _customer = customer_or_none(request)
+        if _customer is None:
             return Response({"orders": [], "count": 0})
+        customer_id = _customer.id
 
         from .models import CustomerOrderRef
         from .verticals import ALL_VERTICALS
@@ -1343,18 +1339,14 @@ class CustomerReservationsView(APIView):
     (booked_for set, excluding provisioning/live/paid tenant-signup leads).
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — anonymous → empty list, not 401.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [CustomerReservationsThrottle]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"reservations": [], "count": 0})
-
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"reservations": [], "count": 0})
 
         from sales.models import Lead
@@ -1488,18 +1480,14 @@ class CustomerEmailVerifyView(APIView):
 class CustomerProfileUpdateView(APIView):
     """PATCH /api/customer/profile/ — update name, locale, or email for the current customer session."""
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [CustomerProfileUpdateThrottle]
 
     def patch(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         update_fields = ["updated_at"]
 
@@ -1569,28 +1557,17 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import update_session_auth_hash as _update_session_auth_hash
 
 
-def _is_tenant_owner(request, tenant) -> bool:
-    """Return True if the request user is the owner of the given tenant.
-
-    RISK AUTHZ-1: thin delegate to `sales.permissions.user_owns_tenant_id` (the single owner
-    check shared with `IsTenantOwner` and menu's `_is_tenant_owner`). Kept as a named helper so
-    the ~8 call sites and their tests stay stable. Semantics unchanged: superuser / platform-admin
-    bypass (OPS-5d dropped Django `is_staff` as an owner signal), else tenant-match AND owner role.
-    """
-    return user_owns_tenant_id(getattr(request, "user", None), getattr(tenant, "id", None))
-
-
 class OwnerStaffListCreateView(APIView):
     """GET /api/owner/staff/ — list staff accounts for this tenant.
        POST /api/owner/staff/ — create a new staff (waiter) account."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403
+    # {"detail": "Owner access required.", "code": "forbidden"} — the code is preserved by
+    # IsTenantOwnerStaffForbidden's dict message, which DRF renders as the body verbatim).
+    permission_classes = [IsTenantOwnerStaffForbidden]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
-
         from .models import User
         staff = list(
             User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF)
@@ -1678,8 +1655,6 @@ class OwnerStaffListCreateView(APIView):
 
     def post(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         name = (request.data.get("name") or "").strip()
         email = (request.data.get("email") or "").strip().lower()
@@ -1824,13 +1799,14 @@ class OwnerStaffDeleteView(APIView):
     """DELETE /api/owner/staff/<staff_id>/ — remove a staff account from this tenant.
        PATCH  /api/owner/staff/<staff_id>/ — update staff permissions."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was the code:"forbidden" 403 inside _get_staff,
+    # which now does only the 404 lookup). Body preserved by IsTenantOwnerStaffForbidden.
+    permission_classes = [IsTenantOwnerStaffForbidden]
 
     def _get_staff(self, request, staff_id):
-        """Return (tenant, staff_user) or raise a Response on error."""
+        """Return (staff_user, error_response). Owner-gating is now on the class; this does
+        only the tenant-scoped 404 lookup."""
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return None, Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
         from .models import User
         staff_user = User.objects.filter(id=staff_id, tenant=tenant, role=User.Roles.TENANT_STAFF).first()
         if staff_user is None:
@@ -1973,16 +1949,15 @@ class CustomerWalletPayTokenView(APIView):
     customer, rendered as a QR ("pay code") so a restaurant can scan it to top up the
     customer's wallet without searching by phone. Expires in 5 minutes."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
         from django.core import signing
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        token = signing.dumps({"cid": customer_id}, salt=_WALLET_PAY_SALT)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        token = signing.dumps({"cid": request.user.id}, salt=_WALLET_PAY_SALT)
         return Response({"token": token, "expires_in": _WALLET_PAY_TTL})
 
 
@@ -1990,13 +1965,13 @@ class CustomerWalletChargeRequestsView(APIView):
     """GET /api/customer/wallet/charge-requests/ — pending wallet charges awaiting this
     customer's approval (above-threshold charges a restaurant initiated)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import WalletChargeRequest
         from django.utils import timezone as _tz
         now = _tz.now()
@@ -2028,13 +2003,14 @@ class CustomerWalletChargeApproveView(APIView):
     debiting the wallet. Idempotent: the request carries the debit key, and a re-approve
     of an already-charged request replays the result instead of charging again."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer money write. The old handler 401'd
+    # unconditionally before any other check, so IsCustomer is an exact swap.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
 
         from .models import WalletChargeRequest
         from .wallet_service import debit_wallet, InsufficientFunds, WalletError
@@ -2089,13 +2065,13 @@ class CustomerWalletChargeApproveView(APIView):
 class CustomerWalletChargeDeclineView(APIView):
     """POST /api/customer/wallet/charge-requests/<id>/decline/ — decline a pending charge."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write, status-only (no money mutation).
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from .models import WalletChargeRequest
         from django.utils import timezone as _tz
         cr = WalletChargeRequest.objects.filter(pk=request_id, customer_id=customer_id).first()
@@ -2125,13 +2101,13 @@ class CustomerPushSubscribeView(APIView):
     """POST/DELETE /api/customer/push-subscribe/ — register or remove a customer's browser
     Web Push subscription (session-authenticated customer)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write; no staff/owner branch, no money.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         endpoint = (request.data.get("endpoint") or "").strip()
         p256dh = (request.data.get("p256dh") or "").strip()
         auth = (request.data.get("auth") or "").strip()
@@ -2152,9 +2128,8 @@ class CustomerPushSubscribeView(APIView):
         return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         endpoint = (request.data.get("endpoint") or "").strip()
         if endpoint:
             from .models import CustomerPushSubscription
@@ -2169,18 +2144,15 @@ class CustomerWalletView(APIView):
     paginates the transactions list only; balance/spend_by_vertical/etc. are
     unaffected (they're not page-scoped)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            request.session.pop("customer_id", None)
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal
+        # (a stale/forged session now 401s at auth time instead of this view's old
+        # hand-rolled 404 — the same sanctioned carve-out as the rest of the sweep).
+        customer = request.user
 
         from django.conf import settings
         from django.db.models import Sum
@@ -2254,8 +2226,13 @@ class CustomerWalletTransferView(APIView):
     Rate-limited per customer (WalletTransferThrottle) so a burst can't drain a wallet.
     """
 
+    # IDENTITY-1 sweep: stays AllowAny deliberately — the WALLET_P2P_ENABLED gate below
+    # must answer BEFORE auth ("this feature doesn't exist" outranks "who are you"), an
+    # ordering pinned by test_customer_wallet_transfer.test_disabled_returns_403_before_
+    # anything_else. IsCustomer runs in initial(), ahead of post(), and would turn the
+    # feature-disabled 403 into a 401 for an anonymous caller.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [WalletTransferThrottle]
 
     def post(self, request, *args, **kwargs):
@@ -2266,9 +2243,10 @@ class CustomerWalletTransferView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        _customer = customer_or_none(request)
+        if _customer is None:
             return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        customer_id = _customer.id
 
         from accounts.wallet_service import (
             transfer_between_customers,
@@ -3942,8 +3920,10 @@ class MarketplaceMenuView(APIView):
     Only published, available items are included.
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — an anonymous shopper still gets the
+    # full public menu; the customer session only personalises COD eligibility below.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
 
     def get(self, request, slug, *args, **kwargs):
         from tenancy.models import Tenant
@@ -4091,11 +4071,12 @@ class MarketplaceMenuView(APIView):
 
                 # Trusted-customer cash-on-handover eligibility for the marketplace cart —
                 # mirrors menu.views.OrderEligibilityView. The Order count lives in this
-                # tenant schema, so compute it inside schema_context. The customer id comes
-                # from the marketplace session (authentication_classes is empty, but the
-                # session cookie still resolves so request.session is available).
+                # tenant schema, so compute it inside schema_context. customer_or_none reads
+                # request.user (hydrated by CustomerSessionAuthentication in initial(), before
+                # this schema_context) — no query here, so the public/tenant split is a non-issue.
                 from menu.views import _cod_eligible as _mkt_menu_cod_eligible
-                _mkt_menu_cust_id = request.session.get("customer_id")
+                _mkt_menu_customer = customer_or_none(request)
+                _mkt_menu_cust_id = _mkt_menu_customer.id if _mkt_menu_customer else None
                 cod_enabled = bool(getattr(profile, "cod_enabled", False))
                 cod_eligible = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
 
@@ -4195,6 +4176,10 @@ class MarketplacePlaceOrderView(APIView):
       use_wallet (bool)
     """
 
+    # IDENTITY-1 sweep: optional-auth money view. Stays AllowAny — the marketplace serves
+    # guest (anonymous) orders; a signed-in customer is linked for wallet/loyalty. Runs on
+    # the public marketplace host, so there is no staff-preview branch (unlike PlaceOrderView).
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [MarketplaceOrderThrottle]
 
@@ -4222,13 +4207,9 @@ class MarketplacePlaceOrderView(APIView):
         if tenant.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
             return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
-        _customer_id = request.session.get("customer_id")
-        _linked_customer = None
-        if _customer_id:
-            try:
-                _linked_customer = Customer.objects.get(pk=_customer_id)
-            except Customer.DoesNotExist:
-                request.session.pop("customer_id", None)
+        # IDENTITY-1: the signed-in customer (if any) is request.user, hydrated by
+        # CustomerSessionAuthentication. customer_or_none returns None for a guest order.
+        _linked_customer = customer_or_none(request)
 
         items_raw = request.data.get("items") or []
         if not items_raw or not isinstance(items_raw, list):
@@ -5179,8 +5160,10 @@ class MarketplacePlaceOrderView(APIView):
 class MarketplaceOrderStatusView(APIView):
     """GET /api/marketplace/order/<order_number>/?restaurant=<slug> — poll order status."""
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny by design — see the ownership gate
+    # below: a non-owner (incl. anonymous) still gets the minimal status payload.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [MarketplaceOrderStatusThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -5227,15 +5210,13 @@ class MarketplaceOrderStatusView(APIView):
                 # Ownership gate — this endpoint is AllowAny and order numbers are
                 # ORD-+token_hex(3) (24 bits → enumerable), so the financial body
                 # (items, totals, payment_status, wallet/loyalty/promo, schedule)
-                # MUST be confined to the session customer who owns the order.
-                # A non-owner gets only a minimal, non-sensitive status. The items
-                # query is built INSIDE the schema_context, so compute ownership
-                # here before deciding whether to materialise it.
-                _scid = getattr(request, "session", None) and request.session.get("customer_id")
-                try:
-                    _owns = bool(_scid and order.customer_id and int(_scid) == int(order.customer_id))
-                except (TypeError, ValueError):
-                    _owns = False
+                # MUST be confined to the customer who owns the order. A non-owner gets
+                # only a minimal, non-sensitive status. The items query is built INSIDE
+                # the schema_context, so compute ownership here before materialising it.
+                # IsOrderOwner is the shared home for the comparison (fails closed on a
+                # non-Customer principal or a missing/unparseable id on either side); used
+                # as a plain predicate so this view keeps its degrade-to-minimal behavior.
+                _owns = IsOrderOwner().has_object_permission(request, self, order)
 
                 items = []
                 existing_rating = None
@@ -5591,12 +5572,11 @@ class OwnerFlashSaleListView(APIView):
     whether this tenant has opted in.
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -5628,12 +5608,11 @@ class OwnerFlashSaleOptInView(APIView):
     DELETE /api/owner/flash-sales/<id>/opt-in/   — opt out
     """
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only, all methods (was per-method inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def post(self, request, fs_id, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -5666,8 +5645,6 @@ class OwnerFlashSaleOptInView(APIView):
 
     def delete(self, request, fs_id, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=400)
 
@@ -6049,17 +6026,14 @@ class DriverRegisterView(APIView):
     before the driver can go online. Body: { "vehicle"?: str }
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer write (the applicant is NOT a driver yet,
+    # so this gates on IsCustomer, not driver status).
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         fields = []
         vehicle = str(request.data.get("vehicle") or "").strip()[:120]
@@ -6093,17 +6067,15 @@ class DriverStatusView(APIView):
        PATCH /api/driver/status/ — toggle driver online/offline. Body: { "online": bool }
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer view. GET is deliberately IsCustomer-only
+    # (it reports driver_status="none" for a customer who never applied); PATCH keeps its
+    # own is_driver gate below.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
         # A driver reads as "rejected" when an admin has rejected them (driver_rejected_at
         # set) and they haven't since been approved. AdminDriverApprovalView clears
         # driver_rejected_at on a later approve, so this is naturally False for drivers who
@@ -6135,12 +6107,10 @@ class DriverStatusView(APIView):
         })
 
     def patch(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal; the
+        # driver gate stays here so the 404 contract is preserved.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         online = bool(request.data.get("online", False))
@@ -6224,19 +6194,17 @@ class DriverPositionUpdateView(APIView):
     Also accepts optional job_id to update the specific job context.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverPositionThrottle]
 
     def post(self, request, *args, **kwargs):
         from django.utils import timezone as _tz
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.data.get("lat") is None or request.data.get("lng") is None:
@@ -6271,16 +6239,14 @@ class DriverJobListView(APIView):
     plus any currently active job assigned to this driver.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from .models import DeliveryJob
@@ -6380,8 +6346,9 @@ class DriverJobListView(APIView):
 class DriverJobAcceptView(APIView):
     """POST /api/driver/jobs/<job_id>/accept/ — driver accepts a pending delivery job."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own approved+online 403 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
@@ -6389,14 +6356,10 @@ class DriverJobAcceptView(APIView):
         from django.db import transaction as _tx
         from .models import DeliveryJob
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(
-                pk=customer_id, is_driver=True, driver_approved=True, is_driver_online=True
-            )
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal; the
+        # approved-and-online gate stays here so the 403 contract is preserved.
+        customer = request.user
+        if not (customer.is_driver and customer.driver_approved and customer.is_driver_online):
             return Response({"detail": "Driver must be approved and online to accept jobs."}, status=status.HTTP_403_FORBIDDEN)
 
         # Check driver doesn't already have an active job
@@ -6461,17 +6424,15 @@ class DriverJobDeclineView(APIView):
     for anyone else it's a harmless no-op success.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
         from accounts.dispatch import decline_offer
         decline_offer(job_id, customer.id)
@@ -6662,8 +6623,9 @@ class DriverJobStatusUpdateView(APIView):
         "picked_up": ["delivered", "failed"],
     }
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [DriverStatusUpdateThrottle]
     # Accept multipart so drivers can attach a proof photo (leave-at-door fallback).
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -6674,12 +6636,9 @@ class DriverJobStatusUpdateView(APIView):
         from django.db import transaction as _dbtx
         from .models import DeliveryJob
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        if not customer.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         new_status = request.data.get("status", "").strip()
@@ -6837,18 +6796,19 @@ class DriverJobStatusUpdateView(APIView):
 
 
 def _tracking_request_owns_order(request, tenant, order_number) -> bool:
-    """True when the requesting session customer owns this order (tenant-schema lookup).
+    """True when the requesting customer owns this order (tenant-schema lookup).
 
     Delivery orders always have a signed-in owner, so this never hides tracking from a
     legitimate customer — it just stops anyone who guesses an order number from reading the
     driver's phone + live position.
+
+    RISK IDENTITY-1: reads the principal via customer_or_none (hydrated by
+    CustomerSessionAuthentication on OrderTrackingView) instead of the raw session id.
     """
-    try:
-        sid = request.session.get("customer_id")
-    except Exception:
-        sid = None
-    if not sid:
+    _customer = customer_or_none(request)
+    if _customer is None:
         return False
+    sid = _customer.id
     try:
         from django_tenants.utils import schema_context
         from menu.models import Order as _O
@@ -6874,8 +6834,11 @@ class OrderTrackingView(APIView):
     have elapsed (to avoid holding Gunicorn workers indefinitely).
     """
 
+    # IDENTITY-1 sweep: optional-auth. Stays AllowAny — a non-owner still gets the basic
+    # tracking, but the owner-only detail (driver phone + live position) is gated by
+    # _tracking_request_owns_order, which now reads the customer off request.user.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [DeliveryTrackingThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
@@ -6961,8 +6924,14 @@ class DeliveryRatingView(APIView):
       { "role": "restaurant", "score": 5, "note": "On time" }
     """
 
+    # IDENTITY-1 sweep: MULTI-ROLE, so it stays AllowAny and each role branch gates
+    # itself. CustomerSessionAuthentication hydrates the customer/driver principal onto
+    # request.user; a staff owner (role=restaurant) is force_authenticated in tests and,
+    # in production, is not reachable through this AllowAny path (request.user stays
+    # anonymous without SessionAuthentication) — behavior preserved. The role=restaurant
+    # branch is hardened below so a Customer principal can't pass its staff gate.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [DeliveryRatingThrottle]
 
     def post(self, request, order_number, *args, **kwargs):
@@ -7000,14 +6969,16 @@ class DeliveryRatingView(APIView):
 
         update_fields = []
         if role == "customer":
-            customer_id = request.session.get("customer_id")
-            if not customer_id:
+            # IDENTITY-1: the rater is the signed-in customer principal (request.user).
+            _rater = customer_or_none(request)
+            if _rater is None:
                 return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+            customer_id = _rater.id
             # OPS-5f: ownership gate. Without this, any session holder who guesses a
             # delivered order number could write the customer→driver rating (review
             # fraud / driver-reputation tampering). The order's customer_id lives in the
             # tenant schema (the DeliveryJob is public-schema), so resolve it there and
-            # require the session customer to OWN the order (mirrors CustomerOrderRate).
+            # require the customer to OWN the order (mirrors CustomerOrderRate).
             from django_tenants.utils import schema_context as _sc
             from menu.models import Order as _O
             with _sc(tenant.schema_name):
@@ -7030,9 +7001,11 @@ class DeliveryRatingView(APIView):
             job.customer_driver_note = note
             update_fields = ["customer_driver_rating", "customer_driver_note"]
         elif role == "driver":
-            customer_id = request.session.get("customer_id")
+            # IDENTITY-1: the rater is the signed-in driver (a Customer principal). The gate
+            # is that the principal IS this job's assigned driver.
+            _rater = customer_or_none(request)
             driver = getattr(job, "driver", None)
-            if not customer_id or not driver or driver.id != customer_id:
+            if _rater is None or not driver or driver.id != _rater.id:
                 return Response({"detail": "Driver session required."}, status=status.HTTP_403_FORBIDDEN)
             if job.driver_customer_rating is not None:
                 return Response(
@@ -7045,7 +7018,12 @@ class DeliveryRatingView(APIView):
         elif role == "restaurant":
             user = getattr(request, "user", None)
             tenant_ctx = getattr(request, "tenant", None)
-            if not user or not user.is_authenticated:
+            # RISK IDENTITY-1 landmine: this branch requires a STAFF owner, but a Customer
+            # principal is now also authenticated (Customer.is_authenticated is True), so a
+            # bare is_authenticated check would let a customer through. customer_or_none is
+            # non-None iff the principal is a Customer — reject that here so only a real
+            # staff User can rate as the restaurant.
+            if not user or not user.is_authenticated or customer_or_none(request) is not None:
                 return Response({"detail": "Owner session required."}, status=status.HTTP_401_UNAUTHORIZED)
             if not tenant_ctx or tenant_ctx.id != tenant.id:
                 return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
@@ -7062,18 +7040,6 @@ class DeliveryRatingView(APIView):
 
         job.save(update_fields=update_fields)
         return Response({"detail": "Rating saved.", "score": score})
-
-
-def _resolve_customer_from_request(request):
-    """Return (Customer, error_response) from a customer-session request."""
-    customer_id = request.session.get("customer_id") if hasattr(request, "session") else None
-    if not customer_id:
-        return None, Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-    try:
-        customer = Customer.objects.get(pk=customer_id)
-    except Customer.DoesNotExist:
-        return None, Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
-    return customer, None
 
 
 class CustomerSavedAddressListCreateView(APIView):
@@ -7220,13 +7186,14 @@ class CustomerLinkReferralView(APIView):
       next order check).
     """
 
-    permission_classes = [AllowAny]
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, *args, **kwargs):
         from .models import Customer
-        customer, err = _resolve_customer_from_request(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
 
         code = (request.data.get("code") or "").strip().upper()
         if not code:
@@ -7499,17 +7466,16 @@ class AdminDriverEarningsView(APIView):
 class DriverEarningsView(APIView):
     """GET /api/driver/earnings/ — the signed-in driver's own earnings summary."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            cust = Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        cust = request.user
+        if not cust.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = cust.id
 
         from .driver_service import driver_earnings_summary, CASHOUT_MIN
         from .models import DeliveryJob
@@ -7555,15 +7521,14 @@ class DriverCashoutView(APIView):
     """GET  /api/driver/cashout/  → the driver's current PENDING cash-out (or null).
     POST /api/driver/cashout/  → create a cash-out request {amount} (wallet ≥ min)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def _driver(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return None, Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        cust = Customer.objects.filter(pk=customer_id, is_driver=True).first()
-        if cust is None:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        cust = request.user
+        if not cust.is_driver:
             return None, Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
         return cust, None
 
@@ -7607,13 +7572,14 @@ class DriverCashoutView(APIView):
 class DriverCashoutCancelView(APIView):
     """POST /api/driver/cashout/<id>/cancel/ — driver cancels their own pending request."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view. Deliberately no is_driver gate (matching
+    # the previous behavior) — ownership is already enforced by the driver_id filter below.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request, request_id, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer_id = request.user.id
         from django.utils import timezone as _tz
         from .models import DriverCashoutRequest
         req = DriverCashoutRequest.objects.filter(pk=request_id, driver_id=customer_id).first()
@@ -7632,17 +7598,15 @@ class DriverCashoutHistoryView(APIView):
     DriverCashoutView.get for that), newest first. Mirrors DriverDeliveriesView's
     page/has_more pagination."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        if not request.user.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = request.user.id
 
         from .models import DriverCashoutRequest
         PAGE_SIZE = 20
@@ -7676,17 +7640,15 @@ class DriverDeliveriesView(APIView):
     """GET /api/driver/deliveries/ — the signed-in driver's recent finished jobs
     (delivered or failed), newest first, for an in-app history view."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role driver view; keeps its own is_driver 404 contract.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            Customer.objects.get(pk=customer_id, is_driver=True)
-        except Customer.DoesNotExist:
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        if not request.user.is_driver:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = request.user.id
 
         from .models import DeliveryJob
         PAGE_SIZE = 20
@@ -8048,13 +8010,11 @@ class AdminDeliveryZoneDetailView(APIView):
 class OwnerDeliveryZoneView(APIView):
     """GET /api/owner/delivery-zone/ — return the zone this restaurant is assigned to (if any)."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def get(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
-
         from django_tenants.utils import schema_context
         from tenancy.models import Profile
 
@@ -8081,13 +8041,11 @@ class OwnerDeliveryZoneView(APIView):
 class OwnerDeliveryRadiusUpdateView(APIView):
     """PATCH /api/owner/delivery-radius/ — update delivery radius for this restaurant."""
 
-    permission_classes = [IsAuthenticated]
+    # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
+    permission_classes = [IsTenantOwner]
 
     def patch(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
-        if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required."}, status=403)
-
         try:
             radius = float(request.data.get("delivery_radius_km", 0))
             if radius < 0:
@@ -8403,6 +8361,11 @@ class CustomerTopUpIntentView(APIView):
     ``{"enabled": True, "url": "<stripe_url>"}``. The frontend redirects to that URL.
     """
 
+    # IDENTITY-1 sweep: stays AllowAny deliberately — the docstring's "safe to call
+    # always" contract means the PSP_TOPUP_ENABLED probe below must answer {"enabled":
+    # False} BEFORE auth. IsCustomer runs in initial(), ahead of post(), and would 401 an
+    # anonymous/expired caller instead. (Same ordering rule as CustomerWalletTransferView.)
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = []
 
@@ -8410,13 +8373,12 @@ class CustomerTopUpIntentView(APIView):
         if not settings.PSP_TOPUP_ENABLED:
             return Response({"enabled": False})
 
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
+        # A stale/forged session now 401s here rather than the old 404 "Customer not
+        # found." — the sanctioned 404-to-401 carve-out used across the sweep.
+        customer = customer_or_none(request)
+        if customer is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        customer_id = customer.id
 
         from decimal import Decimal as _D, InvalidOperation as _IO
         raw = str(request.data.get("amount") or "").strip()
@@ -8571,20 +8533,14 @@ class CustomerDataExportView(APIView):
     addresses (limited to the most recent 200 rows each to stay < 1 MB).
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer read; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response(
-                {"detail": "Not authenticated."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        customer_id = customer.id
 
         wallet_txns = list(
             WalletTransaction.objects.filter(customer_id=customer_id)
@@ -8652,20 +8608,14 @@ class CustomerErasureRequestView(APIView):
     On guard failure: HTTP 409 with {"detail": "...", "errors": ["…", "…"]}.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role customer mutation; no staff/owner branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def post(self, request):
-        customer_id = request.session.get("customer_id")
-        if not customer_id:
-            return Response(
-                {"detail": "Not authenticated."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            customer = Customer.objects.get(pk=customer_id)
-        except Customer.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        customer = request.user
+        customer_id = customer.id
 
         from accounts.management.commands.erase_customer import _check_guard_rails
 
