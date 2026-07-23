@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **3 CustomerAccount tabs extracted** (reservations/reviews/profile; 3654→2963 lines); more tabs + other pages in progress | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **37 slices → 42 tested child components** (~2950 lines lifted; vitest 527→823). Cart fully componentized down to its money-path logic core; only supervised blocks (WaiterPage, form-heavy drawers) + preview QA + merge remain | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1001,21 +1001,31 @@ preview-driven session.
 Plus `CartCheckoutErrors` — the checkout error alerts (place-order / checkout / handoff), DRY'd to a
 `v-for` over the non-empty messages. Display-only, 3 string props, no logic. 3-case test. No new i18n keys.
 
-**Line drawn at the checkout CTA:** the place-order **button + payment/order-placement logic**
-(`placeInAppOrder`, `startCheckout`, the disabled conditions, wallet/prepay checks, the fulfillment/tip
-controls) is deliberately **NOT extracted** — it is the app's money path, unpreviewable by an autonomous
-agent, and the modest parent-size win doesn't justify the risk of a blind checkout change. That block is
-reserved for a preview-driven session at the keyboard. Everything display-only around it (total header,
-order-summary breakdown, error alerts) has been lifted.
+Plus the three checkout **CTA buttons** — `CartPlaceOrderButton` (primary place-order),
+`CartCheckoutButton` (proceed-to-checkout / PSP) and `CartWhatsAppButton` (send-via-WhatsApp, a `variant`
+prop DRYs its prominent-outline + compact-link styles into one component). **DUMB buttons only:** each
+takes the parent's `busy`/`disabled`/`label` values **verbatim** as props and forwards the tap via an
+emit (`place`/`checkout`/`whatsapp`) that the parent binds to its existing handler
+(`placeInAppOrder`/`startCheckout`/`openWhatsApp`). The full 7-term place-order disabled condition, the
+status-aware label ternaries and all payment/order logic stay in `Cart.vue`; the buttons own only the
+busy-spinner-vs-icon (and, for WhatsApp, the variant classes + icon size). Done in a **preview-driven,
+user-reviewed** session — not autonomously. 3 tests (~4 cases each). No new i18n keys.
 
-**Tally: 36 slices across all eight mega-pages, ~2900 lines lifted / DRY'd into 39 tested child
-components; frontend vitest 527 → 811.** FE-2 autonomous extraction is complete — every mega-page is
-decomposed down to the money-path Cart's display chrome; only the Cart checkout CTA/payment logic is
-intentionally left for a supervised session. What remains is the preview-pending components' visual QA
+**Line held at the checkout LOGIC (not the buttons):** the CTA *buttons* are now dumb components (above),
+but the **payment/order-placement logic** — `placeInAppOrder`, `startCheckout`, `openWhatsApp`, the
+disabled/label expressions, wallet/prepay checks, the fulfillment/tip controls — stays entirely in
+`Cart.vue`. That logic is the app's money path and was **not** extracted; the button componentization was
+done under human review + browser preview, not by an autonomous slice.
+
+**Tally: 37 slices across all eight mega-pages, ~2950 lines lifted / DRY'd into 42 tested child
+components; frontend vitest 527 → 823.** FE-2 autonomous extraction is complete — every mega-page is
+decomposed, and the Cart money-path page is now fully componentized down to its logic core (chrome, both
+checkout display blocks, and the CTA buttons all lifted; only the payment/pricing/place-order *logic*
+remains in the parent by design). What remains is the preview-pending components' visual QA
 and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
-drawers, the OwnerKitchen 86-board, and the held `Cart`/`WaiterPage`) — those want supervised,
-previewable extraction, not autonomous slices. Money/order paths (driver cash-out, customer cart/checkout) were
-explicitly left in their parents. `Cart.vue` (money path) and `WaiterPage.vue` (most entangled) are
+drawers, the OwnerKitchen 86-board, and the held `WaiterPage`) — those want supervised,
+previewable extraction, not autonomous slices. Money/order *logic* (driver cash-out, customer cart/checkout) was
+explicitly left in the parents. `WaiterPage.vue` (most entangled) is
 held for supervised slices, not autonomous ones.
 **Effort:** L. **Source:** frontend review.
 
