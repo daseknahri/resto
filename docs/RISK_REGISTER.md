@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **40 slices → 47 tested child components** (~3050 lines lifted; vitest 527→833). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted. Only entangled/money blocks (WaiterPage settle+floor-tile, form-heavy drawers) + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **41 slices → 47 tested child components** (~3150 lines lifted; vitest 527→833). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted + expanded floor-tile card DRY'd onto WaiterOrderCard. Only money blocks (WaiterPage settle modal, form-heavy drawers) + preview QA + merge remain | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1027,7 +1027,17 @@ keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `Waiter
 untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
 `t()` in the idle-alert label.)
 
-**Tally: 40 slices across all eight mega-pages, ~3050 lines lifted / DRY'd into 47 tested child
+Plus a **DRY unification** (not a new component): the expanded floor-tile view rendered its order cards
+from a **138-line inline copy** of the order-card markup — a drifted 4th duplicate — which was replaced
+with the canonical `<WaiterOrderCard>` bound exactly like the table-grouped list (`show-elapsed=false`,
+`show-combos=true`). Net **−95 lines**, bundle 4131→4122 KiB. Behaviour-preserving for the shared parts
+(header / items / notes / total / full action footer, all via the emits the list already uses); it also
+**fixes the drift** by making the expanded tile show what the list already shows for the same table
+orders — combo sub-lines, `section_name`, and the partial-payment "paid so far / left" line. Reviewed +
+previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
+`WaiterOrderItem` are already covered.
+
+**Tally: 41 slices across all eight mega-pages, ~3150 lines lifted / DRY'd into 47 tested child
 components; frontend vitest 527 → 833.** Every mega-page is decomposed; the Cart money-path page is fully
 componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
 lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
