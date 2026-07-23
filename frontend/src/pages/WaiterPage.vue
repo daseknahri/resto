@@ -1,31 +1,14 @@
 ﻿<template>
   <div class="space-y-4">
-    <!-- First-run welcome (one-time, dismissible) -->
-    <div v-if="!waiterFirstRunSeen" class="ui-reveal space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
-      <p class="text-sm font-semibold text-amber-100">{{ t('waiter.firstRunTitle') }}</p>
-      <p class="text-xs text-amber-200/80">{{ t('waiter.firstRunBody') }}</p>
-      <button class="ui-btn-primary ui-press px-4 py-1.5 text-xs" @click="dismissWaiterFirstRun">
-        {{ t('waiter.firstRunDismiss') }}
-      </button>
-    </div>
-    <!-- Install-the-app banner (waiters work from the installed app) -->
-    <div
+    <!-- First-run welcome (one-time, dismissible) (RISK FE-2) -->
+    <WaiterFirstRunBanner v-if="!waiterFirstRunSeen" @dismiss="dismissWaiterFirstRun" />
+    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2) -->
+    <WaiterInstallBanner
       v-if="!isStandalone && !installDismissed"
-      class="ui-reveal flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-4 py-3 text-xs"
-      role="status"
-    >
-      <span class="flex-1 font-medium text-indigo-200">
-        {{ canInstall ? t('waiterInstall.prompt') : t('waiterInstall.manual') }}
-      </span>
-      <button v-if="canInstall" class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-[11px]" @click="install">
-        {{ t('waiterInstall.cta') }}
-      </button>
-      <button
-        class="ui-touch-target ui-press flex shrink-0 items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-        :aria-label="t('waiterInstall.dismiss')"
-        @click="installDismissed = true"
-      >✕</button>
-    </div>
+      :can-install="canInstall"
+      @install="install"
+      @dismiss="installDismissed = true"
+    />
 
     <!-- Status tabs + action buttons (RISK FE-2) -->
     <WaiterStatusTabBar
@@ -1355,6 +1338,8 @@ import WaiterOfflineIndicator from "../components/WaiterOfflineIndicator.vue";
 import WaiterStatusTabBar from "../components/WaiterStatusTabBar.vue";
 import WaiterFloorTileGrid from "../components/WaiterFloorTileGrid.vue";
 import WaiterOrderCard from "../components/WaiterOrderCard.vue";
+import WaiterFirstRunBanner from "../components/WaiterFirstRunBanner.vue";
+import WaiterInstallBanner from "../components/WaiterInstallBanner.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
