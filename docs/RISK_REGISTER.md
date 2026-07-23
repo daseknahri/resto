@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **37 slices → 42 tested child components** (~2950 lines lifted; vitest 527→823). Cart fully componentized down to its money-path logic core; only supervised blocks (WaiterPage, form-heavy drawers) + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **39 slices → 45 tested child components** (~3000 lines lifted; vitest 527→830). Cart fully componentized to its money-path logic core; WaiterPage display chrome lifted. Only entangled/money blocks (WaiterPage settle+floor-tile, form-heavy drawers) + preview QA + merge remain | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1017,16 +1017,21 @@ disabled/label expressions, wallet/prepay checks, the fulfillment/tip controls �
 `Cart.vue`. That logic is the app's money path and was **not** extracted; the button componentization was
 done under human review + browser preview, not by an autonomous slice.
 
-**Tally: 37 slices across all eight mega-pages, ~2950 lines lifted / DRY'd into 42 tested child
-components; frontend vitest 527 → 823.** FE-2 autonomous extraction is complete — every mega-page is
-decomposed, and the Cart money-path page is now fully componentized down to its logic core (chrome, both
-checkout display blocks, and the CTA buttons all lifted; only the payment/pricing/place-order *logic*
-remains in the parent by design). What remains is the preview-pending components' visual QA
-and the merge to main. Remaining FE-2 blocks are the higher-risk ones (form-heavy `v-model`
-drawers, the OwnerKitchen 86-board, and the held `WaiterPage`) — those want supervised,
-previewable extraction, not autonomous slices. Money/order *logic* (driver cash-out, customer cart/checkout) was
-explicitly left in the parents. `WaiterPage.vue` (most entangled) is
-held for supervised slices, not autonomous ones.
+Plus the first **WaiterPage.vue** slices (the held, most-entangled page, now under supervised
+extraction): `WaiterFirstRunBanner` + `WaiterInstallBanner` (the two dismissible onboarding banners at the
+top — display + emit, the parent keeps `useInstallPrompt` + the seen/dismissed state and the mounting
+v-ifs), and `WaiterFloorLegend` (the static floor-status `<details>` legend — no props/state/emits). All
+non-money, non-order chrome; the WaiterPage order/settle logic is untouched. 3 components, 7 test cases.
+
+**Tally: 39 slices across all eight mega-pages, ~3000 lines lifted / DRY'd into 45 tested child
+components; frontend vitest 527 → 830.** Every mega-page is decomposed; the Cart money-path page is fully
+componentized down to its logic core (chrome, both checkout display blocks, and the CTA buttons all
+lifted; only the payment/pricing/place-order *logic* remains in the parent by design). WaiterPage's
+safe display-only chrome (onboarding banners + floor legend) is now lifted too; what remains there is
+progressively more entangled (the expanded floor-tile block that duplicates the order-card markup, and
+the **settle modal** which is money-path) and wants supervised, previewable slices. What remains overall
+is the preview-pending components' visual QA and the merge to main. Money/order *logic* (driver cash-out,
+customer cart/checkout, waiter settle) is explicitly left in the parents.
 **Effort:** L. **Source:** frontend review.
 
 ### FE-3 — Locale catalogs block first paint  ◑ MOSTLY SHIPPED (verified 2026-07-11)
