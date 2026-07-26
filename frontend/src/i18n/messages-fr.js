@@ -1,5 +1,7 @@
-// FR locale chunk — loaded lazily when French is selected.
-// Keep in sync with messages.js fr: block.
+// FR locale chunk — the SINGLE source of truth for French (FE-1).
+// Loaded lazily when French is selected; the verify-i18n gate checks it for
+// completeness against messages-en.js. FR is ASCII-only by convention (avoids
+// mojibake). (messages.js was deleted; no dual source to keep in sync.)
 export default {
 common: {
   language: "Langue",
@@ -560,6 +562,9 @@ marketplace: {
   loadMoreAriaLabel: "Afficher plus",
 },
 mktMenu: {
+  deliveryMinOrderNotMet: "La livraison necessite un minimum de commande de {amount}. Ajoutez d'autres articles pour continuer.",
+  deliveryMinAddMore: "Ajoutez {amount} pour la livraison",
+  deliveryMinProgress: "Commande minimale pour la livraison",
   loading: "Chargement du menu…",
   error: "Impossible de charger ce menu.",
   closed: "Ferme",
@@ -3324,6 +3329,7 @@ dishPage: {
   optionsKicker: "Personnaliser",
 },
 menu: {
+  reorderWalletShort: "Votre solde portefeuille pourrait ne pas couvrir cette commande — rechargez avant de passer.",
   kicker: "Navigation menu",
   viewDish: "Voir {name}",
   intro: "Explorez les categories et touchez un plat pour voir details, options et prix.",
@@ -4463,6 +4469,7 @@ ownerNotifications: {
   recipient: "A",
 },
 ownerOrders: {
+  statusOverdue: "En retard",
   kicker: "Gestion des commandes",
   title: "Commandes",
   description: "Gerez les commandes entrantes et mettez a jour leur statut en temps reel.",

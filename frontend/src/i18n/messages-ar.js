@@ -3334,6 +3334,7 @@ Object.assign(arabicMessages, {
     loadMoreAriaLabel: "\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0632\u064a\u062f",
   },
   mktMenu: {
+    deliveryMinOrderNotMet: "التوصيل يتطلب حداً أدنى للطلب بقيمة {amount}. أضف المزيد من العناصر للمتابعة.",
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0642\u0627\u0626\u0645\u0629\u2026",
     error: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0647\u0630\u0647 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.",
     closed: "\u0645\u063a\u0644\u0642 \u0627\u0644\u0622\u0646",

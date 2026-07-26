@@ -1,5 +1,8 @@
-// EN locale chunk — loaded synchronously as the default locale.
-// This file is the source of truth for English. Keep in sync with messages.js en: block.
+// EN locale chunk — the SINGLE source of truth for English (FE-1).
+// Loaded at runtime as the default locale AND used by the verify-i18n gates as the
+// parity source (FR + AR completeness are checked against it, and the usage gate
+// checks every t('...') key exists here). One edit per string per locale — en here,
+// fr in messages-fr.js, ar in messages-ar.js. (messages.js was deleted; no dual source.)
 export default {
 common: {
   language: "Language",
@@ -561,6 +564,8 @@ marketplace: {
   loadMoreAriaLabel: "Load more",
 },
 mktMenu: {
+  deliveryMinOrderNotMet: "Delivery requires a minimum order of {amount}. Add more items to proceed.",
+  deliveryMinAddMore: "Add {amount} more for delivery",
   loading: "Loading menu…",
   error: "Could not load this menu.",
   closed: "Closed now",
@@ -5485,6 +5490,7 @@ customerAuth: {
   welcomeExplore: "Explore",
 },
 customerAccount: {
+  reorderWalletShort: "Your wallet balance may not cover this order — top up before placing.",
   kicker: "Your account",
   title: "My Account",
   notSignedInTitle: "Sign in to your account",
