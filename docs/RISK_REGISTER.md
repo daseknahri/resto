@@ -39,10 +39,10 @@
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook trusts metadata~~ — now credits settled `amount_total`, paid-only | ~~S~~ |
 | **OPS-3** | Ops | ◑ Code done, owner-gated | Redis SPOF; sessions cache-only (eviction logs users out). The **schema-pinned session backend is written + tested + dormant** — `accounts/session_backends.py` (subclasses `cached_db`, pins the 5 DB-touching methods to `public` via `schema_context`; `tests/test_ops3_session_backend.py`, 10 mock tests incl. a Django-4.2 override-set pin). Remaining is **owner activation**: flip `SESSION_ENGINE`, validate on staging (django_session in public; survive mid-session Redis eviction with no 500), schedule `clearsessions`, decide `SESSION_SAVE_EVERY_REQUEST` (a per-request DB write on the durable backend) | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
-| **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
+| **ASYNC-4** | Async | ◑ Code done, infra-gated | `acks_late` redelivery double-sends — **dedupe + code-level retry-exhaustion alert both shipped** (`_NotificationTask.on_failure`, commit `6e9c3be`, tested). Only the broker **dead-letter exchange** remains — genuine infra work, not a code fix | S/M |
 | ~~**FE-1**~~ | Frontend | ✅ Done | ~~i18n dual-source: 4 coordinated edits per string → raw-key bugs~~ — redundant `messages.js` **deleted**; both gates repointed to the runtime `messages-{en,fr,ar}.js`, so it's **one source per locale** (3 edits, gates check the shipped files). Reconciled ~7 drifted keys, **fixing live namespace-mismatch raw-key bugs** (`mktMenu.*`/`customerAccount.*` used in templates but only under `cartPage.*`/`menu.*` in the runtime files) | ~~M~~ |
 | **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **52 slices → 62 tested child components** (~4080 lines lifted; vitest 527→924). Every mega-page decomposed to its logic core; the Marketplace checkout drawer is now fully split (8 sub-parts) — only the `placeOrder` CTA stays in the parent, matching Cart/WaiterPage. Remaining is non-code: preview QA + merge to main | L |
-| **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
+| **FE-3** | Frontend | ◑ Effectively done | Locale catalogs — **code-split + lazy Sentry shipped** (`a84cc7d`); `main.js` is lean and Sentry doesn't block mount. The lone residual (awaiting the active locale before mount) is a **deliberate UX tradeoff** (avoids a flash-of-English, and its cost is parallel-masked) — not open work. Namespace/route-split for further wins is a possible future slice | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
 | **DATA-2** | Data | ◑ Partial | `CustomerOrderRef` mirror drift — `post_delete` + **voided/comped item filter** + **content-drift reconcile** shipped; effectively complete | S |
@@ -809,11 +809,16 @@ a cache blip never silently drops a notification; and keys embed the global `ten
 tenant-local `order_number` can't collide across schemas. TTL 1h ≫ the retry+redelivery window.
 Tests: `tests/test_notification_dedupe.py` (9, no DB) — dedupe, distinct-notification isolation,
 retry-preservation, fail-open.
-**Remaining:** a true **DLQ / rejected→alert path** for tasks that exhaust retries (the failure
-audit already lands in `NotificationLog` with `status=failed`, but there is no active alert). That
-is broker/infra work (dead-letter exchange), not a code S-fix; `task_reject_on_worker_lost` was
-left off deliberately — it is global and would also requeue non-idempotent cron/management tasks.
-**Effort:** S (dedupe, done) / M (DLQ, remaining). **Source:** async/realtime review.
+**Reject-alert — DONE (2026-07, commit `6e9c3be`):** the code-level half is shipped.
+`accounts/tasks.py::_NotificationTask.on_failure` (the base task class for all four notification
+tasks) fires a loud, PII-free `logger.error("NOTIFICATION DROPPED (retries exhausted) … RISK ASYNC-4")`
+exactly once on terminal failure (after `autoretry_for` exhausts `max_retries`). Tested by
+`tests/test_async4_dlq_alert.py` (all four tasks, PII-omission, terminal-only). So retry-exhaustion is
+now actively alerted, not silent.
+**Remaining (infra, not code):** a true broker **dead-letter exchange** for messages the worker
+loses. `task_reject_on_worker_lost` is still left off deliberately — it is global and would also
+requeue the non-idempotent `cron.*`/management tasks. That DLX is broker/infra work, not a code fix.
+**Effort:** S (dedupe, done) / S (reject-alert, done) / M (broker DLX, infra). **Source:** async/realtime review.
 
 ### FE-1 — i18n dual-source footgun  ✅ DONE (2026-07-24)
 **Where:** `messages.js` (inline en+fr, read by runtime + gates) **and** `messages-ar.js` **and**
@@ -1219,7 +1224,7 @@ evolve safely against the API is itself broken.
 typed client (which also mitigates API-1's client-drift risk).
 **Effort:** S–M. **Source:** API/auth review.
 
-### DATA-2 — `CustomerOrderRef` mirror can silently drift  ◑ PARTIALLY ADDRESSED (2026-07-10)
+### DATA-2 — `CustomerOrderRef` mirror can silently drift  ◑ MOSTLY DONE (verified 2026-07-27)
 **Where:** `menu/signals.py` `mirror_order_to_public_index` fired on `menu.Order` `post_save` only;
 OrderItem mutations don't always re-save the parent.
 **Failure scenario:** A customer's cross-restaurant "My Orders" shows phantom orders (deleted
@@ -1229,8 +1234,19 @@ drops the mirror row (scoped by `tenant_id` + `order_number`) when an order is d
 the phantom-order class. The existing sync already logs failures via `logger.exception` (not a
 silent `except: pass`). Tests: `tests/test_order_mirror_delete.py` (3, incl. a receiver-registration
 guard against a wrong sender string).
-**Remaining (smaller residuals):** re-mirror on OrderItem void/comp/append mutation (status/items
-snapshot can still drift while the order lives), and a periodic mirror-reconcile as belt-and-suspenders.
+**Both former residuals are now shipped in code (verified 2026-07-27):**
+- **Void/comp filter:** `menu/signals.py` builds `items_snapshot` from
+  `instance.items.filter(is_voided=False, is_comped=False)`, so voided/comped lines no longer drift into
+  the re-order snapshot.
+- **Content-drift reconcile:** `menu/management/commands/reconcile_order_content.py` detects mirrors whose
+  live `Order` has drifted and (with `--fix`) re-syncs via the same `mirror_order_to_public_index`.
+  Tests: `tests/test_reconcile_order_content.py`.
+
+**Only residual:** `reconcile_order_content` is a **manual command — not yet scheduled** (unlike
+`reconcile_order_refs`, which has a `cron.*` task + daily beat entry). Wiring it into beat is a ~4-line
+follow-on, but per the ASYNC-2 precedent **scheduling a previously-unscheduled job is a behavior change /
+owner decision**, so it is left for the owner to enable. Marker stays `◑` until then; drift is caught on
+demand today.
 **Effort:** S. **Source:** data-model review.
 
 ### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
