@@ -27,7 +27,7 @@
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
-| **IDENTITY-1** | Auth | ◑ Partial | Dual identity: customer invisible to DRF. **Keystone shipped** (`CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`; customer is now `request.user`), proven on 3 views (incl. a live voucher `FieldError` fix); ~55-view sweep remains | L |
+| **IDENTITY-1** | Auth | ◑ Core done | Dual identity: customer invisible to DRF. **Keystone + full view sweep shipped** — `CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`/`customer_or_none`; **every request-handling view that read `session["customer_id"]` now hydrates the customer onto `request.user`** (single-role, optional-auth, multi-role, money, driver, list-degrading — all done across ~10 slices). Per-customer throttles now key on the principal too. Residual is by design: throttle key-builders / the login probe / OTP session *writers* / the skipped driver ride-views (non-uniform 401/403 contracts) stay raw session; optional customer-CSRF hardening is a separate step | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method. **Awaiting owner go-ahead** (money-path refactor) | L |
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + real threaded money/isolation DB tests | M |
 | **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
@@ -383,11 +383,17 @@ DELIVERED transition (`Customer.objects.filter(pk=..., driver_approved=True).exi
 principal was hydrated at auth time and approval may have been revoked since, and this gate guards
 the earnings credit (RISK OPS-5f); (2) `DriverJobAcceptView`'s `select_for_update` driver-row mutex.
 
-**Follow-up noted:** `accounts/throttles.py::_CustomerThrottle` still keys on
-`request.session["customer_id"]` rather than `request.user`. Behavior is unchanged today (login
-still populates the session), but it is now a latent inconsistency: if a later slice drops the
-session dependency (e.g. customer-CSRF/token hardening), every customer/driver throttle would
-silently fall back to per-IP bucketing. Migrate it when that slice lands.
+**Follow-up — DONE (2026-07-24):** `accounts/throttles.py::_CustomerThrottle` (and
+`WalletTransferThrottle`, same pattern) now key on the Customer **principal** via a shared
+`_customer_throttle_ident(request)`: prefer `customer_or_none(request)` → `c{principal.pk}`, fall back
+to the raw `session["customer_id"]` for the un-converted ride views (still gated by `_get_driver`), then
+IP. **Behaviour-preserving byte-for-byte** — `CustomerSessionAuthentication` hydrates the Customer from
+`session["customer_id"]`, so the principal's pk IS that id and `c{pk}` == the old `c{cid}` bucket; the
+skipped ride views keep their session-keyed bucket. Closes the latent inconsistency (a converted view's
+throttle no longer silently falls to per-IP if the session dependency is later dropped). Tests:
+`tests/test_customer_throttle_ident.py` (9, no DB). The remaining raw throttle key-builders
+(`VoucherRedeemThrottle.get_cache_key` / `_voucher_redeem_fail_cache_key`) are the lockout-window
+key-builders that are **meant** to key per raw session and are out of scope.
 
 **Update (2026-07-16, optional-auth slice — first `menu/views.py` conversions):**
 `OrderEligibilityView`, `CustomerOrderStatusView` and `CustomerOrderRateView` migrated. These are
