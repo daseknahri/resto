@@ -37,7 +37,7 @@
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook trusts metadata~~ — now credits settled `amount_total`, paid-only | ~~S~~ |
-| **OPS-3** | Ops | 🟡 Med | Redis SPOF; sessions cache-only (eviction logs users out) — needs a **schema-pinned session backend** (naive `cached_db` BREAKS under django-tenants). Not yet started | M |
+| **OPS-3** | Ops | ◑ Code done, owner-gated | Redis SPOF; sessions cache-only (eviction logs users out). The **schema-pinned session backend is written + tested + dormant** — `accounts/session_backends.py` (subclasses `cached_db`, pins the 5 DB-touching methods to `public` via `schema_context`; `tests/test_ops3_session_backend.py`, 10 mock tests incl. a Django-4.2 override-set pin). Remaining is **owner activation**: flip `SESSION_ENGINE`, validate on staging (django_session in public; survive mid-session Redis eviction with no 500), schedule `clearsessions`, decide `SESSION_SAVE_EVERY_REQUEST` (a per-request DB write on the durable backend) | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | ~~**FE-1**~~ | Frontend | ✅ Done | ~~i18n dual-source: 4 coordinated edits per string → raw-key bugs~~ — redundant `messages.js` **deleted**; both gates repointed to the runtime `messages-{en,fr,ar}.js`, so it's **one source per locale** (3 edits, gates check the shipped files). Reconciled ~7 drifted keys, **fixing live namespace-mismatch raw-key bugs** (`mktMenu.*`/`customerAccount.*` used in templates but only under `cartPage.*`/`menu.*` in the runtime files) | ~~M~~ |
@@ -758,6 +758,21 @@ django-tenants switches the connection to the *tenant* schema during middleware 
 (the team documented this at `config/settings.py` ~L409). The real fix is a **schema-pinned session
 backend** (force `schema_context("public")` around session DB writes) or **signed-cookie sessions**
 (size/invalidation tradeoffs) — a deliberate custom component, not a one-line setting.
+**Status (verified 2026-07-27): the backend is built, tested, and dormant.**
+`accounts/session_backends.py::SessionStore` subclasses the stock `cached_db` store and re-points
+**exactly** the 5 DB-touching methods (`_get_session_from_db`, `exists`, `save`, `delete`, and the
+`clear_expired` classmethod) through `schema_context("public")`; `load()`/`create()` are deliberately
+left un-overridden because they reach the DB only via those 5 (dynamic dispatch pins them for free — the
+module docstring traces the call graph against the Django-4.2 source). `tests/test_ops3_session_backend.py`
+(10, mock-based, no DB) pins the Django version, asserts the override set is *exactly* those 5, and checks
+each runs its parent DB call strictly inside `schema_context("public")`. **Not activated** — `SESSION_ENGINE`
+still points at the cache-only backend. Activation is a deliberate **owner** step (see the commented block
+by `SESSION_ENGINE` in `config/settings.py`): flip to `accounts.session_backends`, then validate on a
+real/staging DB (django_session exists in `public`; a mid-session Redis eviction/restart survives with no
+forced logout and no 500s under an active tenant schema; watch error tracking for a full deploy cycle).
+Two activation-time decisions to make then: schedule `clearsessions` (durable rows now accumulate — Redis
+TTL no longer reaps them) and reconsider `SESSION_SAVE_EVERY_REQUEST=True` (it becomes a DB write per
+authenticated request, not just a Redis SETEX). No further code is required for the backend itself.
 **Effort:** M. **Source:** async/realtime review.
 
 ### ASYNC-3 — Realtime and polling both run at full rate  ✅ ADDRESSED (2026-07-17)
