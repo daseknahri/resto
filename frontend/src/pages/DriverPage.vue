@@ -1054,60 +1054,21 @@
     @submit="submitDeliveryCode"
   />
 
-  <!-- Cash-out amount modal -->
-  <Teleport to="body">
-    <div
-      v-if="cashoutModalOpen"
-      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
-      @click.self="closeCashoutModal"
-      @keydown.esc="closeCashoutModal"
-    >
-      <div
-        ref="cashoutDialogRef"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('driver.cashOut')"
-        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
-      >
-        <div>
-          <p class="text-sm font-semibold text-white">{{ t('driver.cashOut') }}</p>
-          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.cashOutAmountPrompt', { max: fmtMoney(earnings ? earnings.available : 0) }) }}</p>
-        </div>
-        <input
-          ref="cashoutFirstRef"
-          v-model="cashoutInput"
-          type="number"
-          min="1"
-          :max="earnings ? earnings.available : undefined"
-          step="0.01"
-          class="ui-input text-lg font-bold tabular-nums"
-          :aria-label="t('driver.cashOut')"
-          @keydown.enter="submitCashout"
-        />
-        <div v-if="cashoutModalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-          <p class="text-sm text-red-300">{{ cashoutModalError }}</p>
-        </div>
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCashoutModal">
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-            :disabled="busy"
-            :aria-busy="busy"
-            @click="submitCashout"
-          >
-            <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ busy ? t('common.loading') : t('driver.cashOut') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Cash-out amount modal (RISK FE-2) -->
+  <DriverCashoutModal
+    v-model:amount="cashoutInput"
+    v-model:error="cashoutModalError"
+    :open="cashoutModalOpen"
+    :busy="busy"
+    :max-amount="earnings ? earnings.available : null"
+    :fmt-money="fmtMoney"
+    @close="closeCashoutModal"
+    @submit="submitCashout"
+  />
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import DriverOfferModal from '../components/DriverOfferModal.vue';
 import DriverPageDeliveryHistory from '../components/DriverPageDeliveryHistory.vue';
@@ -1117,6 +1078,7 @@ import DriverPagePerformanceStats from '../components/DriverPagePerformanceStats
 import DriverPageActiveJob from '../components/DriverPageActiveJob.vue';
 import DriverRateCustomerModal from '../components/DriverRateCustomerModal.vue';
 import DriverDeliveryCodeModal from '../components/DriverDeliveryCodeModal.vue';
+import DriverCashoutModal from '../components/DriverCashoutModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
@@ -1582,9 +1544,8 @@ const cashoutErrorMessageFor = (err) => {
 const cashoutModalOpen = ref(false);
 const cashoutInput = ref('');
 const cashoutModalError = ref('');
-const cashoutFirstRef = ref(null);
-const cashoutDialogRef = ref(null);
-useFocusTrap(cashoutDialogRef, cashoutModalOpen); // D-8: Tab focus-trap
+// The cash-out modal UI (dialog + focus trap) lives in DriverCashoutModal; the parent
+// keeps the amount / error state (read+written by submitCashout) and open/return-focus.
 let _cashoutReturnFocus = null;
 
 const closeCashoutModal = () => {
@@ -1652,7 +1613,7 @@ const requestCashout = () => {
   cashoutInput.value = String(max);
   cashoutModalError.value = '';
   cashoutModalOpen.value = true;
-  nextTick(() => { cashoutFirstRef.value?.focus(); });
+  // (DriverCashoutModal's focus trap moves focus to the amount input on open.)
 };
 const cancelCashout = async () => {
   if (!cashout.value) return;
