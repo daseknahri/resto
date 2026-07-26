@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **49 slices → 58 tested child components** (~3900 lines lifted; vitest 527→905). Cart + WaiterPage fully decomposed; all standalone drawers done; Marketplace checkout drawer being split (part 1: 4 low-risk sub-parts done). Remaining: checkout delivery/geo + pay/totals blocks + preview QA + merge | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **50 slices → 59 tested child components** (~3960 lines lifted; vitest 527→910). Cart + WaiterPage fully decomposed; all standalone drawers done; Marketplace checkout drawer being split (parts 1–2: 5 sub-parts incl. delivery/geo done). Remaining: checkout pay-now + totals display; the placeOrder CTA stays in the parent; + preview QA + merge | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1033,9 +1033,13 @@ sub-parts: `MarketplaceCheckoutCartItems` (cart line list + qty steppers; emits 
 `cart` + mutations stay in the parent), `MarketplaceCheckoutFulfillmentType` (pickup/delivery selector,
 `v-model:fulfillment-type`), `MarketplaceCheckoutSchedule` (ASAP/later + datetime, two v-models), and
 `MarketplaceCheckoutLoyalty` (redeem toggle + earn line, `v-model:use-loyalty`; loyalty math stays). No
-`placeOrder` / wallet / tip / prepay / validation moved. 4 components, 20 test cases. Remaining drawer
-blocks — the delivery/geolocation form, pay-now + totals, and the submit/`placeOrder` CTA — are handled
-separately (the CTA stays in the parent).
+`placeOrder` / wallet / tip / prepay / validation moved. 4 components, 20 test cases. **Part 2** lifts the
+delivery-details block (`MarketplaceCheckoutDelivery` — saved-address picker, address, save-for-later,
+"use my location", and the distance-fee / out-of-range / needs-location hints): presentational, no logic
+moved — geolocation (`useMyLocation`), the saved-address apply/delete, and every fee computed stay in the
+parent (passed as props/emits); the three editable fields are two-way models (incl. `v-model.trim`).
+5 test cases. Remaining drawer tail — pay-now + totals (display) and the submit/`placeOrder` CTA — are
+handled separately (the CTA stays in the parent).
 
 Plus `DriverCashoutModal` — the driver cash-out (payout) **amount** modal, lifted from `DriverPage.vue`
 as a self-contained drawer (money-path, prepped + previewed before commit). It owns the modal + focus trap;
@@ -1105,8 +1109,8 @@ orders — combo sub-lines, `section_name`, and the partial-payment "paid so far
 previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
 `WaiterOrderItem` are already covered.
 
-**Tally: 49 slices across all eight mega-pages, ~3900 lines lifted / DRY'd into 58 tested child
-components; frontend vitest 527 → 905.** **WaiterPage.vue is now fully decomposed** — all display chrome
+**Tally: 50 slices across all eight mega-pages, ~3960 lines lifted / DRY'd into 59 tested child
+components; frontend vitest 527 → 910.** **WaiterPage.vue is now fully decomposed** — all display chrome
 lifted, the expanded floor-tile card DRY'd onto `WaiterOrderCard`, and both its modals (customer-rating,
 settle) split into fragment form-bodies with the shells + focus traps + all money/order handlers kept in
 the parent. Every mega-page is decomposed; the Cart money-path page is fully
