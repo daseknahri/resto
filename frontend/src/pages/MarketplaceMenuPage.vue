@@ -613,87 +613,28 @@
                 class="ui-input"
               />
             </div>
-            <div v-if="form.fulfillment_type === 'delivery'" class="space-y-2">
-              <!-- Saved addresses — shown when customer is signed in and has saved addresses -->
-              <div v-if="customerStore.isAuthenticated && mktSavedAddresses.length" class="space-y-1.5">
-                <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('mktMenu.savedAddresses') }}</p>
-                <div class="space-y-1">
-                  <div
-                    v-for="addr in mktSavedAddresses"
-                    :key="addr.id"
-                    class="flex min-w-0 w-full items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5"
-                  >
-                    <button
-                      type="button"
-                      class="min-w-0 flex-1 text-start text-xs focus-visible:outline-none"
-                      @click="applyMktSavedAddress(addr)"
-                    >
-                      <span v-if="addr.label" class="font-medium text-slate-200 me-0.5">{{ addr.label }} —</span>
-                      <span class="truncate text-slate-400">{{ addr.address }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="shrink-0 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none"
-                      :aria-label="t('mktMenu.deleteSavedAddress')"
-                      @click="deleteMktSavedAddress(addr.id)"
-                    >
-                      <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M6 2h4a1 1 0 0 1 1 1v1H5V3a1 1 0 0 1 1-1ZM4 4H2v1h1l.8 8.1A1 1 0 0 0 4.8 14h6.4a1 1 0 0 0 1-.9L13 5h1V4H4Zm7 1H5l.7 7h4.6L12 5Z"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label for="mkt-address" class="block text-xs font-medium text-slate-400 mb-1">
-                  {{ t('mktMenu.deliveryAddress') }}
-                </label>
-                <textarea
-                  id="mkt-address"
-                  v-model="form.delivery_address"
-                  rows="2"
-                  class="ui-textarea resize-none"
-                />
-              </div>
-              <!-- Save address checkbox (authenticated customers only) -->
-              <div v-if="customerStore.isAuthenticated && form.delivery_address" class="space-y-1.5">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input v-model="saveAddressAfterOrder" type="checkbox" class="rounded" />
-                  <span class="text-xs text-slate-400">{{ t('mktMenu.saveAddress') }}</span>
-                </label>
-                <input
-                  v-if="saveAddressAfterOrder"
-                  v-model.trim="saveAddressLabel"
-                  type="text"
-                  class="ui-input text-xs"
-                  :placeholder="t('mktMenu.saveAddressLabelPlaceholder')"
-                  :aria-label="t('mktMenu.saveAddressLabelPlaceholder')"
-                />
-              </div>
-              <!-- Coordinates → distance-based fee -->
-              <button
-                type="button"
-                class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition-colors hover:border-slate-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                :disabled="locatingMkt"
-                :aria-busy="locatingMkt"
-                @click="useMyLocation"
-              >
-                <svg v-if="locatingMkt" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-                <AppIcon v-else name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ locatingMkt ? t('mktMenu.locating') : (form.delivery_lat ? t('mktMenu.locationSet') : t('mktMenu.useMyLocation')) }}
-              </button>
-              <p v-if="locateError" class="text-[11px] text-rose-300" role="alert">{{ locateError }}</p>
-              <p v-if="deliveryOutOfRange" class="flex items-start gap-1.5 text-[11px] text-rose-300" role="alert">
-                <AppIcon name="info" class="h-3 w-3 shrink-0 mt-px" aria-hidden="true" />
-                {{ t('mktMenu.deliveryOutOfRange', { km: deliveryPricing.radiusKm }) }}
-              </p>
-              <p v-else-if="deliveryFeeIsDistance" class="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ t('mktMenu.deliveryFeeDistance', { fee: fmtPrice(deliveryFee), km: deliveryDistanceKm }) }}
-              </p>
-              <p v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-amber-400" role="alert">
-                <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ t('mktMenu.deliveryNeedsLocation') }}
-              </p>
-            </div>
+            <!-- Delivery details (address / saved addresses / geolocation / fee) (RISK FE-2) -->
+            <MarketplaceCheckoutDelivery
+              v-if="form.fulfillment_type === 'delivery'"
+              v-model:delivery-address="form.delivery_address"
+              v-model:save-address="saveAddressAfterOrder"
+              v-model:save-address-label="saveAddressLabel"
+              :is-authenticated="customerStore.isAuthenticated"
+              :saved-addresses="mktSavedAddresses"
+              :locating="locatingMkt"
+              :locate-error="locateError"
+              :has-location="!!form.delivery_lat"
+              :out-of-range="deliveryOutOfRange"
+              :radius-km="deliveryPricing.radiusKm"
+              :fee-is-distance="deliveryFeeIsDistance"
+              :delivery-fee="deliveryFee"
+              :distance-km="deliveryDistanceKm"
+              :per-km="deliveryPricing.perKm"
+              :fmt-price="fmtPrice"
+              @apply-address="applyMktSavedAddress"
+              @delete-address="deleteMktSavedAddress"
+              @locate="useMyLocation"
+            />
             <div>
               <label for="mkt-note" class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.note') }}
@@ -907,6 +848,7 @@ import MarketplaceCheckoutCartItems from '../components/MarketplaceCheckoutCartI
 import MarketplaceCheckoutFulfillmentType from '../components/MarketplaceCheckoutFulfillmentType.vue';
 import MarketplaceCheckoutSchedule from '../components/MarketplaceCheckoutSchedule.vue';
 import MarketplaceCheckoutLoyalty from '../components/MarketplaceCheckoutLoyalty.vue';
+import MarketplaceCheckoutDelivery from '../components/MarketplaceCheckoutDelivery.vue';
 import MarketplaceMenuCategoryNav from '../components/MarketplaceMenuCategoryNav.vue';
 import MarketplaceMenuFlashSaleBanner from '../components/MarketplaceMenuFlashSaleBanner.vue';
 import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
