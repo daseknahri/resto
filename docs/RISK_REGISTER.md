@@ -40,7 +40,7 @@
 | **OPS-3** | Ops | 🟡 Med | Redis SPOF; sessions cache-only (eviction logs users out) — needs a **schema-pinned session backend** (naive `cached_db` BREAKS under django-tenants). Not yet started | M |
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
-| **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
+| ~~**FE-1**~~ | Frontend | ✅ Done | ~~i18n dual-source: 4 coordinated edits per string → raw-key bugs~~ — redundant `messages.js` **deleted**; both gates repointed to the runtime `messages-{en,fr,ar}.js`, so it's **one source per locale** (3 edits, gates check the shipped files). Reconciled ~7 drifted keys, **fixing live namespace-mismatch raw-key bugs** (`mktMenu.*`/`customerAccount.*` used in templates but only under `cartPage.*`/`menu.*` in the runtime files) | ~~M~~ |
 | **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **52 slices → 62 tested child components** (~4080 lines lifted; vitest 527→924). Every mega-page decomposed to its logic core; the Marketplace checkout drawer is now fully split (8 sub-parts) — only the `placeOrder` CTA stays in the parent, matching Cart/WaiterPage. Remaining is non-code: preview QA + merge to main | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
@@ -800,7 +800,7 @@ is broker/infra work (dead-letter exchange), not a code S-fix; `task_reject_on_w
 left off deliberately — it is global and would also requeue non-idempotent cron/management tasks.
 **Effort:** S (dedupe, done) / M (DLQ, remaining). **Source:** async/realtime review.
 
-### FE-1 — i18n dual-source footgun
+### FE-1 — i18n dual-source footgun  ✅ DONE (2026-07-24)
 **Where:** `messages.js` (inline en+fr, read by runtime + gates) **and** `messages-ar.js` **and**
 `messages-en.js` must all be edited for one new key.
 **Failure scenario:** A dev edits only `messages-{en,fr}.js`, passes `verify-i18n.mjs`, fails
@@ -808,7 +808,19 @@ left off deliberately — it is global and would also requeue non-idempotent cro
 **Fix:** Collapse to a **single source of truth** — delete `messages.js` as the runtime source,
 generate the parity files, or move to a keyed catalog with one file per locale. See
 [ADR-0005](adr/0005-i18n-dual-source.md).
-**Effort:** M. **Source:** frontend review.
+**Resolution (2026-07-24):** FE-3's code-split had already moved the **runtime** onto
+`messages-{en,fr,ar}.js`, leaving `messages.js` (11,776 lines) as duplication read **only by the two
+verify gates** — the drift source. Diffing the gate file against the runtime files surfaced **live
+raw-key bugs**: `mktMenu.deliveryMinAddMore` / `mktMenu.deliveryMinOrderNotMet` / `mktMenu.deliveryMinProgress`
+and `customerAccount.reorderWalletShort` were used in templates and present in `messages.js`, but the
+runtime files only had those leaves under a **different namespace** (`cartPage.*` / `menu.*`), so EN/FR/AR
+users saw raw keys (incl. the checkout min-order warning). Fix: reconciled the ~7 keys into the runtime
+files under the template's namespace (EN +3 / FR +5 / AR +1); repointed **both gates** to the runtime
+files (FR-parity = `messages-en.js` vs `messages-fr.js`; usage gate reads `messages-en.js`; mojibake scan
+covers the real files); **deleted `messages.js`**; updated the file banners, `CLAUDE.md` (4-edit → 3-edit
+rule), and [ADR-0005](adr/0005-i18n-dual-source.md) (Superseded). Now **one source per locale**, both
+runtime and gates reading the same files. Verify: verify:i18n PASS (FR 0 / AR 0 missing), lint clean, build
+PASS, vitest 924. **Effort:** M. **Source:** frontend review.
 
 ### FE-2 — Mega-page components
 **Where:** `WaiterPage.vue` 3,722, `CustomerAccount.vue` 3,654, + four more 2,500–3,700 lines.
