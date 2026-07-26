@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Partial | `acks_late` redelivery double-sends — **dedupe shipped**; DLQ/reject-alert remains (broker/infra work) | S/M |
 | **FE-1** | Frontend | 🟡 Med | i18n dual-source: 4 coordinated edits per string → raw-key bugs | M |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **48 slices → 54 tested child components** (~3820 lines lifted; vitest 527→888). Cart + WaiterPage fully decomposed; drawer pass nearly done (AdminConsole delivery-pricing, DriverPage rate/code/cashout, Marketplace option-group). Only the Marketplace checkout drawer + preview QA + merge remain | L |
+| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **49 slices → 58 tested child components** (~3900 lines lifted; vitest 527→905). Cart + WaiterPage fully decomposed; all standalone drawers done; Marketplace checkout drawer being split (part 1: 4 low-risk sub-parts done). Remaining: checkout delivery/geo + pay/totals blocks + preview QA + merge | L |
 | **FE-3** | Frontend | ◑ Partial | Locale catalogs — **code-split + lazy Sentry already shipped** (`a84cc7d`); only a small `main.js` first-paint residual remains | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -1027,6 +1027,16 @@ keeps `urgentFloorTiles` + `idleAlertDismissed` + the fade Transition) + `Waiter
 untouched. 5 components, 10 test cases. (Fixed en passant: an arrow-param `t` that shadowed the i18n
 `t()` in the idle-alert label.)
 
+Plus the **Marketplace checkout drawer decomposition (part 1)** — the ~400-line checkout drawer in
+`MarketplaceMenuPage.vue` is being split into child components; part 1 lifts the four low-risk, non-money
+sub-parts: `MarketplaceCheckoutCartItems` (cart line list + qty steppers; emits decrement/increment,
+`cart` + mutations stay in the parent), `MarketplaceCheckoutFulfillmentType` (pickup/delivery selector,
+`v-model:fulfillment-type`), `MarketplaceCheckoutSchedule` (ASAP/later + datetime, two v-models), and
+`MarketplaceCheckoutLoyalty` (redeem toggle + earn line, `v-model:use-loyalty`; loyalty math stays). No
+`placeOrder` / wallet / tip / prepay / validation moved. 4 components, 20 test cases. Remaining drawer
+blocks — the delivery/geolocation form, pay-now + totals, and the submit/`placeOrder` CTA — are handled
+separately (the CTA stays in the parent).
+
 Plus `DriverCashoutModal` — the driver cash-out (payout) **amount** modal, lifted from `DriverPage.vue`
 as a self-contained drawer (money-path, prepped + previewed before commit). It owns the modal + focus trap;
 the payout logic is untouched — `submitCashout` (validation + `POST /driver/cashout/`) stays in the parent,
@@ -1095,8 +1105,8 @@ orders — combo sub-lines, `section_name`, and the partial-payment "paid so far
 previewed before commit (rendering change on a payment-adjacent card). No new tests — `WaiterOrderCard` +
 `WaiterOrderItem` are already covered.
 
-**Tally: 48 slices across all eight mega-pages, ~3820 lines lifted / DRY'd into 54 tested child
-components; frontend vitest 527 → 888.** **WaiterPage.vue is now fully decomposed** — all display chrome
+**Tally: 49 slices across all eight mega-pages, ~3900 lines lifted / DRY'd into 58 tested child
+components; frontend vitest 527 → 905.** **WaiterPage.vue is now fully decomposed** — all display chrome
 lifted, the expanded floor-tile card DRY'd onto `WaiterOrderCard`, and both its modals (customer-rating,
 settle) split into fragment form-bodies with the shells + focus traps + all money/order handlers kept in
 the parent. Every mega-page is decomposed; the Cart money-path page is fully
