@@ -665,83 +665,35 @@
             :fmt-price="fmtPrice"
           />
 
-          <!-- Pay now (marketplace orders are pay-now) -->
-          <div v-if="customerStore.isAuthenticated && orderTotal > 0" class="space-y-2">
-            <!-- Trusted customers: choose wallet or cash on handover -->
-            <div v-if="codEligible" class="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :class="paymentMethod === 'wallet' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                :aria-pressed="paymentMethod === 'wallet'"
-                @click="paymentMethod = 'wallet'"
-              >{{ t('mktMenu.payMethodWallet') }}</button>
-              <button
-                type="button"
-                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :class="paymentMethod === 'cash' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                :aria-pressed="paymentMethod === 'cash'"
-                @click="paymentMethod = 'cash'"
-              >{{ t('mktMenu.payMethodCash') }}</button>
-            </div>
+          <!-- Pay now (marketplace orders are pay-now) (RISK FE-2) -->
+          <MarketplaceCheckoutPayNow
+            v-if="customerStore.isAuthenticated && orderTotal > 0"
+            v-model:payment-method="paymentMethod"
+            :cod-eligible="codEligible"
+            :cod-chosen="codChosen"
+            :wallet-covers-total="walletCoversTotal"
+            :wallet-balance="customer?.wallet_balance || 0"
+            :currency="restaurant?.currency"
+            :order-total="orderTotal"
+            :wallet-balance-num="walletBalanceNum"
+            :fmt-price="fmtPrice"
+          />
 
-            <!-- Cash on handover panel -->
-            <div v-if="codChosen" class="ui-panel rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3">
-              <p class="text-sm font-semibold text-emerald-300">{{ t('mktMenu.payCashOnHandoverTitle') }}</p>
-              <p class="mt-0.5 text-xs text-slate-400">{{ t('mktMenu.payCashOnHandoverNote') }}</p>
-            </div>
-
-            <!-- Pay now from wallet -->
-            <div
-              v-else
-              class="ui-panel rounded-xl border px-4 py-3"
-              :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
-            >
-              <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
-                {{ t('mktMenu.payFromWalletTitle') }}
-              </p>
-              <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
-              <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
-                {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
-                <RouterLink
-                  :to="{ name: 'customer-account', query: { tab: 'wallet' } }"
-                  class="ms-1.5 underline hover:no-underline text-amber-300"
-                >{{ t('mktMenu.topUpWallet') }}</RouterLink>
-              </p>
-            </div>
-          </div>
-
-          <!-- Totals -->
-          <div class="ui-panel px-4 py-3 space-y-1.5 text-sm">
-            <!-- ETA chip — shown above totals when available -->
-            <div v-if="prepEta" class="flex items-center gap-1.5 text-[11px] text-emerald-400/80 pb-0.5">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75V8l2.25 2"/></svg>
-              {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>{{ t('mktMenu.subtotal') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(cartTotal) }}</span>
-            </div>
-            <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
-              <span>
-                {{ t('mktMenu.deliveryFeeLabel') }}
-                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500 tabular-nums">· {{ deliveryDistanceKm }} km</span>
-              </span>
-              <span class="tabular-nums">{{ deliveryIsFree ? t('mktMenu.freeDelivery') : fmtPrice(deliveryFee) }}</span>
-            </div>
-            <div v-if="flashSaleDiscount > 0" class="flex justify-between text-amber-300">
-              <span>{{ t('mktMenu.flashDiscount', { pct: restaurant.flash_sale.discount_pct }) }}</span>
-              <span class="tabular-nums">-{{ fmtPrice(flashSaleDiscount) }}</span>
-            </div>
-            <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
-              <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
-              <span class="tabular-nums">-{{ fmtPrice(loyaltyDiscount) }}</span>
-            </div>
-            <div class="flex justify-between font-bold text-white border-t border-slate-800 pt-1.5 mt-1.5">
-              <span>{{ t('mktMenu.total') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(orderTotal) }}</span>
-            </div>
-          </div>
+          <!-- Totals (RISK FE-2) -->
+          <MarketplaceCheckoutTotals
+            :prep-eta="prepEta"
+            :cart-total="cartTotal"
+            :fulfillment-type="form.fulfillment_type"
+            :delivery-fee-is-distance="deliveryFeeIsDistance"
+            :delivery-distance-km="deliveryDistanceKm"
+            :delivery-is-free="deliveryIsFree"
+            :delivery-fee="deliveryFee"
+            :flash-sale-discount="flashSaleDiscount"
+            :flash-sale-pct="restaurant?.flash_sale?.discount_pct"
+            :loyalty-discount="loyaltyDiscount"
+            :order-total="orderTotal"
+            :fmt-price="fmtPrice"
+          />
 
           <!-- Error -->
           <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -849,6 +801,8 @@ import MarketplaceCheckoutFulfillmentType from '../components/MarketplaceCheckou
 import MarketplaceCheckoutSchedule from '../components/MarketplaceCheckoutSchedule.vue';
 import MarketplaceCheckoutLoyalty from '../components/MarketplaceCheckoutLoyalty.vue';
 import MarketplaceCheckoutDelivery from '../components/MarketplaceCheckoutDelivery.vue';
+import MarketplaceCheckoutPayNow from '../components/MarketplaceCheckoutPayNow.vue';
+import MarketplaceCheckoutTotals from '../components/MarketplaceCheckoutTotals.vue';
 import MarketplaceMenuCategoryNav from '../components/MarketplaceMenuCategoryNav.vue';
 import MarketplaceMenuFlashSaleBanner from '../components/MarketplaceMenuFlashSaleBanner.vue';
 import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
