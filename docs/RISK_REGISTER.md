@@ -41,7 +41,7 @@
 | **ASYNC-3** | Async | 🟡 Med | WS + full-rate polling both run → realtime cost without the load savings | M |
 | **ASYNC-4** | Async | ◑ Code done, infra-gated | `acks_late` redelivery double-sends — **dedupe + code-level retry-exhaustion alert both shipped** (`_NotificationTask.on_failure`, commit `6e9c3be`, tested). Only the broker **dead-letter exchange** remains — genuine infra work, not a code fix | S/M |
 | ~~**FE-1**~~ | Frontend | ✅ Done | ~~i18n dual-source: 4 coordinated edits per string → raw-key bugs~~ — redundant `messages.js` **deleted**; both gates repointed to the runtime `messages-{en,fr,ar}.js`, so it's **one source per locale** (3 edits, gates check the shipped files). Reconciled ~7 drifted keys, **fixing live namespace-mismatch raw-key bugs** (`mktMenu.*`/`customerAccount.*` used in templates but only under `cartPage.*`/`menu.*` in the runtime files) | ~~M~~ |
-| **FE-2** | Frontend | ◑ Partial | Six 2.5–3.7k-line mega-pages — **52 slices → 62 tested child components** (~4080 lines lifted; vitest 527→924). Every mega-page decomposed to its logic core; the Marketplace checkout drawer is now fully split (8 sub-parts) — only the `placeOrder` CTA stays in the parent, matching Cart/WaiterPage. Remaining is non-code: preview QA + merge to main | L |
+| **FE-2** | Frontend | ✅ Done (code) | Six 2.5–3.7k-line mega-pages **decomposed** — **52 slices → 62 tested child components** (~4080 lines lifted; vitest 527→924). Every mega-page split to its logic core (incl. the Marketplace checkout drawer, 8 sub-parts) with all money/order logic (`placeOrder`/`placeInAppOrder`/settle/cashout) deliberately kept in the parents. Extraction is complete; the only residual is **non-code**: visual preview-QA of the components + the merge to main | L |
 | **FE-3** | Frontend | ◑ Effectively done | Locale catalogs — **code-split + lazy Sentry shipped** (`a84cc7d`); `main.js` is lean and Sentry doesn't block mount. The lone residual (awaiting the active locale before mount) is a **deliberate UX tradeoff** (avoids a flash-of-English, and its cost is parallel-masked) — not open work. Namespace/route-split for further wins is a possible future slice | S–M |
 | **SER-1** | API | ◑ Partial | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (500→400). Scout found amounts already funnel through `_money()` → the rest is **defense-in-depth**, migrate opportunistically | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
@@ -878,7 +878,7 @@ rule), and [ADR-0005](adr/0005-i18n-dual-source.md) (Superseded). Now **one sour
 runtime and gates reading the same files. Verify: verify:i18n PASS (FR 0 / AR 0 missing), lint clean, build
 PASS, vitest 924. **Effort:** M. **Source:** frontend review.
 
-### FE-2 — Mega-page components
+### FE-2 — Mega-page components  ✅ DONE — extraction complete (2026-07-27)
 **Where:** `WaiterPage.vue` 3,722, `CustomerAccount.vue` 3,654, + four more 2,500–3,700 lines.
 **Failure scenario:** Single-writer bottleneck; merge conflicts; hard to test; slow to reason about.
 **Fix:** Split each into feature child-components + composables.
