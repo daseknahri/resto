@@ -23,7 +23,7 @@
 
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
-| **AUTHZ-1** | Auth | ◑ Core done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices); dead `accounts._is_tenant_owner` helper deleted. Residual is by design: 3 Category-C predicates (mid-logic owner checks that return a *different* response, not 403) | L |
+| **AUTHZ-1** | Auth | ✅ Done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices); dead `accounts._is_tenant_owner` helper deleted. The only residual is **by design** — 3 Category-C predicates (mid-logic owner checks that must return a *different* response, not a generic 403, so they correctly stay inline) — i.e. nothing left to migrate | L |
 | **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
@@ -59,7 +59,7 @@
 
 ## 🔴 Critical
 
-### AUTHZ-1 — Authorization is a copy-pasted convention on a shared cookie
+### AUTHZ-1 — Authorization is a copy-pasted convention on a shared cookie  ✅ DONE (2026-07-27)
 **Where:** ~198 of ~262 endpoints (no permission class); `_is_tenant_owner` duplicated in
 `menu/views.py` and `accounts/views.py` (divergent signatures) + predicate in 5+ places;
 `SESSION_COOKIE_DOMAIN = ".<suffix>"`.
