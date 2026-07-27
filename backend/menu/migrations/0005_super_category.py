@@ -55,6 +55,10 @@ class Migration(migrations.Migration):
                 to="menu.supercategory",
             ),
         ),
+        # NOT elidable (deliberate, RISK STRUCT-2): this also SEEDS the default "Menu"
+        # SuperCategory that a fresh tenant schema needs (Category.super_category becomes
+        # NOT NULL just below). Eliding it in a squash would leave new tenants without the
+        # default super-category — so a squash must keep this RunPython.
         migrations.RunPython(attach_default_super_category, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="category",

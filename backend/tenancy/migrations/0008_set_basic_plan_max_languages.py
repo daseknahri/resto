@@ -18,6 +18,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(set_basic_plan_max_languages, noop_reverse),
+        # elidable: one-time config fix on the existing "starter" plan row — seed_plans
+        # (run every deploy) is the source of truth and already sets max_languages=3 on a
+        # fresh DB, so this is redundant there and can be dropped when squashing (RISK STRUCT-2).
+        migrations.RunPython(set_basic_plan_max_languages, noop_reverse, elidable=True),
     ]
 

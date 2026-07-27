@@ -35,5 +35,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(mark_completed_paid, noop),
+        # elidable: one-time backfill of payment_status/paid_at on historical orders —
+        # a fresh schema has no orders, so this can be dropped when squashing (RISK STRUCT-2).
+        migrations.RunPython(mark_completed_paid, noop, elidable=True),
     ]
