@@ -30,7 +30,7 @@
 | **IDENTITY-1** | Auth | ◑ Core done | Dual identity: customer invisible to DRF. **Keystone + full view sweep shipped** — `CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`/`customer_or_none`; **every request-handling view that read `session["customer_id"]` now hydrates the customer onto `request.user`** (single-role, optional-auth, multi-role, money, driver, list-degrading — all done across ~10 slices). Per-customer throttles now key on the principal too. Residual is by design: throttle key-builders / the login probe / OTP session *writers* / the skipped driver ride-views (non-uniform 401/403 contracts) stay raw session; optional customer-CSRF hardening is a separate step | L |
 | **STRUCT-1** | Structure | 🟠 High | God-files (13.4k / 8.7k lines), no `OrderService`, 574-line order method. **Awaiting owner go-ahead** (money-path refactor) | L |
 | **TEST-1** | Testing | ✅ Done | count-floor + DB-fail-not-skip + Playwright E2E in CI + real threaded money/isolation DB tests | M |
-| **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
+| **DATA-1** | Data | ◑ Mitigated; refactor scale-gated | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`) + **generator hardened** to 48-bit (`token_hex(6)`, both generators) so within-tenant collisions have huge headroom and cross-tenant collisions are negligible (format-compatible, no migration/frontend change). The acute risk is fully mitigated (composite `(tenant_id, order_number)` keys on all public refs + schema-namespaced idempotency keys + reconcile). The **single-column global refactor** (drop the composites → needs a public order-number registry w/ a cross-schema write on order create) is **large-ripple + marginal + scale-gated**, deliberately deferred | S/L |
 | ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
 | **ASYNC-2** | Async | ✅ Addressed | Named `cron.<command>` tasks (name *is* the allowlist), `cron.*`→`cron` queue route, transient-DB retry/backoff; worker consumes `-Q notifications,cron` | M |
 | **ASYNC-1** | Async | ✅ Addressed | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; **durable outbox now shipped too**: the inline fallback persists each task to an `OutboxMessage` (public schema, Decimal-safe args), deleted on success; `relay_outbox` (run at boot in `entrypoint.sh`) re-dispatches rows a crashed/restarted process left pending (grace window + `select_for_update(skip_locked)` + max-attempts; idempotent via ASYNC-4 dedup) | M |
@@ -627,13 +627,31 @@ out of scope (fuzzy free-text `reference`; a money ledger must never be reconcil
 Tests: `tests/test_reconcile_order_refs.py` (4, no DB). Verified there is **no production Order
 hard-delete path today** (GDPR erase blanks-but-retains; no admin/teardown deletes), so this is
 defense-in-depth for out-of-band deletes.
-**Remaining (structural):** (1) make `order_number` **globally unique** (`{tenant_id}-{seq}` or
-UUID) so public refs need one column and can't cross-contaminate — a large ripple (URLs,
-serializers, frontend), deliberately deferred; (2) an `Order` **soft-delete convention** (no
-`deleted` field exists). The existing per-ref `tenant_id` scoping (audited: DeliveryJob /
-CustomerRating / CustomerOrderRef lookups already constrain `tenant_id`) plus this reconcile job
-cover the acute risk without the structural rewrite.
-**Effort:** S (reconcile, done) / L (global-unique order_number, remaining).
+**Generator hardened (2026-07-27):** both order-number generators
+(`menu.views._generate_order_number` and the lockstep inline one in
+`accounts.views.MarketplacePlaceOrderView`) now mint **48-bit** values (`token_hex(6)`, was 24-bit).
+The old ~16.7M space birthday-collided within a busy tenant and collided freely across tenants; 48 bits
+gives huge within-tenant headroom and makes cross-tenant collisions negligible — *effectively* globally
+unique without a registry. Format stays `ORD-<uppercase hex>` (16 chars ≤ `max_length=20`, still matches
+the one frontend format assumption, `router/index.js` `/order/:n([A-Z]+-[A-Z0-9]+)`), so **no migration,
+no frontend change, no serializer change**. Tests: `tests/test_data1_order_number_entropy.py` (4, no DB).
+
+**Scoping (2026-07-27) — the structural refactor is scale-gated, and the acute risk is already gone.**
+A full ripple audit (backend + frontend) confirmed: (a) all 3 public refs key on the **composite
+`(tenant_id, order_number)`** (`DeliveryJob.unique_together`, `CustomerOrderRef.UniqueConstraint`,
+`CustomerRating.unique_together`), so a shared `order_number` across tenants **cannot** cross-contaminate;
+(b) every idempotency key / PSP reference that embeds `order_number` is already **schema-namespaced**
+(`order-pay-{schema}-...`, `cancelrefund:{schema}:{id}`, …), so none is load-bearing on global uniqueness;
+(c) the **frontend never looks an order up by `order_number` alone** — it scopes by `slug` (marketplace)
+or host (tenant site) and treats the value as an opaque string. To *drop* the composites to a single
+global-unique column you must make generation **deterministically** global, which requires a **public
+order-number registry with a cross-schema write on every order create** (money-path, transactional — like
+the ASYNC-1 outbox) — that is the "large ripple," and it buys only cleanliness over the already-safe
+composite keys. Do it only if/when a real need for cross-schema single-id lookup arrives (it compounds
+with the MULTITENANCY-1 scale decision). Also still open, low-value: (2) an `Order` **soft-delete
+convention** (no `deleted` field). The per-ref `tenant_id` scoping + `reconcile_order_refs` cover the acute
+risk without the rewrite.
+**Effort:** S (reconcile + generator, done) / L (single-column global refactor, scale-gated).
 **Source:** data-model review.
 
 ### API-1 — No API versioning
