@@ -33,7 +33,7 @@
 | **DATA-1** | Data | ◑ Mitigated; refactor scale-gated | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`) + **generator hardened** to 48-bit (`token_hex(6)`, both generators) so within-tenant collisions have huge headroom and cross-tenant collisions are negligible (format-compatible, no migration/frontend change). The acute risk is fully mitigated (composite `(tenant_id, order_number)` keys on all public refs + schema-namespaced idempotency keys + reconcile). The **single-column global refactor** (drop the composites → needs a public order-number registry w/ a cross-schema write on order create) is **large-ripple + marginal + scale-gated**, deliberately deferred | S/L |
 | ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
 | **ASYNC-2** | Async | ✅ Addressed | Named `cron.<command>` tasks (name *is* the allowlist), `cron.*`→`cron` queue route, transient-DB retry/backoff; worker consumes `-Q notifications,cron` | M |
-| **ASYNC-1** | Async | ✅ Addressed | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; **durable outbox now shipped too**: the inline fallback persists each task to an `OutboxMessage` (public schema, Decimal-safe args), deleted on success; `relay_outbox` (run at boot in `entrypoint.sh`) re-dispatches rows a crashed/restarted process left pending (grace window + `select_for_update(skip_locked)` + max-attempts; idempotent via ASYNC-4 dedup) | M |
+| **ASYNC-1** | Async | ✅ Done | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; **durable outbox now shipped too**: the inline fallback persists each task to an `OutboxMessage` (public schema, Decimal-safe args), deleted on success; `relay_outbox` (run at boot in `entrypoint.sh`) re-dispatches rows a crashed/restarted process left pending (grace window + `select_for_update(skip_locked)` + max-attempts; idempotent via ASYNC-4 dedup) | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook trusts metadata~~ — now credits settled `amount_total`, paid-only | ~~S~~ |
@@ -691,7 +691,7 @@ config, routing, "every scheduled cron task is registered", "generic runner + al
 **Effort:** M.
 **Source:** async/realtime review.
 
-### ASYNC-1 — Inline fallback loses work on restart
+### ASYNC-1 — Inline fallback loses work on restart  ✅ DONE (2026-07-27)
 **Where:** `accounts/tasks.py` `enqueue()` — when `CELERY_BROKER_URL` is unset (a likely default),
 tasks run on an in-process `ThreadPoolExecutor`; `.run()` bypasses `autoretry_for`; the pending
 queue is unbounded and evaporates on process exit.
