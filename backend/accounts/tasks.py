@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 
 from celery import Task, shared_task
 from django.conf import settings
 from django.db import InterfaceError, OperationalError
+from django_tenants.utils import schema_context
 
 logger = logging.getLogger(__name__)
 
@@ -122,13 +124,85 @@ _inline_executor = ThreadPoolExecutor(
 )
 
 
+# ── ASYNC-1 durable-outbox (arg) serialization ──────────────────────────────────
+# The inline-fallback task's args/kwargs are persisted as JSON so a restart can
+# re-dispatch them. Everything the ~24 enqueue() call sites pass is a primitive
+# (int / str) EXCEPT a wallet ``amount`` Decimal, which JSON can't round-trip — so
+# Decimals are tagged on encode and rebuilt on decode, preserving the exact value.
+
+def _encode_arg(value):
+    if isinstance(value, Decimal):
+        return {"__decimal__": str(value)}
+    return value
+
+
+def _decode_arg(value):
+    if isinstance(value, dict) and list(value.keys()) == ["__decimal__"]:
+        return Decimal(value["__decimal__"])
+    return value
+
+
+def _encode_seq(seq):
+    return [_encode_arg(v) for v in seq]
+
+
+def _decode_seq(seq):
+    return [_decode_arg(v) for v in (seq or [])]
+
+
+def _encode_map(mapping):
+    return {k: _encode_arg(v) for k, v in mapping.items()}
+
+
+def _decode_map(mapping):
+    return {k: _decode_arg(v) for k, v in (mapping or {}).items()}
+
+
+def _persist_outbox(task, args, kwargs):
+    """Durably record an inline-fallback task before it runs, so a restart can
+    re-dispatch it (RISK ASYNC-1). Returns the row pk, or None if persistence failed —
+    NEVER raises: losing durability must not break enqueue()'s fire-and-forget contract
+    (a persist failure just degrades to today's non-durable inline behaviour). Pinned
+    to the public schema because OutboxMessage lives only there (accounts is shared)."""
+    name = getattr(task, "name", "") or ""
+    if not name:
+        return None  # can't be re-resolved by the relay without a registered name
+    try:
+        from accounts.models import OutboxMessage
+        with schema_context("public"):
+            row = OutboxMessage.objects.create(
+                task_name=name, args=_encode_seq(args), kwargs=_encode_map(kwargs)
+            )
+        return row.pk
+    except Exception:
+        logger.warning(
+            "ASYNC-1 outbox persist failed for %s; inline run has no durable fallback",
+            name, exc_info=True,
+        )
+        return None
+
+
+def _clear_outbox(outbox_id) -> None:
+    """Drop the durable row after a successful inline run (RISK ASYNC-1)."""
+    if outbox_id is None:
+        return
+    try:
+        from accounts.models import OutboxMessage
+        with schema_context("public"):
+            OutboxMessage.objects.filter(pk=outbox_id).delete()
+    except Exception:
+        logger.warning("ASYNC-1 outbox clear failed for row %s", outbox_id, exc_info=True)
+
+
 def enqueue(task, *args, **kwargs) -> None:
     """Dispatch *task* via Celery when a broker is configured, else run it inline on a
     bounded thread pool. Never raises, never blocks the caller.
 
     Inline mode is a dev/degraded fallback (no broker); the durable path is Celery.
     The bounded pool + its internal queue provide backpressure so a burst cannot spawn
-    unbounded threads / DB connections."""
+    unbounded threads / DB connections. RISK ASYNC-1: the inline path also persists the
+    task to a durable OutboxMessage row so a restart mid-run doesn't silently lose it —
+    ``relay_outbox`` (run at boot) re-dispatches anything left pending."""
     if getattr(settings, "CELERY_BROKER_URL", ""):
         try:
             task.delay(*args, **kwargs)
@@ -136,30 +210,37 @@ def enqueue(task, *args, **kwargs) -> None:
         except Exception:  # broker unreachable → don't lose the notification
             logger.warning("Celery enqueue failed for %s; running inline",
                            getattr(task, "name", task), exc_info=True)
-    # RISK ASYNC-1: in production this fallback means the work is running in-process
-    # with NO durability — it is lost outright on the next deploy/restart, silently,
-    # unless something screams about it. config.checks.celery_broker_configured_for_durability
-    # blocks a *new* deploy from shipping without a broker (deploy=True check, so it
-    # never runs in dev/tests); this log line is the equivalent signal for a box that
-    # already booted (e.g. the broker died after startup) so it shows up in prod logs
-    # / alerting instead of vanishing quietly.
+    # RISK ASYNC-1: in production this fallback means the work is running in-process.
+    # config.checks.celery_broker_configured_for_durability blocks a *new* deploy from
+    # shipping without a broker (deploy=True check, so it never runs in dev/tests); this
+    # log line is the equivalent signal for a box that already booted (e.g. the broker
+    # died after startup). The OutboxMessage row below makes the work durable so a
+    # restart during that window recovers it instead of losing it outright.
+    # The durable outbox exists for PRODUCTION (where losing a real
+    # notification/money-nudge matters). Dev/tests run inline lossily by design —
+    # gating on ``not DEBUG`` keeps the outbox (and its DB write) out of the dev/test
+    # path entirely, matching the prod-only log below.
+    outbox_id = None
     if not settings.DEBUG:
         logger.error(
             "PROD inline task fallback: %s is running on the in-process ThreadPoolExecutor "
-            "(no durable Celery broker) — this work will be LOST on the next deploy/restart. "
-            "Set CELERY_BROKER_URL. (RISK ASYNC-1)",
+            "(no durable Celery broker). It is now persisted to the ASYNC-1 outbox for "
+            "restart recovery, but set CELERY_BROKER_URL for the real durable path. (RISK ASYNC-1)",
             getattr(task, "name", task),
         )
+        outbox_id = _persist_outbox(task, args, kwargs)
     # Submit to the bounded pool (not a raw unbounded Thread): excess work queues
     # instead of opening a connection-per-call all at once.
-    _inline_executor.submit(_run_inline, task, args, kwargs)
+    _inline_executor.submit(_run_inline, task, args, kwargs, outbox_id)
 
 
-def _run_inline(task, args, kwargs) -> None:
+def _run_inline(task, args, kwargs, outbox_id=None) -> None:
     try:
         task.run(*args, **kwargs)  # execute the task body directly (no broker)
+        _clear_outbox(outbox_id)   # success → drop the durable row
     except Exception:
         logger.warning("inline task %s failed", getattr(task, "name", task), exc_info=True)
+        # Leave the outbox row PENDING → relay_outbox retries it after the grace window.
     finally:
         # CRITICAL: pool threads are REUSED across submissions, so a connection opened
         # for this task would otherwise stay open and accumulate (one idle Postgres

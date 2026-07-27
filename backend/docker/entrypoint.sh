@@ -71,6 +71,14 @@ else
   fi
 fi
 
+# RISK ASYNC-1: re-dispatch any inline-fallback tasks that a previous container lost
+# mid-run (persisted to the durable OutboxMessage table). Best-effort recovery, NOT a
+# boot gate — a relay failure must not keep a healthy app from serving, so swallow a
+# non-zero exit (set -e would otherwise halt boot). Only rows older than the grace
+# window are touched, so this never re-sends work a sibling container is still running.
+echo "[entrypoint] relay_outbox (ASYNC-1 restart recovery)"
+python manage.py relay_outbox || echo "[entrypoint] relay_outbox failed (non-fatal), continuing"
+
 # Serve under ASGI (uvicorn) so WebSockets work. HTTP behaves identically under
 # both servers — only WebSockets require ASGI. Instant rollback: set USE_ASGI=0
 # in the environment to return to the previous gunicorn/WSGI server (no code change).
