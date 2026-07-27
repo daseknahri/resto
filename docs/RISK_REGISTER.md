@@ -33,7 +33,7 @@
 | **DATA-1** | Data | ◑ Partial | Loose cross-schema refs — **orphan reconcile shipped** (`reconcile_order_refs`); global-unique `order_number` remains (deferred, large ripple) | S/L |
 | ~~**API-1**~~ | API | ✅ Done | ~~No API versioning~~ — **`/api/v1/` alias shipped** (legacy `/api/` unchanged & default, `reverse()`-invariant via `v1` namespace) | ~~S~~ |
 | **ASYNC-2** | Async | ✅ Addressed | Named `cron.<command>` tasks (name *is* the allowlist), `cron.*`→`cron` queue route, transient-DB retry/backoff; worker consumes `-Q notifications,cron` | M |
-| **ASYNC-1** | Async | ◑ Partial | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; durable-outbox/runtime-dispatch remains | M |
+| **ASYNC-1** | Async | ✅ Addressed | Silent lossy inline task fallback — **deploy-blocking Error (kepoli.E002) + loud prod log** shipped; **durable outbox now shipped too**: the inline fallback persists each task to an `OutboxMessage` (public schema, Decimal-safe args), deleted on success; `relay_outbox` (run at boot in `entrypoint.sh`) re-dispatches rows a crashed/restarted process left pending (grace window + `select_for_update(skip_locked)` + max-attempts; idempotent via ASYNC-4 dedup) | M |
 | **MULTITENANCY-1** | Tenancy | 🟠 High* | Schema-per-tenant caps scale. Provisioning atomic-index landmine **fixed**; the (a)–(c) scale ceiling is a conscious **owner decision** | XL |
 | ~~**MONEY-2**~~ | Money | ✅ Done | ~~Driver-payout unlocked "owed" check~~ — driver row now locked in `record_driver_payout` | ~~S~~ |
 | ~~**MONEY-3**~~ | Money | ✅ Done | ~~Dormant Stripe webhook trusts metadata~~ — now credits settled `amount_total`, paid-only | ~~S~~ |
@@ -684,6 +684,24 @@ not be running.
 **Fix:** Make the broker **required in production** (fail-closed if unset), or give the inline
 path a durable outbox. At minimum, document that inline mode is dev-only and assert a broker in
 prod boot.
+**Resolution (2026-07-27):** both halves shipped.
+- *Broker required in prod* — `config/checks.py::celery_broker_configured_for_durability` (`kepoli.E002`,
+  `deploy=True`) hard-fails `manage.py check --deploy --fail-level ERROR` in the entrypoint when
+  `CELERY_BROKER_URL` is unset, so prod cannot ship without a broker; a runtime `logger.error` covers a
+  broker that dies *after* boot. (Was already done.)
+- *Durable outbox* — the inline fallback is no longer lossy **in production**. When `enqueue` takes the
+  inline path *and* `DEBUG` is off (prod/staging — dev/tests stay lossy by design, so no outbox DB write
+  pollutes them), it persists the task to an `OutboxMessage` row (`accounts/models.py`, public/shared
+  schema, written under `schema_context("public")`; Decimal args tagged so a wallet `amount` round-trips
+  exactly) **before** running it on the bounded pool; `_run_inline` deletes the row on success and leaves
+  it `pending` on failure/crash. `accounts/management/commands/relay_outbox.py`, run at boot in `docker/entrypoint.sh`
+  (best-effort, non-fatal, before the server starts), re-dispatches rows left `pending` past a 300 s grace
+  window — via the broker if one is now configured, else inline — claiming each with
+  `select_for_update(skip_locked=True)` (multi-container safe) and giving up to `failed` + a loud log after
+  5 attempts. Re-dispatch is at-least-once; the notification tasks are idempotent via their ASYNC-4 dedup
+  keys, so a relay never double-sends. Tests: `tests/test_async1_outbox.py` (17 mock-based, no DB:
+  serialization/persist/clear/enqueue/run_inline/relay-dispatch; + 3 DB-backed for the relay loop / grace /
+  max-attempts, run in CI). Migration `accounts/0068_outboxmessage`.
 **Effort:** M.
 **Source:** async/realtime review.
 
