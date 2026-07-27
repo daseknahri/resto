@@ -4799,8 +4799,13 @@ class MarketplacePlaceOrderView(APIView):
                                 # max_uses is None → unlimited → no cap to enforce
                                 _Promo.objects.filter(pk=_best_promo.pk).update(use_count=_F("use_count") + 1)
 
+                        # RISK DATA-1: 48-bit entropy (token_hex(6)) — keep in lockstep
+                        # with menu.views._generate_order_number (same format/entropy). The
+                        # old 24-bit value birthday-collided within a tenant and collided
+                        # freely across tenants; 48 bits makes both negligible. Format stays
+                        # ORD-<uppercase hex> (16 chars) so downstream is unaffected.
                         for _attempt in range(10):
-                            _candidate = f"ORD-{_sec.token_hex(3).upper()}"
+                            _candidate = f"ORD-{_sec.token_hex(6).upper()}"
                             if not _Order.objects.filter(order_number=_candidate).exists():
                                 order_number = _candidate
                                 break

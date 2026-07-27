@@ -2399,9 +2399,21 @@ def _compute_promo_discount(promo, food_subtotal, delivery_fee) -> "Decimal":
 
 
 def _generate_order_number() -> str:
-    """Generate a unique order number like ORD-A3F2C1."""
+    """Generate a unique order number like ORD-A3F2C19B8E7D.
+
+    RISK DATA-1: 48 bits of entropy (``token_hex(6)``, not 3). The old 24-bit value
+    (~16.7M) birthday-collided within a busy tenant and collided freely ACROSS tenants
+    (``order_number`` is only unique per schema under django-tenants). 48 bits gives huge
+    within-tenant headroom and makes cross-tenant collisions negligible — so it's
+    effectively globally unique without a public registry. Cross-tenant safety proper is
+    still carried by the ``(tenant_id, order_number)`` composite keys on the public refs;
+    this just removes the collision pressure. Format stays ``ORD-<uppercase hex>`` (16
+    chars ≤ max_length 20, matches the frontend route regex) so nothing downstream changes.
+
+    NOTE: keep in lockstep with the inline generator in
+    ``accounts.views.MarketplacePlaceOrderView`` (same format/entropy)."""
     for _ in range(10):
-        candidate = f"ORD-{_secrets.token_hex(3).upper()}"
+        candidate = f"ORD-{_secrets.token_hex(6).upper()}"
         if not Order.objects.filter(order_number=candidate).exists():
             return candidate
     raise RuntimeError("Could not generate unique order number after 10 attempts.")
