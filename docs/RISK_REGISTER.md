@@ -49,7 +49,7 @@
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog. **Product decision** (build when a non-food tenant is real) | L |
 | ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in has no data prerequisite~~ — serializer now requires city+coords to opt in | ~~S~~ |
 | ~~**DATA-5**~~ | Data | ✅ Done | ~~Four `Profile` mirrors, no periodic reconcile~~ — **`reconcile_profile_denorms` shipped** (per-tenant, reuses the 3 recompute fns) | ~~M~~ |
-| **STRUCT-2** | Structure | 🟡 Med | 215 migrations, `Order` field sprawl, no squashing → slow per-schema deploys | M |
+| **STRUCT-2** | Structure | 🟡 Med (prep done) | 216 migrations, `Order` field sprawl, no squashing → slow per-schema deploys. **Squash-prep done**: the 5 one-time-backfill `RunPython`s marked `elidable=True` (behavior-neutral now), the 6th (`menu/0005` default-SuperCategory seed) deliberately kept, and a [squash runbook](STRUCT-2_squash_runbook.md) written (handles the 3 `AddIndexConcurrently` `atomic=False` migrations → squash `menu` only to 0059). The squash itself is an **owner/release-boundary** step (needs a real multi-tenant DB to validate; marginal value until the MULTITENANCY-1 scale ceiling); `Order` decomposition is STRUCT-1 | M |
 | **API-2** | API | 🟢 Low | Contract sprawl / inconsistent naming / RPC verbs in 3 god url-files (client-breaking renames — defer) | M |
 | **OPS-4** | Ops | 🟢 Low | ⏭️ Re-scoped — `daphne` is a registered `INSTALLED_APP` (ASGI runserver), NOT dead weight; skipped as low-value | S |
 
@@ -1306,6 +1306,21 @@ optimization — this is about making it robust, not removing it.)
 MULTITENANCY-1); wide `Order` rows hurt every scan.
 **Fix:** Squash migrations at a release boundary; consider decomposing `Order` by bounded context
 as part of STRUCT-1.
+**Squash-prep — DONE (2026-07-27); the squash itself is owner/release-gated.** Squashing here is not a
+mechanical `squashmigrations` run: it has **6 `RunPython` data migrations** and **3 `AddIndexConcurrently`
+(`atomic=False`)** migrations (`menu/0060,0062,0066`, the MULTITENANCY-1 landmine). Prep completed so a
+future squash is clean + safe:
+- Marked `elidable=True` on the **5 one-time backfills** (`accounts/0050`, `accounts/0058`, `menu/0035`,
+  `menu/0062`, `tenancy/0008`) so a squash drops them; **kept** `menu/0005`'s RunPython non-elidable (it
+  seeds the default `SuperCategory` a fresh tenant schema needs). Behavior-neutral today (`elidable` only
+  affects squash generation — verified `makemigrations --check` + `manage.py check` clean).
+- Wrote [`STRUCT-2_squash_runbook.md`](STRUCT-2_squash_runbook.md): preconditions (all schemas past the
+  range), the two-release process (add squash+`replaces` → validate → delete originals), per-app commands
+  (squash `menu` only to **0059**, before the first concurrent index; `accounts`/`tenancy`/`sales` fully),
+  and the staging validation checklist.
+The squash execution stays an **owner** step — it can't be validated without a real multi-tenant Postgres,
+its blast radius is the deploy machinery, and the value is marginal until the MULTITENANCY-1 scale ceiling.
+The `Order`-field decomposition is part of STRUCT-1 (owner-gated, money-path).
 **Effort:** M. **Source:** data-model review.
 
 ---
