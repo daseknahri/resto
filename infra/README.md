@@ -81,6 +81,13 @@
   - `infra/coolify/backup_postgres.sh`
   - `infra/coolify/restore_postgres.sh`
 
+## Postgres PITR / disaster recovery (OPS-1)
+- Runbook: `infra/COOLIFY_POSTGRES_PITR.md` (3 paths: managed Postgres / pgBackRest / native WAL)
+- pgBackRest config template: `infra/coolify/pgbackrest.conf.example`
+
+## Stripe PSP wallet top-up (activation)
+- Runbook: `infra/COOLIFY_PSP_STRIPE_ACTIVATION.md` (seam is built + dormant; env in `coolify.env.production.sample`)
+
 ## Coolify full-stack backup + wildcard verification
 - Runbook: `infra/COOLIFY_FULL_STACK_BACKUP.md`
 - Scripts:
