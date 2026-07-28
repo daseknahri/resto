@@ -105,3 +105,10 @@ FE-2 mega-page splits, SER-1, ASYNC-1 outbox, DATA-1 entropy, DATA-2 reconcile, 
   DATA-1 global `order_number` structural refactor (entropy already widened; full change scale-gated).
 - **Merge:** ✅ done — `integration/campaign-round-2` landed on `main` 2026-07-28 (PR #70 + post-merge
   follow-ups #74 CVE drift / #78 flake / #79 verified dep bumps; infra runbooks #80/#81).
+- **Supply-chain / docker hardening (post-campaign, 2026-07-28):** ✅ done — #79 verified 23 Dependabot
+  pip+npm bumps through full CI; #84 bumped the Docker base images (python 3.12→3.14, node 20→26,
+  nginx 1.27→1.31) behind a **new CI image-build gate** (images were never built in CI before); #85
+  extended it to a **runtime deploy smoke** (boots both images + polls health); #86/#87 added the
+  owner-run staging deploy-smoke runbook with per-base validation notes; #88 recorded it in the
+  register. Stale major Dependabot PRs (Django 6, Tailwind 4, …) closed as deliberate deferrals.
+  Every image/base change is now build- and boot-gated in CI.
