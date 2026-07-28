@@ -1291,10 +1291,13 @@ guard against a wrong sender string).
 killed by the `post_delete` receiver; stale reorders by the void/comp filter; and content drift self-heals
 because the mirror re-syncs on every Order `post_save` (status transitions save the Order constantly), so
 any drift from an OrderItem-only mutation is corrected on the next status change — a narrow, transient
-window. `reconcile_order_content` is now **scheduled daily** as belt-and-suspenders for that window —
-`cron.reconcile_order_content` (`accounts/tasks.py`) + a daily beat entry (`config/settings.py`),
-**detect-only** (no `--fix`), mirroring `reconcile_order_refs` exactly. Drift is now auto-detected + logged
-daily; a human still runs `--fix` to re-sync.
+window. `reconcile_order_content` is now **scheduled daily — done** (commit `fe280cb`): the
+`cron.reconcile_order_content` `@shared_task` (`accounts/tasks.py`) + a daily `CELERY_BEAT_SCHEDULE` entry
+(`config/settings.py`), **detect-only** (no `--fix`), mirroring `reconcile_order_refs` exactly — so lingering
+drift is auto-detected + logged daily; a human still runs `--fix` to re-sync. Pinned by
+`tests/test_celery_tasks.py::test_order_content_reconcile_is_scheduled` (plus the general "every `cron.*`
+beat task is registered + routes to the `cron` queue" test), so removing the schedule regresses loudly.
+**Nothing left — DATA-2 is fully closed** (both automatic mechanisms + the scheduled reconcile).
 **Effort:** S. **Source:** data-model review.
 
 ### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
