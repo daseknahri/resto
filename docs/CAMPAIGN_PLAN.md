@@ -110,5 +110,10 @@ FE-2 mega-page splits, SER-1, ASYNC-1 outbox, DATA-1 entropy, DATA-2 reconcile, 
   nginx 1.27→1.31) behind a **new CI image-build gate** (images were never built in CI before); #85
   extended it to a **runtime deploy smoke** (boots both images + polls health); #86/#87 added the
   owner-run staging deploy-smoke runbook with per-base validation notes; #88 recorded it in the
-  register. Stale major Dependabot PRs (Django 6, Tailwind 4, …) closed as deliberate deferrals.
+  register. 23 stale **major**-version Dependabot PRs were closed as deliberate deferrals (need their
+  own tested migration, not an auto-merge) — the full grouped list (Django 6, Tailwind 4, Pinia 3,
+  the vite/vitest/eslint toolchain majors, backend-lib majors, GitHub Actions majors) is tracked in
+  the register's "Deferred major upgrades" note ([`RISK_REGISTER.md`](RISK_REGISTER.md)), the source
+  of truth — not duplicated here to avoid drift. The docker base bumps were NOT deferred (landed in
+  #84/#85).
   Every image/base change is now build- and boot-gated in CI.
