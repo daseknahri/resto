@@ -88,6 +88,10 @@
 ## Stripe PSP wallet top-up (activation)
 - Runbook: `infra/COOLIFY_PSP_STRIPE_ACTIVATION.md` (seam is built + dormant; env in `coolify.env.production.sample`)
 
+## Staging deploy smoke (image / base-image changes)
+- Runbook: `infra/COOLIFY_STAGING_DEPLOY_SMOKE.md` (owner-run; validate a docker base-image bump on real Coolify staging before prod — the suspenders to CI's build + runtime-smoke `docker` job)
+- Smoke scripts it drives: `infra/{production_tenant,customer_flow,order_flow_api,pre_release}_smoke.ps1`
+
 ## Coolify full-stack backup + wildcard verification
 - Runbook: `infra/COOLIFY_FULL_STACK_BACKUP.md`
 - Scripts:
