@@ -20,7 +20,8 @@
 > **Execution tracker:** the multi-branch campaign working through these items — waves, lanes,
 > collision map — lives in [`CAMPAIGN_PLAN.md`](CAMPAIGN_PLAN.md). **This register's markers were
 > reconciled against the code on 2026-07-27** (every `◑`/severity row re-verified; stale summaries
-> corrected), so the status column here is now the current source of truth — no longer lagging the detail
+> corrected) and confirmed current on 2026-07-28, when `CAMPAIGN_PLAN.md` was pruned to defer to this
+> register. So the status column here is the current source of truth — no longer lagging the detail
 > sections or `CAMPAIGN_PLAN.md`.
 
 ---
