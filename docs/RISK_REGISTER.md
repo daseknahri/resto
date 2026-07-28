@@ -27,8 +27,19 @@
 > **Landed:** round-2 merged to `main` on 2026-07-28 via **#70** (the campaign integration), with
 > post-merge follow-ups **#74** (patch CVE drift — Pillow/postcss/transitive bumps + a documented
 > `brace-expansion` deferral in the npm-audit gate & `.trivyignore`) and **#78** (fix a ~2.3% flaky
-> referral test surfaced once the CVE fix let the backend test step run). All code-actionable items are
-> ✅ Done; only the owner/infra items in the verdict above remain.
+> referral test surfaced once the CVE fix let the backend test step run).
+>
+> **Dependency + supply-chain hardening (2026-07-28):** **#79** verified 23 Dependabot pip+npm bumps
+> (django-tenants 3.6→3.10, DRF 3.15→3.17, uvicorn, celery, vue 3.5.40, …) through the full CI suite;
+> **#84** bumped the Docker base images (python 3.12→3.14, node 20→26, nginx 1.27→1.31) behind a **new
+> CI image-build gate** — CI never built the images before, so base bumps were unverifiable; **#85**
+> extended that gate to a **runtime deploy smoke** (boots both images through the real entrypoint against
+> Postgres+Redis, polls `/api/health/` + `/health`); **#86/#87** added the owner-run staging deploy-smoke
+> runbook ([`infra/COOLIFY_STAGING_DEPLOY_SMOKE.md`](../infra/COOLIFY_STAGING_DEPLOY_SMOKE.md)) with
+> per-base validation notes. Every future image/base change is now build- **and** boot-gated in CI. The
+> stale major-version Dependabot PRs (Django 6, Tailwind 4, etc.) were closed as deliberate deferrals.
+>
+> All code-actionable items are ✅ Done; only the owner/infra items in the verdict above remain.
 
 ---
 
