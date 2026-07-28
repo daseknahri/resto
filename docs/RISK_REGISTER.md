@@ -44,7 +44,7 @@
 | ID | Area | Sev | One-line | Effort |
 |---|---|---|---|---|
 | **AUTHZ-1** | Auth | ✅ Done | Authorization by-convention on a shared cross-subdomain cookie. **Backstop middleware + `IsTenantOwner` policy class (+ message variants) + single `user_owns_tenant_id` owner-check** shipped; **all 58 method-entry `_is_tenant_owner` guards migrated to `permission_classes`** (13 slices); dead `accounts._is_tenant_owner` helper deleted. The only residual is **by design** — 3 Category-C predicates (mid-logic owner checks that must return a *different* response, not a generic 403, so they correctly stay inline) — i.e. nothing left to migrate | L |
-| **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** | M |
+| **OPS-1** | DR | 🔴 Critical | Single Postgres, no replica/PITR → ~24h RPO, money loss on host failure. **OWNER/infra** — apply-ready runbook: [`infra/COOLIFY_POSTGRES_PITR.md`](../infra/COOLIFY_POSTGRES_PITR.md) | M |
 | **OPS-2** | DR | 🔴 Critical | Backups on-host not off-box. **Shipping mechanism built** (off-box hook + freshness probe); owner S3 creds + restore drill remain | S |
 | ~~**MONEY-1**~~ | Money | ✅ Done | ~~No balance-vs-ledger reconciliation~~ — `reconcile_wallet_balances` shipped | ~~S–M~~ |
 | **IDENTITY-1** | Auth | ✅ Done | Dual identity: customer invisible to DRF. **Keystone + full view sweep shipped** — `CustomerSessionAuthentication` + `IsCustomer`/`IsOrderOwner`/`customer_or_none`; **every request-handling view that read `session["customer_id"]` now hydrates the customer onto `request.user`** (single-role, optional-auth, multi-role, money, driver, list-degrading — all done across ~10 slices). Per-customer throttles now key on the principal too. Residual is by design: throttle key-builders / the login probe / OTP session *writers* / the skipped driver ride-views (non-uniform 401/403 contracts) stay raw session; optional customer-CSRF hardening is a separate step | L |
@@ -274,6 +274,11 @@ already admits "customers may need manual wallet adjustments." For a money app t
 business-ending, not "degraded."
 **Fix:** Enable continuous WAL archiving / PITR (e.g. `pgBackRest` or a managed Postgres with
 PITR), and/or a streaming replica. Target RPO ≤ 5 min for the money tables.
+**Runbook (apply-ready, 2026-07-28):** [`infra/COOLIFY_POSTGRES_PITR.md`](../infra/COOLIFY_POSTGRES_PITR.md)
+— decision-complete with three paths (managed Postgres / pgBackRest self-hosted / native WAL), a
+recommendation, concrete steps, and [`infra/coolify/pgbackrest.conf.example`](../infra/coolify/pgbackrest.conf.example).
+What remains is **owner-execution only**: pick a path, provision it, and run the restore drill (the
+drill is the acceptance criterion — `reconcile_wallet_balances` must pass on the restored DB).
 **Effort:** M.
 **Source:** ops/scale review (CRITICAL).
 
