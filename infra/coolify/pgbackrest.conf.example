@@ -1,0 +1,55 @@
+# pgBackRest config — OPS-1 Path 2 template.
+#
+# Copy to /etc/pgbackrest/pgbackrest.conf on the VPS and fill the placeholders.
+# See infra/COOLIFY_POSTGRES_PITR.md (Path 2) for the surrounding steps.
+#
+# SECURITY: never commit real credentials. Keep repo1-s3-key / repo1-s3-key-secret
+# in Coolify env (or a root-only /etc/pgbackrest/pgbackrest.conf, chmod 600) — NOT
+# in the image or git. This file is a TEMPLATE with placeholders only.
+#
+# Reuse the SAME S3-compatible bucket OPS-2 already ships pg_dumps to, under a
+# separate prefix (repo1-path) so the two mechanisms don't collide.
+
+[global]
+# --- Repository: S3-compatible object store (same bucket as OPS-2, own prefix) ---
+repo1-type=s3
+repo1-s3-bucket=CHANGEME-kepoli-backups
+repo1-s3-endpoint=CHANGEME.s3.example.com          # e.g. s3.eu-west-1.amazonaws.com, or your provider's endpoint
+repo1-s3-region=CHANGEME-region                    # e.g. eu-west-1
+repo1-s3-key=CHANGEME                              # prefer env: PGBACKREST_REPO1_S3_KEY
+repo1-s3-key-secret=CHANGEME                       # prefer env: PGBACKREST_REPO1_S3_KEY_SECRET
+repo1-path=/pgbackrest                              # prefix inside the bucket (keep separate from the pg_dump prefix)
+
+# For non-AWS S3 (MinIO / DO Spaces / Backblaze B2 S3): uncomment if the provider
+# needs path-style addressing rather than virtual-host style.
+# repo1-s3-uri-style=path
+
+# --- Encryption at rest (recommended: the repo holds every committed transaction) ---
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=CHANGEME-long-random-passphrase   # store in env/secret manager, NOT here
+
+# --- Retention: keep 2 full backups; diffs expire with their full ---
+repo1-retention-full=2
+repo1-retention-diff=6
+
+# --- Performance / integrity ---
+process-max=2                                       # parallel compress/upload workers (match spare cores)
+compress-type=zst
+compress-level=6
+start-fast=y                                        # checkpoint immediately so backups start fast
+archive-async=y                                     # async WAL push/get for lower archive latency
+spool-path=/var/spool/pgbackrest                    # local spool for archive-async (create, pgbackrest-owned)
+
+# --- Logging ---
+log-level-console=info
+log-level-file=detail
+log-path=/var/log/pgbackrest
+
+[kepoli]
+# Stanza for this cluster. `kepoli` must match --stanza in archive_command and cron.
+pg1-path=/var/lib/postgresql/data/pgdata            # matches PGDATA in docker-compose.coolify.yml
+pg1-port=5432
+pg1-user=CHANGEME-postgres-user                     # POSTGRES_USER
+# pg1-host / pg1-socket-path: set if pgBackRest runs outside the DB container
+# (e.g. a sidecar reaching Postgres over the compose network as host `postgres`).
+# pg1-host=postgres
