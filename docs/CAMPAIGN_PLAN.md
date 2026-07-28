@@ -92,12 +92,16 @@ round-2 sweep (AUTHZ-1 call-site migration, IDENTITY-1 view sweep, FE-1 i18n sin
 FE-2 mega-page splits, SER-1, ASYNC-1 outbox, DATA-1 entropy, DATA-2 reconcile, and more). See the
 [register](RISK_REGISTER.md) for current per-item state; only these remain, all owner-gated:
 
-- **Owner-only / infra:** OPS-1 (Postgres PITR), OPS-2 (S3 creds + restore drill), OPS-3 activation
-  (schema-pinned session backend built, awaiting owner flip), plus the standing launch TODOs
-  (DNS/TLS, prod env, Stripe PSP, schedule the sweep commands on Coolify).
+- **Owner-only / infra:** OPS-1 (Postgres PITR — **apply-ready runbook written 2026-07-28,
+  [`infra/COOLIFY_POSTGRES_PITR.md`](../infra/COOLIFY_POSTGRES_PITR.md): 3 paths + `pgbackrest.conf.example`;
+  owner picks a path, provisions, runs the restore drill**), OPS-2 (off-box backup mechanism + restore
+  drill already built — owner supplies S3 creds + runs the drill), OPS-3 activation (schema-pinned
+  session backend built, awaiting owner flip), plus the standing launch TODOs (DNS/TLS, prod env,
+  Stripe PSP — activation runbook now written, schedule the sweep commands on Coolify).
 - **Owner decisions:** MULTITENANCY-1 (tenant ceiling), DATA-3 (multi-vertical catalog), the
   commission-basis / refund-policy / rides-go-live product calls.
 - **Owner / release-gated code:** STRUCT-1 `OrderService` extraction (awaiting explicit go-ahead —
   money-path refactor), STRUCT-2 migration squash (runbook written, run at a release boundary),
   DATA-1 global `order_number` structural refactor (entropy already widened; full change scale-gated).
-- **Merge:** land `integration/campaign-round-2` → `main` (see [`PR_campaign_round_2.md`](PR_campaign_round_2.md)).
+- **Merge:** ✅ done — `integration/campaign-round-2` landed on `main` 2026-07-28 (PR #70 + post-merge
+  follow-ups #74 CVE drift / #78 flake / #79 verified dep bumps; infra runbooks #80/#81).
