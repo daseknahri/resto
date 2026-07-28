@@ -6,16 +6,22 @@
 > a concrete failure scenario, the fix, and a rough effort. When you close one, strike it
 > through and note the commit.
 >
-> **Overall verdict:** the architecture is **not poor** — it is genuinely good craftsmanship
-> for a small team, with debt concentrated in a few foundational places. The items below are
-> that concentrated debt. Fix the 3 critical items before onboarding paying tenants at volume.
+> **Overall verdict (current 2026-07-27):** the architecture is **not poor** — genuinely good
+> craftsmanship for a small team, and the multi-round campaign has now cleared essentially all the
+> **code** debt below: **every code-actionable item is ✅ Done or code-complete behind an owner/scale
+> gate** (see the status key). Of the original 3 criticals, the one *code* item — **AUTHZ-1** — is done;
+> what remains before onboarding paying tenants at volume is **owner/infra, not code** — the two DR
+> criticals **OPS-1** (Postgres replica/PITR) and **OPS-2** (off-box backup S3 creds + restore drill) —
+> plus the launch ops (DNS/TLS, prod env, Stripe, first-tenant smoke; see `infra/` + the root launch docs)
+> and this branch's merge to `main`.
 >
 > Effort key: **S** = hours · **M** = a few days · **L** = weeks · **XL** = multi-week project.
 >
 > **Execution tracker:** the multi-branch campaign working through these items — waves, lanes,
-> collision map, and per-item real-vs-register status — lives in
-> [`CAMPAIGN_PLAN.md`](CAMPAIGN_PLAN.md) (code-verified 2026-07-11; note several items there are
-> corrected to their true state, e.g. FE-3 and OPS-2 are further along than this register said).
+> collision map — lives in [`CAMPAIGN_PLAN.md`](CAMPAIGN_PLAN.md). **This register's markers were
+> reconciled against the code on 2026-07-27** (every `◑`/severity row re-verified; stale summaries
+> corrected), so the status column here is now the current source of truth — no longer lagging the detail
+> sections or `CAMPAIGN_PLAN.md`.
 
 ---
 
