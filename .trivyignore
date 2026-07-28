@@ -13,3 +13,15 @@
 #
 # NEVER add entries without justification; never add wildcards or ecosystem-
 # wide ignores.  The goal is zero entries here through timely patching.
+
+# ── Deferred: brace-expansion OOM DoS — dev/build tooling only ────────────────
+# Present only in the frontend build/lint/test toolchain (eslint, glob,
+# minimatch, workbox-build, vitest js-beautify) — NEVER in the shipped bundle,
+# and it only ever expands our own source globs, never untrusted input. Fixed
+# only in brace-expansion 5.0.8, whose named-export shape breaks eslint's
+# minimatch 3.x ("expand is not a function"); npm's only alternative is a major
+# eslint downgrade — so there is no in-range fix. Accepted 2026-07-28; revisit
+# when the eslint/minimatch chain ships a patched brace-expansion in range.
+# Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs (kept in lockstep).
+CVE-2026-14257       # brace-expansion <=5.0.7 unbounded-expansion OOM DoS
+GHSA-mh99-v99m-4gvg  # same advisory — GitHub Advisory DB id Trivy uses for npm

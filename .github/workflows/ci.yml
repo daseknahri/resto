@@ -178,14 +178,19 @@ jobs:
         #                                bumping to 0.28.1 removes it from the audit
         #                                rather than carrying an ignore for it)
         #
-        # Result: `npm audit` reports 0 vulnerabilities at every severity, so the
-        # gate needs NO `--ignore`/ignore-list today. If a future dev-only CVE ever
-        # lacks an in-range fix, add a documented named-CVE deferral note right here
-        # (CVE id + 'dev-only, not shipped' reason, mirroring the pip-audit gate) —
-        # never re-add a blanket --omit=dev that hides critical advisories.
+        # The gate runs through scripts/audit-gate.mjs — a thin wrapper over
+        # `npm audit --json` that still fails on ANY moderate+ advisory EXCEPT a
+        # small, documented ALLOWLIST of dev-only advisories that have no in-range
+        # fix (npm audit has no native per-advisory ignore, unlike pip-audit's
+        # --ignore-vuln or Trivy's .trivyignore). One entry today:
+        # GHSA-mh99-v99m-4gvg (brace-expansion OOM, CVE-2026-14257) — present only
+        # in build/lint/test tooling, never shipped; fixed only in brace-expansion
+        # 5.0.8, whose export shape breaks eslint's minimatch, so there is no
+        # in-range fix. Keep the allowlist in lockstep with the repo-root
+        # .trivyignore. Never re-add a blanket --omit=dev that hides critical advisories.
         run: |
           cd frontend
-          npm audit --audit-level=moderate
+          node scripts/audit-gate.mjs
       - name: CVE scan (npm audit — informational, never blocks)
         # Visibility net: prints the full audit (all severities incl. low) even
         # when the blocking gate above passes, so newly-disclosed low/dev CVEs
