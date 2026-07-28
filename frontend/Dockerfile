@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 WORKDIR /app
 
@@ -34,10 +34,10 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.31-alpine AS runner
 
 # R13: non-root nginx.
-# nginx:1.27-alpine ships with a built-in `nginx` user (UID 101 / GID 101).
+# nginx:*-alpine ships with a built-in `nginx` user (UID 101 / GID 101).
 # To run without root we must:
 #   1. Replace /etc/nginx/nginx.conf so pid, temp, and cache paths live under
 #      /tmp (writable by any user) not /var/run / /var/cache (owned by root).
