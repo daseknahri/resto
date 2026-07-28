@@ -23,6 +23,12 @@
 > corrected) and confirmed current on 2026-07-28, when `CAMPAIGN_PLAN.md` was pruned to defer to this
 > register. So the status column here is the current source of truth — no longer lagging the detail
 > sections or `CAMPAIGN_PLAN.md`.
+>
+> **Landed:** round-2 merged to `main` on 2026-07-28 via **#70** (the campaign integration), with
+> post-merge follow-ups **#74** (patch CVE drift — Pillow/postcss/transitive bumps + a documented
+> `brace-expansion` deferral in the npm-audit gate & `.trivyignore`) and **#78** (fix a ~2.3% flaky
+> referral test surfaced once the CVE fix let the backend test step run). All code-actionable items are
+> ✅ Done; only the owner/infra items in the verdict above remain.
 
 ---
 

@@ -104,7 +104,10 @@ class CustomerReferralCodeAutoGenTests(SimpleTestCase):
             c2.referral_code = _uuid.uuid4().hex[:8].upper()
         self.assertIsNotNone(c2.referral_code)
         self.assertEqual(len(c2.referral_code), 8)
-        self.assertTrue(c2.referral_code.isupper())
+        # Robust uppercase check: str.isupper() is False when the string has no
+        # cased characters, so an all-digit code (e.g. "80783197", ~2.3% of uuid
+        # hex prefixes) would fail it spuriously. Assert "no lowercase" instead.
+        self.assertEqual(c2.referral_code, c2.referral_code.upper())
 
     def test_save_does_not_overwrite_existing_code(self):
         """If referral_code is already set, save() leaves it alone."""
