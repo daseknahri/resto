@@ -54,7 +54,7 @@
 | **FE-3** | Frontend | ✅ Done | Locale catalogs — **code-split + lazy Sentry shipped** (`a84cc7d`); `main.js` is lean and Sentry doesn't block mount. The lone residual (awaiting the active locale before mount) is a **deliberate UX tradeoff** (avoids a flash-of-English, and its cost is parallel-masked) — not open work. Namespace/route-split for further wins is a possible future slice | S–M |
 | **SER-1** | API | ◑ Code done · optional | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (fixed the 500→400). Amounts already funnel through `_money()`, so the rest is **defense-in-depth** — migrate opportunistically, not a discrete task | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
-| **DATA-2** | Data | ✅ Done | `CustomerOrderRef` mirror drift — `post_delete` (phantom-order removal) + **voided/comped item filter** (stale reorder) + **content-drift reconcile** all shipped; the mirror re-syncs on every Order `post_save`, so content drift self-heals on the next status change. The `reconcile_order_content` command is optional on-demand belt-and-suspenders (wiring it into beat is an optional owner scheduling choice, not required) | S |
+| **DATA-2** | Data | ✅ Done | `CustomerOrderRef` mirror drift — `post_delete` (phantom-order removal) + **voided/comped item filter** (stale reorder) + **content-drift reconcile** all shipped; the mirror re-syncs on every Order `post_save`, so drift self-heals on the next status change. `reconcile_order_content` is now **scheduled daily** (`cron.reconcile_order_content`, detect-only, mirroring `reconcile_order_refs`) as belt-and-suspenders for the transient window | S |
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog. **Product decision** (build when a non-food tenant is real) | L |
 | ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in has no data prerequisite~~ — serializer now requires city+coords to opt in | ~~S~~ |
 | ~~**DATA-5**~~ | Data | ✅ Done | ~~Four `Profile` mirrors, no periodic reconcile~~ — **`reconcile_profile_denorms` shipped** (per-tenant, reuses the 3 recompute fns) | ~~M~~ |
@@ -1291,9 +1291,10 @@ guard against a wrong sender string).
 killed by the `post_delete` receiver; stale reorders by the void/comp filter; and content drift self-heals
 because the mirror re-syncs on every Order `post_save` (status transitions save the Order constantly), so
 any drift from an OrderItem-only mutation is corrected on the next status change — a narrow, transient
-window. `reconcile_order_content` is **optional on-demand belt-and-suspenders** for that window; wiring it
-into beat (a ~4-line `cron.*` task + entry, mirroring `reconcile_order_refs`) is an **optional owner
-scheduling choice** — not required, and per the ASYNC-2 precedent scheduling a new job is the owner's call.
+window. `reconcile_order_content` is now **scheduled daily** as belt-and-suspenders for that window —
+`cron.reconcile_order_content` (`accounts/tasks.py`) + a daily beat entry (`config/settings.py`),
+**detect-only** (no `--fix`), mirroring `reconcile_order_refs` exactly. Drift is now auto-detected + logged
+daily; a human still runs `--fix` to re-sync.
 **Effort:** S. **Source:** data-model review.
 
 ### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
