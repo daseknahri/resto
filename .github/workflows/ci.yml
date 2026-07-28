@@ -370,3 +370,23 @@ jobs:
             frontend-e2e.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # ── Docker image build gate ───────────────────────────────────────────────────
+  # CI never built the images before, so a base-image bump (python/node/nginx) or any
+  # Dockerfile change could break the build and only surface at Coolify deploy time —
+  # exactly why the Dependabot docker bumps sat unverifiable. This job builds BOTH
+  # images from scratch on every PR, so pip-install-on-the-python-base, npm-build-on-
+  # the-node-base, and nginx-runner-stage breakage is caught here instead of in prod.
+  #
+  # Build-only (no run): the app's runtime behaviour is already covered by the backend
+  # + e2e jobs against the source tree. This gate exists to prove the images *build* on
+  # their pinned bases. The frontend build args all have Dockerfile defaults, so a plain
+  # build suffices for verification.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image (verifies requirements install on the python base)
+        run: docker build -t kepoli-backend:ci ./backend
+      - name: Build frontend image (verifies npm build on the node base + the nginx runner)
+        run: docker build -t kepoli-frontend:ci ./frontend
