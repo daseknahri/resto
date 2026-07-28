@@ -6,7 +6,7 @@
 > a concrete failure scenario, the fix, and a rough effort. When you close one, strike it
 > through and note the commit.
 >
-> **Overall verdict (current 2026-07-27):** the architecture is **not poor** — genuinely good
+> **Overall verdict (current 2026-07-28):** the architecture is **not poor** — genuinely good
 > craftsmanship for a small team, and the multi-round campaign has now cleared essentially all the
 > **code** debt below: **every code-actionable item is ✅ Done or code-complete behind an owner/scale
 > gate** (see the status key). Of the original 3 criticals, the one *code* item — **AUTHZ-1** — is done;
