@@ -371,22 +371,77 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # ── Docker image build gate ───────────────────────────────────────────────────
-  # CI never built the images before, so a base-image bump (python/node/nginx) or any
-  # Dockerfile change could break the build and only surface at Coolify deploy time —
-  # exactly why the Dependabot docker bumps sat unverifiable. This job builds BOTH
-  # images from scratch on every PR, so pip-install-on-the-python-base, npm-build-on-
-  # the-node-base, and nginx-runner-stage breakage is caught here instead of in prod.
+  # ── Docker image build + runtime smoke gate ───────────────────────────────────
+  # CI never built OR ran the images before, so a base-image bump (python/node/nginx)
+  # or Dockerfile change could break the build — or build fine but fail to *boot* — and
+  # only surface at Coolify deploy time. This job:
+  #   1. BUILDS both images from scratch (pip-install / npm-build / nginx-stage breakage).
+  #   2. RUNS them as a deploy smoke: boots the backend image through its real entrypoint
+  #      (migrate_schemas → check_schema_health → collectstatic → seed_plans →
+  #      check --deploy → uvicorn) against a real Postgres + Redis and polls
+  #      /api/health/; boots the nginx runner image and polls /health.
+  # So "the image serves on the new base" is proven here, not in prod.
   #
-  # Build-only (no run): the app's runtime behaviour is already covered by the backend
-  # + e2e jobs against the source tree. This gate exists to prove the images *build* on
-  # their pinned bases. The frontend build args all have Dockerfile defaults, so a plain
-  # build suffices for verification.
+  # DJANGO_DEBUG=True mirrors the backend/e2e jobs (the documented CI norm): no
+  # SSL-redirect/HSTS so plain-HTTP polling works. The backend container uses
+  # --network host so it reaches the GitHub service containers on localhost.
   docker:
     runs-on: ubuntu-latest
+    env:
+      DJANGO_SECRET_KEY: ci-test-only-not-a-real-secret-key
+      DJANGO_DEBUG: "True"
+    services:
+      postgres:
+        image: postgres:16
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: resto
+          POSTGRES_USER: resto
+          POSTGRES_PASSWORD: resto
+        options: >-
+          --health-cmd="pg_isready -U resto" --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image (verifies requirements install on the python base)
         run: docker build -t kepoli-backend:ci ./backend
       - name: Build frontend image (verifies npm build on the node base + the nginx runner)
         run: docker build -t kepoli-frontend:ci ./frontend
+      - name: Runtime smoke — backend image boots through its entrypoint & serves /api/health/
+        run: |
+          docker run -d --name backend --network host \
+            -e DJANGO_SECRET_KEY="$DJANGO_SECRET_KEY" \
+            -e DJANGO_DEBUG=True \
+            -e DATABASE_URL="postgres://resto:resto@localhost:5432/resto" \
+            -e REDIS_URL="redis://localhost:6379/0" \
+            -e DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1" \
+            kepoli-backend:ci
+          ok=""
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/api/health/ >/dev/null 2>&1; then ok=1; echo "backend image healthy after ${i} tries"; break; fi
+            sleep 3
+          done
+          echo "----- backend container logs (tail) -----"; docker logs backend 2>&1 | tail -40
+          if [ -z "$ok" ]; then echo "::error::backend image did not boot/serve on the new python base"; exit 1; fi
+      - name: Runtime smoke — frontend nginx image serves /health
+        run: |
+          # nginx.conf proxy_passes to a literal `api` host, which nginx resolves at
+          # startup — so a standalone container needs `api` resolvable or it won't boot
+          # ("host not found in upstream"). --add-host points it at loopback; the smoke
+          # only hits /health (served directly, no proxy), so the dangling upstream is
+          # never exercised — this validates the nginx base + built assets serve.
+          docker run -d --name frontend -p 3000:3000 --add-host api:127.0.0.1 kepoli-frontend:ci
+          ok=""
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health >/dev/null 2>&1; then ok=1; echo "frontend image healthy after ${i} tries"; break; fi
+            sleep 2
+          done
+          echo "----- frontend container logs (tail) -----"; docker logs frontend 2>&1 | tail -20
+          if [ -z "$ok" ]; then echo "::error::frontend image did not serve /health on the new nginx base"; exit 1; fi
+      - name: Teardown
+        if: always()
+        run: docker rm -f backend frontend >/dev/null 2>&1 || true
