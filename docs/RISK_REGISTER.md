@@ -24,9 +24,7 @@
 > **Status key:** **✅ Done** — closed (or only a by-design residual, nothing left to build).
 > **◑ Code done · owner-gated** — the code is complete; an owner / ops / infra / staging step remains
 > (activation, creds, scheduling, a release-boundary run). **◑ Code done · scale-gated** — mitigated in
-> code; the further structural work is deliberately deferred until scale demands it. **◑ Code done ·
-> optional** — the actionable RISK is fixed; the rest is opportunistic defense-in-depth, not a discrete
-> task. **🔴 / 🟠 / 🟡 / 🟢** —
+> code; the further structural work is deliberately deferred until scale demands it. **🔴 / 🟠 / 🟡 / 🟢** —
 > still open, ranked by severity; where the one-liner says *owner decision* / *product decision* / *infra*,
 > the remaining work is not code.
 
