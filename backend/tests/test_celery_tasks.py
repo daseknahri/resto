@@ -232,6 +232,16 @@ class TaskQueueRoutingTests(SimpleTestCase):
         self.assertEqual(entry["task"], "cron.prune_customer_ratings")
         self.assertEqual(entry["schedule"], 86400.0)  # daily
 
+    def test_order_content_reconcile_is_scheduled(self):
+        """RISK DATA-2: the CustomerOrderRef content-drift reconcile is scheduled daily
+        (detect-only), mirroring reconcile_order_refs, so lingering mirror drift is
+        auto-detected + logged rather than only caught by an ad-hoc manual run."""
+        from django.conf import settings
+        entry = settings.CELERY_BEAT_SCHEDULE.get("reconcile-order-content")
+        self.assertIsNotNone(entry, "content-drift reconcile is not scheduled")
+        self.assertEqual(entry["task"], "cron.reconcile_order_content")
+        self.assertEqual(entry["schedule"], 24 * 60 * 60.0)  # daily
+
 
 class ChargeRequestDispatchTests(SimpleTestCase):
     """R14b FIX1: push_charge_request now routes through accounts.tasks.enqueue (bounded

@@ -349,6 +349,13 @@ CELERY_BEAT_SCHEDULE = {
         # a human runs the command with --fix to clean the safe CustomerOrderRef mirror orphans.
         "schedule": 24 * 60 * 60.0,
     },
+    "reconcile-order-content": {
+        "task": "cron.reconcile_order_content",
+        # daily — DATA-2: detect CustomerOrderRef mirrors whose content drifted from the live
+        # Order (self-heals on the next Order post_save; this catches lingering drift).
+        # DETECT-ONLY here (no --fix) — a human runs the command with --fix to re-sync.
+        "schedule": 24 * 60 * 60.0,
+    },
     "sweep-ride-requests": {
         "task": "cron.sweep_ride_requests",
         # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.

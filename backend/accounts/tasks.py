@@ -436,6 +436,13 @@ def reconcile_order_refs():
     _run_command("reconcile_order_refs")
 
 
+@shared_task(name="cron.reconcile_order_content", acks_late=True, **_CRON_RETRY)
+def reconcile_order_content():
+    # RISK DATA-2: detect CustomerOrderRef mirrors whose content drifted from the live
+    # Order. DETECT-ONLY (no --fix) — a human runs the command with --fix to re-sync.
+    _run_command("reconcile_order_content")
+
+
 @shared_task(name="cron.sweep_ride_requests", acks_late=True, **_CRON_RETRY)
 def sweep_ride_requests():
     _run_command("sweep_ride_requests")
