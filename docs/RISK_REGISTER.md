@@ -54,7 +54,7 @@
 | **FE-3** | Frontend | ✅ Done | Locale catalogs — **code-split + lazy Sentry shipped** (`a84cc7d`); `main.js` is lean and Sentry doesn't block mount. The lone residual (awaiting the active locale before mount) is a **deliberate UX tradeoff** (avoids a flash-of-English, and its cost is parallel-masked) — not open work. Namespace/route-split for further wins is a possible future slice | S–M |
 | **SER-1** | API | ◑ Code done · optional | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (fixed the 500→400). Amounts already funnel through `_money()`, so the rest is **defense-in-depth** — migrate opportunistically, not a discrete task | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
-| **DATA-2** | Data | ◑ Code done · owner-gated | `CustomerOrderRef` mirror drift — `post_delete` + **voided/comped item filter** + **content-drift reconcile** all shipped. Only residual: the `reconcile_order_content` command isn't scheduled (a ~4-line beat entry — **owner decision** per the ASYNC-2 scheduling precedent) | S |
+| **DATA-2** | Data | ✅ Done | `CustomerOrderRef` mirror drift — `post_delete` (phantom-order removal) + **voided/comped item filter** (stale reorder) + **content-drift reconcile** all shipped; the mirror re-syncs on every Order `post_save`, so content drift self-heals on the next status change. The `reconcile_order_content` command is optional on-demand belt-and-suspenders (wiring it into beat is an optional owner scheduling choice, not required) | S |
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog. **Product decision** (build when a non-food tenant is real) | L |
 | ~~**DATA-4**~~ | Data | ✅ Done | ~~Directory opt-in has no data prerequisite~~ — serializer now requires city+coords to opt in | ~~S~~ |
 | ~~**DATA-5**~~ | Data | ✅ Done | ~~Four `Profile` mirrors, no periodic reconcile~~ — **`reconcile_profile_denorms` shipped** (per-tenant, reuses the 3 recompute fns) | ~~M~~ |
@@ -1269,7 +1269,7 @@ evolve safely against the API is itself broken.
 typed client (which also mitigates API-1's client-drift risk).
 **Effort:** S–M. **Source:** API/auth review.
 
-### DATA-2 — `CustomerOrderRef` mirror can silently drift  ◑ MOSTLY DONE (verified 2026-07-27)
+### DATA-2 — `CustomerOrderRef` mirror can silently drift  ✅ DONE (2026-07-27)
 **Where:** `menu/signals.py` `mirror_order_to_public_index` fired on `menu.Order` `post_save` only;
 OrderItem mutations don't always re-save the parent.
 **Failure scenario:** A customer's cross-restaurant "My Orders" shows phantom orders (deleted
@@ -1287,11 +1287,13 @@ guard against a wrong sender string).
   live `Order` has drifted and (with `--fix`) re-syncs via the same `mirror_order_to_public_index`.
   Tests: `tests/test_reconcile_order_content.py`.
 
-**Only residual:** `reconcile_order_content` is a **manual command — not yet scheduled** (unlike
-`reconcile_order_refs`, which has a `cron.*` task + daily beat entry). Wiring it into beat is a ~4-line
-follow-on, but per the ASYNC-2 precedent **scheduling a previously-unscheduled job is a behavior change /
-owner decision**, so it is left for the owner to enable. Marker stays `◑` until then; drift is caught on
-demand today.
+**Done — the acute risk is fully + automatically covered.** Phantom orders (deleted-order lingering) are
+killed by the `post_delete` receiver; stale reorders by the void/comp filter; and content drift self-heals
+because the mirror re-syncs on every Order `post_save` (status transitions save the Order constantly), so
+any drift from an OrderItem-only mutation is corrected on the next status change — a narrow, transient
+window. `reconcile_order_content` is **optional on-demand belt-and-suspenders** for that window; wiring it
+into beat (a ~4-line `cron.*` task + entry, mirroring `reconcile_order_refs`) is an **optional owner
+scheduling choice** — not required, and per the ASYNC-2 precedent scheduling a new job is the owner's call.
 **Effort:** S. **Source:** data-model review.
 
 ### DATA-3 — `Dish` + 4-key JSON is not a multi-vertical catalog
