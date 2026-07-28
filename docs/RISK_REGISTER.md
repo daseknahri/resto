@@ -52,7 +52,7 @@
 | ~~**FE-1**~~ | Frontend | ✅ Done | ~~i18n dual-source: 4 coordinated edits per string → raw-key bugs~~ — redundant `messages.js` **deleted**; both gates repointed to the runtime `messages-{en,fr,ar}.js`, so it's **one source per locale** (3 edits, gates check the shipped files). Reconciled ~7 drifted keys, **fixing live namespace-mismatch raw-key bugs** (`mktMenu.*`/`customerAccount.*` used in templates but only under `cartPage.*`/`menu.*` in the runtime files) | ~~M~~ |
 | **FE-2** | Frontend | ✅ Done | Six 2.5–3.7k-line mega-pages **decomposed** — **52 slices → 62 tested child components** (~4080 lines lifted; vitest 527→924). Every mega-page split to its logic core (incl. the Marketplace checkout drawer, 8 sub-parts) with all money/order logic (`placeOrder`/`placeInAppOrder`/settle/cashout) deliberately kept in the parents. Extraction is complete; the only residual is **non-code**: visual preview-QA of the components + the merge to main | L |
 | **FE-3** | Frontend | ✅ Done | Locale catalogs — **code-split + lazy Sentry shipped** (`a84cc7d`); `main.js` is lean and Sentry doesn't block mount. The lone residual (awaiting the active locale before mount) is a **deliberate UX tradeoff** (avoids a flash-of-English, and its cost is parallel-masked) — not open work. Namespace/route-split for further wins is a possible future slice | S–M |
-| **SER-1** | API | ◑ Code done · optional | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (fixed the 500→400). Amounts already funnel through `_money()`, so the rest is **defense-in-depth** — migrate opportunistically, not a discrete task | L |
+| **SER-1** | API | ✅ Done | Raw `request.data` money reads — **`QuantizedMoneyField` primitive + drawer amount** shipped (fixed the acute 500→400), and amounts already funnel through `_money()` (coerces + quantizes, rejects bad input), so the RISK is resolved. Migrating the remaining serializer fields onto the primitive is **optional opportunistic hardening**, not a required task | L |
 | ~~**SCHEMA-1**~~ | API | ✅ Done | ~~OpenAPI via legacy `generateschema`~~ — **drf-spectacular shipped** (collision-free operationIds, CI validates) | ~~S~~ |
 | **DATA-2** | Data | ✅ Done | `CustomerOrderRef` mirror drift — `post_delete` (phantom-order removal) + **voided/comped item filter** (stale reorder) + **content-drift reconcile** all shipped; the mirror re-syncs on every Order `post_save`, so drift self-heals on the next status change. `reconcile_order_content` is now **scheduled daily** (`cron.reconcile_order_content`, detect-only, mirroring `reconcile_order_refs`) as belt-and-suspenders for the transient window | S |
 | **DATA-3** | Data | 🟡 Med | `Dish` + 4-key JSON is not a real multi-vertical catalog. **Product decision** (build when a non-food tenant is real) | L |
@@ -1235,7 +1235,7 @@ AR first paint blocks on ~82KB gz) — and namespace/route splitting (the origin
 flash-of-raw-keys risk, so both are left for a deliberate later slice.
 **Effort:** S–M. **Source:** frontend review.
 
-### SER-1 — Writes bypass serializers  ◑ PRIMITIVE SHIPPED (2026-07-12)
+### SER-1 — Writes bypass serializers  ✅ DONE — RISK resolved; rest is optional (2026-07-12)
 **Where:** 242 raw `request.data.get(...)` reads vs 41 serializer-mediated writes.
 **Failure scenario:** Validation/type-coercion is hand-rolled per handler; a money endpoint
 reads a price/amount from `request.data` without a serializer guard → price-manipulation class
@@ -1255,10 +1255,13 @@ Applied to `DrawerTransactionView` (the one genuine gap: an oversized amount use
 `NUMERIC(10,2)` column → uncaught **500**; now a clean **400**). Independently verified
 behavior-preserving by a 3-lens adversarial pass (legacy-vs-new across ~50 inputs). Tests:
 `test_ser1_money_field.py` (contract matrix) + drawer regression tests.
-**Remaining:** migrate the other hand-rolled money reads onto `QuantizedMoneyField`
-**opportunistically** (low urgency — defense-in-depth), each behavior-preserving with a regression
-test. Not a high-priority sweep.
-**Effort:** L (incremental). **Source:** API/auth review.
+**Done — the RISK is resolved.** The exploit class (a money endpoint reading a raw amount without a
+guard → price-manip / an overflow 500) is closed: amounts funnel through `_money()` (coerce + quantize +
+reject) with downstream caps, and the one genuine gap (the drawer overflow 500) is fixed. Migrating the
+remaining hand-rolled money reads onto `QuantizedMoneyField` is **optional opportunistic hardening** — each
+behavior-preserving with a regression test, done piecemeal if/when those handlers are touched — **not a
+discrete task and not a blocker.**
+**Effort:** L (incremental, optional). **Source:** API/auth review.
 
 ### SCHEMA-1 — OpenAPI has duplicate operationIds
 **Where:** CI exports via legacy `generateschema`; ~239 view classes, zero `operationId` overrides.
