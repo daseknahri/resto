@@ -1,8 +1,8 @@
 # Risk-register hardening — round 2 (campaign integration)
 
 Merges `integration/campaign-round-2` into `main`: the second wave of the
-`docs/RISK_REGISTER.md` hardening campaign. **116 commits · 228 files · +16,137 / −18,376**
-(net ≈ −2,200 lines — mostly the i18n de-duplication and mega-page decomposition).
+`docs/RISK_REGISTER.md` hardening campaign. **130 commits · 230 files · +16,289 / −18,401**
+(net ≈ −2,100 lines — mostly the i18n de-duplication and mega-page decomposition).
 Every commit was gate-verified in isolation (backend pytest + ruff; frontend
 verify:i18n / lint / build / vitest); nothing here is speculative.
 
