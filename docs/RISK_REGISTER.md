@@ -37,7 +37,20 @@
 > Postgres+Redis, polls `/api/health/` + `/health`); **#86/#87** added the owner-run staging deploy-smoke
 > runbook ([`infra/COOLIFY_STAGING_DEPLOY_SMOKE.md`](../infra/COOLIFY_STAGING_DEPLOY_SMOKE.md)) with
 > per-base validation notes. Every future image/base change is now build- **and** boot-gated in CI. The
-> stale major-version Dependabot PRs (Django 6, Tailwind 4, etc.) were closed as deliberate deferrals.
+> stale major-version Dependabot PRs were closed as deliberate deferrals (see below).
+>
+> **Deferred major upgrades (tracked debt, 2026-07-28):** 23 Dependabot **major**-version PRs were
+> closed unmerged — not merged, not forgotten. They need deliberate, tested migrations (not an
+> auto-merge), and Dependabot will resurface a fresh PR when a newer version drops. Schedule each as
+> its own verified pass (the #79 workflow):
+> - **Framework migrations (largest):** Django 4.2→6.0, Tailwind 3→4, Pinia 2→3 (+ @pinia/testing).
+> - **Frontend toolchain majors:** vite 6→8, vitest 3→4, eslint 9→10, eslint-plugin-vue 9→10,
+>   @vitejs/plugin-vue 5→6, jsdom 25→29.
+> - **Backend lib majors:** redis 5→8, django-redis 5→7, dj-database-url 2→3, gunicorn 23→26, qrcode 7→8.
+> - **GitHub Actions majors:** setup-node, setup-python, checkout, codeql-action, upload-artifact (→v7/v4).
+>
+> (The Docker base bumps — python 3.14 / node 26 / nginx 1.31 — were **not** deferred; they landed
+> verified in #84/#85.)
 >
 > All code-actionable items are ✅ Done; only the owner/infra items in the verdict above remain.
 
