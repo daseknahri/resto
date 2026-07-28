@@ -30,9 +30,8 @@ eligible days (nudge clock starts fresh after 90 days).
 
 Beat entry (settings.py):
     "send-winback-nudges": {
-        "task": "accounts.tasks.run_management_command",
+        "task": "cron.send_winback_nudges",
         "schedule": 3600.0,  # hourly
-        "args": ("send_winback_nudges",),
     },
 """
 from __future__ import annotations

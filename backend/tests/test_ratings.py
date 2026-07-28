@@ -6,6 +6,12 @@ Tests for the per-restaurant ratings feature.
 
 All tests are SimpleTestCase (no database).
 The Order and Rating ORM calls are mocked.
+
+RISK IDENTITY-1: CustomerOrderRateView now authenticates via
+CustomerSessionAuthentication (it stays AllowAny — a non-owner, including an anonymous
+caller, must still get the coded 403 rather than a 401), and its ownership gate is the
+shared IsOrderOwner predicate reading request.user. Tests force-authenticate a real
+(unsaved) Customer principal instead of hand-setting request.session.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -14,11 +20,19 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from accounts.models import User
+from accounts.models import Customer, User
 from menu.views import CustomerOrderRateView, OwnerRatingListView
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _customer(pk=1):
+    """A real (unsaved) Customer so it passes IsOrderOwner's principal check
+    (is_authenticated + class name). No DB is touched."""
+    c = Customer(id=pk)
+    c.save = MagicMock()
+    return c
+
 
 def _owner(tenant_id=1):
     u = MagicMock(spec=User)
@@ -72,17 +86,19 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = CustomerOrderRateView.as_view()
 
-    def _post(self, order_number, body, tenant=None, session_cid=1):
+    def _post(self, order_number, body, tenant=None, customer_id=1):
         req = self.factory.post(
             f"/api/orders/{order_number}/rate/",
             body,
             format="json",
         )
-        req.user = MagicMock(is_authenticated=False)
         req.tenant = tenant or _tenant()
-        # OPS-5e: rating requires the session customer to OWN the order; the mock
-        # orders are owned by customer_id=1, so default the session to match.
-        req.session = {"customer_id": session_cid} if session_cid is not None else {}
+        req.session = {}
+        # OPS-5e: rating requires the signed-in customer to OWN the order; the mock
+        # orders are owned by customer_id=1, so default the principal to match.
+        # customer_id=None drives the anonymous case.
+        if customer_id is not None:
+            force_authenticate(req, user=_customer(customer_id))
         return self.view(req, order_number=order_number)
 
     # ── 404 ───────────────────────────────────────────────────────────────────
@@ -135,13 +151,10 @@ class CustomerOrderRateViewTests(SimpleTestCase):
 
     # ── 201 happy path ────────────────────────────────────────────────────────
 
-    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_valid_rating_returns_201(self, mock_orders, mock_ratings, mock_cust):
+    def test_valid_rating_returns_201(self, mock_orders, mock_ratings):
         mock_orders.get.return_value = _completed_order()
-        linked = MagicMock(pk=1)
-        mock_cust.get.return_value = linked
         rating = MagicMock()
         rating.score = 4
         rating.comment = "Very good!"
@@ -154,19 +167,20 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["score"], 4)
         self.assertEqual(resp.data["comment"], "Very good!")
-        mock_ratings.create.assert_called_once_with(
-            order=mock_orders.get.return_value,
-            score=4,
-            comment="Very good!",
-            customer=linked,  # OPS-5e: the owning session customer is linked
-        )
+        mock_ratings.create.assert_called_once()
+        _, create_kwargs = mock_ratings.create.call_args
+        self.assertEqual(create_kwargs["order"], mock_orders.get.return_value)
+        self.assertEqual(create_kwargs["score"], 4)
+        self.assertEqual(create_kwargs["comment"], "Very good!")
+        # OPS-5e / RISK IDENTITY-1: the linked customer IS the authenticated owner
+        # principal (the ownership gate already proved it owns this order), so the
+        # view no longer re-fetches it from the session id.
+        self.assertEqual(create_kwargs["customer"].id, 1)
 
-    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_comment_is_optional(self, mock_orders, mock_ratings, mock_cust):
+    def test_comment_is_optional(self, mock_orders, mock_ratings):
         mock_orders.get.return_value = _completed_order()
-        mock_cust.get.return_value = MagicMock(pk=1)
         rating = MagicMock()
         rating.score = 5
         rating.comment = ""
@@ -181,13 +195,11 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         _, create_kwargs = mock_ratings.create.call_args
         self.assertEqual(create_kwargs["comment"], "")
 
-    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_successful_rating_busts_meta_cache(self, mock_orders, mock_ratings, mock_cust):
+    def test_successful_rating_busts_meta_cache(self, mock_orders, mock_ratings):
         """Creating a rating must evict the TenantMeta cache."""
         mock_orders.get.return_value = _completed_order()
-        mock_cust.get.return_value = MagicMock(pk=1)
         rating = MagicMock()
         rating.score = 3
         rating.comment = ""
@@ -200,11 +212,31 @@ class CustomerOrderRateViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_non_owner_session_returns_403(self, mock_orders):
-        """OPS-5e: a session customer who doesn't own the order cannot rate it."""
+        """OPS-5e: a signed-in customer who doesn't own the order cannot rate it."""
         mock_orders.get.return_value = _completed_order(customer_id=1)
-        resp = self._post("ORD-001", {"score": 5}, session_cid=2)
+        resp = self._post("ORD-001", {"score": 5}, customer_id=2)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "not_order_owner")
+
+    @patch("menu.views.Order.objects")
+    def test_anonymous_returns_403_not_401(self, mock_orders):
+        """RISK IDENTITY-1: the view stays AllowAny on purpose — an anonymous caller
+        must still get the coded 403 (and the 404 order check must run first), not the
+        401 an IsCustomer permission class would raise ahead of both."""
+        mock_orders.get.return_value = _completed_order(customer_id=1)
+        resp = self._post("ORD-001", {"score": 5}, customer_id=None)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_order_owner")
+
+    @patch("menu.views.Order.objects")
+    def test_unknown_order_404s_before_the_ownership_gate(self, mock_orders):
+        """Ordering contract: order-existence (404) is checked before ownership (403),
+        even for an anonymous caller."""
+        from menu.models import Order as _O
+        mock_orders.get.side_effect = _O.DoesNotExist
+        resp = self._post("BAD-999", {"score": 5}, customer_id=None)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "order_not_found")
 
 
 # ── OwnerRatingListView tests ─────────────────────────────────────────────────

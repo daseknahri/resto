@@ -82,5 +82,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(backfill, reverse),
+        # elidable: one-time backfill of `vertical` on existing rows — a fresh schema
+        # has no rows (code tags vertical going forward; standalone commands remain for
+        # re-runs), so this can be dropped when squashing (RISK STRUCT-2).
+        migrations.RunPython(backfill, reverse, elidable=True),
     ]

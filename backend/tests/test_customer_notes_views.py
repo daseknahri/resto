@@ -33,6 +33,25 @@ def _owner(tenant_id=1):
     return u
 
 
+def _staff(tenant_id=1):
+    """An authenticated NON-owner (tenant staff). RISK AUTHZ-1: pin is_superuser /
+    is_platform_admin False — user_owns_tenant_id short-circuits True on a truthy value,
+    and a spec=User mock returns a truthy Mock for any unset attribute, so a "staff"
+    fixture that skipped these would read as a SUPERUSER and be wrongly allowed."""
+    u = MagicMock(spec=User)
+    u.is_authenticated = True
+    u.is_active = True
+    u.pk = 20
+    u.id = 20
+    u.is_superuser = False
+    u.is_staff = False
+    u.is_platform_admin = False
+    u.role = User.Roles.TENANT_STAFF
+    u.tenant_id = tenant_id
+    u.Roles = User.Roles
+    return u
+
+
 def _anon():
     u = MagicMock(spec=User)
     u.is_authenticated = False
@@ -118,9 +137,13 @@ class OwnerCustomerNotesViewTests(SimpleTestCase):
         resp = OwnerCustomerNotesView.as_view()(self._patch_req({"notes": "note"}), customer_id=77)
         self.assertEqual(resp.data["customer_id"], 77)
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_non_owner_gets_403(self, _mock_owner):
-        resp = OwnerCustomerNotesView.as_view()(self._patch_req({"notes": "x"}), customer_id=42)
+    def test_non_owner_gets_403(self):
+        # RISK AUTHZ-1: owner check is now permission_classes=[IsTenantOwnerAccessDenied]
+        # (DRF dispatch) — drive a REAL non-owner (staff) principal; the old
+        # _is_tenant_owner=False patch is now a no-op (the view doesn't call it).
+        resp = OwnerCustomerNotesView.as_view()(
+            self._patch_req({"notes": "x"}, user=_staff()), customer_id=42
+        )
         self.assertEqual(resp.status_code, 403)
 
     def test_unauthenticated_gets_403(self):
@@ -161,9 +184,11 @@ class OwnerCustomerLoyaltyGrantViewTests(SimpleTestCase):
         req.tenant = _tenant()
         return req
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_non_owner_gets_403(self, _):
-        resp = OwnerCustomerLoyaltyGrantView.as_view()(self._post_req({"delta": 50}), customer_id=42)
+    def test_non_owner_gets_403(self):
+        # RISK AUTHZ-1: drive a REAL non-owner (staff); the _is_tenant_owner patch is dead.
+        resp = OwnerCustomerLoyaltyGrantView.as_view()(
+            self._post_req({"delta": 50}, user=_staff()), customer_id=42
+        )
         self.assertEqual(resp.status_code, 403)
 
     def test_unauthenticated_gets_403(self):

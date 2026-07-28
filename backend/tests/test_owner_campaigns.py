@@ -22,7 +22,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from accounts.models import User
+from accounts.models import Customer, User
 from accounts.views import CustomerProfileUpdateView
 from menu.views import OwnerCampaignView
 
@@ -287,25 +287,34 @@ class OwnerCampaignLengthValidationTests(SimpleTestCase):
 # ─── 7. notify_promotions pref round-trip via profile update endpoint ─────────
 
 class NotifyPromotionsPrefTests(SimpleTestCase):
+    """RISK IDENTITY-1: CustomerProfileUpdateView now authenticates via
+    CustomerSessionAuthentication + IsCustomer, so the signed-in Customer arrives
+    as request.user. Force-authenticate a real Customer principal instead of
+    mocking Customer.objects.get."""
+
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerProfileUpdateView.as_view()
 
-    @patch("accounts.views.Customer.objects")
-    def test_sets_notify_promotions_false(self, objects_mock):
-        cust = MagicMock(
-            pk=10, email="x@y.com",
+    def _customer(self, **kwargs):
+        c = Customer(**kwargs)
+        c.save = MagicMock()
+        return c
+
+    def test_sets_notify_promotions_false(self):
+        cust = self._customer(
+            id=10, email="x@y.com",
             notify_order_updates=True,
             notify_review_prompts=True,
             notify_promotions=True,
         )
-        objects_mock.get.return_value = cust
         req = self.factory.patch(
             "/api/customer/profile/",
             {"notify_promotions": False},
             format="json",
         )
         req.session = {"customer_id": 10}
+        force_authenticate(req, user=cust)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(cust.notify_promotions)
@@ -327,17 +336,16 @@ class NotifyPromotionsPrefTests(SimpleTestCase):
         self.assertIn("notify_promotions", data)
         self.assertTrue(data["notify_promotions"])
 
-    @patch("accounts.views.Customer.objects")
-    def test_promotions_pref_set_then_cleared(self, objects_mock):
+    def test_promotions_pref_set_then_cleared(self):
         """Setting notify_promotions=True after False works (round-trip)."""
-        cust = MagicMock(pk=12, notify_promotions=False)
-        objects_mock.get.return_value = cust
+        cust = self._customer(id=12, notify_promotions=False)
         req = self.factory.patch(
             "/api/customer/profile/",
             {"notify_promotions": True},
             format="json",
         )
         req.session = {"customer_id": 12}
+        force_authenticate(req, user=cust)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(cust.notify_promotions)

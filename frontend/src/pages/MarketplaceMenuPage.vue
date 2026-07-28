@@ -59,99 +59,17 @@
     </div>
 
     <template v-else-if="restaurant">
-      <!-- Restaurant header -->
-      <div class="pt-4 pb-2">
-        <header class="ui-hero-ribbon ui-reveal px-4 py-4">
-          <div class="flex items-start gap-4">
-            <!-- Logo -->
-            <div class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
-              <img v-if="restaurant.logo_url" :src="restaurant.logo_url" :alt="restaurant.name" loading="eager" decoding="async" class="h-full w-full object-cover" @error="$event.target.style.display='none'" />
-              <span v-else aria-hidden="true" class="text-2xl">{{ businessIcon(restaurant) }}</span>
-            </div>
-            <!-- Info -->
-            <div class="flex-1 min-w-0">
-              <p class="ui-kicker">{{ t('mktMenu.restaurantKicker') }}</p>
-              <h1 class="ui-display text-xl font-semibold tracking-tight text-white leading-tight">{{ restaurant.name }}</h1>
-              <p v-if="restaurant.tagline" class="mt-0.5 text-xs text-slate-400 line-clamp-1" :title="restaurant.tagline">{{ restaurant.tagline }}</p>
-              <!-- Chips row -->
-              <div class="mt-2 flex flex-wrap gap-1.5">
-                <span
-                  class="ui-status-pill"
-                  :class="restaurant.is_open
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                    : 'border-slate-700/60 bg-slate-800/50 text-slate-400'"
-                >
-                  <span
-                    class="ui-live-dot"
-                    :class="restaurant.is_open ? 'bg-emerald-400' : 'bg-slate-500'"
-                    aria-hidden="true"
-                  />
-                  {{ restaurant.is_open ? t('mktMenu.open') : t('mktMenu.closed') }}
-                </span>
-                <!-- Rating chip -->
-                <span v-if="restaurant.rating_average" class="ui-chip flex items-center gap-0.5 text-amber-400">
-                  <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current shrink-0" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
-                  <span class="tabular-nums">{{ restaurant.rating_average }}</span>
-                  <span class="text-slate-500 tabular-nums">({{ restaurant.rating_count }})</span>
-                </span>
-                <!-- Pre-order prep ETA chip ('Ready in ~X–Y min') -->
-                <span v-if="prepEta" class="ui-chip flex items-center gap-1 text-sky-300" :title="t('common.estimate')">
-                  <AppIcon name="clock" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                  {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
-                </span>
-                <span v-if="restaurant.cuisine_type" class="ui-chip">{{ restaurant.cuisine_type }}</span>
-                <span v-if="restaurant.city" class="ui-chip">{{ restaurant.city }}</span>
-                <span v-if="restaurant.delivery_enabled" class="ui-chip text-sky-300">
-                  {{ t('mktMenu.deliveryFee') }}: {{ Number(restaurant.delivery_fee) > 0 ? fmtPrice(restaurant.delivery_fee) : t('mktMenu.freeDelivery') }}
-                </span>
-                <span
-                  v-if="restaurant.delivery_enabled && Number(restaurant.delivery_minimum_order) > 0"
-                  class="ui-chip"
-                >
-                  {{ t('mktMenu.minOrder', { amount: fmtPrice(restaurant.delivery_minimum_order) }) }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <!-- Opening hours (today + expandable week) -->
-          <div v-if="todayHours" class="mt-2 pl-px">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 focus-visible:outline-none transition-colors"
-              :aria-expanded="hoursExpanded"
-              @click="hoursExpanded = !hoursExpanded"
-            >
-              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 shrink-0" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M6 3.5V6l1.5 1.5"/></svg>
-              <span v-if="todayHours.closed" class="text-rose-400/80">{{ t('mktMenu.hoursClosedToday') }}</span>
-              <span v-else>{{ t('mktMenu.hoursToday', { open: todayHours.open, close: todayHours.close }) }}</span>
-              <span class="transition-transform" :class="hoursExpanded ? 'rotate-180' : ''" aria-hidden="true">▾</span>
-            </button>
-            <div v-if="hoursExpanded && weeklyHours" class="mt-1.5 overflow-hidden rounded-lg border border-slate-700/50 bg-slate-800/40 divide-y divide-slate-700/30">
-              <div
-                v-for="day in weeklyHours"
-                :key="day.key"
-                class="flex justify-between items-center px-2.5 py-1.5 text-[11px]"
-                :class="day.isToday ? 'bg-slate-700/40 font-semibold text-slate-200' : 'text-slate-400'"
-              >
-                <span>{{ day.label }}</span>
-                <span v-if="day.open" class="tabular-nums">{{ day.open }} – {{ day.close }}</span>
-                <span v-else class="text-slate-500">–</span>
-              </div>
-            </div>
-          </div>
-          <!-- Share restaurant link -->
-          <div class="mt-3 flex justify-end">
-            <button
-              class="ui-press inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/50 px-3 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50"
-              :aria-label="t('mktMenu.shareRestaurant')"
-              @click="shareRestaurant"
-            >
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/><path d="M5.5 8.9l5 2.7M10.5 4.1l-5 2.7"/></svg>
-              {{ menuLinkCopied ? t('mktMenu.linkCopied') : t('mktMenu.share') }}
-            </button>
-          </div>
-        </header>
-      </div>
+      <!-- Restaurant header / about section (presentational; RISK FE-2) -->
+      <MarketplaceMenuHeader
+        :restaurant="restaurant"
+        :prep-eta="prepEta"
+        :today-hours="todayHours"
+        :weekly-hours="weeklyHours"
+        :menu-link-copied="menuLinkCopied"
+        :fmt-price="fmtPrice"
+        :business-icon="businessIcon"
+        @share="shareRestaurant"
+      />
 
       <!-- Fulfillment type quick-switch (shown when restaurant supports delivery) -->
       <div
@@ -181,64 +99,26 @@
         </button>
       </div>
 
-      <!-- Flash sale banner -->
-      <div
+      <!-- Flash sale banner (presentational; RISK FE-2) -->
+      <MarketplaceMenuFlashSaleBanner
         v-if="restaurant.flash_sale"
-        class="ui-reveal mx-4 mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm"
-        :style="{ '--ui-delay': '40ms' }"
-        role="status"
-      >
-        <p class="font-semibold text-amber-200">
-          {{ t('mktMenu.flashSaleBanner', { pct: restaurant.flash_sale.discount_pct }) }}
-        </p>
-        <p v-if="flashSaleCountdown" class="shrink-0 font-mono text-[11px] tabular-nums text-amber-300/80">
-          {{ t('mktMenu.flashSaleEnds', { time: flashSaleCountdown }) }}
-        </p>
-      </div>
+        :flash-sale="restaurant.flash_sale"
+        :countdown="flashSaleCountdown"
+      />
 
-      <!-- Loyalty points teaser — shown when signed in + loyalty enabled -->
-      <div
+      <!-- Loyalty points teaser — shown when signed in + loyalty enabled (presentational; RISK FE-2) -->
+      <MarketplaceMenuLoyaltyTeaser
         v-if="loyaltyConfig?.enabled && customerStore.isAuthenticated"
-        class="ui-reveal mx-4 mb-2 flex items-center gap-2.5 rounded-xl border border-violet-500/25 bg-violet-500/8 px-4 py-2"
-        :style="{ '--ui-delay': '70ms' }"
-        role="note"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-violet-400" aria-hidden="true">
-          <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
-        </svg>
-        <div class="min-w-0 flex-1">
-          <p class="text-[12px] font-semibold leading-tight text-violet-200">
-            {{ loyaltyPoints > 0 ? t('mktMenu.loyaltyTeaserPts', { points: loyaltyPoints }) : t('mktMenu.loyaltyTeaserEarn') }}
-          </p>
-          <p v-if="loyaltyEarnProjection > 0" class="text-[10px] leading-tight text-violet-400/80">{{ t('mktMenu.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
-          <p v-else-if="loyaltyAvailable" class="text-[10px] leading-tight text-violet-400/80">{{ t('mktMenu.loyaltyTeaserRedeem') }}</p>
-        </div>
-        <span
-          v-if="loyaltyPoints > 0"
-          class="shrink-0 rounded-full border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-violet-300"
-        >{{ loyaltyPoints }}</span>
-      </div>
+        :points="loyaltyPoints"
+        :earn-projection="loyaltyEarnProjection"
+        :available="loyaltyAvailable"
+      />
 
-      <!-- Customer reviews — horizontal scroll, only shown when restaurant has review comments -->
-      <div
+      <!-- Customer reviews rail (presentational; RISK FE-2) -->
+      <MarketplaceMenuReviews
         v-if="restaurant.recent_reviews?.length"
-        class="ui-reveal mb-2 space-y-2"
-        :style="{ '--ui-delay': '90ms' }"
-      >
-        <p class="ui-kicker px-4">{{ t('mktMenu.reviewsTitle') }}</p>
-        <div class="flex gap-2.5 overflow-x-auto px-4 pb-0.5 snap-x">
-          <div
-            v-for="(review, idx) in restaurant.recent_reviews"
-            :key="idx"
-            class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
-          >
-            <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
-              <span :aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
-            </div>
-            <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
-          </div>
-        </div>
-      </div>
+        :reviews="restaurant.recent_reviews"
+      />
 
       <!-- Sticky category/search/allergen-filter nav (presentational; RISK FE-2) -->
       <MarketplaceMenuCategoryNav
@@ -690,72 +570,20 @@
             {{ t('mktMenu.cartHasUnavailableItems') }}
           </div>
 
-          <!-- Cart items -->
-          <div class="space-y-2">
-            <article
-              v-for="item in cart"
-              :key="item.slug"
-              class="relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-800/60 bg-slate-900/60 py-2.5 ps-3.5 pe-2.5"
-            >
-              <!-- left accent bar -->
-              <div
-                class="pointer-events-none absolute inset-y-0 start-0 w-[3px] rounded-s-xl"
-                style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
-              />
-              <!-- info -->
-              <div class="flex-1 min-w-0 space-y-0.5">
-                <p class="truncate text-sm font-semibold leading-snug" :class="unavailableSlugs.has(item.slug) ? 'text-slate-400 line-through' : 'text-slate-100'" :title="item.name">{{ item.name }}</p>
-                <p v-if="unavailableSlugs.has(item.slug)" class="text-[10px] font-semibold text-red-400">{{ t('mktMenu.cartItemUnavailable') }}</p>
-                <p v-if="item.options?.length" class="truncate text-[11px] text-slate-500 leading-snug">{{ item.options.map(o => o.name).join(', ') }}</p>
-                <p class="text-xs tabular-nums">
-                  <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice((item.unitPrice ?? item.price) * item.qty) }}</span>
-                  <span class="text-slate-500"> · {{ fmtPrice(item.unitPrice ?? item.price) }} ea.</span>
-                </p>
-              </div>
-              <!-- stepper pill -->
-              <div class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
-                <button
-                  class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                  :aria-label="`${t('dishPage.decreaseQuantity')} ${item.name}`"
-                  @click="removeFromCart(item.slug)"
-                >
-                  <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M2 6h8"/></svg>
-                </button>
-                <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ item.qty }}</span>
-                <button
-                  class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-                  :aria-label="`${t('dishPage.increaseQuantity')} ${item.name}`"
-                  @click="addToCartBySlug(item.slug)"
-                >
-                  <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
-                </button>
-              </div>
-            </article>
-          </div>
+          <!-- Cart items (RISK FE-2) -->
+          <MarketplaceCheckoutCartItems
+            :cart="cart"
+            :unavailable-slugs="unavailableSlugs"
+            :fmt-price="fmtPrice"
+            @decrement="removeFromCart"
+            @increment="addToCartBySlug"
+          />
 
-          <!-- Fulfillment type -->
-          <div>
-            <p class="text-xs font-medium text-slate-400 mb-1.5">{{ t('mktMenu.fulfillmentLabel') }}</p>
-            <div class="flex gap-2">
-              <button
-                class="flex-1 rounded-xl border py-2.5 text-xs font-medium transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                :class="form.fulfillment_type === 'pickup'
-                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                :aria-pressed="form.fulfillment_type === 'pickup'"
-                @click="form.fulfillment_type = 'pickup'"
-              >{{ t('mktMenu.fulfillmentPickup') }}</button>
-              <button
-                v-if="restaurant?.delivery_enabled"
-                class="flex-1 rounded-xl border py-2.5 text-xs font-medium transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
-                :class="form.fulfillment_type === 'delivery'
-                  ? 'border-sky-500/60 bg-sky-500/10 text-sky-300'
-                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                :aria-pressed="form.fulfillment_type === 'delivery'"
-                @click="form.fulfillment_type = 'delivery'"
-              >{{ t('mktMenu.fulfillmentDelivery') }}</button>
-            </div>
-          </div>
+          <!-- Fulfillment type (RISK FE-2) -->
+          <MarketplaceCheckoutFulfillmentType
+            v-model:fulfillment-type="form.fulfillment_type"
+            :delivery-enabled="restaurant?.delivery_enabled"
+          />
 
           <!-- Customer info -->
           <div class="space-y-3">
@@ -785,87 +613,28 @@
                 class="ui-input"
               />
             </div>
-            <div v-if="form.fulfillment_type === 'delivery'" class="space-y-2">
-              <!-- Saved addresses — shown when customer is signed in and has saved addresses -->
-              <div v-if="customerStore.isAuthenticated && mktSavedAddresses.length" class="space-y-1.5">
-                <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('mktMenu.savedAddresses') }}</p>
-                <div class="space-y-1">
-                  <div
-                    v-for="addr in mktSavedAddresses"
-                    :key="addr.id"
-                    class="flex min-w-0 w-full items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5"
-                  >
-                    <button
-                      type="button"
-                      class="min-w-0 flex-1 text-start text-xs focus-visible:outline-none"
-                      @click="applyMktSavedAddress(addr)"
-                    >
-                      <span v-if="addr.label" class="font-medium text-slate-200 me-0.5">{{ addr.label }} —</span>
-                      <span class="truncate text-slate-400">{{ addr.address }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="shrink-0 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none"
-                      :aria-label="t('mktMenu.deleteSavedAddress')"
-                      @click="deleteMktSavedAddress(addr.id)"
-                    >
-                      <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M6 2h4a1 1 0 0 1 1 1v1H5V3a1 1 0 0 1 1-1ZM4 4H2v1h1l.8 8.1A1 1 0 0 0 4.8 14h6.4a1 1 0 0 0 1-.9L13 5h1V4H4Zm7 1H5l.7 7h4.6L12 5Z"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label for="mkt-address" class="block text-xs font-medium text-slate-400 mb-1">
-                  {{ t('mktMenu.deliveryAddress') }}
-                </label>
-                <textarea
-                  id="mkt-address"
-                  v-model="form.delivery_address"
-                  rows="2"
-                  class="ui-textarea resize-none"
-                />
-              </div>
-              <!-- Save address checkbox (authenticated customers only) -->
-              <div v-if="customerStore.isAuthenticated && form.delivery_address" class="space-y-1.5">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input v-model="saveAddressAfterOrder" type="checkbox" class="rounded" />
-                  <span class="text-xs text-slate-400">{{ t('mktMenu.saveAddress') }}</span>
-                </label>
-                <input
-                  v-if="saveAddressAfterOrder"
-                  v-model.trim="saveAddressLabel"
-                  type="text"
-                  class="ui-input text-xs"
-                  :placeholder="t('mktMenu.saveAddressLabelPlaceholder')"
-                  :aria-label="t('mktMenu.saveAddressLabelPlaceholder')"
-                />
-              </div>
-              <!-- Coordinates → distance-based fee -->
-              <button
-                type="button"
-                class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition-colors hover:border-slate-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                :disabled="locatingMkt"
-                :aria-busy="locatingMkt"
-                @click="useMyLocation"
-              >
-                <svg v-if="locatingMkt" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-                <AppIcon v-else name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ locatingMkt ? t('mktMenu.locating') : (form.delivery_lat ? t('mktMenu.locationSet') : t('mktMenu.useMyLocation')) }}
-              </button>
-              <p v-if="locateError" class="text-[11px] text-rose-300" role="alert">{{ locateError }}</p>
-              <p v-if="deliveryOutOfRange" class="flex items-start gap-1.5 text-[11px] text-rose-300" role="alert">
-                <AppIcon name="info" class="h-3 w-3 shrink-0 mt-px" aria-hidden="true" />
-                {{ t('mktMenu.deliveryOutOfRange', { km: deliveryPricing.radiusKm }) }}
-              </p>
-              <p v-else-if="deliveryFeeIsDistance" class="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ t('mktMenu.deliveryFeeDistance', { fee: fmtPrice(deliveryFee), km: deliveryDistanceKm }) }}
-              </p>
-              <p v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-amber-400" role="alert">
-                <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
-                {{ t('mktMenu.deliveryNeedsLocation') }}
-              </p>
-            </div>
+            <!-- Delivery details (address / saved addresses / geolocation / fee) (RISK FE-2) -->
+            <MarketplaceCheckoutDelivery
+              v-if="form.fulfillment_type === 'delivery'"
+              v-model:delivery-address="form.delivery_address"
+              v-model:save-address="saveAddressAfterOrder"
+              v-model:save-address-label="saveAddressLabel"
+              :is-authenticated="customerStore.isAuthenticated"
+              :saved-addresses="mktSavedAddresses"
+              :locating="locatingMkt"
+              :locate-error="locateError"
+              :has-location="!!form.delivery_lat"
+              :out-of-range="deliveryOutOfRange"
+              :radius-km="deliveryPricing.radiusKm"
+              :fee-is-distance="deliveryFeeIsDistance"
+              :delivery-fee="deliveryFee"
+              :distance-km="deliveryDistanceKm"
+              :per-km="deliveryPricing.perKm"
+              :fmt-price="fmtPrice"
+              @apply-address="applyMktSavedAddress"
+              @delete-address="deleteMktSavedAddress"
+              @locate="useMyLocation"
+            />
             <div>
               <label for="mkt-note" class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.note') }}
@@ -877,128 +646,54 @@
                 class="ui-input"
               />
             </div>
-            <!-- When: ASAP vs scheduled -->
-            <div>
-              <p class="text-xs font-medium text-slate-400 mb-1.5">{{ t('mktMenu.whenTitle') }}</p>
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                  :class="!scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                  :aria-pressed="!scheduleEnabled"
-                  @click="scheduleEnabled = false"
-                >{{ t('mktMenu.scheduleAsap') }}</button>
-                <button
-                  type="button"
-                  class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                  :class="scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                  :aria-pressed="scheduleEnabled"
-                  @click="scheduleEnabled = true"
-                >{{ t('mktMenu.scheduleLater') }}</button>
-              </div>
-              <input
-                v-if="scheduleEnabled"
-                v-model="scheduledFor"
-                type="datetime-local"
-                :min="minScheduleDatetime"
-                class="ui-input mt-2"
-              />
-              <p v-if="scheduleEnabled" class="mt-1 text-[11px] text-slate-500">{{ t('mktMenu.scheduleHint') }}</p>
-            </div>
+            <!-- When: ASAP vs scheduled (RISK FE-2) -->
+            <MarketplaceCheckoutSchedule
+              v-model:schedule-enabled="scheduleEnabled"
+              v-model:scheduled-for="scheduledFor"
+              :min-schedule-datetime="minScheduleDatetime"
+            />
           </div>
 
-          <!-- Loyalty redemption -->
-          <label
-            v-if="loyaltyAvailable"
-            class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3"
-          >
-            <input v-model="useLoyalty" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500/40" />
-            <span class="flex-1 text-xs text-amber-200">{{ t('mktMenu.loyaltyRedeem', { points: loyaltyPoints }) }}</span>
-            <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold tabular-nums text-amber-300">-{{ fmtPrice(loyaltyDiscount) }}</span>
-          </label>
-          <!-- ── Loyalty earn projection ── -->
-          <p
-            v-if="loyaltyConfig?.enabled && loyaltyEarnProjection > 0"
-            class="text-[11px] text-violet-400/80 ps-1"
-          >{{ t('mktMenu.loyaltyEarnProjection', { points: loyaltyEarnProjection }) }}</p>
+          <!-- Loyalty redemption + earn projection (RISK FE-2) -->
+          <MarketplaceCheckoutLoyalty
+            v-model:use-loyalty="useLoyalty"
+            :available="loyaltyAvailable"
+            :points="loyaltyPoints"
+            :discount="loyaltyDiscount"
+            :earn-enabled="loyaltyConfig?.enabled"
+            :earn-projection="loyaltyEarnProjection"
+            :fmt-price="fmtPrice"
+          />
 
-          <!-- Pay now (marketplace orders are pay-now) -->
-          <div v-if="customerStore.isAuthenticated && orderTotal > 0" class="space-y-2">
-            <!-- Trusted customers: choose wallet or cash on handover -->
-            <div v-if="codEligible" class="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :class="paymentMethod === 'wallet' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                :aria-pressed="paymentMethod === 'wallet'"
-                @click="paymentMethod = 'wallet'"
-              >{{ t('mktMenu.payMethodWallet') }}</button>
-              <button
-                type="button"
-                class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                :class="paymentMethod === 'cash' ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
-                :aria-pressed="paymentMethod === 'cash'"
-                @click="paymentMethod = 'cash'"
-              >{{ t('mktMenu.payMethodCash') }}</button>
-            </div>
+          <!-- Pay now (marketplace orders are pay-now) (RISK FE-2) -->
+          <MarketplaceCheckoutPayNow
+            v-if="customerStore.isAuthenticated && orderTotal > 0"
+            v-model:payment-method="paymentMethod"
+            :cod-eligible="codEligible"
+            :cod-chosen="codChosen"
+            :wallet-covers-total="walletCoversTotal"
+            :wallet-balance="customer?.wallet_balance || 0"
+            :currency="restaurant?.currency"
+            :order-total="orderTotal"
+            :wallet-balance-num="walletBalanceNum"
+            :fmt-price="fmtPrice"
+          />
 
-            <!-- Cash on handover panel -->
-            <div v-if="codChosen" class="ui-panel rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3">
-              <p class="text-sm font-semibold text-emerald-300">{{ t('mktMenu.payCashOnHandoverTitle') }}</p>
-              <p class="mt-0.5 text-xs text-slate-400">{{ t('mktMenu.payCashOnHandoverNote') }}</p>
-            </div>
-
-            <!-- Pay now from wallet -->
-            <div
-              v-else
-              class="ui-panel rounded-xl border px-4 py-3"
-              :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
-            >
-              <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
-                {{ t('mktMenu.payFromWalletTitle') }}
-              </p>
-              <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
-              <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
-                {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
-                <RouterLink
-                  :to="{ name: 'customer-account', query: { tab: 'wallet' } }"
-                  class="ms-1.5 underline hover:no-underline text-amber-300"
-                >{{ t('mktMenu.topUpWallet') }}</RouterLink>
-              </p>
-            </div>
-          </div>
-
-          <!-- Totals -->
-          <div class="ui-panel px-4 py-3 space-y-1.5 text-sm">
-            <!-- ETA chip — shown above totals when available -->
-            <div v-if="prepEta" class="flex items-center gap-1.5 text-[11px] text-emerald-400/80 pb-0.5">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75V8l2.25 2"/></svg>
-              {{ t('menu.etaReadyIn', { min: prepEta.min, max: prepEta.max }) }}
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>{{ t('mktMenu.subtotal') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(cartTotal) }}</span>
-            </div>
-            <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
-              <span>
-                {{ t('mktMenu.deliveryFeeLabel') }}
-                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500 tabular-nums">· {{ deliveryDistanceKm }} km</span>
-              </span>
-              <span class="tabular-nums">{{ deliveryIsFree ? t('mktMenu.freeDelivery') : fmtPrice(deliveryFee) }}</span>
-            </div>
-            <div v-if="flashSaleDiscount > 0" class="flex justify-between text-amber-300">
-              <span>{{ t('mktMenu.flashDiscount', { pct: restaurant.flash_sale.discount_pct }) }}</span>
-              <span class="tabular-nums">-{{ fmtPrice(flashSaleDiscount) }}</span>
-            </div>
-            <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
-              <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
-              <span class="tabular-nums">-{{ fmtPrice(loyaltyDiscount) }}</span>
-            </div>
-            <div class="flex justify-between font-bold text-white border-t border-slate-800 pt-1.5 mt-1.5">
-              <span>{{ t('mktMenu.total') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(orderTotal) }}</span>
-            </div>
-          </div>
+          <!-- Totals (RISK FE-2) -->
+          <MarketplaceCheckoutTotals
+            :prep-eta="prepEta"
+            :cart-total="cartTotal"
+            :fulfillment-type="form.fulfillment_type"
+            :delivery-fee-is-distance="deliveryFeeIsDistance"
+            :delivery-distance-km="deliveryDistanceKm"
+            :delivery-is-free="deliveryIsFree"
+            :delivery-fee="deliveryFee"
+            :flash-sale-discount="flashSaleDiscount"
+            :flash-sale-pct="restaurant?.flash_sale?.discount_pct"
+            :loyalty-discount="loyaltyDiscount"
+            :order-total="orderTotal"
+            :fmt-price="fmtPrice"
+          />
 
           <!-- Error -->
           <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -1006,35 +701,14 @@
             <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
           </div>
 
-          <!-- Minimum order warning panel -->
-          <div
-            v-if="form.fulfillment_type === 'delivery' && deliveryMinGap > 0"
-            class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
-            role="alert"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-xs font-medium text-amber-200">{{ t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) }}</p>
-          </div>
-
-          <!-- Restaurant closed warning panel -->
-          <div
-            v-if="restaurant && !restaurant.is_open"
-            class="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/8 px-3 py-2.5"
-            role="alert"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-xs font-medium text-rose-300">{{ t('mktMenu.restaurantClosed') }}</p>
-          </div>
-
-          <!-- Guest + delivery warning — shown before submit so customer knows to sign in -->
-          <div
-            v-if="form.fulfillment_type === 'delivery' && !customerStore.isAuthenticated"
-            class="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/8 px-3 py-2.5"
-            role="status"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-xs font-medium text-sky-200">{{ t('mktMenu.authRequired') }}</p>
-          </div>
+          <!-- Pre-submit warning panels (min-order / closed / guest-delivery) (RISK FE-2) -->
+          <MarketplaceCheckoutWarnings
+            :fulfillment-type="form.fulfillment_type"
+            :delivery-min-gap="deliveryMinGap"
+            :is-closed="!!(restaurant && !restaurant.is_open)"
+            :is-authenticated="customerStore.isAuthenticated"
+            :fmt-price="fmtPrice"
+          />
 
           <!-- Submit -->
           <button
@@ -1050,166 +724,24 @@
       </div>
     </Transition>
 
-    <!-- Option group selection panel (bottom sheet) -->
+    <!-- Option group selection panel (bottom sheet) (RISK FE-2) -->
     <Transition name="slide-up">
-      <div
+      <MarketplaceOptionGroupSheet
         v-if="activeOptionDish"
-        ref="optionPanelRef"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="activeOptionDish.name"
-        class="fixed inset-0 z-50 flex flex-col"
-        @keydown.esc="closeOptionPanel"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
-          aria-hidden="true"
-          @click="closeOptionPanel"
-        />
-        <!-- Sheet (slides up from bottom, max ~88 vh) -->
-        <div
-          class="relative mt-auto mx-auto w-full max-w-md overflow-hidden rounded-t-3xl border-t border-slate-800/60 bg-[#0b0d13] shadow-2xl flex flex-col"
-          style="max-height: 88vh"
-        >
-          <!-- Handle bar -->
-          <div class="flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
-            <div class="h-1 w-10 rounded-full bg-slate-700" />
-          </div>
-          <!-- Dish header -->
-          <div class="flex items-start gap-3 px-5 py-3.5 border-b border-slate-800/50 shrink-0">
-            <!-- Larger image when available -->
-            <div
-              v-if="activeOptionDish.image_url"
-              class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800"
-            >
-              <img :src="activeOptionDish.image_url" :alt="activeOptionDish.name" loading="lazy" class="h-full w-full object-cover" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-base font-bold text-white leading-snug">{{ activeOptionDish.name }}</p>
-              <!-- Base price + optional flash-sale strikethrough -->
-              <div class="mt-0.5 flex items-baseline gap-1.5">
-                <span v-if="flashSalePct" class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(activeOptionDish.price) }}</span>
-                <span
-                  class="text-sm font-bold tabular-nums"
-                  :class="flashSalePct ? 'text-amber-400' : 'text-[var(--color-secondary)]'"
-                >{{ fmtPrice(flashSalePct ? dishSalePrice(activeOptionDish.price) : activeOptionDish.price) }}</span>
-              </div>
-              <!-- Dietary tags -->
-              <div v-if="activeOptionDish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
-                <span
-                  v-for="tag in activeOptionDish.tags"
-                  :key="tag"
-                  class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
-                  :class="tagBadgeClass(tag)"
-                >{{ tag }}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              class="ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-              :aria-label="t('common.close')"
-              @click="closeOptionPanel"
-            >
-              <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-            </button>
-          </div>
-
-          <!-- Scrollable body: description + allergens + option groups -->
-          <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-5">
-            <!-- Full description -->
-            <p v-if="activeOptionDish.description" class="text-sm leading-relaxed text-slate-300">{{ activeOptionDish.description }}</p>
-            <!-- Allergen list -->
-            <div v-if="activeOptionDish.allergens?.length" class="flex flex-wrap gap-1.5">
-              <span class="text-[10px] font-semibold uppercase tracking-widest text-slate-500 self-center shrink-0">{{ t('mktMenu.freeFrom') }}:</span>
-              <span
-                v-for="a in activeOptionDish.allergens"
-                :key="a"
-                class="rounded-full border border-amber-500/30 bg-amber-500/8 px-2 py-0.5 text-[11px] font-medium text-amber-300"
-              >{{ t(`mktMenu.allergen_${a}`) }}</span>
-            </div>
-            <!-- Divider between info and option groups (only shown when both exist) -->
-            <hr v-if="(activeOptionDish.description || activeOptionDish.allergens?.length) && activeOptionDish.option_groups?.length" class="border-slate-800/60" />
-            <!-- Option groups (one per group) -->
-            <div
-              v-for="grp in activeOptionDish.option_groups"
-              :key="grp.id"
-              role="group"
-              :aria-labelledby="`opt-grp-${grp.id}`"
-            >
-              <!-- Group label + badges -->
-              <div class="flex items-start justify-between gap-2 mb-3">
-                <p :id="`opt-grp-${grp.id}`" class="text-sm font-semibold text-white leading-snug">{{ grp.name }}</p>
-                <div class="flex items-center gap-1.5 shrink-0">
-                  <span
-                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                    :class="grp.min_select > 0
-                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
-                      : 'border-slate-700/60 bg-slate-900/60 text-slate-400'"
-                  >{{ grp.min_select > 0 ? t('mktMenu.optionRequired') : t('mktMenu.optionOptional') }}</span>
-                  <span class="text-[10px] text-slate-500 whitespace-nowrap">{{ grp.max_select === 1 ? t('mktMenu.optionChooseOne') : t('mktMenu.optionChooseUp', { max: grp.max_select }) }}</span>
-                </div>
-              </div>
-              <!-- Option buttons -->
-              <div class="space-y-2">
-                <button
-                  v-for="opt in grp.options"
-                  :key="opt.id"
-                  type="button"
-                  :disabled="!opt.is_available || (!isOptionSelected(grp.id, opt.id) && isGroupAtMax(grp))"
-                  class="w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-start transition-colors ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:pointer-events-none disabled:opacity-40"
-                  :class="isOptionSelected(grp.id, opt.id)
-                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-white'
-                    : 'border-slate-700/60 bg-slate-900/40 text-slate-300 hover:border-slate-600 hover:bg-slate-900/60'"
-                  :aria-pressed="isOptionSelected(grp.id, opt.id)"
-                  @click="toggleOption(grp, opt.id)"
-                >
-                  <!-- Indicator: filled dot for radio (single), checkmark for multi -->
-                  <span
-                    class="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-all"
-                    :class="isOptionSelected(grp.id, opt.id)
-                      ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]'
-                      : 'border-slate-600'"
-                    aria-hidden="true"
-                  >
-                    <svg v-if="isOptionSelected(grp.id, opt.id) && grp.max_select > 1" viewBox="0 0 10 10" class="h-2.5 w-2.5 text-slate-950" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5l2.5 2.5 3.5-4"/></svg>
-                    <span v-else-if="isOptionSelected(grp.id, opt.id)" class="h-2 w-2 rounded-full bg-slate-950" aria-hidden="true" />
-                  </span>
-                  <span class="flex-1 text-sm font-medium">{{ opt.name }}</span>
-                  <span
-                    v-if="Number(opt.price_delta)"
-                    class="shrink-0 text-xs tabular-nums"
-                    :class="isOptionSelected(grp.id, opt.id) ? 'text-[var(--color-secondary)]' : 'text-slate-400'"
-                  >{{ Number(opt.price_delta) > 0 ? '+' : '' }}{{ fmtPrice(opt.price_delta) }}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Validation error shown after attempted confirm -->
-          <div
-            v-if="panelShowErrors && !optionPanelValid"
-            class="mx-5 mb-2 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/8 px-3 py-2"
-            role="alert"
-          >
-            <svg aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-rose-400" fill="currentColor">
-              <path fill-rule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm-.75-9.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 6a.875.875 0 100-1.75.875.875 0 000 1.75z" clip-rule="evenodd"/>
-            </svg>
-            <p class="text-xs text-rose-300">{{ t('mktMenu.optionInvalid') }}</p>
-          </div>
-
-          <!-- Footer: running unit price + Add CTA -->
-          <div class="px-5 pt-3 pb-6 shrink-0 border-t border-slate-800/50">
-            <button
-              type="button"
-              class="ui-press w-full rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-              @click="confirmOptionSelection"
-            >
-              {{ t('mktMenu.optionConfirm', { price: fmtPrice(optionPanelUnitPrice) }) }}
-            </button>
-          </div>
-        </div>
-      </div>
+        :dish="activeOptionDish"
+        :flash-sale-pct="flashSalePct"
+        :show-errors="panelShowErrors"
+        :valid="optionPanelValid"
+        :unit-price="optionPanelUnitPrice"
+        :fmt-price="fmtPrice"
+        :dish-sale-price="dishSalePrice"
+        :tag-badge-class="tagBadgeClass"
+        :is-option-selected="isOptionSelected"
+        :is-group-at-max="isGroupAtMax"
+        @toggle="toggleOption"
+        @confirm="confirmOptionSelection"
+        @close="closeOptionPanel"
+      />
     </Transition>
 
     <!-- Inline sign-in modal — triggered when a delivery order requires auth -->
@@ -1242,7 +774,20 @@ import { useI18n } from '../composables/useI18n';
 import { useVocabulary } from '../composables/useVocabulary';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import MarketplaceOptionGroupSheet from '../components/MarketplaceOptionGroupSheet.vue';
+import MarketplaceCheckoutCartItems from '../components/MarketplaceCheckoutCartItems.vue';
+import MarketplaceCheckoutFulfillmentType from '../components/MarketplaceCheckoutFulfillmentType.vue';
+import MarketplaceCheckoutSchedule from '../components/MarketplaceCheckoutSchedule.vue';
+import MarketplaceCheckoutLoyalty from '../components/MarketplaceCheckoutLoyalty.vue';
+import MarketplaceCheckoutDelivery from '../components/MarketplaceCheckoutDelivery.vue';
+import MarketplaceCheckoutPayNow from '../components/MarketplaceCheckoutPayNow.vue';
+import MarketplaceCheckoutTotals from '../components/MarketplaceCheckoutTotals.vue';
+import MarketplaceCheckoutWarnings from '../components/MarketplaceCheckoutWarnings.vue';
 import MarketplaceMenuCategoryNav from '../components/MarketplaceMenuCategoryNav.vue';
+import MarketplaceMenuFlashSaleBanner from '../components/MarketplaceMenuFlashSaleBanner.vue';
+import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
+import MarketplaceMenuLoyaltyTeaser from '../components/MarketplaceMenuLoyaltyTeaser.vue';
+import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
@@ -1707,7 +1252,6 @@ const allergenHiddenCount = computed(() => {
 
 // ── Option group selection panel ─────────────────────────────────────────────
 const activeOptionDish = ref(null);   // dish object when panel is open, null = closed
-const optionPanelRef = ref(null);
 const panelSelections = ref({});      // groupId → [selectedOptionId, ...]
 const panelShowErrors = ref(false);
 
@@ -1722,7 +1266,7 @@ const openOptionPanel = (dish) => {
   panelSelections.value = sel;
   panelShowErrors.value = false;
   activeOptionDish.value = dish;
-  nextTick(() => optionPanelRef.value?.querySelector('button:not([disabled])')?.focus());
+  // (MarketplaceOptionGroupSheet moves initial focus into the sheet on open.)
 };
 
 const closeOptionPanel = () => { activeOptionDish.value = null; };
@@ -1987,8 +1531,6 @@ const todayHours = computed(() => {
   if (!entry.enabled) return { closed: true };
   return { closed: false, open: entry.open, close: entry.close };
 });
-
-const hoursExpanded = ref(false);
 
 const weeklyHours = computed(() => {
   const sched = restaurant.value?.business_hours_schedule;

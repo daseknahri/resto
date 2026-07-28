@@ -137,79 +137,85 @@ class CustomerLoyaltyConfigViewTierTests(SimpleTestCase):
 
 
 # ── CustomerProfileUpdateView — birthday field ───────────────────────────────
+#
+# RISK IDENTITY-1: CustomerProfileUpdateView now authenticates via
+# CustomerSessionAuthentication + IsCustomer, so the signed-in Customer arrives as
+# request.user. Force-authenticate a real (unsaved) Customer principal instead of
+# mocking Customer.objects.get.
 
 class CustomerProfileBirthdayTests(SimpleTestCase):
     """CustomerProfileUpdateView accepts a valid birthday and rejects invalid ones."""
 
     def _make_customer(self):
-        c = MagicMock()
-        c.pk = 1
-        c.name = "Test"
-        c.email = ""
-        c.phone = "+212600000001"
-        c.phone_verified = True
-        c.email_verified = False
-        c.google_sub = None
-        c.wallet_balance = "0.00"
-        c.loyalty_points = 0
-        c.lifetime_loyalty_points = 0
-        c.birthday = None
-        c.locale = "en"
-        c.is_driver = False
-        c.is_driver_online = False
-        c.notify_order_updates = True
-        c.notify_review_prompts = True
-        c.notify_promotions = True
-        c.referral_code = "REF123"
-        c.referral_reward_given = False
+        from accounts.models import Customer
+
+        c = Customer(
+            id=1,
+            name="Test",
+            email="",
+            phone="+212600000001",
+            phone_verified=True,
+            email_verified=False,
+            google_sub=None,
+            wallet_balance="0.00",
+            loyalty_points=0,
+            lifetime_loyalty_points=0,
+            birthday=None,
+            locale="en",
+            is_driver=False,
+            is_driver_online=False,
+            notify_order_updates=True,
+            notify_review_prompts=True,
+            notify_promotions=True,
+            referral_code="REF123",
+            referral_reward_given=False,
+        )
+        c.save = MagicMock()
         return c
 
     def test_valid_birthday_accepted(self):
         from accounts.views import CustomerProfileUpdateView
-        from rest_framework.test import APIRequestFactory
+        from rest_framework.test import APIRequestFactory, force_authenticate
 
         factory = APIRequestFactory()
         req = factory.patch("/api/customer/profile/", {"birthday": "1990-06-15"}, format="json")
         req.session = {"customer_id": 1}
         mock_customer = self._make_customer()
-        mock_customer.save = MagicMock()
+        force_authenticate(req, user=mock_customer)
 
-        with patch("accounts.views.Customer.objects.get", return_value=mock_customer):
-            resp = CustomerProfileUpdateView.as_view()(req)
+        resp = CustomerProfileUpdateView.as_view()(req)
 
         self.assertEqual(resp.status_code, 200)
-        # birthday should have been set (the mock stores it via setattr)
+        # birthday should have been set
         self.assertEqual(mock_customer.birthday, date(1990, 6, 15))
 
     def test_invalid_birthday_ignored(self):
         from accounts.views import CustomerProfileUpdateView
-        from rest_framework.test import APIRequestFactory
+        from rest_framework.test import APIRequestFactory, force_authenticate
 
         factory = APIRequestFactory()
         req = factory.patch("/api/customer/profile/", {"birthday": "not-a-date"}, format="json")
         req.session = {"customer_id": 1}
         mock_customer = self._make_customer()
-        mock_customer.save = MagicMock()
+        force_authenticate(req, user=mock_customer)
 
-        with patch("accounts.views.Customer.objects.get", return_value=mock_customer):
-            resp = CustomerProfileUpdateView.as_view()(req)
+        resp = CustomerProfileUpdateView.as_view()(req)
 
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(mock_customer.birthday)  # unchanged
 
     def test_empty_birthday_clears_field(self):
         from accounts.views import CustomerProfileUpdateView
-        from rest_framework.test import APIRequestFactory
+        from rest_framework.test import APIRequestFactory, force_authenticate
 
         factory = APIRequestFactory()
         req = factory.patch("/api/customer/profile/", {"birthday": ""}, format="json")
         req.session = {"customer_id": 1}
         mock_customer = self._make_customer()
         mock_customer.birthday = date(1990, 6, 15)
-        mock_customer.save = MagicMock()
+        force_authenticate(req, user=mock_customer)
 
-        with patch("accounts.views.Customer.objects.get", return_value=mock_customer):
-            resp = CustomerProfileUpdateView.as_view()(req)
+        resp = CustomerProfileUpdateView.as_view()(req)
 
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(mock_customer.birthday)

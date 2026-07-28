@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { messages } from "../src/i18n/messages.js";
+import enMessages from "../src/i18n/messages-en.js";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const srcRoot = resolve(__dirname, "../src");
@@ -23,7 +23,7 @@ const flatten = (v, prefix = "") =>
         return isPlainObject(item) ? flatten(item, path) : [path];
       });
 
-const enKeys = new Set(flatten(messages.en));
+const enKeys = new Set(flatten(enMessages));
 // Plural bases: a key used as t('x.count') resolves x.count_one / x.count_other.
 const PLURAL_SUFFIXES = ["_zero", "_one", "_two", "_few", "_many", "_other"];
 const pluralBases = new Set();

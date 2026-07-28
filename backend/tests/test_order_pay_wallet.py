@@ -3,13 +3,19 @@ Tests for CustomerOrderPayWalletView — a signed-in customer settling their own
 order from their wallet (e.g. paying a dine-in tab at the end).
 
 Unit-level (SimpleTestCase + mocks — no real DB / no real wallet ledger).
+
+RISK IDENTITY-1: the view resolves ownership through the shared IsOrderOwner predicate
+off request.user. It deliberately stays AllowAny — order-existence (404) is checked
+before ownership, and the non-owner 403 IS the sign-in prompt an anonymous caller is
+meant to get, so IsCustomer would 401 ahead of both.
 """
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from menu.views import CustomerOrderPayWalletView
 from menu.models import Order
 from accounts.wallet_service import InsufficientFunds
@@ -32,8 +38,16 @@ class PayWalletTests(SimpleTestCase):
         self.view = CustomerOrderPayWalletView.as_view()
 
     def _post(self, session):
+        """`session` keeps its {"customer_id": N} / {} shape — it now drives BOTH the
+        request session (mirroring production, where login populates it) and the
+        Customer principal the auth stack hydrates onto request.user."""
         req = self.factory.post("/api/orders/ORD-1/pay-wallet/")
         req.session = session
+        cid = session.get("customer_id")
+        if cid is not None:
+            principal = Customer(id=cid)
+            principal.save = MagicMock()
+            force_authenticate(req, user=principal)
         req.tenant = MagicMock(id=7)
         return req
 

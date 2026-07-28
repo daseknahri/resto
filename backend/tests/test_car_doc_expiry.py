@@ -7,7 +7,7 @@ Covers:
   - check_car_doc_expiry management command: dry-run, expire sweep de-approves +
     pushes, warning sweep pushes without de-approving, push exception doesn't
     crash, output contains driver id, no drivers → clean output
-  - _MANAGEMENT_COMMAND_ALLOWLIST contains check_car_doc_expiry
+  - check_car_doc_expiry is scheduled in Beat as its cron.* task (RISK ASYNC-2)
   - AdminCarApprovalView: accept licence_expiry / insurance_expiry on approve;
     bad date format → 400; reject ignores expiry fields; response includes expiry
   - DriverDocUploadView: re-upload clears the corresponding expiry field only
@@ -242,10 +242,12 @@ class TestCheckCarDocExpiryCommand(SimpleTestCase):
         mock_push.assert_not_called()
 
 
-class TestAllowlistContainsCheckCarDocExpiry(SimpleTestCase):
-    def test_command_in_allowlist(self):
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
-        self.assertIn("check_car_doc_expiry", _MANAGEMENT_COMMAND_ALLOWLIST)
+class TestCheckCarDocExpiryScheduled(SimpleTestCase):
+    def test_command_scheduled_as_cron_task(self):
+        # RISK ASYNC-2: the command is wired to Beat via its dedicated cron.* task.
+        from django.conf import settings
+        tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.check_car_doc_expiry", tasks)
 
 
 # ── AdminCarApprovalView expiry date handling ────────────────────────────────

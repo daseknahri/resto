@@ -229,17 +229,18 @@ class PlaceOrderRuntimeErrorTests(SimpleTestCase):
             id=1, name="Demo", slug="demo",
             plan=SimpleNamespace(can_whatsapp_order=True, can_checkout=True),
         )
-        req.session = {"customer_id": 7}
+        req.session = {}
 
-        # Pickup is pay-now: supply a funded wallet customer so the request reaches
-        # the order-number generation (the RuntimeError path this test exercises).
-        customer = MagicMock()
-        customer.wallet_balance = "1000"
-        import accounts.models as _accts
+        # RISK IDENTITY-1: the linked customer is request.user (customer_or_none).
+        # Pickup is pay-now: force-authenticate a funded real Customer principal so the
+        # request reaches order-number generation (the RuntimeError path under test).
+        from decimal import Decimal
+        from accounts.models import Customer as _Cust
+        customer = _Cust(id=7, wallet_balance=Decimal("1000"))
+        customer.save = MagicMock()
+        force_authenticate(req, user=customer)
         # Patch the whole transaction.atomic so the DB isn't touched
-        with patch.object(_accts.Customer, "objects") as cust_mock, \
-             patch("menu.views.transaction") as mock_tx:
-            cust_mock.get.return_value = customer
+        with patch("menu.views.transaction") as mock_tx:
             cm = MagicMock()
             cm.__enter__ = MagicMock(return_value=None)
             cm.__exit__ = MagicMock(return_value=False)

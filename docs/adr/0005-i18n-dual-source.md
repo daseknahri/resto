@@ -1,8 +1,11 @@
 # ADR-0005: Hand-rolled i18n runtime with a dual-source catalog
 
-- **Status:** Accepted historically — **known footgun; collapse to a single source is recommended**
-- **Date:** documented 2026-07-10
-- **Related risk:** [FE-1](../RISK_REGISTER.md), [FE-3](../RISK_REGISTER.md)
+- **Status:** **Superseded (2026-07-24)** — the dual source was collapsed. `messages.js` (the redundant
+  inline en+fr catalog read only by the gates) was **deleted**; both verify gates now read the same
+  runtime files (`messages-en.js` / `messages-fr.js` / `messages-ar.js`). One source per locale. See the
+  "Resolution" section below and [FE-1](../RISK_REGISTER.md).
+- **Date:** documented 2026-07-10; resolved 2026-07-24
+- **Related risk:** [FE-1](../RISK_REGISTER.md) (resolved), [FE-3](../RISK_REGISTER.md)
 
 ## Context
 Kepoli ships in English, French, and **Arabic (RTL)**. It needs runtime locale switching, a way
@@ -45,7 +48,21 @@ A hand-rolled i18n runtime with a **dual-source** catalog and two verify gates:
   larger migration; the single-source cleanup captures most of the value at less cost.
 
 ## When to revisit
-When i18n friction next causes a shipped raw-key bug, or during any frontend cleanup pass:
-collapse to **one source of truth**, generate the parity/AR files, and split catalogs by
-namespace/route for lazy loading (FE-1 + FE-3). Until then, the four-edit rule is a
-**must-follow invariant** — see `CLAUDE.md`.
+Largely settled. Lazy per-namespace/route splitting for further first-paint wins (FE-3) is the only
+remaining thread; the single-source cleanup (FE-1) is done.
+
+## Resolution (2026-07-24) — FE-1
+FE-3's earlier code-split had already moved the **runtime** onto `messages-en.js` / `messages-fr.js` /
+`messages-ar.js`, which left `messages.js` (11,776 lines) as pure duplication read **only by the two
+verify gates** — the hand-sync source of the drift. That drift had already produced **live raw-key bugs**
+(template keys under `mktMenu.*` / `customerAccount.*` that existed in `messages.js` but only under a
+*different* namespace — `cartPage.*` / `menu.*` — in the runtime files, so they rendered as raw keys). The fix:
+- reconciled the ~7 drifted keys into the runtime files under the namespace the templates use (bug fix);
+- repointed **both** gates to the runtime files (FR-parity = `messages-en.js` vs `messages-fr.js`; the
+  usage gate reads `messages-en.js`; the mojibake scan covers the real files);
+- **deleted `messages.js`.**
+
+Result: **one source of truth per locale**, each consumed by both runtime and gates. A new string is
+**3 edits** (en/fr/ar — the irreducible one-per-language minimum), and a key that passes the gates is the
+key the runtime ships. The ADR's old "generate parity files from one source" idea is moot — `messages-en.js`
+*is* the parity source directly, no codegen needed. The four-edit rule in `CLAUDE.md` is retired.

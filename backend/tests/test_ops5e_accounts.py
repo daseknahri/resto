@@ -98,8 +98,14 @@ class MarketplaceOrderStatusIDORTests(SimpleTestCase):
         self.view = MarketplaceOrderStatusView.as_view()
 
     def _call(self, *, session_customer_id, order_customer_id=5):
+        from accounts.models import Customer
         req = self.factory.get("/api/marketplace/order/ORD-ABC123/?restaurant=demo")
-        req.session = {"customer_id": session_customer_id} if session_customer_id else {}
+        # RISK IDENTITY-1: ownership is now the shared IsOrderOwner predicate off
+        # request.user (hydrated by CustomerSessionAuthentication). force_authenticate a
+        # real Customer principal instead of hand-setting the session id.
+        req.session = {}
+        if session_customer_id:
+            force_authenticate(req, user=Customer(id=session_customer_id))
         order = _order_mock(customer_id=order_customer_id)
 
         tenant = SimpleNamespace(schema_name="demo", name="Demo Resto", slug="demo")
@@ -165,7 +171,9 @@ class CustomerPushSubscribeHijackTests(SimpleTestCase):
             {"endpoint": "https://push/shared", "p256dh": "key", "auth": "secret"},
             format="json",
         )
-        req.session = {"customer_id": 7}
+        req.session = {}
+        from accounts.models import Customer
+        force_authenticate(req, user=Customer(id=7))
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

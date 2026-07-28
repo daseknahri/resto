@@ -223,19 +223,20 @@ class TestStaffPlanLimit(SimpleTestCase):
         # create_user to raise StopIteration so we can detect we got past the gate.
         MockUser.objects.create_user.side_effect = StopIteration("past limit check")
 
-        # Patch: _is_tenant_owner → True, and inject MockUser into accounts.models
-        # so local `from .models import User` inside the method gets the mock.
+        # Inject MockUser into accounts.models so a local `from .models import User`
+        # inside the method gets the mock. Owner-gating is a permission_class now, and
+        # this test calls view.post() directly (bypassing DRF dispatch/permissions), so
+        # no _is_tenant_owner patch is needed.
         import accounts.models as _am
         original_user = _am.User if hasattr(_am, "User") else None
         _am.User = MockUser
         try:
-            with patch("accounts.views._is_tenant_owner", return_value=True):
-                try:
-                    resp = view.post(request)
-                    return resp
-                except StopIteration:
-                    # Got past the limit check successfully (unlimited or below limit)
-                    return None
+            try:
+                resp = view.post(request)
+                return resp
+            except StopIteration:
+                # Got past the limit check successfully (unlimited or below limit)
+                return None
         finally:
             if original_user is not None:
                 _am.User = original_user

@@ -271,7 +271,9 @@ class TestSendPredispatchRemindersCommand(SimpleTestCase):
 
 # ── allowlist guard ──────────────────────────────────────────────────────────
 
-class TestAllowlistContainsSendPredispatch(SimpleTestCase):
-    def test_command_in_allowlist(self):
-        from accounts.tasks import _MANAGEMENT_COMMAND_ALLOWLIST
-        self.assertIn("send_predispatch_reminders", _MANAGEMENT_COMMAND_ALLOWLIST)
+class TestSendPredispatchScheduled(SimpleTestCase):
+    def test_command_scheduled_as_cron_task(self):
+        # RISK ASYNC-2: the command is wired to Beat via its dedicated cron.* task.
+        from django.conf import settings
+        tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.send_predispatch_reminders", tasks)

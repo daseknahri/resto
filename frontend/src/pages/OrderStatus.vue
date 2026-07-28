@@ -741,6 +741,10 @@ const showJustPlacedBanner = ref(false);
 let _justPlacedTimer = null;
 
 const POLL_INTERVAL_S = 15;
+// RISK ASYNC-3: realtime is substitutive. When the WS is 'live', status updates
+// arrive by push, so the poll drops to a slow safety-net; otherwise it stays at
+// the fast rate as the primary update path.
+const POLL_SAFETY_NET_S = 60;
 const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
@@ -1178,6 +1182,18 @@ const orderRealtime = useOrderRealtime(
 // anything else (connecting/polling/idle) → amber "reconnecting" cue.
 const { connectionState: realtimeState } = orderRealtime;
 
+// Self-rescheduling poll so the cadence adapts if the WS connection flips during
+// the session (RISK ASYNC-3). 'live' → 60s safety-net; otherwise the fast rate.
+const scheduleNextPoll = () => {
+  const seconds = realtimeState.value === "live" ? POLL_SAFETY_NET_S : POLL_INTERVAL_S;
+  pollTimer = setTimeout(() => {
+    if (typeof document === "undefined" || document.visibilityState !== "hidden") {
+      if (isLiveStatus.value) fetchStatus();
+    }
+    scheduleNextPoll();
+  }, seconds * 1000);
+};
+
 onMounted(() => {
   // Request notification permission proactively (non-blocking)
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -1201,14 +1217,11 @@ onMounted(() => {
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onStatusPageVisible);
   }
-  pollTimer = setInterval(() => {
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    if (isLiveStatus.value) fetchStatus();
-  }, POLL_INTERVAL_S * 1000);
+  scheduleNextPoll();
 });
 onUnmounted(() => {
   if (_justPlacedTimer) clearTimeout(_justPlacedTimer);
-  clearInterval(pollTimer);
+  clearTimeout(pollTimer);
   orderRealtime.disconnect();
   stopCountdown();
   orderStore.clearPlacedOrder();

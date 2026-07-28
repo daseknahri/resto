@@ -15,7 +15,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from menu.models import Order
-from menu.order_service import compute_order_delivery_fee, compute_order_tip
+from menu.order_service import compute_order_delivery_fee, compute_order_tip, resolve_prepay_and_wallet
 
 
 class ComputeOrderDeliveryFeeTests(SimpleTestCase):
@@ -103,3 +103,72 @@ class ComputeOrderTipTests(SimpleTestCase):
     def test_zero_subtotal_does_not_cap(self):
         # matches the original `if _food_subtotal > 0 and ...` — no cap when subtotal is 0
         self.assertEqual(compute_order_tip("100.00", Decimal("0")), Decimal("100.00"))
+
+
+class ResolvePrepayAndWalletTests(SimpleTestCase):
+    """RISK STRUCT-1 slice 3: prepay/COD/wallet money-gate, byte-identical to the inline block.
+
+    `menu.views._cod_eligible` is patched (the service calls it function-locally to keep that patch
+    target valid). No DB — customers/users are lightweight namespaces.
+    """
+
+    def _customer(self, balance="100.00", cid=1):
+        return SimpleNamespace(id=cid, wallet_balance=Decimal(balance))
+
+    def _call(self, **kw):
+        base = dict(
+            user=SimpleNamespace(is_authenticated=True, role=None),
+            linked_customer=self._customer(), profile=SimpleNamespace(),
+            fulfillment_type=Order.FulfillmentType.PICKUP, total=Decimal("50.00"),
+            is_scheduled=False, payment_method=None, use_wallet_flag=None,
+        )
+        base.update(kw)
+        return resolve_prepay_and_wallet(**base)
+
+    def test_staff_order_exempt(self):
+        from accounts.models import User
+        rp, cod, uw, wd, err = self._call(user=SimpleNamespace(is_authenticated=True, role=User.Roles.TENANT_STAFF))
+        self.assertFalse(rp)
+        self.assertIsNone(err)
+        self.assertFalse(cod)
+
+    def test_customer_pickup_no_linked_customer_403(self):
+        rp, cod, uw, wd, err = self._call(linked_customer=None)
+        self.assertIsNotNone(err)
+        self.assertEqual(err[1], 403)
+        self.assertEqual(err[0]["code"], "auth_required")
+
+    def test_cash_cod_eligible_becomes_cod_no_wallet(self):
+        with patch("menu.views._cod_eligible", return_value=True):
+            rp, cod, uw, wd, err = self._call(payment_method="cash")
+        self.assertIsNone(err)
+        self.assertTrue(cod)
+        self.assertFalse(uw)
+        self.assertEqual(wd, Decimal("0"))
+
+    def test_cash_not_cod_insufficient_wallet_402(self):
+        with patch("menu.views._cod_eligible", return_value=False):
+            rp, cod, uw, wd, err = self._call(payment_method="cash", linked_customer=self._customer("30.00"))
+        self.assertIsNotNone(err)
+        self.assertEqual(err[1], 402)
+        self.assertEqual(err[0]["code"], "wallet_insufficient")
+        self.assertEqual(err[0]["amount_due"], "50.00")
+
+    def test_wallet_covers_uses_wallet(self):
+        rp, cod, uw, wd, err = self._call(linked_customer=self._customer("100.00"))
+        self.assertIsNone(err)
+        self.assertTrue(rp)
+        self.assertTrue(uw)
+        self.assertEqual(wd, Decimal("50.00"))  # min(100, 50)
+
+    def test_dine_in_with_use_wallet_flag(self):
+        # non-pickup/delivery → not prepay-required, but an explicit use_wallet still deducts
+        rp, cod, uw, wd, err = self._call(fulfillment_type="table", use_wallet_flag=True, total=Decimal("20.00"))
+        self.assertFalse(rp)
+        self.assertTrue(uw)
+        self.assertEqual(wd, Decimal("20.00"))
+
+    def test_zero_deduction_disables_wallet(self):
+        rp, cod, uw, wd, err = self._call(fulfillment_type="table", use_wallet_flag=True, total=Decimal("0"))
+        self.assertFalse(uw)
+        self.assertEqual(wd, Decimal("0"))

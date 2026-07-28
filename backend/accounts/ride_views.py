@@ -187,23 +187,6 @@ def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=Fal
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────────
 
-def _get_rider(request):
-    """Return (Customer, None) or (None, error Response)."""
-    customer_id = request.session.get("customer_id")
-    if not customer_id:
-        return None, Response(
-            {"detail": "Customer session required."},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-    try:
-        return Customer.objects.get(pk=customer_id), None
-    except Customer.DoesNotExist:
-        return None, Response(
-            {"detail": "Customer not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-
 def _get_driver(request):
     """Return (Customer, None) or (None, error Response). Driver must be approved + online."""
     customer_id = request.session.get("customer_id")
@@ -683,17 +666,17 @@ class RideTipView(APIView):
     every existing trip untouched.
     """
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    # IDENTITY-1 sweep: single-role rider mutation (own ride only); no driver/staff branch.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, ride_id, *args, **kwargs):
         if (gate := _vertical_gate(None)) is not None:
             return gate
 
-        rider, err = _get_rider(request)
-        if err:
-            return err
+        # IsCustomer guarantees request.user is the signed-in Customer principal.
+        rider = request.user
 
         # Parse + validate the amount BEFORE locking anything.
         try:

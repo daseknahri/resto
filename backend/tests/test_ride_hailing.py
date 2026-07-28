@@ -546,36 +546,45 @@ class RideRateViewTests(SimpleTestCase):
 # ── RideTipView ──────────────────────────────────────────────────────────────────
 
 class RideTipViewTests(SimpleTestCase):
-    """Sender tips the courier after a completed package, once, wallet→wallet."""
+    """Sender tips the courier after a completed package, once, wallet→wallet.
+
+    RISK IDENTITY-1: RideTipView now authenticates via CustomerSessionAuthentication +
+    IsCustomer, so the signed-in Customer arrives as request.user. We force-authenticate a
+    real Customer principal, matching the production auth path (mirrors RideCreateViewTests)."""
 
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = RideTipView.as_view()
 
-    def _post(self, ride_id, data, session=None):
+    def _post(self, ride_id, data, rider=None):
         req = self.factory.post(f"/api/rides/{ride_id}/tip/", data, format="json")
-        req.session = session or _session(customer_id=10)
-        req.user = MagicMock(is_authenticated=False)
+        if rider is not None:
+            req.session = _session(customer_id=rider.id)
+            force_authenticate(req, user=rider)
+        else:
+            req.session = _session()
         return req
+
+    def test_no_session_returns_401(self):
+        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.wallet_service.debit_wallet")
     def test_successful_tip_debits_sender_credits_courier(
-        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_debit, mock_credit, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10, wallet_balance=Decimal("100.00"))
         driver = _make_customer(pk=2, is_driver=True)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver,
                           kind="package")
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        req = self._post(ride_id=1, data={"amount": "10"}, session=_session(customer_id=10))
+        req = self._post(ride_id=1, data={"amount": "10"}, rider=rider)
         resp = self.view(req, ride_id=1)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -595,40 +604,36 @@ class RideTipViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     def test_tip_non_completed_returns_409(
-        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10)
         driver = _make_customer(pk=2, is_driver=True)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         ride = _make_ride(pk=1, status_val="in_progress", rider=rider, driver=driver)
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "10"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "not_completed")
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.wallet_service.debit_wallet")
     def test_double_tip_returns_409_idempotent(
-        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_debit, mock_credit, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10)
         driver = _make_customer(pk=2, is_driver=True)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         # Already tipped → tip_amount > 0.
         ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver,
                           tip_amount=Decimal("5.00"))
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "10"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "already_tipped")
         mock_debit.assert_not_called()
@@ -637,50 +642,44 @@ class RideTipViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     def test_non_positive_tip_returns_400(
-        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
-        resp = self.view(self._post(1, {"amount": "0"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "0"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "bad_amount")
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     def test_oversized_tip_returns_400(
-        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
-        resp = self.view(self._post(1, {"amount": "100000"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "100000"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "amount_too_large")
 
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.wallet_service.debit_wallet")
     def test_insufficient_funds_returns_402_no_credit(
-        self, mock_debit, mock_credit, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_debit, mock_credit, mock_ride_objs, mock_tx, _throttle
     ):
         from accounts.wallet_service import InsufficientFunds
         rider = _make_customer(pk=10, wallet_balance=Decimal("1.00"))
         driver = _make_customer(pk=2, is_driver=True)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         mock_debit.side_effect = InsufficientFunds("nope")
         ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=driver)
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "10"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
         self.assertEqual(resp.data["code"], "insufficient_funds")
         # Courier must NOT be credited when the sender debit failed.
@@ -691,17 +690,15 @@ class RideTipViewTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views._tx")
     @patch("accounts.ride_views.RideRequest.objects")
-    @patch("accounts.models.Customer.objects")
     def test_no_courier_returns_409(
-        self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle
+        self, mock_ride_objs, mock_tx, _throttle
     ):
         rider = _make_customer(pk=10)
-        mock_cust_objs.get.return_value = rider
         mock_tx.atomic.return_value = _noop_atomic()
         ride = _make_ride(pk=1, status_val="completed", rider=rider, driver=None)
         mock_ride_objs.select_for_update.return_value.get.return_value = ride
 
-        resp = self.view(self._post(1, {"amount": "10"}), ride_id=1)
+        resp = self.view(self._post(1, {"amount": "10"}, rider=rider), ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "no_courier")
 

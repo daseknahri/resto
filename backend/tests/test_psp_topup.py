@@ -15,7 +15,9 @@ Covered invariants:
 import json
 from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase, override_settings
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from accounts.models import Customer
 
 
 _PSP_ON = dict(
@@ -50,7 +52,12 @@ class IntentDisabledTests(SimpleTestCase):
 
 
 class IntentUnauthenticatedTests(SimpleTestCase):
-    """Intent endpoint returns 401 when flag is on but no customer session."""
+    """Intent endpoint returns 401 when the flag is on but there's no customer principal.
+
+    RISK IDENTITY-1: the view reads customer_or_none(request) rather than the raw
+    session, but stays AllowAny so the PSP_TOPUP_ENABLED probe still answers
+    {"enabled": False} before auth (its docstring's "safe to call always" contract).
+    """
 
     @override_settings(**_PSP_ON)
     def test_returns_401_without_session(self):
@@ -66,11 +73,9 @@ class IntentUnauthenticatedTests(SimpleTestCase):
         from accounts.views import CustomerTopUpIntentView
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "abc"}, format="json")
-        req.session = {"customer_id": 1}
-        mock_customer = MagicMock()
-        mock_customer.pk = 1
-        with patch("accounts.views.Customer.objects.get", return_value=mock_customer):
-            resp = CustomerTopUpIntentView.as_view()(req)
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1))
+        resp = CustomerTopUpIntentView.as_view()(req)
         self.assertEqual(resp.status_code, 400)
 
     @override_settings(**_PSP_ON)
@@ -78,11 +83,9 @@ class IntentUnauthenticatedTests(SimpleTestCase):
         from accounts.views import CustomerTopUpIntentView
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "5"}, format="json")
-        req.session = {"customer_id": 1}
-        mock_customer = MagicMock()
-        mock_customer.pk = 1
-        with patch("accounts.views.Customer.objects.get", return_value=mock_customer):
-            resp = CustomerTopUpIntentView.as_view()(req)
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1))
+        resp = CustomerTopUpIntentView.as_view()(req)
         self.assertEqual(resp.status_code, 400)
 
 

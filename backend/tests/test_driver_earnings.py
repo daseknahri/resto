@@ -1,11 +1,15 @@
-"""Tests for driver earnings/payout views (auth paths, no DB)."""
+"""Tests for driver earnings/payout views (auth paths, no DB).
+
+RISK IDENTITY-1: DriverEarningsView now authenticates via CustomerSessionAuthentication
++ IsCustomer; the is_driver gate stays in the view, so its 404 contract is unchanged.
+"""
 from unittest.mock import MagicMock
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from accounts.models import User
+from accounts.models import Customer, User
 from accounts.views import AdminDriverEarningsView, DriverEarningsView
 
 
@@ -46,3 +50,11 @@ class DriverEarningsAuthTests(SimpleTestCase):
         req = self.factory.get("/api/driver/earnings/")
         req.session = {}
         self.assertEqual(self.view(req).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_non_driver_returns_404(self):
+        """A signed-in customer who never applied to drive still gets the 404
+        contract — the is_driver gate lives in the view, not a permission class."""
+        req = self.factory.get("/api/driver/earnings/")
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1, is_driver=False))
+        self.assertEqual(self.view(req).status_code, status.HTTP_404_NOT_FOUND)

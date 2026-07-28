@@ -1533,3 +1533,47 @@ class CustomerNotification(models.Model):
     def __str__(self) -> str:
         state = "read" if self.read_at else "unread"
         return f"CustomerNotification(cust={self.customer_id}, {self.type}, {state})"
+
+
+class OutboxMessage(models.Model):
+    """Durable outbox for the inline (no-broker) task fallback (RISK ASYNC-1).
+
+    When ``accounts.tasks.enqueue`` cannot hand a task to Celery — no broker
+    configured, or a transient broker outage after boot — it runs the task on the
+    in-process thread pool, which would be LOST on the next deploy/restart. Before
+    running inline it now persists the task here (registered name + JSON-encoded
+    args/kwargs); the row is deleted on successful inline execution, and a boot-time
+    ``relay_outbox`` management command re-dispatches anything left ``pending`` past a
+    grace window (i.e. whose process died mid-run).
+
+    Lives in the public/shared schema (``accounts`` is in SHARED_APPS, so this table
+    exists only in ``public``) — writers wrap the insert in ``schema_context("public")``
+    so a request running under a tenant schema still lands the row in public. Decimal
+    args (e.g. a wallet ``amount``) are tagged on encode so they round-trip exactly
+    (see ``accounts.tasks._encode_seq`` / ``_decode_seq``). Re-dispatch is at-least-once;
+    idempotency rides on the per-task ASYNC-4 dedup keys.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        FAILED = "failed", "Failed"
+
+    task_name = models.CharField(max_length=255)
+    args = models.JSONField(default=list, blank=True)
+    kwargs = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self) -> str:
+        return (
+            f"OutboxMessage(id={self.pk}, {self.task_name}, "
+            f"{self.status}, attempts={self.attempts})"
+        )

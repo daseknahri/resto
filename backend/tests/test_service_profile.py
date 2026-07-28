@@ -257,49 +257,64 @@ class TestSerializeCustomerRoleFlags(SimpleTestCase):
 
 
 class TestCustomerServiceProfilesView(SimpleTestCase):
-    """P3: read/update per-service notification preferences."""
+    """P3: read/update per-service notification preferences.
 
-    def _req(self, customer_id=1, data=None):
-        req = MagicMock()
-        req.session = {"customer_id": customer_id} if customer_id else {}
-        req.data = data or {}
-        return req
+    RISK IDENTITY-1: this view now authenticates via CustomerSessionAuthentication +
+    IsCustomer, so it must be driven through as_view()/dispatch (not a bare instance
+    .get()/.patch() call) for the auth gate to run at all — force_authenticate
+    injects a real Customer principal, matching the production auth path.
+    """
 
-    def test_get_unauthenticated_401(self):
+    def setUp(self):
         from accounts.views import CustomerServiceProfilesView
 
-        resp = CustomerServiceProfilesView().get(self._req(customer_id=None))
+        self.factory = APIRequestFactory()
+        self.view = CustomerServiceProfilesView.as_view()
+
+    def _get(self, customer=None):
+        req = self.factory.get("/api/customer/service-profiles/")
+        req.session = {"customer_id": customer.id} if customer is not None else {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
+        return self.view(req)
+
+    def _patch(self, data, customer=None):
+        req = self.factory.patch("/api/customer/service-profiles/", data, format="json")
+        req.session = {"customer_id": customer.id} if customer is not None else {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
+        return self.view(req)
+
+    def test_get_unauthenticated_401(self):
+        resp = self._get(customer=None)
         self.assertEqual(resp.status_code, 401)
 
     @patch("accounts.models.CustomerServiceProfile")
-    @patch("accounts.models.Customer")
-    def test_get_falls_back_to_global(self, mock_cust, mock_csp):
-        from accounts.views import CustomerServiceProfilesView
+    def test_get_falls_back_to_global(self, mock_csp):
+        from accounts.models import Customer
 
-        mock_cust.objects.get.return_value = MagicMock(
-            notify_order_updates=True, notify_promotions=False
-        )
+        customer = Customer(id=1, notify_order_updates=True, notify_promotions=False)
         mock_csp.objects.filter.return_value = []  # no per-service rows yet
-        resp = CustomerServiceProfilesView().get(self._req(1))
+        resp = self._get(customer=customer)
         sp = resp.data["service_profiles"]
         self.assertFalse(sp["food"]["customized"])
         self.assertTrue(sp["food"]["notify_updates"])       # global default
         self.assertFalse(sp["food"]["notify_promotions"])   # global default
 
     def test_patch_invalid_vertical_400(self):
-        from accounts.views import CustomerServiceProfilesView
+        from accounts.models import Customer
 
-        resp = CustomerServiceProfilesView().patch(self._req(1, {"vertical": "spaceport"}))
+        resp = self._patch({"vertical": "spaceport"}, customer=Customer(id=1))
         self.assertEqual(resp.status_code, 400)
 
     @patch("accounts.models.CustomerServiceProfile")
     def test_patch_updates_profile(self, mock_csp):
-        from accounts.views import CustomerServiceProfilesView
+        from accounts.models import Customer
 
         profile = MagicMock(notify_updates=True, notify_promotions=True)
         mock_csp.get_or_create_for.return_value = profile
-        resp = CustomerServiceProfilesView().patch(
-            self._req(1, {"vertical": "food", "notify_promotions": False})
+        resp = self._patch(
+            {"vertical": "food", "notify_promotions": False}, customer=Customer(id=1)
         )
         self.assertFalse(profile.notify_promotions)
         profile.save.assert_called_once()
@@ -308,22 +323,22 @@ class TestCustomerServiceProfilesView(SimpleTestCase):
     @patch("accounts.models.SavedAddress")
     @patch("accounts.models.CustomerServiceProfile")
     def test_patch_default_address_validates_ownership(self, mock_csp, mock_addr):
-        from accounts.views import CustomerServiceProfilesView
+        from accounts.models import Customer
 
         profile = MagicMock(notify_updates=True, notify_promotions=True, default_address_id=None)
         mock_csp.get_or_create_for.return_value = profile
 
         # Address NOT owned by this customer → 400, nothing saved.
         mock_addr.objects.filter.return_value.exists.return_value = False
-        resp = CustomerServiceProfilesView().patch(
-            self._req(1, {"vertical": "food", "default_address_id": 99})
+        resp = self._patch(
+            {"vertical": "food", "default_address_id": 99}, customer=Customer(id=1)
         )
         self.assertEqual(resp.status_code, 400)
         profile.save.assert_not_called()
 
         # Address owned → set + persisted.
         mock_addr.objects.filter.return_value.exists.return_value = True
-        CustomerServiceProfilesView().patch(
-            self._req(1, {"vertical": "food", "default_address_id": 7})
+        self._patch(
+            {"vertical": "food", "default_address_id": 7}, customer=Customer(id=1)
         )
         self.assertEqual(profile.default_address_id, 7)

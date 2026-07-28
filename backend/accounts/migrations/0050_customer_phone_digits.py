@@ -38,5 +38,8 @@ class Migration(migrations.Migration):
                 max_length=9,
             ),
         ),
-        migrations.RunPython(_backfill_phone_digits, migrations.RunPython.noop),
+        # elidable: one-time backfill of a new column from existing rows — a fresh
+        # schema has no rows to backfill and maintains phone_digits going forward, so
+        # this can be dropped when these migrations are squashed (RISK STRUCT-2).
+        migrations.RunPython(_backfill_phone_digits, migrations.RunPython.noop, elidable=True),
     ]

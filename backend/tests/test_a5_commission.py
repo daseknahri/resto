@@ -86,13 +86,12 @@ def _dish(slug="burger", price="10.00", currency="MAD", stock_qty=None):
 
 
 def _customer(cid=7, wallet="1000"):
-    c = MagicMock()
-    c.id = cid
-    c.pk = cid
-    c.wallet_balance = Decimal(wallet)
-    c.name = "Repeat Diner"
-    c.phone = "+212600000000"
-    c.loyalty_points = 0
+    """A real (unsaved) Customer principal (RISK IDENTITY-1: MarketplacePlaceOrderView
+    reads the linked customer via customer_or_none(request.user), duck-typed on class name)."""
+    from accounts.models import Customer
+    c = Customer(id=cid, wallet_balance=Decimal(wallet), name="Repeat Diner",
+                 phone="+212600000000", loyalty_points=0)
+    c.save = MagicMock()
     return c
 
 
@@ -143,10 +142,13 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = MarketplacePlaceOrderView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/marketplace/order/", data, format="json")
-        req.user = _anon()
-        req.session = session or {}
+        # RISK IDENTITY-1: force_authenticate the Customer principal (read via
+        # customer_or_none) instead of hand-setting request.session.
+        req.session = {}
+        if customer is not None:
+            force_authenticate(req, user=customer)
         return self.view(req)
 
     def _run_order(self, *, profile, customer):
@@ -203,7 +205,7 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
                 mock_cust_cls.DoesNotExist = _FakeDNE
                 mock_cust_cls.objects.get.return_value = customer
                 with _inject_module("menu.models", fake_menu):
-                    resp = self._post(payload, session={"customer_id": customer.id})
+                    resp = self._post(payload, customer=customer)
         return resp, order_cls
 
     def test_commission_uses_tenant_rate(self):

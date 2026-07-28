@@ -6,6 +6,15 @@ delivery auth/verified gate, table-unavailable gate, items-unavailable gate,
 and the happy-path order creation.
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
+
+RISK IDENTITY-1: PlaceOrderView is MULTI-ROLE. It resolves TWO principals off
+request.user — a staff User (owner/admin previewing the menu; drives can_preview and the
+prepay-exemption in resolve_prepay_and_wallet) OR a signed-in Customer (linked for
+wallet/loyalty via customer_or_none). Its auth stack is
+[SessionAuthentication, CustomerSessionAuthentication], so a staff session lands a User
+and a customer session lands a Customer. Tests therefore force_authenticate the exact
+principal under test (a real Customer, a staff-like object, or nothing for a guest) rather
+than hand-setting request.session / request.user + patching Customer.objects.get.
 """
 from decimal import Decimal
 from types import SimpleNamespace
@@ -13,8 +22,9 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from menu.views import PlaceOrderView
 
 
@@ -52,21 +62,22 @@ def _dish(slug="burger", price="10.00", currency="MAD", stock_qty=None):
     return d
 
 
-def _session(customer_id=None):
-    d = {}
-    if customer_id is not None:
-        d["customer_id"] = customer_id
-    sess = MagicMock()
-    sess.get = lambda key, default=None: d.get(key, default)
-    sess.__setitem__ = lambda s, k, v: d.__setitem__(k, v)
-    sess.pop = lambda key, default=None: d.pop(key, default)
-    return sess
-
-
-def _anon():
-    u = MagicMock()
-    u.is_authenticated = False
-    return u
+def _customer(pk=7, phone_verified=False, email_verified=False, google_sub=None,
+              phone="", name="", wallet_balance="0"):
+    """A real (unsaved) Customer principal so it passes customer_or_none's class-name
+    check. Carries the real model attributes the view reads (verification, phone,
+    wallet_balance) — no DB (save is monkeypatched)."""
+    c = Customer(
+        id=pk,
+        phone_verified=phone_verified,
+        email_verified=email_verified,
+        google_sub=google_sub,
+        phone=phone,
+        name=name,
+        wallet_balance=Decimal(wallet_balance),
+    )
+    c.save = MagicMock()
+    return c
 
 
 VALID_PAYLOAD = {
@@ -80,11 +91,14 @@ class PlaceOrderViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = PlaceOrderView.as_view()
 
-    def _post(self, data=None, tenant=None, profile=None, session=None):
+    def _post(self, data=None, tenant=None, profile=None, principal=None):
+        """`principal` is the request.user under test: a real Customer (customer order),
+        a staff-like object (owner preview / staff-created order), or None (guest)."""
         req = self.factory.post("/api/place-order/", data or VALID_PAYLOAD, format="json")
         req.tenant = tenant or _tenant()
-        req.user = _anon()
-        req.session = session or _session()
+        req.session = {}
+        if principal is not None:
+            force_authenticate(req, user=principal)
         self._profile = profile or _profile()
         return req
 
@@ -137,21 +151,34 @@ class PlaceOrderViewTests(SimpleTestCase):
         """Tenant owner can still place orders even when restaurant is closed (preview mode)."""
         profile_mock.filter.return_value.first.return_value = _profile(is_open=False)
         tenant = _tenant()
-        req = self._post(tenant=tenant)
-        # Make the request user look like the tenant owner
+        # A staff principal (tenant owner) — NOT a Customer, so customer_or_none returns
+        # None and _is_staff_user is True, unlocking the preview (closed-restaurant) bypass.
         owner = MagicMock()
         owner.is_authenticated = True
         owner.is_superuser = False
         owner.is_staff = False
         owner.is_platform_admin = False
         owner.tenant_id = tenant.id
-        req.user = owner
+        req = self._post(tenant=tenant, principal=owner)
         # Will fail at serializer/dish stage — not at the closed check
         with patch("menu.views.Dish.objects") as dish_mock:
             dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = []
             resp = self.view(req)
         # Should NOT be 409 (closed) — should be 400 (items unavailable) or similar
         self.assertNotEqual(resp.status_code, status.HTTP_409_CONFLICT)
+
+    @patch("menu.views.Profile.objects")
+    def test_customer_principal_is_not_a_previewer(self, profile_mock):
+        """RISK IDENTITY-1 landmine: a Customer principal is authenticated too, so the
+        can_preview gate must (1) NOT crash reading a User-only attribute like is_superuser
+        on the Customer, and (2) NOT grant a customer the staff preview bypass. An
+        unpublished menu must still 403 the customer, not let them through as a previewer."""
+        profile_mock.filter.return_value.first.return_value = _profile(is_menu_published=False)
+        # A real Customer principal (customer_or_none resolves it; _is_staff_user is False).
+        req = self._post(principal=_customer(pk=7, wallet_balance="1000"))
+        resp = self.view(req)  # must not 500 on user.is_superuser
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "menu_unpublished")
 
     # ── Delivery auth gate ────────────────────────────────────────────────────
 
@@ -184,10 +211,8 @@ class PlaceOrderViewTests(SimpleTestCase):
         dish = _dish()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
-        customer = MagicMock()
-        customer.phone_verified = False
-        customer.email_verified = False
-        customer.google_sub = None
+        # A signed-in but unverified customer (no phone/email verified, no Google).
+        principal = _customer(pk=7, phone_verified=False, email_verified=False, google_sub=None)
 
         payload = {
             "items": [{"slug": "burger", "qty": 1}],
@@ -195,23 +220,9 @@ class PlaceOrderViewTests(SimpleTestCase):
             "delivery_address": "123 Main St",
             "delivery_location_url": "https://maps.example.com/place/123",
         }
-        req = self._post(data=payload, session=_session(customer_id=7))
+        req = self._post(data=payload, principal=principal)
         with patch("menu.views.DishOption.objects") as opt_mock:
             opt_mock.filter.return_value = []
-            with patch("accounts.models.Customer.objects") as cust_mock:
-                cust_mock.get.return_value = customer
-                with patch("menu.views.PlaceOrderView.post") as _:
-                    # Manually trigger the view so Customer is imported inline
-                    pass
-        # Re-run with patched Customer import path used inside the view
-        with patch("menu.views.DishOption.objects") as opt_mock:
-            opt_mock.filter.return_value = []
-            with patch("menu.models.Order") as _:
-                pass
-        # Direct patch of the inline import
-        import accounts.models as accts
-        with patch.object(accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "not_verified")
@@ -305,12 +316,9 @@ class PlaceOrderViewTests(SimpleTestCase):
         dish = _dish()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
-        # Verified via email but no phone number set
-        customer = MagicMock()
-        customer.phone_verified = False
-        customer.email_verified = True
-        customer.google_sub = None
-        customer.phone = None  # no phone
+        # Verified via email but no phone number set.
+        principal = _customer(pk=7, phone_verified=False, email_verified=True,
+                              google_sub=None, phone="")
 
         payload = {
             "items": [{"slug": "burger", "qty": 1}],
@@ -318,13 +326,10 @@ class PlaceOrderViewTests(SimpleTestCase):
             "delivery_address": "123 Main St",
             "delivery_location_url": "https://maps.example.com/place/123",
         }
-        req = self._post(data=payload, session=_session(customer_id=7))
-        import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
-            with patch("menu.views.DishOption.objects") as opt_mock:
-                opt_mock.filter.return_value = []
-                resp = self.view(req)
+        req = self._post(data=payload, principal=principal)
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "phone_required")
 
@@ -338,13 +343,11 @@ class PlaceOrderViewTests(SimpleTestCase):
         dish = _dish()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
-        customer = MagicMock()
-        customer.phone_verified = True
-        customer.email_verified = False
-        customer.google_sub = None
-        customer.phone = "+21261234567"
-        customer.name = "Alice"
-        customer.wallet_balance = Decimal("1000")  # funds the pay-now (pickup/delivery) requirement
+        principal = _customer(
+            pk=7, phone_verified=True, email_verified=False, google_sub=None,
+            phone="+21261234567", name="Alice",
+            wallet_balance="1000",  # funds the pay-now (pickup/delivery) requirement
+        )
 
         payload = {
             "items": [{"slug": "burger", "qty": 1}],
@@ -352,15 +355,12 @@ class PlaceOrderViewTests(SimpleTestCase):
             "delivery_address": "123 Main St",
             "delivery_location_url": "https://maps.example.com/place/123",
         }
-        req = self._post(data=payload, session=_session(customer_id=7))
-        import accounts.models as _accts
+        req = self._post(data=payload, principal=principal)
         # R16b: debit_wallet is now the canonical path; mock it so the unit test
         # does not need a real DB. The returned tx.amount drives _actual.
         fake_wallet_tx = MagicMock()
         fake_wallet_tx.amount = Decimal("10.00")
-        with patch.object(_accts.Customer, "objects") as cust_mock, \
-             patch("accounts.wallet_service.debit_wallet", return_value=fake_wallet_tx):
-            cust_mock.get.return_value = customer
+        with patch("accounts.wallet_service.debit_wallet", return_value=fake_wallet_tx):
             with patch("menu.views.DishOption.objects") as opt_mock:
                 opt_mock.filter.return_value = []
                 with patch("menu.views.Order.objects") as order_mock:
@@ -404,23 +404,17 @@ class PlaceOrderViewTests(SimpleTestCase):
         dish_mock.select_for_update.return_value.filter.return_value = [locked_dish]
 
         payload = {"items": [{"slug": "burger", "qty": 2}], "fulfillment_type": "pickup"}
-        req = self._post(data=payload, session=_session(customer_id=7))
-
         # Pickup is pay-now: supply a funded wallet customer so the request reaches
         # the stock check (which is what this test exercises).
-        customer = MagicMock()
-        customer.wallet_balance = Decimal("1000")
-        import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
-            with patch("menu.views.DishOption.objects") as opt_mock:
-                opt_mock.filter.return_value = []
-                with patch("menu.views.transaction") as tx_mock:
-                    cm = MagicMock()
-                    cm.__enter__ = MagicMock(return_value=None)
-                    cm.__exit__ = MagicMock(return_value=False)
-                    tx_mock.atomic.return_value = cm
-                    resp = self.view(req)
+        req = self._post(data=payload, principal=_customer(pk=7, wallet_balance="1000"))
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.transaction") as tx_mock:
+                cm = MagicMock()
+                cm.__enter__ = MagicMock(return_value=None)
+                cm.__exit__ = MagicMock(return_value=False)
+                tx_mock.atomic.return_value = cm
+                resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "items_unavailable")
@@ -456,17 +450,11 @@ class PlaceOrderViewTests(SimpleTestCase):
         profile_mock.filter.return_value.first.return_value = _profile()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish(price="10.00")]
 
-        customer = MagicMock()
-        customer.wallet_balance = Decimal("3.00")  # < 10.00 total
-
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
-        req = self._post(data=payload, session=_session(customer_id=7))
-        import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
-            with patch("menu.views.DishOption.objects") as opt_mock:
-                opt_mock.filter.return_value = []
-                resp = self.view(req)
+        req = self._post(data=payload, principal=_customer(pk=7, wallet_balance="3.00"))  # < 10.00 total
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
         self.assertEqual(resp.data["code"], "wallet_insufficient")
@@ -488,8 +476,9 @@ class PlaceOrderViewTests(SimpleTestCase):
         staff.role = User.Roles.TENANT_OWNER
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
-        req = self._post(data=payload)  # no customer session
-        req.user = staff
+        # A staff principal (owner) — resolve_prepay_and_wallet reads user.role and exempts
+        # them from the customer wallet-prepay rule (they settle in person).
+        req = self._post(data=payload, principal=staff)
 
         with patch("menu.views.DishOption.objects") as opt_mock:
             opt_mock.filter.return_value = []
@@ -525,34 +514,30 @@ class PlaceOrderViewTests(SimpleTestCase):
         profile_mock.filter.return_value.first.return_value = _profile()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish()]
 
-        customer = MagicMock()
-        customer.wallet_balance = "0"  # no wallet funds, but COD-eligible
-        customer.id = 7
+        # no wallet funds, but COD-eligible
+        principal = _customer(pk=7, wallet_balance="0")
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup", "payment_method": "cash"}
-        req = self._post(data=payload, session=_session(customer_id=7))
-        import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
-            with patch("menu.views.DishOption.objects") as opt_mock:
-                opt_mock.filter.return_value = []
-                with patch("menu.views.Order.objects") as order_mock:
-                    mock_order = MagicMock()
-                    mock_order.order_number = "ORD555"
-                    mock_order.status = "pending"
-                    mock_order.total = Decimal("10.00")
-                    mock_order.delivery_fee = Decimal("0")
-                    mock_order.currency = "MAD"
-                    mock_order.estimated_ready_minutes = None
-                    order_mock.create.return_value = mock_order
-                    with patch("menu.views.OrderItem.objects"), \
-                         patch("menu.views._generate_order_number", return_value="ORD555"), \
-                         patch("menu.views.transaction") as tx_mock:
-                        cm = MagicMock()
-                        cm.__enter__ = MagicMock(return_value=None)
-                        cm.__exit__ = MagicMock(return_value=False)
-                        tx_mock.atomic.return_value = cm
-                        resp = self.view(req)
+        req = self._post(data=payload, principal=principal)
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.Order.objects") as order_mock:
+                mock_order = MagicMock()
+                mock_order.order_number = "ORD555"
+                mock_order.status = "pending"
+                mock_order.total = Decimal("10.00")
+                mock_order.delivery_fee = Decimal("0")
+                mock_order.currency = "MAD"
+                mock_order.estimated_ready_minutes = None
+                order_mock.create.return_value = mock_order
+                with patch("menu.views.OrderItem.objects"), \
+                     patch("menu.views._generate_order_number", return_value="ORD555"), \
+                     patch("menu.views.transaction") as tx_mock:
+                    cm = MagicMock()
+                    cm.__enter__ = MagicMock(return_value=None)
+                    cm.__exit__ = MagicMock(return_value=False)
+                    tx_mock.atomic.return_value = cm
+                    resp = self.view(req)
 
         self.assertNotIn(resp.data.get("code"), ("auth_required", "wallet_insufficient"))
 
@@ -566,18 +551,14 @@ class PlaceOrderViewTests(SimpleTestCase):
         profile_mock.filter.return_value.first.return_value = _profile()
         dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish(price="10.00")]
 
-        customer = MagicMock()
-        customer.wallet_balance = Decimal("2.00")  # < 10.00 total, not COD-eligible
-        customer.id = 7
+        # < 10.00 total, not COD-eligible
+        principal = _customer(pk=7, wallet_balance="2.00")
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup", "payment_method": "cash"}
-        req = self._post(data=payload, session=_session(customer_id=7))
-        import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
-            cust_mock.get.return_value = customer
-            with patch("menu.views.DishOption.objects") as opt_mock:
-                opt_mock.filter.return_value = []
-                resp = self.view(req)
+        req = self._post(data=payload, principal=principal)
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
         self.assertEqual(resp.data["code"], "wallet_insufficient")

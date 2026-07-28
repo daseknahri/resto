@@ -67,3 +67,65 @@ def compute_order_tip(tip_raw, food_subtotal) -> Decimal:
     if food_subtotal > Decimal("0") and tip > food_subtotal:
         return food_subtotal
     return tip
+
+
+def resolve_prepay_and_wallet(*, user, linked_customer, profile, fulfillment_type, total,
+                              is_scheduled, payment_method, use_wallet_flag):
+    """Resolve the prepay / cash-on-handover / wallet money-gate (RISK STRUCT-1, extracted from
+    PlaceOrderView.post).
+
+    Returns ``(requires_prepay, cod_order, use_wallet, wallet_deduction, error)`` — the four locals
+    the order pipeline consumes downstream, plus ``error`` = a ``(detail_dict, http_status)`` tuple
+    the caller returns as a Response, or ``None`` when the gate passes.
+
+    Behavior is byte-identical to the former inline block: staff/owner orders (waiter settles in
+    person) are EXEMPT; a customer pickup/delivery order with a positive total must either be a
+    COD-eligible cash-on-handover (repeat customer, not a scheduled order) or be fully covered by
+    wallet balance — else 403 ``auth_required`` (no signed-in customer) or 402 ``wallet_insufficient``.
+    Wallet is used when prepay-required-and-not-COD or the client opted in, deducting
+    ``min(balance, total)`` (and disabled if that is ≤ 0).
+    """
+    from accounts.models import User
+
+    is_staff = bool(
+        user is not None
+        and getattr(user, "is_authenticated", False)
+        and getattr(user, "role", None) in (User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF)
+    )
+    requires_prepay = (
+        not is_staff
+        and fulfillment_type in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY)
+    )
+
+    cod_order = False
+    if requires_prepay and total > Decimal("0"):
+        if linked_customer is None:
+            return requires_prepay, cod_order, False, Decimal("0"), (
+                {"detail": "Sign in and top up your wallet to place a pickup or delivery order.",
+                 "code": "auth_required"},
+                403,
+            )
+        pm = str(payment_method or "").strip().lower()
+        # Function-local so the patch target stays `menu.views._cod_eligible` (tests patch it there).
+        from menu.views import _cod_eligible
+        if pm == "cash" and not is_scheduled and _cod_eligible(profile, linked_customer.id):
+            cod_order = True
+        else:
+            wallet_avail = Decimal(str(linked_customer.wallet_balance or "0"))
+            if wallet_avail < total:
+                return requires_prepay, cod_order, False, Decimal("0"), (
+                    {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                     "code": "wallet_insufficient",
+                     "balance": str(wallet_avail), "amount_due": str(total)},
+                    402,
+                )
+
+    use_wallet = ((requires_prepay and not cod_order) or bool(use_wallet_flag)) and linked_customer is not None
+    wallet_deduction = Decimal("0")
+    if use_wallet:
+        available = Decimal(str(linked_customer.wallet_balance or "0"))
+        wallet_deduction = min(available, total)
+        if wallet_deduction <= Decimal("0"):
+            use_wallet = False
+            wallet_deduction = Decimal("0")
+    return requires_prepay, cod_order, use_wallet, wallet_deduction, None

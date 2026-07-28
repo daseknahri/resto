@@ -11,11 +11,18 @@ Run in production (Coolify "Scheduled Tasks" / extra processes):
     celery -A config worker -l info -Q notifications,cron
     celery -A config beat   -l info     # only if you want Beat to own the cron jobs
 
-RISK ASYNC-2: accounts.tasks.run_management_command (every Beat cron/sweep entry) is
-routed to the "cron" queue (see CELERY_TASK_ROUTES in settings.py) so a slow sweep
-can't starve customer-facing notification tasks, which stay on "notifications". A
-production worker must consume BOTH queues (as above) or run two separate consumer
-groups — one per queue — so cron ticks never occupy notification slots.
+RISK ASYNC-2: every Beat cron/sweep entry dispatches a dedicated ``cron.<command>``
+``@shared_task`` (accounts/tasks.py) — the task name IS the allowlist (no task takes an
+arbitrary command name off the broker). The whole ``cron.*`` namespace is routed to the
+"cron" queue (CELERY_TASK_ROUTES in settings.py) so a slow sweep can't starve
+customer-facing notification tasks, which stay on the default "notifications" queue. The
+sweep tasks also carry retry/backoff on a transient DB error so a Postgres blip during a
+tick retries instead of dropping it.
+
+A production worker MUST consume BOTH queues (``-Q notifications,cron`` as above), or —
+better for isolation — run a SECOND worker dedicated to the "cron" queue so a slow sweep
+never occupies a notification worker slot. The worker in docker-compose.coolify.yml is
+set to ``-Q notifications,cron``.
 """
 import os
 

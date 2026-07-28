@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { messages } from "../src/i18n/messages.js";
 import rawArabicMessages from "../src/i18n/messages-ar.js";
 import rawEnglishMessages from "../src/i18n/messages-en.js";
+import rawFrenchMessages from "../src/i18n/messages-fr.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, "..");
@@ -22,23 +22,19 @@ const flatten = (value, prefix = "") => {
 
 const flattenLocale = (locale) => Object.fromEntries(flatten(locale));
 
-const english = flattenLocale(messages.en);
-const french = flattenLocale(messages.fr);
-
-// NOTE: messages.ar (from messages.js) is a merged CLONE of `en` overlaid with
-// the sparse messages-ar.js overrides (see mergeLocaleInto below in this same
-// file's runtime equivalent) — it therefore ALWAYS contains every EN key by
-// construction and is structurally incapable of reporting a missing key. To
-// actually detect incomplete Arabic coverage we must diff the RAW hand-
-// maintained source files directly: messages-ar.js (the real AR translations)
-// against messages-en.js (the real EN source of truth), BEFORE any merge.
+// Single source of truth per locale (FE-1): the runtime files ARE the catalogs.
+// EN (messages-en.js) is both the runtime EN and the parity source; FR
+// (messages-fr.js) and AR (messages-ar.js) are checked for completeness against it.
 const rawEnglish = flattenLocale(rawEnglishMessages);
 const rawArabic = flattenLocale(rawArabicMessages);
+const rawFrench = flattenLocale(rawFrenchMessages);
 
+// AR runtime = clone-of-EN + sparse overrides, so it can never self-report a gap;
+// diff the RAW hand-maintained AR source against the EN source of truth directly.
 const missingArabic = Object.keys(rawEnglish).filter((key) => !(key in rawArabic));
 // French has NO merge-fallback (unlike Arabic, which is overlaid onto a clone of
 // EN) — a missing FR key renders as a raw key token in the UI, so it must fail.
-const missingFrench = Object.keys(english).filter((key) => !(key in french));
+const missingFrench = Object.keys(rawEnglish).filter((key) => !(key in rawFrench));
 const brokenArabic = Object.entries(rawArabic).filter(
   ([, value]) =>
     typeof value === "string" &&
@@ -46,7 +42,8 @@ const brokenArabic = Object.entries(rawArabic).filter(
 );
 
 const sourceFiles = [
-  resolve(projectRoot, "src/i18n/messages.js"),
+  resolve(projectRoot, "src/i18n/messages-en.js"),
+  resolve(projectRoot, "src/i18n/messages-fr.js"),
   resolve(projectRoot, "src/i18n/messages-ar.js"),
   resolve(projectRoot, "src/i18n/config.js"),
 ];

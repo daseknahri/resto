@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from config.drf_fields import QuantizedMoneyField
 from tenancy.models import Plan, Tenant
 from tenancy.tiering import (
     canonical_plan_code,
@@ -593,7 +594,9 @@ class TierUpgradeDecisionSerializer(serializers.Serializer):
     payment_reference = serializers.CharField(required=False, allow_blank=True, max_length=120)
     # invoice_amount: set when approving so the owner can download a receipt without a
     # manual Django-admin edit (OPS-5 G). Optional; ignored on reject.
-    invoice_amount = serializers.DecimalField(
+    # RISK SER-1: QuantizedMoneyField pre-quantizes over-precision input (matching the
+    # legacy hand-rolled money parse) instead of rejecting it outright — see drf_fields.py.
+    invoice_amount = QuantizedMoneyField(
         required=False, allow_null=True, max_digits=10, decimal_places=2
     )
     invoice_currency = serializers.CharField(required=False, allow_blank=True, max_length=8)

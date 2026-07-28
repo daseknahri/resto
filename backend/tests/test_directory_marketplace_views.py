@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import (
     DirectoryView,
@@ -1218,15 +1218,19 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
         self.view = MarketplaceOrderStatusView.as_view()
 
     def _get(self, order_number="ORD-001", params=None, session_cid=None):
+        from accounts.models import Customer
         req = self.factory.get(
             f"/api/marketplace/order/{order_number}/",
             params or {},
         )
-        req.user = _anon()
-        # OPS-5e: the financial body is gated on the session customer OWNING the
-        # order. Default to no session (anonymous → minimal body); pass session_cid
-        # to simulate the owner.
-        req.session = {"customer_id": session_cid} if session_cid is not None else {}
+        # OPS-5e: the financial body is gated on the customer OWNING the order.
+        # RISK IDENTITY-1: ownership is the shared IsOrderOwner predicate off request.user.
+        # Default to no principal (anonymous → minimal body); force_authenticate a real
+        # Customer to simulate the owner (hand-setting the session id would trigger the
+        # auth class's DB lookup on this no-DB SimpleTestCase).
+        req.session = {}
+        if session_cid is not None:
+            force_authenticate(req, user=Customer(id=session_cid))
         return self.view(req, order_number=order_number)
 
     def test_missing_restaurant_param_returns_400(self):

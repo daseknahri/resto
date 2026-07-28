@@ -64,15 +64,40 @@ class CustomerProfileUpdateThrottle(_IPThrottle):
     scope = "customer_profile_update"
 
 
+def _customer_throttle_ident(request):
+    """Per-signed-in-customer throttle ident, or ``None`` (RISK IDENTITY-1).
+
+    Prefer the Customer PRINCIPAL (``request.user``, hydrated by
+    ``CustomerSessionAuthentication``) so the throttle no longer depends on reading
+    the raw session. Fall back to the raw ``session["customer_id"]`` for the views
+    that don't mount that auth class (the ride views still gated by ``_get_driver``),
+    then let the caller fall back to IP. Behaviour-preserving: for a converted view
+    the principal's pk IS the session ``customer_id`` (the auth class hydrates the
+    Customer from it), so the bucket ``c{pk}`` is byte-identical to the old
+    ``c{cid}``; un-converted views keep their old session-keyed bucket.
+    """
+    from accounts.permissions import customer_or_none
+
+    cust = customer_or_none(request)
+    if cust is not None:
+        return f"c{cust.pk}"
+    try:
+        cid = request.session.get("customer_id")
+    except Exception:
+        cid = None
+    return f"c{cid}" if cid else None
+
+
 class _CustomerThrottle(SimpleRateThrottle):
-    """Throttle per signed-in customer/driver (session customer_id), falling back to IP."""
+    """Throttle per signed-in customer/driver, falling back to IP.
+
+    Keys on the Customer principal (``request.user``) where the view mounts
+    ``CustomerSessionAuthentication``, else the raw session ``customer_id`` (the ride
+    views), else the client IP — see ``_customer_throttle_ident`` (RISK IDENTITY-1).
+    """
 
     def get_cache_key(self, request, view):
-        try:
-            cid = request.session.get("customer_id")
-        except Exception:
-            cid = None
-        ident = f"c{cid}" if cid else self.get_ident(request)
+        ident = _customer_throttle_ident(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
@@ -140,12 +165,8 @@ class WalletTransferThrottle(SimpleRateThrottle):
     scope = "wallet_transfer"
 
     def get_cache_key(self, request, view):
-        cid = None
-        try:
-            cid = request.session.get("customer_id")
-        except Exception:
-            cid = None
-        ident = f"c{cid}" if cid else self.get_ident(request)
+        # Prefer the Customer principal, fall back to session then IP (RISK IDENTITY-1).
+        ident = _customer_throttle_ident(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 

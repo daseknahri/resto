@@ -1,10 +1,10 @@
 # Kepoli hardening campaign — execution plan
 
-> Living tracker for the multi-branch tech-debt campaign that follows the launch-readiness
-> work. **Source of truth for risks is [`RISK_REGISTER.md`](RISK_REGISTER.md); this file is the
-> *execution* layer** — waves, lanes, collision map, and per-item status. Generated from a
-> 28-agent code-verification sweep (2026-07-11) that checked every register item against the
-> real code, so several "open" items below are corrected to their true state.
+> Execution plan for the multi-branch tech-debt campaign — waves, lanes, collision map.
+> **[`RISK_REGISTER.md`](RISK_REGISTER.md) is the source of truth for risk status** — its markers were
+> reconciled against the code on 2026-07-27. The per-item **statuses in the backlog table below are a
+> point-in-time snapshot from the 2026-07-11 verification sweep and are superseded by the register** —
+> read them as campaign history, not current state.
 
 ## Operating rules (how this campaign runs safely)
 
@@ -21,12 +21,13 @@
   accounts / credentials — agent may draft config + runbook, owner applies), `DECISION` (a
   product/strategy call only the owner can make).
 
-## Code-verified backlog (real status ≠ register in several places)
+## Code-verified backlog (point-in-time snapshot — 2026-07-11; superseded by the register)
 
-Legend — Status: real state after grepping code. Bucket: CODE/OWNER/DECISION. Lane: which
-merge lane (see waves). `hot` = touches a shared god-file (serialize).
+Legend — Status: real state after grepping code **on 2026-07-11**. Bucket: CODE/OWNER/DECISION.
+Lane: which merge lane (see waves). `hot` = touches a shared god-file (serialize). Statuses are
+historical — the [register](RISK_REGISTER.md) carries current state.
 
-| ID | Real status | Bucket | Risk | Lane | Notes / correction vs register |
+| ID | Status (2026-07-11) | Bucket | Risk | Lane | Notes |
 |---|---|---|---|---|---|
 | **AUTHZ-1** | partial | CODE | low→high | A | Backstop + partial policy layer already exist. Slice 1 (add `IsTenantOwner`) is additive/low-risk. Real completion = **1b** migrate `accounts/views.py` (9 sites) + **1c** migrate `menu/views.py` (50 sites) — both `hot`, sequential, human-review before merge. |
 | **IDENTITY-1 sweep** | partial | CODE | med | A | ~55 customer/driver views still read `session["customer_id"]`. `hot` (accounts/views.py). Landmine: multi-role staff gates. |
@@ -40,15 +41,15 @@ merge lane (see waves). `hot` = touches a shared god-file (serialize).
 | **ASYNC-1** | partial | CODE | med | B-cfg | Broker-required-in-prod (fail-closed) instead of silent inline executor. Same Celery section → sequential with ASYNC-2. |
 | **ASYNC-4** | partial | CODE | low | B-cfg | Residual: DLQ / reject-alert on top of shipped dedupe. |
 | **OPS-3** | open | CODE | med | B-cfg | Schema-pinned session backend (naive `cached_db` is broken under django-tenants). settings.py. |
-| **DATA-2** | partial | CODE | low | **W1** | **Register overstates.** Re-mirror already works (post_save fires on `update_fields`). Real residual = exclude voided/comped items from `items_snapshot`. |
-| **DATA-5** | partial | CODE | low | **W1** | **Register overstates** ("scattered signals" — they're co-located). Real gap = no periodic reconcile command. Additive. |
+| **DATA-2** | partial | CODE | low | **W1** | Re-mirror already works (post_save fires on `update_fields`). Residual = exclude voided/comped items from `items_snapshot`. |
+| **DATA-5** | partial | CODE | low | **W1** | Denorm signals are co-located, not scattered. Gap = no periodic reconcile command. Additive. |
 | **FE-1** | open | CODE | low | C-fe | i18n dual-source consolidation. `hot` (messages*.js). |
 | **FE-2** | open | CODE | low | C-fe | Split six 2.5–3.7k-line Vue mega-pages, tab by tab. Each page = own branch. |
 | **FE-3** | **mostly done** | CODE | low | C-fe | **Already shipped** in `a84cc7d` (code-split locale catalogs + lazy Sentry). Residual = `main.js` first-paint still awaits active locale + no `localeLoader` test. |
 | **DATA-3** | decision | DECISION | high | — | `Dish` + 4-key JSON isn't a real multi-vertical catalog. Contained today (serializer whitelists 4 keys). Needs product call before building. |
 | **STRUCT-2** | open | CODE | high | — | Squash `menu` migrations 0001–0057. Migration-order risk; serialize against any item adding a menu migration. |
 | **OPS-1** | open | OWNER | high | — | Postgres PITR/replica. Agent can draft compose/WAL config + runbook; owner provisions. |
-| **OPS-2** | **mechanism built** | OWNER | low | — | **Register overstates.** Off-box `--remote-copy-cmd` hook + freshness probe already exist; awaiting owner S3 creds + restore drill. |
+| **OPS-2** | **mechanism built** | OWNER | low | — | Off-box `--remote-copy-cmd` hook + freshness probe already exist; awaiting owner S3 creds + restore drill. |
 | **MULTITENANCY-1** | decision | DECISION | med | — | Pick the tenant ceiling (schema-per-tenant vs shared+RLS). ADR update, owner decides. |
 
 **Already ✅ done (do not touch):** MONEY-1/2/3, TEST-1, DATA-4, plus the merged partials'
@@ -84,10 +85,19 @@ MULTITENANCY-1 (ceiling decision), DATA-3 (catalog decision).
 - 2026-07-12 — **Wave 3b merged** (#66–#67): FE-2c profile tab, SER-1 `QuantizedMoneyField` + drawer amount (3-lens adversarial-verified). CustomerAccount.vue now 2963 lines (was 3654).
 - 2026-07-12 — **Wave 4 in flight:** FE-2d orders tab, FE-2e OwnerOrders section, this register/plan refresh.
 
-## What's left (post-Wave-4)
+## What's left
 
-- **Owner-only / infra:** OPS-1 (Postgres PITR), OPS-2 (S3 creds + restore drill), plus the standing launch TODOs (DNS/TLS, prod env, Stripe PSP, schedule the sweep commands on Coolify).
-- **Owner decisions:** MULTITENANCY-1 (tenant ceiling), DATA-3 (multi-vertical catalog), the commission-basis / refund-policy / rides-go-live product calls.
-- **Focused code (need care, one at a time):** OPS-3 (schema-pinned session backend), **STRUCT-1 `OrderService`** (awaiting explicit go-ahead — the money-path refactor), the IDENTITY-1 ~55-view sweep, the AUTHZ-1 call-site → `permission_classes` migration.
-- **Incremental / opportunistic:** remaining FE-2 tabs & mega-pages, SER-1 money-read migrations onto `QuantizedMoneyField`, ASYNC-2 retry split, ASYNC-4 DLQ.
-- **Low priority / deferred:** API-2 naming, DATA-1 global `order_number`, STRUCT-2 migration squash, FE-1 i18n single-source, ASYNC-3 poll-gating.
+The code-actionable backlog is cleared — the `integration/campaign-round-2` branch carried the
+round-2 sweep (AUTHZ-1 call-site migration, IDENTITY-1 view sweep, FE-1 i18n single-source,
+FE-2 mega-page splits, SER-1, ASYNC-1 outbox, DATA-1 entropy, DATA-2 reconcile, and more). See the
+[register](RISK_REGISTER.md) for current per-item state; only these remain, all owner-gated:
+
+- **Owner-only / infra:** OPS-1 (Postgres PITR), OPS-2 (S3 creds + restore drill), OPS-3 activation
+  (schema-pinned session backend built, awaiting owner flip), plus the standing launch TODOs
+  (DNS/TLS, prod env, Stripe PSP, schedule the sweep commands on Coolify).
+- **Owner decisions:** MULTITENANCY-1 (tenant ceiling), DATA-3 (multi-vertical catalog), the
+  commission-basis / refund-policy / rides-go-live product calls.
+- **Owner / release-gated code:** STRUCT-1 `OrderService` extraction (awaiting explicit go-ahead —
+  money-path refactor), STRUCT-2 migration squash (runbook written, run at a release boundary),
+  DATA-1 global `order_number` structural refactor (entropy already widened; full change scale-gated).
+- **Merge:** land `integration/campaign-round-2` → `main` (see [`PR_campaign_round_2.md`](PR_campaign_round_2.md)).

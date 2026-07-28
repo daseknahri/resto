@@ -8,16 +8,21 @@ the restaurant gets a one-time web-push ("Driver arriving") and the job's
 ``pickup_arrival_notified`` flag is set so it never fires twice for the same job.
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB), mirroring the
-style in test_driver_views.py. These DB-adjacent lookups (Customer.objects,
-DeliveryJob.objects, Tenant.objects) are all mocked at the class level, so no
-Postgres connection is required to run this file.
+style in test_driver_views.py. These DB-adjacent lookups (DeliveryJob.objects,
+Tenant.objects) are all mocked at the class level, so no Postgres connection is
+required to run this file.
+
+RISK IDENTITY-1: DriverPositionUpdateView now authenticates via
+CustomerSessionAuthentication + IsCustomer, so the driver arrives as request.user
+(force-authenticated below) instead of being re-fetched from the session.
 """
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.views import (
     DriverPositionUpdateView,
     ARRIVAL_PROXIMITY_KM,
@@ -27,20 +32,10 @@ from accounts.views import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _session(customer_id=None):
-    data = {} if customer_id is None else {"customer_id": customer_id}
-    sess = MagicMock()
-    sess.get = lambda key, default=None: data.get(key, default)
-    return sess
-
-
 def _make_customer(pk=1, is_driver=True):
-    c = MagicMock()
-    c.pk = pk
-    c.id = pk
-    c.is_driver = is_driver
-    c.driver_lat = None
-    c.driver_lng = None
+    """A real (unsaved) Customer so it passes IsCustomer's principal check."""
+    c = Customer(id=pk, is_driver=is_driver)
+    c.save = MagicMock()
     return c
 
 
@@ -92,24 +87,22 @@ class DriverArrivalPushTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverPositionUpdateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/driver/position/", data, format="json")
-        req.session = session or _session(customer_id=1)
-        req.user = MagicMock(is_authenticated=False)
+        req.session = {}
+        force_authenticate(req, user=customer if customer is not None else _make_customer())
         return req
 
     # (a) Close position -> exactly one push enqueued + flag set on the job.
     @patch("accounts.tasks.enqueue")
     @patch("tenancy.models.Tenant")
-    @patch("accounts.models.Customer.objects")
-    def test_close_position_sends_one_push_and_sets_flag(self, mock_cust_objs, mock_tenant, mock_enqueue):
+    def test_close_position_sends_one_push_and_sets_flag(self, mock_tenant, mock_enqueue):
         customer = _make_customer()
-        mock_cust_objs.get.return_value = customer
         job = _make_job(pickup_lat=33.5731, pickup_lng=-7.5898)
         mock_tenant.objects.filter.return_value.first.return_value = _make_tenant("tenant_demo")
 
         # Same coords as pickup => distance 0km, well within threshold.
-        req = self._post({"lat": 33.5731, "lng": -7.5898}, session=_session(customer_id=1))
+        req = self._post({"lat": 33.5731, "lng": -7.5898}, customer=customer)
         with _DJPatch(job):
             resp = self.view(req)
 
@@ -125,16 +118,14 @@ class DriverArrivalPushTests(SimpleTestCase):
     # (b) A second update (still close / flag already set) must NOT push again.
     @patch("accounts.tasks.enqueue")
     @patch("tenancy.models.Tenant")
-    @patch("accounts.models.Customer.objects")
-    def test_second_close_update_does_not_repush(self, mock_cust_objs, mock_tenant, mock_enqueue):
+    def test_second_close_update_does_not_repush(self, mock_tenant, mock_enqueue):
         customer = _make_customer()
-        mock_cust_objs.get.return_value = customer
         mock_tenant.objects.filter.return_value.first.return_value = _make_tenant("tenant_demo")
 
         job = _make_job(pickup_lat=33.5731, pickup_lng=-7.5898, pickup_arrival_notified=False)
 
         # First call: job not yet notified -> found by the filter, push fires, flag set.
-        req1 = self._post({"lat": 33.5731, "lng": -7.5898}, session=_session(customer_id=1))
+        req1 = self._post({"lat": 33.5731, "lng": -7.5898}, customer=customer)
         with _DJPatch(job):
             resp1 = self.view(req1)
         self.assertEqual(resp1.status_code, status.HTTP_200_OK)
@@ -143,7 +134,7 @@ class DriverArrivalPushTests(SimpleTestCase):
         # Second call: the real query filters on pickup_arrival_notified=False, so once
         # notified the job would no longer be returned by DeliveryJob.objects.filter(...).
         # Simulate that by having the (patched) queryset return None this time.
-        req2 = self._post({"lat": 33.5731, "lng": -7.5898}, session=_session(customer_id=1))
+        req2 = self._post({"lat": 33.5731, "lng": -7.5898}, customer=customer)
         with _DJPatch(None):
             resp2 = self.view(req2)
 
@@ -153,15 +144,13 @@ class DriverArrivalPushTests(SimpleTestCase):
     # (c) Far-away position -> nothing enqueued, flag untouched.
     @patch("accounts.tasks.enqueue")
     @patch("tenancy.models.Tenant")
-    @patch("accounts.models.Customer.objects")
-    def test_far_position_sends_no_push(self, mock_cust_objs, mock_tenant, mock_enqueue):
+    def test_far_position_sends_no_push(self, mock_tenant, mock_enqueue):
         customer = _make_customer()
-        mock_cust_objs.get.return_value = customer
         mock_tenant.objects.filter.return_value.first.return_value = _make_tenant("tenant_demo")
 
         # Pickup in Casablanca; driver position several km away in Rabat.
         job = _make_job(pickup_lat=33.5731, pickup_lng=-7.5898, pickup_arrival_notified=False)
-        req = self._post({"lat": 34.0209, "lng": -6.8416}, session=_session(customer_id=1))
+        req = self._post({"lat": 34.0209, "lng": -6.8416}, customer=customer)
         with _DJPatch(job):
             resp = self.view(req)
 
@@ -173,14 +162,12 @@ class DriverArrivalPushTests(SimpleTestCase):
     # (d) Any failure in the arrival-check block must be swallowed — position update
     #     endpoint still returns 200 with its normal body.
     @patch("accounts.tasks.enqueue")
-    @patch("accounts.models.Customer.objects")
-    def test_push_failure_does_not_break_position_endpoint(self, mock_cust_objs, mock_enqueue):
+    def test_push_failure_does_not_break_position_endpoint(self, mock_enqueue):
         customer = _make_customer()
-        mock_cust_objs.get.return_value = customer
         mock_enqueue.side_effect = RuntimeError("push backend unavailable")
 
         job = _make_job(pickup_lat=33.5731, pickup_lng=-7.5898)
-        req = self._post({"lat": 33.5731, "lng": -7.5898}, session=_session(customer_id=1))
+        req = self._post({"lat": 33.5731, "lng": -7.5898}, customer=customer)
         with patch("tenancy.models.Tenant") as mock_tenant:
             mock_tenant.objects.filter.return_value.first.return_value = _make_tenant("tenant_demo")
             with _DJPatch(job):

@@ -7,6 +7,13 @@ Tests for driver-related views:
   - DriverJobAcceptView         POST /api/driver/jobs/<job_id>/accept/
   - DriverJobStatusUpdateView   PATCH /api/driver/jobs/<job_id>/status/
 
+RISK IDENTITY-1: the driver views now authenticate via CustomerSessionAuthentication
++ IsCustomer, so the signed-in driver (a Customer with is_driver=True) arrives as
+request.user instead of being re-fetched from request.session["customer_id"]. Each
+view keeps its OWN is_driver / approved+online gate, so those 404/403 contracts are
+unchanged — the tests below now drive them with a real (unsaved) Customer principal
+rather than by making Customer.objects.get raise DoesNotExist.
+
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from unittest.mock import MagicMock, patch
@@ -15,6 +22,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Customer
 from accounts.views import (
     DriverRegisterView,
     DriverStatusView,
@@ -30,24 +38,30 @@ from accounts.views import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _session(customer_id=None):
-    data = {} if customer_id is None else {"customer_id": customer_id}
-    sess = MagicMock()
-    sess.get = lambda key, default=None: data.get(key, default)
-    return sess
-
-
 def _make_customer(pk=1, is_driver=True, is_driver_online=True, driver_approved=True):
-    c = MagicMock()
-    c.pk = pk
-    c.id = pk
-    c.is_driver = is_driver
-    c.driver_approved = driver_approved
-    c.driver_vehicle = ""
-    c.is_driver_online = is_driver_online
-    c.driver_lat = None
-    c.driver_lng = None
+    """A real (unsaved) Customer so it passes IsCustomer's principal check
+    (is_authenticated + class name). No DB is touched — save is monkeypatched."""
+    c = Customer(
+        id=pk,
+        is_driver=is_driver,
+        driver_approved=driver_approved,
+        is_driver_online=is_driver_online,
+        driver_vehicle="",
+    )
+    c.save = MagicMock()
     return c
+
+
+def _authed(req, customer):
+    """Attach the driver principal the way production does (via the auth stack).
+
+    `req.session` is always set because CustomerSessionAuthentication reads it on the
+    unauthenticated path (force_authenticate bypasses the authenticator entirely).
+    """
+    req.session = {}
+    if customer is not None:
+        force_authenticate(req, user=customer)
+    return req
 
 
 def _make_job(pk=1, status_val="assigned", driver=None, tenant_id=1, order_number="ORD-001"):
@@ -90,42 +104,36 @@ class DriverRegisterViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverRegisterView.as_view()
 
-    def _post(self, session=None):
-        req = self.factory.post("/api/driver/register/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+    def _post(self, customer=None):
+        return _authed(self.factory.post("/api/driver/register/"), customer)
 
     def test_no_session_returns_401(self):
-        req = self._post(session=_session(customer_id=None))
-        resp = self.view(req)
+        resp = self.view(self._post(customer=None))
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_customer_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        req = self._post(session=_session(customer_id=99))
-        resp = self.view(req)
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+    def test_stale_session_returns_401(self):
+        """RISK IDENTITY-1: a stale/forged customer_id now 401s at the auth layer
+        (CustomerSessionAuthentication fails closed before the view runs) instead of
+        the view's old 404 — the sanctioned 404-to-401 carve-out."""
+        req = self.factory.post("/api/driver/register/")
+        req.session = {"customer_id": 99}
+        with patch("accounts.models.Customer.objects") as mock_objs:
+            mock_objs.filter.return_value.first.return_value = None
+            resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_register_activates_driver(self, mock_objs):
+    @patch("accounts.views._notify_admins_new_driver")
+    def test_register_activates_driver(self, _notify):
         customer = _make_customer(is_driver=False)
-        mock_objs.get.return_value = customer
-        req = self._post(session=_session(customer_id=1))
-        resp = self.view(req)
+        resp = self.view(self._post(customer=customer))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["is_driver"])
         self.assertTrue(customer.is_driver)
         customer.save.assert_called_once_with(update_fields=["is_driver", "updated_at"])
 
-    @patch("accounts.models.Customer.objects")
-    def test_already_driver_no_save_called(self, mock_objs):
+    def test_already_driver_no_save_called(self):
         customer = _make_customer(is_driver=True)
-        mock_objs.get.return_value = customer
-        req = self._post(session=_session(customer_id=1))
-        resp = self.view(req)
+        resp = self.view(self._post(customer=customer))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["is_driver"])
         customer.save.assert_not_called()
@@ -138,59 +146,50 @@ class DriverStatusViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverStatusView.as_view()
 
-    def _patch(self, data, session=None):
+    def _patch(self, data, customer=None):
         req = self.factory.patch("/api/driver/status/", data, format="json")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+        return _authed(req, customer)
 
     def test_no_session_returns_401(self):
-        req = self._patch({"online": True}, session=_session(customer_id=None))
+        req = self._patch({"online": True}, customer=None)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        req = self._patch({"online": True}, session=_session(customer_id=99))
+    def test_non_driver_returns_404(self):
+        """The is_driver gate stays in the view (deliberately NOT a permission class),
+        so a signed-in customer who never applied still gets the 404 contract."""
+        customer = _make_customer(is_driver=False)
+        req = self._patch({"online": True}, customer=customer)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        customer.save.assert_not_called()
 
-    @patch("accounts.models.Customer.objects")
-    def test_go_online_updates_status(self, mock_objs):
+    def test_go_online_updates_status(self):
         customer = _make_customer(is_driver_online=False)
-        mock_objs.get.return_value = customer
-        req = self._patch({"online": True}, session=_session(customer_id=1))
+        req = self._patch({"online": True}, customer=customer)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(customer.is_driver_online)
         customer.save.assert_called_once_with(update_fields=["is_driver_online", "updated_at"])
 
-    @patch("accounts.models.Customer.objects")
-    def test_unapproved_driver_cannot_go_online(self, mock_objs):
+    def test_unapproved_driver_cannot_go_online(self):
         customer = _make_customer(is_driver_online=False, driver_approved=False)
-        mock_objs.get.return_value = customer
-        req = self._patch({"online": True}, session=_session(customer_id=1))
+        req = self._patch({"online": True}, customer=customer)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "pending_approval")
         customer.save.assert_not_called()
 
-    @patch("accounts.models.Customer.objects")
-    def test_go_offline_updates_status(self, mock_objs):
+    def test_go_offline_updates_status(self):
         customer = _make_customer(is_driver_online=True)
-        mock_objs.get.return_value = customer
-        req = self._patch({"online": False}, session=_session(customer_id=1))
+        req = self._patch({"online": False}, customer=customer)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.is_driver_online)
 
-    @patch("accounts.models.Customer.objects")
-    def test_response_contains_is_driver_online(self, mock_objs):
+    def test_response_contains_is_driver_online(self):
         customer = _make_customer(is_driver_online=True)
-        mock_objs.get.return_value = customer
-        req = self._patch({"online": True}, session=_session(customer_id=1))
+        req = self._patch({"online": True}, customer=customer)
         resp = self.view(req)
         self.assertIn("is_driver_online", resp.data)
 
@@ -202,46 +201,35 @@ class DriverPositionUpdateViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverPositionUpdateView.as_view()
 
-    def _post(self, data, session=None):
+    def _post(self, data, customer=None):
         req = self.factory.post("/api/driver/position/", data, format="json")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+        return _authed(req, customer)
 
     def test_no_session_returns_401(self):
-        req = self._post({"lat": 48.85, "lng": 2.35}, session=_session(customer_id=None))
+        req = self._post({"lat": 48.85, "lng": 2.35}, customer=None)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        req = self._post({"lat": 48.85, "lng": 2.35}, session=_session(customer_id=99))
+    def test_non_driver_returns_404(self):
+        customer = _make_customer(is_driver=False)
+        req = self._post({"lat": 48.85, "lng": 2.35}, customer=customer)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch("accounts.models.Customer.objects")
-    def test_missing_lat_lng_returns_400(self, mock_objs):
-        customer = _make_customer()
-        mock_objs.get.return_value = customer
-        req = self._post({}, session=_session(customer_id=1))
+    def test_missing_lat_lng_returns_400(self):
+        req = self._post({}, customer=_make_customer())
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("accounts.models.Customer.objects")
-    def test_invalid_lat_returns_400(self, mock_objs):
-        customer = _make_customer()
-        mock_objs.get.return_value = customer
-        req = self._post({"lat": "bad", "lng": 2.35}, session=_session(customer_id=1))
+    def test_invalid_lat_returns_400(self):
+        req = self._post({"lat": "bad", "lng": 2.35}, customer=_make_customer())
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("accounts.models.Customer.objects")
-    def test_valid_position_returns_200(self, mock_objs):
+    @patch("accounts.views._maybe_notify_restaurant_arrival")
+    def test_valid_position_returns_200(self, _arrival):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
-        req = self._post({"lat": 33.57, "lng": -7.58}, session=_session(customer_id=1))
+        req = self._post({"lat": 33.57, "lng": -7.58}, customer=customer)
         mock_now = MagicMock()
         mock_now.isoformat.return_value = "2026-05-01T12:00:00+00:00"
         with patch("django.utils.timezone.now", return_value=mock_now):
@@ -252,11 +240,10 @@ class DriverPositionUpdateViewTests(SimpleTestCase):
         self.assertIn("updated_at", resp.data)
         customer.save.assert_called_once()
 
-    @patch("accounts.models.Customer.objects")
-    def test_position_stored_on_customer(self, mock_objs):
+    @patch("accounts.views._maybe_notify_restaurant_arrival")
+    def test_position_stored_on_customer(self, _arrival):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
-        req = self._post({"lat": 10.0, "lng": 20.0}, session=_session(customer_id=1))
+        req = self._post({"lat": 10.0, "lng": 20.0}, customer=customer)
         with patch("django.utils.timezone.now", return_value=MagicMock()):
             self.view(req)
         self.assertAlmostEqual(customer.driver_lat, 10.0)
@@ -270,29 +257,21 @@ class DriverJobListViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverJobListView.as_view()
 
-    def _get(self, session=None):
-        req = self.factory.get("/api/driver/jobs/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+    def _get(self, customer=None):
+        return _authed(self.factory.get("/api/driver/jobs/"), customer)
 
     def test_no_session_returns_401(self):
-        req = self._get(session=_session(customer_id=None))
+        req = self._get(customer=None)
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        req = self._get(session=_session(customer_id=99))
+    def test_non_driver_returns_404(self):
+        req = self._get(customer=_make_customer(is_driver=False))
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch("accounts.models.Customer.objects")
-    def test_returns_active_and_pending_keys(self, mock_objs):
+    def test_returns_active_and_pending_keys(self):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
 
         job_active = _make_job(status_val="assigned", driver=customer)
         job_pending = _make_job(pk=2, status_val="searching", driver=None)
@@ -317,7 +296,7 @@ class DriverJobListViewTests(SimpleTestCase):
             mock_dj.Status.SEARCHING = "searching"
 
             with patch("accounts.views._serialize_delivery_job", side_effect=lambda j, **kw: {"id": j.id}):
-                req = self._get(session=_session(customer_id=1))
+                req = self._get(customer=customer)
                 resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -332,19 +311,18 @@ class DriverDeliveriesViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverDeliveriesView.as_view()
 
-    def _get(self, session=None):
-        req = self.factory.get("/api/driver/deliveries/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+    def _get(self, customer=None):
+        return _authed(self.factory.get("/api/driver/deliveries/"), customer)
 
     def test_no_session_returns_401(self):
-        resp = self.view(self._get(session=_session(customer_id=None)))
+        resp = self.view(self._get(customer=None))
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_returns_finished_jobs(self, mock_objs):
-        mock_objs.get.return_value = _make_customer()
+    def test_non_driver_returns_404(self):
+        resp = self.view(self._get(customer=_make_customer(is_driver=False)))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_returns_finished_jobs(self):
         job = _make_job(status_val="delivered", driver=_make_customer())
 
         with patch("accounts.models.DeliveryJob") as mock_dj:
@@ -355,7 +333,7 @@ class DriverDeliveriesViewTests(SimpleTestCase):
             mock_dj.Status.FAILED = "failed"
             # DriverDeliveriesView now uses _tenant_slug_name (not _serialize_delivery_job).
             with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
-                resp = self.view(self._get(session=_session(customer_id=1)))
+                resp = self.view(self._get(customer=_make_customer()))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data["results"]), 1)
@@ -386,26 +364,18 @@ class DriverCashoutHistoryViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverCashoutHistoryView.as_view()
 
-    def _get(self, session=None):
-        req = self.factory.get("/api/driver/cashout/history/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return req
+    def _get(self, customer=None):
+        return _authed(self.factory.get("/api/driver/cashout/history/"), customer)
 
     def test_no_session_returns_401(self):
-        resp = self.view(self._get(session=_session(customer_id=None)))
+        resp = self.view(self._get(customer=None))
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        resp = self.view(self._get(session=_session(customer_id=99)))
+    def test_non_driver_returns_404(self):
+        resp = self.view(self._get(customer=_make_customer(is_driver=False)))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch("accounts.models.Customer.objects")
-    def test_returns_resolved_rows_excludes_pending(self, mock_objs):
-        mock_objs.get.return_value = _make_customer()
+    def test_returns_resolved_rows_excludes_pending(self):
         req = _make_cashout_req(status_val="paid")
 
         with patch("accounts.models.DriverCashoutRequest") as mock_dcr:
@@ -414,7 +384,7 @@ class DriverCashoutHistoryViewTests(SimpleTestCase):
             mock_dcr.objects.filter.return_value = qs
             mock_dcr.Status.PENDING = "pending"
             with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
-                resp = self.view(self._get(session=_session(customer_id=1)))
+                resp = self.view(self._get(customer=_make_customer()))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data["results"]), 1)
@@ -430,9 +400,7 @@ class DriverCashoutHistoryViewTests(SimpleTestCase):
         exclude_kwargs = qs.exclude.call_args[1]
         self.assertEqual(exclude_kwargs["status"], "pending")
 
-    @patch("accounts.models.Customer.objects")
-    def test_pagination_has_more_flag(self, mock_objs):
-        mock_objs.get.return_value = _make_customer()
+    def test_pagination_has_more_flag(self):
         # 21 rows returned for a page size of 20 → has_more True, only 20 kept.
         rows = [_make_cashout_req(pk=i) for i in range(21)]
 
@@ -442,7 +410,7 @@ class DriverCashoutHistoryViewTests(SimpleTestCase):
             mock_dcr.objects.filter.return_value = qs
             mock_dcr.Status.PENDING = "pending"
             with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
-                resp = self.view(self._get(session=_session(customer_id=1)))
+                resp = self.view(self._get(customer=_make_customer()))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["has_more"])
@@ -500,41 +468,46 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = DriverJobAcceptView.as_view()
 
-    def _post(self, job_id, session=None):
+    def _post(self, job_id, customer=None):
         req = self.factory.post(f"/api/driver/jobs/{job_id}/accept/")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return self.view(req, job_id=job_id)
+        return self.view(_authed(req, customer), job_id=job_id)
 
     def test_no_session_returns_401(self):
-        resp = self._post(1, session=_session(customer_id=None))
+        resp = self._post(1, customer=None)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_offline_returns_403(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        resp = self._post(1, session=_session(customer_id=1))
+    def test_driver_offline_returns_403(self):
+        """The approved+online gate stays in the view, so an offline driver still
+        gets the exact 403 contract (not DRF's generic permission denial)."""
+        resp = self._post(1, customer=_make_customer(is_driver_online=False))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unapproved_driver_returns_403(self):
+        resp = self._post(1, customer=_make_customer(driver_approved=False))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_non_driver_returns_403(self):
+        resp = self._post(1, customer=_make_customer(is_driver=False))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_already_has_active_job_returns_409(self, mock_objs, mock_dj):
+    def test_already_has_active_job_returns_409(self, mock_dj):
         customer = _make_customer(is_driver_online=True)
-        mock_objs.get.return_value = customer
         mock_dj.Status.ASSIGNED = "assigned"
         mock_dj.Status.AT_RESTAURANT = "at_restaurant"
         mock_dj.Status.PICKED_UP = "picked_up"
         mock_dj.Status.SEARCHING = "searching"
         mock_dj.objects.filter.return_value.exists.return_value = True
-        resp = self._post(1, session=_session(customer_id=1))
+        resp = self._post(1, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
 
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
-    def test_job_not_available_returns_404(self, mock_objs, mock_dj):
+    def test_job_not_available_returns_404(self, mock_cust_objs, mock_dj):
+        # Customer.objects stays patched: this test reaches INSIDE the atomic block,
+        # where the view takes the driver-row mutex (select_for_update) that
+        # serialises concurrent accepts — that's a real query, not an identity read.
         customer = _make_customer(is_driver_online=True)
-        mock_objs.get.return_value = customer
         mock_dj.Status.ASSIGNED = "assigned"
         mock_dj.Status.AT_RESTAURANT = "at_restaurant"
         mock_dj.Status.PICKED_UP = "picked_up"
@@ -547,7 +520,7 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         with patch("django.db.transaction.atomic") as mock_atomic:
             mock_atomic.return_value.__enter__ = lambda s: None
             mock_atomic.return_value.__exit__ = lambda s, *a: None
-            resp = self._post(1, session=_session(customer_id=1))
+            resp = self._post(1, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -564,11 +537,9 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
     def tearDown(self):
         self._atomic.stop()
 
-    def _patch(self, job_id, data, session=None):
+    def _patch(self, job_id, data, customer=None):
         req = self.factory.patch(f"/api/driver/jobs/{job_id}/status/", data, format="json")
-        req.session = session or _session()
-        req.user = MagicMock(is_authenticated=False)
-        return self.view(req, job_id=job_id)
+        return self.view(_authed(req, customer), job_id=job_id)
 
     @staticmethod
     def _wire_status(mock_dj):
@@ -580,44 +551,36 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         mock_dj.FailureReason.CUSTOMER_NO_SHOW = "customer_no_show"
 
     def test_no_session_returns_401(self):
-        resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=None))
+        resp = self._patch(1, {"status": "at_restaurant"}, customer=None)
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_not_found_returns_404(self, mock_objs):
-        from accounts.models import Customer
-        mock_objs.get.side_effect = Customer.DoesNotExist
-        resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=99))
+    def test_non_driver_returns_404(self):
+        resp = self._patch(1, {"status": "at_restaurant"},
+                           customer=_make_customer(is_driver=False))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_job_not_found_returns_404(self, mock_objs, mock_dj):
+    def test_job_not_found_returns_404(self, mock_dj):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         mock_dj.DoesNotExist = Exception
         mock_dj.objects.select_for_update.return_value.get.side_effect = mock_dj.DoesNotExist
-        resp = self._patch(999, {"status": "at_restaurant"}, session=_session(customer_id=1))
+        resp = self._patch(999, {"status": "at_restaurant"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_invalid_transition_returns_409(self, mock_objs, mock_dj):
+    def test_invalid_transition_returns_409(self, mock_dj):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="assigned", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
         # "delivered" is not a valid transition from "assigned"
-        resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
+        resp = self._patch(1, {"status": "delivered"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("allowed", resp.data)
 
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_valid_transition_returns_200(self, mock_objs, mock_dj):
+    def test_valid_transition_returns_200(self, mock_dj):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="assigned", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
@@ -625,15 +588,17 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "at_restaurant"}):
             with patch("accounts.views._batch_business_types", return_value={}):
                 with patch("django.utils.timezone.now", return_value=MagicMock()):
-                    resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=1))
+                    resp = self._patch(1, {"status": "at_restaurant"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     @patch("accounts.views._complete_delivered_order")
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
     def test_delivered_transition_updates_fields(self, mock_objs, mock_dj, mock_complete):
+        # Customer.objects stays patched here: the DELIVERED branch re-reads
+        # driver_approved from the DB (it must not trust the principal, which was
+        # hydrated at auth time and could since have been revoked).
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="picked_up", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
@@ -642,7 +607,7 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
             with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
                 with patch("accounts.views._batch_business_types", return_value={}):
                     with patch("django.utils.timezone.now", return_value=MagicMock()):
-                        resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
+                        resp = self._patch(1, {"status": "delivered"}, customer=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.is_driver_online)  # driver freed after delivery
@@ -650,25 +615,21 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
 
     @patch("accounts.views._on_job_failed")
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_failed_requires_reason(self, mock_objs, mock_dj, mock_failed):
+    def test_failed_requires_reason(self, mock_dj, mock_failed):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="picked_up", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
         # No failure_reason → 400
-        resp = self._patch(1, {"status": "failed"}, session=_session(customer_id=1))
+        resp = self._patch(1, {"status": "failed"}, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data.get("code"), "failure_reason_required")
         mock_failed.assert_not_called()
 
     @patch("accounts.views._on_job_failed")
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_failed_with_reason_ok(self, mock_objs, mock_dj, mock_failed):
+    def test_failed_with_reason_ok(self, mock_dj, mock_failed):
         customer = _make_customer()
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="picked_up", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
@@ -676,18 +637,16 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
             with patch("accounts.views._batch_business_types", return_value={}):
                 with patch("django.utils.timezone.now", return_value=MagicMock()):
                     resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
-                                       session=_session(customer_id=1))
+                                       customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_failed.assert_called_once()
 
     @patch("accounts.views._on_job_failed")
     @patch("accounts.models.DeliveryJob")
-    @patch("accounts.models.Customer.objects")
-    def test_failed_transition_clears_driver_online(self, mock_objs, mock_dj, mock_failed):
+    def test_failed_transition_clears_driver_online(self, mock_dj, mock_failed):
         """D-1 bug fix: a FAILED delivery must free the driver (mirrors DELIVERED),
         so a failed run doesn't strand the driver stuck 'online' server-side."""
         customer = _make_customer(is_driver_online=True)
-        mock_objs.get.return_value = customer
         job = _make_job(status_val="picked_up", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
@@ -695,7 +654,7 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
             with patch("accounts.views._batch_business_types", return_value={}):
                 with patch("django.utils.timezone.now", return_value=MagicMock()):
                     resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
-                                       session=_session(customer_id=1))
+                                       customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.is_driver_online)
         customer.save.assert_any_call(update_fields=["is_driver_online", "updated_at"])
@@ -711,11 +670,9 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
-    @patch("accounts.models.Customer.objects")
-    def test_driver_job_list_includes_business_type(self, mock_cust_objs):
+    def test_driver_job_list_includes_business_type(self):
         """DriverJobListView: active and pending job cards must include business_type."""
         customer = _make_customer()
-        mock_cust_objs.get.return_value = customer
 
         job_active = _make_job(pk=1, status_val="assigned", driver=customer, tenant_id=42)
         job_pending = _make_job(pk=2, status_val="searching", driver=None, tenant_id=99)
@@ -744,9 +701,7 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
             mock_dj.Status.SEARCHING = "searching"
 
             with patch("accounts.views._job_order_summaries", return_value={}):
-                req = self.factory.get("/api/driver/jobs/")
-                req.session = _session(customer_id=1)
-                req.user = MagicMock(is_authenticated=False)
+                req = _authed(self.factory.get("/api/driver/jobs/"), customer)
                 from accounts.views import DriverJobListView
                 resp = DriverJobListView.as_view()(req)
 

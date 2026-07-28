@@ -37,6 +37,11 @@ def _staff(tenant_id=1):
     u = MagicMock(spec=User)
     u.is_authenticated = True
     u.is_tenant_owner = False
+    # RISK AUTHZ-1: IsTenantOwner (via user_owns_tenant_id) short-circuits True on a truthy
+    # is_superuser / is_platform_admin. A spec=User mock returns a truthy Mock for those
+    # unless set — so a non-owner MUST pin them False, or it reads as a superuser.
+    u.is_superuser = False
+    u.is_platform_admin = False
     u.role = User.Roles.TENANT_STAFF
     u.tenant_id = tenant_id
     u.id = 2
@@ -103,8 +108,9 @@ class RepeatAnalyticsAuthTests(SimpleTestCase):
         resp = self._get(user=None)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("menu.views._is_tenant_owner", return_value=False)
-    def test_staff_is_403(self, _mock):
+    def test_staff_is_403(self):
+        # RISK AUTHZ-1: owner check is now permission_classes=[IsTenantOwner] (DRF dispatch),
+        # so a real non-owner principal is denied — no _is_tenant_owner patch needed.
         resp = self._get(user=_staff())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 

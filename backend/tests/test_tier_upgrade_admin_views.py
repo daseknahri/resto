@@ -293,6 +293,43 @@ class AdminTierUpgradeRequestDecisionViewTests(SimpleTestCase):
         self.assertEqual(resp.data["detail"], "Upgrade request rejected.")
 
 
+# ── TierUpgradeDecisionSerializer.invoice_amount (RISK SER-1) ──────────────────
+
+class TierUpgradeDecisionSerializerInvoiceAmountTests(SimpleTestCase):
+    """invoice_amount migrated onto QuantizedMoneyField (config/drf_fields.py) — pins the
+    behavior-preservation contract at this specific field (full generic contract is covered
+    by test_ser1_money_field.py): over-precision rounds instead of rejecting, an out-of-range
+    magnitude is a clean 400 instead of the old DB-overflow 500, and allow_null/optional
+    (used on reject, where invoice_amount is never sent) still passes through unchanged."""
+
+    def _serializer(self, **overrides):
+        from sales.serializers import TierUpgradeDecisionSerializer
+        data = {"decision": "approve"}
+        data.update(overrides)
+        return TierUpgradeDecisionSerializer(data=data)
+
+    def test_over_precision_amount_is_rounded(self):
+        from decimal import Decimal
+        s = self._serializer(invoice_amount="99.005")
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertEqual(s.validated_data["invoice_amount"], Decimal("99.00"))
+
+    def test_out_of_range_magnitude_rejected_cleanly(self):
+        s = self._serializer(invoice_amount="99999999999.99")
+        self.assertFalse(s.is_valid())
+        self.assertIn("invoice_amount", s.errors)
+
+    def test_omitted_amount_still_optional(self):
+        s = self._serializer(decision="reject")
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertNotIn("invoice_amount", s.validated_data)
+
+    def test_null_amount_still_allowed(self):
+        s = self._serializer(invoice_amount=None)
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertIsNone(s.validated_data["invoice_amount"])
+
+
 # ── LeadProvisionPreviewView ──────────────────────────────────────────────────
 
 class LeadProvisionPreviewViewTests(SimpleTestCase):

@@ -1248,29 +1248,14 @@
       </article>
     </div>
 
-    <!-- Live delivery tracking modal (owner follows the driver on a map) -->
-    <div
-      v-if="trackModal.open"
-      class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
-      @click.self="closeTrack"
-      @keydown.esc="closeTrack"
-    >
-      <div class="ui-panel w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl" role="dialog" aria-modal="true" aria-labelledby="track-modal-heading">
-        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h3 id="track-modal-heading" class="text-sm font-semibold text-slate-100">
-            {{ t("ownerOrders.trackTitle") }} <span class="text-slate-500">#{{ trackModal.orderNumber }}</span>
-          </h3>
-          <button class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="closeTrack">{{ t("common.close") }}</button>
-        </div>
-        <div class="p-4">
-          <p v-if="trackModal.error" class="ui-empty-state py-6 text-center text-sm text-slate-400">
-            {{ trackModal.error }}
-          </p>
-          <DeliveryTracker v-else-if="trackModal.delivery" :delivery="trackModal.delivery" />
-          <div v-else class="ui-skeleton h-48" aria-busy="true" :aria-label="t('common.loading')" />
-        </div>
-      </div>
-    </div>
+    <!-- Live delivery tracking modal (owner follows the driver on a map) — RISK FE-2 -->
+    <OwnerOrdersTrackModal
+      :open="trackModal.open"
+      :order-number="trackModal.orderNumber"
+      :delivery="trackModal.delivery"
+      :error="trackModal.error"
+      @close="closeTrack"
+    />
 
     <!-- ── FILTER SHEET — bottom drawer for fulfillment / payment / date filters ── -->
     <OwnerOrdersFilterSheet
@@ -1293,110 +1278,22 @@
       @set-payment-status="activePaymentStatus = $event"
     />
 
-    <!-- ── 86 BOARD MODAL — dish availability (opens from floating button) ───── -->
-    <Teleport to="body">
-      <Transition name="ui-fade">
-        <div
-          v-if="orders86BoardOpen"
-          class="fixed inset-0 z-[2200] flex items-end justify-center sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="t('kitchen.eightySixTitle')"
-          @keydown.esc="orders86BoardOpen = false"
-        >
-          <!-- Backdrop -->
-          <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" @click="orders86BoardOpen = false" />
-          <!-- Panel -->
-          <div class="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col max-h-[85dvh]">
-            <!-- Header -->
-            <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 shrink-0">
-              <h2 class="text-base font-bold text-white">
-                {{ t('kitchen.eightySixTitle') }}
-                <span v-if="orders86SoldOutCount > 0" class="ms-2 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-300 tabular-nums">{{ orders86SoldOutCount }}</span>
-              </h2>
-              <button
-                class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:text-slate-200"
-                :aria-label="t('common.close')"
-                @click="orders86BoardOpen = false"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
-                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
-                </svg>
-              </button>
-            </div>
-            <!-- Search -->
-            <div class="px-4 pt-3 pb-2 shrink-0">
-              <div class="relative">
-                <svg class="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
-                </svg>
-                <input
-                  v-model.trim="orders86Search"
-                  type="search"
-                  autofocus
-                  class="w-full rounded-xl border border-slate-700 bg-slate-800/70 py-2.5 ps-9 pe-4 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                  :placeholder="t('kitchen.eightySixSearch')"
-                  :aria-label="t('kitchen.eightySixSearch')"
-                />
-              </div>
-              <!-- Reset all available / Mark all unavailable -->
-              <div class="mt-2 flex items-center justify-between gap-2">
-                <button
-                  v-if="orders86Dishes.some(d => d.is_available)"
-                  class="ui-press rounded-full border border-red-500/40 px-2.5 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                  :disabled="orders86MarkingUnavailable"
-                  @click="orders86MarkAllUnavailable"
-                >{{ orders86MarkingUnavailable ? t('common.loading') : t('kitchen.markAllUnavailable') }}</button>
-                <span v-else />
-                <button
-                  v-if="orders86SoldOutCount > 0"
-                  class="ui-press rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
-                  :disabled="orders86Resetting"
-                  @click="orders86ResetAll"
-                >{{ orders86Resetting ? t('common.loading') : t('ownerHome.resetAllAvailable') }}</button>
-              </div>
-            </div>
-            <!-- List -->
-            <div class="overflow-y-auto flex-1 px-4 pb-4">
-              <div v-if="orders86Fetching" class="space-y-2 pt-1">
-                <div v-for="i in 6" :key="i" class="flex animate-pulse items-center justify-between gap-2 rounded-xl px-2 py-3">
-                  <div class="h-4 w-36 rounded bg-slate-700/60" />
-                  <div class="h-9 w-24 rounded-xl bg-slate-700/40" />
-                </div>
-              </div>
-              <div v-else-if="!orders86Filtered.length" class="py-8 text-center text-sm text-slate-500">{{ t('kitchen.eightySixEmpty') }}</div>
-              <ul v-else role="list" class="list-none space-y-1 pt-1">
-                <li
-                  v-for="dish in orders86Filtered"
-                  :key="dish.id"
-                  class="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-800/50"
-                  :class="!dish.is_available ? 'opacity-70' : ''"
-                >
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium text-slate-100">{{ dish.name }}</p>
-                    <p class="truncate text-[11px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
-                  </div>
-                  <button
-                    role="switch"
-                    class="ui-press shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 min-w-[5.5rem] text-center"
-                    :class="dish.is_available
-                      ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
-                      : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
-                    :disabled="orders86TogglingId === dish.id"
-                    :aria-checked="dish.is_available"
-                    :aria-busy="orders86TogglingId === dish.id"
-                    :aria-label="`${dish.name} — ${dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')}`"
-                    @click="orders86Toggle(dish)"
-                  >
-                    {{ orders86TogglingId === dish.id ? '…' : (dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')) }}
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- ── 86 BOARD MODAL — dish availability (opens from floating button) — RISK FE-2 ── -->
+    <OwnerOrders86Board
+      v-model:search="orders86Search"
+      :open="orders86BoardOpen"
+      :dishes="orders86Filtered"
+      :fetching="orders86Fetching"
+      :toggling-id="orders86TogglingId"
+      :sold-out-count="orders86SoldOutCount"
+      :has-available="orders86Dishes.some(d => d.is_available)"
+      :marking-unavailable="orders86MarkingUnavailable"
+      :resetting="orders86Resetting"
+      @close="orders86BoardOpen = false"
+      @toggle="orders86Toggle"
+      @mark-all-unavailable="orders86MarkAllUnavailable"
+      @reset-all="orders86ResetAll"
+    />
 
     <!-- ── FLOATING 86 BOARD BUTTON ── -->
     <Teleport to="body">
@@ -1422,45 +1319,13 @@
     </Teleport>
 
     <!-- Cashier-mode big-total modal — tap settle button to open -->
-    <Teleport to="body">
-      <Transition name="ui-fade">
-        <div
-          v-if="cashierOrder"
-          class="fixed inset-0 z-[3500] flex items-end justify-center sm:items-center"
-          role="dialog"
-          :aria-label="t('ownerOrders.cashierModalTitle')"
-          @click.self="cashierOrder = null"
-        >
-          <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" aria-hidden="true" @click="cashierOrder = null" />
-          <div class="relative z-10 w-full max-w-sm rounded-t-3xl border border-slate-700/60 bg-slate-900 px-6 pb-8 pt-6 text-center shadow-2xl sm:rounded-2xl">
-            <p class="text-sm font-medium uppercase tracking-widest text-slate-400">{{ t('ownerOrders.cashierModalTitle') }}</p>
-            <p class="mt-2 font-mono text-6xl font-extrabold tabular-nums text-emerald-300 sm:text-7xl">
-              {{ formatCurrency(cashierOrder.total, cashierOrder.currency) }}
-            </p>
-            <p v-if="cashierOrder.table_label" class="mt-2 text-sm text-slate-400">
-              {{ t('ownerOrders.fulfillmentTable', { table: cashierOrder.table_label }) }}
-            </p>
-            <p class="mt-1 text-sm text-slate-500">#{{ cashierOrder.order_number }}</p>
-            <div class="mt-6 flex gap-3">
-              <button
-                type="button"
-                class="ui-btn-outline ui-press flex-1 py-3 text-sm"
-                @click="cashierOrder = null"
-              >{{ t('common.cancel') }}</button>
-              <button
-                type="button"
-                class="ui-press flex-[2] rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-                :disabled="settlingOrderId === cashierOrder.id"
-                @click="settleOrder(cashierOrder); cashierOrder = null"
-              >
-                <span v-if="settlingOrderId === cashierOrder?.id" class="inline-block animate-spin h-4 w-4 border-2 border-white/60 border-t-white rounded-full mr-2 align-middle" aria-hidden="true" />
-                {{ cashierOrder.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <OwnerOrdersCashierModal
+      :order="cashierOrder"
+      :settling="settlingOrderId === cashierOrder?.id"
+      :format-currency="formatCurrency"
+      @close="cashierOrder = null"
+      @settle="settleOrder($event); cashierOrder = null"
+    />
   </div>
 </template>
 
@@ -1468,8 +1333,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import DeliveryTracker from "../components/DeliveryTracker.vue";
+import OwnerOrdersTrackModal from "../components/OwnerOrdersTrackModal.vue";
+import OwnerOrders86Board from "../components/OwnerOrders86Board.vue";
 import OwnerOrdersFilterSheet from "../components/OwnerOrdersFilterSheet.vue";
+import OwnerOrdersCashierModal from "../components/OwnerOrdersCashierModal.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useNowTicker } from "../composables/useNowTicker";
@@ -1479,6 +1346,7 @@ import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { usePrintTicket } from "../composables/usePrintTicket";
+import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { isAutoAcceptOn } from "../lib/orderHandling";
 import { bustCache } from "../lib/staleCache";
@@ -2469,6 +2337,31 @@ const doPoll = async () => {
   }
 };
 
+// ── Realtime channel (RISK ASYNC-3) ───────────────────────────────────────────
+// Own `/ws/owner/` subscription (mirrors OwnerKitchen) so order events arrive by
+// push and trigger the same refresh the poll does. When the socket is 'live' the
+// poll below drops to a slow safety-net; otherwise it runs full-rate.
+const ordersRealtime = useOwnerRealtime((event) => {
+  if (typeof event === "string" && event.startsWith("order.")) {
+    doPoll();
+  }
+});
+
+// Self-rescheduling poll so the cadence adapts when the WS connection flips.
+// 'live' → 60s safety-net; otherwise the fast 15s primary rate.
+const POLL_SAFETY_NET_MS = 60000;
+const POLL_FAST_MS = 15000; // faster than layout's 30 s
+const scheduleNextPoll = () => {
+  const live = ordersRealtime.connectionState?.value === "live";
+  pollTimer = setTimeout(() => {
+    // Skip the API call when the tab is in the background — runs on resume instead
+    if (typeof document === "undefined" || document.visibilityState !== "hidden") {
+      doPoll();
+    }
+    scheduleNextPoll();
+  }, live ? POLL_SAFETY_NET_MS : POLL_FAST_MS);
+};
+
 const onPageVisible = () => {
   // Immediately refresh when the owner switches back to this tab
   if (typeof document !== "undefined" && document.visibilityState === "visible") {
@@ -2492,15 +2385,13 @@ onMounted(async () => {
     document.addEventListener("visibilitychange", onPageVisible);
   }
 
-  pollTimer = setInterval(() => {
-    // Skip the API call when the tab is in the background — runs on resume instead
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    doPoll();
-  }, 15000); // 15 s — faster than layout's 30 s
+  ordersRealtime.connect(); // instant order updates when WS is available (else polling)
+  scheduleNextPoll();
 });
 
 onUnmounted(() => {
-  clearInterval(pollTimer);
+  clearTimeout(pollTimer);
+  ordersRealtime.disconnect();
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onPageVisible);
   }

@@ -37,7 +37,7 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from menu.models import Order
-from accounts.models import User
+from accounts.models import Customer, User
 
 
 # Live test-DB schema name — the view derives the key from connection.schema_name, so the
@@ -72,8 +72,16 @@ class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
         self.view = CustomerOrderPayWalletView.as_view()
 
     def _post(self, session):
+        """`session` keeps its {"customer_id": N} shape — it now drives BOTH the request
+        session (mirroring production) and the Customer principal the auth stack hydrates
+        onto request.user (RISK IDENTITY-1: ownership is checked via IsOrderOwner)."""
         req = self.factory.post("/api/orders/ORD-1/pay-wallet/")
         req.session = session
+        cid = session.get("customer_id")
+        if cid is not None:
+            principal = Customer(id=cid)
+            principal.save = MagicMock()
+            force_authenticate(req, user=principal)
         req.tenant = MagicMock(id=7)
         return req
 

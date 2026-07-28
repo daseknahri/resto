@@ -53,7 +53,12 @@ class Migration(migrations.Migration):
                 ),
             ),
         ),
-        migrations.RunPython(backfill_phone_digits, migrations.RunPython.noop),
+        # elidable: one-time backfill of a new column from existing rows — a fresh
+        # schema has none (the pre_save signal maintains it going forward), so this can
+        # be dropped when squashing. NOTE: this migration is atomic=False (concurrent
+        # index) and so can't itself be folded into an atomic squash — see the STRUCT-2
+        # runbook; the elidable flag here is only about the RunPython op (RISK STRUCT-2).
+        migrations.RunPython(backfill_phone_digits, migrations.RunPython.noop, elidable=True),
         AddIndexConcurrently(
             model_name="order",
             index=models.Index(
