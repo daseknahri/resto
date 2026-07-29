@@ -215,6 +215,44 @@ class ApplyTemplateViewTests(SimpleTestCase):
         self.assertEqual(resp.data["created_dishes"], expected_dishes)
         self.assertGreater(resp.data["created_categories"], 0)
 
+    def test_post_store_template_seeds_catalog_not_menu(self):
+        """A NON-food (store) template applies through the same path but names its
+        top-level 'Catalog' instead of 'Menu' — the store-vocab distinction — and
+        sets the store business_type. Forces the create-super-category branch (no
+        existing one) to actually exercise that naming. The 11 store templates
+        (grocery/retail/pharmacy) previously had ZERO apply coverage here — only
+        restaurant templates (cafe/fast_casual) were tested."""
+        prof = MagicMock()
+        with patch("django.db.transaction.atomic", _noop_atomic), \
+             patch("menu.views.Profile") as mock_profile, \
+             patch("menu.views.SuperCategory") as mock_sc, \
+             patch("menu.views.Category") as mock_cat, \
+             patch("menu.views.Dish") as mock_dish:
+            mock_profile.objects.filter.return_value.first.return_value = prof
+            # No existing super-category → the view CREATEs one, named from the
+            # template's super_category ("Catalog" for a store, not "Menu").
+            mock_sc.objects.order_by.return_value.first.return_value = None
+            mock_sc.objects.filter.return_value.exists.return_value = False  # unique-slug loop terminates
+            mock_sc.objects.create.return_value = MagicMock(id=1)
+            mock_cat.objects.filter.return_value.first.return_value = None
+            mock_cat.objects.filter.return_value.exists.return_value = False
+            mock_cat.objects.count.return_value = 0
+            mock_cat.objects.create.return_value = MagicMock()
+            mock_dish.objects.filter.return_value.exists.return_value = False
+            mock_dish.objects.create.return_value = MagicMock()
+            resp = self._post({"template": "pharmacy"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["applied"], "pharmacy")
+        # Store vocabulary: the seeded top-level is "Catalog", not "Menu".
+        self.assertEqual(mock_sc.objects.create.call_args.kwargs.get("name"), "Catalog")
+        # Store business_type written onto the profile (drives the capability seam
+        # that hides tables/dine-in/waiter/kitchen for non-food).
+        self.assertEqual(prof.business_type, "pharmacy")
+        # Every product in the pharmacy template is seeded.
+        expected = sum(len(c["dishes"]) for c in TEMPLATES["pharmacy"]["categories"])
+        self.assertEqual(resp.data["created_dishes"], expected)
+        self.assertGreater(resp.data["created_categories"], 0)
+
     # ── B2: menu cache bust on sample-menu seeding ────────────────────────────────
 
     def test_post_with_content_busts_menu_cache(self):
