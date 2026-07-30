@@ -170,7 +170,7 @@
             <!-- Icon tile -->
             <div
               class="flex h-10 w-10 items-center justify-center rounded-2xl text-xl"
-              :class="ACCENT_CLASSES[svc.accent].tile"
+              :class="ACCENT_CLASSES[svc.accent]?.tile ?? 'border border-slate-600/40 bg-slate-700/20'"
               aria-hidden="true"
             >{{ svc.icon }}</div>
 
@@ -190,7 +190,7 @@
             <span
               v-if="svc.status === 'live'"
               class="inline-flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors"
-              :class="ACCENT_CLASSES[svc.accent].pill"
+              :class="ACCENT_CLASSES[svc.accent]?.pill ?? 'border-slate-600/50 bg-slate-700/20 text-slate-300'"
               aria-hidden="true"
             >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></span>
           </component>
@@ -371,6 +371,7 @@ const ACCENT_CLASSES = {
   emerald: { tile: 'border border-emerald-500/30 bg-emerald-500/10', pill: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300 hover:border-emerald-500/70 hover:bg-emerald-500/15 focus-visible:ring-emerald-500/50' },
   rose:    { tile: 'border border-rose-500/30 bg-rose-500/10',     pill: 'border-rose-500/40 bg-rose-500/8 text-rose-300 hover:border-rose-500/70 hover:bg-rose-500/15 focus-visible:ring-rose-500/50'     },
   sky:     { tile: 'border border-sky-500/30 bg-sky-500/10',       pill: 'border-sky-500/40 bg-sky-500/8 text-sky-300 hover:border-sky-500/70 hover:bg-sky-500/15 focus-visible:ring-sky-500/50'       },
+  violet:  { tile: 'border border-violet-500/30 bg-violet-500/10', pill: 'border-violet-500/40 bg-violet-500/8 text-violet-300 hover:border-violet-500/70 hover:bg-violet-500/15 focus-visible:ring-violet-500/50' },
 };
 
 const route = useRoute();
