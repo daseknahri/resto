@@ -96,10 +96,17 @@ if [ "${USE_ASGI:-1}" = "1" ]; then
   # Per-request HTTP timeout lives in BoundedHTTPMiddleware (config/asgi.py);
   # uvicorn has no --timeout-request flag and we must NOT apply asyncio.wait_for
   # at the ProtocolTypeRouter level because that would also kill websockets.
+  # Worker count defaults to 3 (NOT nproc*2+1): uvicorn is async, so a few workers
+  # handle high concurrency, and each worker holds persistent DB connections
+  # (CONN_MAX_AGE=600). The old nproc*2+1 default silently spawned many workers on a
+  # multi-core VPS and exhausted Postgres max_connections=25 ("too many clients
+  # already" → api 500s → unhealthy). Override GUNICORN_WORKERS explicitly on a large
+  # box, and raise PG_MAX_CONNECTIONS to match (rule of thumb: workers*4 + ~10). This
+  # now matches the WSGI fallback below.
   exec uvicorn config.asgi:application \
     --host 0.0.0.0 \
     --port 8000 \
-    --workers "${GUNICORN_WORKERS:-$(( $(nproc) * 2 + 1 ))}" \
+    --workers "${GUNICORN_WORKERS:-3}" \
     --loop uvloop \
     --http httptools \
     --proxy-headers \

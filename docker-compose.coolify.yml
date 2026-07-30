@@ -187,7 +187,7 @@ services:
       DJANGO_SENTRY_SEND_PII: ${DJANGO_SENTRY_SEND_PII}
       DJANGO_SENTRY_CAPTURE_THROTTLE: ${DJANGO_SENTRY_CAPTURE_THROTTLE}
       DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS: ${DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS}
-      GUNICORN_WORKERS: ${GUNICORN_WORKERS}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT}
       # R13/Goal-B: per-HTTP-request timeout (seconds). WebSockets AND the SSE
       # tracking stream (/api/marketplace/track/) are exempt — see config/asgi.py.
@@ -284,7 +284,10 @@ services:
     restart: unless-stopped
     # Performance tuning: env-driven so values can be overridden per VPS size without
     # rebuilding. Defaults are conservative for a small VPS (1-2 GB RAM).
-    # max_connections=25 pairs with the uvicorn worker count (nproc*2+1 ≤ 25 on small VPS).
+    # max_connections=50 gives headroom for the default 3 uvicorn workers (each holds
+    # persistent DB connections, CONN_MAX_AGE=600) + the celery worker + beat, with margin.
+    # If you raise GUNICORN_WORKERS on a bigger VPS, raise PG_MAX_CONNECTIONS too
+    # (rule of thumb: workers*4 + ~10) or you hit "too many clients already".
     # log_min_duration_statement=500 surfaces slow queries ≥500 ms in Postgres logs.
     command: >
       postgres
@@ -292,7 +295,7 @@ services:
       -c effective_cache_size=${PG_EFFECTIVE_CACHE:-768MB}
       -c work_mem=${PG_WORK_MEM:-8MB}
       -c maintenance_work_mem=128MB
-      -c max_connections=${PG_MAX_CONNECTIONS:-25}
+      -c max_connections=${PG_MAX_CONNECTIONS:-50}
       -c checkpoint_completion_target=0.9
       -c wal_buffers=16MB
       -c random_page_cost=1.1

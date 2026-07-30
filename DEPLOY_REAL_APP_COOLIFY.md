@@ -299,3 +299,26 @@ Fix:
 3. Save and redeploy the resource.
 4. Configure the wildcard at the server proxy layer using:
    - [infra/COOLIFY_TENANT_WILDCARD_PROXY.md](infra/COOLIFY_TENANT_WILDCARD_PROXY.md)
+
+## Troubleshooting: `Running (unhealthy)` + Postgres `FATAL: sorry, too many clients already`
+
+Symptom: the resource shows **`Running (unhealthy)`**; the **postgres** log repeats
+`FATAL: sorry, too many clients already`; the **api** log repeats `GET /api/health/ … 500`
+(and worker/beat show `OperationalError: … too many clients already`).
+
+Cause: Postgres ran out of connection slots. The api's uvicorn worker count times its
+persistent DB connections (`CONN_MAX_AGE=600`), plus the celery worker + beat, exceeded
+`max_connections`. The historical trigger was `GUNICORN_WORKERS` being unset → the entrypoint
+defaulting to `nproc*2+1` workers on a multi-core VPS (fixed: the ASGI default is now `3`).
+
+Fix (env, then Redeploy — Postgres restarts to apply `max_connections`; the data volume persists):
+
+```
+GUNICORN_WORKERS=4          # cap api workers regardless of core count
+PG_MAX_CONNECTIONS=100      # headroom: rule of thumb workers*4 + celery/beat + margin
+```
+
+Verify: header flips to **`Running (healthy)`**; `/api/health/` returns `200`; the
+`too many clients` lines stop. If a large VPS needs more workers, raise both together
+(keep `PG_MAX_CONNECTIONS ≳ GUNICORN_WORKERS*4 + 10`), mindful of Postgres RAM
+(~a few MB/connection on top of `shared_buffers`).
