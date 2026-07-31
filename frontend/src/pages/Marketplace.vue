@@ -70,7 +70,7 @@
             class="ui-press flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
             :class="svc.status === 'coming_soon'
               ? 'cursor-default border-slate-700/40 bg-slate-950/40 text-slate-500 opacity-60'
-              : HUB_ACCENT_CLASSES[svc.accent].idle"
+              : (HUB_ACCENT_CLASSES[svc.accent]?.idle ?? 'border-slate-700/70 bg-slate-950/60 text-slate-300')"
             @click="svc.status === 'live' && onServiceClick(svc)"
           >
             <span aria-hidden="true" class="text-base leading-none">{{ svc.icon }}</span>
@@ -642,6 +642,7 @@ const HUB_ACCENT_CLASSES = {
   emerald: { active: 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300', idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-200' },
   rose:    { active: 'border-rose-500/70 bg-rose-500/15 text-rose-300',       idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-rose-500/40 hover:text-rose-200'     },
   sky:     { active: 'border-sky-500/70 bg-sky-500/15 text-sky-300',         idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-sky-500/40 hover:text-sky-200'       },
+  violet:  { active: 'border-violet-500/70 bg-violet-500/15 text-violet-300', idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-violet-500/40 hover:text-violet-200' },
 };
 
 const FAVOURITES_KEY = 'marketplace:favourites';
