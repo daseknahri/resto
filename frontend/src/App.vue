@@ -17,7 +17,19 @@
     </Transition>
   </div>
   <ErrorBoundary>
-    <RouterView />
+    <!-- Friendly "restaurant not found" when a tenant host doesn't resolve (an
+         unknown/mistyped subdomain, or a tenant with no Domain record for this
+         host) — instead of a broken shell + a raw console error. -->
+    <div
+      v-if="tenant.notFound"
+      class="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center"
+    >
+      <div class="text-5xl" aria-hidden="true">🔍</div>
+      <h1 class="ui-display text-2xl font-bold text-white">{{ t('tenantStore.notFoundTitle') }}</h1>
+      <p class="max-w-md text-sm leading-relaxed text-slate-400">{{ t('tenantStore.notFoundText') }}</p>
+      <a :href="marketplaceUrl" class="ui-btn-primary">{{ t('tenantStore.notFoundCta') }}</a>
+    </div>
+    <RouterView v-else />
   </ErrorBoundary>
   <ToastHost />
   <ConfirmModal />
@@ -34,6 +46,7 @@ import { useSessionStore } from "./stores/session";
 import { useSeoMeta } from "./composables/useSeoMeta";
 import { useI18n } from "./composables/useI18n";
 import {
+  getPrimaryPublicHost,
   hasPublicDemoTenant,
   isPlatformAdminHost,
   isPublicDemoHost,
@@ -59,6 +72,11 @@ onUnmounted(() => {
 });
 
 const tenant = useTenantStore();
+// Link the not-found screen back to the marketplace on the primary public host.
+const marketplaceUrl = (() => {
+  const host = getPrimaryPublicHost();
+  return host ? `https://${host}` : "/";
+})();
 const locale = useLocaleStore();
 const theme = useThemeStore();
 const session = useSessionStore();

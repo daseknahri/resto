@@ -1056,7 +1056,10 @@ menuStore: {
   loadDishesFailed: "Unable to load dishes"
 },
 tenantStore: {
-  loadFailed: "Unable to load tenant settings"
+  loadFailed: "Unable to load tenant settings",
+  notFoundTitle: "Restaurant not found",
+  notFoundText: "We couldn't find a restaurant at this address. It may have moved, or the link may be mistyped.",
+  notFoundCta: "Browse restaurants"
 },
 sessionStore: {
   notAuthenticated: "Not authenticated",

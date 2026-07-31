@@ -11,7 +11,7 @@ const META_CACHE = "meta";
 const META_TTL   = 5 * 60 * 1000; // 5 minutes
 
 export const useTenantStore = defineStore("tenant", {
-  state: () => ({ meta: null, loading: false, error: null }),
+  state: () => ({ meta: null, loading: false, error: null, notFound: false }),
   getters: {
     resolvedMeta(state) {
       if (state.meta) return state.meta;
@@ -163,10 +163,18 @@ export const useTenantStore = defineStore("tenant", {
         setTenantContext(res.data?.slug ?? res.data?.profile?.slug ?? null, res.data?.id ?? null);
       } catch (err) {
         if (!cached) {
-          // First visit with no cache — surface the error so the user knows
-          this.error = isDemo ? null : translate("tenantStore.loadFailed");
+          if (err?.response?.status === 404 && !isDemo) {
+            // The tenant host doesn't resolve — an unknown/mistyped subdomain, or a
+            // tenant with no Domain record for this host. Expected input, not an app
+            // failure: flag it so App.vue shows a friendly "restaurant not found"
+            // screen instead of a broken shell + a raw console.error.
+            this.notFound = true;
+          } else {
+            // First visit with no cache — surface the error so the user knows.
+            this.error = isDemo ? null : translate("tenantStore.loadFailed");
+            if (!isDemo) console.error(err);
+          }
           this.syncCartEntitlements();
-          if (!isDemo) console.error(err);
         }
         // Background revalidation failed → silently keep stale data.
         // The user already sees a working UI; we'll retry on the next page load.

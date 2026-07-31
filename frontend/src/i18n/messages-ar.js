@@ -429,7 +429,10 @@ const arabicMessages = {
     "loadDishesFailed": "تعذر تحميل الأطباق."
   },
   "tenantStore": {
-    "loadFailed": "تعذر تحميل بيانات المطعم."
+    "loadFailed": "تعذر تحميل بيانات المطعم.",
+    "notFoundTitle": "المطعم غير موجود",
+    "notFoundText": "لم نتمكن من العثور على مطعم على هذا العنوان. ربما تم نقله أو أن الرابط غير صحيح.",
+    "notFoundCta": "تصفّح المطاعم"
   },
   "sessionStore": {
     "notAuthenticated": "غير مسجل الدخول",
