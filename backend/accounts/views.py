@@ -4013,17 +4013,22 @@ class MarketplaceMenuView(APIView):
                             "id": og.id,
                             "name": og.name,
                             "name_i18n": getattr(og, "name_i18n", None) or {},
-                            "required": og.required,
-                            "multi_select": og.multi_select,
-                            "max_selections": og.max_selections,
+                            # OptionGroup fields are min_select/max_select — there is no
+                            # required/multi_select/max_selections. The marketplace menu
+                            # frontend (MarketplaceOptionGroupSheet) reads min_select/
+                            # max_select directly, matching the OptionGroupSerializer.
+                            "min_select": og.min_select,
+                            "max_select": og.max_select,
                             "options": [
                                 {
                                     "id": opt.id,
                                     "name": opt.name,
+                                    "name_i18n": opt.name_i18n or {},
                                     "price_delta": str(opt.price_delta),
-                                    "is_available": opt.is_available,
                                 }
-                                for opt in og.options.filter(is_available=True)
+                                # DishOption has no is_available field — every option
+                                # is selectable, so list them all.
+                                for opt in og.options.all()
                             ],
                         })
 
