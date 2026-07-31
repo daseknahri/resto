@@ -968,9 +968,6 @@ const cart = ref(Array.isArray(_savedCart) ? _savedCart : []);
 watch(cart, (v) => {
   try { localStorage.setItem(MKT_CART_KEY, JSON.stringify(v)); } catch { /* quota */ }
 }, { deep: true });
-watch(() => form.fulfillment_type, (v) => {
-  try { localStorage.setItem(MKT_FULFILLMENT_KEY, v); } catch { /* quota */ }
-});
 
 const form = reactive({
   fulfillment_type: 'pickup',
@@ -980,6 +977,14 @@ const form = reactive({
   delivery_lat: null,
   delivery_lng: null,
   customer_note: '',
+});
+
+// Persist the fulfillment type. MUST come after `const form` above: watch()
+// evaluates its source getter synchronously at registration, so referencing
+// `form` before its declaration throws "Cannot access 'form' before
+// initialization" (TDZ) and crashes setup on page load.
+watch(() => form.fulfillment_type, (v) => {
+  try { localStorage.setItem(MKT_FULFILLMENT_KEY, v); } catch { /* quota */ }
 });
 
 // Keep the checkout contact fields pre-filled from the signed-in customer so a
