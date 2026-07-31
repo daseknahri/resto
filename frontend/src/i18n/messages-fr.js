@@ -1054,7 +1054,10 @@ menuStore: {
   loadDishesFailed: "Impossible de charger les plats"
 },
 tenantStore: {
-  loadFailed: "Impossible de charger la configuration du tenant"
+  loadFailed: "Impossible de charger la configuration du tenant",
+  notFoundTitle: "Restaurant introuvable",
+  notFoundText: "Nous n'avons pas trouve de restaurant a cette adresse. Il a peut-etre demenage ou le lien est mal saisi.",
+  notFoundCta: "Parcourir les restaurants"
 },
 sessionStore: {
   notAuthenticated: "Non authentifie",
