@@ -102,6 +102,26 @@
           </div>
         </Transition>
 
+        <!-- Soft-capture: save this guest order to a Kepoli account (one-tap phone verify) -->
+        <div
+          v-if="showClaimCta"
+          class="ui-reveal flex flex-col gap-3 rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-4 py-3.5 sm:flex-row sm:items-center"
+          :style="{ '--ui-delay': '60ms' }"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-white">{{ t('mktOrderStatus.claimTitle') }}</p>
+            <p class="mt-0.5 text-xs text-slate-300">{{ t('mktOrderStatus.claimSubtitle') }}</p>
+          </div>
+          <button
+            type="button"
+            class="ui-btn-primary ui-touch-target shrink-0 whitespace-nowrap"
+            :disabled="claiming"
+            @click="claimModalOpen = true"
+          >
+            {{ claiming ? t('common.loading') : t('mktOrderStatus.claimCta') }}
+          </button>
+        </div>
+
         <!-- Header -->
         <header class="ui-hero-ribbon ui-reveal px-4 py-4 text-center">
           <p class="ui-kicker">{{ t('mktOrderStatus.restaurant', { name: order.restaurant_name }) }}</p>
@@ -484,6 +504,12 @@
         </div>
       </template>
     </div>
+
+    <CustomerAuthModal
+      v-if="claimModalOpen"
+      @close="claimModalOpen = false"
+      @authenticated="onClaimAuthenticated"
+    />
   </div>
 </template>
 
@@ -494,11 +520,14 @@ import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import DeliveryTracker from '../components/DeliveryTracker.vue';
+import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import { useCustomerStore } from '../stores/customer';
 
 const { t, formatDateTime, formatCurrency } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const toast = useToastStore();
+const customerStore = useCustomerStore();
 
 
 const slug = route.params.slug;
@@ -519,6 +548,41 @@ watch(() => order.value?.status, (newStatus) => {
 // ── Just-placed celebration banner ────────────────────────────────────────────
 const showJustPlacedBanner = ref(false);
 let _justPlacedTimer = null;
+
+// ── Soft-capture: claim this guest order into a platform account ───────────────
+// A guest who just placed this order can one-tap verify their phone to save it to their
+// Kepoli account, which links the order server-side (POST /customer/orders/claim/) so it
+// becomes reorderable — the acquisition-flywheel keystone. Shown only to a not-signed-in
+// viewer of their just-placed order; the backend enforces the phone-digits match, so the
+// CTA is optimistic (a mismatch surfaces as a clear message rather than being pre-hidden).
+const canClaim = ref(false);        // set in onMounted when the device stamp matches this order
+const claimed = ref(false);
+const claiming = ref(false);
+const claimModalOpen = ref(false);
+const showClaimCta = computed(
+  () => canClaim.value && !customerStore.isAuthenticated && !claimed.value
+);
+const onClaimAuthenticated = async () => {
+  claimModalOpen.value = false;
+  claiming.value = true;
+  try {
+    await api.post('/customer/orders/claim/', { restaurant: slug, order_number: orderNumber });
+    claimed.value = true;
+    toast.show(t('mktOrderStatus.claimSuccess'), 'success');
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code === 'already_claimed') {
+      claimed.value = true;
+      toast.show(t('mktOrderStatus.claimAlready'), 'info');
+    } else if (code === 'phone_mismatch') {
+      toast.show(t('mktOrderStatus.claimPhoneMismatch'), 'error');
+    } else {
+      toast.show(t('mktOrderStatus.claimError'), 'error');
+    }
+  } finally {
+    claiming.value = false;
+  }
+};
 
 // ── ETA countdown (estimated_ready_minutes from backend) ─────────────────────
 const countdownSeconds = ref(null);
@@ -732,9 +796,15 @@ onMounted(() => {
   try {
     const lastNum = localStorage.getItem('mktLastOrderNumber');
     const lastAt = parseInt(localStorage.getItem('mktLastOrderAt') || '0', 10);
-    if (lastNum === String(orderNumber) && (Date.now() - lastAt) < 60000) {
-      showJustPlacedBanner.value = true;
-      _justPlacedTimer = setTimeout(() => { showJustPlacedBanner.value = false; }, 5000);
+    if (lastNum === String(orderNumber)) {
+      // Guest soft-capture CTA — persists (no time cap) until claimed or the viewer signs
+      // in, so it survives the multi-step phone-OTP flow.
+      canClaim.value = true;
+      // Celebration banner — only within the first 60 s, and auto-hides after 5 s.
+      if ((Date.now() - lastAt) < 60000) {
+        showJustPlacedBanner.value = true;
+        _justPlacedTimer = setTimeout(() => { showJustPlacedBanner.value = false; }, 5000);
+      }
     }
   } catch { /* storage unavailable */ }
   fetchStatus();

@@ -78,6 +78,9 @@ REST_FRAMEWORK = {
         "loyalty_redeem": "30/hour",
         # OPS-5g: voucher redemption — money movement; per-session-customer (accounts.views).
         "voucher_redeem": "10/hour",
+        # Flywheel soft-capture: guest-order claim (link a just-placed order to the caller).
+        # Phone-digits match is the real guard; this caps order-number enumeration. Per-customer.
+        "customer_order_claim": "30/hour",
         # B1-followup: public one-click email-unsubscribe — auth-less, signed-token
         # gated; throttle blunts sequential scanning. Keyed per client IP.
         "email_unsubscribe": "60/hour",

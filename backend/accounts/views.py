@@ -41,6 +41,7 @@ from .throttles import (
     CustomerEmailOtpRequestThrottle,
     CustomerEmailOtpVerifyThrottle,
     CustomerGoogleAuthThrottle,
+    CustomerOrderClaimThrottle,
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
@@ -1329,6 +1330,96 @@ class CustomerMarketplaceOrdersView(APIView):
             "has_more": has_more,
             "page": page,
         })
+
+
+class CustomerClaimOrderView(APIView):
+    """POST /api/customer/orders/claim/ — link a just-placed GUEST order to the signed-in
+    customer (QR/guest soft-capture backfill — the acquisition-flywheel keystone).
+
+    A diner orders anonymously (``Order.customer`` is None; phone captured as free text),
+    then verifies their phone (which signs them in), then this retroactively links that order
+    to their platform account. The save runs inside ``tenant_context`` so the existing
+    ``mirror_order_to_public_index`` signal fires and the order enters the customer's
+    cross-tenant history (``CustomerOrderRef``) — making the business reorderable and starting
+    the flywheel.
+
+    Body: ``{ restaurant | tenant_slug: str, order_number: str }``
+
+    Security: the caller is already a signed-in Customer with a verified phone (they passed the
+    OTP). This *additionally* requires the order's captured phone (``customer_phone_digits``) to
+    equal the caller's ``phone_digits`` — so a caller can only claim an order placed with THEIR
+    verified phone. An order already linked to another customer is refused (409); re-claiming
+    one's own order is idempotent.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+    throttle_classes = [CustomerOrderClaimThrottle]
+
+    def post(self, request, *args, **kwargs):
+        from django.db import transaction as _tx
+        from django_tenants.utils import tenant_context as _tc
+        from tenancy.models import Tenant
+        from menu.models import Order
+
+        customer = customer_or_none(request)  # IsCustomer guarantees a Customer principal
+        if customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # The phone is the join key for the claim. A customer without a verified phone (e.g.
+        # Google/email-only) has no phone_digits to match against a guest order's captured number.
+        _cust_digits = (customer.phone_digits or "").strip()
+        if not customer.phone_verified or not _cust_digits:
+            return Response(
+                {"detail": "Verify your phone to save this order.", "code": "phone_unverified"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        restaurant_slug = (
+            request.data.get("restaurant") or request.data.get("tenant_slug") or ""
+        ).strip().lower()
+        order_number = str(request.data.get("order_number") or "").strip()[:20]
+        if not restaurant_slug or not order_number:
+            return Response(
+                {"detail": "restaurant and order_number are required.", "code": "missing_fields"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            tenant = Tenant.objects.get(slug=restaurant_slug)
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # tenant_context (NOT schema_context): the mirror signal reads connection.tenant.id /
+        # .name / .slug — schema_context sets only a FakeTenant (id=None) and the mirror would
+        # silently skip. A real Tenant makes order.save() cascade into CustomerOrderRef.
+        with _tc(tenant):
+            with _tx.atomic():
+                try:
+                    # Lock the row so two concurrent claims can't both see customer_id=None.
+                    order = Order.objects.select_for_update().get(order_number=order_number)
+                except Order.DoesNotExist:
+                    return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+                if order.customer_id == customer.id:
+                    return Response({"claimed": True, "already": True, "order_number": order_number})
+                if order.customer_id is not None:
+                    return Response(
+                        {"detail": "This order is already linked to another account.", "code": "already_claimed"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                _order_digits = (order.customer_phone_digits or "").strip()
+                if not _order_digits or _order_digits != _cust_digits:
+                    return Response(
+                        {"detail": "This order was placed with a different phone number.", "code": "phone_mismatch"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+                # Link it. Saving fires mirror_order_to_public_index → CustomerOrderRef appears.
+                order.customer = customer
+                order.save(update_fields=["customer", "updated_at"])
+
+        return Response({"claimed": True, "order_number": order_number, "restaurant_slug": restaurant_slug})
 
 
 class CustomerReservationsView(APIView):

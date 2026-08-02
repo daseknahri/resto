@@ -335,6 +335,16 @@ class VoucherRedeemThrottle(_CustomerThrottle):
     scope = "voucher_redeem"
 
 
+class CustomerOrderClaimThrottle(_CustomerThrottle):
+    """Flywheel soft-capture: per-customer throttle on the guest-order claim endpoint.
+
+    The claim endpoint takes a client-supplied (restaurant_slug, order_number) and links a
+    guest order to the caller. The phone-digits match is the real guard, but a throttle caps
+    order-number enumeration attempts. Keyed on the signed-in Customer principal (falls back
+    to IP)."""
+    scope = "customer_order_claim"
+
+
 class EmailUnsubscribeThrottle(_IPThrottle):
     """B1-followup: rate-limit the public one-click email-unsubscribe endpoint.
 
