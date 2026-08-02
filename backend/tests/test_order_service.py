@@ -10,12 +10,18 @@ coverage the STRUCT-1 scout called for alongside proving the seam is inert.
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
 from menu.models import Order
-from menu.order_service import compute_order_delivery_fee, compute_order_tip, resolve_prepay_and_wallet
+from menu.order_service import (
+    compute_order_delivery_fee,
+    compute_order_tip,
+    resolve_available_dishes,
+    resolve_option_map,
+    resolve_prepay_and_wallet,
+)
 
 
 class ComputeOrderDeliveryFeeTests(SimpleTestCase):
@@ -172,3 +178,47 @@ class ResolvePrepayAndWalletTests(SimpleTestCase):
         rp, cod, uw, wd, err = self._call(fulfillment_type="table", use_wallet_flag=True, total=Decimal("0"))
         self.assertFalse(uw)
         self.assertEqual(wd, Decimal("0"))
+
+
+class ResolveItemsTests(SimpleTestCase):
+    """RISK STRUCT-1 slice: resolve_available_dishes / resolve_option_map — the item-resolution
+    queries shared verbatim by PlaceOrderView and MarketplacePlaceOrderView. Mock-based: the models
+    are patched at their order_service module binding, so no DB is needed."""
+
+    @patch("menu.models.Dish")
+    def test_resolve_available_dishes_maps_by_slug_with_availability_gate(self, mock_dish):
+        d1 = MagicMock(slug="burger")
+        d2 = MagicMock(slug="fries")
+        (
+            mock_dish.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+        ) = [d1, d2]
+        result = resolve_available_dishes(["burger", "fries", "gone"])
+        self.assertEqual(set(result.keys()), {"burger", "fries"})
+        self.assertIs(result["burger"], d1)
+        # The availability gate is applied exactly (published + available, published & non-disabled
+        # category) — the guard against ordering an unpublished/sold-out/hidden dish.
+        kwargs = mock_dish.objects.filter.call_args.kwargs
+        self.assertEqual(kwargs["slug__in"], ["burger", "fries", "gone"])
+        self.assertTrue(kwargs["is_published"])
+        self.assertTrue(kwargs["is_available"])
+        self.assertTrue(kwargs["category__is_published"])
+        self.assertFalse(kwargs["category__is_temporarily_disabled"])
+
+    @patch("menu.models.DishOption")
+    def test_resolve_option_map_empty_short_circuits(self, mock_do):
+        self.assertEqual(resolve_option_map([]), {})
+        mock_do.objects.filter.assert_not_called()
+
+    @patch("menu.models.DishOption")
+    def test_resolve_option_map_maps_by_id_and_select_relates_dish(self, mock_do):
+        o1 = MagicMock(id=5)
+        o2 = MagicMock(id=7)
+        mock_do.objects.filter.return_value.select_related.return_value = [o1, o2]
+        result = resolve_option_map([5, 7])
+        self.assertEqual(set(result.keys()), {5, 7})
+        self.assertIs(result[5], o1)
+        mock_do.objects.filter.assert_called_once_with(id__in=[5, 7])
+        # select_related("dish") is the OPS-5f price-smuggling guard — assert it's applied.
+        mock_do.objects.filter.return_value.select_related.assert_called_once_with("dish")

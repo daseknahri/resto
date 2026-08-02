@@ -57,3 +57,39 @@ the backend-convergence decision to the owner first.
 share cleanly with no host coupling and no user-visible change. It removes the drift-bug risk of
 copy-pasted money math first, and establishes the shared-code pattern before the invasive 3c cart/host
 unification (which is gated on a tenant-context abstraction + a backend-convergence decision).
+
+## 3c decision (owner delegated: "make the right call") — **Option B: shared order service**
+
+A deep read of the two order backends (`PlaceOrderView` menu/views.py:2619 vs `MarketplacePlaceOrderView`
+accounts/views.py:4288) settled the backend-convergence fork:
+
+- **Chosen — Option B: extract a shared `place_order` service** in `menu/order_service.py` (the seam
+  already exists — delivery-fee/tip/prepay are already extracted there) that BOTH thin views call. It
+  centralizes the ~600 lines of duplicated item-resolution / pricing / promo / loyalty / stock / wallet /
+  order-creation logic while each view keeps its own auth, tenant resolution (host vs slug+schema_context),
+  notifications, and response contract. It's schema-agnostic (operates on the caller's established schema —
+  `connection.schema_name` is already correct in both), so the shared `debit_wallet` key pattern ports
+  unchanged. **Test-verifiable** (unlike the visual 3b), lower-risk, and incremental/reversible slice-by-slice.
+- **Rejected — Option A: merge the two endpoints** (`/place-order/` gains an optional `restaurant`). It's
+  where all the risk lives: the endpoint is tenant-urlconf-only + assumes an ambient tenant schema; merging
+  forces reconciling two auth models, two throttles, and every divergence below onto one path — silently
+  changing pricing/security for one client population and breaking one response contract. Only worth
+  revisiting *after* Option B proves the shared core.
+
+**Divergences that MUST stay explicit parameters (current per-caller default), never flattened —**
+they are money/security-affecting: happy-hour rule source (all-active `get_all_active_hh_rules` vs
+time-windowed `get_active_happy_hours`); open-now gate (`_is_restaurant_currently_open` vs
+`_compute_is_open_now`, the latter honours closure_dates + temp-disable); **delivery verification**
+(storefront requires verified account + phone; marketplace requires only signed-in); tip; table/dine-in;
+promo-code vs flash-sales; commission + `source=MARKETPLACE`; staff preview/attribution/coursing;
+owner notifications (storefront: dispatch+WhatsApp+push+WS; marketplace: dispatch only); response shape.
+
+**Sliced extraction plan (each PR behavior-identical + tests ported/added):**
+1. **Item resolution** — `resolve_available_dishes(slugs)` + `resolve_option_map(option_ids)` (byte-identical
+   queries in both; pure, pre-transaction, zero money risk). **First 3c PR.**
+2. Per-item validation + line building (option-bind/stale-options is shared; happy-hour pricing passed as a
+   param to preserve the rule-source divergence; per-line course/seat stays storefront-only).
+3. Stock lock/decrement + component + ingredient depletion.
+4. Loyalty sizing/earn; the bounded promo-counter bump; wallet settle.
+Each slice lands as its own gate-verified PR; the frontend cart-model unification (the visual half) is
+deferred with 3b to a UI/UX pass.

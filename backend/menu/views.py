@@ -2753,18 +2753,16 @@ class PlaceOrderView(APIView):
         slugs = [i["slug"] for i in items_input]
         all_option_ids = [oid for i in items_input for oid in i.get("option_ids", [])]
 
-        dishes_map = {d.slug: d for d in Dish.objects.filter(
-            slug__in=slugs, is_published=True, is_available=True,
-            category__is_published=True, category__is_temporarily_disabled=False,
-        ).select_related("category").prefetch_related("combo_components__component", "option_groups__options")}
+        # RISK STRUCT-1: item resolution extracted verbatim into menu.order_service (OrderService
+        # seam, shared with MarketplacePlaceOrderView).
+        from menu.order_service import resolve_available_dishes, resolve_option_map
+        dishes_map = resolve_available_dishes(slugs)
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
             return Response({"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing}, status=status.HTTP_400_BAD_REQUEST)
 
-        options_map = {}
-        if all_option_ids:
-            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids).select_related("dish")}
+        options_map = resolve_option_map(all_option_ids)
 
         # Compute active happy-hour rules ONCE for this request (placement-time lock).
         # Price is evaluated at submission time, not at scheduled_for — see class docstring.
