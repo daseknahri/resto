@@ -2755,7 +2755,7 @@ class PlaceOrderView(APIView):
 
         # RISK STRUCT-1: item resolution extracted verbatim into menu.order_service (OrderService
         # seam, shared with MarketplacePlaceOrderView).
-        from menu.order_service import resolve_available_dishes, resolve_option_map
+        from menu.order_service import resolve_available_dishes, resolve_option_map, price_line_options
         dishes_map = resolve_available_dishes(slugs)
 
         missing = [s for s in slugs if s not in dishes_map]
@@ -2784,35 +2784,17 @@ class PlaceOrderView(APIView):
             dish = dishes_map[item_input["slug"]]
             currency = dish.currency or "MAD"
             # Apply happy-hour discount (largest percent_off wins; option price_delta unchanged).
+            # Rule source: get_all_active_hh_rules() (no time-window) — the storefront's own source,
+            # kept here so its `menu.views.effective_unit_price` patch target and this divergence hold.
             unit_price, _ = effective_unit_price(dish, _active_happy_hours)
 
-            option_snapshots = []
-            _invalid_oids: list[int] = []
-            for oid in item_input.get("option_ids", []):
-                opt = options_map.get(oid)
-                _opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
-                if opt is None or _opt_dish_slug != dish.slug:
-                    _invalid_oids.append(oid)
-                    continue
-                unit_price += Decimal(str(opt.price_delta))
-                option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
-            if _invalid_oids:
-                return Response(
-                    {
-                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
-                        "code": "stale_options",
-                        "dish_slug": dish.slug,
-                        "invalid_option_ids": _invalid_oids,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # B2 (SECURITY): enforce OptionGroup.min_select/max_select server-side —
-            # mirrors the SPA's own enforcement, so only malformed/API-bypass/replay
-            # requests are rejected (see _validate_option_group_selections docstring).
-            _group_err = _validate_option_group_selections(dish, item_input.get("option_ids", []))
-            if _group_err:
-                return Response(_group_err, status=status.HTTP_400_BAD_REQUEST)
+            # OPS-5f option binding + B2 group-select + price_delta accumulation — the byte-identical
+            # per-line core shared with MarketplacePlaceOrderView (RISK STRUCT-1, slice 2).
+            unit_price, option_snapshots, _line_err = price_line_options(
+                dish, item_input.get("option_ids", []), options_map, unit_price,
+            )
+            if _line_err:
+                return Response(_line_err, status=status.HTTP_400_BAD_REQUEST)
 
             qty = item_input["qty"]
             subtotal = unit_price * qty

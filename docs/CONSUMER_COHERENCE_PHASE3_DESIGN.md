@@ -86,9 +86,15 @@ owner notifications (storefront: dispatch+WhatsApp+push+WS; marketplace: dispatc
 
 **Sliced extraction plan (each PR behavior-identical + tests ported/added):**
 1. **Item resolution** — `resolve_available_dishes(slugs)` + `resolve_option_map(option_ids)` (byte-identical
-   queries in both; pure, pre-transaction, zero money risk). **First 3c PR.**
-2. Per-item validation + line building (option-bind/stale-options is shared; happy-hour pricing passed as a
-   param to preserve the rule-source divergence; per-line course/seat stays storefront-only).
+   queries in both; pure, pre-transaction, zero money risk). ✅ **slice 1 — #113.**
+2. **Per-item validation + line building** — `price_line_options(dish, option_ids, options_map, base_unit_price)`
+   centralizes the OPS-5f option binding + `stale_options` guard, the B2 group-select enforcement, and the
+   `price_delta` accumulation + snapshots (byte-identical in both loops). ✅ **slice 2.**
+   Key call: the helper takes the caller's already-happy-hour-adjusted **base unit price** rather than calling
+   `effective_unit_price` itself — so each view keeps its own happy-hour rule source AND its distinct
+   `effective_unit_price` patch target (storefront patches `menu.views.effective_unit_price`;
+   marketplace/others patch `menu.pricing.effective_unit_price`). Per-line qty parsing (serializer-trusted vs
+   `max(1,min(99,…))` clamp), note truncation, and course/seat stay per-view.
 3. Stock lock/decrement + component + ingredient depletion.
 4. Loyalty sizing/earn; the bounded promo-counter bump; wallet settle.
 Each slice lands as its own gate-verified PR; the frontend cart-model unification (the visual half) is

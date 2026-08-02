@@ -4513,42 +4513,19 @@ class MarketplacePlaceOrderView(APIView):
                 for it in items_raw:
                     dish = dishes_map[it["slug"]]
                     currency = dish.currency or "MAD"
-                    # Apply happy-hour discount; option price_delta added below unchanged.
+                    # Apply happy-hour discount; option price_delta added by the shared helper.
+                    # Rule source: get_active_happy_hours(now_local) (time-windowed) — the marketplace's
+                    # own source, kept here so this divergence and its patch target hold.
                     unit_price, _ = _eff_price(dish, _mkt_active_hh)
-                    # OPS-5f: validate each option is bound to THIS dish before pricing.
-                    # An option whose dish != this dish (foreign id, cross-dish id, or an
-                    # unknown id) is rejected — exactly like the other order paths
-                    # (menu/views.py:1647-1664) — so price_delta can't be smuggled in.
-                    _invalid_option_ids = []
-                    _bound_options = []
-                    for oid in (it.get("option_ids") or []):
-                        opt = options_map.get(int(oid)) if str(oid).isdigit() else None
-                        opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
-                        if opt is None or opt_dish_slug != dish.slug:
-                            _invalid_option_ids.append(oid)
-                            continue
-                        _bound_options.append(opt)
-                    if _invalid_option_ids:
-                        return Response(
-                            {
-                                "detail": f"Some selected options are no longer valid for '{dish.name}'.",
-                                "code": "stale_options",
-                                "dish_slug": dish.slug,
-                                "invalid_option_ids": _invalid_option_ids,
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    # B2 (SECURITY): enforce OptionGroup.min_select/max_select server-side —
-                    # mirrors the SPA's own enforcement, so only malformed/API-bypass/replay
-                    # requests are rejected (see menu.views._validate_option_group_selections).
-                    from menu.views import _validate_option_group_selections as _vogs
-                    _group_err = _vogs(dish, [opt.id for opt in _bound_options])
-                    if _group_err:
-                        return Response(_group_err, status=status.HTTP_400_BAD_REQUEST)
-                    option_snapshots = []
-                    for opt in _bound_options:
-                        unit_price += Decimal(str(opt.price_delta))
-                        option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+                    # OPS-5f option binding + B2 group-select + price_delta accumulation — the byte-
+                    # identical per-line core shared with PlaceOrderView (RISK STRUCT-1, slice 2). An
+                    # option whose dish != this dish (foreign / cross-dish / unknown id) is rejected so
+                    # price_delta can't be smuggled onto a cheap dish.
+                    unit_price, option_snapshots, _line_err = _order_service.price_line_options(
+                        dish, (it.get("option_ids") or []), options_map, unit_price,
+                    )
+                    if _line_err:
+                        return Response(_line_err, status=status.HTTP_400_BAD_REQUEST)
                     qty = max(1, min(99, int(it.get("qty", 1))))
                     subtotal = unit_price * qty
                     food_subtotal += subtotal

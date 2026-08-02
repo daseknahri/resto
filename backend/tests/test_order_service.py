@@ -18,6 +18,7 @@ from menu.models import Order
 from menu.order_service import (
     compute_order_delivery_fee,
     compute_order_tip,
+    price_line_options,
     resolve_available_dishes,
     resolve_option_map,
     resolve_prepay_and_wallet,
@@ -222,3 +223,74 @@ class ResolveItemsTests(SimpleTestCase):
         mock_do.objects.filter.assert_called_once_with(id__in=[5, 7])
         # select_related("dish") is the OPS-5f price-smuggling guard — assert it's applied.
         mock_do.objects.filter.return_value.select_related.assert_called_once_with("dish")
+
+
+class PriceLineOptionsTests(SimpleTestCase):
+    """RISK STRUCT-1 slice 2: price_line_options — OPS-5f option binding + B2 group-select +
+    price_delta accumulation, shared verbatim by PlaceOrderView and MarketplacePlaceOrderView.
+    `menu.views._validate_option_group_selections` is patched at origin (the helper imports it
+    function-locally); no DB."""
+
+    def _dish(self, slug="burger", name="Burger"):
+        return SimpleNamespace(slug=slug, name=name)
+
+    def _opt(self, oid, dish_slug, price_delta="0.00", name="opt"):
+        return SimpleNamespace(
+            id=oid, name=name, price_delta=Decimal(price_delta),
+            dish=SimpleNamespace(slug=dish_slug),
+        )
+
+    def test_empty_options_returns_base_price(self):
+        with patch("menu.views._validate_option_group_selections", return_value=None):
+            price, snaps, err = price_line_options(self._dish(), [], {}, Decimal("10.00"))
+        self.assertIsNone(err)
+        self.assertEqual(price, Decimal("10.00"))
+        self.assertEqual(snaps, [])
+
+    def test_bound_options_add_price_delta_in_order(self):
+        dish = self._dish()
+        o1 = self._opt(1, "burger", "1.50", "cheese")
+        o2 = self._opt(2, "burger", "0.50", "bacon")
+        with patch("menu.views._validate_option_group_selections", return_value=None):
+            price, snaps, err = price_line_options(dish, [1, 2], {1: o1, 2: o2}, Decimal("10.00"))
+        self.assertIsNone(err)
+        self.assertEqual(price, Decimal("12.00"))
+        self.assertEqual([s["id"] for s in snaps], [1, 2])
+        self.assertEqual(snaps[0], {"id": 1, "name": "cheese", "price_delta": "1.50"})
+
+    def test_foreign_option_rejected_stale_options(self):
+        # OPS-5f: an option bound to a DIFFERENT dish is rejected before pricing — no negative
+        # price_delta smuggled onto a cheap dish, and group-select is never reached.
+        dish = self._dish(slug="burger")
+        foreign = self._opt(9, "pizza", "-9.00")
+        with patch("menu.views._validate_option_group_selections", return_value=None) as vogs:
+            price, snaps, err = price_line_options(dish, [9], {9: foreign}, Decimal("10.00"))
+        self.assertIsNone(price)
+        self.assertEqual(err["code"], "stale_options")
+        self.assertEqual(err["dish_slug"], "burger")
+        self.assertIn(9, err["invalid_option_ids"])
+        vogs.assert_not_called()
+
+    def test_unknown_option_rejected_stale_options(self):
+        with patch("menu.views._validate_option_group_selections", return_value=None):
+            price, snaps, err = price_line_options(self._dish(), [5], {}, Decimal("10.00"))
+        self.assertIsNone(price)
+        self.assertEqual(err["code"], "stale_options")
+        self.assertIn(5, err["invalid_option_ids"])
+
+    def test_group_select_violation_returned(self):
+        dish = self._dish()
+        o1 = self._opt(1, "burger", "1.00")
+        payload = {"code": "option_selection_invalid", "reason": "min_select"}
+        with patch("menu.views._validate_option_group_selections", return_value=payload):
+            price, snaps, err = price_line_options(dish, [1], {1: o1}, Decimal("10.00"))
+        self.assertIsNone(price)
+        self.assertIs(err, payload)
+
+    def test_group_select_receives_bound_ids(self):
+        dish = self._dish()
+        o1 = self._opt(1, "burger")
+        o2 = self._opt(2, "burger")
+        with patch("menu.views._validate_option_group_selections", return_value=None) as vogs:
+            price_line_options(dish, [1, 2], {1: o1, 2: o2}, Decimal("10.00"))
+        vogs.assert_called_once_with(dish, [1, 2])
