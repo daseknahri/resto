@@ -173,3 +173,62 @@ def resolve_option_map(option_ids):
     if not option_ids:
         return {}
     return {o.id: o for o in DishOption.objects.filter(id__in=option_ids).select_related("dish")}
+
+
+def price_line_options(dish, option_ids, options_map, base_unit_price):
+    """Bind + validate one order line's selected options and fold in their price (RISK
+    STRUCT-1, slice 2 — per-item validation + line building).
+
+    Given a dish, its ``base_unit_price`` (the caller's own happy-hour-adjusted unit price —
+    passed in so each order path keeps its distinct happy-hour rule source and its
+    ``effective_unit_price`` patch target), this centralizes the two security guards + the
+    money math that were byte-identical in ``PlaceOrderView`` and ``MarketplacePlaceOrderView``:
+
+    * **OPS-5f option binding** — every selected option id must resolve to a real option whose
+      ``dish`` IS this dish. A foreign / cross-dish / unknown id can't be smuggled in to attach a
+      negative ``price_delta`` to a cheap dish (the ``select_related("dish")`` that makes
+      ``opt.dish`` cheap lives in `resolve_option_map`). Any invalid id → a ``stale_options`` error.
+    * **B2 group-select** — ``OptionGroup.min_select`` / ``max_select`` enforced server-side (via
+      `menu.views._validate_option_group_selections`, imported function-locally so its patch target
+      and the menu↔accounts cycle-avoidance convention both hold).
+    * **Pricing** — ``price_delta`` summed ONLY over the validated, dish-bound options, in selection
+      order, and the per-option snapshot list built for the order-line record.
+
+    Returns ``(unit_price, option_snapshots, error)`` where ``error`` is a ready-to-return DRF
+    payload dict (the caller wraps it in ``Response(..., 400)``) for the first failing guard, or
+    ``None`` on success — in which case ``unit_price`` = ``base_unit_price`` + Σ bound ``price_delta``
+    and ``option_snapshots`` = ``[{"id","name","price_delta"}, ...]``.
+
+    Behavior-identical to both former inline loops: the storefront interleaved the price-add with the
+    binding loop but early-returned on any invalid id, so on success (all ids valid) the accumulated
+    price and snapshot order match this bind-then-price form exactly.
+    """
+    from menu.views import _validate_option_group_selections  # function-local (cycle + patch target)
+
+    invalid_option_ids = []
+    bound_options = []
+    for oid in option_ids:
+        opt = options_map.get(int(oid)) if str(oid).isdigit() else None
+        opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
+        if opt is None or opt_dish_slug != dish.slug:
+            invalid_option_ids.append(oid)
+            continue
+        bound_options.append(opt)
+    if invalid_option_ids:
+        return None, None, {
+            "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+            "code": "stale_options",
+            "dish_slug": dish.slug,
+            "invalid_option_ids": invalid_option_ids,
+        }
+
+    group_err = _validate_option_group_selections(dish, [opt.id for opt in bound_options])
+    if group_err:
+        return None, None, group_err
+
+    unit_price = base_unit_price
+    option_snapshots = []
+    for opt in bound_options:
+        unit_price += Decimal(str(opt.price_delta))
+        option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+    return unit_price, option_snapshots, None
