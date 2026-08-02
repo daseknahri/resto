@@ -246,7 +246,7 @@ const showAuthModal = ref(false);
 // partner/staff sign-in at /signin. B2B behaviour is therefore unchanged.
 const CONSUMER_ROUTES = new Set([
   "super-app-hub", "marketplace", "marketplace-menu", "marketplace-order-status",
-  "customer-account", "ride", "send-package", "driver", "directory",
+  "customer-account", "ride", "send-package", "driver",
 ]);
 const isConsumerContext = computed(() => CONSUMER_ROUTES.has(String(route.name || "")));
 

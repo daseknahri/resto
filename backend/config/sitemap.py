@@ -44,7 +44,6 @@ from django.http import HttpResponse
 STATIC_PUBLIC_PATHS = (
     "/",
     "/browse",
-    "/directory",
     "/privacy",
     "/terms",
     "/contact",

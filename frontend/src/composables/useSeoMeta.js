@@ -35,7 +35,6 @@ const INDEXABLE_ROUTE_NAMES = new Set([
   // Landing discovery
   "home",
   "demo",
-  "directory",
   "marketplace",
   "marketplace-menu",
   // Public marketing pages (linked from footer; also listed in the sitemap).
