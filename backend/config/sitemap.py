@@ -15,7 +15,7 @@ The sitemap lists two groups of URLs:
   2. Live tenant storefronts — one URL per ACTIVE, directory-opted-in,
      menu-published tenant, pointing at the public marketplace storefront path
      ``/order/<slug>``. This mirrors the tenant-visibility rules used by the
-     public DirectoryView / MarketplaceView (only ``lifecycle_status="active"``
+     public MarketplaceView (only ``lifecycle_status="active"``
      tenants are discoverable; suspended / canceled tenants drop out).
 
 Host derivation is server-authoritative (NOT the spoofable Host header): we
@@ -92,7 +92,7 @@ def _base_url(host: str) -> str:
 def _tenant_storefront_paths() -> list[str]:
     """Return ``/order/<slug>`` for each discoverable tenant.
 
-    Mirrors DirectoryView visibility: ACTIVE lifecycle, opted into the directory,
+    Mirrors MarketplaceView visibility: ACTIVE lifecycle, opted into the directory,
     menu published. Resilient — never raises; a bad row is skipped and a total
     failure yields an empty list (static pages still ship).
     """

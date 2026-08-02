@@ -19,8 +19,6 @@ Contracts covered:
     - no-op on the public schema and when there's no real tenant
 
   views (accounts.views)
-    - DirectoryView reads profile.rating_avg / rating_count WITHOUT entering a
-      per-tenant schema_context or querying the per-tenant Rating aggregate
     - MarketplaceView reads the denormalized fields and pushes min_rating to SQL
       on the Profile queryset (no in-loop rating aggregate)
 
@@ -34,7 +32,7 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
-from accounts.views import DirectoryView, MarketplaceView
+from accounts.views import MarketplaceView
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -251,61 +249,6 @@ class RatingSignalTests(SimpleTestCase):
             mock_conn.tenant = None
             denormalize_rating_on_save(sender=MagicMock(), instance=MagicMock())
         mock_recompute.assert_not_called()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# DirectoryView — denormalized read, no per-tenant schema_context
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def _make_sliceable_qs(rows):
-    qs = MagicMock()
-    qs.__getitem__ = lambda s, k: rows
-    return qs
-
-
-@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
-class DirectoryDenormReadTests(SimpleTestCase):
-    def setUp(self):
-        cache.clear()
-        self.factory = APIRequestFactory()
-        self.view = DirectoryView.as_view()
-
-    def _get(self, params=None):
-        req = self.factory.get("/api/directory/", params or {})
-        req.user = _anon()
-        return self.view(req)
-
-    def test_reads_denormalized_rating_without_schema_context(self):
-        """rating_average/rating_count come from profile.rating_avg/count; the loop
-        must NOT enter a per-tenant schema_context nor query the Rating aggregate."""
-        profile = _make_profile(rating_avg=4.5, rating_count=12)
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            with patch("django_tenants.utils.schema_context") as mock_sc, \
-                    patch("menu.models.Rating") as mock_rating:
-                resp = self._get()
-
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        r = resp.data["restaurants"][0]
-        self.assertEqual(r["rating_average"], 4.5)
-        self.assertEqual(r["rating_count"], 12)
-        # The N+1 is gone: no schema switch, no Rating aggregate in the loop.
-        mock_sc.assert_not_called()
-        mock_rating.objects.aggregate.assert_not_called()
-
-    def test_unrated_tenant_reports_none(self):
-        """A Profile with rating_avg=None surfaces rating_average=None, count=0."""
-        profile = _make_profile(rating_avg=None, rating_count=0)
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            with patch("django_tenants.utils.schema_context") as mock_sc:
-                resp = self._get()
-        r = resp.data["restaurants"][0]
-        self.assertIsNone(r["rating_average"])
-        self.assertEqual(r["rating_count"], 0)
-        mock_sc.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
