@@ -1458,10 +1458,11 @@ const closeCodeModal = () => {
   _codeReturnFocus = null;
 };
 
-// D-1: after ANY terminal job transition (delivered OR failed) the backend now
-// forces is_driver_online=False, so re-fetch the real state from /driver/status/
-// instead of assuming offline client-side — keeps online/geo in sync with the
-// server rather than desyncing on a failed delivery that leaves the driver online.
+// After a terminal job transition (delivered OR failed) the driver STAYS online
+// (continuous availability — the backend no longer force-offlines after a drop).
+// Re-sync the real online/geo state from the server so we reconcile any server-side
+// change (e.g. a stale-GPS sweep that offlined the driver) rather than assuming a
+// state client-side.
 const _syncOnlineAfterTerminal = async () => {
   const wasOnline = online.value;
   await fetchStatus();
@@ -1479,7 +1480,9 @@ const _afterDelivered = async (data, job) => {
     activeJob.value = null;
     await _syncOnlineAfterTerminal();
     toast.show(t('driver.deliveredToast'), 'success');
-    showGoOnlineCta.value = true;
+    // Only prompt to go online if the sync shows the driver actually ended up offline
+    // (e.g. a stale-GPS sweep) — normally they stay online across jobs.
+    showGoOnlineCta.value = !online.value;
     if (job && job.restaurant_slug) openCustomerRating(job);
     await fetchJobs();
     fetchEarnings();
@@ -1987,11 +1990,12 @@ const advance = async (toStatus, extra = {}) => {
     const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, payload);
     if (data.is_terminal) {
       activeJob.value = null;
-      // D-1: the server now forces is_driver_online=False after ANY terminal status
-      // (delivered or failed) — re-fetch the real state instead of assuming offline.
+      // The driver stays online across jobs; re-sync real online/geo state from the
+      // server (reconciles e.g. a stale-GPS sweep) rather than assuming offline.
       await _syncOnlineAfterTerminal();
       toast.show(t('driver.deliveredToast'), 'success');
-      showGoOnlineCta.value = true; // Item D: prompt the driver to go back online
+      // Only prompt to go online if the sync shows the driver actually ended up offline.
+      showGoOnlineCta.value = !online.value;
       if (job && job.restaurant_slug) openCustomerRating(job);
       await fetchJobs();
       fetchEarnings(); // a completed delivery just added to earnings

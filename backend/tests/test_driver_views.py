@@ -610,7 +610,12 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
                         resp = self._patch(1, {"status": "delivered"}, customer=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(customer.is_driver_online)  # driver freed after delivery
+        # Continuous availability: the driver STAYS online across jobs (the dispatch
+        # busy-guard + terminal status handle re-eligibility) — no force-offline.
+        self.assertTrue(customer.is_driver_online)
+        # And no is_driver_online write happened on the terminal transition.
+        for _call in customer.save.call_args_list:
+            self.assertNotIn("is_driver_online", (_call.kwargs.get("update_fields") or []))
         mock_complete.assert_called_once()
 
     @patch("accounts.views._on_job_failed")
@@ -643,9 +648,12 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
 
     @patch("accounts.views._on_job_failed")
     @patch("accounts.models.DeliveryJob")
-    def test_failed_transition_clears_driver_online(self, mock_dj, mock_failed):
-        """D-1 bug fix: a FAILED delivery must free the driver (mirrors DELIVERED),
-        so a failed run doesn't strand the driver stuck 'online' server-side."""
+    def test_failed_transition_keeps_driver_online(self, mock_dj, mock_failed):
+        """Continuous availability: a FAILED delivery must NOT bench the driver. A failed
+        job leaves ACTIVE_STATUSES, so the dispatch busy-guard frees them for new offers
+        automatically — forcing is_driver_online=False would strand them offline until a
+        manual re-toggle. (Reverses the old D-1 behavior, which conflated 'free from this
+        job' with 'set offline'.)"""
         customer = _make_customer(is_driver_online=True)
         job = _make_job(status_val="picked_up", driver=customer)
         mock_dj.objects.select_for_update.return_value.get.return_value = job
@@ -656,8 +664,10 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
                     resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
                                        customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(customer.is_driver_online)
-        customer.save.assert_any_call(update_fields=["is_driver_online", "updated_at"])
+        self.assertTrue(customer.is_driver_online)  # stays online
+        # No is_driver_online write on a terminal transition.
+        for _call in customer.save.call_args_list:
+            self.assertNotIn("is_driver_online", (_call.kwargs.get("update_fields") or []))
         mock_failed.assert_called_once()
 
 

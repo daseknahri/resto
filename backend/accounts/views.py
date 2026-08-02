@@ -6765,13 +6765,18 @@ class DriverJobStatusUpdateView(APIView):
             _mark_order_out_for_delivery(job)
             _notify_customer_milestone(job, "out_for_delivery")
         elif new_status == DeliveryJob.Status.DELIVERED:
-            customer.is_driver_online = False  # free the driver after a completed run
-            customer.save(update_fields=["is_driver_online", "updated_at"])
+            # Keep the driver ONLINE across jobs (continuous availability). The dispatch
+            # busy-guard (pick_nearest_driver excludes drivers with a job in ACTIVE_STATUSES)
+            # already prevented a second assignment during this run; a DELIVERED job leaves
+            # ACTIVE_STATUSES, so the driver is immediately eligible for the next offer
+            # without a manual re-toggle. (Previously this forced is_driver_online=False,
+            # benching the driver after every drop — the offer model already lets them
+            # decline, so staying online never forces work on them.)
             _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
             _notify_customer_milestone(job, "delivered")
         elif new_status == DeliveryJob.Status.FAILED:
-            customer.is_driver_online = False  # free the driver after a terminal outcome (mirrors DELIVERED)
-            customer.save(update_fields=["is_driver_online", "updated_at"])
+            # Same as DELIVERED: a FAILED job leaves ACTIVE_STATUSES, so the driver is freed
+            # for new offers automatically — keep them online rather than benching them.
             _on_job_failed(job)
         elif new_status == DeliveryJob.Status.AT_RESTAURANT:
             try:
