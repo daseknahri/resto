@@ -791,6 +791,7 @@ import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
+import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
 
 const { t, formatCurrency } = useI18n();
@@ -1000,20 +1001,23 @@ watch(() => customerStore.customer, (c) => {
 }, { immediate: true });
 
 // ── Saved addresses (signed-in customers) ────────────────────────────────────
-const mktSavedAddresses = ref([]);
+// Saved addresses — shared CRUD in composables/useSavedAddresses; the marketplace keeps its
+// auto-select-most-recent behavior on top.
+const {
+  savedAddresses: mktSavedAddresses,
+  saveAddressAfterOrder,
+  saveAddressLabel,
+  loadSavedAddresses,
+  removeSavedAddress,
+  persistSavedAddress,
+} = useSavedAddresses();
 
 const fetchMktSavedAddresses = async () => {
-  if (!customerStore.isAuthenticated) return;
-  try {
-    const res = await api.get('/customer/addresses/');
-    mktSavedAddresses.value = Array.isArray(res.data) ? res.data : [];
-    // Auto-select the most recent saved address for a delivery order so a repeat
-    // customer doesn't have to tap to pick it (they can still choose another).
-    if (form.fulfillment_type === 'delivery' && !form.delivery_address && mktSavedAddresses.value.length) {
-      applyMktSavedAddress(mktSavedAddresses.value[0]);
-    }
-  } catch {
-    // silent — address picker degrades gracefully to manual entry
+  await loadSavedAddresses();
+  // Auto-select the most recent saved address for a delivery order so a repeat customer
+  // doesn't have to tap to pick it (they can still choose another).
+  if (form.fulfillment_type === 'delivery' && !form.delivery_address && mktSavedAddresses.value.length) {
+    applyMktSavedAddress(mktSavedAddresses.value[0]);
   }
 };
 
@@ -1023,13 +1027,9 @@ const applyMktSavedAddress = (addr) => {
   if (addr.lng != null) form.delivery_lng = addr.lng;
 };
 
-const saveAddressAfterOrder = ref(false);
-const saveAddressLabel = ref('');
-
 const deleteMktSavedAddress = async (id) => {
   try {
-    await api.delete(`/customer/addresses/${id}/`);
-    mktSavedAddresses.value = mktSavedAddresses.value.filter((a) => a.id !== id);
+    await removeSavedAddress(id);
   } catch { /* non-critical */ }
 };
 
@@ -1693,15 +1693,14 @@ const placeOrder = async () => {
     // Optionally persist the delivery address for future orders.
     if (form.fulfillment_type === 'delivery' && saveAddressAfterOrder.value && form.delivery_address) {
       try {
-        const saved = await api.post('/customer/addresses/', {
+        // persistSavedAddress POSTs + prepends (so it's auto-selected next time), capped at 10.
+        await persistSavedAddress({
           label: saveAddressLabel.value.trim() || '',
           address: form.delivery_address,
           location_url: '',
           lat: form.delivery_lat || null,
           lng: form.delivery_lng || null,
         });
-        // Prepend so it becomes the auto-selected address next time.
-        mktSavedAddresses.value = [saved.data, ...mktSavedAddresses.value].slice(0, 10);
       } catch { /* non-critical */ }
     }
     // Stamp localStorage so MarketplaceOrderStatus can show a "just placed" banner
