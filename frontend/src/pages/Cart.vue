@@ -93,6 +93,20 @@
                 @input="clearFieldError('customer_name')"
               />
             </label>
+            <label class="block space-y-1">
+              <span class="text-[11px] text-emerald-200/75">{{ t('cartPage.tableCustomerPhoneOptional') }}</span>
+              <input
+                v-model.trim="customerPhoneModel"
+                type="tel"
+                maxlength="30"
+                class="ui-input"
+                autocomplete="tel"
+                inputmode="tel"
+                :placeholder="t('cartPage.tableCustomerPhonePlaceholder')"
+                @input="clearFieldError('customer_phone')"
+              />
+              <span class="block text-[10px] text-emerald-200/60">{{ t('cartPage.tableCustomerPhoneHint') }}</span>
+            </label>
           </div>
 
           <!-- ── Fulfillment selector ── -->
@@ -1487,6 +1501,14 @@ const customerNameModel = computed({
   set: (value) => cart.setCustomerName(value),
 });
 
+// Optional dine-in phone — powers the post-order "save this order" soft-capture claim
+// (the claim endpoint matches this phone against the verified account). Skippable, so the
+// dine-in flow stays frictionless/anonymous when left blank.
+const customerPhoneModel = computed({
+  get: () => cart.customerPhone || '',
+  set: (value) => cart.setCustomerPhone(value),
+});
+
 const formatCoordinate = (value) => {
   const number = Number(value);
   if (!Number.isFinite(number)) return '-';
@@ -2025,7 +2047,10 @@ const buildPayload = () => {
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
   // customer_name: only for table context (optional)
   if (isTableContextOrder.value && cart.customerName) payload.customer_name = cart.customerName;
-  // customer_phone no longer sent (anonymous pickup, delivery uses customer profile)
+  // customer_phone: only for table context, and only if the diner chose to provide it —
+  // it stays optional (frictionless), and enables the post-order soft-capture claim.
+  // (Pickup stays anonymous; delivery uses the signed-in customer profile.)
+  if (isTableContextOrder.value && cart.customerPhone) payload.customer_phone = cart.customerPhone;
 
   if (!isTableContextOrder.value) {
     if (fulfillmentType.value) payload.fulfillment_type = fulfillmentType.value;

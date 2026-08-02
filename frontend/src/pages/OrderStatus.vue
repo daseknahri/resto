@@ -697,7 +697,7 @@
   <CustomerAuthModal
     v-if="showAuthModal"
     @close="showAuthModal = false"
-    @authenticated="showAuthModal = false"
+    @authenticated="onClaimAuthenticated"
   />
 
   <!-- Push-permission priming soft-ask (self-gated; triggered post-checkout) -->
@@ -718,6 +718,7 @@ import { useOrderRealtime } from "../composables/useOrderRealtime";
 import { useReorder } from "../composables/useReorder";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
+import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 
@@ -728,11 +729,26 @@ const props = defineProps({
 const router = useRouter();
 const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
+const tenant = useTenantStore();
 const toast = useToastStore();
 const { t, formatPrice, formatDateTime, currentLocale } = useI18n();
 const { reorderFromOrder } = useReorder();
 
 const showAuthModal = ref(false);
+// Soft-capture: after a dine-in guest signs in from the table nudge, link THIS just-placed
+// order to their account so it enters their history and the business becomes reorderable.
+// Best-effort — the claim endpoint enforces the phone-digits match (the diner must have left
+// their phone at ordering), so a mismatch / already-claimed just means no toast; the sign-in
+// still succeeds either way.
+const onClaimAuthenticated = async () => {
+  showAuthModal.value = false;
+  const slug = tenant.resolvedMeta?.slug || tenant.resolvedMeta?.profile?.slug;
+  if (!slug) return;
+  try {
+    await api.post("/customer/orders/claim/", { restaurant: slug, order_number: props.orderNumber });
+    toast.show(t("orderStatus.claimSuccess"), "success");
+  } catch { /* phone mismatch / already claimed — stay quiet; sign-in still succeeded */ }
+};
 // Push-permission priming soft-ask — triggered post-checkout (high-intent moment).
 const pushPrimingSheet = ref(null);
 
