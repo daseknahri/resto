@@ -629,6 +629,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
+import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
 import { SERVICES } from '../lib/services';
@@ -829,17 +830,45 @@ const userLng = ref(null);
 
 // ── Active filter count ───────────────────────────────────────────────────────
 // ── Favourites ────────────────────────────────────────────────────────────────
+const customerStore = useCustomerStore();
 const favourites = ref(loadFavourites());
 const showFavouritesOnly = ref(false);
 const sortBy = ref('relevance'); // 'relevance' | 'rating' | 'name' | 'nearest' | 'open'
 const isFavourite = (slug) => favourites.value.has(slug);
 const toggleFavourite = (slug) => {
   const next = new Set(favourites.value);
-  if (next.has(slug)) next.delete(slug);
-  else next.add(slug);
+  const willFollow = !next.has(slug);
+  if (willFollow) next.add(slug);
+  else next.delete(slug);
   favourites.value = next;
   saveFavourites(next);
+  // Signed in → mirror the toggle to the account so the marketplace heart is the SAME
+  // relationship as the hub's "My businesses" (server-backed, cross-device). Best-effort;
+  // localStorage stays the instant local source and anonymous users keep working unchanged.
+  if (customerStore.isAuthenticated) {
+    if (willFollow) api.post('/customer/businesses/follow/', { restaurant: slug }).catch(() => {});
+    else api.delete('/customer/businesses/follow/', { params: { restaurant: slug } }).catch(() => {});
+  }
 };
+
+// Merge the signed-in customer's server-side follows into the local favourites set so the
+// marketplace hearts reflect follows made on the hub / another device. Additive + best-effort;
+// runs once the customer session is known (immediate + on the auth→true transition).
+const syncFollowsFromServer = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const { data } = await api.get('/customer/businesses/');
+    const followedSlugs = (data.businesses || [])
+      .filter((b) => b.is_favorite && b.restaurant_slug)
+      .map((b) => b.restaurant_slug);
+    if (!followedSlugs.length) return;
+    const next = new Set(favourites.value);
+    followedSlugs.forEach((s) => next.add(s));
+    favourites.value = next;
+    saveFavourites(next);
+  } catch { /* best-effort */ }
+};
+watch(() => customerStore.isAuthenticated, (authed) => { if (authed) syncFollowsFromServer(); }, { immediate: true });
 
 /**
  * For a closed restaurant with a schedule, return a formatted "Opens {day} {time}" string.
