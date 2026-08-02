@@ -40,6 +40,7 @@ from .throttles import (
     AdminPIIThrottle,
     CustomerEmailOtpRequestThrottle,
     CustomerEmailOtpVerifyThrottle,
+    CustomerBusinessesThrottle,
     CustomerGoogleAuthThrottle,
     CustomerOrderClaimThrottle,
     CustomerOtpRequestThrottle,
@@ -1420,6 +1421,156 @@ class CustomerClaimOrderView(APIView):
                 order.save(update_fields=["customer", "updated_at"])
 
         return Response({"claimed": True, "order_number": order_number, "restaurant_slug": restaurant_slug})
+
+
+class CustomerBusinessesView(APIView):
+    """GET /api/customer/businesses/ — the customer's businesses ("My businesses").
+
+    The relationship layer of the flywheel: every restaurant the customer has ordered from
+    (derived on read from the public CustomerOrderRef index — order_count + last_order_at)
+    UNIONed with the ones they explicitly follow (CustomerTenantFollow). Favorites first, then
+    most-recently-ordered. Optional ?vertical= filter (food | shops | pharmacy | …). All tables
+    are public-schema, so no tenant schema switch is needed.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+    throttle_classes = [CustomerBusinessesThrottle]
+
+    def get(self, request, *args, **kwargs):
+        from .models import CustomerOrderRef, CustomerTenantFollow
+
+        customer = customer_or_none(request)
+        if customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        vertical_q = (request.query_params.get("vertical") or "").strip()
+
+        businesses = {}
+        # Ordered-from businesses. Most-recent first so the first row seen per tenant carries
+        # the latest denormalized name/slug/vertical + last_order_at; later rows only ++count.
+        ref_qs = CustomerOrderRef.objects.filter(customer=customer)
+        if vertical_q:
+            ref_qs = ref_qs.filter(vertical=vertical_q)
+        for ref in ref_qs.order_by("-order_created_at").values(
+            "tenant_id", "restaurant_name", "restaurant_slug", "vertical", "order_created_at"
+        )[:1000]:
+            tid = ref["tenant_id"]
+            b = businesses.get(tid)
+            if b is None:
+                businesses[tid] = {
+                    "tenant_id": tid,
+                    "restaurant_name": ref["restaurant_name"],
+                    "restaurant_slug": ref["restaurant_slug"],
+                    "vertical": ref["vertical"],
+                    "last_order_at": ref["order_created_at"],
+                    "order_count": 1,
+                    "is_favorite": False,
+                }
+            else:
+                b["order_count"] += 1
+
+        # Explicit follows (may include businesses never ordered from).
+        follow_qs = CustomerTenantFollow.objects.filter(customer=customer)
+        if vertical_q:
+            follow_qs = follow_qs.filter(vertical=vertical_q)
+        for f in follow_qs.values("tenant_id", "restaurant_name", "restaurant_slug", "vertical"):
+            tid = f["tenant_id"]
+            b = businesses.get(tid)
+            if b is None:
+                businesses[tid] = {
+                    "tenant_id": tid,
+                    "restaurant_name": f["restaurant_name"],
+                    "restaurant_slug": f["restaurant_slug"],
+                    "vertical": f["vertical"],
+                    "last_order_at": None,
+                    "order_count": 0,
+                    "is_favorite": True,
+                }
+            else:
+                b["is_favorite"] = True
+
+        def _key(b):
+            ts = b["last_order_at"].timestamp() if b["last_order_at"] else 0
+            return (0 if b["is_favorite"] else 1, -ts)
+
+        rows = sorted(businesses.values(), key=_key)
+        for b in rows:
+            b["last_order_at"] = b["last_order_at"].isoformat() if b["last_order_at"] else None
+
+        return Response({"businesses": rows, "count": len(rows)})
+
+
+class CustomerBusinessFollowView(APIView):
+    """POST / DELETE /api/customer/businesses/follow/ — follow or unfollow a business.
+
+    Body: ``{ restaurant | tenant_slug: str }``. POST upserts a CustomerTenantFollow (with the
+    tenant's denormalized name/slug/vertical); DELETE removes it. Both are idempotent. Public
+    schema only (no tenant switch).
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+    throttle_classes = [CustomerBusinessesThrottle]
+
+    def _resolve(self, request):
+        customer = customer_or_none(request)
+        # Accept the slug from the body OR the query string — some clients/proxies drop DELETE
+        # request bodies, so the unfollow path passes ?restaurant=… instead.
+        slug = (
+            request.data.get("restaurant")
+            or request.data.get("tenant_slug")
+            or request.query_params.get("restaurant")
+            or request.query_params.get("tenant_slug")
+            or ""
+        ).strip().lower()
+        return customer, slug
+
+    def post(self, request, *args, **kwargs):
+        from tenancy.models import Profile, Tenant
+        from .models import CustomerTenantFollow
+        from .verticals import vertical_for_business_type
+
+        customer, slug = self._resolve(request)
+        if customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        if not slug:
+            return Response({"detail": "restaurant is required.", "code": "missing_fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tenant = Tenant.objects.get(slug=slug)
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        _bt = Profile.objects.filter(tenant_id=tenant.id).values_list("business_type", flat=True).first()
+        CustomerTenantFollow.objects.update_or_create(
+            customer=customer,
+            tenant_id=tenant.id,
+            defaults={
+                "restaurant_name": tenant.name or "",
+                "restaurant_slug": tenant.slug or "",
+                "vertical": vertical_for_business_type(_bt),
+            },
+        )
+        return Response({"followed": True, "restaurant_slug": tenant.slug})
+
+    def delete(self, request, *args, **kwargs):
+        from tenancy.models import Tenant
+        from .models import CustomerTenantFollow
+
+        customer, slug = self._resolve(request)
+        if customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        if not slug:
+            return Response({"detail": "restaurant is required.", "code": "missing_fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tenant = Tenant.objects.get(slug=slug)
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        CustomerTenantFollow.objects.filter(customer=customer, tenant_id=tenant.id).delete()
+        return Response({"followed": False, "restaurant_slug": tenant.slug})
 
 
 class CustomerReservationsView(APIView):

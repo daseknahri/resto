@@ -1300,6 +1300,44 @@ class CustomerTenantOptOut(models.Model):
         return f"CustomerTenantOptOut customer={self.customer_id} tenant={self.tenant_id}"
 
 
+class CustomerTenantFollow(models.Model):
+    """Per-(customer, tenant) explicit 'follow / favorite' for marketplace customers (flywheel).
+
+    The positive mirror of CustomerTenantOptOut: a customer taps the heart on a business (or
+    one-tap-follows after ordering) to pin it to their "My businesses". Businesses they've
+    ordered from are derived on read from CustomerOrderRef; this table stores the EXPLICIT
+    follows — including businesses a customer wants to keep even before/without ordering.
+    Denormalized name/slug/vertical so a followed business renders without a cross-schema join.
+
+    Lives in the public schema (accounts app). IntegerField tenant_id avoids cross-schema FK
+    issues with django-tenants.
+    """
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="tenant_follows",
+    )
+    tenant_id = models.IntegerField(
+        db_index=True,
+        help_text="FK to tenancy.Tenant (loose — no FK constraint for cross-schema safety).",
+    )
+    restaurant_name = models.CharField(max_length=200, blank=True)
+    restaurant_slug = models.CharField(max_length=200, blank=True)
+    vertical = models.CharField(max_length=16, blank=True, default="", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        unique_together = [("customer", "tenant_id")]
+        indexes = [
+            models.Index(fields=("customer", "tenant_id"), name="cust_tenant_follow_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"CustomerTenantFollow customer={self.customer_id} tenant={self.tenant_id}"
+
+
 class CustomerServiceProfile(models.Model):
     """Per-(customer, vertical) profile — the "account for each service" (P2).
 
