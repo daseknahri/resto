@@ -22,14 +22,61 @@ def compute_phone_digits(sender, instance, **kwargs):
     instance.customer_phone_digits = digits[-9:] if digits else ""
 
 
+def _resolve_current_tenant():
+    """Return ``(tenant_id, name, slug)`` for the schema active on the connection.
+
+    The order-index signals need the REAL ``Tenant`` row's id/name/slug to attribute a
+    mirror. On the tenant-storefront request path the tenant middleware puts a real
+    ``Tenant`` on ``connection.tenant``, so we read it directly — the hot path, no extra
+    query. On EVERY other path that saves an order — the marketplace place/cancel views,
+    the driver pickup/complete helpers, the scheduled-order release cron — the order is
+    saved inside ``django_tenants`` ``schema_context``, which sets ``connection.tenant`` to
+    a bare ``FakeTenant(schema_name=...)`` that has no ``.id``. Historically the signal saw
+    that missing id and silently no-oped, so those orders never reached the customer's
+    cross-restaurant history ("Order again"). Here we instead resolve the real ``Tenant``
+    by its ``schema_name`` (a unique, indexed public-schema lookup — ``Tenant`` is in the
+    search path from any tenant schema) so the mirror is written from any path. Returns
+    ``(None, "", "")`` when there is no real tenant to attribute to (public schema, an
+    unknown schema, or a lookup failure) — the caller then no-ops as before.
+    """
+    tenant = getattr(connection, "tenant", None)
+    tenant_id = getattr(tenant, "id", None)
+    if tenant_id is not None:
+        # Storefront request path: a real Tenant is already on the connection.
+        return tenant_id, getattr(tenant, "name", "") or "", getattr(tenant, "slug", "") or ""
+
+    # schema_context path (marketplace / driver / cron): only a FakeTenant with a
+    # schema_name is on the connection — resolve the real Tenant behind that schema.
+    from django_tenants.utils import get_public_schema_name
+
+    schema = getattr(connection, "schema_name", None) or getattr(tenant, "schema_name", None)
+    if not schema or schema == get_public_schema_name():
+        return None, "", ""
+    try:
+        from tenancy.models import Tenant
+
+        row = (
+            Tenant.objects.filter(schema_name=schema)
+            .values("id", "name", "slug")
+            .first()
+        )
+    except Exception:
+        return None, "", ""
+    if not row:
+        return None, "", ""
+    return row["id"], row["name"] or "", row["slug"] or ""
+
+
 @receiver(post_save, sender="menu.Order")
 def mirror_order_to_public_index(sender, instance, **kwargs):
     # Only customer-linked orders belong in a customer's history.
     if not getattr(instance, "customer_id", None):
         return
 
-    tenant = getattr(connection, "tenant", None)
-    tenant_id = getattr(tenant, "id", None)
+    # Resolve the tenant behind the currently-active schema. Works whether the order was
+    # saved on the storefront request path (real Tenant on the connection) or inside a
+    # schema_context (marketplace / driver / cron), which only carries a FakeTenant.
+    tenant_id, restaurant_name, restaurant_slug = _resolve_current_tenant()
     if tenant_id is None:
         return  # not in a tenant context — nothing to attribute the order to
 
@@ -74,8 +121,8 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
             order_number=instance.order_number,
             defaults={
                 "customer_id": instance.customer_id,
-                "restaurant_name": getattr(tenant, "name", "") or "",
-                "restaurant_slug": getattr(tenant, "slug", "") or "",
+                "restaurant_name": restaurant_name,
+                "restaurant_slug": restaurant_slug,
                 "status": instance.status or "",
                 "fulfillment_type": instance.fulfillment_type or "",
                 "total": instance.total or 0,
@@ -102,8 +149,10 @@ def remove_order_from_public_index(sender, instance, **kwargs):
     if not getattr(instance, "customer_id", None):
         return
 
-    tenant = getattr(connection, "tenant", None)
-    tenant_id = getattr(tenant, "id", None)
+    # Same schema→Tenant resolution as the mirror: a hard-delete on the marketplace /
+    # driver / cron paths runs inside schema_context (FakeTenant), where the old
+    # id-off-connection.tenant check no-oped and left the mirror orphaned.
+    tenant_id, _name, _slug = _resolve_current_tenant()
     if tenant_id is None:
         return  # not in a tenant context — nothing to scope the delete to
 
