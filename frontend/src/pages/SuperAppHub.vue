@@ -143,6 +143,47 @@
       </div>
     </section>
 
+    <!-- ── MY BUSINESSES — ordered-from + followed, with a follow toggle ──── -->
+    <section
+      v-if="customerStore.isAuthenticated && myBusinesses.length"
+      aria-labelledby="my-businesses-heading"
+      class="ui-reveal space-y-3"
+    >
+      <h2 id="my-businesses-heading" class="ui-kicker">{{ t('superAppHub.myBusinessesTitle') }}</h2>
+      <div class="flex gap-2.5 overflow-x-auto pb-1">
+        <div
+          v-for="b in myBusinesses"
+          :key="b.tenant_id"
+          class="relative flex shrink-0 flex-col items-start gap-1 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5"
+          style="min-width: 150px; max-width: 190px"
+        >
+          <RouterLink
+            :to="{ name: 'marketplace-menu', params: { slug: b.restaurant_slug } }"
+            class="ui-press flex flex-col items-start gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          >
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60 text-xl" aria-hidden="true">🍽</span>
+            <p class="mt-0.5 line-clamp-2 pe-6 text-sm font-semibold leading-snug text-white">{{ b.restaurant_name }}</p>
+            <p class="text-[10px] text-slate-500">
+              {{ b.order_count ? t('superAppHub.myBusinessesOrders', { count: b.order_count }) : t('superAppHub.myBusinessesFollowing') }}
+            </p>
+          </RouterLink>
+          <button
+            type="button"
+            class="absolute end-2 top-2 rounded-full p-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:opacity-50"
+            :class="b.is_favorite ? 'text-rose-400 hover:text-rose-300' : 'text-slate-500 hover:text-slate-300'"
+            :aria-pressed="b.is_favorite"
+            :aria-label="b.is_favorite ? t('superAppHub.unfollowAria', { name: b.restaurant_name }) : t('superAppHub.followAria', { name: b.restaurant_name })"
+            :disabled="followBusy.has(b.tenant_id)"
+            @click="toggleFollow(b)"
+          >
+            <svg viewBox="0 0 20 20" :fill="b.is_favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.6" class="h-4 w-4" aria-hidden="true">
+              <path d="M10 16.6l-1.1-1C4.98 12.03 3 10.2 3 8a3 3 0 015.5-1.65L10 8l1.5-1.65A3 3 0 0117 8c0 2.2-1.98 4.03-5.9 7.6l-1.1 1z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- ── SERVICE LAUNCHER GRID ─────────────────────────────────────────── -->
     <section aria-labelledby="services-heading">
       <h2 id="services-heading" class="sr-only">{{ t('home.verticalsTitle') }}</h2>
@@ -359,6 +400,28 @@ const resumeCards = computed(() => {
 
 const recentRestaurants = ref([]);
 
+// ── My businesses (flywheel) — ordered-from + explicitly followed ─────────────
+const myBusinesses = ref([]);
+const followBusy = ref(new Set());
+const toggleFollow = async (b) => {
+  if (followBusy.value.has(b.tenant_id)) return;
+  followBusy.value = new Set(followBusy.value).add(b.tenant_id);
+  const next = !b.is_favorite;
+  try {
+    if (next) {
+      await api.post('/customer/businesses/follow/', { restaurant: b.restaurant_slug });
+    } else {
+      await api.delete('/customer/businesses/follow/', { params: { restaurant: b.restaurant_slug } });
+    }
+    b.is_favorite = next;
+  } catch { /* best-effort — leave the toggle state unchanged on failure */ }
+  finally {
+    const s = new Set(followBusy.value);
+    s.delete(b.tenant_id);
+    followBusy.value = s;
+  }
+};
+
 onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
@@ -371,6 +434,11 @@ onMounted(async () => {
     recentRestaurants.value = (data.orders || [])
       .filter((o) => o.restaurant_slug && o.status === 'completed' && !seen.has(o.restaurant_slug) && seen.add(o.restaurant_slug))
       .slice(0, 3);
+  } catch { /* best-effort */ }
+  // "My businesses" — the durable relationship rail (ordered-from + explicitly followed).
+  try {
+    const { data } = await api.get('/customer/businesses/');
+    myBusinesses.value = data.businesses || [];
   } catch { /* best-effort */ }
 });
 

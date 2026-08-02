@@ -345,6 +345,13 @@ class CustomerOrderClaimThrottle(_CustomerThrottle):
     scope = "customer_order_claim"
 
 
+class CustomerBusinessesThrottle(_CustomerThrottle):
+    """Flywheel discovery: per-customer throttle for the "my businesses" list + follow/unfollow
+    toggles. Generous — it's a browse + occasional-write surface, keyed on the Customer
+    principal (falls back to IP)."""
+    scope = "customer_businesses"
+
+
 class EmailUnsubscribeThrottle(_IPThrottle):
     """B1-followup: rate-limit the public one-click email-unsubscribe endpoint.
 

@@ -81,6 +81,9 @@ REST_FRAMEWORK = {
         # Flywheel soft-capture: guest-order claim (link a just-placed order to the caller).
         # Phone-digits match is the real guard; this caps order-number enumeration. Per-customer.
         "customer_order_claim": "30/hour",
+        # Flywheel discovery: "my businesses" list + follow/unfollow toggles. Per-customer,
+        # generous (browse + occasional writes).
+        "customer_businesses": "120/hour",
         # B1-followup: public one-click email-unsubscribe — auth-less, signed-token
         # gated; throttle blunts sequential scanning. Keyed per client IP.
         "email_unsubscribe": "60/hour",
