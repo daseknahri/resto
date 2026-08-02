@@ -517,6 +517,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
+import { useOrderRating } from '../composables/useOrderRating';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import DeliveryTracker from '../components/DeliveryTracker.vue';
@@ -634,37 +635,19 @@ const fetchDelivery = async () => {
 const printReceipt = () => window.print();
 
 // ── Rating ────────────────────────────────────────────────────────────────────
-const mktRatingScore = ref(0);
-const mktRatingComment = ref('');
-const mktRatingSubmitting = ref(false);
-
-// Map backend rating-rejection codes to distinct, localized messages instead
-// of silently swallowing the error (B5) — mirrors OrderStatus.vue's mapping.
-const mktRatingErrorMessage = (err) => {
-  const code = err?.response?.data?.code;
-  if (code === 'already_rated') return t('mktOrderStatus.rateErrorAlreadyRated');
-  if (code === 'order_not_completed') return t('mktOrderStatus.rateErrorNotCompleted');
-  if (code === 'not_order_owner') return t('mktOrderStatus.rateErrorNotOwner');
-  if (code === 'invalid_score') return t('mktOrderStatus.rateErrorInvalidScore');
-  return t('mktOrderStatus.rateError');
-};
-
-const submitMktRating = async () => {
-  if (mktRatingScore.value === 0 || mktRatingSubmitting.value) return;
-  mktRatingSubmitting.value = true;
-  try {
-    await api.post(`/orders/${order.value.order_number}/rate/`, {
-      score: mktRatingScore.value,
-      comment: mktRatingComment.value.trim(),
-    });
-    // Mark rated locally so the prompt hides without waiting for next poll
-    if (order.value) order.value = { ...order.value, has_rating: true };
-  } catch (err) {
-    toast.show(mktRatingErrorMessage(err), 'error');
-  } finally {
-    mktRatingSubmitting.value = false;
-  }
-};
+// Shared rating submit + error-code mapping (see composables/useOrderRating). Destructured to
+// the template's existing names. On success: mark rated locally so the prompt hides without
+// waiting for the next poll.
+const {
+  score: mktRatingScore,
+  comment: mktRatingComment,
+  submitting: mktRatingSubmitting,
+  submit: submitMktRating,
+} = useOrderRating({
+  getOrderNumber: () => order.value.order_number,
+  i18nPrefix: 'mktOrderStatus',
+  onRated: () => { if (order.value) order.value = { ...order.value, has_rating: true }; },
+});
 
 // ── Reorder ───────────────────────────────────────────────────────────────────
 const reorder = () => {
