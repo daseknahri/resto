@@ -53,8 +53,11 @@ class SitemapViewTests(SimpleTestCase):
         self.assertIn("<urlset", body)
         self.assertIn("sitemaps.org/schemas/sitemap/0.9", body)
         # Each static public page appears as an absolute URL on the brand host
-        for path in ("/", "/browse", "/directory", "/privacy", "/terms", "/contact"):
+        for path in ("/", "/browse", "/privacy", "/terms", "/contact"):
             self.assertIn(f"<loc>https://kepoli.example{path}</loc>", body)
+        # The legacy /directory page was removed (redirects to the marketplace) and must
+        # no longer be advertised in the sitemap.
+        self.assertNotIn("<loc>https://kepoli.example/directory</loc>", body)
         # /reserve is a noindex form (see useSeoMeta INDEXABLE_ROUTE_NAMES) and
         # must NOT be advertised — listing it would be a contradictory signal.
         self.assertNotIn("<loc>https://kepoli.example/reserve</loc>", body)

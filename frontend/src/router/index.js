@@ -87,7 +87,6 @@ const Unauthorized = () => import("../pages/Unauthorized.vue");
 const PrivacyPolicy = () => import("../pages/PrivacyPolicy.vue");
 const TermsOfService = () => import("../pages/TermsOfService.vue");
 const ContactPage = () => import("../pages/ContactPage.vue");
-const Directory = () => import("../pages/Directory.vue");
 const Marketplace = () => import("../pages/Marketplace.vue");
 const MarketplaceMenuPage = () => import("../pages/MarketplaceMenuPage.vue");
 const MarketplaceOrderStatus = () => import("../pages/MarketplaceOrderStatus.vue");
@@ -112,7 +111,10 @@ const routes = [
       { path: "privacy", name: "privacy", component: PrivacyPolicy, meta: { interface: "landing" } },
       { path: "terms", name: "terms", component: TermsOfService, meta: { interface: "landing" } },
       { path: "contact", name: "contact", component: ContactPage, meta: { interface: "landing" } },
-      { path: "directory", name: "directory", component: Directory, meta: { interface: "landing" } },
+      // Legacy discovery page removed (marketplace-first): the standalone Directory
+      // duplicated the marketplace and bounced users out to bare tenant subdomains.
+      // Redirect any inbound /directory (old bookmarks, indexed links) to the marketplace.
+      { path: "directory", redirect: { name: "marketplace" } },
       { path: "driver", name: "driver", component: DriverPage, meta: { interface: "landing" } },
       { path: "order", name: "marketplace", component: Marketplace, meta: { interface: "landing" } },
       { path: "order/:slug", name: "marketplace-menu", component: MarketplaceMenuPage, props: true, meta: { interface: "landing" } },
