@@ -2755,7 +2755,9 @@ class PlaceOrderView(APIView):
 
         # RISK STRUCT-1: item resolution extracted verbatim into menu.order_service (OrderService
         # seam, shared with MarketplacePlaceOrderView).
-        from menu.order_service import resolve_available_dishes, resolve_option_map, price_line_options
+        from menu.order_service import (
+            resolve_available_dishes, resolve_option_map, price_line_options, deplete_stock,
+        )
         dishes_map = resolve_available_dishes(slugs)
 
         missing = [s for s in slugs if s not in dishes_map]
@@ -3160,43 +3162,16 @@ class PlaceOrderView(APIView):
                 else:
                     _locked_dishes = {}
 
-                if _stock_updates:
-                    # Validate sufficient stock for every combo-dish in this order
-                    for _dish_pk, _ordered_qty in _stock_updates:
-                        _ld = _locked_dishes.get(_dish_pk)
-                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
-                            raise _OutOfStock(_pk_to_slug.get(_dish_pk, ""))
-                    # Atomically decrement; mark sold-out when stock reaches zero.
-                    # stock_auto_zeroed=True marks automatic decrements so the 5am
-                    # auto_reset_availability cron can distinguish them from deliberate
-                    # owner-zeroed dishes.
-                    for _dish_pk, _ordered_qty in _stock_updates:
-                        _ld = _locked_dishes.get(_dish_pk)
-                        if _ld and _ld.stock_qty is not None:
-                            _new_qty = max(0, _ld.stock_qty - _ordered_qty)
-                            if _new_qty == 0:
-                                Dish.objects.filter(pk=_dish_pk).update(
-                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
-                                )
-                            else:
-                                Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
-
-                # Component stock: validate then decrement each component
-                if _comp_stock_agg:
-                    for _cpk, _cqty in _comp_stock_agg.items():
-                        _ld = _locked_dishes.get(_cpk)
-                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
-                            raise _OutOfStock(_comp_pk_to_name.get(_cpk, ""))
-                    for _cpk, _cqty in _comp_stock_agg.items():
-                        _ld = _locked_dishes.get(_cpk)
-                        if _ld and _ld.stock_qty is not None:
-                            _cnew = max(0, _ld.stock_qty - _cqty)
-                            if _cnew == 0:
-                                Dish.objects.filter(pk=_cpk).update(
-                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
-                                )
-                            else:
-                                Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
+                # RISK STRUCT-1 slice 3: stock validate/decrement + ingredient depletion moved to the
+                # shared order service (byte-identical to MarketplacePlaceOrderView). The
+                # select_for_update lock (above) and the _OutOfStock raise stay here with the
+                # transaction; deplete_stock returns the first sold-out slug/name instead of raising, so
+                # this view keeps its own exception + rollback semantics.
+                _sold_out = deplete_stock(
+                    _locked_dishes, _stock_updates, _pk_to_slug, _comp_stock_agg, _comp_pk_to_name,
+                )
+                if _sold_out is not None:
+                    raise _OutOfStock(_sold_out)
 
                 # B3 Phase 2: deplete ingredient stock for recipe-linked ingredients.
                 # Runs inside the same atomic block so a failed checkout never leaves
