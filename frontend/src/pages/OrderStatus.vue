@@ -716,6 +716,7 @@ import PushPrimingSheet from "../components/PushPrimingSheet.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderRealtime } from "../composables/useOrderRealtime";
 import { useReorder } from "../composables/useReorder";
+import { useOrderRating } from "../composables/useOrderRating";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
 import { useTenantStore } from "../stores/tenant";
@@ -792,39 +793,22 @@ const copyDeliveryCode = (code) => {
 };
 
 // ── Rating ────────────────────────────────────────────────────────────────────
-const ratingScore = ref(0);
-const ratingComment = ref("");
-const ratingSubmitting = ref(false);
-
-// Map backend rating-rejection codes to distinct, localized messages instead
-// of one generic toast (B5) — already_rated/order_not_completed/not_order_owner/
-// invalid_score are all reachable outcomes from CustomerOrderRateView.
-const ratingErrorMessage = (err) => {
-  const code = err?.response?.data?.code;
-  if (code === "already_rated") return t("orderStatus.rateErrorAlreadyRated");
-  if (code === "order_not_completed") return t("orderStatus.rateErrorNotCompleted");
-  if (code === "not_order_owner") return t("orderStatus.rateErrorNotOwner");
-  if (code === "invalid_score") return t("orderStatus.rateErrorInvalidScore");
-  return t("orderStatus.rateError");
-};
-
-const submitRating = async () => {
-  if (ratingScore.value === 0 || ratingSubmitting.value) return;
-  ratingSubmitting.value = true;
-  try {
-    await api.post(`/orders/${props.orderNumber}/rate/`, {
-      score: ratingScore.value,
-      comment: ratingComment.value.trim(),
-    });
+// Shared rating submit + error-code mapping (see composables/useOrderRating). Destructured to
+// the template's existing names. On success: confirm + refetch so has_rating flips and the
+// prompt hides.
+const {
+  score: ratingScore,
+  comment: ratingComment,
+  submitting: ratingSubmitting,
+  submit: submitRating,
+} = useOrderRating({
+  getOrderNumber: () => props.orderNumber,
+  i18nPrefix: "orderStatus",
+  onRated: async () => {
     toast.show(t("orderStatus.rateSubmitted"), "success");
-    // Refresh so has_rating flips to true and the prompt hides
     await fetchStatus();
-  } catch (err) {
-    toast.show(ratingErrorMessage(err), "error");
-  } finally {
-    ratingSubmitting.value = false;
-  }
-};
+  },
+});
 
 const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)
