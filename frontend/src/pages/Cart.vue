@@ -900,6 +900,7 @@ import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import QuickAddSheet from '../components/QuickAddSheet.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
+import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
 import { useMenuStore } from '../stores/menu';
@@ -992,20 +993,16 @@ const onPromoCodeInput = (value) => {
   promoError.value = '';
 };
 
-// Saved addresses
-const savedAddresses = ref([]);
-const saveAddressAfterOrder = ref(false);
-const saveAddressLabel = ref('');
-
-const fetchSavedAddresses = async () => {
-  if (!customerStore.isAuthenticated) return;
-  try {
-    const res = await api.get('/customer/addresses/');
-    savedAddresses.value = res.data || [];
-  } catch {
-    // silent
-  }
-};
+// Saved addresses — shared CRUD in composables/useSavedAddresses (loadSavedAddresses aliased to
+// the existing fetchSavedAddresses call site). Page-specific apply/clear stays below.
+const {
+  savedAddresses,
+  saveAddressAfterOrder,
+  saveAddressLabel,
+  loadSavedAddresses: fetchSavedAddresses,
+  removeSavedAddress,
+  persistSavedAddress,
+} = useSavedAddresses();
 
 const appliedSavedAddressId = ref(null);
 
@@ -1026,8 +1023,7 @@ const deleteSavedAddress = async (id) => {
   });
   if (!ok) return;
   try {
-    await api.delete(`/customer/addresses/${id}/`);
-    savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
+    await removeSavedAddress(id);
     if (appliedSavedAddressId.value === id) {
       appliedSavedAddressId.value = null;
       deliveryAddress.value = '';
@@ -2372,7 +2368,7 @@ const placeInAppOrder = async () => {
     // Optionally save the delivery address for future use
     if (isDelivery.value && saveAddressAfterOrder.value && deliveryAddress.value) {
       try {
-        await api.post('/customer/addresses/', {
+        await persistSavedAddress({
           label: saveAddressLabel.value.trim() || '',
           address: deliveryAddress.value,
           location_url: deliveryLocationUrl.value || '',
