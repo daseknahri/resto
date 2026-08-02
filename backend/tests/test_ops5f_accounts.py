@@ -210,11 +210,16 @@ class MarketplaceOptionBindingTests(SimpleTestCase):
     def test_select_related_and_binding_in_source(self):
         """price_delta must only be summed over validated, dish-bound options."""
         from accounts.views import MarketplacePlaceOrderView
+        from menu.order_service import resolve_option_map
         src = inspect.getsource(MarketplacePlaceOrderView.post)
-        self.assertIn('.select_related("dish")', src)
+        # The option-map build + its select_related("dish") guard moved into the shared order
+        # service (RISK STRUCT-1); the view delegates to it, and resolve_option_map keeps the guard.
+        self.assertIn("resolve_option_map", src)
+        self.assertIn('.select_related("dish")', inspect.getsource(resolve_option_map))
+        # The binding validation (reject cross-dish/foreign ids) + delta-over-validated-set stay in
+        # the view's item loop.
         self.assertIn("opt_dish_slug != dish.slug", src)
         self.assertIn("stale_options", src)
-        # The delta is applied over the validated set, not the raw option_ids.
         self.assertIn("for opt in _bound_options", src)
 
 

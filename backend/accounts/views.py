@@ -4373,7 +4373,6 @@ class MarketplacePlaceOrderView(APIView):
             with _sc(tenant.schema_name):
                 from menu.models import (
                     Dish as _Dish,
-                    DishOption as _DO,
                     Order as _Order,
                     OrderItem as _OI,
                     Promotion as _Promo,
@@ -4482,27 +4481,17 @@ class MarketplacePlaceOrderView(APIView):
                         return Response({"detail": "Each item must have a slug.", "code": "invalid_items"}, status=status.HTTP_400_BAD_REQUEST)
                     slugs.append(str(it["slug"]))
 
-                dishes_map = {
-                    d.slug: d
-                    for d in _Dish.objects.filter(
-                        slug__in=slugs, is_published=True, is_available=True,
-                        category__is_published=True, category__is_temporarily_disabled=False,
-                    ).select_related("category").prefetch_related("combo_components__component", "option_groups__options")
-                }
+                # RISK STRUCT-1: item resolution shared with PlaceOrderView via menu.order_service.
+                from menu import order_service as _order_service
+                dishes_map = _order_service.resolve_available_dishes(slugs)
                 missing = [s for s in slugs if s not in dishes_map]
                 if missing:
                     return Response({"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing}, status=status.HTTP_400_BAD_REQUEST)
 
                 all_option_ids = [int(oid) for it in items_raw for oid in (it.get("option_ids") or []) if str(oid).isdigit()]
-                # OPS-5f: select_related("dish") so we can bind each option to its dish
-                # and reject foreign / cross-dish option ids (mirrors menu/views.py:1647).
-                # Without this, a customer could attach a foreign or negative-price_delta
-                # option to a cheap dish and drive the wallet-PREPAID total DOWN.
-                options_map = (
-                    {o.id: o for o in _DO.objects.filter(id__in=all_option_ids).select_related("dish")}
-                    if all_option_ids
-                    else {}
-                )
+                # resolve_option_map select_relates each option's dish so the loop below can reject
+                # foreign / cross-dish ids (OPS-5f price-smuggling guard).
+                options_map = _order_service.resolve_option_map(all_option_ids)
 
                 # Compute active happy-hour rules ONCE (placement-time price lock —
                 # for scheduled orders price is locked at submission, not scheduled_for;

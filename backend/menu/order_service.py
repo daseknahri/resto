@@ -129,3 +129,47 @@ def resolve_prepay_and_wallet(*, user, linked_customer, profile, fulfillment_typ
             use_wallet = False
             wallet_deduction = Decimal("0")
     return requires_prepay, cod_order, use_wallet, wallet_deduction, None
+
+
+def resolve_available_dishes(slugs):
+    """Return ``{slug: Dish}`` for the currently-orderable dishes among ``slugs`` (RISK STRUCT-1,
+    slice 2 — item resolution).
+
+    Filters to published + available dishes in a published, non-temporarily-disabled category, with
+    the combo-component and option-group relations prefetched (the pipeline needs them downstream).
+    This is byte-identical in the storefront (``PlaceOrderView``) and marketplace
+    (``MarketplacePlaceOrderView``) order paths. Schema-agnostic — it runs against whatever tenant
+    schema the caller has already established (ambient for the storefront, ``schema_context`` for the
+    marketplace). The caller compares the returned keys against ``slugs`` to build its own
+    ``items_unavailable`` response, keeping the DRF response contract in the view.
+    """
+    # Function-local import (codebase menu↔accounts cycle-avoidance convention) — also keeps the
+    # order paths' existing `menu.models`-patching tests valid after this extraction.
+    from menu.models import Dish
+    return {
+        d.slug: d
+        for d in Dish.objects.filter(
+            slug__in=slugs,
+            is_published=True,
+            is_available=True,
+            category__is_published=True,
+            category__is_temporarily_disabled=False,
+        )
+        .select_related("category")
+        .prefetch_related("combo_components__component", "option_groups__options")
+    }
+
+
+def resolve_option_map(option_ids):
+    """Return ``{id: DishOption}`` for ``option_ids`` with each option's ``dish`` select_related
+    (RISK STRUCT-1, slice 2).
+
+    The ``select_related("dish")`` is load-bearing security, not a perf nicety: both order paths bind
+    every option to its dish and reject a foreign / cross-dish id, so a negative-``price_delta``
+    option can't be smuggled onto a cheap dish to drive a wallet-prepaid total down (OPS-5f). Shared
+    verbatim by both order paths.
+    """
+    from menu.models import DishOption  # function-local (see resolve_available_dishes)
+    if not option_ids:
+        return {}
+    return {o.id: o for o in DishOption.objects.filter(id__in=option_ids).select_related("dish")}
