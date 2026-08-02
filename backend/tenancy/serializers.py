@@ -225,6 +225,28 @@ def _get_publish_warnings(profile_instance) -> list:
     return warnings
 
 
+def _autolist_on_publish(*, is_published_now, was_published, owner_set_directory,
+                         already_listed, city, lat, lng):
+    """Flywheel auto-list: True iff a FRESH menu-publish should auto-enable directory_opt_in.
+
+    "Auto-list on publish" (owner-approved marketplace default): the first time a menu goes
+    live, opt the business into the public marketplace by default — but only when
+      * this is a real unpublished→published transition,
+      * the owner did NOT set the directory flag in this same update (explicit opt-out honored),
+      * it isn't already listed, and
+      * the profile has the data a listing needs (city + valid coords, mirroring validate()).
+    A profile missing city/coords is left unlisted rather than creating a broken marketplace card;
+    the owner can list it later once the data is complete. Pure function so it unit-tests without
+    a DB.
+    """
+    if not (is_published_now and not was_published):
+        return False
+    if owner_set_directory or already_listed:
+        return False
+    from .delivery_pricing import valid_coord
+    return bool(str(city or "").strip()) and valid_coord(lat, lng)
+
+
 class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerializer):
     published_at = serializers.DateTimeField(read_only=True)
     is_open_now = serializers.SerializerMethodField()
@@ -577,6 +599,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
 
     def update(self, instance, validated_data):
         previous = instance.is_menu_published
+        # Whether the owner expressed an explicit directory preference in THIS update — if so,
+        # honor it and never auto-override (e.g. publish + deliberately opt out in one PATCH).
+        owner_set_directory = "directory_opt_in" in validated_data
         instance = super().update(instance, validated_data)
         if not instance.is_menu_temporarily_disabled and instance.menu_disabled_note:
             instance.menu_disabled_note = ""
@@ -587,6 +612,20 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         if not instance.is_menu_published and instance.published_at is not None:
             instance.published_at = None
             instance.save(update_fields=["published_at"])
+        # Flywheel: auto-list the business in the public marketplace on its first publish
+        # (owner-approved default). Honors an explicit opt-out set in this update, and only
+        # lists a profile that has the data a listing needs — see _autolist_on_publish.
+        if _autolist_on_publish(
+            is_published_now=instance.is_menu_published,
+            was_published=previous,
+            owner_set_directory=owner_set_directory,
+            already_listed=instance.directory_opt_in,
+            city=getattr(instance, "city", ""),
+            lat=getattr(instance, "lat", None),
+            lng=getattr(instance, "lng", None),
+        ):
+            instance.directory_opt_in = True
+            instance.save(update_fields=["directory_opt_in"])
         return instance
 
     def to_representation(self, instance):
