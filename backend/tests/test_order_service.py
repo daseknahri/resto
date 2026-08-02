@@ -18,6 +18,7 @@ from menu.models import Order
 from menu.order_service import (
     compute_order_delivery_fee,
     compute_order_tip,
+    deplete_stock,
     price_line_options,
     resolve_available_dishes,
     resolve_option_map,
@@ -294,3 +295,53 @@ class PriceLineOptionsTests(SimpleTestCase):
         with patch("menu.views._validate_option_group_selections", return_value=None) as vogs:
             price_line_options(dish, [1, 2], {1: o1, 2: o2}, Decimal("10.00"))
         vogs.assert_called_once_with(dish, [1, 2])
+
+
+class DepleteStockTests(SimpleTestCase):
+    """RISK STRUCT-1 slice 3: deplete_stock — dish + component validate/decrement over the
+    caller's select_for_update-locked rows. Returns the first sold-out slug/name (the caller
+    raises its own _OutOfStock); a decrement to zero flips is_available + stock_auto_zeroed.
+    menu.models.Dish patched; no DB."""
+
+    @patch("menu.models.Dish")
+    def test_sufficient_stock_decrements_and_returns_none(self, mock_dish):
+        locked = {1: SimpleNamespace(pk=1, stock_qty=5)}
+        result = deplete_stock(locked, [(1, 2)], {1: "burger"}, {}, {})
+        self.assertIsNone(result)
+        mock_dish.objects.filter.assert_called_once_with(pk=1)
+        mock_dish.objects.filter.return_value.update.assert_called_once_with(stock_qty=3)
+
+    @patch("menu.models.Dish")
+    def test_dish_short_returns_slug_before_any_decrement(self, mock_dish):
+        # Validation runs for every dish BEFORE any decrement — a short dish returns its slug
+        # and no .update() fires (the caller raises → rollback).
+        locked = {1: SimpleNamespace(pk=1, stock_qty=1)}
+        result = deplete_stock(locked, [(1, 5)], {1: "burger"}, {}, {})
+        self.assertEqual(result, "burger")
+        mock_dish.objects.filter.assert_not_called()
+
+    @patch("menu.models.Dish")
+    def test_decrement_to_zero_sets_soldout_flags(self, mock_dish):
+        locked = {1: SimpleNamespace(pk=1, stock_qty=2)}
+        deplete_stock(locked, [(1, 2)], {1: "burger"}, {}, {})
+        mock_dish.objects.filter.return_value.update.assert_called_once_with(
+            stock_qty=0, is_available=False, stock_auto_zeroed=True
+        )
+
+    @patch("menu.models.Dish")
+    def test_component_short_returns_name_after_dish_decrement(self, mock_dish):
+        # Dish ok (decrements), component short → returns the component NAME. Matches the inline
+        # order (dish decremented, then component short), which the caller's raise rolls back.
+        locked = {1: SimpleNamespace(pk=1, stock_qty=10), 2: SimpleNamespace(pk=2, stock_qty=1)}
+        result = deplete_stock(locked, [(1, 1)], {1: "combo"}, {2: 3}, {2: "patty"})
+        self.assertEqual(result, "patty")
+        mock_dish.objects.filter.assert_called_once_with(pk=1)
+        mock_dish.objects.filter.return_value.update.assert_called_once_with(stock_qty=9)
+
+    @patch("menu.models.Dish")
+    def test_untracked_stock_qty_none_is_skipped(self, mock_dish):
+        # stock_qty None (unlimited) → never validated or decremented.
+        locked = {1: SimpleNamespace(pk=1, stock_qty=None)}
+        result = deplete_stock(locked, [(1, 99)], {1: "burger"}, {}, {})
+        self.assertIsNone(result)
+        mock_dish.objects.filter.assert_not_called()

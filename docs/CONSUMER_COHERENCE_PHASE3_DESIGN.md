@@ -95,7 +95,19 @@ owner notifications (storefront: dispatch+WhatsApp+push+WS; marketplace: dispatc
    `effective_unit_price` patch target (storefront patches `menu.views.effective_unit_price`;
    marketplace/others patch `menu.pricing.effective_unit_price`). Per-line qty parsing (serializer-trusted vs
    `max(1,min(99,…))` clamp), note truncation, and course/seat stay per-view.
-3. Stock lock/decrement + component + ingredient depletion.
+3. **Stock lock/decrement + component** — `deplete_stock(locked_dishes, stock_updates, pk_to_slug,
+   comp_stock_agg, comp_pk_to_name)` centralizes the dish + combo-component validate/decrement over the
+   caller's `select_for_update`-locked rows (a decrement to 0 flips `is_available`+`stock_auto_zeroed`).
+   The lock and the `_OutOfStock` raise stay in each view with the transaction; the helper **returns** the
+   first sold-out slug/name instead of raising (the caller re-raises inside the same atomic block, so a
+   short component still rolls back the dish decrements exactly as before). ✅ **slice 3a.** Works with the
+   existing `@patch("menu.views.Dish.objects")` tests because `.objects` is a class attribute — patching it
+   is path-independent (`menu.views.Dish` **is** `menu.models.Dish`).
+   - **Ingredient depletion (B3 Phase 2) deferred to slice 3b** — it references `RecipeLine`/`Ingredient`,
+     and ~12 order-path tests `@patch("menu.views.RecipeLine")` (a *name* binding, not `.objects`), so a
+     `menu.models`-based helper isn't intercepted and would hit the real DB. 3b must repoint those name
+     patches to `menu.models.RecipeLine`/`Ingredient` (same call the `effective_unit_price` divergence
+     makes). Kept inline in both views for now — modest (~20 lines) and not worth bundling that churn here.
 4. Loyalty sizing/earn; the bounded promo-counter bump; wallet settle.
 Each slice lands as its own gate-verified PR; the frontend cart-model unification (the visual half) is
 deferred with 3b to a UI/UX pass.

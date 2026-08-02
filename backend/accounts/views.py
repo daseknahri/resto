@@ -4809,36 +4809,15 @@ class MarketplacePlaceOrderView(APIView):
                         else:
                             _locked = {}
 
-                        if _stock_updates:
-                            for _dish_pk, _ordered_qty in _stock_updates:
-                                _ld = _locked.get(_dish_pk)
-                                if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
-                                    raise _OutOfStock(_pk_to_slug.get(_dish_pk, ""))
-                            for _dish_pk, _ordered_qty in _stock_updates:
-                                _ld = _locked.get(_dish_pk)
-                                if _ld and _ld.stock_qty is not None:
-                                    _new_qty = max(0, _ld.stock_qty - _ordered_qty)
-                                    _update_fields = {"stock_qty": _new_qty}
-                                    if _new_qty == 0:
-                                        _update_fields["is_available"] = False
-                                        _update_fields["stock_auto_zeroed"] = True
-                                    _Dish.objects.filter(pk=_dish_pk).update(**_update_fields)
-
-                        # Component stock: validate then decrement
-                        if _mkt_comp_stock_agg:
-                            for _cpk, _cqty in _mkt_comp_stock_agg.items():
-                                _ld = _locked.get(_cpk)
-                                if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
-                                    raise _OutOfStock(_mkt_comp_pk_to_name.get(_cpk, ""))
-                            for _cpk, _cqty in _mkt_comp_stock_agg.items():
-                                _ld = _locked.get(_cpk)
-                                if _ld and _ld.stock_qty is not None:
-                                    _cnew = max(0, _ld.stock_qty - _cqty)
-                                    _cupdate_fields = {"stock_qty": _cnew}
-                                    if _cnew == 0:
-                                        _cupdate_fields["is_available"] = False
-                                        _cupdate_fields["stock_auto_zeroed"] = True
-                                    _Dish.objects.filter(pk=_cpk).update(**_cupdate_fields)
+                        # RISK STRUCT-1 slice 3: stock validate/decrement + ingredient depletion shared
+                        # with PlaceOrderView via menu.order_service. The select_for_update lock (above)
+                        # and the _OutOfStock raise stay here with the transaction; deplete_stock returns
+                        # the first sold-out slug/name instead of raising.
+                        _sold_out = _order_service.deplete_stock(
+                            _locked, _stock_updates, _pk_to_slug, _mkt_comp_stock_agg, _mkt_comp_pk_to_name,
+                        )
+                        if _sold_out is not None:
+                            raise _OutOfStock(_sold_out)
 
                         # B3 Phase 2: deplete ingredient stock for recipe-linked ingredients.
                         from django.db.models import F as _mkt_F

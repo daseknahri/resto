@@ -232,3 +232,59 @@ def price_line_options(dish, option_ids, options_map, base_unit_price):
         unit_price += Decimal(str(opt.price_delta))
         option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
     return unit_price, option_snapshots, None
+
+
+def deplete_stock(locked_dishes, stock_updates, pk_to_slug, comp_stock_agg, comp_pk_to_name):
+    """Validate + decrement dish and combo-component stock under the caller's row locks
+    (RISK STRUCT-1, slice 3 — stock depletion).
+
+    MUST be called inside the caller's ``transaction.atomic()`` block, passing the
+    ``select_for_update``-locked ``{pk: Dish}`` map (the lock + the ``_OutOfStock`` raise stay
+    in the view, with the transaction). Returns the slug/name of the FIRST sold-out item —
+    dish slug first, then component name — so the caller raises its own out-of-stock exception
+    (which rolls the whole order back), or ``None`` after applying every decrement.
+
+    Byte-identical to the former inline blocks in ``PlaceOrderView`` and
+    ``MarketplacePlaceOrderView``, with ``raise _OutOfStock(x)`` replaced by ``return x`` at the
+    seam. Equivalent because the caller re-raises inside the same atomic block: a short component
+    (found after the dish decrements have run) still rolls those decrements back exactly as before.
+
+    ``stock_updates``: list of ``(dish_pk, ordered_qty)``. ``comp_stock_agg``:
+    ``{component_pk: total_qty}`` (already aggregated). ``pk_to_slug`` / ``comp_pk_to_name`` are the
+    sold-out message sources. A decrement that reaches 0 also flips ``is_available=False`` +
+    ``stock_auto_zeroed=True`` (the marker the 5am auto-reset cron uses to tell auto- from
+    owner-zeroed dishes).
+    """
+    from menu.models import Dish  # function-local (cycle-avoidance + patch-target parity)
+
+    # Dish stock: validate every combo-dish before decrementing any (parity with both views).
+    for _pk, _ordered in stock_updates:
+        _ld = locked_dishes.get(_pk)
+        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered:
+            return pk_to_slug.get(_pk, "")
+    for _pk, _ordered in stock_updates:
+        _ld = locked_dishes.get(_pk)
+        if _ld and _ld.stock_qty is not None:
+            _new = max(0, _ld.stock_qty - _ordered)
+            _fields = {"stock_qty": _new}
+            if _new == 0:
+                _fields["is_available"] = False
+                _fields["stock_auto_zeroed"] = True
+            Dish.objects.filter(pk=_pk).update(**_fields)
+
+    # Component stock: validate then decrement.
+    for _cpk, _cqty in comp_stock_agg.items():
+        _ld = locked_dishes.get(_cpk)
+        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
+            return comp_pk_to_name.get(_cpk, "")
+    for _cpk, _cqty in comp_stock_agg.items():
+        _ld = locked_dishes.get(_cpk)
+        if _ld and _ld.stock_qty is not None:
+            _cnew = max(0, _ld.stock_qty - _cqty)
+            _cfields = {"stock_qty": _cnew}
+            if _cnew == 0:
+                _cfields["is_available"] = False
+                _cfields["stock_auto_zeroed"] = True
+            Dish.objects.filter(pk=_cpk).update(**_cfields)
+
+    return None
