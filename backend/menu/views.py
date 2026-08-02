@@ -52,7 +52,7 @@ import qrcode
 # import nothing from this app (rest_framework only), so they don't feed the
 # menu/views.py <-> accounts/views.py circular-import web that forces local imports here.
 from accounts.authentication import CustomerSessionAuthentication
-from accounts.permissions import IsOrderOwner, customer_or_none
+from accounts.permissions import IsCustomer, IsOrderOwner, customer_or_none
 # RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
 # sales.permissions imports only rest_framework + accounts.models.User (accounts.models
 # does not import menu), the same import accounts/views.py already does at module level.
@@ -11219,7 +11219,12 @@ class CustomerLoyaltyRedeemView(APIView):
     """POST /api/customer/loyalty/redeem/ — convert loyalty points into wallet credits.
     Requires authenticated customer. Body: { points: int }"""
 
-    permission_classes = [IsAuthenticated]
+    # Customers authenticate via the session-backed CustomerSessionAuthentication, which sets
+    # request.user to the Customer instance. The old `IsAuthenticated` + `request.user.customer_id`
+    # combo was broken: no customer auth class ran, and a Customer principal's PK is `.id`, not
+    # `.customer_id`, so every real customer 404'd here.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
     throttle_classes = [LoyaltyRedeemThrottle]  # OPS-5g: per-customer money-movement cap
 
     def post(self, request, *args, **kwargs):
@@ -11227,11 +11232,10 @@ class CustomerLoyaltyRedeemView(APIView):
         from accounts.models import Customer as _CustM, WalletTransaction as _WTM
         from django.db import connection as _dbc
 
-        # Resolve the platform Customer from the authenticated request
-        try:
-            _customer = _CustM.objects.get(pk=request.user.customer_id)
-        except (AttributeError, _CustM.DoesNotExist):
-            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees a signed-in customer; request.user is the Customer instance.
+        _customer = customer_or_none(request)
+        if _customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         # No verified phone → no wallet: can't redeem points into wallet credit.
         if not _customer.phone_verified:
             return Response(
@@ -11365,16 +11369,20 @@ class CustomerLoyaltyHistoryView(APIView):
     customer: orders that earned points and redemptions that converted points to
     wallet credit. Maximum 50 most-recent entries.
     """
-    permission_classes = [IsAuthenticated]
+    # See CustomerLoyaltyRedeemView: customers use CustomerSessionAuthentication (request.user is
+    # the Customer instance, PK `.id`), gated by IsCustomer. The old IsAuthenticated +
+    # request.user.customer_id combo 404'd every real customer.
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
 
     def get(self, request, *args, **kwargs):
-        from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+        from accounts.models import WalletTransaction as _WTM
         from decimal import Decimal as _Dec
 
-        try:
-            customer = _CustM.objects.get(pk=request.user.customer_id)
-        except (AttributeError, _CustM.DoesNotExist):
-            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+        # IsCustomer guarantees a signed-in customer; request.user is the Customer instance.
+        customer = customer_or_none(request)
+        if customer is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
         events = []
 

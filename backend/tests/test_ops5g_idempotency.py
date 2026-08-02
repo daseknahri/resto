@@ -344,31 +344,31 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
     another customer's key can't read that customer's redemption back out."""
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate the per-customer loyalty_redeem throttle counter
         from menu.views import CustomerLoyaltyRedeemView
         self.factory = APIRequestFactory()
         self.view = CustomerLoyaltyRedeemView.as_view()
 
-    def _post(self, body, customer_id=1):
+    def _post(self, body, principal):
+        # IDENTITY-1: the redeem view resolves the customer off request.user via
+        # customer_or_none(), which requires a real Customer principal (not a MagicMock).
         req = self.factory.post("/api/customer/loyalty/redeem/", body, format="json")
-        req.user = MagicMock(is_authenticated=True)
-        req.user.customer_id = customer_id
-        req.user.pk = customer_id
+        force_authenticate(req, user=principal)
         return self.view(req)
 
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
     def test_preflight_replay_lookup_is_customer_scoped(self, mock_cust, mock_cfg, mock_wt):
-        customer = MagicMock(phone_verified=True, loyalty_points=500,
-                             wallet_balance=Decimal("42.00"))
-        customer.id = 1
-        mock_cust.get.return_value = customer
+        customer = Customer(id=1, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("42.00"))
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         prior = MagicMock(amount=Decimal("10.00"), reference="loyalty:100pts")
         mock_wt.filter.return_value.first.return_value = prior
 
-        resp = self._post({"points": 100, "idempotency_key": "victim-key"}, customer_id=1)
+        resp = self._post({"points": 100, "idempotency_key": "victim-key"}, principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])
@@ -387,17 +387,15 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
         """With the customer_id filter present, a victim's tx is NOT returned to the
         attacker: the customer-scoped queryset yields nothing, so no duplicate replay of
         someone else's amount happens (the attacker proceeds on their own balance instead)."""
-        attacker = MagicMock(phone_verified=True, loyalty_points=50,
-                             wallet_balance=Decimal("0.00"))
-        attacker.id = 2
-        mock_cust.get.return_value = attacker
+        attacker = Customer(id=2, phone_verified=True, loyalty_points=50,
+                            wallet_balance=Decimal("0.00"))
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         # The customer-scoped lookup finds NOTHING for the attacker (the victim's row is
         # excluded by customer_id=2), so .first() returns None → no leak.
         mock_wt.filter.return_value.first.return_value = None
 
-        resp = self._post({"points": 100, "idempotency_key": "victim-key"}, customer_id=2)
+        resp = self._post({"points": 100, "idempotency_key": "victim-key"}, principal=attacker)
 
         # No duplicate replay; the attacker falls through to the threshold guard on THEIR
         # own (insufficient) points → 400, never reading the victim's amount.
@@ -412,11 +410,10 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
         """The concurrent-duplicate (IntegrityError) handler must ALSO scope the replay
         lookup to the requesting customer."""
         from django.db import IntegrityError
-        customer = MagicMock(phone_verified=True, loyalty_points=500,
-                             wallet_balance=Decimal("42.00"))
-        customer.id = 1
+        customer = Customer(id=1, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("42.00"))
+        # The IntegrityError handler calls _customer.refresh_from_db() — stub it (no DB here).
         customer.refresh_from_db = MagicMock()
-        mock_cust.get.return_value = customer
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         # Pre-flight lookup returns None (no prior), so we proceed into the atomic block …
@@ -430,7 +427,7 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
         mock_wt.create.side_effect = IntegrityError("dupe key")
 
         with patch("django.db.transaction.atomic"):
-            resp = self._post({"points": 100, "idempotency_key": "abc"}, customer_id=1)
+            resp = self._post({"points": 100, "idempotency_key": "abc"}, principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])
@@ -455,35 +452,35 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         return f"loyalty:{connection.schema_name}:{self.RAW}"
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate the per-customer loyalty_redeem throttle counter
         from menu.views import CustomerLoyaltyRedeemView
         self.factory = APIRequestFactory()
         self.view = CustomerLoyaltyRedeemView.as_view()
 
-    def _post(self, customer_id=1):
+    def _post(self, principal):
+        # IDENTITY-1: the redeem view resolves the customer off request.user (a real
+        # Customer principal), so force-authenticate one rather than mock request.user.
         req = self.factory.post(
             "/api/customer/loyalty/redeem/",
             {"points": 100, "idempotency_key": self.RAW},
             format="json",
         )
-        req.user = MagicMock(is_authenticated=True)
-        req.user.customer_id = customer_id
-        req.user.pk = customer_id
+        force_authenticate(req, user=principal)
         return self.view(req)
 
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
     def test_preflight_read_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
-        customer = MagicMock(phone_verified=True, loyalty_points=500,
-                             wallet_balance=Decimal("42.00"))
-        customer.id = 1
-        mock_cust.get.return_value = customer
+        customer = Customer(id=1, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("42.00"))
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         mock_wt.filter.return_value.first.return_value = MagicMock(
             amount=Decimal("10.00"), reference="loyalty:100pts")
 
-        resp = self._post(customer_id=1)
+        resp = self._post(principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # The pre-flight replay lookup queries the SCHEMA-NAMESPACED key, not the raw one.
@@ -495,10 +492,8 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
     def test_create_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
-        customer = MagicMock(phone_verified=True, loyalty_points=500,
-                             wallet_balance=Decimal("0.00"))
-        customer.id = 1
-        mock_cust.get.return_value = customer
+        customer = Customer(id=1, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("0.00"))
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         mock_wt.filter.return_value.first.return_value = None  # no prior → proceed to create
@@ -509,7 +504,7 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         mock_cust.select_for_update.return_value.get.return_value = locked
 
         with patch("django.db.transaction.atomic"):
-            resp = self._post(customer_id=1)
+            resp = self._post(principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_wt.create.assert_called_once()
@@ -524,11 +519,10 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
     @patch("accounts.models.Customer.objects")
     def test_integrity_replay_refetch_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
         from django.db import IntegrityError
-        customer = MagicMock(phone_verified=True, loyalty_points=500,
-                             wallet_balance=Decimal("0.00"))
-        customer.id = 1
+        customer = Customer(id=1, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("0.00"))
+        # The IntegrityError handler calls _customer.refresh_from_db() — stub it (no DB here).
         customer.refresh_from_db = MagicMock()
-        mock_cust.get.return_value = customer
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
         mock_wt.filter.return_value.first.return_value = None  # pre-flight: no prior
@@ -540,7 +534,7 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         mock_wt.create.side_effect = IntegrityError("dupe key")  # concurrent winner took it
 
         with patch("django.db.transaction.atomic"):
-            resp = self._post(customer_id=1)
+            resp = self._post(principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])

@@ -26,14 +26,7 @@ from unittest.mock import MagicMock, patch
 from django.db import connection
 from django.test import TransactionTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
-
-
-def _auth_user(customer_id):
-    u = MagicMock()
-    u.is_authenticated = True
-    u.customer_id = customer_id
-    return u
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 class LoyaltyRedeemCrossTenantNamespacingTests(TransactionTestCase):
@@ -45,9 +38,11 @@ class LoyaltyRedeemCrossTenantNamespacingTests(TransactionTestCase):
     RAW_KEY = "client-retry-token-001"
 
     def setUp(self):
+        from django.core.cache import cache
         from accounts.models import Customer
         from menu.views import CustomerLoyaltyRedeemView
 
+        cache.clear()  # isolate the per-customer loyalty_redeem throttle counter
         self.factory = APIRequestFactory()
         self.view = CustomerLoyaltyRedeemView.as_view()
         # One platform customer with enough points to redeem twice.
@@ -66,7 +61,8 @@ class LoyaltyRedeemCrossTenantNamespacingTests(TransactionTestCase):
             {"points": points, "idempotency_key": self.RAW_KEY},
             format="json",
         )
-        req.user = _auth_user(customer_id=self.customer.id)
+        # IDENTITY-1: the view reads the Customer off request.user; force the real one.
+        force_authenticate(req, user=self.customer)
         cfg = MagicMock(redeem_threshold=100, points_value=Decimal("0.10"))
         # LoyaltyConfig is a tenant-schema model; patch it so no physical schema is needed.
         # connection.schema_name is the ONLY thing the key-namespacing reads.

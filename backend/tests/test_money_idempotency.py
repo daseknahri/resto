@@ -18,29 +18,27 @@ from menu.views import CustomerLoyaltyRedeemView
 from accounts.views import CustomerWalletRedeemVoucherView
 
 
-def _auth_user(customer_id=7):
-    u = MagicMock()
-    u.is_authenticated = True
-    u.customer_id = customer_id
-    return u
-
-
 class LoyaltyRedeemIdempotencyTests(SimpleTestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate the per-customer loyalty_redeem throttle counter
         self.factory = APIRequestFactory()
         self.view = CustomerLoyaltyRedeemView.as_view()
 
-    def _post(self, body):
+    def _post(self, body, customer):
         req = self.factory.post("/api/customer/loyalty/redeem/", body, format="json")
-        req.user = _auth_user()
+        # IDENTITY-1: the redeem view reads the Customer off request.user (hydrated by
+        # CustomerSessionAuthentication), so force a real Customer principal — the resolver
+        # (customer_or_none) requires the actual model class, not a MagicMock.
+        force_authenticate(req, user=customer)
         return self.view(req)
 
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
     def test_replay_returns_duplicate_without_recharging(self, mock_cust, mock_cfg, mock_wt):
-        customer = MagicMock(phone_verified=True, loyalty_points=500, wallet_balance=Decimal("42.00"))
-        mock_cust.get.return_value = customer
+        customer = Customer(id=7, phone_verified=True, loyalty_points=500,
+                            wallet_balance=Decimal("42.00"))
 
         cfg = MagicMock(redeem_threshold=100, points_value=Decimal("0.10"))
         mock_cfg.filter.return_value.first.return_value = cfg
@@ -48,7 +46,7 @@ class LoyaltyRedeemIdempotencyTests(SimpleTestCase):
         prior = MagicMock(amount=Decimal("10.00"), reference="loyalty:100pts")
         mock_wt.filter.return_value.first.return_value = prior
 
-        resp = self._post({"points": 100, "idempotency_key": "abc-123"})
+        resp = self._post({"points": 100, "idempotency_key": "abc-123"}, customer=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])
