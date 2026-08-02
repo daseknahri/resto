@@ -441,7 +441,7 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
         req.session = {}
         return req
 
-    @patch("menu.views.RecipeLine")
+    @patch("menu.models.RecipeLine")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.DishOption.objects")
@@ -706,7 +706,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
         plan.can_whatsapp_order = False
         tenant.plan = plan
 
-        with patch("menu.views.RecipeLine"), \
+        with patch("menu.models.RecipeLine"), \
              patch("menu.views.OrderItem.objects") as item_om, \
              patch("menu.views.Dish.objects") as dish_om, \
              patch("menu.views.DishOption.objects") as dish_opt, \

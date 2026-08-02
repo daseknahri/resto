@@ -351,29 +351,35 @@ class IngredientDepletionSourceTests(SimpleTestCase):
     """Verify ingredient depletion code is present in both order views."""
 
     def test_place_order_view_depletes_ingredients(self):
+        # RISK STRUCT-1 slice 3b: ingredient depletion moved to the shared order service; the view
+        # delegates to it, and the RecipeLine query + stock_quantity update live in the helper.
         from menu.views import PlaceOrderView
+        from menu.order_service import deplete_ingredients
         src = inspect.getsource(PlaceOrderView.post)
-        self.assertIn("RecipeLine.objects.filter", src,
-                      "PlaceOrderView.post must query RecipeLine for ingredient depletion")
-        self.assertIn("stock_quantity", src,
-                      "PlaceOrderView.post must update ingredient stock_quantity")
+        self.assertIn("deplete_ingredients", src,
+                      "PlaceOrderView.post must delegate ingredient depletion to the shared helper")
+        helper_src = inspect.getsource(deplete_ingredients)
+        self.assertIn("RecipeLine.objects.filter", helper_src)
+        self.assertIn("stock_quantity", helper_src)
 
     def test_marketplace_place_order_depletes_ingredients(self):
         from accounts.views import MarketplacePlaceOrderView
+        from menu.order_service import deplete_ingredients
         src = inspect.getsource(MarketplacePlaceOrderView.post)
-        self.assertIn("_RecipeLine", src,
-                      "MarketplacePlaceOrderView.post must query RecipeLine for ingredient depletion")
-        self.assertIn("stock_quantity", src,
-                      "MarketplacePlaceOrderView.post must update ingredient stock_quantity")
+        self.assertIn("deplete_ingredients", src,
+                      "MarketplacePlaceOrderView.post must delegate ingredient depletion to the shared helper")
+        self.assertIn("stock_quantity", inspect.getsource(deplete_ingredients))
 
-    def test_depletion_is_inside_atomic_block(self):
-        """The depletion code appears after the stock-update block in the atomic section."""
+    def test_depletion_runs_after_stock_in_order_flow(self):
+        """Both depletions are now shared helpers; stock depletion must be called before
+        ingredient depletion in the storefront order flow."""
         from menu.views import PlaceOrderView
         src = inspect.getsource(PlaceOrderView.post)
-        stock_auto_idx = src.find("stock_auto_zeroed")
-        recipe_line_idx = src.find("RecipeLine.objects.filter")
-        self.assertGreater(recipe_line_idx, stock_auto_idx,
-                           "Ingredient depletion must come after dish-stock update in PlaceOrderView.post")
+        stock_idx = src.find("deplete_stock")
+        ingredient_idx = src.find("deplete_ingredients")
+        self.assertGreater(stock_idx, -1, "PlaceOrderView.post must call deplete_stock")
+        self.assertGreater(ingredient_idx, stock_idx,
+                           "Ingredient depletion must come after stock depletion in PlaceOrderView.post")
 
 
 # ── URL registration checks ───────────────────────────────────────────────────

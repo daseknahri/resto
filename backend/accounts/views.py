@@ -4819,28 +4819,9 @@ class MarketplacePlaceOrderView(APIView):
                         if _sold_out is not None:
                             raise _OutOfStock(_sold_out)
 
-                        # B3 Phase 2: deplete ingredient stock for recipe-linked ingredients.
-                        from django.db.models import F as _mkt_F
-                        from menu.models import Ingredient as _Ingredient, RecipeLine as _RecipeLine
-                        _mkt_dish_qty_map: dict = {}
-                        for _item_d in order_items_data:
-                            _d = dishes_map[_item_d["dish_slug"]]
-                            if isinstance(_d.pk, int):
-                                _mkt_dish_qty_map[_d.pk] = _mkt_dish_qty_map.get(_d.pk, 0) + _item_d["qty"]
-                        if _mkt_dish_qty_map:
-                            _mkt_recipe_lines = _RecipeLine.objects.filter(
-                                dish_id__in=list(_mkt_dish_qty_map.keys())
-                            ).only("dish_id", "ingredient_id", "quantity")
-                            _mkt_ing_depletion: dict = {}
-                            for _rl in _mkt_recipe_lines:
-                                _delta = _rl.quantity * _mkt_dish_qty_map[_rl.dish_id]
-                                _mkt_ing_depletion[_rl.ingredient_id] = (
-                                    _mkt_ing_depletion.get(_rl.ingredient_id, Decimal("0")) + _delta
-                                )
-                            for _ing_pk, _delta in _mkt_ing_depletion.items():
-                                _Ingredient.objects.filter(pk=_ing_pk).update(
-                                    stock_quantity=_mkt_F("stock_quantity") - _delta
-                                )
+                        # B3 Phase 2: deplete ingredient stock — shared with PlaceOrderView via
+                        # menu.order_service (RISK STRUCT-1 slice 3b). Runs inside this atomic block.
+                        _order_service.deplete_ingredients(order_items_data, dishes_map)
 
                         # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create().
                         # Marketplace only auto-applies promos (no customer code input), so a

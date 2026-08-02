@@ -2756,7 +2756,8 @@ class PlaceOrderView(APIView):
         # RISK STRUCT-1: item resolution extracted verbatim into menu.order_service (OrderService
         # seam, shared with MarketplacePlaceOrderView).
         from menu.order_service import (
-            resolve_available_dishes, resolve_option_map, price_line_options, deplete_stock,
+            resolve_available_dishes, resolve_option_map, price_line_options,
+            deplete_stock, deplete_ingredients,
         )
         dishes_map = resolve_available_dishes(slugs)
 
@@ -3173,29 +3174,10 @@ class PlaceOrderView(APIView):
                 if _sold_out is not None:
                     raise _OutOfStock(_sold_out)
 
-                # B3 Phase 2: deplete ingredient stock for recipe-linked ingredients.
-                # Runs inside the same atomic block so a failed checkout never leaves
-                # partial ingredient deductions. Negative stock is allowed (indicates
-                # variance / under-stocking for the owner to investigate).
-                _dish_qty_map: dict[int, int] = {}
-                for _item_d in order_items_data:
-                    _d = dishes_map[_item_d["dish_slug"]]
-                    if isinstance(_d.pk, int):
-                        _dish_qty_map[_d.pk] = _dish_qty_map.get(_d.pk, 0) + _item_d["qty"]
-                if _dish_qty_map:
-                    _recipe_lines = RecipeLine.objects.filter(
-                        dish_id__in=list(_dish_qty_map.keys())
-                    ).only("dish_id", "ingredient_id", "quantity")
-                    _ing_depletion: dict[int, Decimal] = {}
-                    for _rl in _recipe_lines:
-                        _delta = _rl.quantity * _dish_qty_map[_rl.dish_id]
-                        _ing_depletion[_rl.ingredient_id] = (
-                            _ing_depletion.get(_rl.ingredient_id, Decimal("0")) + _delta
-                        )
-                    for _ing_pk, _delta in _ing_depletion.items():
-                        Ingredient.objects.filter(pk=_ing_pk).update(
-                            stock_quantity=F("stock_quantity") - _delta
-                        )
+                # B3 Phase 2: deplete ingredient stock — shared with MarketplacePlaceOrderView via
+                # menu.order_service (RISK STRUCT-1 slice 3b). Runs inside the same atomic block so a
+                # failed checkout never leaves partial deductions.
+                deplete_ingredients(order_items_data, dishes_map)
 
                 # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create() so
                 # a failed increment never leaves a discounted order in the DB.
