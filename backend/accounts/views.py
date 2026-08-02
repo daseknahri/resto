@@ -3440,8 +3440,8 @@ def _promo_badge_from_denorm(promos, now_local=None):
 
 # Internal raw-input keys stored on each cached row (stripped before the HTTP response).
 # NOTE: the schedule input is carried under "_raw_schedule" — NOT the public
-# "business_hours_schedule" field — so the recompute is uniform across both views and
-# DirectoryView's response shape stays unchanged (it does not expose business hours).
+# "business_hours_schedule" field — so the is_open recompute reads a
+# stable schedule input regardless of which public fields the response exposes.
 # MarketplaceView keeps its own public "business_hours_schedule" field untouched.
 _LIVE_ROW_INTERNAL_KEYS = (
     "_raw_is_open",
@@ -3718,129 +3718,10 @@ def _apply_business_type_filter(qs, request):
     return qs.filter(flt)
 
 
-class DirectoryView(APIView):
-    """GET /api/directory/ — public list of restaurants that opted in.
-
-    Query params:
-      city=        filter by city (case-insensitive contains)
-      cuisine=     filter by cuisine_type (case-insensitive contains)
-    """
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
-    throttle_classes = [MarketplaceBrowseThrottle]
-
-    def get(self, request, *args, **kwargs):
-        from tenancy.models import Profile
-
-        city_q = (request.query_params.get("city") or "").strip()
-        cuisine_q = (request.query_params.get("cuisine") or "").strip()
-
-        qs = (
-            Profile.objects
-            # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
-            # restaurants drop out of the marketplace but keep serving their own subdomain.
-            .filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-            .select_related("tenant")
-            .order_by("tenant__name")
-        )
-        if city_q:
-            qs = qs.filter(city__icontains=city_q)
-        if cuisine_q:
-            qs = qs.filter(cuisine_type__icontains=cuisine_q)
-        qs = _apply_business_type_filter(qs, request)
-
-        # R9: page/page_size (backward-compatible — default page_size=100 = the old cap,
-        # so a no-param request from the un-updated frontend still gets up to 100 rows).
-        page, page_size = _parse_public_list_pagination(request)
-
-        _ck = _public_list_cache_key("directory", request)
-
-        def _build():
-            # The expensive O(N_tenants) rebuild — runs at most once per key under
-            # concurrency (single-flight; see _public_list_get_or_build). Returns the
-            # payload WITH internal "_raw_*" inputs; the post-cache live recompute
-            # (_refresh_marketplace_live_fields) strips them before the HTTP response.
-            # R9: slice ONE PAST the page (start : start+size+1) so the extra row tells us
-            # has_more without a second COUNT. The qs is ordered (tenant__name) BEFORE the
-            # slice, so page boundaries are stable. Filter lists are built from the page
-            # rows (as before) — they describe the current page, not the whole table.
-            start = (page - 1) * page_size
-            window = list(qs[start:start + page_size + 1])
-            has_more = len(window) > page_size
-            profiles_page = window[:page_size]
-
-            results = []
-            cities_set: set = set()
-            cuisines_set: set = set()
-
-            # B8: ratings are denormalized onto the public Profile (rating_avg /
-            # rating_count), kept in sync by the menu.Rating signals. This loop is now
-            # pure in-memory — no per-tenant schema_context switch for the rating.
-            for profile in profiles_page:
-                tenant = profile.tenant
-                # Derive is_open identically to MarketplaceView (schedule-aware, tenant-local)
-                # so the SAME restaurant reads the same open/closed state on both listings.
-                is_currently_open = _compute_is_open_now(profile)
-
-                rating_average = float(profile.rating_avg) if profile.rating_avg is not None else None
-                rating_count = profile.rating_count or 0
-
-                if profile.city:
-                    cities_set.add(profile.city)
-                if profile.cuisine_type:
-                    cuisines_set.add(profile.cuisine_type)
-
-                results.append({
-                    "slug": tenant.slug,
-                    "name": tenant.name,
-                    "tagline": profile.tagline or "",
-                    "logo_url": profile.logo_url or "",
-                    "cuisine_type": profile.cuisine_type or "",
-                    "business_type": getattr(profile, "business_type", "") or "restaurant",
-                    "city": profile.city or "",
-                    "is_open": is_currently_open,
-                    "rating_average": rating_average,
-                    "rating_count": rating_count,
-                    "delivery_enabled": bool(profile.delivery_enabled),
-                    # Raw inputs for the post-cache is_open recompute (see
-                    # _refresh_marketplace_live_fields). All internal ("_raw_*") and stripped
-                    # before the HTTP response — the directory payload does NOT expose business
-                    # hours, so the schedule rides under _raw_schedule (not a public field).
-                    "_raw_is_open": bool(profile.is_open),
-                    "_raw_menu_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
-                    "_raw_timezone": (getattr(profile, "timezone", "") or ""),
-                    "_raw_schedule": profile.business_hours_schedule or {},
-                    "_raw_closure_dates": list(getattr(profile, "closure_dates", None) or []),
-                })
-
-            cities = sorted(cities_set)
-            cuisines = sorted(cuisines_set)
-
-            # R9: response stays ADDITIVE — keep restaurants[] + filters EXACTLY as
-            # before, ADD has_more/page/page_size alongside. These top-level keys ride
-            # through _refresh_marketplace_live_fields unchanged (it only touches rows +
-            # internal keys), so they reach the client on both cache hit and rebuild.
-            return {
-                "restaurants": results,
-                "filters": {"cities": cities, "cuisines": cuisines},
-                "has_more": has_more,
-                "page": page,
-                "page_size": page_size,
-            }
-
-        # Single-flight: a HIT returns immediately; a MISS rebuilds at most once per key
-        # (concurrent missers wait for + serve the winner's value). Return a COPY with
-        # is_open recomputed live and the internal raw inputs stripped — the post-cache
-        # recompute runs on whatever payload comes back (hit or rebuilt), unchanged.
-        _payload = _public_list_get_or_build(_ck, _build)
-        return Response(_refresh_marketplace_live_fields(_payload, include_promo_flash=False))
-
-
 class MarketplaceView(APIView):
     """GET /api/marketplace/ — public marketplace listing with advanced filters.
 
-    Extends DirectoryView with:
+    Query params:
       ?q=           full-text search across name / tagline / cuisine
       ?city=        city filter
       ?cuisine=     cuisine filter

@@ -331,8 +331,8 @@ class TenantMetaView(APIView):
             return built_data
 
         # Single-flight: on a cache miss at peak, only one request runs _build(); the rest
-        # wait briefly then read the freshly populated value. Mirrors the MarketplaceView /
-        # DirectoryView pattern exactly (accounts.views._public_list_get_or_build).
+        # wait briefly then read the freshly populated value. Mirrors the MarketplaceView
+        # pattern exactly (accounts.views._public_list_get_or_build).
         payload = get_or_build_single_flight(
             cache_key,
             _build,
@@ -352,15 +352,13 @@ class TenantMetaView(APIView):
 # of these changes what the cross-tenant listing shows (membership, a result's
 # serialized fields, the open/closed verdict, or a facet list), so a save touching one
 # must bust the GLOBAL public-list cache (accounts.views._bust_public_list_cache).
-# Derived from the two views in accounts/views.py:
-#   DirectoryView   — directory_opt_in/is_menu_published/tenant active (membership);
-#                     city, cuisine_type (filter + facet); tagline, logo_url,
-#                     business_type, delivery_enabled (serialized); is_open via
-#                     _compute_is_open_now (is_open / is_menu_temporarily_disabled /
-#                     business_hours_schedule / timezone).
-#   MarketplaceView — + delivery_enabled, price_tier (filter); tags (filter + facet);
-#                     address, delivery_fee, delivery_minimum_order, lat, lng,
-#                     business_hours_schedule (serialized); timezone (open + promo tz).
+# Derived from MarketplaceView in accounts/views.py:
+#   directory_opt_in / is_menu_published / tenant active (membership);
+#   city, cuisine_type, price_tier (filter); tags (filter + facet);
+#   tagline, logo_url, business_type, delivery_enabled, address, delivery_fee,
+#   delivery_minimum_order, lat, lng, business_hours_schedule (serialized);
+#   is_open via _compute_is_open_now (is_open / is_menu_temporarily_disabled /
+#   business_hours_schedule / timezone); timezone also drives the promo tz.
 # Excluded on purpose: rating_avg/rating_count + marketplace_promos (own denorm bust
 # paths) and unrelated config (notify_*/winback_*/commission/…).
 LISTING_RELEVANT_FIELDS = frozenset({

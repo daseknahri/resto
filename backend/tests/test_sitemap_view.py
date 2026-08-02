@@ -2,8 +2,8 @@
 Tests for the public SEO sitemap view: GET /sitemap.xml (config.sitemap).
 
 Unit-level (SimpleTestCase + mocks — no real DB or schema switch). The view
-iterates tenants cross-schema via tenancy.models.Profile, exactly like
-DirectoryView, so we mock the chained queryset's .iterator().
+iterates tenants cross-schema via tenancy.models.Profile, like the public
+marketplace listing, so we mock the chained queryset's .iterator().
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch

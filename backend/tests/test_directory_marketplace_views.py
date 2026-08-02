@@ -1,6 +1,5 @@
 """
 Tests for marketplace / directory public views:
-  - DirectoryView              GET /api/directory/
   - MarketplaceView            GET /api/marketplace/
   - MarketplaceMenuView        GET /api/marketplace/menu/<slug>/
   - MarketplacePlaceOrderView  POST /api/marketplace/order/
@@ -18,7 +17,6 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import (
-    DirectoryView,
     MarketplaceView,
     MarketplaceMenuView,
     MarketplacePlaceOrderView,
@@ -87,129 +85,6 @@ def _sc_mock():
     def _inner(*args, **kwargs):
         yield
     return _inner
-
-
-# ── DirectoryView ─────────────────────────────────────────────────────────────
-
-def _make_sliceable_qs(rows):
-    """Return a MagicMock queryset whose __getitem__ yields *rows* when sliced."""
-    qs = MagicMock()
-    # list() calls __iter__ (via __getitem__ with a slice); MagicMock's default
-    # __iter__ raises TypeError, so we override __getitem__ to return the list
-    # regardless of the key/slice used (the view always slices with [:N]).
-    qs.__getitem__ = lambda s, k: rows
-    return qs
-
-
-class DirectoryViewTests(SimpleTestCase):
-    def setUp(self):
-        cache.clear()  # responses are cached by query params — isolate each test
-        self.factory = APIRequestFactory()
-        self.view = DirectoryView.as_view()
-
-    def _get(self, params=None):
-        req = self.factory.get("/api/directory/", params or {})
-        req.user = _anon()
-        return self.view(req)
-
-    def test_returns_200_with_empty_qs(self):
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([])
-            resp = self._get()
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("restaurants", resp.data)
-        self.assertIn("filters", resp.data)
-
-    def test_returns_restaurant_list(self):
-        profile = _make_profile()
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            with patch("django_tenants.utils.schema_context", _sc_mock()):
-                with patch("menu.models.Rating") as mock_rating:
-                    mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
-                    resp = self._get()
-
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(resp.data["restaurants"]), 1)
-        r = resp.data["restaurants"][0]
-        self.assertEqual(r["slug"], "bistro")
-        self.assertEqual(r["name"], "Bistro Paris")
-
-    def test_filters_structure_has_cities_and_cuisines(self):
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([])
-            resp = self._get()
-        self.assertIn("cities", resp.data["filters"])
-        self.assertIn("cuisines", resp.data["filters"])
-
-    def test_filters_derived_from_fetched_rows(self):
-        """Cities/cuisines come from the profiles in the queryset page (no extra DB call)."""
-        profile = _make_profile(city="Casablanca", cuisine_type="Moroccan")
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            with patch("django_tenants.utils.schema_context", _sc_mock()):
-                with patch("menu.models.Rating") as mock_rating:
-                    mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
-                    resp = self._get()
-        self.assertIn("Casablanca", resp.data["filters"]["cities"])
-        self.assertIn("Moroccan", resp.data["filters"]["cuisines"])
-
-    def test_city_filter_applied(self):
-        with patch("tenancy.models.Profile") as mock_p:
-            qs = MagicMock()
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
-            qs.filter.return_value = _make_sliceable_qs([])
-            qs.__getitem__ = lambda s, k: []
-            resp = self._get(params={"city": "Paris"})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_cuisine_filter_applied(self):
-        with patch("tenancy.models.Profile") as mock_p:
-            qs = MagicMock()
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
-            qs.filter.return_value = _make_sliceable_qs([])
-            qs.__getitem__ = lambda s, k: []
-            resp = self._get(params={"cuisine": "Italian"})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_business_type_filter_applied(self):
-        # View-level regression for the type lens: exercises the real get() path
-        # with ?business_type= (the helper is unit-tested separately).
-        with patch("tenancy.models.Profile") as mock_p:
-            qs = MagicMock()
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
-            qs.filter.return_value = _make_sliceable_qs([])
-            qs.__getitem__ = lambda s, k: []
-            resp = self._get(params={"business_type": "pharmacy"})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_is_open_honors_schedule_like_marketplace(self):
-        """CHANGE 3a: DirectoryView derives is_open via the schedule-aware rule, so a
-        profile that is currently closed reports is_open=False — identical to
-        MarketplaceView. The verdict is recomputed LIVE at request time (post-cache) from
-        the row's raw inputs, so the manual toggle off → False is reflected in the response."""
-        profile = _make_profile(is_open=False)  # manual toggle off → closed
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            resp = self._get()
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertFalse(resp.data["restaurants"][0]["is_open"])
-
-    def test_is_open_true_when_schedule_says_open(self):
-        """The same rule reports is_open=True when the restaurant is open (manual toggle on,
-        no schedule restriction → open). Recomputed live at request time from raw inputs."""
-        profile = _make_profile()  # is_open=True, empty schedule → open
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
-                _make_sliceable_qs([profile])
-            resp = self._get()
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.data["restaurants"][0]["is_open"])
 
 
 # ── MarketplaceView ───────────────────────────────────────────────────────────
@@ -665,64 +540,6 @@ class MarketplacePaginationTests(SimpleTestCase):
         self.assertTrue(resp.data["has_more"])
 
 
-class DirectoryPaginationTests(SimpleTestCase):
-    """FIX2: page/page_size + has_more on DirectoryView; no-param is backward-compatible."""
-
-    def setUp(self):
-        cache.clear()
-        self.factory = APIRequestFactory()
-        self.view = DirectoryView.as_view()
-
-    def _get(self, params=None):
-        req = self.factory.get("/api/directory/", params or {})
-        req.user = _anon()
-        return self.view(req)
-
-    def _run(self, rows, params):
-        fake_qs = _FakeListQS(rows)
-        with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = fake_qs
-            return self._get(params)
-
-    def test_no_param_request_is_backward_compatible(self):
-        rows = _profiles(3)
-        resp = self._run(rows, {})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("restaurants", resp.data)
-        self.assertIn("filters", resp.data)
-        self.assertEqual(len(resp.data["restaurants"]), 3)
-        self.assertEqual(resp.data["page"], 1)
-        self.assertEqual(resp.data["page_size"], 100)
-        self.assertFalse(resp.data["has_more"])
-
-    def test_default_page_size_caps_at_100_with_has_more(self):
-        rows = _profiles(101)
-        resp = self._run(rows, {})
-        self.assertEqual(len(resp.data["restaurants"]), 100)
-        self.assertTrue(resp.data["has_more"])
-
-    def test_page_2_returns_next_slice(self):
-        rows = _profiles(25)
-        resp = self._run(rows, {"page": "2", "page_size": "10"})
-        slugs = [r["slug"] for r in resp.data["restaurants"]]
-        self.assertEqual(slugs, [f"r{i}" for i in range(10, 20)])
-        self.assertTrue(resp.data["has_more"])
-
-    def test_has_more_false_on_last_page(self):
-        rows = _profiles(25)
-        resp = self._run(rows, {"page": "3", "page_size": "10"})
-        slugs = [r["slug"] for r in resp.data["restaurants"]]
-        self.assertEqual(slugs, [f"r{i}" for i in range(20, 25)])
-        self.assertFalse(resp.data["has_more"])
-
-    def test_page_size_clamped_to_cap_50(self):
-        rows = _profiles(60)
-        resp = self._run(rows, {"page_size": "999"})
-        self.assertEqual(resp.data["page_size"], 50)
-        self.assertEqual(len(resp.data["restaurants"]), 50)
-        self.assertTrue(resp.data["has_more"])
-
-
 # ── Post-cache live-verdict recompute (freshness fix) ─────────────────────────
 # The list-cache freezes the whole response for the TTL, but is_open / promo_badge /
 # flash_sale_active are time-sensitive. _refresh_marketplace_live_fields recomputes
@@ -906,7 +723,7 @@ class RefreshLiveFieldsTests(SimpleTestCase):
         self.assertIn("business_hours_schedule", row)
 
     def test_directory_recompute_only_touches_is_open_and_strips_internals(self):
-        """DirectoryView path (include_promo_flash=False): is_open recomputed, internals
+        """Non-promo listing path (include_promo_flash=False): is_open recomputed, internals
         stripped, no promo/flash keys introduced, schedule NOT leaked (directory shape)."""
         from datetime import datetime
         from zoneinfo import ZoneInfo
@@ -929,7 +746,7 @@ class RefreshLiveFieldsTests(SimpleTestCase):
         self.assertNotIn("flash_sale_active", row)
         for leak in ("_raw_is_open", "_raw_menu_disabled", "_raw_timezone", "_raw_schedule"):
             self.assertNotIn(leak, row)
-        # DirectoryView does not expose business hours.
+        # This non-promo listing shape does not expose business hours.
         self.assertNotIn("business_hours_schedule", row)
 
     def test_cache_hit_path_recomputes_without_db(self):
