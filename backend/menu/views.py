@@ -3000,30 +3000,33 @@ class PlaceOrderView(APIView):
         _promo_discount = Decimal("0")
         _promo_code_input = str(request.data.get("promo_code") or "").strip().upper()
         if _promo_code_input:
-            # Code-based lookup: find an active promotion matching this code
-            try:
-                _code_promo = Promotion.objects.get(
-                    code__iexact=_promo_code_input,
-                    is_active=True,
-                )
-                _code_valid = True
-                if _code_promo.max_uses is not None and _code_promo.use_count >= _code_promo.max_uses:
-                    _code_valid = False
-                if Decimal(str(_code_promo.min_order_amount or "0")) > _food_subtotal:
-                    _code_valid = False
-                if not _is_promo_active_now(_code_promo, now_local=_promo_now_local):
-                    _code_valid = False
-                if _code_valid:
-                    _best_promo = _code_promo
-                    _promo_discount = _compute_promo_discount(_code_promo, _food_subtotal, _delivery_fee)
-                else:
-                    return Response(
-                        {"detail": "Promo code is not valid for this order.", "code": "promo_invalid"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-            except Promotion.DoesNotExist:
+            # Code-based lookup: find an active promotion matching this code. Use filter().first()
+            # (NOT .get) — Promotion.code has no unique constraint, so two active rows with the same
+            # code case-insensitively ("SAVE" + "save") would raise MultipleObjectsReturned, which the
+            # old `except Promotion.DoesNotExist` did NOT catch → a 500 on the checkout hot path.
+            _code_promo = (
+                Promotion.objects.filter(code__iexact=_promo_code_input, is_active=True)
+                .order_by("id")
+                .first()
+            )
+            if _code_promo is None:
                 return Response(
                     {"detail": "Promo code not found.", "code": "promo_not_found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            _code_valid = True
+            if _code_promo.max_uses is not None and _code_promo.use_count >= _code_promo.max_uses:
+                _code_valid = False
+            if Decimal(str(_code_promo.min_order_amount or "0")) > _food_subtotal:
+                _code_valid = False
+            if not _is_promo_active_now(_code_promo, now_local=_promo_now_local):
+                _code_valid = False
+            if _code_valid:
+                _best_promo = _code_promo
+                _promo_discount = _compute_promo_discount(_code_promo, _food_subtotal, _delivery_fee)
+            else:
+                return Response(
+                    {"detail": "Promo code is not valid for this order.", "code": "promo_invalid"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
@@ -7560,7 +7563,12 @@ class OwnerPromotionDetailView(APIView):
             p.is_active = bool(data["is_active"])
         if "max_uses" in data:
             raw = data["max_uses"]
-            p.max_uses = max(1, int(raw)) if raw is not None else None
+            # A cleared ("") or non-numeric max_uses would raise ValueError on int() → 500. Match the
+            # create path (which guards the same parse); leave the field unchanged on bad input.
+            try:
+                p.max_uses = max(1, int(raw)) if raw is not None else None
+            except (TypeError, ValueError):
+                pass
         if "code" in data:
             p.code = str(data["code"] or "").strip().upper()[:20]
 
@@ -11388,9 +11396,10 @@ class PromoCodeCheckView(APIView):
         if not code:
             return Response({"valid": False, "detail": "No code provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            promo = Promotion.objects.get(code__iexact=code, is_active=True)
-        except Promotion.DoesNotExist:
+        # filter().first() (NOT .get) — a duplicate active code (no DB unique constraint) would
+        # raise MultipleObjectsReturned here and 500 the pre-checkout code validation.
+        promo = Promotion.objects.filter(code__iexact=code, is_active=True).order_by("id").first()
+        if promo is None:
             return Response({"valid": False, "detail": "Promo code not found."})
 
         # Check usage cap
