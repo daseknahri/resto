@@ -1457,7 +1457,7 @@ const reorder = async (order) => {
   if (cart.items.length > 0) {
     const ok = await confirm({
       title: t('customerAccount.reorderCartTitle'),
-      message: t('customerAccount.reorderCartBody'),
+      body: t('customerAccount.reorderCartBody'),
       confirmLabel: t('customerAccount.reorderCartConfirm'),
       danger: false,
     });
@@ -2213,7 +2213,7 @@ const cancelOrder = async (order) => {
   if (cancellingOrderNumber.value) return;
   const ok = await confirm({
     title: t('customerAccount.cancelConfirm'),
-    message: t('customerAccount.cancelConfirmBody'),
+    body: t('customerAccount.cancelConfirmBody'),
     confirmLabel: t('customerAccount.cancelConfirmYes'),
     danger: true,
   });
@@ -2241,7 +2241,7 @@ const cancelMarketplaceOrder = async (order) => {
   if (cancellingOrderNumber.value) return;
   const ok = await confirm({
     title: t('customerAccount.cancelConfirm'),
-    message: t('customerAccount.cancelConfirmBody'),
+    body: t('customerAccount.cancelConfirmBody'),
     confirmLabel: t('customerAccount.cancelConfirmYes'),
     danger: true,
   });
