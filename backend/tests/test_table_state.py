@@ -273,6 +273,23 @@ class StaffTransferItemsViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "no_dest")
 
+    def test_non_numeric_dest_order_id_is_400(self):
+        """Live-hardening: a non-numeric dest_order_id would ValueError on the ORM lookup → 500."""
+        resp = self._post(1, {"item_ids": [10], "dest_order_id": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "invalid_transfer")
+
+    def test_non_list_item_ids_is_400(self):
+        resp = self._post(1, {"item_ids": 10, "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "no_items")
+
+    def test_non_numeric_item_id_is_400(self):
+        """A non-numeric item id would ValueError on int(x) when building the id set → 500."""
+        resp = self._post(1, {"item_ids": ["abc"], "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "invalid_transfer")
+
     @patch("menu.views._can_edit_tenant_order", return_value=False)
     def test_no_perm_is_403(self, _mock):
         resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
@@ -403,6 +420,11 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
         resp = self._post(1, {})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "no_src")
+
+    def test_non_numeric_src_order_id_is_404(self):
+        """Live-hardening: a non-numeric src_order_id would ValueError on the ORM lookup → 500."""
+        resp = self._post(1, {"src_order_id": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     @patch("menu.views._can_edit_tenant_order", return_value=False)
     def test_no_perm_is_403(self, _mock):

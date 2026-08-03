@@ -302,6 +302,12 @@ class CommissionStatementBucketTests(SimpleTestCase):
         # The half-open UTC instant for June-start is 2026-05-31 20:00Z.
         self.assertEqual(start.astimezone(_tz.utc), datetime(2026, 5, 31, 20, 0, tzinfo=_tz.utc))
 
+    def test_out_of_range_year_is_400_not_500(self):
+        """Live-hardening: an unbounded large year (99999) passes int() but would overflow
+        _dt(year, ...) below → ValueError → 500. It must be a clean 400."""
+        resp = self._run(year=99999, month=6, tz_name="UTC", capture={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_december_rolls_to_next_year(self):
         """December's upper bound is Jan 1 of the next year (no month-13)."""
         capture = {}
