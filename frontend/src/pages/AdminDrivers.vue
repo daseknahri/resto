@@ -247,6 +247,12 @@
                 <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-slate-800/50" />
               </div>
 
+              <!-- Fetch error: don't leave the panel blank (no earnings / vetting / payout controls) -->
+              <div v-else-if="detailError" class="space-y-3 py-8 text-center" role="alert">
+                <p class="text-sm text-red-300">{{ detailError }}</p>
+                <button class="ui-btn-outline px-4 py-1.5 text-xs" @click="openDriver(selected)">{{ t('common.retry') }}</button>
+              </div>
+
               <template v-else-if="detail">
                 <!-- Earnings tiles -->
                 <div class="grid grid-cols-3 gap-2">
@@ -442,6 +448,7 @@ const payAmount = ref('');
 const payMethod = ref('cash');
 const paying = ref(false);
 const payError = ref('');
+const detailError = ref(''); // panel-level fetch error (distinct from payError = the payout error shown inside the panel)
 const vetting = ref(false);
 const vettingCar = ref(false);
 const rejectReason = ref(''); // optional reason posted with a reject; server-truncated to 300 chars
@@ -450,6 +457,7 @@ const openDriver = async (d) => {
   selected.value = d;
   detail.value = null;
   payError.value = '';
+  detailError.value = '';
   rejectReason.value = '';
   loadingDetail.value = true;
   try {
@@ -458,7 +466,7 @@ const openDriver = async (d) => {
     payAmount.value = res.data.owed;
     payMethod.value = 'cash';
   } catch {
-    payError.value = t('adminDrivers.fetchError');
+    detailError.value = t('adminDrivers.fetchError');
   } finally {
     loadingDetail.value = false;
   }

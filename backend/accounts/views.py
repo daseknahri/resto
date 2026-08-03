@@ -6024,6 +6024,21 @@ def _serialize_delivery_job(
     return data
 
 
+def _serialize_driver_active_job(job, business_type: str = "restaurant") -> dict:
+    """Serialize the driver's OWN job WITH the order summary merged in — the same
+    cash-to-collect / order-total / customer-contact / item fields DriverJobListView
+    already adds to active jobs. Accept + status responses must carry these so the app's
+    active-job hero doesn't drop the amber COLLECT-CASH banner and the "call customer"
+    link for a poll cycle after each transition — and so a pickup->deliver within one poll
+    still surfaces the COD cash-collected confirmation (the client reads ``collect_cash``
+    off the returned job). One order -> a single ``_job_order_summary`` query (no N+1);
+    the summary helper is itself best-effort (errors -> {}), so this never fails the
+    transition response."""
+    d = _serialize_delivery_job(job, business_type=business_type)
+    d.update(_job_order_summary(job.tenant_id, job.order_number, include_contact=True))
+    return d
+
+
 def _valid_polygon(polygon) -> bool:
     """Each polygon point must be a {lat, lng} dict with numeric coordinates."""
     if not isinstance(polygon, list) or len(polygon) < 3:
@@ -6501,7 +6516,7 @@ class DriverJobAcceptView(APIView):
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
         _bt = job.business_type or "restaurant"
-        return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_200_OK)
+        return Response(_serialize_driver_active_job(job, business_type=_bt), status=status.HTTP_200_OK)
 
 
 class DriverJobDeclineView(APIView):
@@ -6882,7 +6897,7 @@ class DriverJobStatusUpdateView(APIView):
                 pass  # Never fail the driver status update due to push errors
 
         _bt = job.business_type or "restaurant"
-        return Response(_serialize_delivery_job(job, business_type=_bt))
+        return Response(_serialize_driver_active_job(job, business_type=_bt))
 
 
 # ── Order tracking SSE ────────────────────────────────────────────────────────

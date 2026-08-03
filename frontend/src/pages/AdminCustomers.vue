@@ -216,6 +216,12 @@
                 <div v-for="i in 4" :key="i" class="ui-skeleton h-12" />
               </div>
 
+              <!-- Fetch error: don't leave the panel blank (no wallet balance / credit controls) -->
+              <div v-else-if="detailError" class="space-y-3 py-8 text-center" role="alert">
+                <p class="text-sm text-red-300">{{ detailError }}</p>
+                <button class="ui-btn-outline px-4 py-1.5 text-xs" @click="openDetail(selected)">{{ t('common.retry') }}</button>
+              </div>
+
               <template v-else-if="detail">
                 <!-- Summary tiles -->
                 <div class="grid grid-cols-2 gap-3">
@@ -411,6 +417,7 @@ const creditAmount = ref('');
 const creditNote = ref('');
 const crediting = ref(false);
 const creditError = ref('');
+const detailError = ref(''); // panel-level fetch error (distinct from creditError = the credit-form error inside the panel)
 let creditKey = null;
 const togglingDriver = ref(false);
 const orders = ref([]);
@@ -471,6 +478,7 @@ const openDetail = async (c) => {
   creditAmount.value = '';
   creditNote.value = '';
   creditError.value = '';
+  detailError.value = '';
   creditKey = null;
   ledgerStale.value = false;
   loadingDetail.value = true;
@@ -478,7 +486,7 @@ const openDetail = async (c) => {
     const res = await api.get(`/admin/customers/${c.id}/`);
     detail.value = res.data;
   } catch {
-    creditError.value = t('adminCustomers.fetchError');
+    detailError.value = t('adminCustomers.fetchError');
   } finally {
     loadingDetail.value = false;
   }
