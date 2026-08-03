@@ -461,6 +461,46 @@ class AdminDriverApprovalViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
+# ── _serialize_driver_active_job (D4) ─────────────────────────────────────────
+
+class SerializeDriverActiveJobTests(SimpleTestCase):
+    """The accept/status responses serialize the driver's OWN job WITH the order summary
+    merged in (cash-to-collect, order total, customer contact, item count) — so the app's
+    active-job hero doesn't drop the amber COLLECT-CASH banner + call link between polls,
+    and a same-poll pickup->deliver still shows the COD cash confirmation (D4)."""
+
+    @patch("accounts.views._job_order_summary")
+    @patch("accounts.views._serialize_delivery_job")
+    def test_merges_order_summary_with_contact(self, mock_ser, mock_summ):
+        from types import SimpleNamespace
+        from accounts.views import _serialize_driver_active_job
+        mock_ser.return_value = {"id": 7, "order_number": "ORD-7", "status": "assigned"}
+        mock_summ.return_value = {
+            "collect_cash": True, "order_total": "80.00",
+            "customer_phone": "0600000000", "items_count": 3,
+        }
+        job = SimpleNamespace(tenant_id=1, order_number="ORD-7")
+        out = _serialize_driver_active_job(job, business_type="pharmacy")
+        # base serialization preserved, summary merged on top
+        self.assertEqual(out["id"], 7)
+        self.assertTrue(out["collect_cash"])
+        self.assertEqual(out["order_total"], "80.00")
+        self.assertEqual(out["items_count"], 3)
+        # include_contact=True because it's the driver's OWN accepted job
+        self.assertEqual(out["customer_phone"], "0600000000")
+        mock_summ.assert_called_once_with(1, "ORD-7", include_contact=True)
+        mock_ser.assert_called_once_with(job, business_type="pharmacy")
+
+    @patch("accounts.views._job_order_summary", return_value={})
+    @patch("accounts.views._serialize_delivery_job")
+    def test_empty_summary_leaves_base_untouched(self, mock_ser, _mock_summ):
+        from types import SimpleNamespace
+        from accounts.views import _serialize_driver_active_job
+        mock_ser.return_value = {"id": 9, "status": "picked_up"}
+        out = _serialize_driver_active_job(SimpleNamespace(tenant_id=2, order_number="ORD-9"))
+        self.assertEqual(out, {"id": 9, "status": "picked_up"})
+
+
 # ── DriverJobAcceptView ───────────────────────────────────────────────────────
 
 class DriverJobAcceptViewTests(SimpleTestCase):
