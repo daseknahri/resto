@@ -288,3 +288,33 @@ def deplete_stock(locked_dishes, stock_updates, pk_to_slug, comp_stock_agg, comp
             Dish.objects.filter(pk=_cpk).update(**_cfields)
 
     return None
+
+
+def deplete_ingredients(order_items_data, dishes_map):
+    """Deplete recipe-linked ingredient stock for a placed order (RISK STRUCT-1, slice 3b —
+    B3 Phase 2). Byte-identical in both order paths; MUST run inside the caller's atomic block.
+
+    Aggregates ordered qty per dish (integer pks only), then for every ``RecipeLine`` on those
+    dishes decrements ``Ingredient.stock_quantity`` by ``recipe_qty × ordered_qty`` via an ``F()``
+    update. Negative stock is allowed by design (it flags variance / under-stocking for the owner);
+    no exceptions — a recipe/ingredient issue never blocks checkout.
+    """
+    from django.db.models import F  # function-local
+    from menu.models import Ingredient, RecipeLine
+
+    _dish_qty_map = {}
+    for _item_d in order_items_data:
+        _d = dishes_map[_item_d["dish_slug"]]
+        if isinstance(_d.pk, int):
+            _dish_qty_map[_d.pk] = _dish_qty_map.get(_d.pk, 0) + _item_d["qty"]
+    if not _dish_qty_map:
+        return
+    _recipe_lines = RecipeLine.objects.filter(
+        dish_id__in=list(_dish_qty_map.keys())
+    ).only("dish_id", "ingredient_id", "quantity")
+    _ing_depletion = {}
+    for _rl in _recipe_lines:
+        _delta = _rl.quantity * _dish_qty_map[_rl.dish_id]
+        _ing_depletion[_rl.ingredient_id] = _ing_depletion.get(_rl.ingredient_id, Decimal("0")) + _delta
+    for _ing_pk, _delta in _ing_depletion.items():
+        Ingredient.objects.filter(pk=_ing_pk).update(stock_quantity=F("stock_quantity") - _delta)

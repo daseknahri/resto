@@ -103,11 +103,14 @@ owner notifications (storefront: dispatch+WhatsApp+push+WS; marketplace: dispatc
    short component still rolls back the dish decrements exactly as before). ✅ **slice 3a.** Works with the
    existing `@patch("menu.views.Dish.objects")` tests because `.objects` is a class attribute — patching it
    is path-independent (`menu.views.Dish` **is** `menu.models.Dish`).
-   - **Ingredient depletion (B3 Phase 2) deferred to slice 3b** — it references `RecipeLine`/`Ingredient`,
-     and ~12 order-path tests `@patch("menu.views.RecipeLine")` (a *name* binding, not `.objects`), so a
-     `menu.models`-based helper isn't intercepted and would hit the real DB. 3b must repoint those name
-     patches to `menu.models.RecipeLine`/`Ingredient` (same call the `effective_unit_price` divergence
-     makes). Kept inline in both views for now — modest (~20 lines) and not worth bundling that churn here.
+   - **Ingredient depletion (B3 Phase 2)** — `deplete_ingredients(order_items_data, dishes_map)` (recipe BOM
+     → `Ingredient.stock_quantity` `F()` decrement; negative allowed = variance flag). ✅ **slice 3b.** Split
+     from 3a because it references `RecipeLine`/`Ingredient`, which order-path tests `@patch("menu.views.
+     RecipeLine")` as a *name* binding (not `.objects`) — a `menu.models`-based helper isn't intercepted and
+     would hit the real DB. 3b repointed those to `@patch("menu.models.RecipeLine")` in test_happy_hour,
+     test_course_sequencing, test_station_snapshot + the 3 test_ingredients source checks. The marketplace's
+     `_inject_module("menu.models", …)` tests (test_a4, test_r15b) keep working because the helper's
+     **function-local** `from menu.models import` re-resolves the injected module at call time.
 4. Loyalty sizing/earn; the bounded promo-counter bump; wallet settle.
 Each slice lands as its own gate-verified PR; the frontend cart-model unification (the visual half) is
 deferred with 3b to a UI/UX pass.

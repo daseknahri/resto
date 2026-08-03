@@ -607,7 +607,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
         req._dish = dish
         return req
 
-    @patch("menu.views.RecipeLine")
+    @patch("menu.models.RecipeLine")
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Order.objects")
@@ -662,7 +662,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
             f"Expected discounted unit_price 80.00, got {call_kwargs['unit_price']}"
         )
 
-    @patch("menu.views.RecipeLine")
+    @patch("menu.models.RecipeLine")
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.OrderItem.objects")
     @patch("menu.views.Order.objects")

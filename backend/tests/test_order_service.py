@@ -18,6 +18,7 @@ from menu.models import Order
 from menu.order_service import (
     compute_order_delivery_fee,
     compute_order_tip,
+    deplete_ingredients,
     deplete_stock,
     price_line_options,
     resolve_available_dishes,
@@ -345,3 +346,58 @@ class DepleteStockTests(SimpleTestCase):
         result = deplete_stock(locked, [(1, 99)], {1: "burger"}, {}, {})
         self.assertIsNone(result)
         mock_dish.objects.filter.assert_not_called()
+
+
+class DepleteIngredientsTests(SimpleTestCase):
+    """RISK STRUCT-1 slice 3b: deplete_ingredients — recipe BOM → F() ingredient decrement.
+    menu.models.Ingredient + RecipeLine patched; F() stays a real lazy expression (no DB)."""
+
+    def _dishes_map(self, **slug_pk):
+        return {slug: SimpleNamespace(pk=pk) for slug, pk in slug_pk.items()}
+
+    @patch("menu.models.RecipeLine")
+    @patch("menu.models.Ingredient")
+    def test_depletes_by_recipe_qty_times_order_qty(self, mock_ing, mock_rl):
+        rl = SimpleNamespace(dish_id=1, ingredient_id=10, quantity=Decimal("2"))
+        mock_rl.objects.filter.return_value.only.return_value = [rl]
+        deplete_ingredients([{"dish_slug": "burger", "qty": 3}], self._dishes_map(burger=1))
+        mock_ing.objects.filter.assert_called_once_with(pk=10)
+        self.assertIn("stock_quantity", mock_ing.objects.filter.return_value.update.call_args.kwargs)
+
+    @patch("menu.models.RecipeLine")
+    @patch("menu.models.Ingredient")
+    def test_same_ingredient_across_dishes_aggregated(self, mock_ing, mock_rl):
+        rls = [
+            SimpleNamespace(dish_id=1, ingredient_id=10, quantity=Decimal("1")),
+            SimpleNamespace(dish_id=2, ingredient_id=10, quantity=Decimal("1")),
+        ]
+        mock_rl.objects.filter.return_value.only.return_value = rls
+        deplete_ingredients(
+            [{"dish_slug": "burger", "qty": 1}, {"dish_slug": "wrap", "qty": 1}],
+            self._dishes_map(burger=1, wrap=2),
+        )
+        mock_ing.objects.filter.assert_called_once_with(pk=10)
+
+    @patch("menu.models.RecipeLine")
+    @patch("menu.models.Ingredient")
+    def test_no_recipe_lines_no_update(self, mock_ing, mock_rl):
+        mock_rl.objects.filter.return_value.only.return_value = []
+        deplete_ingredients([{"dish_slug": "burger", "qty": 1}], self._dishes_map(burger=1))
+        mock_ing.objects.filter.assert_not_called()
+
+    @patch("menu.models.RecipeLine")
+    @patch("menu.models.Ingredient")
+    def test_empty_order_short_circuits(self, mock_ing, mock_rl):
+        deplete_ingredients([], {})
+        mock_rl.objects.filter.assert_not_called()
+        mock_ing.objects.filter.assert_not_called()
+
+    @patch("menu.models.RecipeLine")
+    @patch("menu.models.Ingredient")
+    def test_non_int_pk_dish_skipped(self, mock_ing, mock_rl):
+        # A dish whose pk isn't an int (e.g. an unsaved / mocked dish) is skipped, so the recipe
+        # query never runs — this is the guard the storefront happy-hour mock tests rely on.
+        dishes_map = {"burger": SimpleNamespace(pk=MagicMock())}
+        deplete_ingredients([{"dish_slug": "burger", "qty": 1}], dishes_map)
+        mock_rl.objects.filter.assert_not_called()
+        mock_ing.objects.filter.assert_not_called()
