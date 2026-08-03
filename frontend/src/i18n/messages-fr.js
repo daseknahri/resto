@@ -2199,6 +2199,7 @@ waiterPage: {
   settleTitle: "Comment a-t-il ete paye ?",
   settleItemsLabel: "Articles de la commande",
   seatItemsCount: "{n} articles",
+  seatSplitEmpty: "Aucun siege a separer pour le moment.",
   payCash: "Especes",
   payWalletMethod: "Portefeuille",
   cashFull: "Especes — {amount}",

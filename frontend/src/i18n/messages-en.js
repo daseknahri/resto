@@ -2201,6 +2201,7 @@ waiterPage: {
   settleTitle: "How was it paid?",
   settleItemsLabel: "Order items",
   seatItemsCount: "{n} items",
+  seatSplitEmpty: "No seats to split yet.",
   payCash: "Cash",
   payWalletMethod: "Wallet",
   cashFull: "Cash — {amount}",

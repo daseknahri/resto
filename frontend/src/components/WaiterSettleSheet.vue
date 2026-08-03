@@ -60,6 +60,7 @@
         </div>
       </div>
     </div>
+    <div v-else class="rounded-lg border border-dashed border-slate-700/60 px-3 py-4 text-center text-xs text-slate-500">{{ t('waiterPage.seatSplitEmpty') }}</div>
   </template>
 
   <!-- Standard settle controls (hidden when seat-split mode is on) -->

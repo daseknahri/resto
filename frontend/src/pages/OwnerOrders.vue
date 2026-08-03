@@ -93,8 +93,8 @@
               {{ statusTabs.find(t => t.value === activeStatus)?.label || activeStatus }}
             </span>
             <span v-if="searchQuery" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">"{{ searchQuery }}"</span>
-            <span v-if="activeFulfillmentType" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ activeFulfillmentType }}</span>
-            <span v-if="activePaymentStatus" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ activePaymentStatus }}</span>
+            <span v-if="activeFulfillmentType" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ fulfillmentLabel(activeFulfillmentType) }}</span>
+            <span v-if="activePaymentStatus" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ paymentLabel(activePaymentStatus) }}</span>
             <span v-if="activeDateFilter !== 'all'" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ t(`ownerOrders.dateFilter_${activeDateFilter}`) }}</span>
             <button
               class="ms-auto rounded-full px-1.5 py-0.5 text-slate-600 hover:text-slate-400 ui-press"
@@ -169,7 +169,7 @@
           v-if="newOrderBannerCount > 0"
           type="button"
           class="ui-press flex w-full items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm font-semibold text-amber-300"
-          @click="activeStatus = 'pending'; newOrderBannerCount = 0"
+          @click="activeTab = 'active'; activeStatus = 'pending'; newOrderBannerCount = 0"
         >
           <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
           {{ t('ownerOrders.newOrderBanner', { count: newOrderBannerCount }) }}
@@ -1626,6 +1626,13 @@ const paymentStatusTabs = computed(() => {
     { value: "paid",   label: t("ownerOrders.paymentPaid"),   count: counts.paid   || 0 },
   ];
 });
+
+// Localized labels for the active-filter context strip — raw tokens like
+// "delivery"/"unpaid" must never leak to the UI (mirrors the filter-tab labels).
+const _FULFILLMENT_LABELS = { pickup: "ownerOrders.fulfillmentPickup", delivery: "ownerOrders.fulfillmentDelivery", table: "ownerOrders.fulfillmentDineIn" };
+const _PAYMENT_LABELS = { unpaid: "ownerOrders.paymentUnpaid", paid: "ownerOrders.paymentPaid" };
+const fulfillmentLabel = (v) => (_FULFILLMENT_LABELS[v] ? t(_FULFILLMENT_LABELS[v]) : v);
+const paymentLabel = (v) => (_PAYMENT_LABELS[v] ? t(_PAYMENT_LABELS[v]) : v);
 
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {

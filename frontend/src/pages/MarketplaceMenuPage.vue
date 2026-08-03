@@ -713,7 +713,7 @@
           <!-- Submit -->
           <button
             class="ui-btn-primary ui-press w-full justify-center gap-2 py-3.5 text-sm font-bold disabled:opacity-50"
-            :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0"
+            :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0 || !cart.length"
             :aria-busy="placing"
             @click="placeOrder"
           >
@@ -1155,6 +1155,9 @@ const removeFromCart = (dishSlug) => {
   } else {
     cart.value.splice(idx, 1);
   }
+  // Removing the last line empties the cart — close the checkout drawer so the
+  // customer isn't stranded on a 0-total drawer (mirrors clearMktCart).
+  if (!cart.value.length) checkoutOpen.value = false;
 };
 
 const cartTotalQty = computed(() => cart.value.reduce((s, i) => s + i.qty, 0));
