@@ -130,3 +130,35 @@ describe("QuickAddSheet — edit mode", () => {
     expect(w.find("textarea").element.value).toBe("");
   });
 });
+
+describe("QuickAddSheet — happy-hour pricing", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  it("charges the discounted effective_price base when happy-hour is active", async () => {
+    const cart = useCartStore();
+    // one-tap add: Size defaults to Small (+0), so the line base is the discounted 7 (not 10)
+    const w = mountSheet({ dish: { ...DISH, happy_hour: true, price: 10, effective_price: 7 } });
+    await w.find("button.ui-btn-primary").trigger("click");
+    expect(cart.items).toHaveLength(1);
+    expect(cart.items[0].price).toBe(7);
+  });
+
+  it("adds undiscounted option deltas on top of the discounted base", async () => {
+    const cart = useCartStore();
+    const w = mountSheet({ dish: { ...DISH, happy_hour: true, price: 10, effective_price: 7 } });
+    // switch Size to Large (+2): delta is never discounted -> 7 + 2 = 9
+    await w.findAll('input[type="radio"]')[1].trigger("change");
+    await w.find("button.ui-btn-primary").trigger("click");
+    expect(cart.items[0].price).toBe(9);
+  });
+
+  it("keeps the full price when effective_price is not below price", async () => {
+    const cart = useCartStore();
+    const w = mountSheet({ dish: { ...DISH, happy_hour: true, price: 10, effective_price: 10 } });
+    await w.find("button.ui-btn-primary").trigger("click");
+    expect(cart.items[0].price).toBe(10);
+  });
+});
