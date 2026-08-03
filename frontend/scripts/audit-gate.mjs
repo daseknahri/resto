@@ -25,6 +25,15 @@ const ALLOWLIST = {
     "shape breaks minimatch 3.x (eslint's) with `expand is not a function`, and " +
     "npm's only alternative is downgrading eslint a major — no in-range fix. " +
     'Mirrored in .trivyignore.',
+  'GHSA-rgw5-rvv9-x895':
+    'brace-expansion DoS via unbounded intermediate arrays — a follow-up advisory ' +
+    'that bypasses the CVE-2026-14257 / 5.0.8 mitigation. SAME dev/build-tooling-only ' +
+    'package and usage as GHSA-mh99-v99m-4gvg above: never in the shipped bundle, only ' +
+    'ever expands our own source globs, never untrusted input. Still no in-range fix — ' +
+    "any patched brace-expansion breaks eslint's minimatch 3.x the same way, and eslint " +
+    '9 cannot be bumped to unbind it (eslint-plugin-vue 9.29.0 peer-caps eslint at 9). ' +
+    'Mirrored in .trivyignore. Revisit when the eslint/minimatch chain ships a patched ' +
+    'brace-expansion in range.',
 }
 
 // Match the old gate: fail on moderate and above (low stays informational).
