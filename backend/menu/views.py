@@ -5866,6 +5866,17 @@ class StaffTransferItemsView(APIView):
         if not dest_order_id:
             return Response({"detail": "dest_order_id is required.", "code": "no_dest"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Coerce body-supplied ids before the ORM lookup / set-building — a non-numeric dest_order_id
+        # or a non-list / non-numeric item_ids raises ValueError/TypeError (only DoesNotExist is caught
+        # below) → 500. Reject as a clean 400.
+        if not isinstance(item_ids, list):
+            return Response({"detail": "item_ids must be a list.", "code": "no_items"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            dest_order_id = int(dest_order_id)
+            requested_item_ids = {int(x) for x in item_ids}
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid transfer request.", "code": "invalid_transfer"}, status=status.HTTP_400_BAD_REQUEST)
+
         from django.db import transaction as _tx
         from menu.models import OrderItem as _OI
 
@@ -5902,7 +5913,7 @@ class StaffTransferItemsView(APIView):
 
             # Validate items belong to src and are non-voided
             src_item_ids = {i.id for i in src.items.all() if not i.is_voided}
-            requested = set(int(x) for x in item_ids)
+            requested = requested_item_ids
             missing = requested - src_item_ids
             if missing:
                 return Response({"detail": "Some items not found in source order.", "code": "items_not_found"}, status=status.HTTP_409_CONFLICT)
@@ -5962,6 +5973,12 @@ class StaffMergeOrdersView(APIView):
         src_order_id = request.data.get("src_order_id")
         if not src_order_id:
             return Response({"detail": "src_order_id is required.", "code": "no_src"}, status=status.HTTP_400_BAD_REQUEST)
+        # Coerce before the ORM lookup — a non-numeric src_order_id raises ValueError (only
+        # DoesNotExist is caught below) → 500.
+        try:
+            src_order_id = int(src_order_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "Source order not found."}, status=status.HTTP_404_NOT_FOUND)
 
         from django.db import transaction as _tx
         from menu.models import OrderItem as _OI
@@ -8842,6 +8859,14 @@ class OwnerZReportView(APIView):
 
         _z_tenant = getattr(request, "tenant", None)
         _z_tenant_id = _z_tenant.id if _z_tenant else None
+        # A bad ?date= raises ValueError deep in service_day_window's date.fromisoformat and would
+        # surface as the generic 500 below; validate up front so a malformed date is a clean 400.
+        if date_param is not None:
+            from datetime import date as _date
+            try:
+                _date.fromisoformat(date_param)
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid date; expected YYYY-MM-DD.", "code": "invalid_date"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             data = self._build_report(profile, date_param, tenant_id=_z_tenant_id)
         except Exception as exc:
@@ -9878,7 +9903,9 @@ class OwnerCommissionStatementView(APIView):
         try:
             year = int(request.query_params.get("year", local_now.year))
             month = int(request.query_params.get("month", local_now.month))
-            if not (1 <= month <= 12) or year < 2000:
+            # Bound the year both ways — an unbounded large year (e.g. 99999) passes int() but
+            # overflows _dt(year, ...) below (outside this try) → ValueError → 500.
+            if not (1 <= month <= 12) or not (2000 <= year <= 2100):
                 raise ValueError
         except (TypeError, ValueError):
             return Response({"detail": "Invalid year/month parameters."}, status=400)
@@ -10904,7 +10931,13 @@ class OwnerCustomerListView(APIView):
             "last_order_at",
         )
         reverse = (request.query_params.get("order") or "desc").strip().lower() != "asc"
-        customers.sort(key=lambda c: (c[sort_key] or ""), reverse=reverse)
+        # total_spend/order_count are numeric; `or ""` turned a real 0 into "" and then sorting
+        # mixed str with float/int → TypeError (a fully loyalty/promo-covered order has spend 0.0
+        # while order_count ≥ 1). Default numeric keys to 0, string/datetime keys keep the old path.
+        if sort_key in ("total_spend", "order_count"):
+            customers.sort(key=lambda c: (c[sort_key] if c[sort_key] is not None else 0.0), reverse=reverse)
+        else:
+            customers.sort(key=lambda c: (c[sort_key] or ""), reverse=reverse)
 
         # ── 9. Summary stats ─────────────────────────────────────────────────
         total_count = len(customers)
@@ -13231,6 +13264,13 @@ class DrawerHistoryView(APIView):
             return Response({"detail": "Tenant profile not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         date_param = (request.query_params.get("date") or "").strip() or None
+        # A bad ?date= raises ValueError in service_day_window's date.fromisoformat → 500.
+        if date_param is not None:
+            from datetime import date as _date
+            try:
+                _date.fromisoformat(date_param)
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid date; expected YYYY-MM-DD.", "code": "invalid_date"}, status=status.HTTP_400_BAD_REQUEST)
         window_start, window_end = service_day_window(profile, date=date_param)
 
         sessions = DrawerSession.objects.filter(

@@ -491,6 +491,17 @@ class DrawerAccessControlTests(SimpleTestCase):
     def test_history_requires_owner(self):
         self._assert_owner_required(DrawerHistoryView)
 
+    def test_history_invalid_date_is_400_not_500(self):
+        """Live-hardening: a bad ?date= would raise ValueError in service_day_window's
+        date.fromisoformat → 500. It must be a clean 400 before the drawer query runs."""
+        factory = APIRequestFactory()
+        req = factory.get("/api/owner/drawer/history/?date=garbage")
+        req.tenant = SimpleNamespace(id=1, profile=SimpleNamespace())
+        force_authenticate(req, user=User(id=7, role=User.Roles.TENANT_OWNER, tenant_id=1))
+        resp = DrawerHistoryView.as_view()(req)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["code"], "invalid_date")
+
 
 class DefaultPreservingNoDrawerTest(SimpleTestCase):
     """

@@ -339,6 +339,19 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         spends = [c["total_spend"] for c in resp.data["results"]]
         self.assertEqual(spends, sorted(spends))
 
+    def test_sort_by_total_spend_with_zero_spend_row_no_500(self):
+        """Live-hardening: a fully loyalty/promo-covered order yields total_spend 0.0 while
+        order_count ≥ 1. The old `or ""` turned that 0.0 into "" and then sorting compared
+        str with float → TypeError → 500. Numeric keys must default to 0, not ""."""
+        linked = [
+            _linked_row(customer_id=1, order_count=1, total_spend=0.0, days_ago=5),
+            _linked_row(customer_id=2, order_count=3, total_spend=200.0, days_ago=3),
+        ]
+        resp = self._patched_get(linked=linked, params={"sort": "total_spend", "order": "desc"})
+        self.assertEqual(resp.status_code, 200)
+        spends = [c["total_spend"] for c in resp.data["results"]]
+        self.assertEqual(spends, [200.0, 0.0])  # numeric desc sort, no crash
+
     def test_csv_format_returns_csv_response(self):
         """
         The view returns an HttpResponse with CSV when query_params["format"] == "csv".
