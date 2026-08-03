@@ -2773,6 +2773,8 @@ const arabicMessages = {
     bulkReadyConfirmTitle: "تعليم {count} طلبات كجاهزة؟",
     bulkReadyConfirmBody: "سيتم تعليم جميع الطلبات قيد التحضير المرئية كجاهزة.",
     bulkReadyDone: "تم تعليم {count} طلبات كجاهزة.",
+    bulkReadyPartial: "تم تعليم {ok} من {total} كجاهزة — تعذّر تحديث {failed}.",
+    bulkReadyFailed: "تعذّر تعليم أي من الطلبات كجاهزة.",
     "promoDiscount": "خصم",
     "tip": "إكرامية",
     "walletPaid": "محفظة",

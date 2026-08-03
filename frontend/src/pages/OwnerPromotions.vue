@@ -303,6 +303,7 @@ const togglePromoActive = async (promo) => {
   promo.is_active = !promo.is_active;
   try {
     await api.patch(`/owner/promotions/${promo.id}/`, { is_active: promo.is_active });
+    writeCache(PROMOS_CACHE_KEY, promotions.value); // keep the SWR cache in sync so it doesn't appear to revert
   } catch {
     // Revert on error
     promo.is_active = !promo.is_active;
