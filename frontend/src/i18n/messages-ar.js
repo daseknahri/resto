@@ -4451,6 +4451,8 @@ Object.assign(arabicMessages, {
     tabShift: "\u0627\u0644\u0648\u0631\u062f\u064a\u0629",
     tabRecent: "\u0627\u0644\u0623\u062e\u064a\u0631\u0629",
     settleTitle: "\u0643\u064a\u0641 \u062a\u0645 \u0627\u0644\u062f\u0641\u0639\u061f",
+    settleItemsLabel: "\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0637\u0644\u0628",
+    seatItemsCount: "{n} \u0639\u0646\u0627\u0635\u0631",
     payCash: "\u0646\u0642\u062f\u0627\u064b",
     payWalletMethod: "\u0627\u0644\u0645\u062d\u0641\u0638\u0629",
     cashFull: "\u0646\u0642\u062f\u0627\u064b \u2014 {amount}",

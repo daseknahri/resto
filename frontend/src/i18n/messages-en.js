@@ -2197,6 +2197,8 @@ waiterPage: {
   tabShift: "Shift",
   tabRecent: "Recent",
   settleTitle: "How was it paid?",
+  settleItemsLabel: "Order items",
+  seatItemsCount: "{n} items",
   payCash: "Cash",
   payWalletMethod: "Wallet",
   cashFull: "Cash — {amount}",

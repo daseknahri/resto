@@ -7,7 +7,7 @@
     </p>
   </div>
   <!-- Item breakdown -->
-  <ul v-if="order.items?.length" class="max-h-28 overflow-y-auto divide-y divide-slate-700/40 rounded-lg border border-slate-700/50 bg-slate-800/50" aria-label="Order items">
+  <ul v-if="order.items?.length" class="max-h-28 overflow-y-auto divide-y divide-slate-700/40 rounded-lg border border-slate-700/50 bg-slate-800/50" :aria-label="t('waiterPage.settleItemsLabel')">
     <li
       v-for="item in order.items"
       :key="item.id"
@@ -46,7 +46,7 @@
       >
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-slate-200">{{ seatGroupLabel(seat) }}</p>
-          <p class="text-[10px] text-slate-500">{{ seat.items.length }} {{ seat.items.length === 1 ? 'item' : 'items' }}</p>
+          <p class="text-[10px] text-slate-500">{{ t('waiterPage.seatItemsCount', { n: seat.items.length }) }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
           <button
