@@ -7,7 +7,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="waiter-new-order-title"
-      @keydown.esc="$emit('close')"
+      @keydown.esc="requestClose"
     >
       <!-- Header bar -->
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
@@ -20,7 +20,7 @@
         <button
           class="ui-press ui-touch-target flex items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.close')"
-          @click="$emit('close')"
+          @click="requestClose"
         >
           <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
         </button>
@@ -467,6 +467,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
@@ -486,6 +487,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'placed', 'appended']);
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const menu = useMenuStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -838,6 +840,21 @@ const decrement = (key) => {
 
 const removeItem = (key) => {
   cartItems.value = cartItems.value.filter((i) => i.line_key !== key);
+};
+
+// Close guard: a non-empty cart means unsaved items/seats/courses/notes would be
+// lost, so confirm before discarding. An empty cart closes immediately.
+const requestClose = async () => {
+  if (cartItems.value.length) {
+    const ok = await confirm({
+      title: t('waiterPage.discardOrderConfirmTitle'),
+      body: t('waiterPage.discardOrderConfirmBody'),
+      confirmLabel: t('waiterPage.discardOrderConfirmBtn'),
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  emit('close');
 };
 
 const onSearch = () => {

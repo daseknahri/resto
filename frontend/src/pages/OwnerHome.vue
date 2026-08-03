@@ -593,6 +593,7 @@ import OwnerDashboardDishPanel from "../components/OwnerDashboardDishPanel.vue";
 import OwnerNextAction from "../components/OwnerNextAction.vue";
 import BusyModeControl from "../components/BusyModeControl.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useNowTicker } from "../composables/useNowTicker";
 import { upcomingOrders, minutesUntilScheduled } from "../lib/ownerLiveFocus";
 import api from "../lib/api";
@@ -610,6 +611,7 @@ const order = useOrderStore();
 const toast = useToastStore();
 const router = useRouter();
 const { t, formatNumber, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 
 // ── Quick-action: open and scroll to the dish availability panel ──────────────
 const dishPanelRef = ref(null);
@@ -723,8 +725,18 @@ const planModeLabel = computed(() => {
 // ── Open/Closed toggle ────────────────────────────────────────────────────────
 const toggleOpen = async () => {
   if (togglingOpen.value) return;
-  togglingOpen.value = true;
   const newValue = !isOpen.value;
+  // Confirm only when taking the storefront offline; resuming needs no confirm.
+  if (!newValue) {
+    const ok = await confirm({
+      title: t("ownerHome.closeStorefrontConfirmTitle"),
+      body: t("ownerHome.closeStorefrontConfirmBody"),
+      confirmLabel: t("ownerHome.closeNow"),
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  togglingOpen.value = true;
   try {
     await api.patch("/profile/", { is_open: newValue });
     tenant.mergeProfile({ is_open: newValue });
@@ -909,6 +921,15 @@ const focusBusy = ref(false);
 const handleNextAction = async (action) => {
   if (focusBusy.value) return;
   const o = action?.order;
+  if (action.kind === "soldOut") {
+    const ok = await confirm({
+      title: t("ownerHome.resetAvailabilityConfirm", { count: soldOutCount.value }),
+      body: t("ownerHome.resetAvailabilityConfirmBody"),
+      confirmLabel: t("ownerHome.alertResetAll"),
+      danger: false,
+    });
+    if (!ok) return;
+  }
   focusBusy.value = true;
   try {
     if (action.kind === "confirm") {

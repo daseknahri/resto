@@ -603,6 +603,10 @@ const arabicMessages = {
     "heldCourseWarningConfirm": "وضع علامة جاهز على أي حال",
   },
   "ownerHome": {
+    "closeStorefrontConfirmTitle": "إغلاق المتجر؟",
+    "closeStorefrontConfirmBody": "لن يتمكن الزبائن من الطلب حتى تعيد الفتح.",
+    "resetAvailabilityConfirm": "إعادة توفير جميع الأطباق المنتهية ({count})؟",
+    "resetAvailabilityConfirmBody": "سيُعاد عرض كل طبق منتهٍ للبيع فورًا.",
     "platformFeeNote": "عمولة المنصة 10%",
     "kicker": "لوحة المالك",
     "title": "أطلق قائمتك وأدرها",
@@ -1263,6 +1267,11 @@ const arabicMessages = {
     "insuranceLink": "التأمين"
   },
   "ownerReservations": {
+    "confirmNoShowTitle": "تعليم الحجز كعدم حضور؟",
+    "confirmLostTitle": "تعليم الحجز كغير متاح؟",
+    "confirmSingleBody": "لا يمكن التراجع عن هذا بسهولة.",
+    "bulkConfirmTitle": "تحديث {count} حجوزات؟",
+    "bulkConfirmBody": "سيتم تعليم الحجوزات المختارة ولا يمكن التراجع عن هذا بسهولة.",
     "kicker": "صندوق المالك",
     "title": "طلبات الحجز",
     "description": "أدر طلبات حجز الطاولات القادمة من صفحة مطعمك. حدّث الحالة عند التواصل مع الضيوف.",
@@ -4306,6 +4315,7 @@ Object.assign(arabicMessages, {
     exportError: "\u0641\u0634\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.",
   },
   ownerStaff: {
+    "confirmRemoveBody": "هذا يزيل {name} نهائيًا من فريقك.",
     kicker: "\u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646",
     title: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646",
     subtitle: "\u0623\u0646\u0634\u0626 \u062d\u0633\u0627\u0628\u0627\u062a \u0645\u0648\u0638\u0641\u064a\u0646 \u062d\u062a\u0649 \u064a\u062a\u0645\u0643\u0646 \u0641\u0631\u064a\u0642\u0643 \u0645\u0646 \u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0637\u0644\u0628\u0627\u062a.",
@@ -4387,6 +4397,9 @@ Object.assign(arabicMessages, {
     utilityNav: "\u062a\u0646\u0642\u0644 \u0645\u0633\u0627\u0639\u062f",
   },
   waiterPage: {
+    "discardOrderConfirmTitle": "تجاهل هذا الطلب؟",
+    "discardOrderConfirmBody": "ستفقد العناصر التي أضفتها.",
+    "discardOrderConfirmBtn": "تجاهل",
     searchPlaceholder: "بحث بالطاولة أو رقم الطلب أو الاسم…",
     noActiveOrders: "\u0643\u0644 \u0634\u064a\u0621 \u0639\u0644\u0649 \u0645\u0627 \u064a\u0631\u0627\u0645 \u2014 \u0644\u0627 \u0637\u0644\u0628\u0627\u062a \u0646\u0634\u0637\u0629",
     noActiveOrdersBody: "\u0633\u062a\u0638\u0647\u0631 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u062c\u062f\u064a\u062f\u0629 \u0647\u0646\u0627 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b.",
@@ -5268,6 +5281,8 @@ Object.assign(arabicMessages, {
     laborStillOpen: "\u062c\u0627\u0631\u064a\u0629",
   },
   ownerRatings: {
+    "deleteReplyConfirmTitle": "حذف ردك العلني؟",
+    "deleteReplyConfirmBody": "هذا يحذف ردك نهائيًا. لن يراه الزبائن بعد الآن.",
     kicker: "\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
     title: "\u0627\u0644\u062a\u0642\u064a\u064a\u0645\u0627\u062a",
     description: "\u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0627\u062a \u0627\u0644\u062a\u064a \u064a\u062a\u0631\u0643\u0647\u0627 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0628\u0639\u062f \u0637\u0644\u0628\u0627\u062a\u0647\u0645.",
@@ -5949,6 +5964,8 @@ Object.assign(arabicMessages, {
     reconnecting: "\u062c\u0627\u0631\u064d \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0627\u062a\u0635\u0627\u0644\u2026",
   },
   cashDrawer: {
+    "closeConfirmTitle": "إغلاق صندوق النقد؟",
+    "closeConfirmBody": "هذا ينهي جلسة الصندوق ولا يمكن التراجع عنه. الإجمالي المحسوب: {total}.",
     navLabel: "\u0627\u0644\u062f\u0631\u062c \u0627\u0644\u0646\u0642\u062f\u064a",
     cardTitle: "\u0627\u0644\u062f\u0631\u062c \u0627\u0644\u0646\u0642\u062f\u064a",
     statusOpen: "\u0627\u0644\u062f\u0631\u062c \u0645\u0641\u062a\u0648\u062d",

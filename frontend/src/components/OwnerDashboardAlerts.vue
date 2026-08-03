@@ -55,6 +55,7 @@
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
@@ -62,6 +63,7 @@ import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
 const { t } = useI18n();
+const { confirm } = useConfirmModal();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -80,6 +82,13 @@ const emit = defineEmits(["reset-complete"]);
 const resetting = ref(false);
 const resetAvailability = async () => {
   if (resetting.value) return;
+  const ok = await confirm({
+    title: t("ownerHome.resetAvailabilityConfirm", { count: props.soldOutCount }),
+    body: t("ownerHome.resetAvailabilityConfirmBody"),
+    confirmLabel: t("ownerHome.alertResetAll"),
+    danger: false,
+  });
+  if (!ok) return;
   resetting.value = true;
   try {
     await api.post("/owner/dishes/reset-availability/");

@@ -444,6 +444,7 @@
 import { ref, onMounted, computed } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
@@ -451,6 +452,7 @@ import api from "../lib/api";
 defineOptions({ name: "OwnerZReport" });
 
 const { t } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 const tenant = useTenantStore();
 
@@ -477,6 +479,13 @@ const openDrawerSession = computed(() =>
 const closeShiftAndPrint = async () => {
   const counted = parseFloat(closeDrawerCounted.value);
   if (isNaN(counted) || counted < 0) return;
+  const ok = await confirm({
+    title: t("cashDrawer.closeConfirmTitle"),
+    body: t("cashDrawer.closeConfirmBody", { total: fmtMoney(counted) }),
+    confirmLabel: t("zReport.closeDrawerBtn"),
+    danger: true,
+  });
+  if (!ok) return;
   closingDrawer.value = true;
   try {
     await api.post("/owner/drawer/close/", { counted_total: counted.toFixed(2) });

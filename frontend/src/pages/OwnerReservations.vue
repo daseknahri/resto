@@ -834,6 +834,19 @@ const fetchReservations = async ({ silent = false } = {}) => {
 const updateStatus = async (reservation, status) => {
   const id = reservation?.id;
   if (!id) return;
+  if (status === "no_show" || status === "lost") {
+    const ok = await confirm({
+      title: status === "no_show"
+        ? t("ownerReservations.confirmNoShowTitle")
+        : t("ownerReservations.confirmLostTitle"),
+      body: t("ownerReservations.confirmSingleBody"),
+      confirmLabel: status === "no_show"
+        ? t("ownerReservations.markNoShow")
+        : t("ownerReservations.markUnavailable"),
+      danger: true,
+    });
+    if (!ok) return;
+  }
   updating.value = { ...updating.value, [id]: true };
   try {
     await api.put(`/owner/reservations/${id}/`, { status });
@@ -1054,6 +1067,15 @@ const bulkUpdateStatus = async (status) => {
 
 const runBulkAction = async () => {
   if (!selectedIds.value.length) return;
+  if (bulkAction.value === "no_show" || bulkAction.value === "lost") {
+    const ok = await confirm({
+      title: t("ownerReservations.bulkConfirmTitle", { count: selectedIds.value.length }),
+      body: t("ownerReservations.bulkConfirmBody"),
+      confirmLabel: t("common.apply"),
+      danger: true,
+    });
+    if (!ok) return;
+  }
   await bulkUpdateStatus(bulkAction.value);
 };
 

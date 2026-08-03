@@ -551,7 +551,7 @@ const createStaff = async () => {
 const removeStaff = async (member) => {
   const ok = await confirm({
     title: t("ownerStaff.confirmRemove"),
-    body: t("confirmModal.defaultBody"),
+    body: t("ownerStaff.confirmRemoveBody", { name: member.name }),
     confirmLabel: t("ownerStaff.remove"),
   });
   if (!ok) return;
