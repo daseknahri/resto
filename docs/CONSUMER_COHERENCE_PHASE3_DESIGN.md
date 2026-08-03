@@ -111,6 +111,36 @@ owner notifications (storefront: dispatch+WhatsApp+push+WS; marketplace: dispatc
      test_course_sequencing, test_station_snapshot + the 3 test_ingredients source checks. The marketplace's
      `_inject_module("menu.models", …)` tests (test_a4, test_r15b) keep working because the helper's
      **function-local** `from menu.models import` re-resolves the injected module at call time.
-4. Loyalty sizing/earn; the bounded promo-counter bump; wallet settle.
+4. **Loyalty / promo-counter / wallet settle — NOT extracted (intentional divergence).** A full read of
+   both views' post-`Order.create()` money blocks (storefront `menu/views.py:3330–3489`, marketplace
+   `accounts/views.py:4934–5041`) found these are **not** a clean, byte-identical de-dup like slices 1–3b —
+   they diverge by product design, and forcing them into shared helpers would add risk/complexity on the
+   most money-critical path for little benefit. Kept per-view deliberately. The divergences:
+   - **Bounded promo counter** — only the 2-line `filter(use_count__lt=max_uses).update(F+1)` is shared. The
+     cap-hit (0-rows) handling diverges hard: storefront branches on a customer-entered code (`raise
+     _PromoCapped` → 400) vs auto-promo strip that **adds `_promo_discount` back** to the loyalty/tip-adjusted
+     total (preserving the loyalty discount), plus a cap-crossing `recompute_tenant_promos` denorm bust;
+     marketplace has no code path and **recomputes `total = food_subtotal + delivery_fee`** (drops the loyalty
+     discount, no tip). `_PromoCapped` is live only on the storefront.
+   - **Loyalty earn** — base earn + tier multiplier are identical, but: `select_for_update` on Customer is
+     marketplace-only; first-order-bonus counts `payment_status=PAID` (storefront) vs non-`CANCELLED`
+     (marketplace — COD never reaches PAID); birthday-year is read from the in-memory snapshot (storefront)
+     vs fresh under the lock (marketplace); referral bonus is storefront-only; flash-sale redemption bump is
+     marketplace-only.
+   - **Wallet settle** — the debit→settle core (currency guard, `debit_wallet` call, `wallet_amount_paid`,
+     PAID transition, prepay safety-net) *is* byte-identical, but the edges diverge: entry guard, the
+     **schema-namespaced idempotency key** (`orderpay_checkout:` vs `mktpay:` — a money invariant that must
+     stay per-caller), and a marketplace-only payments-channel logger wrapper around the debit. A shared
+     helper here would need ~8 params + multi-signal returns (currency-unsupported, prepay-unpaid) to raise
+     each view's own exceptions — net-negative vs the explicit inline blocks.
+   - **Loyalty spend** (the one byte-identical guarded decrement) was considered but skipped: the marketplace
+     path reads module-level `accounts.views.Customer` which `test_a4`/`test_r15b` `@patch` as a bare name, so
+     a `menu.order_service` helper reading `accounts.models.Customer` would only avoid a real-DB hit because
+     those tests happen to set `_loyalty_points_spent = 0` — too fragile a basis for a 5-line de-dup.
+
+**Status: the 3c backend convergence is substantially complete.** Slices 1–3b share all the high-value,
+cleanly-shared order logic (item resolution, option pricing incl. the OPS-5f price-smuggling guard, and
+stock/component/ingredient depletion). Slice 4 is intentionally left per-view. The frontend cart-model
+unification (the visual half) remains deferred to a UI/UX pass with 3b-visual.
 Each slice lands as its own gate-verified PR; the frontend cart-model unification (the visual half) is
 deferred with 3b to a UI/UX pass.
