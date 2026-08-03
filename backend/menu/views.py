@@ -13119,12 +13119,6 @@ class DrawerOpenView(APIView):
     permission_classes = [IsTenantOwner]
 
     def post(self, request, *args, **kwargs):
-        if DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).exists():
-            return Response(
-                {"detail": "A drawer session is already open.", "code": "already_open"},
-                status=status.HTTP_409_CONFLICT,
-            )
-
         opening_float_raw = request.data.get("opening_float", "0")
         try:
             opening_float = Decimal(str(opening_float_raw)).quantize(Decimal("0.01"))
@@ -13140,14 +13134,38 @@ class DrawerOpenView(APIView):
         user = request.user
         user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
 
-        session = DrawerSession.objects.create(
-            opened_by_user_id=user.id,
-            opened_by_name=user_name,
-            opening_float=opening_float,
-            opened_at=timezone.now(),
-            status=DrawerSession.Status.OPEN,
-            note=note,
-        )
+        # At most one OPEN session at a time. The check-then-create is a race — two managers (or a
+        # double-tap) opening at once could both pass .exists() and create two OPEN sessions, which
+        # then splits cash reconciliation at close (close/Z-report pick order_by("-opened_at").first()
+        # and silently ignore the other). Serialize concurrent opens for THIS tenant schema with a
+        # transaction-scoped Postgres advisory lock so the loser blocks until the winner commits, then
+        # sees the open session → 409. Best-effort: if the advisory lock is unavailable for any reason
+        # the (still-atomic) check-then-create runs anyway — no worse than before.
+        with transaction.atomic():
+            try:
+                from django.db import connection as _drawer_open_conn
+                with _drawer_open_conn.cursor() as _cur:
+                    _cur.execute(
+                        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                        [f"drawer_open:{_drawer_open_conn.schema_name}"],
+                    )
+            except Exception:
+                pass
+
+            if DrawerSession.objects.filter(status=DrawerSession.Status.OPEN).exists():
+                return Response(
+                    {"detail": "A drawer session is already open.", "code": "already_open"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            session = DrawerSession.objects.create(
+                opened_by_user_id=user.id,
+                opened_by_name=user_name,
+                opening_float=opening_float,
+                opened_at=timezone.now(),
+                status=DrawerSession.Status.OPEN,
+                note=note,
+            )
         return Response(_drawer_session_dict(session), status=status.HTTP_201_CREATED)
 
 

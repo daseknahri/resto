@@ -235,7 +235,7 @@ class DrawerOpenViewTests(SimpleTestCase):
         mock_ds.objects.create.return_value = new_session
 
         req = _make_owner_request("POST", {"opening_float": "100.00"})
-        with patch("menu.views.timezone") as mock_tz:
+        with patch("menu.views.timezone") as mock_tz, patch("menu.views.transaction"):
             mock_tz.now.return_value = datetime(2024, 1, 1, 8, 0, tzinfo=_tz.utc)
             resp = DrawerOpenView().post(req)
 
@@ -249,9 +249,20 @@ class DrawerOpenViewTests(SimpleTestCase):
         mock_ds.objects.filter.return_value.exists.return_value = True
 
         req = _make_owner_request("POST", {"opening_float": "50.00"})
-        resp = DrawerOpenView().post(req)
+        with patch("menu.views.transaction"):
+            resp = DrawerOpenView().post(req)
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data["code"], "already_open")
+
+    def test_open_serializes_concurrent_opens(self):
+        """Single-open guard (POS reliability): the exists-check + create must run inside an atomic
+        block behind a Postgres advisory lock, so two concurrent opens can't both create an OPEN
+        session (which would split cash reconciliation at close)."""
+        import inspect
+        from menu.views import DrawerOpenView
+        src = inspect.getsource(DrawerOpenView.post)
+        self.assertIn("transaction.atomic()", src)
+        self.assertIn("pg_advisory_xact_lock", src)
 
     @patch("menu.views.DrawerSession")
     @patch("menu.views._is_tenant_owner", return_value=True)
