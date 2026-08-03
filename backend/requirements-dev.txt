@@ -3,7 +3,7 @@
 # CI's backend job installs this file and runs `pytest` (matching local dev).
 # Kept out of requirements.txt so these never reach production or the prod CVE scan.
 # Pinned to the versions used locally.
-pytest==8.3.5
+pytest==9.1.1
 pytest-django==4.12.0
 pytz==2026.3.post1
 pypdf==6.14.2
