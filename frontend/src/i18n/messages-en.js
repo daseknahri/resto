@@ -4646,6 +4646,8 @@ ownerOrders: {
   bulkReadyConfirmTitle: "Mark {count} orders as ready?",
   bulkReadyConfirmBody: "All visible preparing orders will be marked ready.",
   bulkReadyDone: "{count} orders marked as ready.",
+  bulkReadyPartial: "{ok} of {total} marked ready — {failed} could not be updated.",
+  bulkReadyFailed: "None of the orders could be marked ready.",
   promoDiscount: "Promo",
   tip: "Tip",
   walletPaid: "Wallet",
