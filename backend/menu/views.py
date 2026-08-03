@@ -13179,15 +13179,45 @@ class DrawerTransactionView(APIView):
         user = request.user
         user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
 
-        tx = DrawerTransaction.objects.create(
-            session=session,
-            kind=kind,
-            amount=amount,
-            reason=reason,
-            recorded_by_user_id=user.id,
-            recorded_by_name=user_name,
-            at=timezone.now(),
-        )
+        # Idempotency: a double-tapped / retried pay-in or pay-out must not record two rows (which
+        # would skew the drawer's expected_total at close). An optional client key stores the created
+        # transaction id in a short-TTL cache marker; a replay re-fetches and returns that same row.
+        idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
+        _txn_idem_key = None
+        if idempotency_key:
+            from django.db import connection as _drawer_txn_conn
+            _txn_idem_key = f"drawer_txn_idem:{_drawer_txn_conn.schema_name}:{session.id}:{idempotency_key}"
+            _existing_tx_id = cache.get(_txn_idem_key)
+            if _existing_tx_id:
+                _existing = DrawerTransaction.objects.filter(pk=_existing_tx_id).first()
+                if _existing is not None:
+                    return Response(_drawer_transaction_dict(_existing), status=status.HTTP_201_CREATED)
+
+        # Lock the session row and re-assert OPEN before inserting: DrawerCloseView locks the same
+        # row to finalize, so this serializes pay-in/out against close — a transaction can't land in a
+        # just-closed session, and a close can't compute expected_total without an in-flight pay-in/out.
+        with transaction.atomic():
+            _locked = (
+                DrawerSession.objects.select_for_update()
+                .filter(pk=session.id, status=DrawerSession.Status.OPEN)
+                .first()
+            )
+            if _locked is None:
+                return Response(
+                    {"detail": "The drawer session was just closed.", "code": "session_closed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            tx = DrawerTransaction.objects.create(
+                session=_locked,
+                kind=kind,
+                amount=amount,
+                reason=reason,
+                recorded_by_user_id=user.id,
+                recorded_by_name=user_name,
+                at=timezone.now(),
+            )
+        if _txn_idem_key:
+            cache.set(_txn_idem_key, tx.id, 300)
         return Response(_drawer_transaction_dict(tx), status=status.HTTP_201_CREATED)
 
 

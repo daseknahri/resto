@@ -288,12 +288,40 @@ class DrawerTransactionViewTests(SimpleTestCase):
         mock_dt.objects.create.return_value = tx
 
         req = _make_owner_request("POST", {"kind": "pay_in", "amount": "25.00", "reason": "Petty cash"})
-        with patch("menu.views.timezone") as mock_tz:
+        with patch("menu.views.timezone") as mock_tz, patch("menu.views.transaction"):
             mock_tz.now.return_value = datetime(2024, 1, 1, 9, 0, tzinfo=_tz.utc)
             resp = DrawerTransactionView().post(req)
 
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["kind"], "pay_in")
+
+    @patch("menu.views.cache")
+    @patch("menu.views.DrawerTransaction")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    def test_idempotent_replay_returns_existing_tx(self, mock_owner, mock_ds, mock_dt, cache_mock):
+        """POS reliability: a retried / double-tapped pay-in with the same idempotency_key must NOT
+        record a second drawer transaction (which would skew expected_total); it re-fetches and
+        returns the original row."""
+        session = MagicMock(); session.id = 5
+        mock_ds.Status.OPEN = "open"
+        mock_ds.objects.filter.return_value.order_by.return_value.first.return_value = session
+        mock_dt.Kind.PAY_IN = "pay_in"; mock_dt.Kind.PAY_OUT = "pay_out"
+
+        # The cache marker holds the ORIGINAL transaction id → replay re-fetches it, no new create.
+        cache_mock.get.return_value = 42
+        existing = MagicMock()
+        existing.id = 42; existing.kind = "pay_in"; existing.amount = Decimal("25.00")
+        existing.reason = "Petty cash"; existing.recorded_by_name = "Owner Test"
+        existing.at = datetime(2024, 1, 1, 9, 0, tzinfo=_tz.utc)
+        mock_dt.objects.filter.return_value.first.return_value = existing
+
+        req = _make_owner_request("POST", {"kind": "pay_in", "amount": "25.00", "idempotency_key": "abc"})
+        resp = DrawerTransactionView().post(req)
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["kind"], "pay_in")
+        mock_dt.objects.create.assert_not_called()  # no second row
 
     @patch("menu.views.DrawerSession")
     @patch("menu.views._is_tenant_owner", return_value=True)
@@ -369,7 +397,7 @@ class DrawerTransactionViewTests(SimpleTestCase):
         )
 
         req = _make_owner_request("POST", {"kind": "pay_in", "amount": "25.017"})
-        with patch("menu.views.timezone") as mock_tz:
+        with patch("menu.views.timezone") as mock_tz, patch("menu.views.transaction"):
             mock_tz.now.return_value = datetime(2024, 1, 1, 9, 0, tzinfo=_tz.utc)
             resp = DrawerTransactionView().post(req)
 
