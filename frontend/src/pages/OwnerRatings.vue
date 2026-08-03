@@ -243,11 +243,13 @@ import { computed, nextTick, onActivated, onMounted, reactive, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const RATINGS_CACHE_KEY = "owner.ratings";
@@ -310,6 +312,13 @@ const saveReply = async (r) => {
 };
 
 const deleteReply = async (r) => {
+  const ok = await confirm({
+    title: t("ownerRatings.deleteReplyConfirmTitle"),
+    body: t("ownerRatings.deleteReplyConfirmBody"),
+    confirmLabel: t("common.delete"),
+    danger: true,
+  });
+  if (!ok) return;
   replyDeleting.value = new Set([...replyDeleting.value, r.id]);
   try {
     await api.delete(`/owner/ratings/${r.id}/reply/`);

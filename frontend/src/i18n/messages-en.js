@@ -2067,6 +2067,7 @@ ownerCustomers: {
   exportError: "Export failed. Please try again.",
 },
 ownerStaff: {
+  confirmRemoveBody: "This permanently removes {name} from your staff.",
   kicker: "Staff",
   title: "Staff management",
   subtitle: "Create staff accounts so your team can manage orders.",
@@ -2148,6 +2149,9 @@ waiterLayout: {
   utilityNav: "Utility navigation",
 },
 waiterPage: {
+  discardOrderConfirmTitle: "Discard this order?",
+  discardOrderConfirmBody: "The items you've added will be lost.",
+  discardOrderConfirmBtn: "Discard",
   searchPlaceholder: "Search by table, order #, or name…",
   noActiveOrders: "All clear — no active orders",
   noActiveOrdersBody: "New orders will appear here automatically.",
@@ -3682,6 +3686,10 @@ orderFlow: {
   updatedAt: "Updated",
 },
 ownerHome: {
+  closeStorefrontConfirmTitle: "Close the storefront?",
+  closeStorefrontConfirmBody: "Customers won't be able to place orders until you reopen.",
+  resetAvailabilityConfirm: "Make all {count} sold-out dishes available again?",
+  resetAvailabilityConfirmBody: "Every sold-out dish will be put back on sale immediately.",
   kicker: "Owner dashboard",
   title: "Launch and manage your menu",
   description: "Track readiness, complete setup, and publish a stable customer experience.",
@@ -4302,6 +4310,11 @@ adminConsole: {
   insuranceLink: "Insurance",
 },
 ownerReservations: {
+  confirmNoShowTitle: "Mark reservation as no-show?",
+  confirmLostTitle: "Mark reservation as unavailable?",
+  confirmSingleBody: "This can't be easily undone.",
+  bulkConfirmTitle: "Update {count} reservations?",
+  bulkConfirmBody: "The selected reservations will be marked and this can't be easily undone.",
   preparedFirstOpenedRestCopied: "Prepared {count} reminders. Only the first chat was opened automatically -- the rest were copied to your clipboard and still need to be sent manually.",
   clearPendingConfirmTitle: "Clear {count} pending reminders?",
   clearPendingConfirmBody: "These reminders have not been marked as opened or failed yet. Clearing them now means you will lose track of whether they were actually sent.",
@@ -5229,6 +5242,8 @@ zReport: {
   laborStillOpen: "open",
 },
 ownerRatings: {
+  deleteReplyConfirmTitle: "Delete your public reply?",
+  deleteReplyConfirmBody: "This permanently removes your reply. Guests will no longer see it.",
   kicker: "Customer feedback",
   title: "Ratings",
   description: "Reviews left by customers after their orders.",
@@ -5855,6 +5870,8 @@ realtime: {
   reconnecting: "Reconnecting…",
 },
 cashDrawer: {
+  closeConfirmTitle: "Close the cash drawer?",
+  closeConfirmBody: "This ends the cash session and can't be undone. Counted total: {total}.",
   navLabel: "Cash drawer",
   cardTitle: "Cash drawer",
   statusOpen: "Drawer open",

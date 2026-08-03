@@ -203,6 +203,7 @@ import { ref, computed, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
@@ -210,6 +211,7 @@ import api from "../lib/api";
 defineOptions({ name: "OwnerShiftClose" });
 
 const { t } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 const tenant = useTenantStore();
 
@@ -311,6 +313,13 @@ const loadData = async () => {
 const closeDrawerNow = async () => {
   const counted = parseFloat(countedInput.value);
   if (isNaN(counted) || counted < 0) return;
+  const ok = await confirm({
+    title: t("cashDrawer.closeConfirmTitle"),
+    body: t("cashDrawer.closeConfirmBody", { total: fmtMoney(counted) }),
+    confirmLabel: t("cashDrawer.submitClose"),
+    danger: true,
+  });
+  if (!ok) return;
   closing.value = true;
   try {
     const { data } = await api.post("/owner/drawer/close/", { counted_total: counted.toFixed(2) });

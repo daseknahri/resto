@@ -2065,6 +2065,7 @@ ownerCustomers: {
   exportError: "Echec de l'export. Veuillez reessayer.",
 },
 ownerStaff: {
+  confirmRemoveBody: "Ceci retire definitivement {name} de votre equipe.",
   kicker: "Personnel",
   title: "Gestion du personnel",
   subtitle: "Creez des comptes personnel pour que votre equipe puisse gerer les commandes.",
@@ -2146,6 +2147,9 @@ waiterLayout: {
   utilityNav: "Navigation utilitaire",
 },
 waiterPage: {
+  discardOrderConfirmTitle: "Abandonner cette commande ?",
+  discardOrderConfirmBody: "Les articles ajoutes seront perdus.",
+  discardOrderConfirmBtn: "Abandonner",
   searchPlaceholder: "Table, n° commande, ou nom…",
   noActiveOrders: "Tout est calme — aucune commande active",
   noActiveOrdersBody: "Les nouvelles commandes apparaitront ici automatiquement.",
@@ -3639,6 +3643,10 @@ orderFlow: {
   updatedAt: "Mise à jour",
 },
 ownerHome: {
+  closeStorefrontConfirmTitle: "Fermer la boutique ?",
+  closeStorefrontConfirmBody: "Les clients ne pourront pas commander jusqu'a la reouverture.",
+  resetAvailabilityConfirm: "Rendre a nouveau disponibles les {count} plats en rupture ?",
+  resetAvailabilityConfirmBody: "Chaque plat en rupture sera remis en vente immediatement.",
   readinessDone: "Tout est prêt ! Votre menu est en ligne et prêt pour vos clients.",
   analyticsPeriod7: "7j",
   analyticsPeriod14: "14j",
@@ -4259,6 +4267,11 @@ adminConsole: {
   insuranceLink: "Assurance",
 },
 ownerReservations: {
+  confirmNoShowTitle: "Marquer la reservation comme absence ?",
+  confirmLostTitle: "Marquer la reservation comme indisponible ?",
+  confirmSingleBody: "Ceci ne peut pas etre annule facilement.",
+  bulkConfirmTitle: "Mettre a jour {count} reservations ?",
+  bulkConfirmBody: "Les reservations selectionnees seront marquees et ceci ne peut pas etre annule facilement.",
   preparedFirstOpenedRestCopied: "{count} rappels prepares. Seule la premiere conversation a ete ouverte automatiquement -- les autres ont ete copiees dans votre presse-papiers et doivent encore etre envoyees manuellement.",
   clearPendingConfirmTitle: "Effacer {count} rappels en attente ?",
   clearPendingConfirmBody: "Ces rappels n'ont pas encore ete marques comme ouverts ou echoues. Les effacer maintenant signifie que vous perdrez la trace de leur envoi effectif.",
@@ -5237,6 +5250,8 @@ zReport: {
   laborStillOpen: "en cours",
 },
 ownerRatings: {
+  deleteReplyConfirmTitle: "Supprimer votre reponse publique ?",
+  deleteReplyConfirmBody: "Ceci supprime definitivement votre reponse. Les clients ne la verront plus.",
   kicker: "Retours clients",
   title: "Avis",
   description: "Evaluations laissees par les clients apres leurs commandes.",
@@ -5844,6 +5859,8 @@ realtime: {
   reconnecting: "Reconnexion…",
 },
 cashDrawer: {
+  closeConfirmTitle: "Fermer la caisse ?",
+  closeConfirmBody: "Ceci termine la session de caisse et est irreversible. Total compte : {total}.",
   navLabel: "Caisse",
   cardTitle: "Caisse",
   statusOpen: "Caisse ouverte",

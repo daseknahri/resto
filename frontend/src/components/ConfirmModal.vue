@@ -3,7 +3,7 @@
     <Transition name="confirm-fade">
       <div
         v-if="modal.visible.value"
-        class="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[9990] flex items-center justify-center p-4 backdrop-blur-sm"
         style="background-color: var(--color-overlay)"
         role="presentation"
         @click.self="cancel"
