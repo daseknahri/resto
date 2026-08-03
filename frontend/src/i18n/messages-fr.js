@@ -4668,6 +4668,8 @@ ownerOrders: {
   djRefundCancelBody: "Le portefeuille du client sera rembourse. Cette action est irreversible.",
   djRefundCancelYes: "Oui, rembourser & annuler",
   djPayNoshow: "Payer le livreur (absence)",
+  djPayNoshowConfirmTitle: "Payer le livreur pour cette absence ?",
+  djPayNoshowConfirmBody: "Ceci paie le livreur pour l'absence du client. C'est un decaissement irreversible.",
   djResolution_redispatched: "Reassignee aux livreurs",
   djResolution_refunded_cancelled: "Remboursee & annulee",
   djResolution_noshow_paid: "Livreur paye pour l'absence",

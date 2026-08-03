@@ -2792,6 +2792,8 @@ const arabicMessages = {
     "djReason_other": "أخرى",
     "djRedispatch": "إعادة التوزيع",
     "djPayNoshow": "دفع للسائق (عدم حضور)",
+    "djPayNoshowConfirmTitle": "دفع للسائق مقابل عدم الحضور؟",
+    "djPayNoshowConfirmBody": "هذا يدفع للسائق مقابل عدم حضور العميل. إنه صرف مالي ولا يمكن التراجع عنه.",
     "djResolution_redispatched": "أُعيد توزيعه على السائقين",
     "djResolution_refunded_cancelled": "تم الاسترداد والإلغاء",
     "djResolution_noshow_paid": "تم الدفع للسائق مقابل عدم الحضور",

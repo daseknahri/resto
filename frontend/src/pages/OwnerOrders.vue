@@ -2103,6 +2103,17 @@ const deliveryActing = ref(null);  // order id currently being resolved
 const djConfirmId = ref(null);     // order id awaiting refund_cancel inline confirm
 const deliveryAction = async (o, action) => {
   if (deliveryActing.value) return;
+  // Paying the driver for a customer no-show is a money-out action — confirm it (its sibling
+  // refund-cancel already gates behind the inline confirm; this one fired on a single tap).
+  if (action === 'confirm_noshow') {
+    const okNoshow = await confirm({
+      title: t('ownerOrders.djPayNoshowConfirmTitle'),
+      body: t('ownerOrders.djPayNoshowConfirmBody'),
+      confirmLabel: t('ownerOrders.djPayNoshow'),
+      danger: true,
+    });
+    if (!okNoshow) return;
+  }
   deliveryActing.value = o.id;
   try {
     const { data } = await api.post(`/owner/orders/${o.id}/delivery-action/`, { action });

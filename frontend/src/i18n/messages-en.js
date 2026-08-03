@@ -4660,6 +4660,8 @@ ownerOrders: {
   djRefundCancelBody: "The customer's wallet will be refunded. This action cannot be undone.",
   djRefundCancelYes: "Yes, refund & cancel",
   djPayNoshow: "Pay driver (no-show)",
+  djPayNoshowConfirmTitle: "Pay the driver for this no-show?",
+  djPayNoshowConfirmBody: "This pays the driver for the customer no-show. It's a money-out action and cannot be undone.",
   djResolution_redispatched: "Re-dispatched to drivers",
   djResolution_refunded_cancelled: "Refunded & cancelled",
   djResolution_noshow_paid: "Driver paid for the no-show",
