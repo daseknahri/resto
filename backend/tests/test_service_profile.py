@@ -342,3 +342,19 @@ class TestCustomerServiceProfilesView(SimpleTestCase):
             {"vertical": "food", "default_address_id": 7}, customer=Customer(id=1)
         )
         self.assertEqual(profile.default_address_id, 7)
+
+    @patch("accounts.models.SavedAddress")
+    @patch("accounts.models.CustomerServiceProfile")
+    def test_patch_non_numeric_default_address_returns_400_not_500(self, mock_csp, mock_addr):
+        """Live-hardening regression: a non-numeric default_address_id would raise ValueError
+        on the IntegerField lookup → 500. It must be a clean 400, and the ORM never queried."""
+        from accounts.models import Customer
+
+        profile = MagicMock(notify_updates=True, notify_promotions=True, default_address_id=None)
+        mock_csp.get_or_create_for.return_value = profile
+        resp = self._patch(
+            {"vertical": "food", "default_address_id": "abc"}, customer=Customer(id=1)
+        )
+        self.assertEqual(resp.status_code, 400)
+        profile.save.assert_not_called()
+        mock_addr.objects.filter.assert_not_called()  # coercion fails before the ORM lookup

@@ -30,6 +30,18 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("language", serializer.errors)
 
+    def test_tags_rejects_non_list(self):
+        # A non-list `tags` would 500 the public marketplace listing (a list comprehension
+        # over it) — reject it at the write instead.
+        serializer = ProfileSerializer(data={"tags": 5})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("tags", serializer.errors)
+
+    def test_tags_normalizes_list_entries(self):
+        serializer = ProfileSerializer(data={"tags": ["  Halal ", "", "Vegan"]})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["tags"], ["Halal", "Vegan"])
+
     def test_logo_url_is_normalized_to_https_for_same_host_media(self):
         request = RequestFactory().get("/", secure=True, HTTP_HOST="badr.menu.ibnbatoutaweb.com")
         tenant = Tenant(name="Badr", slug="badr", plan=Plan(code="basic", name="Basic"))
