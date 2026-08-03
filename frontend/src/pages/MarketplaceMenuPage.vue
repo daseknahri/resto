@@ -545,7 +545,7 @@
                 v-if="cart.length > 1"
                 class="ui-press rounded-lg px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-rose-400 focus-visible:outline-none"
                 :aria-label="t('mktMenu.clearCart')"
-                @click="cart.splice(0); checkoutOpen = false"
+                @click="clearMktCart"
               >
                 {{ t('mktMenu.clearCart') }}
               </button>
@@ -1029,6 +1029,20 @@ const applyMktSavedAddress = (addr) => {
   if (addr.lng != null) form.delivery_lng = addr.lng;
 };
 
+// Clearing a multi-item cart is irreversible — confirm first, for parity with the tenant
+// Cart (which already guards clear-cart). Reuses the shared cartPage.clearCart* copy.
+const clearMktCart = async () => {
+  const ok = await confirm({
+    title: t('cartPage.clearCartConfirm'),
+    body: t('cartPage.clearCartConfirmBody'),
+    confirmLabel: t('cartPage.clearCartConfirmYes'),
+    danger: true,
+  });
+  if (!ok) return;
+  cart.value.splice(0);
+  checkoutOpen.value = false;
+};
+
 const deleteMktSavedAddress = async (id) => {
   // Deleting a saved address is irreversible — confirm first (Cart / CustomerAccount
   // already guard this; the marketplace checkout used to delete on a single tap).
@@ -1040,7 +1054,10 @@ const deleteMktSavedAddress = async (id) => {
   if (!ok) return;
   try {
     await removeSavedAddress(id);
-  } catch { /* non-critical */ }
+  } catch {
+    // Surface the failure instead of swallowing it — the address is still there.
+    toastStore.show(t('cartPage.addressDeleteFailed'), 'error');
+  }
 };
 
 // When the customer switches to delivery, auto-fill their most recent saved

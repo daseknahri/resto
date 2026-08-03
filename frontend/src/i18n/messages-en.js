@@ -834,6 +834,7 @@ mktOrderStatus: {
   currentStep: "current step",
   stepDone: "completed",
   pointsEarned: "Loyalty points earned",
+  pointsUnit: "pts",
   justPlacedTitle: "Order placed!",
   justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
   claimTitle: "Save this order to your account",

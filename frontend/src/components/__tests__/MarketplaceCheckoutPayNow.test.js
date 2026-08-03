@@ -42,9 +42,11 @@ describe("MarketplaceCheckoutPayNow", () => {
   });
 
   it("shows the wallet panel with the balance line when cod is not chosen", () => {
-    const w = mountIt({ codChosen: false, walletBalance: 200, currency: "DH" });
+    // The balance line is now formatted via fmtPrice(walletBalanceNum) for parity with the
+    // shortfall line below (was a raw `${walletBalance} ${currency}` = "200 DH").
+    const w = mountIt({ codChosen: false, walletBalanceNum: 200 });
     expect(w.text()).toContain("mktMenu.payFromWalletTitle");
-    expect(w.text()).toContain('mktMenu.walletBalanceLine:{"balance":"200 DH"}');
+    expect(w.text()).toContain('mktMenu.walletBalanceLine:{"balance":"$200.00"}');
   });
 
   it("shows the shortfall notice + top-up link only when the wallet is short", () => {
