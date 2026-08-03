@@ -57,6 +57,62 @@ class CancelDeliveryJobTests(SimpleTestCase):
         enq.assert_not_called()
 
 
+class CompleteDeliveryJobTests(SimpleTestCase):
+    """complete_delivery_job_for_order: when the OWNER completes a delivery order, the job is closed
+    (→ DELIVERED) and the driver is credited — closing the gap where owner-completion left the job
+    dangling at picked_up (driver uncredited + soft-locked)."""
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_picked_up_job_delivered_and_driver_credited(self, mock_dj, _atomic, mock_credit):
+        from accounts.delivery_service import complete_delivery_job_for_order
+        mock_dj.Status.DELIVERED = "delivered"
+        job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
+                              delivered_at=None, save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        out = complete_delivery_job_for_order(1, "ORD-1")
+        self.assertEqual(job.status, "delivered")
+        self.assertIsNotNone(job.delivered_at)
+        job.save.assert_called_once()
+        mock_credit.assert_called_once_with(job)  # driver paid
+        self.assertIs(out, job)
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_terminal_job_is_noop(self, mock_dj, _atomic, mock_credit):
+        # Already delivered (e.g. the driver also tapped delivered) → no re-close, no re-credit.
+        from accounts.delivery_service import complete_delivery_job_for_order
+        job = SimpleNamespace(is_terminal=True, driver_id=5, status="delivered", save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        complete_delivery_job_for_order(1, "ORD-1")
+        job.save.assert_not_called()
+        mock_credit.assert_not_called()
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_no_driver_is_noop(self, mock_dj, _atomic, mock_credit):
+        # A driverless (still-searching) job on a completed order isn't marked delivered/credited here.
+        from accounts.delivery_service import complete_delivery_job_for_order
+        job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching", save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        complete_delivery_job_for_order(1, "ORD-1")
+        job.save.assert_not_called()
+        mock_credit.assert_not_called()
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_no_job_is_noop(self, mock_dj, _atomic, mock_credit):
+        from accounts.delivery_service import complete_delivery_job_for_order
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = None
+        out = complete_delivery_job_for_order(1, "ORD-NONE")
+        self.assertIsNone(out)
+        mock_credit.assert_not_called()
+
+
 class SetFoodReadyTests(SimpleTestCase):
     """accounts.delivery_service.set_delivery_job_food_ready mirrors the prep ETA
     onto the active delivery job so the driver knows when to be at the restaurant."""

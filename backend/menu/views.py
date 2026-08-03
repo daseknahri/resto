@@ -8028,6 +8028,19 @@ class OwnerOrderStatusUpdateView(APIView):
             except Exception:
                 pass
 
+        # When the OWNER completes a platform-delivery order, reconcile the delivery job the same way
+        # the driver's own "delivered" tap would: close the job (→ DELIVERED) and credit the driver.
+        # Without this the job dangles at picked_up forever — the driver goes uncredited (unless they
+        # also tap delivered) and is soft-locked out of new offers. Idempotent + best-effort.
+        if new_status == Order.Status.COMPLETED and order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+            try:
+                from accounts.delivery_service import complete_delivery_job_for_order
+                _ct = getattr(request, "tenant", None)
+                if _ct:
+                    complete_delivery_job_for_order(_ct.id, order.order_number)
+            except Exception:
+                pass
+
         # Real-time ping so other connected owner/kitchen screens refresh immediately
         # (no-op if WS not configured). Low-sensitivity signal only.
         try:
