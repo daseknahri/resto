@@ -401,6 +401,7 @@
 import { ref, onMounted } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
@@ -408,6 +409,7 @@ import adminApi from '../lib/adminApi';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const loading = ref(true);
@@ -517,6 +519,14 @@ const fundFloat = async () => {
     fundError.value = t('adminWallet.fundAmountRequired');
     return;
   }
+  const _fundTn = fundTenants.value.find((tn) => tn.id === fundTenantId.value);
+  const okFund = await confirm({
+    title: t('adminWallet.fundConfirmTitle'),
+    body: t('adminWallet.fundConfirmBody', { amount: amount.toFixed(2), name: _fundTn?.name || _fundTn?.slug || t('adminWallet.thisRestaurant') }),
+    confirmLabel: t('adminWallet.fundConfirmCta'),
+    danger: true,
+  });
+  if (!okFund) return;
   fundSaving.value = true;
   if (!fundKey) fundKey = newIdempotencyKey();
   try {

@@ -413,11 +413,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const loading = ref(true);
@@ -467,6 +469,13 @@ const submitPayout = async () => {
   const amount = parseFloat(payAmount.value);
   if (!amount || amount <= 0) { payError.value = t('adminDrivers.payoutInvalid'); return; }
   if (amount > Number(detail.value.owed)) { payError.value = t('adminDrivers.payoutInvalid'); return; }
+  const okPay = await confirm({
+    title: t('adminDrivers.payoutConfirmTitle'),
+    body: t('adminDrivers.payoutConfirmBody', { amount: fmtMoney(amount), name: selected.value?.name || t('adminDrivers.thisDriver') }),
+    confirmLabel: t('adminDrivers.payoutConfirmCta'),
+    danger: true,
+  });
+  if (!okPay) return;
   paying.value = true;
   try {
     const res = await api.post(`/admin/drivers/${selected.value.id}/payout/`, {
@@ -488,6 +497,15 @@ const submitPayout = async () => {
 
 const setApproval = async (approve) => {
   if (!selected.value || vetting.value) return;
+  if (!approve) {
+    const okReject = await confirm({
+      title: t('adminDrivers.rejectConfirmTitle'),
+      body: t('adminDrivers.rejectConfirmBody', { name: selected.value?.name || t('adminDrivers.thisDriver') }),
+      confirmLabel: t('adminDrivers.rejectConfirmCta'),
+      danger: true,
+    });
+    if (!okReject) return;
+  }
   vetting.value = true;
   try {
     const body = approve ? {} : { reason: rejectReason.value.trim() };
