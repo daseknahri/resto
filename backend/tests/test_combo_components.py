@@ -623,6 +623,20 @@ class DishSerializerComboValidationTests(SimpleTestCase):
             s.validate_combo_components(entries)
         self.assertIn("8", str(ctx.exception.detail))
 
+    def test_get_combo_components_survives_missing_component(self):
+        """Live-hardening: a combo-component whose component deref fails (a future nullable /
+        SET_NULL migration would allow it) must degrade to [] rather than AttributeError-500 on
+        EVERY menu load — the deref now lives inside the guard."""
+        cc = MagicMock()
+        cc.component_id = 9
+        cc.component = None  # cc.component.name would raise AttributeError
+        cc.qty = 1
+        cc.position = 0
+        instance = MagicMock()
+        instance.combo_components.all.return_value = [cc]
+        s = self._serializer_instance()
+        self.assertEqual(s.get_combo_components(instance), [])
+
     def test_get_is_combo_false_when_no_components(self):
         dish = _make_dish(combo_components=[])
         s = self._serializer_instance(instance=dish)
