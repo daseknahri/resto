@@ -34,7 +34,7 @@
       <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
         {{ t('mktMenu.payFromWalletTitle') }}
       </p>
-      <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${walletBalance} ${currency}` }) }}</p>
+      <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: fmtPrice(walletBalanceNum) }) }}</p>
       <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
         {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
         <RouterLink

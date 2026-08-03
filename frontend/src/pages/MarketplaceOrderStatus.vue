@@ -423,7 +423,7 @@
                 </svg>
                 {{ t('mktOrderStatus.pointsEarned') }}
               </span>
-              <span class="text-[12px] font-bold tabular-nums text-violet-200">+{{ order.points_earned }} pts</span>
+              <span class="text-[12px] font-bold tabular-nums text-violet-200">+{{ order.points_earned }} {{ t('mktOrderStatus.pointsUnit') }}</span>
             </div>
           </div>
         </div>

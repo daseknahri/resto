@@ -832,6 +832,7 @@ mktOrderStatus: {
   currentStep: "etape en cours",
   stepDone: "termine",
   pointsEarned: "Points de fidelite gagnes",
+  pointsUnit: "pts",
   justPlacedTitle: "Commande passee !",
   justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
   claimTitle: "Enregistrez cette commande sur votre compte",
