@@ -335,7 +335,14 @@ const selectedOptionNote = computed(() => {
 });
 
 const unitOptionTotal = computed(() => selectedOptionObjects.value.reduce((s, o) => s + Number(o.price_delta || 0), 0));
-const unitPriceWithOptions = computed(() => (Number(props.dish.price) || 0) + unitOptionTotal.value);
+// Use effective_price (happy-hour discounted base) when active — mirrors DishPage so the quick-add
+// sheet charges the SAME discounted price the card shows. Option deltas are never discounted.
+const dishBasePrice = computed(() => {
+  const d = props.dish;
+  if (d?.happy_hour && Number(d.effective_price) < Number(d.price)) return Number(d.effective_price);
+  return Number(d?.price) || 0;
+});
+const unitPriceWithOptions = computed(() => dishBasePrice.value + unitOptionTotal.value);
 const totalWithOptions = computed(() => unitPriceWithOptions.value * (qty.value || 1));
 
 const hasUngroupedRequiredMissing = computed(() =>
