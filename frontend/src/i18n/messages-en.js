@@ -1560,6 +1560,7 @@ driver: {
   pendingTitle2: "Application under review",
   pendingDesc: "An admin is reviewing your driver application. You'll be able to go online once approved.",
   deliveredToast: "Delivery completed — nice work!",
+  failedToast: "Delivery marked as failed.",
   enterDeliveryCode: "Enter the delivery code from the customer",
   badDeliveryCode: "Incorrect code — ask the customer for the code on their order.",
   rateCustomerTitle: "Rate the customer",

@@ -1558,6 +1558,7 @@ driver: {
   pendingTitle2: "Demande en cours d'examen",
   pendingDesc: "Un administrateur examine votre demande de livreur. Vous pourrez vous connecter une fois approuve.",
   deliveredToast: "Livraison terminee — beau travail !",
+  failedToast: "Livraison marquee comme echouee.",
   enterDeliveryCode: "Saisissez le code de livraison du client",
   badDeliveryCode: "Code incorrect — demandez au client le code affiche sur sa commande.",
   rateCustomerTitle: "Evaluer le client",
