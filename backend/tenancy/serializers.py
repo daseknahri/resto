@@ -471,6 +471,16 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
     def validate_business_hours_i18n(self, value):
         return self._validate_i18n_map(value, field_label="Business hours", max_length=1000)
 
+    def validate_tags(self, value):
+        # `tags` feeds the public marketplace filter (a list comprehension over it), so a
+        # non-list scalar would 500 the listing. Reject non-lists at the write and normalize
+        # entries to trimmed, capped, non-empty strings.
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a list.")
+        return [str(t).strip()[:50] for t in value if str(t).strip()]
+
     def validate_receipt_message(self, value):
         return str(value or "").strip()[:300]
 

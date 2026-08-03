@@ -191,6 +191,33 @@ class MarketplaceViewTests(SimpleTestCase):
         self.assertIn("Moroccan", resp.data["filters"]["cuisines"])
         self.assertIn("halal", resp.data["filters"]["tags"])
 
+    def test_non_list_tags_does_not_500_the_listing(self):
+        """Live-hardening regression: one tenant with a non-list `tags` (a writable,
+        historically unvalidated JSON field) must NOT 500 the whole marketplace. The row
+        should still list; its bad tags are simply ignored."""
+        profile = _make_profile(city="Fez", cuisine_type="Moroccan", tags=5)  # non-list scalar
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: [profile]
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                with patch("django_tenants.utils.schema_context", _sc_mock()):
+                    with patch("menu.models.Rating") as mock_rating:
+                        mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
+                        with patch("menu.models.Promotion") as mock_promo:
+                            mock_promo.objects.filter.return_value.order_by.return_value.__getitem__ = \
+                                lambda s, k: []
+                            optin_m = MagicMock()
+                            optin_m.objects.values.return_value = []
+                            fs_m = MagicMock()
+                            fs_m.objects.filter.return_value = []
+                            with patch("accounts.models.PlatformFlashSaleOptIn", optin_m):
+                                with patch("accounts.models.PlatformFlashSale", fs_m):
+                                    resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["restaurants"]), 1)  # bad-tags tenant still listed
+
     def test_flash_sale_active_set_when_opted_in_and_live(self):
         """flash_sale_active=True when tenant is opted-in to a live flash sale."""
         profile = _make_profile()
@@ -955,6 +982,13 @@ class MarketplacePlaceOrderViewTests(SimpleTestCase):
         resp = self._post({"items": [{"slug": "burger", "qty": 1}]})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "missing_restaurant")
+
+    def test_non_dict_body_returns_400_not_500(self):
+        """Live-hardening regression: a top-level JSON array body makes request.data a list,
+        so the first .get() would AttributeError → 500. It must be a clean 400 instead."""
+        resp = self._post([1, 2])
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "invalid_body")
 
     def test_unknown_restaurant_returns_404(self):
         with patch("tenancy.models.Tenant") as mock_tenant:

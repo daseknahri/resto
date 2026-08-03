@@ -961,6 +961,12 @@ class CustomerServiceProfilesView(APIView):
                 profile.default_address = None
                 fields.append("default_address")
             else:
+                # Coerce before the ORM filter — a non-numeric id would raise ValueError
+                # ("Field 'id' expected a number") on an IntegerField lookup, escaping as a 500.
+                try:
+                    addr_id = int(addr_id)
+                except (TypeError, ValueError):
+                    return Response({"detail": "Address not found."}, status=status.HTTP_400_BAD_REQUEST)
                 from .models import SavedAddress
                 if SavedAddress.objects.filter(id=addr_id, customer_id=customer_id).exists():
                     profile.default_address_id = addr_id
@@ -3900,7 +3906,10 @@ class MarketplaceView(APIView):
                 # NOTE: the ?q= search moved to SQL (above, before slicing) — it no longer
                 # filters here, so it can no longer MISS a match past a pre-slice window.
 
-                profile_tags = [str(t).lower() for t in (profile.tags or [])]
+                # A single tenant with a non-list `tags` (a writable, historically
+                # unvalidated JSON field) must not 500 the marketplace for everyone —
+                # mirror the isinstance guard used at the tag-accumulation site above.
+                profile_tags = [str(t).lower() for t in profile.tags] if isinstance(profile.tags, list) else []
                 if required_tags and not all(rt in profile_tags for rt in required_tags):
                     continue
 
@@ -4317,6 +4326,11 @@ class MarketplacePlaceOrderView(APIView):
         from django_tenants.utils import schema_context as _sc
         import secrets as _sec
 
+        # A non-dict JSON body (top-level array/scalar) would make request.data a list,
+        # so the .get() below raises AttributeError → 500. Reject it as a clean 400.
+        if not isinstance(request.data, dict):
+            return Response({"detail": "Invalid request body.", "code": "invalid_body"}, status=status.HTTP_400_BAD_REQUEST)
+
         # OPS-3: read the client-minted idempotency key before ANY work. If a
         # prior Order with this key already exists inside the tenant schema we
         # return it immediately without re-decrementing stock or re-charging the
@@ -4526,7 +4540,10 @@ class MarketplacePlaceOrderView(APIView):
                     )
                     if _line_err:
                         return Response(_line_err, status=status.HTTP_400_BAD_REQUEST)
-                    qty = max(1, min(99, int(it.get("qty", 1))))
+                    try:
+                        qty = max(1, min(99, int(it.get("qty", 1))))
+                    except (TypeError, ValueError):
+                        return Response({"detail": "Each item quantity must be a whole number.", "code": "invalid_items"}, status=status.HTTP_400_BAD_REQUEST)
                     subtotal = unit_price * qty
                     food_subtotal += subtotal
                     # Build combo snapshot (per-unit qty, not pre-multiplied)
