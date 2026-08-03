@@ -677,25 +677,31 @@ const formatScheduledFor = (iso) => {
 };
 
 // ── Status stepper ────────────────────────────────────────────────────────────
-const STATUS_ORDER = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
-const statusSteps = [
-  { key: 'pending' },
-  { key: 'confirmed' },
-  { key: 'preparing' },
-  { key: 'ready' },
-  { key: 'out_for_delivery' },
-  { key: 'completed' },
-];
+// Fulfillment-aware stepper: pickup / dine-in orders never go "out for delivery",
+// so that phantom step — and the progress math it skews (a ready-for-pickup order
+// otherwise reads 4/6) — must not show for them. Mirrors the tenant OrderStatus.vue,
+// which builds its steps per fulfillment type.
+const statusSteps = computed(() => {
+  const steps = [
+    { key: 'pending' },
+    { key: 'confirmed' },
+    { key: 'preparing' },
+    { key: 'ready' },
+  ];
+  if (order.value?.fulfillment_type === 'delivery') steps.push({ key: 'out_for_delivery' });
+  steps.push({ key: 'completed' });
+  return steps;
+});
 
 const currentStatusIdx = computed(() => {
   if (!order.value) return -1;
-  return STATUS_ORDER.indexOf(order.value.status);
+  return statusSteps.value.findIndex((s) => s.key === order.value.status);
 });
 
 const isCurrentStep = (key) => order.value?.status === key;
 const isStepDone = (key) => {
-  const keyIdx = STATUS_ORDER.indexOf(key);
-  return keyIdx >= 0 && keyIdx < currentStatusIdx.value;
+  const idx = statusSteps.value.findIndex((s) => s.key === key);
+  return idx >= 0 && idx < currentStatusIdx.value;
 };
 
 const stepClass = (key) => {
@@ -710,7 +716,7 @@ const stepClass = (key) => {
 const progressPercent = computed(() => {
   const idx = currentStatusIdx.value;
   if (idx < 0) return 0;
-  return Math.round(((idx + 1) / statusSteps.length) * 100);
+  return Math.round(((idx + 1) / statusSteps.value.length) * 100);
 });
 
 // ── Polling ───────────────────────────────────────────────────────────────────
