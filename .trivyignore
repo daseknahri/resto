@@ -25,3 +25,8 @@
 # Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs (kept in lockstep).
 CVE-2026-14257       # brace-expansion <=5.0.7 unbounded-expansion OOM DoS
 GHSA-mh99-v99m-4gvg  # same advisory — GitHub Advisory DB id Trivy uses for npm
+# Follow-up brace-expansion DoS (unbounded intermediate arrays) that bypasses the 5.0.8
+# mitigation — same dev-only package + usage, still no in-range fix (any patched version
+# breaks eslint's minimatch 3.x, and eslint 9 is peer-capped by eslint-plugin-vue 9.29.0).
+# Accepted 2026-08-03; revisit when the eslint/minimatch chain ships a patched range.
+GHSA-rgw5-rvv9-x895  # brace-expansion unbounded-intermediate-array DoS (npm audit id)
