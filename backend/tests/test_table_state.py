@@ -248,7 +248,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [src, dest]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
             om.select_for_update.return_value = locked
             oi_model.objects.filter.return_value.update = MagicMock()
 
@@ -290,6 +290,18 @@ class StaffTransferItemsViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "invalid_transfer")
 
+    def test_transfer_and_merge_lock_orders_in_pk_order(self):
+        """Deadlock guard (POS reliability): both StaffTransferItemsView and StaffMergeOrdersView
+        must lock the two orders via a single pk-ordered query (order_by('pk')) — otherwise a
+        concurrent transfer + merge on the same pair (swapped src/dest roles) acquire the two row
+        locks in opposite orders and can deadlock (Postgres aborts one as a 500)."""
+        import inspect
+        from menu.views import StaffTransferItemsView, StaffMergeOrdersView
+        for _view in (StaffTransferItemsView, StaffMergeOrdersView):
+            _src = inspect.getsource(_view.post)
+            self.assertIn("pk__in=[src_order_id, dest_order_id]", _src)
+            self.assertIn('order_by("pk")', _src)
+
     @patch("menu.views._can_edit_tenant_order", return_value=False)
     def test_no_perm_is_403(self, _mock):
         resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
@@ -311,7 +323,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = Order.DoesNotExist
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = []
             om.select_for_update.return_value = locked
             resp = self._post(99, {"item_ids": [1], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -323,7 +335,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.return_value = src
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -336,7 +348,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.return_value = src
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -349,7 +361,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.return_value = src
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -366,7 +378,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [src, dest]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -387,7 +399,7 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [src, dest]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
             om.select_for_update.return_value = locked
             oi_model.objects.filter.return_value.update = MagicMock()
 
@@ -447,7 +459,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = Order.DoesNotExist
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = []
             om.select_for_update.return_value = locked
             resp = self._post(99, {"src_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -460,7 +472,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [dest, src_same]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src_same]
             om.select_for_update.return_value = locked
             resp = self._post(5, {"src_order_id": 5})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -474,7 +486,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [dest, src]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"src_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -488,7 +500,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [dest, src]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"src_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -502,7 +514,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [dest, src]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"src_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -516,7 +528,7 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             tx_mock.return_value.__enter__ = MagicMock(return_value=None)
             tx_mock.return_value.__exit__ = MagicMock(return_value=False)
             locked = MagicMock()
-            locked.prefetch_related.return_value.get.side_effect = [dest, src]
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
             om.select_for_update.return_value = locked
             resp = self._post(1, {"src_order_id": 2})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
