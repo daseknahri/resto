@@ -1497,7 +1497,7 @@ const clearFieldError = (field) => {
 const clearCart = async () => {
   const ok = await confirm({
     title: t('cartPage.clearCartConfirm'),
-    message: t('cartPage.clearCartConfirmBody'),
+    body: t('cartPage.clearCartConfirmBody'),
     confirmLabel: t('cartPage.clearCartConfirmYes'),
     danger: true,
   });
@@ -2276,7 +2276,7 @@ const placeInAppOrder = async () => {
   if (tipHighWarning.value) {
     const ok = await confirm({
       title: t('cartPage.tipHighConfirmTitle'),
-      message: t('cartPage.tipHighConfirmBody', { amount: formatPrice(tipAmount.value) }),
+      body: t('cartPage.tipHighConfirmBody', { amount: formatPrice(tipAmount.value) }),
       confirmLabel: t('cartPage.tipHighConfirmYes'),
     });
     if (!ok) return;
