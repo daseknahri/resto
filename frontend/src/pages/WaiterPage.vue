@@ -290,6 +290,20 @@
       </div>
     </div>
 
+    <!-- Recent-tab fetch error — must win over the empty state so a failed load doesn't read as "no recent orders" -->
+    <div
+      v-else-if="!floorView && activeTab === 'recent' && waiter.recentError"
+      :id="`waiter-panel-${activeTab}`"
+      role="tabpanel"
+      :aria-labelledby="`waiter-tab-${activeTab}`"
+    >
+      <div role="alert" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ t('waiterPage.recentFetchError') }}</p>
+        <button class="ui-press shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium text-slate-300 underline hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60" @click="waiter.fetchRecent()">{{ t('waiterPage.retry') }}</button>
+      </div>
+    </div>
+
     <!-- Empty state (orders only) -->
     <div
       v-else-if="!floorView && activeTab !== 'shift' && visibleOrders.length === 0"
@@ -1114,30 +1128,11 @@ const showTableQR = async (slug, label) => {
   }
 };
 
-const _waiterKnownIds = new Set();
-const _playWaiterAlert = () => {
-  if (!waiterSoundOn.value) return;
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.2].forEach((delay, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(i === 0 ? 520 : 720, ctx.currentTime + delay);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.22);
-      osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.22);
-    });
-  } catch { /* blocked */ }
-};
-watch(() => waiter.orders, (orders) => {
-  if (!Array.isArray(orders)) return;
-  if (!_waiterKnownIds.size) { orders.forEach(o => _waiterKnownIds.add(o.id)); return; }
-  const hasNew = orders.some(o => o.status === 'pending' && !_waiterKnownIds.has(o.id));
-  orders.forEach(o => _waiterKnownIds.add(o.id));
-  if (hasNew) _playWaiterAlert();
-}, { deep: false });
+// The new-order sound + haptic alert lives in the polling loop (playAlert, gated on
+// waiterSoundOn). A second watch-driven beeper used to live here — it double-fired with
+// playAlert on every new order and, because it was the ONLY mute-aware path, made the 🔕
+// toggle look broken (the poll alert kept beeping through it). Consolidated onto the
+// single poll-driven, mute-guarded playAlert.
 
 const showNewOrder = ref(false);
 // When opening new-order from a floor tile, pre-seed these so the waiter
@@ -1362,7 +1357,10 @@ const allReadyBusyIds = ref(new Set());
 
 const doToggleItemReady = async (order, item) => {
   if (!canManageOrders.value) return;
-  await waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+  const ok = await waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+  // Surface a silent failure: the store reverts the optimistic tick, so without this the
+  // item snaps back with no message and the pass/kitchen state is wrong unknowingly.
+  if (!ok) toast.show(t('waiterPage.itemReadyFailed'), 'error');
 };
 
 const doAllReady = async (order) => {
@@ -2265,6 +2263,7 @@ let pollTimer = null;
 let prevPendingIds = new Set();
 
 const playAlert = () => {
+  if (!waiterSoundOn.value) return; // respect the 🔕 mute toggle (was unguarded → mute did nothing)
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.18].forEach((delay) => {
