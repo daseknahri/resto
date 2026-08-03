@@ -1866,7 +1866,7 @@ const payCashForSeat = async (order, seat) => {
   if (!amount || amount <= 0) return;
   const ok = await confirm({
     title: t('waiterPage.splitCashConfirmTitle'),
-    message: t('waiterPage.splitCashConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
+    body: t('waiterPage.splitCashConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
     confirmLabel: t('waiterPage.payCash'),
     danger: false,
   });
@@ -1898,7 +1898,7 @@ const payWalletForSeat = async (order, seat) => {
   if (!amount || amount <= 0) return;
   const ok = await confirm({
     title: t('waiterPage.splitWalletConfirmTitle'),
-    message: t('waiterPage.splitWalletConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
+    body: t('waiterPage.splitWalletConfirmBody', { amount: fmtOrderPrice(amount, order.currency) }),
     confirmLabel: t('waiterPage.payWalletForSeat'),
     danger: false,
   });
