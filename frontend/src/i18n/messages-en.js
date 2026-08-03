@@ -2357,6 +2357,8 @@ waiterPage: {
   markItemNotReady: "Mark not ready",
   allReadyBtn: "All ready",
   allReadyFailed: "Could not mark all items ready — please try again.",
+  itemReadyFailed: "Could not update the item — please try again.",
+  recentFetchError: "Could not load recent orders.",
   // Item C — needs-action tab
   tabNeedsAction: "Needs action",
   // Floor map view (P1)
