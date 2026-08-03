@@ -5902,9 +5902,19 @@ class StaffTransferItemsView(APIView):
         from menu.models import OrderItem as _OI
 
         with _tx.atomic():
-            try:
-                src = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=src_order_id)
-            except Order.DoesNotExist:
+            # Lock BOTH orders in one pk-ordered query so transfer and merge always acquire the two
+            # row locks in the same order (lower pk first). Otherwise a concurrent transfer + merge on
+            # the same pair (with swapped src/dest roles) lock them in opposite orders and can deadlock
+            # — Postgres aborts one as a 500 instead of letting it retry cleanly.
+            _locked_orders = {
+                o.pk: o
+                for o in Order.objects.select_for_update()
+                .prefetch_related("items", "payments")
+                .filter(pk__in=[src_order_id, dest_order_id])
+                .order_by("pk")
+            }
+            src = _locked_orders.get(src_order_id)
+            if src is None:
                 return Response({"detail": "Source order not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if src.fulfillment_type != Order.FulfillmentType.TABLE:
@@ -5914,9 +5924,8 @@ class StaffTransferItemsView(APIView):
             if src.payment_status == Order.PaymentStatus.PAID:
                 return Response({"detail": "Source order is already paid.", "code": "already_paid"}, status=status.HTTP_409_CONFLICT)
 
-            try:
-                dest = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=dest_order_id)
-            except Order.DoesNotExist:
+            dest = _locked_orders.get(dest_order_id)
+            if dest is None:
                 return Response({"detail": "Destination order not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if dest.fulfillment_type != Order.FulfillmentType.TABLE:
@@ -6005,14 +6014,21 @@ class StaffMergeOrdersView(APIView):
         from menu.models import OrderItem as _OI
 
         with _tx.atomic():
-            try:
-                dest = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=dest_order_id)
-            except Order.DoesNotExist:
+            # Lock BOTH orders in one pk-ordered query (lower pk first) — see StaffTransferItemsView:
+            # transfer and merge must acquire the two row locks in the SAME order, or a concurrent
+            # opposing pair can deadlock.
+            _locked_orders = {
+                o.pk: o
+                for o in Order.objects.select_for_update()
+                .prefetch_related("items", "payments")
+                .filter(pk__in=[src_order_id, dest_order_id])
+                .order_by("pk")
+            }
+            dest = _locked_orders.get(dest_order_id)
+            if dest is None:
                 return Response({"detail": "Destination order not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            try:
-                src = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=src_order_id)
-            except Order.DoesNotExist:
+            src = _locked_orders.get(src_order_id)
+            if src is None:
                 return Response({"detail": "Source order not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if src.pk == dest.pk:
