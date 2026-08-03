@@ -41,7 +41,7 @@
     "@pinia/testing": "^0.1.6",
     "@playwright/test": "^1.62.1",
     "@vitejs/plugin-vue": "5.2.4",
-    "@vue/eslint-config-prettier": "9.0.0",
+    "@vue/eslint-config-prettier": "10.2.0",
     "@vue/test-utils": "^2.4.11",
     "autoprefixer": "10.5.4",
     "eslint": "9.39.4",
