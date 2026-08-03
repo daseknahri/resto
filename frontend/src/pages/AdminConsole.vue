@@ -779,7 +779,7 @@
             class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50"
             :disabled="planFlagsLoading || !adminPanels.planFlags"
             :title="planFlagDirtyKeys.size > 0 ? t('adminConsole.unsavedFlagChanges') : undefined"
-            @click="planFlagDirtyKeys.size > 0 ? (error.value = t('adminConsole.unsavedFlagChanges')) : fetchPlanFeatureFlags()"
+            @click="planFlagDirtyKeys.size > 0 ? (error = t('adminConsole.unsavedFlagChanges')) : fetchPlanFeatureFlags()"
           >
             {{ t("common.refresh") }}{{ planFlagDirtyKeys.size > 0 ? ' *' : '' }}
           </button>

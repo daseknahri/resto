@@ -1924,6 +1924,7 @@ adminWallet: {
   fundSubtitle: "Transferez un solde a un restaurant pour que son proprietaire recharge ses clients. Reconciliez l'espece hors ligne.",
   fundRestaurantLabel: "Restaurant",
   fundSelectPlaceholder: "Choisir un restaurant…",
+  fundTenantsLoadError: "Impossible de charger les restaurants.",
   fundAmountLabel: "Montant a approvisionner",
   fundAmountPlaceholder: "0.00",
   fundNoteLabel: "Note (optionnel)",

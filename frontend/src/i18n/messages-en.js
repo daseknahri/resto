@@ -1926,6 +1926,7 @@ adminWallet: {
   fundSubtitle: "Transfer float to a restaurant so its owner can top up customers. Reconcile the cash offline.",
   fundRestaurantLabel: "Restaurant",
   fundSelectPlaceholder: "Select a restaurant…",
+  fundTenantsLoadError: "Couldn't load restaurants.",
   fundAmountLabel: "Amount to fund",
   fundAmountPlaceholder: "0.00",
   fundNoteLabel: "Note (optional)",
