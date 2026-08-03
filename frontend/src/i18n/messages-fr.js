@@ -670,6 +670,8 @@ mktMenu: {
   loyaltyTeaserEarn: "Gagnez des points a chaque commande",
   loyaltyTeaserRedeem: "A utiliser au paiement",
   reviewsTitle: "Avis clients",
+  menuCategoriesLabel: "Categories du menu",
+  ratingStars: "{score} etoiles",
   reviewsCarouselLabel: "Avis clients, utilisez les fleches gauche et droite pour faire defiler",
   opensUntil: "Ouvert · ferme a {time}",
   opensAt: "Ferme · ouvre {day} a {time}",

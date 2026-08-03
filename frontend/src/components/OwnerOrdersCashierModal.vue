@@ -4,10 +4,14 @@
     <Transition name="ui-fade">
       <div
         v-if="order"
+        ref="dialogRef"
         class="fixed inset-0 z-[3500] flex items-end justify-center sm:items-center"
         role="dialog"
+        aria-modal="true"
         :aria-label="t('ownerOrders.cashierModalTitle')"
+        tabindex="-1"
         @click.self="emit('close')"
+        @keydown.esc="emit('close')"
       >
         <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" aria-hidden="true" @click="emit('close')" />
         <div class="relative z-10 w-full max-w-sm rounded-t-3xl border border-slate-700/60 bg-slate-900 px-6 pb-8 pt-6 text-center shadow-2xl sm:rounded-2xl">
@@ -50,11 +54,12 @@
 // settle it via emits. `formatCurrency` is passed down as a function (same
 // convention as DriverPageDeliveryHistory's `fmtMoney`) so currency formatting
 // stays single-sourced in the parent.
+import { ref, watch, nextTick } from 'vue';
 import { useI18n } from '../composables/useI18n';
 
 const { t } = useI18n();
 
-defineProps({
+const props = defineProps({
   /** The order driving the modal ({ total, currency, table_label, order_number, status, id }); null = closed. */
   order: { type: Object, default: null },
   /** True while this order's settle request is in flight (drives the spinner + disabled state). */
@@ -64,4 +69,9 @@ defineProps({
 });
 
 const emit = defineEmits(['close', 'settle']);
+
+// Focus the dialog when it opens so Esc-to-close fires and assistive tech lands
+// inside the modal (mirrors the focus handling on the app's other dialogs).
+const dialogRef = ref(null);
+watch(() => props.order, (o) => { if (o) nextTick(() => dialogRef.value?.focus()); }, { immediate: true });
 </script>

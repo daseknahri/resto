@@ -51,7 +51,8 @@ class="min-w-0 flex-1 leading-snug"
       :disabled="comping"
       @click.stop="emit('comp')"
     >
-      <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+      <span v-if="comping" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+      <svg v-else viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M9.586 2a2 2 0 0 1 1.414.586l2.414 2.414a2 2 0 0 1 .586 1.414V7H2V4a2 2 0 0 1 2-2h5.586ZM2 8v4a2 2 0 0 0 2 2h1V8H2Zm5 0v6h5a2 2 0 0 0 2-2V8H7ZM5.5 3a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
     </button>
     <button
       v-if="canManage && !item.is_voided && !item.is_comped && notTerminal && canVoid"
@@ -60,7 +61,8 @@ class="min-w-0 flex-1 leading-snug"
       :disabled="voiding"
       @click.stop="emit('void')"
     >
-      <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+      <span v-if="voiding" class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+      <svg v-else viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
     </button>
   </li>
 </template>

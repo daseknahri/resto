@@ -671,6 +671,8 @@ mktMenu: {
   loyaltyTeaserEarn: "Earn loyalty points with every order",
   loyaltyTeaserRedeem: "Redeem at checkout",
   reviewsTitle: "What customers say",
+  menuCategoriesLabel: "Menu categories",
+  ratingStars: "{score} stars",
   reviewsCarouselLabel: "Customer reviews, use the left and right arrow keys to scroll",
   opensUntil: "Open · closes {time}",
   opensAt: "Closed · opens {day} {time}",

@@ -3,7 +3,7 @@
   <nav
     class="sticky top-0 z-20 -mx-4 mt-1 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-md"
     :class="categories.length > 1 ? 'mb-2' : 'mb-1'"
-    aria-label="Menu categories"
+    :aria-label="t('mktMenu.menuCategoriesLabel')"
     style="scrollbar-width: none; -webkit-overflow-scrolling: touch;"
   >
     <div v-if="categories.length > 1" class="flex gap-1.5 overflow-x-auto px-4 py-2" style="scrollbar-width: none;">
