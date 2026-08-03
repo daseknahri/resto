@@ -72,6 +72,12 @@ class AdminWalletBonusViewTests(SimpleTestCase):
         resp = self._post({"amount": "10.00"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_non_numeric_customer_ids_returns_400(self):
+        """Live-hardening: a non-list / non-numeric customer_ids would raise ValueError/TypeError
+        on the pk__in lookup → 500. Coerced to a clean 400 before any wallet mutation."""
+        resp = self._post({"amount": "10.00", "customer_ids": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     # ── Happy path ────────────────────────────────────────────────────────────
 
     @patch("accounts.models.WalletTransaction.objects")

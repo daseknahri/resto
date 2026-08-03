@@ -2595,6 +2595,12 @@ class AdminWalletBonusView(APIView):
 
         # No verified phone → no wallet: bonus credits only ever land in verified wallets.
         if customer_ids:
+            # Coerce to ints — a non-list or non-numeric entry raises ValueError/TypeError on the
+            # pk__in lookup → 500.
+            try:
+                customer_ids = [int(c) for c in customer_ids]
+            except (TypeError, ValueError):
+                return Response({"detail": "customer_ids must be a list of numbers."}, status=status.HTTP_400_BAD_REQUEST)
             qs = Customer.objects.filter(pk__in=customer_ids, phone_verified=True)
         elif all_customers:
             qs = Customer.objects.filter(phone_verified=True)
@@ -2679,6 +2685,12 @@ class AdminFundTenantView(APIView):
         tenant_id = request.data.get("tenant_id")
         if not tenant_id:
             return Response({"detail": "tenant_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        # Coerce before credit_tenant_float → Tenant.objects.get(pk=...); a non-numeric id raises
+        # ValueError there (before DoesNotExist), and the except below catches only DoesNotExist/WalletError.
+        try:
+            tenant_id = int(tenant_id)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid tenant_id."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Platform funding").strip()[:200]
         reference = str(request.data.get("reference") or "").strip()[:120]
@@ -8181,7 +8193,10 @@ class AdminDeliveryJobListView(APIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
         if tenant_filter:
-            qs = qs.filter(tenant_id=tenant_filter)
+            try:
+                qs = qs.filter(tenant_id=int(tenant_filter))
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid tenant_id."}, status=status.HTTP_400_BAD_REQUEST)
 
         jobs = list(qs[:100])
         # Batch-fetch business_type for all jobs (one query — no N+1).
@@ -8245,18 +8260,24 @@ class AdminCreateDeliveryJobView(APIView):
         if data.get("zone_id"):
             try:
                 zone = DeliveryZone.objects.get(pk=data["zone_id"])
-            except DeliveryZone.DoesNotExist:
+            except (DeliveryZone.DoesNotExist, ValueError, TypeError):
                 pass
+
+        # Parse coordinates once, guarded — a non-numeric coord raises ValueError on float()
+        # (used both in the distance calc and the create below) → an uncaught 500.
+        try:
+            pickup_lat = float(data["pickup_lat"]) if data.get("pickup_lat") else None
+            pickup_lng = float(data["pickup_lng"]) if data.get("pickup_lng") else None
+            del_lat = float(data["delivery_lat"]) if data.get("delivery_lat") else None
+            del_lng = float(data["delivery_lng"]) if data.get("delivery_lng") else None
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid coordinates."}, status=400)
 
         # Auto-compute fee from zone tiers when distance coords are available
         # and caller hasn't explicitly provided a fee.
         _explicit_fee = data.get("delivery_fee")
         _explicit_payout = data.get("driver_payout")
         if _explicit_fee is None and zone and zone.fee_tiers:
-            pickup_lat = float(data["pickup_lat"]) if data.get("pickup_lat") else None
-            pickup_lng = float(data["pickup_lng"]) if data.get("pickup_lng") else None
-            del_lat = float(data["delivery_lat"]) if data.get("delivery_lat") else None
-            del_lng = float(data["delivery_lng"]) if data.get("delivery_lng") else None
             if all(v is not None for v in (pickup_lat, pickup_lng, del_lat, del_lng)):
                 distance = _haversine_km(pickup_lat, pickup_lng, del_lat, del_lng)
                 _explicit_fee = str(zone.compute_fee(distance))
@@ -8281,11 +8302,11 @@ class AdminCreateDeliveryJobView(APIView):
             tenant_id=tenant_id,
             order_number=order_number,
             pickup_address=str(data.get("pickup_address") or "")[:200],
-            pickup_lat=float(data["pickup_lat"]) if data.get("pickup_lat") else None,
-            pickup_lng=float(data["pickup_lng"]) if data.get("pickup_lng") else None,
+            pickup_lat=pickup_lat,
+            pickup_lng=pickup_lng,
             delivery_address=str(data.get("delivery_address") or "")[:200],
-            delivery_lat=float(data["delivery_lat"]) if data.get("delivery_lat") else None,
-            delivery_lng=float(data["delivery_lng"]) if data.get("delivery_lng") else None,
+            delivery_lat=del_lat,
+            delivery_lng=del_lng,
             delivery_fee=delivery_fee,
             driver_payout=driver_payout,
             zone=zone,

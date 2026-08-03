@@ -428,6 +428,17 @@ class AdminDeliveryJobListViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         qs.filter.assert_called()
 
+    def test_non_numeric_tenant_id_returns_400(self):
+        """Live-hardening: ?tenant_id=abc would ValueError when the queryset evaluates (only the
+        <int:> path params are converter-guarded) → 500. Coerced to a clean 400."""
+        with patch("accounts.models.DeliveryJob") as mock_dj:
+            qs = MagicMock()
+            mock_dj.objects.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: []
+            resp = self._get(params={"tenant_id": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_has_pii_throttle(self):
         from accounts.throttles import AdminPIIThrottle
         self.assertIn(AdminPIIThrottle, AdminDeliveryJobListView.throttle_classes)
