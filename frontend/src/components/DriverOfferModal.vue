@@ -151,7 +151,7 @@ const FOCUSABLE = [
 
 const trapFocus = (e) => {
   if (!dialogRef.value) return;
-  if (e.key === 'Escape') { e.preventDefault(); emit('pass'); return; }
+  if (e.key === 'Escape') { e.preventDefault(); emit('pass', props.offer?.id); return; }
   if (e.key !== 'Tab') return;
   const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
   if (!focusable.length) return;

@@ -1437,7 +1437,10 @@ const fetchEarnings = async () => {
     const { data } = await api.get('/driver/earnings/');
     earnings.value = data;
   } catch {
-    earnings.value = null;
+    // Keep the last-known earnings on a transient blip. Nulling it collapses the whole
+    // wallet + cash-out + stats block (rendered under v-if="earnings"), locking the driver
+    // out of cashing out until they complete another job or reload — a common failure right
+    // after a delivery on a flaky mobile connection.
   }
 };
 
@@ -1682,6 +1685,10 @@ const POLL_IDLE_MS = 15000;
 
 const pollTick = () => {
   fetchJobs();
+  // Earnings can change with no driver action now that the owner completing a delivery
+  // order credits the driver (fix/owner-complete-driver-reconcile) — poll so the balance
+  // and cash-out stay live, and so a transient earnings blip self-heals next cycle.
+  fetchEarnings();
   if (driverVehicleType.value === 'car') fetchRides();
   // D-4: no push exists yet for a redeemed cash-out (see backend contract), so poll —
   // catches a PENDING→PAID/expired transition within one cycle; fetchCashout itself
@@ -1989,16 +1996,25 @@ const advance = async (toStatus, extra = {}) => {
     const job = activeJob.value;
     const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, payload);
     if (data.is_terminal) {
+      // advance() only reaches a terminal state via 'failed' ('delivered' returns early
+      // to the code modal above). Don't tell a driver who just reported a no-show / bad
+      // address that the delivery "completed" (a green success toast) and then open the
+      // customer-rating modal — that rating POST 404s for a non-delivered job. Branch on
+      // the real status so failure gets neutral copy and no rating prompt.
+      const wasDelivered = data.status === 'delivered';
       activeJob.value = null;
       // The driver stays online across jobs; re-sync real online/geo state from the
       // server (reconciles e.g. a stale-GPS sweep) rather than assuming offline.
       await _syncOnlineAfterTerminal();
-      toast.show(t('driver.deliveredToast'), 'success');
+      toast.show(
+        wasDelivered ? t('driver.deliveredToast') : t('driver.failedToast'),
+        wasDelivered ? 'success' : 'info',
+      );
       // Only prompt to go online if the sync shows the driver actually ended up offline.
       showGoOnlineCta.value = !online.value;
-      if (job && job.restaurant_slug) openCustomerRating(job);
+      if (wasDelivered && job && job.restaurant_slug) openCustomerRating(job);
       await fetchJobs();
-      fetchEarnings(); // a completed delivery just added to earnings
+      fetchEarnings(); // re-sync earnings (a completed delivery just credited)
     } else {
       activeJob.value = data;
     }

@@ -3812,6 +3812,7 @@ Object.assign(arabicMessages, {
     pendingTitle2: "طلبك قيد المراجعة",
     pendingDesc: "يقوم المشرف بمراجعة طلب التوصيل الخاص بك. ستتمكن من الاتصال بمجرد الموافقة.",
     deliveredToast: "اكتمل التوصيل — عمل رائع!",
+    failedToast: "تم تسجيل فشل التوصيل.",
     enterDeliveryCode: "أدخل رمز التسليم من العميل",
     badDeliveryCode: "رمز غير صحيح — اطلب من العميل الرمز الظاهر على طلبه.",
     rateCustomerTitle: "قيّم العميل",
