@@ -705,6 +705,8 @@ mktMenu: {
   saveAddress: "Sauvegarder cette adresse pour la prochaine fois",
   saveAddressLabelPlaceholder: "Libelle (ex. Maison, Travail) — optionnel",
   deleteSavedAddress: "Supprimer l'adresse sauvegardee",
+  deleteAddressConfirmTitle: "Supprimer cette adresse ?",
+  deleteAddressConfirmBody: "Cela retire l'adresse enregistree de votre compte. Action irreversible.",
 },
 reservationManage: {
   kicker: "Reservation",

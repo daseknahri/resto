@@ -706,6 +706,8 @@ mktMenu: {
   saveAddress: "Save this address for next time",
   saveAddressLabelPlaceholder: "Label (e.g. Home, Work) — optional",
   deleteSavedAddress: "Delete saved address",
+  deleteAddressConfirmTitle: "Delete this address?",
+  deleteAddressConfirmBody: "This removes the saved address from your account. This can't be undone.",
   deliveryMinProgress: "Minimum order for delivery",
 },
 reservationManage: {
