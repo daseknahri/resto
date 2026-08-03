@@ -222,6 +222,22 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         resp = self._post(body={"items": []})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    # ── Idempotency (POS reliability) ─────────────────────────────────────────
+
+    @patch("menu.views._staff_order_payload", return_value={"id": 10})
+    @patch("menu.views.OrderItem.objects")
+    @patch("menu.views.cache")
+    @patch("menu.views.Order.objects")
+    def test_idempotent_replay_does_not_reappend(self, order_om, cache_mock, item_om, payload_mock):
+        """A retried / double-tapped append with the same idempotency_key must short-circuit
+        (201) and NOT insert the items a second time — the double-charge guard."""
+        order = _make_order()
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
+        cache_mock.get.return_value = True  # marker set by the original committed request
+        resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 1}], "idempotency_key": "abc"})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        item_om.create.assert_not_called()  # no second insert
+
     # ── Happy path: append + recompute totals + stock decremented ─────────────
 
     @patch("menu.views._broadcast_order_change")
