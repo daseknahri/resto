@@ -293,6 +293,19 @@ class OwnerPromotionDetailViewTests(SimpleTestCase):
         self.assertFalse(promo.is_active)
 
     @patch("menu.views.Promotion.objects")
+    def test_patch_blank_max_uses_does_not_500(self, mock_promo_objs):
+        """Live-hardening regression: clearing the max_uses number field ("") must not
+        int("") → ValueError → 500. The guard swallows the bad parse and leaves it unchanged."""
+        promo = _make_promo(promo_id=1, max_uses=5, is_active=True)
+        mock_promo_objs.filter.return_value.first.return_value = promo
+        mock_promo_objs.filter.return_value.exclude.return_value.exists.return_value = False
+
+        resp = self._patch(1, {"max_uses": ""})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(promo.max_uses, 5)  # unchanged on bad input
+        promo.save.assert_called_once()
+
+    @patch("menu.views.Promotion.objects")
     def test_patch_invalid_promo_type_ignored(self, mock_promo_objs):
         promo = _make_promo(promo_type="percentage")
         mock_promo_objs.filter.return_value.first.return_value = promo
@@ -393,10 +406,15 @@ class PromoCodeCheckViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data["valid"])
 
+    # NOTE: the view now resolves the code via filter(code__iexact=...).order_by("id").first()
+    # (NOT .get) so a duplicate active code can't raise MultipleObjectsReturned → 500. These
+    # tests mock that path; _first sets what the lookup resolves to.
+    def _first(self, mock_promo_objs, value):
+        mock_promo_objs.filter.return_value.order_by.return_value.first.return_value = value
+
     @patch("menu.views.Promotion.objects")
     def test_unknown_code_returns_200_invalid(self, mock_promo_objs):
-        from menu.models import Promotion
-        mock_promo_objs.get.side_effect = Promotion.DoesNotExist
+        self._first(mock_promo_objs, None)
         resp = self._get(code="NOPE")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(resp.data["valid"])
@@ -404,7 +422,7 @@ class PromoCodeCheckViewTests(SimpleTestCase):
     @patch("menu.views.Promotion.objects")
     def test_usage_cap_reached_returns_invalid(self, mock_promo_objs):
         promo = _make_promo(max_uses=10, use_count=10)
-        mock_promo_objs.get.return_value = promo
+        self._first(mock_promo_objs, promo)
         resp = self._get(code="FULL")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(resp.data["valid"])
@@ -413,7 +431,7 @@ class PromoCodeCheckViewTests(SimpleTestCase):
     @patch("menu.views.Promotion.objects")
     def test_not_active_now_returns_invalid(self, mock_promo_objs, mock_active_now):
         promo = _make_promo(max_uses=None)
-        mock_promo_objs.get.return_value = promo
+        self._first(mock_promo_objs, promo)
         mock_active_now.return_value = False
 
         resp = self._get(code="OFFHOURS")
@@ -428,7 +446,7 @@ class PromoCodeCheckViewTests(SimpleTestCase):
             discount_value="15.00", min_order_amount="20.00",
             max_uses=None,
         )
-        mock_promo_objs.get.return_value = promo
+        self._first(mock_promo_objs, promo)
         mock_active_now.return_value = True
 
         resp = self._get(code="HAPPY")
@@ -444,10 +462,24 @@ class PromoCodeCheckViewTests(SimpleTestCase):
     def test_code_lookup_is_case_insensitive(self, mock_promo_objs, mock_active_now):
         """The view uppercases the code before lookup (iexact handled by ORM)."""
         promo = _make_promo(code="HAPPY")
-        mock_promo_objs.get.return_value = promo
+        self._first(mock_promo_objs, promo)
         mock_active_now.return_value = True
 
         self._get(code="happy")
-        # Verify the get was called with the uppercased code
-        call_kwargs = mock_promo_objs.get.call_args[1]
+        # Verify the filter lookup was called with the uppercased code
+        call_kwargs = mock_promo_objs.filter.call_args[1]
         self.assertEqual(call_kwargs.get("code__iexact"), "HAPPY")
+
+    @patch("menu.views._is_promo_active_now")
+    @patch("menu.views.Promotion.objects")
+    def test_duplicate_active_code_uses_first_no_500(self, mock_promo_objs, mock_active_now):
+        """Live-hardening regression: two active promos sharing a code (no DB unique constraint)
+        must NOT MultipleObjectsReturned → 500; the view resolves via filter().order_by().first()
+        and returns the first match. The crash-prone .get() must be gone."""
+        promo = _make_promo(name="Dup", max_uses=None)
+        self._first(mock_promo_objs, promo)
+        mock_active_now.return_value = True
+        resp = self._get(code="DUP")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["valid"])
+        mock_promo_objs.get.assert_not_called()
