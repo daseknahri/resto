@@ -823,8 +823,11 @@ const fetchDishes = async () => {
 
 onMounted(fetchDishes);
 
-let _stockTimer = null;
-let _threshTimer = null;
+// Per-dish debounce timers — a single shared timer let editing dish B cancel dish A's
+// still-pending stock/threshold PATCH (silent inventory loss, and a sold-out dish left
+// orderable → oversell).
+const _stockTimers = {};
+const _threshTimers = {};
 
 const patchDish = async (dish, payload) => {
   if (savingId.value === dish.id) return;
@@ -850,8 +853,8 @@ const commitStock = (dish, rawValue) => {
   const newQty = trimmed === "" ? null : parseInt(trimmed, 10);
   if (newQty !== null && (isNaN(newQty) || newQty < 0)) return;
   if (newQty === dish.stock_qty) return;
-  clearTimeout(_stockTimer);
-  _stockTimer = setTimeout(() => patchDish(dish, { stock_qty: newQty }), 600);
+  clearTimeout(_stockTimers[dish.id]);
+  _stockTimers[dish.id] = setTimeout(() => patchDish(dish, { stock_qty: newQty }), 600);
 };
 
 const commitThreshold = (dish, rawValue) => {
@@ -859,15 +862,15 @@ const commitThreshold = (dish, rawValue) => {
   const newVal = trimmed === "" ? 3 : parseInt(trimmed, 10);
   if (isNaN(newVal) || newVal < 0) return;
   if (newVal === dish.low_stock_threshold) return;
-  clearTimeout(_threshTimer);
-  _threshTimer = setTimeout(() => patchDish(dish, { low_stock_threshold: newVal }), 600);
+  clearTimeout(_threshTimers[dish.id]);
+  _threshTimers[dish.id] = setTimeout(() => patchDish(dish, { low_stock_threshold: newVal }), 600);
 };
 
 const adjustStock = (dish, delta) => {
   const current = dish.stock_qty ?? 0;
   const next = Math.max(0, current + delta);
   if (next === dish.stock_qty) return;
-  clearTimeout(_stockTimer);
+  clearTimeout(_stockTimers[dish.id]);
   patchDish(dish, { stock_qty: next });
 };
 

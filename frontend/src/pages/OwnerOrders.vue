@@ -1917,7 +1917,17 @@ const bulkMarkPreparingReady = async () => {
       preparing.map((o) => order.updateOrderStatus(o.id, { status: 'ready' })),
     );
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
-    if (succeeded > 0) toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
+    const failed = results.length - succeeded;
+    // Feedback on every outcome (was silent on total failure, and hid partial failures) —
+    // mirrors confirmAllPending. The board itself stays truthful: failed orders remain
+    // visibly "preparing".
+    if (failed === 0) {
+      toast.show(t('ownerOrders.bulkReadyDone', { count: succeeded }), 'success');
+    } else if (succeeded > 0) {
+      toast.show(t('ownerOrders.bulkReadyPartial', { ok: succeeded, total: results.length, failed }), 'info');
+    } else {
+      toast.show(t('ownerOrders.bulkReadyFailed'), 'error');
+    }
   } finally {
     bulkBusy.value = false;
   }

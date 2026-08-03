@@ -259,6 +259,10 @@
               {{ ten.name }} — {{ fmtBalance(ten.float_balance) }}
             </option>
           </select>
+          <p v-if="fundTenantsError" class="flex items-center gap-2 text-[11px] text-red-300" role="alert">
+            {{ t('adminWallet.fundTenantsLoadError') }}
+            <button type="button" class="underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 rounded" @click="fetchTenants">{{ t('common.retry') }}</button>
+          </p>
         </div>
         <!-- Amount -->
         <div class="space-y-1">
@@ -498,13 +502,16 @@ const fundError = ref('');
 const fundSaving = ref(false);
 let fundKey = null; // stable across retries of the same funding; cleared on success
 
+const fundTenantsError = ref(false); // the fund-float restaurant list failed to load (vs genuinely empty)
 const fetchTenants = async () => {
   try {
     const res = await adminApi.get('/admin-tenants/', { params: { page: 1, page_size: 200 } });
     const payload = res?.data;
     fundTenants.value = Array.isArray(payload) ? payload : (payload?.results || []);
+    fundTenantsError.value = false;
   } catch {
     fundTenants.value = [];
+    fundTenantsError.value = true; // surface the load failure instead of a silently empty picker
   }
 };
 

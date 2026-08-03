@@ -1926,6 +1926,7 @@ adminWallet: {
   fundSubtitle: "Transfer float to a restaurant so its owner can top up customers. Reconcile the cash offline.",
   fundRestaurantLabel: "Restaurant",
   fundSelectPlaceholder: "Select a restaurant…",
+  fundTenantsLoadError: "Couldn't load restaurants.",
   fundAmountLabel: "Amount to fund",
   fundAmountPlaceholder: "0.00",
   fundNoteLabel: "Note (optional)",
@@ -2356,6 +2357,8 @@ waiterPage: {
   markItemNotReady: "Mark not ready",
   allReadyBtn: "All ready",
   allReadyFailed: "Could not mark all items ready — please try again.",
+  itemReadyFailed: "Could not update the item — please try again.",
+  recentFetchError: "Could not load recent orders.",
   // Item C — needs-action tab
   tabNeedsAction: "Needs action",
   // Floor map view (P1)
@@ -4646,6 +4649,8 @@ ownerOrders: {
   bulkReadyConfirmTitle: "Mark {count} orders as ready?",
   bulkReadyConfirmBody: "All visible preparing orders will be marked ready.",
   bulkReadyDone: "{count} orders marked as ready.",
+  bulkReadyPartial: "{ok} of {total} marked ready — {failed} could not be updated.",
+  bulkReadyFailed: "None of the orders could be marked ready.",
   promoDiscount: "Promo",
   tip: "Tip",
   walletPaid: "Wallet",

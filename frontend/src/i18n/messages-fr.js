@@ -1924,6 +1924,7 @@ adminWallet: {
   fundSubtitle: "Transferez un solde a un restaurant pour que son proprietaire recharge ses clients. Reconciliez l'espece hors ligne.",
   fundRestaurantLabel: "Restaurant",
   fundSelectPlaceholder: "Choisir un restaurant…",
+  fundTenantsLoadError: "Impossible de charger les restaurants.",
   fundAmountLabel: "Montant a approvisionner",
   fundAmountPlaceholder: "0.00",
   fundNoteLabel: "Note (optionnel)",
@@ -2349,6 +2350,8 @@ waiterPage: {
   markItemNotReady: "Marquer non pret",
   allReadyBtn: "Tout pret",
   allReadyFailed: "Impossible de marquer tous les articles prets — reessayez.",
+  itemReadyFailed: "Impossible de mettre a jour l'article — reessayez.",
+  recentFetchError: "Impossible de charger les commandes recentes.",
   // Item C — needs-action tab
   tabNeedsAction: "A traiter",
   // Floor map view (P1)
@@ -4654,6 +4657,8 @@ ownerOrders: {
   bulkReadyConfirmTitle: "Marquer {count} commandes comme pretes ?",
   bulkReadyConfirmBody: "Toutes les commandes en preparation visibles seront marquees pretes.",
   bulkReadyDone: "{count} commandes marquees pretes.",
+  bulkReadyPartial: "{ok} sur {total} marquees pretes — {failed} n'ont pas pu etre mises a jour.",
+  bulkReadyFailed: "Aucune commande n'a pu etre marquee prete.",
   promoDiscount: "Promo",
   tip: "Pourboire",
   walletPaid: "Portefeuille",

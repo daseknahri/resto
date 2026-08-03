@@ -82,6 +82,7 @@ export const useWaiterStore = defineStore("waiter", {
     orders: [],
     recentOrders: [],       // recently finished orders (for the waiter's history view)
     recentLoading: false,
+    recentError: false,     // recent-orders fetch failed → show an error, not "no recent orders"
     loading: false,
     error: null,
     lastSyncAt: null,          // ISO string of last successful full fetch
@@ -194,12 +195,13 @@ export const useWaiterStore = defineStore("waiter", {
     // -------------------------------------------------------
     async fetchRecent() {
       this.recentLoading = true;
+      this.recentError = false;
       try {
         const res = await api.get("/staff/orders/", { params: { recent: 1 } });
         this.recentOrders = Array.isArray(res.data?.results) ? res.data.results : [];
         return this.recentOrders;
       } catch {
-        /* keep last */
+        this.recentError = true; // surface it — the tab must not silently read as "no recent orders"
       } finally {
         this.recentLoading = false;
       }
