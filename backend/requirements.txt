@@ -35,4 +35,4 @@ daphne==4.2.3
 uvicorn[standard]==0.52.0
 pyotp==2.10.0
 # PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
-stripe>=10.0.0,<13.0.0
+stripe>=15.4.0,<16.0.0
