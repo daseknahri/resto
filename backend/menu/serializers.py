@@ -400,19 +400,22 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         Call the queryset with .prefetch_related("combo_components__component") for
         efficient reads.
         """
+        # The cc.component deref must stay INSIDE the guard (mirrors get_combo_unavailable):
+        # ComboComponent.component is PROTECT + NOT NULL today so it's always present, but a future
+        # SET_NULL / nullable migration would otherwise turn a missing component into an AttributeError
+        # 500 on EVERY menu load. Degrade to [] instead.
         try:
-            components = instance.combo_components.all()
+            return [
+                {
+                    "component_id": cc.component_id,
+                    "name": cc.component.name,
+                    "qty": cc.qty,
+                    "position": cc.position,
+                }
+                for cc in instance.combo_components.all()
+            ]
         except Exception:
             return []
-        return [
-            {
-                "component_id": cc.component_id,
-                "name": cc.component.name,
-                "qty": cc.qty,
-                "position": cc.position,
-            }
-            for cc in components
-        ]
 
     def get_is_combo(self, instance) -> bool:
         """True when the dish has at least one combo component."""
