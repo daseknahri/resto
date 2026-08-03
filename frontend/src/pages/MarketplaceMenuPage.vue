@@ -793,8 +793,10 @@ import { newIdempotencyKey } from '../lib/idempotency';
 import { ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
 import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
+import { useConfirmModal } from '../composables/useConfirmModal';
 
 const { t, formatCurrency } = useI18n();
+const { confirm } = useConfirmModal();
 const route = useRoute();
 const router = useRouter();
 const customerStore = useCustomerStore();
@@ -1028,6 +1030,14 @@ const applyMktSavedAddress = (addr) => {
 };
 
 const deleteMktSavedAddress = async (id) => {
+  // Deleting a saved address is irreversible — confirm first (Cart / CustomerAccount
+  // already guard this; the marketplace checkout used to delete on a single tap).
+  const ok = await confirm({
+    title: t('mktMenu.deleteAddressConfirmTitle'),
+    body: t('mktMenu.deleteAddressConfirmBody'),
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await removeSavedAddress(id);
   } catch { /* non-critical */ }
