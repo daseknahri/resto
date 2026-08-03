@@ -707,6 +707,7 @@ mktMenu: {
   deleteSavedAddress: "Supprimer l'adresse sauvegardee",
   deleteAddressConfirmTitle: "Supprimer cette adresse ?",
   deleteAddressConfirmBody: "Cela retire l'adresse enregistree de votre compte. Action irreversible.",
+  etaArrivesIn: "Arrivee dans ~{min}-{max} min",
 },
 reservationManage: {
   kicker: "Reservation",

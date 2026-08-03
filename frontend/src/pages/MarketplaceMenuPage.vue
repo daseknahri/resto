@@ -681,7 +681,7 @@
 
           <!-- Totals (RISK FE-2) -->
           <MarketplaceCheckoutTotals
-            :prep-eta="prepEta"
+            :prep-eta="checkoutEta"
             :cart-total="cartTotal"
             :fulfillment-type="form.fulfillment_type"
             :delivery-fee-is-distance="deliveryFeeIsDistance"
@@ -790,7 +790,7 @@ import MarketplaceMenuLoyaltyTeaser from '../components/MarketplaceMenuLoyaltyTe
 import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
-import { ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
+import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
 import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
 import { useConfirmModal } from '../composables/useConfirmModal';
@@ -1527,6 +1527,26 @@ const prepEta = computed(() => {
   const hi = restaurant.value?.prep_eta_max;
   if (lo == null || hi == null) return null;
   return { min: lo, max: hi };
+});
+
+// Travel minutes for the chosen delivery address (floored at 1), 0 when unknown — mirrors
+// Cart.vue's deliveryTravelMin using the same AVG_SPEED_KMH the backend routing uses.
+const deliveryTravelMin = computed(() => {
+  const km = deliveryDistanceKm.value;
+  if (km == null || km <= 0) return 0;
+  return Math.max(1, Math.round((km / AVG_SPEED_KMH) * 60));
+});
+// The ETA shown at CHECKOUT: for delivery it's prep + travel (the arrival time), so a delivery
+// customer isn't shown the prep-only estimate as if the food arrives then. Pickup = prep only.
+// (The menu header keeps prepEta — no address is chosen there yet.)
+const checkoutEta = computed(() => {
+  const base = prepEta.value;
+  if (!base) return null;
+  if (form.fulfillment_type === 'delivery') {
+    const travel = deliveryTravelMin.value;
+    return { min: base.min + travel, max: base.max + travel };
+  }
+  return base;
 });
 
 // ── Opening hours ─────────────────────────────────────────────────────────────
