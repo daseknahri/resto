@@ -504,6 +504,12 @@ const customerName = ref('');
 // so the backend deduplicates instead of creating a second kitchen ticket.
 const orderPlacementKey = ref(newIdempotencyKey());
 
+// Same idempotency guard for appending items to an open tab: a double-tapped / retried
+// "add items" must not append the lines (and decrement stock) twice. Stable across retries
+// within the same modal lifecycle; reset to a fresh key after a successful append so a reused
+// modal starts a new intent.
+const appendIdempotencyKey = ref(newIdempotencyKey());
+
 // ── Table list (sourced from GET /api/staff/tables/) ─────────────────────────
 const availableTables = ref([]);
 const tablesLoadError = ref(false);
@@ -884,6 +890,7 @@ const submit = async () => {
           // = unassigned; omitting it entirely also defaults to 0 on the backend.
           ...(isDineIn.value && (i.seat || 0) > 0 ? { seat: i.seat } : {}),
         })),
+        idempotency_key: appendIdempotencyKey.value,
         // 'Send now' fires the appended items immediately; 'Hold' keeps held
         // courses paced. Omitted entirely for non-coursing menus.
         ...(coursingEnabled.value && hasHeldCourse.value
@@ -891,6 +898,8 @@ const submit = async () => {
           : {}),
       };
       await api.post(`/staff/orders/${props.appendToOrderId}/items/`, payload);
+      // Fresh key so a subsequent append in a reused modal is a new intent (not an idempotent replay).
+      appendIdempotencyKey.value = newIdempotencyKey();
       toast.show(t('waiterPage.itemsAdded'), 'success');
       emit('appended');
       emit('close');

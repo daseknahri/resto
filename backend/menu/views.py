@@ -4762,6 +4762,21 @@ class StaffAppendOrderItemsView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # ── Idempotency ───────────────────────────────────────────────────────
+        # A double-tapped / network-retried append must not add the items twice (and
+        # double the stock decrement). Mirrors StaffOrderPaymentView: an optional client
+        # key + a short-TTL cache marker; a replay returns the order's current state
+        # without appending again. Best-effort for the common retry window — there is no
+        # OrderItem uniqueness backstop, so a rare truly-simultaneous same-key submit is
+        # not covered (a dedup-row migration would be the follow-up if that's ever needed).
+        idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
+        _append_idem_key = None
+        if idempotency_key:
+            from django.db import connection as _staff_append_conn
+            _append_idem_key = f"staff_append_idem:{_staff_append_conn.schema_name}:{order_id}:{idempotency_key}"
+            if cache.get(_append_idem_key):
+                return Response(_staff_order_payload(order), status=status.HTTP_201_CREATED)
+
         # ── Input validation ──────────────────────────────────────────────────
         raw_items = request.data.get("items")
         if not isinstance(raw_items, list) or not raw_items:
@@ -5028,6 +5043,12 @@ class StaffAppendOrderItemsView(APIView):
                 {"detail": f"'{exc.name}' is out of stock.", "code": "out_of_stock", "dish": exc.name},
                 status=status.HTTP_409_CONFLICT,
             )
+
+        # Mark this append committed so a same-key retry short-circuits above (5-min TTL
+        # covers any realistic network-retry window). Set AFTER commit so a rolled-back
+        # (out-of-stock) attempt never blocks a legitimate retry.
+        if _append_idem_key:
+            cache.set(_append_idem_key, True, 300)
 
         try:
             _broadcast_order_change(order)
