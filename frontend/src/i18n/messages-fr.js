@@ -2195,6 +2195,8 @@ waiterPage: {
   tabShift: "Shift",
   tabRecent: "Recentes",
   settleTitle: "Comment a-t-il ete paye ?",
+  settleItemsLabel: "Articles de la commande",
+  seatItemsCount: "{n} articles",
   payCash: "Especes",
   payWalletMethod: "Portefeuille",
   cashFull: "Especes — {amount}",
