@@ -24,6 +24,7 @@
       type="datetime-local"
       :min="minScheduleDatetime"
       class="ui-input mt-2"
+      :aria-label="t('mktMenu.scheduleLater')"
     />
     <p v-if="scheduleEnabled" class="mt-1 text-[11px] text-slate-500">{{ t('mktMenu.scheduleHint') }}</p>
   </div>

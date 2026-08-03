@@ -35,7 +35,7 @@
         <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
           {{ t('ownerPromotions.minOrderShort', { amount: promo.min_order_amount }) }}
         </span>
-        <span v-if="promo.days && promo.days.length">{{ promo.days.join(', ') }}</span>
+        <span v-if="promo.days && promo.days.length">{{ promo.days.map((d) => t(`stepDishes.weekday_${d}`)).join(', ') }}</span>
         <span v-if="promo.time_start && promo.time_end">{{ promo.time_start }}–{{ promo.time_end }}</span>
         <span v-if="promo.active_from || promo.active_until">
           {{ promo.active_from || '∞' }} → {{ promo.active_until || '∞' }}
