@@ -2349,6 +2349,8 @@ waiterPage: {
   markItemNotReady: "Marquer non pret",
   allReadyBtn: "Tout pret",
   allReadyFailed: "Impossible de marquer tous les articles prets — reessayez.",
+  itemReadyFailed: "Impossible de mettre a jour l'article — reessayez.",
+  recentFetchError: "Impossible de charger les commandes recentes.",
   // Item C — needs-action tab
   tabNeedsAction: "A traiter",
   // Floor map view (P1)
