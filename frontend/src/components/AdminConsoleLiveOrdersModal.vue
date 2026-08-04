@@ -69,7 +69,7 @@
                     <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                   </div>
                   <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.type") }}: {{ order.order_type || "-" }}</p>
-                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.total") }}: {{ order.total }}</p>
+                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.total") }}: {{ formatCurrency(order.total, order.currency || 'MAD') }}</p>
                   <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.age") }}: {{ formatAge(order.created_at) }}</p>
                   <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.phone") }}: {{ order.customer_phone || "-" }}</p>
                 </article>
@@ -94,7 +94,7 @@
                         <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                       </td>
                       <td class="px-3 py-2.5 text-slate-300">{{ order.order_type || "-" }}</td>
-                      <td class="px-3 py-2.5 text-slate-300 tabular-nums">{{ order.total }}</td>
+                      <td class="px-3 py-2.5 text-slate-300 tabular-nums">{{ formatCurrency(order.total, order.currency || 'MAD') }}</td>
                       <td class="px-3 py-2.5 text-slate-400">{{ formatAge(order.created_at) }}</td>
                       <td class="px-3 py-2.5 text-slate-400">{{ order.customer_phone || "-" }}</td>
                     </tr>
@@ -148,7 +148,7 @@ const props = defineProps({
 
 const emit = defineEmits(["close", "refresh"]);
 
-const { t } = useI18n();
+const { t, formatCurrency } = useI18n();
 
 const dialogRef = ref(null);
 
