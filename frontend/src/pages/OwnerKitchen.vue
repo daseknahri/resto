@@ -224,6 +224,7 @@
         :index="index"
         :prep-station="prepStation"
         :firing-course-order-id="firingCourseOrderId"
+        :marking-all-order-ids="markingAllOrderIds"
         :waiter="waiter"
         :card-class="cardClass"
         :strip-class="stripClass"
@@ -768,6 +769,7 @@ onUnmounted(() => {
 
 // ── Course sequencing helpers ──────────────────────────────────────────────────
 const firingCourseOrderId = ref(null);
+const markingAllOrderIds = ref(new Set()); // order ids with a "mark all ready" request in flight
 
 const isItemHeld = (item, order) => {
   const c = item.course ?? 0;
@@ -850,6 +852,7 @@ const allItemsReady = (order) => {
 };
 
 const markAllReady = async (order) => {
+  if (markingAllOrderIds.value.has(order.id)) return;
   if (lowestHeldCourse(order) !== null) {
     const proceed = await confirm({
       title: t('kitchen.heldCourseWarningTitle'),
@@ -860,6 +863,7 @@ const markAllReady = async (order) => {
   }
   // Use the bulk endpoint (POST /staff/orders/<id>/items/ready-all/) which
   // marks all non-voided, not-yet-ready items in a single request.
+  markingAllOrderIds.value = new Set(markingAllOrderIds.value).add(order.id);
   try {
     const { data } = await api.post(`/staff/orders/${order.id}/items/ready-all/`);
     // Merge the updated order items back into the store
@@ -875,6 +879,8 @@ const markAllReady = async (order) => {
     } else {
       toast.show(t("kitchen.markAllFailed"), "error");
     }
+  } finally {
+    const next = new Set(markingAllOrderIds.value); next.delete(order.id); markingAllOrderIds.value = next;
   }
 };
 
@@ -963,7 +969,9 @@ const djChipLabel = (dj) => {
   if (status === "assigned")      return driver_name ? `${t("kitchen.driverAssigned")} · ${driver_name}` : t("kitchen.driverAssigned");
   if (status === "at_restaurant") return driver_name ? `${t("kitchen.driverAtDoor")} · ${driver_name}` : t("kitchen.driverAtDoor");
   if (status === "picked_up")     return t("kitchen.driverPickedUp");
+  if (status === "delivered")     return t("kitchen.driverDelivered");
   if (status === "failed")        return t("kitchen.driverFailed");
+  if (status === "cancelled")     return t("kitchen.driverCancelled");
   return status;
 };
 </script>
@@ -1130,6 +1138,7 @@ const djChipLabel = (dj) => {
   border: 1px solid rgba(51, 65, 85, 0.6);
   background: rgba(30, 41, 59, 0.55);
   padding: 0.4rem 0.5rem;
+  min-height: 2.75rem;
   color: rgb(148, 163, 184);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
