@@ -6,6 +6,7 @@
     :aria-label="dish.name"
     class="fixed inset-0 z-50 flex flex-col"
     @keydown.esc="emit('close')"
+    @keydown.tab="trapTab"
   >
     <!-- Backdrop -->
     <div
@@ -172,7 +173,7 @@
 // values (flashSalePct / showErrors / valid / unitPrice) are props; option taps /
 // confirm / close are emits. The initial-focus-on-open (the sheet's only use of the
 // old optionPanelRef) moved in self-contained.
-import { onMounted, nextTick, ref } from 'vue';
+import { onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 
 const { t } = useI18n();
@@ -200,8 +201,23 @@ defineProps({
 
 const emit = defineEmits(['toggle', 'confirm', 'close']);
 
-// Move initial focus into the sheet on open (mirrors the parent's old
-// openOptionPanel focus via optionPanelRef — first enabled button).
+// Focus management: move initial focus into the sheet on open (first enabled
+// button), keep Tab within the sheet while it's open, and restore focus to the
+// invoking element on close (the sheet is v-if-mounted per open by the parent).
 const rootRef = ref(null);
-onMounted(() => nextTick(() => rootRef.value?.querySelector('button:not([disabled])')?.focus()));
+let prevFocus = null;
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+onMounted(() => {
+  prevFocus = document.activeElement;
+  nextTick(() => rootRef.value?.querySelector('button:not([disabled])')?.focus());
+});
+onBeforeUnmount(() => { try { prevFocus?.focus?.(); } catch { /* invoking element gone */ } });
+const trapTab = (e) => {
+  const nodes = rootRef.value?.querySelectorAll(FOCUSABLE);
+  if (!nodes || !nodes.length) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+};
 </script>
