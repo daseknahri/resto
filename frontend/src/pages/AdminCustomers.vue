@@ -292,7 +292,7 @@
                         <p class="font-medium text-slate-200 truncate">{{ o.restaurant }} <span class="font-mono text-slate-500">#{{ o.order_number }}</span></p>
                         <p class="text-[10px] text-slate-500">{{ orderStatusLabel(o.status) }} · {{ fmtDate(o.created_at) }}</p>
                       </div>
-                      <span class="shrink-0 font-semibold tabular-nums text-slate-300">{{ fmtMoney(o.total) }}</span>
+                      <span class="shrink-0 font-semibold tabular-nums text-slate-300">{{ fmtMoney(o.total, o.currency) }}</span>
                     </li>
                   </ul>
                 </div>
@@ -360,9 +360,9 @@ const verifiedOnly = ref(false);
 const driversOnly = ref(false);
 let searchTimer = null;
 
-const fmtMoney = (v) => {
+const fmtMoney = (v, currency = 'MAD') => {
   try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 })
+    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: currency || 'MAD', maximumFractionDigits: 2 })
       .format(parseFloat(v || 0));
   } catch {
     return `${parseFloat(v || 0).toFixed(2)}`;

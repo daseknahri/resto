@@ -3101,6 +3101,7 @@ class AdminTenantLiveOrdersView(APIView):
                         "status": o.status,
                         "order_type": getattr(o, "order_type", ""),
                         "total": str(o.total),
+                        "currency": o.currency,
                         "created_at": o.created_at.isoformat() if o.created_at else None,
                         # PII: phone is already visible in the admin console customer list
                         "customer_phone": getattr(o, "customer_phone", "") or "",

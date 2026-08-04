@@ -14,6 +14,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
     t: (k, p) => (p ? `${k}:${JSON.stringify(p)}` : k),
+    formatCurrency: (n, c) => `${c || "MAD"} ${n}`,
   }),
 }));
 

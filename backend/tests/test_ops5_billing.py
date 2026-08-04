@@ -336,6 +336,7 @@ class TestAdminLiveOrdersView(SimpleTestCase):
             status="pending",
             order_type="dine_in",
             total=Decimal("25.00"),
+            currency="MAD",
             created_at=None,
             customer_phone="+212600000001",
         )
