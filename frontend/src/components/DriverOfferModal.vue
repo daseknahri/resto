@@ -139,7 +139,9 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
-const emit = defineEmits(['accept', 'pass']);
+// Emits are consumed via $emit in the template; no local `emit` binding needed
+// (Escape no longer programmatically passes, which was the only script-side use).
+defineEmits(['accept', 'pass']);
 
 const dialogRef = ref(null);
 
