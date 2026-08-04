@@ -109,8 +109,10 @@ const ORDER_STATUS_LABEL = {
   pending:          "globalLiveStatusBar.statusPending",
   confirmed:        "globalLiveStatusBar.statusConfirmed",
   preparing:        "globalLiveStatusBar.statusPreparing",
-  ready:            "globalLiveStatusBar.statusReady",
-  out_for_delivery: "globalLiveStatusBar.statusOutForDelivery",
+  // Use the canonical orderStatus.* labels the trackers/account use so the same order
+  // never reads "Ready"/"On the way" here but "Ready for pickup"/"Out for delivery" there.
+  ready:            "orderStatus.statusReady",
+  out_for_delivery: "orderStatus.stepOutForDelivery",
 };
 const RIDE_STATUS_LABEL = {
   scheduled:   "tripSchedule.statusScheduled",
