@@ -230,7 +230,7 @@
 
         <!-- Active filter count + clear -->
         <div v-if="activeFilterCount > 0" class="flex items-center gap-2">
-          <span class="text-xs text-slate-500">{{ t('marketplace.filtersActive', { count: activeFilterCount }) }}</span>
+          <span class="text-xs text-slate-500">{{ activeFilterCount === 1 ? t('marketplace.filtersActive_one', { count: activeFilterCount }) : t('marketplace.filtersActive_other', { count: activeFilterCount }) }}</span>
           <button
             class="ui-press rounded-full border border-slate-700/70 px-2.5 py-0.5 text-[11px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
             :aria-label="t('marketplace.clearFilters')"
@@ -376,7 +376,7 @@
 
       <!-- Results count + sort — sort always visible so user can pick before results arrive -->
       <div v-if="!fetchError && (displayedRestaurants.length || loading)" class="flex items-center justify-between gap-3 px-1">
-        <p class="text-[11px] text-slate-500">{{ loading ? '' : t('marketplace.resultsCount', { n: displayedRestaurants.length }) }}</p>
+        <p class="text-[11px] text-slate-500">{{ loading ? '' : (displayedRestaurants.length === 1 ? t('marketplace.resultsCount_one', { n: displayedRestaurants.length }) : t('marketplace.resultsCount_other', { n: displayedRestaurants.length })) }}</p>
         <select
           v-model="sortBy"
           :aria-label="t('marketplace.sortBy')"

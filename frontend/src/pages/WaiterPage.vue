@@ -115,7 +115,7 @@
             <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="text-sm font-bold text-slate-200 truncate">{{ expandedFloorTileData.tableLabel }}</span>
-                <span class="text-[11px] text-slate-500">{{ t('waiterPage.tableOrders', { n: expandedFloorTileData.orders.length }) }}</span>
+                <span class="text-[11px] text-slate-500">{{ expandedFloorTileData.orders.length === 1 ? t('waiterPage.tableOrders_one', { n: expandedFloorTileData.orders.length }) : t('waiterPage.tableOrders_other', { n: expandedFloorTileData.orders.length }) }}</span>
                 <span
                   class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
                   :class="tableStatusBadgeClass(expandedFloorTileData.tableStatus)"
@@ -348,7 +348,7 @@
           <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-sm font-bold text-slate-200 truncate">{{ group.tableLabel }}</span>
-              <span class="text-[11px] text-slate-500">{{ t('waiterPage.tableOrders', { n: group.orders.length }) }}</span>
+              <span class="text-[11px] text-slate-500">{{ group.orders.length === 1 ? t('waiterPage.tableOrders_one', { n: group.orders.length }) : t('waiterPage.tableOrders_other', { n: group.orders.length }) }}</span>
               <!-- Table-state badge -->
               <span
                 class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"

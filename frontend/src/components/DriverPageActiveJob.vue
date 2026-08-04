@@ -27,7 +27,7 @@
         <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
           <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
         </span>
-        <span v-if="job.items_count">{{ t('driver.itemsCount', { n: job.items_count }) }}</span>
+        <span v-if="job.items_count">{{ job.items_count === 1 ? t('driver.itemsCount_one', { n: job.items_count }) : t('driver.itemsCount_other', { n: job.items_count }) }}</span>
       </div>
 
       <!-- Active address: one always-visible truncated line for the relevant destination.

@@ -46,7 +46,7 @@ describe("WaiterFloorTileGrid", () => {
     expect(w.text()).toContain("Table 1");
     expect(w.text()).toContain("waiterPage.tableStatus_occupied");
     expect(w.text()).toContain("1"); // order-count badge
-    expect(w.text()).toContain('waiterPage.floorCapacity:{"n":4}');
+    expect(w.text()).toContain('waiterPage.floorCapacity_other:{"n":4}');
   });
 
   it("shows the outstanding total and longest-elapsed badge when occupied", () => {
