@@ -66,7 +66,7 @@
                 >
                   <div class="flex items-center justify-between gap-2">
                     <p class="font-semibold text-slate-100">#{{ order.order_number }}</p>
-                    <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ order.status }}</span>
+                    <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                   </div>
                   <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.type") }}: {{ order.order_type || "-" }}</p>
                   <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.total") }}: {{ order.total }}</p>
@@ -91,7 +91,7 @@
                     <tr v-for="(order, index) in orders" :key="`lo-row-${order.order_number}-${index}`" class="border-t border-slate-800">
                       <td class="px-3 py-2.5 font-medium text-slate-100">#{{ order.order_number }}</td>
                       <td class="px-3 py-2.5">
-                        <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ order.status }}</span>
+                        <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                       </td>
                       <td class="px-3 py-2.5 text-slate-300">{{ order.order_type || "-" }}</td>
                       <td class="px-3 py-2.5 text-slate-300 tabular-nums">{{ order.total }}</td>
@@ -194,6 +194,19 @@ const liveOrderStatusClass = (status) => {
   if (status === "pending") return "bg-slate-700/60 text-slate-200";
   return "bg-slate-700/60 text-slate-300";
 };
+
+// Localize the cross-tenant live-order status (was leaking the raw enum token to the
+// operator). Reuses the canonical orderStatus.* labels; unknown statuses fall back to raw.
+const LIVE_ORDER_STATUS_I18N = {
+  pending: "orderStatus.statusPending",
+  confirmed: "orderStatus.statusConfirmed",
+  preparing: "orderStatus.statusPreparing",
+  ready: "orderStatus.statusReady",
+  out_for_delivery: "orderStatus.stepOutForDelivery",
+  completed: "orderStatus.statusCompleted",
+  cancelled: "orderStatus.statusCancelled",
+};
+const liveOrderStatusLabel = (s) => (s ? t(LIVE_ORDER_STATUS_I18N[s] || s) : "-");
 
 const formatAge = (value) => {
   if (!value) return "-";
