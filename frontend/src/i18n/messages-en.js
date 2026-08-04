@@ -3993,6 +3993,10 @@ ownerHome: {
   nextActionDoFire: "Open kitchen to fire",
   nextActionDoReady: "Mark ready",
   nextActionDoReset: "Reset availability",
+  // Setup-incomplete focus action (menu still in draft → publish).
+  nextActionKindSetup: "Setup",
+  nextActionFinishSetup: "Finish setup",
+  nextActionFinishSetupBody: "Publish your menu to start taking orders.",
 },
 revenueChart: {
   kicker: "Analytics",

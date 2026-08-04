@@ -83,4 +83,23 @@ describe("OwnerNextAction", () => {
     const w = mountCard({ orders, busy: true });
     expect(w.find("button.ui-btn-primary").attributes("disabled")).toBeDefined();
   });
+
+  it("surfaces finish-setup when the menu is unpublished and emits act", async () => {
+    const w = mountCard({ orders: [], menuPublished: false });
+    expect(w.text()).toContain("ownerHome.nextActionFinishSetup");
+    expect(w.text()).toContain("ownerHome.setupContinue"); // primary label
+    expect(w.text()).not.toContain("ownerHome.nextActionAllClearTitle");
+    const btn = w.find("button.ui-btn-primary");
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    const evt = w.emitted("act");
+    expect(evt).toBeTruthy();
+    expect(evt[0][0]).toMatchObject({ kind: "finishSetup" });
+  });
+
+  it("stays all-clear when menuPublished is true or absent (loading)", () => {
+    expect(mountCard({ orders: [], menuPublished: true }).text()).toContain("ownerHome.nextActionAllClearTitle");
+    // Absent prop → undefined → must NOT nag (guards the prop default against Boolean casting).
+    expect(mountCard({ orders: [] }).text()).toContain("ownerHome.nextActionAllClearTitle");
+  });
 });

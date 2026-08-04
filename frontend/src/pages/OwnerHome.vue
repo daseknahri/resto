@@ -54,6 +54,7 @@
         v-if="focusMode"
         :orders="focusOrders"
         :sold-out-count="soldOutCount"
+        :menu-published="profile.is_menu_published"
         :busy="focusBusy"
         @act="handleNextAction"
         @skip="skipNextAction"
@@ -965,6 +966,9 @@ const handleNextAction = async (action) => {
       await api.post("/owner/dishes/reset-availability/");
       soldOutCount.value = 0;
       toast.show(t("ownerHome.allClear"), "success");
+    } else if (action.kind === "finishSetup") {
+      // Menu still in draft — send the owner back to the setup wizard to publish.
+      await router.push({ name: "onboarding" });
     }
   } catch {
     toast.show(t("ownerOrders.updateFailed"), "error");
