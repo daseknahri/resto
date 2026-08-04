@@ -48,6 +48,8 @@ vi.mock("../../composables/useI18n", () => ({
         "globalLiveStatusBar.statusPackageInProgress":"In transit",
         "globalLiveStatusBar.statusInProgress":      "In progress",
         "tripSchedule.statusScheduled":              "Scheduled",
+        "orderStatus.statusReady":                   "Ready for pickup",
+        "orderStatus.stepOutForDelivery":            "Out for delivery",
       };
       return map[key] ?? key;
     },
@@ -160,7 +162,7 @@ describe("GlobalLiveStatusBar", () => {
     const w = mountBar();
     await w.vm.$nextTick();
     expect(w.find(".glsb-label").text()).toContain("Pizza Co");
-    expect(w.find(".glsb-chip").text()).toBe("On the way");
+    expect(w.find(".glsb-chip").text()).toBe("Out for delivery");
   });
 
   it("routes to marketplace-order-status when restaurant_slug is present", async () => {
