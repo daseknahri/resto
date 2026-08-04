@@ -1687,6 +1687,7 @@ const arabicMessages = {
     "closedAllDay": "مغلق طوال اليوم",
     "opensAt": "يفتح الساعة",
     "closesAt": "يغلق الساعة",
+    "copyHoursToAll": "نسخ إلى كل الأيام",
     "weekdays": {
       "mon": "الاثنين",
       "tue": "الثلاثاء",
@@ -2219,6 +2220,9 @@ const arabicMessages = {
     "startFromStepOne": "ابدأ من الخطوة الأولى",
     "footerHint": "يُحفظ تقدمك أولاً بأول — يمكنك المغادرة والعودة من حيث توقفت تماماً.",
     "leaveConfirm": "لديك تغييرات غير محفوظة في معالج الإعداد. هل تريد المغادرة على أي حال؟",
+    "leaveConfirmTitle": "مغادرة الإعداد؟",
+    "leaveConfirmCta": "المغادرة على أي حال",
+    "saveAndExit": "حفظ والخروج إلى لوحة التحكم",
     "stepLockedHint": "أكمل الخطوات السابقة أولاً لفتح هذه الخطوة.",
     "steps": {
       "start": {

@@ -2495,6 +2495,7 @@ stepBrand: {
   closedAllDay: "Closed all day",
   opensAt: "Opens at",
   closesAt: "Closes at",
+  copyHoursToAll: "Copy to all days",
   weekdays: {
     mon: "Monday",
     tue: "Tuesday",
@@ -3130,6 +3131,9 @@ onboardingWizard: {
   startFromStepOne: "Start from step 1",
   footerHint: "Your progress saves as you go — you can leave and pick up right where you left off.",
   leaveConfirm: "You have unsaved changes in the setup wizard. Leave anyway?",
+  leaveConfirmTitle: "Leave setup?",
+  leaveConfirmCta: "Leave anyway",
+  saveAndExit: "Save & exit to dashboard",
   stepLockedHint: "Complete the previous steps first to unlock this step.",
   steps: {
     start: {

@@ -253,6 +253,18 @@
         </div>
 
         <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/55 p-3">
+          <!-- Convenience: replicate the first open day's hours across the week so
+               the owner sets one day, then applies it to all seven in one tap. -->
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="ui-btn-outline ui-touch-target ui-press px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="!firstConfiguredDayKey"
+              @click="copyHoursToAllDays"
+            >
+              {{ t("stepBrand.copyHoursToAll") }}
+            </button>
+          </div>
           <div
             v-for="day in weekdayOptions"
             :key="day.key"
@@ -656,6 +668,30 @@ const toggleBusinessHoursDay = (day) => {
   const current = form.business_hours_schedule?.[day];
   if (!current) return;
   current.enabled = !current.enabled;
+  markBusinessHoursEdited();
+};
+
+// First open day in the week — the source row "Copy to all days" replicates.
+// Null (button disabled) until the owner has enabled at least one day.
+const firstConfiguredDayKey = computed(
+  () => WEEKDAY_KEYS.find((day) => Boolean(form.business_hours_schedule?.[day]?.enabled)) || null
+);
+
+// Pure convenience: copy the first open day's open/close (and its open toggle)
+// onto every other day. Writes only values the owner could type themselves — no
+// validation or logic change; save-time checks still apply per day.
+const copyHoursToAllDays = () => {
+  const sourceKey = firstConfiguredDayKey.value;
+  const source = sourceKey && form.business_hours_schedule?.[sourceKey];
+  if (!source) return;
+  WEEKDAY_KEYS.forEach((day) => {
+    if (day === sourceKey) return;
+    const entry = form.business_hours_schedule?.[day];
+    if (!entry) return;
+    entry.enabled = source.enabled;
+    entry.open = source.open;
+    entry.close = source.close;
+  });
   markBusinessHoursEdited();
 };
 
