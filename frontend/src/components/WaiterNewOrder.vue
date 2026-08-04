@@ -137,11 +137,11 @@
 
           <!-- Dish list -->
           <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-            <div v-if="loadingDishes" class="space-y-1.5 pt-1" aria-busy="true" :aria-label="t('waiterPage.loadingDishes')">
+            <div v-if="loadingDishes || (isSearching && searchLoading && !searchResults.length)" class="space-y-1.5 pt-1" aria-busy="true" :aria-label="t('waiterPage.loadingDishes')">
               <div v-for="i in 5" :key="i" class="ui-skeleton h-11" />
             </div>
 
-            <div v-else-if="isSearching && !searchResults.length" class="ui-empty-state text-center p-5 space-y-1">
+            <div v-else-if="isSearching && !searchLoading && !searchResults.length" class="ui-empty-state text-center p-5 space-y-1">
               <p class="text-sm font-semibold text-slate-100">{{ t('waiterPage.noResults') }}</p>
             </div>
 
@@ -539,6 +539,9 @@ const search = ref('');
 const activeCat = ref('');
 const cartItems = ref([]);   // [{line_key, dish_slug, dish_name, unit_price, qty, note, option_ids, options_label}]
 const loadingDishes = ref(false);
+// True while a search's background category loads are in flight. Gates the
+// "No results" empty state so it can't flash before the full menu is loaded.
+const searchLoading = ref(false);
 const submitting = ref(false);
 const submitError = ref('');
 
@@ -550,6 +553,10 @@ const custQty = ref(1);
 const custNote = ref('');
 
 let searchTimer = null;
+// Bumped each time a debounced search kicks off background category loads. Only
+// the latest generation may clear searchLoading, so a slow load for an earlier
+// keystroke can't switch off the flag while a newer query is still loading.
+let searchLoadToken = 0;
 
 // ── Recent/Popular virtual category ──────────────────────────────────────────
 // Tracks add frequency: { [slug]: count }. Stored in localStorage so "Popular"
@@ -859,16 +866,36 @@ const requestClose = async () => {
 
 const onSearch = () => {
   clearTimeout(searchTimer);
-  if (search.value.trim()) {
-    // Pre-load all dishes for search (fire and forget)
-    searchTimer = setTimeout(() => {
-      categories.value.forEach((cat) => {
-        if (!menu.dishes[cat.slug]?.length) {
-          menu.fetchDishesByCategory(cat.slug);
-        }
-      });
-    }, 200);
+  if (!search.value.trim()) {
+    // Empty query: no background load to wait on — drop any loading state so the
+    // category view (not the empty state) shows.
+    searchLoading.value = false;
+    return;
   }
+  // Search spans the WHOLE menu, but categories are lazy-loaded. If any category's
+  // dishes aren't in yet we must background-load them — reflect that immediately so
+  // the "No results" empty state can't flash while the real matches are still on the
+  // wire. When every category is already loaded there is nothing to wait on.
+  const needsLoad = categories.value.some((cat) => !menu.dishes[cat.slug]?.length);
+  searchLoading.value = needsLoad;
+  if (!needsLoad) return;
+  // Debounced fire-and-forget preload of the not-yet-loaded categories.
+  searchTimer = setTimeout(() => {
+    const token = ++searchLoadToken;
+    const pending = categories.value
+      .filter((cat) => !menu.dishes[cat.slug]?.length)
+      .map((cat) => menu.fetchDishesByCategory(cat.slug));
+    if (!pending.length) {
+      if (token === searchLoadToken) searchLoading.value = false;
+      return;
+    }
+    // fetchDishesByCategory never rejects (its own catch swallows errors), but
+    // allSettled keeps this correct even if that changes. Only the latest search
+    // generation may clear the flag — see searchLoadToken.
+    Promise.allSettled(pending).finally(() => {
+      if (token === searchLoadToken) searchLoading.value = false;
+    });
+  }, 200);
 };
 
 // Map backend 409 error codes to user-facing messages for the append endpoint.
