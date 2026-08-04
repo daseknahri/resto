@@ -1965,7 +1965,7 @@ const chargeFromBill = () => {
 const onWalletCharged = async () => {
   const num = chargeContext.value.orderNumber;
   showCharge.value = false;
-  await reload(); // refresh orders so the bill reflects the wallet payment
+  await waiter.fetchOrders({ silent: true }); // refresh silently so the board doesn't flash skeletons mid-settle
   // If this charge came from the Settle chooser, close the order out (completes a
   // ready dine-in order) and prompt the rating — same as the cash path.
   const settling = pendingWalletSettle.value;

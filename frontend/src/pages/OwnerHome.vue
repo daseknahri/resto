@@ -783,10 +783,23 @@ const toggleMenu = async () => {
   }
 };
 
+// Bucket "today"/"yesterday" by the TENANT's timezone (not the owner's device),
+// so the dashboard headline numbers match the orders board — which already uses
+// tenant tz (Contract E). Same shape as OwnerOrders._tenantDateStr.
+const _tenantDayStr = (d) => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  if (!tz) return new Date(d).toDateString();
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
+  } catch {
+    return new Date(d).toDateString();
+  }
+};
+
 // ── Today's order stats — derived from the order store ────────────────────────
 const todayStats = computed(() => {
-  const today = new Date().toDateString();
-  const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const today = _tenantDayStr(new Date());
+  const todayOrders = order.orders.filter((o) => _tenantDayStr(o.created_at) === today);
   const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   let revenueLabel = "";
@@ -816,8 +829,8 @@ const avgTicketLabel = computed(() => {
 const yesterdayStats = computed(() => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toDateString();
-  const yOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === yStr);
+  const yStr = _tenantDayStr(yesterday);
+  const yOrders = order.orders.filter((o) => _tenantDayStr(o.created_at) === yStr);
   return {
     count: yOrders.length,
     revenue: yOrders.reduce((s, o) => s + (Number(o.total) || 0), 0),
