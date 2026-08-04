@@ -11,6 +11,14 @@ const FLUSH_MAX_DELAY_MS = 16000;
 // HTTP status codes that are permanent (don't retry; drop + toast)
 const PERMANENT_4XX = new Set([400, 403, 404, 409, 422]);
 
+// Truthy sentinel returned by advanceStatus when the change was optimistically
+// applied AND queued for offline sync — as opposed to `true` for a confirmed
+// online write. Callers do `if (!ok) toast('updateFailed', 'error')`, so a
+// truthy result suppresses the false-negative error while staying
+// distinguishable from an online success (a future caller could show a
+// "queued, will sync" hint off `ok.queued`). Frozen: it is a shared singleton.
+const QUEUED_OFFLINE = Object.freeze({ queued: true });
+
 // ── Status graph helpers (for nextStatusFor) ─────────────────────────────────
 const LINEAR_NEXT = {
   pending: "confirmed",
@@ -208,7 +216,12 @@ export const useWaiterStore = defineStore("waiter", {
     },
 
     // -------------------------------------------------------
-    // Update order status — optimistic, offline-safe
+    // Update order status — optimistic, offline-safe.
+    // Return contract (callers do `if (!ok) toast('updateFailed', 'error')`):
+    //   • online success        → true            (confirmed write)
+    //   • online failure         → false           (reverted + queued; surface error)
+    //   • offline (queued)       → QUEUED_OFFLINE  (truthy sentinel; NOT an error)
+    //   • nothing to do (no order / no next status) → undefined
     // -------------------------------------------------------
     async advanceStatus(orderId) {
       const order = this.orders.find((o) => o.id === orderId);
@@ -225,7 +238,10 @@ export const useWaiterStore = defineStore("waiter", {
       if (!this.isOnline) {
         this._enqueue(orderId, next);
         this.updatingOrderIds = new Set([...this.updatingOrderIds].filter((id) => id !== orderId));
-        return;
+        // Optimistically applied + queued for sync — NOT a failure. Return a
+        // truthy sentinel so `if (!ok)` in callers does not fire a false
+        // "update failed" error and make staff distrust the working queue.
+        return QUEUED_OFFLINE;
       }
 
       let success = false;

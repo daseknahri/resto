@@ -190,6 +190,34 @@ describe("useWaiterStore", () => {
     expect(store.orders[0].status).toBe("confirmed");
   });
 
+  // Regression: offline advance must return a TRUTHY "queued" sentinel (not
+  // undefined/false) so callers' `if (!ok) toast('updateFailed','error')` does
+  // NOT fire a false-negative error on the working offline queue.
+  it("advanceStatus returns a truthy queued sentinel when offline (no false error)", async () => {
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1, "pending")], count: 1 } });
+
+    const store = useWaiterStore();
+    await store.fetchOrders();
+    store.isOnline = false;
+
+    const result = await store.advanceStatus(1);
+
+    // Truthy sentinel — distinguishable from an online success (`true`) but
+    // still passes the caller's `if (!ok)` check without erroring.
+    expect(result).toBeTruthy();
+    expect(result).toEqual({ queued: true });
+    expect(result).not.toBe(false);
+    expect(result).not.toBeUndefined();
+    // Caller-level guard: `if (!ok)` must be false → no "update failed" toast.
+    expect(!result).toBe(false);
+
+    // Still optimistically applied + queued, and no error state on the store.
+    expect(store.offlineQueue).toHaveLength(1);
+    expect(store.orders[0].status).toBe("confirmed");
+    expect(store.error).toBeNull();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
   it("_enqueue deduplicates by orderId (newest wins, reuses idempotency key)", () => {
     const store = useWaiterStore();
     store._enqueue(1, "confirmed");
