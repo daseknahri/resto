@@ -418,7 +418,7 @@
             class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
             @click="openLiveOrdersModal(tenant)"
           >
-            👁 {{ t("adminConsole.liveOrders.button") }}
+            <span aria-hidden="true">👁</span> {{ t("adminConsole.liveOrders.button") }}
           </button>
           <button
             class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
