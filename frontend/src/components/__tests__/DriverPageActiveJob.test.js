@@ -111,6 +111,16 @@ describe("DriverPageActiveJob", () => {
     expect(advanceBtn.find(".animate-spin").exists()).toBe(true);
   });
 
+  it("renders the advance error atop the hero only when an error is passed", () => {
+    // No error → no alert. A failed advance in the parent sets errorMsg, passed in
+    // as :error so it shows inside the sticky hero (not off-screen below it).
+    expect(mountHero({ error: "" }).find('[role="alert"]').exists()).toBe(false);
+    const w = mountHero({ error: "Could not update status" });
+    const alert = w.find('[role="alert"]');
+    expect(alert.exists()).toBe(true);
+    expect(alert.text()).toContain("Could not update status");
+  });
+
   it("renders the navigate link only when a navigateHref is provided", () => {
     expect(mountHero({ navigateHref: "" }).find('a[target="_blank"]').exists()).toBe(false);
     const w = mountHero({ navigateHref: "https://maps/x" });
