@@ -8,12 +8,16 @@ runs, phase plans) with **no single authoritative architecture reference**. Star
 
 1. **[`../CLAUDE.md`](../CLAUDE.md)** — the fast on-ramp: how to run/verify, the traps, the
    invariants. Read every session.
-2. **[`ARCHITECTURE.md`](ARCHITECTURE.md)** — the canonical system architecture: the two-plane
+2. **[`NEXT_SESSION.md`](NEXT_SESSION.md)** — start-here for a fresh session: current state of
+   `main`, the verify/merge discipline (CI is not a required check here), the delegate-and-gate
+   playbook, and the prioritized remaining backlog. Its companion
+   **[`SESSION_LOG.md`](SESSION_LOG.md)** is the append-only changelog of what shipped per campaign.
+3. **[`ARCHITECTURE.md`](ARCHITECTURE.md)** — the canonical system architecture: the two-plane
    tenancy model, data/money flow, request lifecycle, identity/authz, async/realtime, frontend,
    deployment. **The single source of truth for how Kepoli is built and why.**
-3. **[`RISK_REGISTER.md`](RISK_REGISTER.md)** — the honest, ranked known-debt from the ground-up
+4. **[`RISK_REGISTER.md`](RISK_REGISTER.md)** — the honest, ranked known-debt from the ground-up
    review, each item with a failure scenario, fix, and effort. **Read before any scaling/onboarding.**
-4. **[ADRs](adr/)** — the reasoning + honest consequences behind each load-bearing decision.
+5. **[ADRs](adr/)** — the reasoning + honest consequences behind each load-bearing decision.
 
 ## Architecture Decision Records
 
