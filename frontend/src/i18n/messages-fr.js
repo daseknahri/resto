@@ -3088,6 +3088,9 @@ onboardingWizard: {
   startFromStepOne: "Recommencer a l'etape 1",
   footerHint: "Votre progression est enregistree au fur et a mesure - vous pouvez partir et reprendre exactement ou vous en etiez.",
   leaveConfirm: "Des modifications non enregistrees sont en cours dans le wizard. Quitter quand meme ?",
+  leaveConfirmTitle: "Quitter la configuration ?",
+  leaveConfirmCta: "Quitter quand meme",
+  saveAndExit: "Enregistrer et quitter vers le tableau de bord",
   stepLockedHint: "Terminez d'abord les etapes precedentes pour deverrouiller cette etape.",
   steps: {
     start: {

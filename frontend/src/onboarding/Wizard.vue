@@ -24,6 +24,15 @@
             <span class="ui-data-strip">
               {{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}
             </span>
+            <!-- Escape hatch: progress persists (the current step is saved), so this
+                 leaves to the dashboard without the unsaved-changes prompt. -->
+            <button
+              type="button"
+              class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs"
+              @click="saveAndExit"
+            >
+              {{ t("onboardingWizard.saveAndExit") }}
+            </button>
           </div>
         </div>
         <!-- Progress bar -->
@@ -124,6 +133,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import { steps } from "../onboarding/steps";
@@ -150,7 +160,11 @@ const resumedStep = ref(0);
 const tenant = useTenantStore();
 const router = useRouter();
 const { t } = useI18n();
+const { confirm } = useConfirmModal();
 const { catalog, groupSingular, itemSingular } = useVocabulary();
+// Set while intentionally leaving via "Save & exit"; lets the route guard skip
+// the confirm since the step is already persisted.
+const exitingToDashboard = ref(false);
 const mapping = {
   1: StepStart,
   2: StepBrand,
@@ -253,6 +267,19 @@ const persistStep = () => {
   window.localStorage.setItem(stepStorageKey.value, String(current.value));
 };
 
+// Friendly exit to the owner dashboard. The current step is persisted (also via
+// the `current` watcher), so no leave prompt is needed — the guard is skipped
+// through `exitingToDashboard`.
+const saveAndExit = async () => {
+  persistStep();
+  exitingToDashboard.value = true;
+  try {
+    await router.push({ name: "owner-home" });
+  } finally {
+    exitingToDashboard.value = false;
+  }
+};
+
 onMounted(async () => {
   if (!tenant.meta) await tenant.fetchMeta();
   published.value = tenant.meta?.profile?.is_menu_published === true;
@@ -295,9 +322,16 @@ const beforeUnloadHandler = (e) => {
 onMounted(() => window.addEventListener("beforeunload", beforeUnloadHandler));
 onUnmounted(() => window.removeEventListener("beforeunload", beforeUnloadHandler));
 
-// Warn before in-app (Vue Router) navigation away from the wizard.
-onBeforeRouteLeave(() => {
-  if (published.value) return true;
-  return window.confirm(t("onboardingWizard.leaveConfirm"));
+// Warn before in-app (Vue Router) navigation away from the wizard. Uses the app's
+// confirm modal (async guard) instead of a raw window.confirm for a consistent,
+// less alarming prompt. "Save & exit" bypasses this via exitingToDashboard.
+onBeforeRouteLeave(async () => {
+  if (published.value || exitingToDashboard.value) return true;
+  return await confirm({
+    title: t("onboardingWizard.leaveConfirmTitle"),
+    body: t("onboardingWizard.leaveConfirm"),
+    confirmLabel: t("onboardingWizard.leaveConfirmCta"),
+    danger: false,
+  });
 });
 </script>
