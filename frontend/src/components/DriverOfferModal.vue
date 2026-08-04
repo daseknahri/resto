@@ -105,7 +105,7 @@
           :aria-busy="busy"
           @click="$emit('accept', offer.id)"
         >
-          {{ t('driverOffer.accept') }}
+          <span v-if="busy" class="inline-block h-5 w-5 me-2 align-middle animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />{{ t('driverOffer.accept') }}
         </button>
         <button
           class="ui-touch-target w-full rounded-xl py-3 text-sm text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
@@ -151,7 +151,8 @@ const FOCUSABLE = [
 
 const trapFocus = (e) => {
   if (!dialogRef.value) return;
-  if (e.key === 'Escape') { e.preventDefault(); emit('pass', props.offer?.id); return; }
+  // Escape is intentionally inert: a stray Escape must NOT pass (decline) a
+  // time-critical exclusive offer — passing is only via the explicit Pass control.
   if (e.key !== 'Tab') return;
   const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
   if (!focusable.length) return;
