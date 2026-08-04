@@ -226,6 +226,7 @@
         :ready-eta="activeReadyEta"
         :navigate-href="activeJobNavigateHref"
         :busy="busy"
+        :error="errorMsg"
         :detail-open="showActiveJobDetail"
         :status-label="statusLabel"
         :fmt-money="fmtMoney"
@@ -277,14 +278,18 @@
           :disabled="busy"
           role="switch"
           :aria-checked="online"
-          :aria-label="online ? t('driver.online') : t('driver.offline')"
+          :aria-label="t('driver.availability')"
           @click="toggleOnline"
         >
           {{ online ? t('driver.goOffline') : t('driver.goOnline') }}
         </button>
       </div>
 
-      <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <!-- Page-level error for the no-active-job dashboard (online toggle, accept/
+           decline, cash-out). When an active job exists the same errorMsg is shown
+           inside the sticky hero (:error) instead, so suppress it here to avoid a
+           duplicate that would land off-screen below the tall hero. -->
+      <div v-if="errorMsg && !activeJob" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
       </div>
@@ -310,6 +315,17 @@
             </span>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            <!-- Live cash-out indicator: a pending code renders only inside the
+                 (default-collapsed) accordion, so surface a credential-free
+                 "code active" chip in the header so the driver knows to expand
+                 it and read the code out. Never render the 6-digit code here. -->
+            <span
+              v-if="cashout"
+              class="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300"
+            >
+              <span class="ui-live-dot bg-amber-400" aria-hidden="true" />
+              {{ t('driver.cashoutCodeActive') }}
+            </span>
             <span class="text-sm font-bold tabular-nums text-emerald-400">{{ fmtMoney(earnings.available) }}</span>
             <AppIcon :name="showWallet ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 text-slate-500" aria-hidden="true" />
           </div>
