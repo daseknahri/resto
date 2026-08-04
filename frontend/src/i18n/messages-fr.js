@@ -5345,6 +5345,8 @@ kitchen: {
   driverAtDoor: "Conducteur a la porte",
   driverPickedUp: "En livraison",
   driverFailed: "Livraison echouee",
+  driverDelivered: "Livre",
+  driverCancelled: "Annule",
   itemToggleFailed: "Impossible de marquer l'article pret — reessayez.",
   markAllFailed: "Certains articles n ont pas pu etre marques prets — verifiez et reessayez.",
   heldCourseWarningTitle: "Des services sont encore en attente",

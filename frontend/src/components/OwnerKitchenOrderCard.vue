@@ -90,7 +90,7 @@
         <button
           v-else-if="item.id != null"
           type="button"
-          class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2 -mx-2 transition-colors hover:bg-slate-700/30"
+          class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2.5 -mx-2 transition-colors hover:bg-slate-700/30"
           :class="[item.is_ready ? 'opacity-40 line-through' : '', isItemHeld(item, order) ? 'opacity-50' : '', item.station && prepStation && item.station !== prepStation ? 'opacity-30' : '']"
           :title="t('kitchen.tapItemReady')"
           :aria-pressed="item.is_ready"
@@ -170,11 +170,13 @@
       <button
         v-if="hasUnreadyItems(order)"
         type="button"
-        class="ui-btn-outline ui-press w-full gap-1.5 border-emerald-500/30 text-emerald-300/90 hover:border-emerald-400/50 hover:text-emerald-200 text-xs"
+        class="ui-btn-outline ui-press w-full gap-1.5 border-emerald-500/30 text-emerald-300/90 hover:border-emerald-400/50 hover:text-emerald-200 text-xs disabled:opacity-50"
+        :disabled="markingAllOrderIds.has(order.id)"
         :aria-label="`${t('kitchen.markAllReady')} — #${order.order_number}`"
         @click="emit('markAllReady', order)"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+        <span v-if="markingAllOrderIds.has(order.id)" class="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+        <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
           <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
         </svg>
         {{ t('kitchen.markAllReady') }}
@@ -235,6 +237,8 @@ defineProps({
   prepStation: { type: String, default: '' },
   /** Id of the order whose fire-course request is in flight, or null. */
   firingCourseOrderId: { type: [Number, String], default: null },
+  /** Set of order ids whose "mark all ready" request is in flight. */
+  markingAllOrderIds: { type: Object, default: () => new Set() },
   /** The waiter store (nextStatus / updatingOrderIds) — owned by the parent. */
   waiter: { type: Object, required: true },
   // ── display helpers (parent-owned, passed as function props) ──

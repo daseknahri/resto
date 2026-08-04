@@ -5337,6 +5337,8 @@ kitchen: {
   driverAtDoor: "Driver at door",
   driverPickedUp: "Out for delivery",
   driverFailed: "Delivery failed",
+  driverDelivered: "Delivered",
+  driverCancelled: "Cancelled",
   itemToggleFailed: "Couldn't mark item ready — please try again.",
   markAllFailed: "Some items couldn't be marked ready — please check and retry.",
   heldCourseWarningTitle: "Held courses still waiting",
