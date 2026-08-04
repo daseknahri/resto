@@ -234,7 +234,7 @@
                       </button>
                     </div>
                     <button
-                      v-else-if="dish.is_available && restaurant?.is_open"
+                      v-else-if="dish.is_available"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                       :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                       @click="addToCart(dish)"
@@ -242,10 +242,6 @@
                       <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                       {{ t('mktMenu.addToCart') }}
                     </button>
-                    <span
-                      v-else-if="dish.is_available && !restaurant?.is_open"
-                      class="inline-flex items-center rounded-full border border-slate-600/40 bg-slate-800/50 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
-                    >{{ t('mktMenu.closed') }}</span>
                     <span
                       v-else
                       class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
@@ -740,7 +736,7 @@
           <MarketplaceCheckoutWarnings
             :fulfillment-type="form.fulfillment_type"
             :delivery-min-gap="deliveryMinGap"
-            :is-closed="!!(restaurant && !restaurant.is_open)"
+            :is-closed="closedNeedsSchedule"
             :is-authenticated="customerStore.isAuthenticated"
             :fmt-price="fmtPrice"
             @sign-in="showAuthModal = true"
@@ -749,12 +745,12 @@
           <!-- Submit -->
           <button
             class="ui-btn-primary ui-press w-full justify-center gap-2 py-3.5 text-sm font-bold disabled:opacity-50"
-            :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || (restaurant && !restaurant.is_open) || unavailableSlugs.size > 0 || !cart.length"
+            :disabled="placing || prepayShortfall || deliveryBlocked || needsLocation || deliveryMinGap > 0 || closedNeedsSchedule || unavailableSlugs.size > 0 || !cart.length"
             :aria-busy="placing"
             @click="placeOrder"
           >
             <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ placing ? t('mktMenu.placing') : unavailableSlugs.size > 0 ? t('mktMenu.cartHasUnavailableShort') : !restaurant?.is_open ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : needsLocation ? t('mktMenu.needsLocationShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : t('mktMenu.placeOrder') }}
+            {{ placing ? t('mktMenu.placing') : unavailableSlugs.size > 0 ? t('mktMenu.cartHasUnavailableShort') : closedNeedsSchedule ? t('mktMenu.closed') : deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : needsLocation ? t('mktMenu.needsLocationShort') : deliveryMinGap > 0 ? t('mktMenu.deliveryMinAddMore', { amount: fmtPrice(deliveryMinGap) }) : (isScheduledOrder ? t('mktMenu.scheduleOrder') : t('mktMenu.placeOrder')) }}
           </button>
         </div>
       </div>
@@ -827,6 +823,7 @@ import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
+import { classifyClosedOrderState } from '../lib/businessHours';
 import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
 import { useConfirmModal } from '../composables/useConfirmModal';
@@ -1138,6 +1135,27 @@ const minScheduleDatetime = computed(() => {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 });
+// A valid advance order = "Schedule for later" on with a chosen time meeting the
+// 30-min lead (mirrors the placeOrder guard below). The backend accepts SCHEDULED
+// pickup/delivery even while the restaurant is closed-now, so such an order must
+// stay placeable off-hours.
+const isScheduledOrder = computed(
+  () => scheduleEnabled.value
+    && Boolean(scheduledFor.value)
+    && scheduledFor.value >= minScheduleDatetime.value,
+);
+// Mirror the backend closed-order gate (accounts.MarketplacePlaceOrderView: an ASAP
+// order while closed 409s "restaurant_closed"; a SCHEDULED one bypasses it). Shared
+// classifier with the direct checkout (Cart.vue). Marketplace is pickup/delivery only,
+// so this yields 'open' (open-now OR a valid scheduled order) or 'schedule' (closed-now
+// + immediate → steer to scheduling instead of dead-ending on "Closed").
+const closedNeedsSchedule = computed(
+  () => classifyClosedOrderState({
+    profile: { is_open: restaurant.value?.is_open },
+    isTableContext: false,
+    isScheduled: isScheduledOrder.value,
+  }) === 'schedule',
+);
 
 // ── Customer ─────────────────────────────────────────────────────────────────
 const customer = computed(() => customerStore.customer);
