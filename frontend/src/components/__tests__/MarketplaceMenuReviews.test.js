@@ -50,8 +50,11 @@ describe("MarketplaceMenuReviews", () => {
 
   it("shows filled stars matching the score and dims the remaining stars", () => {
     const w = mountComp({ reviews: [{ score: 3, comment: "Decent." }] });
-    const starWrap = w.find('[aria-label="3 stars"]');
+    // The star wrap's aria-label is now localized via t('mktMenu.ratingStars', { score }),
+    // so find it structurally rather than by the (previously hardcoded) label text.
+    const starWrap = w.find(".text-amber-400 span");
     expect(starWrap.exists()).toBe(true);
+    expect(starWrap.attributes("aria-label")).toContain("mktMenu.ratingStars");
     // 3 filled stars, then a dimmed span with the remaining 2 stars.
     expect(starWrap.text()).toBe("★★★★★");
     expect(starWrap.find(".opacity-25").text()).toBe("★★");
