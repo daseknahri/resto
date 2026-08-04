@@ -1,5 +1,13 @@
 # Platform Vision — Restaurant OS to Delivery Marketplace
 
+> ⚠️ **SUPERSEDED — do not trust for current state.** This 2026-05-19 vision predates the built
+> system and is factually wrong in places: it describes a "Secure JWT session" for customers (the
+> real system uses `request.session["customer_id"]`, **no JWT**) and separate
+> `orders/reservations/ratings/wallet/delivery/` Django apps that **don't exist** (everything lives
+> in `accounts/` + `menu/`). For current product direction use
+> [`docs/PRODUCT_VISION_AND_REBUILD_PLAN.md`](docs/PRODUCT_VISION_AND_REBUILD_PLAN.md); for
+> identity/architecture use [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Kept only as history.
+
 > Living document. Updated as phases are completed.
 > Last updated: 2026-05-19
 

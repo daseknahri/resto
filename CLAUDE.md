@@ -58,7 +58,7 @@ No prod data locally, so you cannot preview the UI — these 4 gates are the ver
 - Fixing a security/logic bug? Update the tests that encoded the old behavior AND add a regression test.
 
 ## Deep docs (read when relevant)
-- **Canonical set (start here): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/RISK_REGISTER.md`](docs/RISK_REGISTER.md) · [ADRs](docs/adr/) · [`docs/README.md`](docs/README.md) (index).**
+- **Canonical set (start here): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) (what's built, per surface) · [`docs/RISK_REGISTER.md`](docs/RISK_REGISTER.md) · [ADRs](docs/adr/) · [`docs/README.md`](docs/README.md) (index).**
 - Architecture / routing (deep-dive): `Tenant_Routing_and_API_Architecture.md`
 - This session's audit + fixes: `DAILY_USE_AUDIT.md`
 - Launch / QA / ops: `Pre_Deployment_QA_Checklist.md`, `First_Tenant_Production_QA.md`, `Launch_Closure_Plan.md`, `VPS_Deployment_Readiness_Report.md`, `infra/DEPLOYMENT_RUNBOOK.md`, `infra/README.md`
