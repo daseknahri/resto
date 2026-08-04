@@ -1687,6 +1687,7 @@ const arabicMessages = {
     "closedAllDay": "مغلق طوال اليوم",
     "opensAt": "يفتح الساعة",
     "closesAt": "يغلق الساعة",
+    "copyHoursToAll": "نسخ إلى كل الأيام",
     "weekdays": {
       "mon": "الاثنين",
       "tue": "الثلاثاء",

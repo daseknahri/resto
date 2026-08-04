@@ -2484,6 +2484,7 @@ stepBrand: {
   closedAllDay: "Ferme toute la journee",
   opensAt: "Ouvre a",
   closesAt: "Ferme a",
+  copyHoursToAll: "Copier sur tous les jours",
   weekdays: {
     mon: "Lundi",
     tue: "Mardi",

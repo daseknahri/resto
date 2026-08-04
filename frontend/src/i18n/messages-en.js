@@ -2495,6 +2495,7 @@ stepBrand: {
   closedAllDay: "Closed all day",
   opensAt: "Opens at",
   closesAt: "Closes at",
+  copyHoursToAll: "Copy to all days",
   weekdays: {
     mon: "Monday",
     tue: "Tuesday",
