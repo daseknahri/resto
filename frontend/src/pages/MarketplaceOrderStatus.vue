@@ -90,7 +90,7 @@
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-sm font-bold text-emerald-200">{{ t('mktOrderStatus.justPlacedTitle') }}</p>
-              <p class="mt-0.5 text-xs text-emerald-200/70">{{ t('mktOrderStatus.justPlacedSubtitle') }}</p>
+              <p class="mt-0.5 text-xs text-emerald-200/70">{{ order?.estimated_ready_minutes ? t('mktOrderStatus.justPlacedSubtitleEta', { min: order.estimated_ready_minutes }) : t('mktOrderStatus.justPlacedSubtitle') }}</p>
             </div>
             <button
               class="shrink-0 rounded-full p-1 text-emerald-400/60 transition hover:text-emerald-300"

@@ -277,6 +277,10 @@
           >
             <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty', { catalog }) }}</p>
             <p class="text-xs text-slate-400">{{ t('mktMenu.menuEmptyBody') }}</p>
+            <router-link
+              :to="{ name: 'marketplace' }"
+              class="ui-btn-outline ui-press mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm"
+            >{{ t('mktMenu.menuEmptyBrowseOther') }}</router-link>
           </div>
           <!-- No dishes pass the active allergen filter -->
           <div
@@ -511,6 +515,26 @@
       </div>
     </Transition>
 
+    <!-- Free-delivery progress strip (minimum met, still below the free-delivery threshold) -->
+    <Transition name="ui-fade">
+      <div
+        v-if="cart.length && !checkoutOpen && form.fulfillment_type === 'delivery' && deliveryMinGap === 0 && deliveryFreeGap > 0"
+        class="fixed inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-t-xl border border-slate-700/60 bg-slate-900/95 px-4 py-2.5 backdrop-blur-sm"
+        style="bottom: calc(var(--safe-bottom) + 4.5rem)"
+      >
+        <div class="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+          <span>{{ t('mktMenu.freeDelivery') }}</span>
+          <span class="font-semibold text-emerald-300">{{ t('mktMenu.deliveryFreeAddMore', { amount: fmtPrice(deliveryFreeGap) }) }}</span>
+        </div>
+        <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-700/60">
+          <div
+            class="h-full rounded-full bg-emerald-400 transition-all duration-300"
+            :style="{ width: `${Math.min(100, Math.round((cartTotal / deliveryPricing.freeOver) * 100))}%` }"
+          />
+        </div>
+      </div>
+    </Transition>
+
     <!-- Cart bottom bar (visible when cart has items) -->
     <button
       v-if="cart.length && !checkoutOpen"
@@ -597,6 +621,7 @@
                 type="text"
                 autocomplete="name"
                 aria-required="true"
+                :placeholder="t('mktMenu.customerNamePlaceholder')"
                 class="ui-input"
               />
             </div>
@@ -610,6 +635,7 @@
                 type="tel"
                 inputmode="tel"
                 autocomplete="tel"
+                :placeholder="t('mktMenu.customerPhonePlaceholder')"
                 class="ui-input"
               />
             </div>
@@ -679,6 +705,15 @@
             :fmt-price="fmtPrice"
           />
 
+          <!-- Guest + pickup: pay-in-person reassurance (PayNow is auth-only) -->
+          <div
+            v-if="!customerStore.isAuthenticated && form.fulfillment_type === 'pickup' && orderTotal > 0"
+            class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/40 px-3 py-2.5"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
+            <p class="flex-1 text-xs font-medium text-slate-300">{{ t('mktMenu.guestPickupPayNote') }}</p>
+          </div>
+
           <!-- Totals (RISK FE-2) -->
           <MarketplaceCheckoutTotals
             :prep-eta="checkoutEta"
@@ -708,6 +743,7 @@
             :is-closed="!!(restaurant && !restaurant.is_open)"
             :is-authenticated="customerStore.isAuthenticated"
             :fmt-price="fmtPrice"
+            @sign-in="showAuthModal = true"
           />
 
           <!-- Submit -->
@@ -1460,6 +1496,14 @@ const deliveryMinGap = computed(() =>
     ? Math.max(0, deliveryMinOrder.value - cartTotal.value)
     : 0
 );
+// Amount still needed to unlock free delivery (delivery_free_over). 0 when not on
+// delivery, no free-delivery threshold is configured, the threshold is already met,
+// or the address is out of range (the fee is moot). Mirrors the min-order gap.
+const deliveryFreeGap = computed(() => {
+  const p = deliveryPricing.value;
+  if (form.fulfillment_type !== 'delivery' || p.freeOver <= 0 || deliveryOutOfRange.value) return 0;
+  return Math.max(0, p.freeOver - cartTotal.value);
+});
 const deliveryBlocked = computed(
   () => form.fulfillment_type === 'delivery' && deliveryOutOfRange.value,
 );
