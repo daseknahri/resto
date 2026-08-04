@@ -127,9 +127,13 @@ Each has a real blocker — don't merge blind:
 
 ## 5. Repo hygiene (needs owner sign-off — not done automatically)
 
-- **Stale leftover git worktrees** exist under `.claude/worktrees/` (`optimistic-wilson-678c57`,
-  `admiring-curran-*`, `happy-goldwasser-*`) and `../resto-wt/fe2*` from much earlier sessions — they
-  carry old branches and duplicate root docs. `git worktree list` shows them; prune with
-  `git worktree remove` once confirmed unneeded.
-- **Root doc de-clutter** — `docs/README.md` §"Point-in-time snapshots" already suggests moving the
-  historical root `.md` files into `docs/history/`. File moves need explicit direction.
+- **Stale leftover git worktrees** — mostly pruned (2026-08-05): `optimistic-wilson-678c57`,
+  `admiring-curran-*`, and `../resto-wt/fe2{j,k,l,m}` were removed via non-force `git worktree remove`
+  (their `refactor/fe-2*` branches are **preserved** — only the working copies went). **One remains:**
+  `.claude/worktrees/happy-goldwasser-dec544`, kept because its tree has **uncommitted files** (non-force
+  remove refused it). Review that work, then `git worktree remove --force` it if disposable.
+- **Root doc de-clutter** — `docs/README.md` §"Point-in-time snapshots" suggests moving the historical
+  root `.md` files into `docs/history/`. The actively-*misleading* ones are now neutralized **in place**
+  (a `⚠️ SUPERSEDED` banner on `PLATFORM_VISION.md` + `platform/*`, and the README "Superseded — do not
+  trust" table, 2026-08-05), so this is now cosmetic de-clutter, not a correctness issue. File moves need
+  explicit direction.

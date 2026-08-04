@@ -12,6 +12,41 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-05 — Documentation onboarding-completeness pass
+
+**Result:** `main` @ `9d16935`, green. A docs-only campaign to make the doc set complete + accurate
+enough that a fresh session/AI can onboard fast **without absorbing already-fixed debt as current**.
+No code touched.
+
+**What shipped:**
+- `#196` — synced the two handoff docs to the merged #193–#195 (SHA/PR-count; removed the three
+  now-shipped items from the `NEXT_SESSION.md` backlog).
+- `#197` — **the substantive one.** Driven by two read-only audit agents (doc-set authority map +
+  code→feature map), whose load-bearing claims were verified against source before writing (caught one
+  agent error: `OwnerBilling.vue` is a live tab inside `OwnerProfile.vue`, not orphaned):
+  - **New [`FEATURE_MAP.md`](FEATURE_MAP.md)** — the missing current-state surface inventory
+    (routes/pages, models, endpoint groups per surface; capability seam; **built-vs-dormant**
+    PSP/rides/retail; load-bearing config toggles). Wired into `README.md` read-order + `CLAUDE.md`.
+  - **Currency fixes to `ARCHITECTURE.md`** (a 2026-07-10 snapshot that predated shipped refactors):
+    i18n is single-source (FE-1 deleted `messages.js`), not dual-source; **AUTHZ-1 + IDENTITY-1 keystone
+    shipped**, not "#1 liability, change planned"; **FE-2 decomposed the mega-pages**. Reconciled
+    §5/§9/§12/§13/§14 against `RISK_REGISTER.md`.
+  - **`README.md`:** fixed the index bug that listed the dead `platform/` Node scaffold as authoritative
+    Coolify docs; updated ADR-0004/0005 verdicts; added a "Superseded — do not trust" table.
+  - **`⚠️ SUPERSEDED` banners** on the 3 worst factual-misleaders (`PLATFORM_VISION.md` — a nonexistent
+    JWT session + nonexistent Django apps; `platform/README.md` + `platform/DEPLOY_COOLIFY.md` — the dead
+    Node scaffold).
+- **Repo hygiene:** pruned **6 stale git worktrees** (non-force — branches preserved, only working copies
+  removed). One (`.claude/worktrees/happy-goldwasser-dec544`) was kept because it has uncommitted files;
+  see `NEXT_SESSION.md` §5.
+
+**Lesson:** the canonical `ARCHITECTURE.md` had a `> this document wins` header but predated the
+2026-07-27 round-2 merge — so on identity/authz/i18n/mega-pages it was the *stalest* canonical doc, not
+the most authoritative. Dated "currency pass" stamps + a "when this and RISK_REGISTER disagree, the
+newer wins" note now guard against that. **A snapshot doc claiming primacy is a trap once code moves.**
+
+---
+
 ## 2026-08 — Daily-use, reliability, product-content & flow campaign
 
 **Result:** `main` @ `d231144`, green (frontend lint/build/vitest + backend pytest + e2e + Docker
