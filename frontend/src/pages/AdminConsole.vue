@@ -231,7 +231,7 @@
           <div class="flex items-center justify-between gap-2">
             <p class="min-w-0 truncate font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
             <div class="flex shrink-0 items-center gap-1.5">
-              <span class="ui-status-pill text-[10px]">{{ lead.status }}</span>
+              <span class="ui-status-pill text-[10px]">{{ leadStatusLabel(lead.status) }}</span>
               <span class="ui-chip text-[10px]">{{ lead.plan_code?.toUpperCase() }}</span>
             </div>
           </div>
@@ -367,7 +367,7 @@
           <div class="flex items-center justify-between gap-2">
             <p class="min-w-0 truncate font-semibold text-slate-100">{{ tenant.name }}</p>
             <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="tenantLifecycleStatusClass(tenant.lifecycle_status)">
-              {{ tenant.lifecycle_status }}
+              {{ tenantLifecycleStatusLabel(tenant.lifecycle_status) }}
             </span>
           </div>
           <p class="text-xs text-slate-400">{{ t("adminConsole.slug") }}: {{ tenant.slug }} | {{ t("common.plan") }}: {{ tenant.plan_name }}</p>
@@ -685,7 +685,7 @@
           <div class="flex items-center justify-between gap-2">
             <p class="text-xs tabular-nums text-slate-400">{{ formatDate(request.requested_at) }}</p>
             <span class="ui-status-pill text-[10px] font-semibold" :class="upgradeStatusClass(request.status)">
-              {{ request.status }}
+              {{ upgradeStatusLabel(request.status) }}
             </span>
           </div>
           <p class="font-semibold text-slate-100">{{ request.tenant_slug }}</p>
@@ -737,7 +737,7 @@
               <td class="px-4 py-3 text-slate-300">{{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}</td>
               <td class="px-4 py-3">
                 <span class="ui-status-pill text-[10px] font-semibold" :class="upgradeStatusClass(request.status)">
-                  {{ request.status }}
+                  {{ upgradeStatusLabel(request.status) }}
                 </span>
               </td>
               <td class="px-4 py-3">
@@ -1745,6 +1745,27 @@ const applyTenantImport = async () => {
   }
 };
 
+// Lead pipeline status → i18n label (Lead.Status text choices). Colour is inline on the pill.
+const LEAD_STATUS_LABELS = {
+  new: "adminConsole.statusNew",
+  contacted: "adminConsole.statusContacted",
+  won: "adminConsole.statusWon",
+  lost: "adminConsole.statusLost",
+  no_show: "adminConsole.statusNoShow",
+  paid: "adminConsole.statusPaid",
+  provisioning: "adminConsole.statusProvisioning",
+  live: "adminConsole.statusLive",
+};
+const leadStatusLabel = (status) => t(LEAD_STATUS_LABELS[status] || "adminConsole.statusNew");
+
+// Tenant lifecycle status → i18n label (Tenant.LifecycleStatus). tenantLifecycleStatusClass keeps the colour.
+const TENANT_LIFECYCLE_LABELS = {
+  active: "adminConsole.statusActive",
+  suspended: "adminConsole.statusSuspended",
+  canceled: "adminConsole.statusCanceled",
+};
+const tenantLifecycleStatusLabel = (status) => t(TENANT_LIFECYCLE_LABELS[status] || "adminConsole.statusActive");
+
 const tenantLifecycleStatusClass = (status) => {
   if (status === "active") return "bg-emerald-500/20 text-emerald-200";
   if (status === "suspended") return "bg-amber-500/20 text-amber-200";
@@ -2099,6 +2120,15 @@ const slaLabel = (lead) => {
   if (state === "on_track") return t("adminConsole.onTrack");
   return t("adminConsole.sla");
 };
+
+// Tier-upgrade-request status → i18n label (TierUpgradeRequest.Status). upgradeStatusClass keeps the colour.
+const UPGRADE_STATUS_LABELS = {
+  pending: "adminConsole.statusPending",
+  approved: "adminConsole.statusApproved",
+  rejected: "adminConsole.statusRejected",
+  canceled: "adminConsole.statusCanceled",
+};
+const upgradeStatusLabel = (status) => t(UPGRADE_STATUS_LABELS[status] || "adminConsole.statusPending");
 
 const upgradeStatusClass = (status) => {
   if (status === "approved") return "bg-emerald-600/30 text-emerald-200";

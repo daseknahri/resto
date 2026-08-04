@@ -96,4 +96,14 @@ describe("AdminConsoleProvisioningJobs", () => {
     const hidden = mountComp({ expanded: false });
     expect(hidden.text()).toContain("adminConsole.show");
   });
+
+  it("renders localized status labels via the STATUS_LABELS map, not the raw enum token", () => {
+    // The i18n mock returns the key, so seeing the mapped key proves statusLabel()
+    // ran instead of rendering the raw job.status ("success"/"running"/"failed").
+    const w = mountComp({ jobs: sampleJobs() });
+    const text = w.text();
+    expect(text).toContain("adminConsole.statusSuccess");
+    expect(text).toContain("adminConsole.statusRunning");
+    expect(text).toContain("adminConsole.statusFailed");
+  });
 });
