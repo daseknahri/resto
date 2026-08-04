@@ -161,4 +161,24 @@ describe("computeNextAction priority ladder", () => {
     expect(computeNextAction([], { now: NOW })).toEqual({ kind: "allClear" });
     expect(computeNextAction([{ id: 9, status: "completed" }], { now: NOW })).toEqual({ kind: "allClear" });
   });
+
+  it("surfaces finish-setup when the menu is unpublished and nothing else needs attention", () => {
+    expect(computeNextAction([], { now: NOW, menuPublished: false })).toEqual({ kind: "finishSetup" });
+  });
+
+  it("keeps all-clear when the menu is published, or when publish state is unknown", () => {
+    // Explicitly published, and the undefined/loading default, both stay all-clear.
+    expect(computeNextAction([], { now: NOW, menuPublished: true })).toEqual({ kind: "allClear" });
+    expect(computeNextAction([], { now: NOW })).toEqual({ kind: "allClear" });
+  });
+
+  it("prioritises live-order actions over finish-setup even when unpublished", () => {
+    const orders = [{ id: 1, order_number: "R1", status: "ready", created_at: minsAgo(3) }];
+    expect(computeNextAction(orders, { now: NOW, menuPublished: false }).kind).toBe("handoff");
+  });
+
+  it("ranks finish-setup below sold-out resets", () => {
+    expect(computeNextAction([], { now: NOW, soldOutCount: 2, menuPublished: false }))
+      .toEqual({ kind: "soldOut", count: 2 });
+  });
 });

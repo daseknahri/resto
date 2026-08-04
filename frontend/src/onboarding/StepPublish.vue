@@ -89,31 +89,67 @@
 
     <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '56ms' }">
       <div class="space-y-1">
+        <p class="ui-section-kicker">{{ t("stepPublish.publishActions") }}</p>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
+      </div>
+
+      <div v-if="!canPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
+      </div>
+
+      <!-- Price-0 warning (non-blocking) -->
+      <div v-if="priceZeroWarning" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <div class="min-w-0 flex-1 space-y-0.5">
+          <p class="text-xs font-semibold text-amber-200">{{ t("stepPublish.priceZeroWarningTitle") }}</p>
+          <p class="text-xs text-amber-200/80">{{ t("stepPublish.priceZeroWarningBody") }}</p>
+        </div>
+        <button class="shrink-0 text-[11px] text-amber-400 hover:text-amber-200 focus:outline-none" @click="priceZeroDismissed = true">
+          {{ t("stepPublish.priceZeroDismiss") }}
+        </button>
+      </div>
+
+      <div v-if="errors.is_menu_published" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ errors.is_menu_published }}</p>
+      </div>
+      <div v-if="errors.non_field_errors" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ errors.non_field_errors }}</p>
+      </div>
+
+      <div class="grid gap-2 sm:flex sm:flex-wrap">
+        <button
+          class="ui-btn-primary w-full justify-center sm:w-auto disabled:opacity-60"
+          :disabled="publishing || !canPublish"
+          :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
+          @click="publish"
+        >
+          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog: catalog.value }) }}
+        </button>
+        <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
+          {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
+        </button>
+        <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
+          {{ t("stepPublish.launchSummary") }}
+        </RouterLink>
+        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu", { catalog: catalog.value }) }}</RouterLink>
+        <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
+        <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
+      </div>
+      <p class="text-xs text-slate-500">{{ t("stepPublish.publishReassurance") }}</p>
+    </section>
+
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
+      <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.availabilityControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.availabilitySectionTitle") }}</h3>
       </div>
 
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <!-- Business type — gates restaurant-only features (tables, dine-in, waiter…) -->
-        <div class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-          <label for="sp-business-type" class="text-sm font-medium text-slate-100">{{ t("stepPublish.businessTypeLabel") }}</label>
-          <p class="text-xs text-slate-500">{{ t("stepPublish.businessTypeHint") }}</p>
-          <select id="sp-business-type" v-model="form.business_type" class="w-full ui-input">
-            <option value="restaurant">{{ t("stepPublish.businessTypeRestaurant") }}</option>
-            <option value="cafe">{{ t("stepPublish.businessTypeCafe") }}</option>
-            <option value="bakery">{{ t("stepPublish.businessTypeBakery") }}</option>
-            <option value="grocery">{{ t("stepPublish.businessTypeGrocery") }}</option>
-            <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
-            <option value="pharmacy">{{ t("stepPublish.businessTypePharmacy") }}</option>
-          </select>
-          <p
-            v-if="form.business_type === 'pharmacy'"
-            class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] leading-relaxed text-sky-100"
-          >
-            {{ t("stepPublish.pharmacyParapharmacieHint") }}
-          </p>
-        </div>
-
+        <!-- Business type now lives on step 1 (StepBrand) so downstream steps
+             adapt from the outset; availability toggles start below. -->
         <label for="sp-is-open" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.restaurantOpen") }}</span>
@@ -309,7 +345,7 @@
     </section>
 
     <!-- Platform directory -->
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '112ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.directoryControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.directoryTitle") }}</h3>
@@ -448,7 +484,7 @@
     </section>
 
     <!-- Menu visual theme -->
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '112ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '140ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.menuThemeControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.menuThemeSectionTitle") }}</h3>
@@ -498,7 +534,7 @@
     </section>
 
     <!-- Menu card layout picker -->
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '140ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '168ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.cardLayoutControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.cardLayoutSectionTitle") }}</h3>
@@ -547,67 +583,13 @@
     </section>
 
     <!-- Closure dates / holiday closures -->
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '168ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '196ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.closureDatesControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.closureDatesSectionTitle") }}</h3>
         <p class="ui-subtle">{{ t("stepPublish.closureDatesHint") }}</p>
       </div>
       <ClosureDates />
-    </section>
-
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '196ms' }">
-      <div class="space-y-1">
-        <p class="ui-section-kicker">{{ t("stepPublish.publishActions") }}</p>
-        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
-      </div>
-
-      <div v-if="!canPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-        <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
-      </div>
-
-      <!-- Price-0 warning (non-blocking) -->
-      <div v-if="priceZeroWarning" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-        <div class="min-w-0 flex-1 space-y-0.5">
-          <p class="text-xs font-semibold text-amber-200">{{ t("stepPublish.priceZeroWarningTitle") }}</p>
-          <p class="text-xs text-amber-200/80">{{ t("stepPublish.priceZeroWarningBody") }}</p>
-        </div>
-        <button class="shrink-0 text-[11px] text-amber-400 hover:text-amber-200 focus:outline-none" @click="priceZeroDismissed = true">
-          {{ t("stepPublish.priceZeroDismiss") }}
-        </button>
-      </div>
-
-      <div v-if="errors.is_menu_published" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-        <p class="flex-1 text-sm text-red-300">{{ errors.is_menu_published }}</p>
-      </div>
-      <div v-if="errors.non_field_errors" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-        <p class="flex-1 text-sm text-red-300">{{ errors.non_field_errors }}</p>
-      </div>
-
-      <div class="grid gap-2 sm:flex sm:flex-wrap">
-        <button
-          class="ui-btn-primary w-full justify-center sm:w-auto disabled:opacity-60"
-          :disabled="publishing || !canPublish"
-          :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
-          @click="publish"
-        >
-          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog: catalog.value }) }}
-        </button>
-        <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
-          {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
-        </button>
-        <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
-          {{ t("stepPublish.launchSummary") }}
-        </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu", { catalog: catalog.value }) }}</RouterLink>
-        <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
-        <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
-      </div>
-      <p class="text-xs text-slate-500">{{ t("stepPublish.publishReassurance") }}</p>
     </section>
   </div>
 </template>

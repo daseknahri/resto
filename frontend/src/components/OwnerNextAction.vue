@@ -85,6 +85,9 @@ const props = defineProps({
   soldOutCount: { type: Number, default: 0 },
   // True while the parent is performing the emitted mutation.
   busy: { type: Boolean, default: false },
+  // Tenant publish state. `false` (menu not yet published) surfaces a
+  // "finish setup" action; `true`/undefined keeps the live-ops behaviour.
+  menuPublished: { type: Boolean, default: undefined },
 });
 
 const emit = defineEmits(["act", "skip"]);
@@ -94,7 +97,11 @@ const { now } = useNowTicker();
 
 // THE one highest-priority action right now (recomputes as the ticker advances).
 const action = computed(() =>
-  computeNextAction(props.orders, { now: now.value, soldOutCount: props.soldOutCount }),
+  computeNextAction(props.orders, {
+    now: now.value,
+    soldOutCount: props.soldOutCount,
+    menuPublished: props.menuPublished,
+  }),
 );
 
 // How many distinct things currently need attention — drives whether "Next" is
@@ -117,6 +124,7 @@ const headline = computed(() => ({
   fire: t("ownerHome.nextActionKindFire"),
   overdue: t("ownerHome.nextActionKindOverdue"),
   soldOut: t("ownerHome.nextActionKindSoldOut"),
+  finishSetup: t("ownerHome.nextActionKindSetup"),
 }[action.value.kind] || ""));
 
 const title = computed(() => {
@@ -128,6 +136,7 @@ const title = computed(() => {
   if (k === "fire") return t("ownerHome.nextActionFire", { order: num });
   if (k === "overdue") return t("ownerHome.nextActionOverdue", { order: num });
   if (k === "soldOut") return t("ownerHome.nextActionSoldOut", { n: action.value.count });
+  if (k === "finishSetup") return t("ownerHome.nextActionFinishSetup");
   return "";
 });
 
@@ -141,6 +150,7 @@ const subtitle = computed(() => {
       ? t("ownerHome.upcomingFiresIn", { min: m })
       : t("ownerHome.upcomingOverdueBy", { min: Math.abs(m) });
   }
+  if (k === "finishSetup") return t("ownerHome.nextActionFinishSetupBody");
   return "";
 });
 
@@ -151,6 +161,7 @@ const primaryLabel = computed(() => ({
   fire: t("ownerHome.nextActionDoFire"),
   overdue: t("ownerHome.nextActionDoReady"),
   soldOut: t("ownerHome.nextActionDoReset"),
+  finishSetup: t("ownerHome.setupContinue"),
 }[action.value.kind] || ""));
 
 const icon = computed(() => ({
@@ -160,6 +171,7 @@ const icon = computed(() => ({
   fire: "🔥",
   overdue: "⏱",
   soldOut: "🍽️",
+  finishSetup: "🚀",
 }[action.value.kind] || "•"));
 
 // Tone: red for overdue/urgent, amber for waiting, sky for handoff, violet for due-soon.
@@ -170,6 +182,7 @@ const tone = computed(() => {
   if (k === "dueSoon") return "violet";
   if (k === "handoff") return "emerald";
   if (k === "fire") return "orange";
+  if (k === "finishSetup") return "amber";
   return "slate";
 });
 

@@ -12,7 +12,30 @@
       </div>
     </div>
 
+    <!-- Business type — chosen first so tables/dine-in/waiter/kitchen gating and
+         the catalog vocabulary adapt across every later step. -->
     <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '28ms' }">
+      <div class="space-y-1.5">
+        <label for="sb-business-type" class="block text-lg font-semibold text-white">{{ t("stepPublish.businessTypeLabel") }}</label>
+        <p class="ui-subtle text-sm">{{ t("stepPublish.businessTypeHint") }}</p>
+        <select id="sb-business-type" v-model="form.business_type" class="w-full ui-input">
+          <option value="restaurant">{{ t("stepPublish.businessTypeRestaurant") }}</option>
+          <option value="cafe">{{ t("stepPublish.businessTypeCafe") }}</option>
+          <option value="bakery">{{ t("stepPublish.businessTypeBakery") }}</option>
+          <option value="grocery">{{ t("stepPublish.businessTypeGrocery") }}</option>
+          <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
+          <option value="pharmacy">{{ t("stepPublish.businessTypePharmacy") }}</option>
+        </select>
+        <p
+          v-if="form.business_type === 'pharmacy'"
+          class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] leading-relaxed text-sky-100"
+        >
+          {{ t("stepPublish.pharmacyParapharmacieHint") }}
+        </p>
+      </div>
+    </section>
+
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '56ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ props.standalone ? t("common.profile") : t("stepBrand.title") }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t("ownerProfileSections.brandContact") }}</h3>
@@ -210,7 +233,7 @@
       </div>
     </section>
 
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '56ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepBrand.businessHours") }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t("ownerProfileSections.operations") }}</h3>
@@ -319,7 +342,7 @@
       </div>
     </section>
 
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '112ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("ownerProfileSections.links") }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t("ownerProfileSections.discovery") }}</h3>
@@ -412,7 +435,7 @@
       </div>
     </section>
 
-    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '112ms' }">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '140ms' }">
       <div v-if="fieldError('non_field_errors')" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ fieldError("non_field_errors") }}</p>
@@ -484,6 +507,10 @@ const form = reactive({
   tiktok_url: "",
   language: "en",
   service_day_cutover_hour: 0,
+  // Business vertical — chosen up front so downstream steps (categories, dishes,
+  // publish) and the owner surfaces adapt their vocabulary/feature gating from
+  // the start. Persisted with the rest of the profile via saveAndNext.
+  business_type: "restaurant",
 });
 const saving = ref(false);
 const status = ref("");

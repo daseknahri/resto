@@ -3950,6 +3950,9 @@ ownerHome: {
   nextActionDoFire: "Ouvrir la cuisine",
   nextActionDoReady: "Marquer pret",
   nextActionDoReset: "Reinitialiser la dispo",
+  nextActionKindSetup: "Configuration",
+  nextActionFinishSetup: "Terminer la configuration",
+  nextActionFinishSetupBody: "Publiez votre menu pour commencer a recevoir des commandes.",
 },
 revenueChart: {
   kicker: "Analytique",

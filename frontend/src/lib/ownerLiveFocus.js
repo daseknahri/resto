@@ -111,19 +111,23 @@ function hasHeldCourse(order) {
  *   2. dueSoon  — a scheduled advance order now within its fire window
  *   3. handoff  — an order ready for pickup/delivery handoff
  *   4. fire     — a dine-in order with a held course ready to fire
- *   5. overdue  — an order preparing longer than expected
- *   6. soldOut  — sold-out dishes to reset
- *   7. allClear — nothing needs attention
+ *   5. overdue     — an order preparing longer than expected
+ *   6. soldOut     — sold-out dishes to reset
+ *   7. finishSetup — menu not yet published (setup incomplete)
+ *   8. allClear    — nothing needs attention
  *
  * Returns a descriptor: { kind, order?, count?, minutes? }. The component maps
  * `kind` → label + the existing mutation. Pure: no store/i18n access.
  *
  * @param {object[]} orders
  * @param {object}   opts
- * @param {number}   opts.now           - epoch ms (default Date.now())
- * @param {number}   opts.soldOutCount  - count of 86'd dishes (from readiness)
+ * @param {number}   opts.now            - epoch ms (default Date.now())
+ * @param {number}   opts.soldOutCount   - count of 86'd dishes (from readiness)
+ * @param {boolean}  opts.menuPublished  - tenant publish state; `false` (menu
+ *   not yet published) makes finishing setup the next action. Undefined/loading
+ *   is treated as "unknown" and never triggers the setup nudge.
  */
-export function computeNextAction(orders, { now = Date.now(), soldOutCount = 0 } = {}) {
+export function computeNextAction(orders, { now = Date.now(), soldOutCount = 0, menuPublished } = {}) {
   const list = orders || [];
   const byOldest = (a, b) => _ms(a.created_at) - _ms(b.created_at);
 
@@ -178,6 +182,14 @@ export function computeNextAction(orders, { now = Date.now(), soldOutCount = 0 }
     return { kind: "soldOut", count: soldOutCount };
   }
 
-  // 8. All clear.
+  // 8. Menu not yet published → finishing setup is the real next action.
+  //    Only when we positively know it is unpublished (`=== false`); an
+  //    unknown/loading state (undefined) falls through to all-clear so the
+  //    focus card never nags before tenant meta has resolved.
+  if (menuPublished === false) {
+    return { kind: "finishSetup" };
+  }
+
+  // 9. All clear.
   return { kind: "allClear" };
 }
