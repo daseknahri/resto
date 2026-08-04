@@ -222,6 +222,12 @@
         <div v-if="loadingVouchers" class="space-y-1.5">
           <div v-for="i in 3" :key="i" class="h-9 animate-pulse rounded-lg bg-slate-800/50" />
         </div>
+        <div v-else-if="vouchersError" class="py-3 text-center" role="alert">
+          <p class="flex items-center justify-center gap-2 text-[11px] text-red-300">
+            {{ t('adminWallet.voucherListError') }}
+            <button type="button" class="underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 rounded ui-touch-target" @click="fetchVouchers">{{ t('common.retry') }}</button>
+          </p>
+        </div>
         <div v-else-if="!vouchers.length" class="py-3 text-center text-xs text-slate-500 italic">{{ t('adminWallet.voucherListEmpty') }}</div>
         <ul v-else class="divide-y divide-slate-800/70 overflow-hidden rounded-xl border border-slate-700/60">
           <li v-for="v in vouchers" :key="v.code" class="flex items-center justify-between gap-3 bg-slate-900/40 px-3 py-2 text-xs">
@@ -436,15 +442,18 @@ const generatedCodes = ref([]);
 const copiedAll = ref(false);
 const vouchers = ref([]);
 const loadingVouchers = ref(false);
+const vouchersError = ref(false); // recent-vouchers fetch failed (vs genuinely empty)
 let voucherKey = null; // stable across retries of the same voucher batch; cleared on success
 
 const fetchVouchers = async () => {
   loadingVouchers.value = true;
+  vouchersError.value = false;
   try {
     const res = await api.get('/admin/wallet/vouchers/');
     vouchers.value = res.data?.vouchers || res.data?.results || (Array.isArray(res.data) ? res.data : []);
   } catch {
     vouchers.value = [];
+    vouchersError.value = true;
   } finally {
     loadingVouchers.value = false;
   }
