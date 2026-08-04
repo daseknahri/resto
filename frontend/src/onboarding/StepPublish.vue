@@ -148,26 +148,8 @@
       </div>
 
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <!-- Business type — gates restaurant-only features (tables, dine-in, waiter…) -->
-        <div class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-          <label for="sp-business-type" class="text-sm font-medium text-slate-100">{{ t("stepPublish.businessTypeLabel") }}</label>
-          <p class="text-xs text-slate-500">{{ t("stepPublish.businessTypeHint") }}</p>
-          <select id="sp-business-type" v-model="form.business_type" class="w-full ui-input">
-            <option value="restaurant">{{ t("stepPublish.businessTypeRestaurant") }}</option>
-            <option value="cafe">{{ t("stepPublish.businessTypeCafe") }}</option>
-            <option value="bakery">{{ t("stepPublish.businessTypeBakery") }}</option>
-            <option value="grocery">{{ t("stepPublish.businessTypeGrocery") }}</option>
-            <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
-            <option value="pharmacy">{{ t("stepPublish.businessTypePharmacy") }}</option>
-          </select>
-          <p
-            v-if="form.business_type === 'pharmacy'"
-            class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] leading-relaxed text-sky-100"
-          >
-            {{ t("stepPublish.pharmacyParapharmacieHint") }}
-          </p>
-        </div>
-
+        <!-- Business type now lives on step 1 (StepBrand) so downstream steps
+             adapt from the outset; availability toggles start below. -->
         <label for="sp-is-open" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.restaurantOpen") }}</span>
