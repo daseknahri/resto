@@ -63,7 +63,7 @@
             >#{{ order.order_number }}</RouterLink>
             <span class="text-slate-600">·</span>
             <span class="text-slate-500">{{ formatDate(order.created_at) }}</span>
-            <span v-if="order.total" class="ms-auto tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+            <span v-if="order.total" class="ms-auto tabular-nums text-slate-400">{{ formatCurrency(order.total, order.currency || 'MAD') }}</span>
           </div>
 
           <!-- Interactive star selector -->
@@ -182,7 +182,7 @@ import { RouterLink } from 'vue-router';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 
-const { t, formatPrice, currentLocale } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 
 const props = defineProps({
   /** True while the parent is fetching the customer's orders. */

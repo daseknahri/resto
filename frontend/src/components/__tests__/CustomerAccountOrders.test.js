@@ -13,6 +13,7 @@ vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
     t: (k, p) => (p ? `${k}:${JSON.stringify(p)}` : k),
     formatPrice: (n) => `$${n}`,
+    formatCurrency: (n, c) => `${c || "MAD"} ${n}`,
     currentLocale: { value: "en" },
   }),
 }));
@@ -105,14 +106,28 @@ describe("CustomerAccountOrders", () => {
     const w = mountComp({ recentOrders: [{ order_number: "555", total: 10 }] });
     expect(w.text()).not.toContain("customerAccount.ordersEmpty");
     expect(w.text()).toContain("customerAccount.orderNumber");
-    expect(w.text()).toContain("$10");
+    expect(w.text()).toContain("MAD 10");
   });
 
   it("renders the tenant order list with order number, status and price", () => {
     const o = tenantOrder();
     const w = mountComp({ apiOrders: [o] });
-    expect(w.text()).toContain("$42.5");
+    expect(w.text()).toContain("MAD 42.5");
     expect(w.text()).toContain("orderStatus.statusPending");
+  });
+
+  it("renders each order total in the order's OWN charged currency, not a converted display currency", () => {
+    // Regression: account order history must format totals with
+    // formatCurrency(total, order.currency) — the actual charged currency,
+    // matching the order tracker/receipt — NOT formatPrice (which converts a MAD
+    // amount into the customer's selected display currency).
+    const eur = tenantOrder({ total: 42.5, currency: "EUR" });
+    const usd = marketplaceOrder({ total: 30, currency: "USD" });
+    const w = mountComp({ apiOrders: [eur], marketplaceOrders: [usd], filteredMarketplaceOrders: [usd] });
+    expect(w.text()).toContain("EUR 42.5");
+    expect(w.text()).toContain("USD 30");
+    // The order's currency drives the display; it is never re-labelled to the base.
+    expect(w.text()).not.toContain("MAD 42.5");
   });
 
   it("emits cancel-order with the order when its cancel button is clicked", async () => {

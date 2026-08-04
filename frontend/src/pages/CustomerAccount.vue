@@ -61,7 +61,7 @@
                 :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
                 class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
               >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
-              <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+              <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatCurrency(order.total, order.currency || 'MAD') }}</span>
             </li>
           </ul>
         </section>
@@ -476,7 +476,7 @@
                   <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(ord.status) }}</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-slate-500">
-                  <span v-if="ord.total" class="tabular-nums text-slate-400">{{ formatPrice(ord.total) }}</span>
+                  <span v-if="ord.total" class="tabular-nums text-slate-400">{{ formatCurrency(ord.total, ord.currency || 'MAD') }}</span>
                   <span v-if="ord.created_at">{{ formatDate(ord.created_at) }}</span>
                 </div>
               </div>
@@ -1294,34 +1294,34 @@
                   <li v-for="(item, idx) in receiptOrder.items" :key="idx" class="flex items-start gap-1.5">
                     <span class="shrink-0 text-slate-500 tabular-nums">{{ item.qty }}×</span>
                     <span class="min-w-0 flex-1 text-slate-200 print:text-slate-800">{{ item.dish_name }}</span>
-                    <span class="shrink-0 tabular-nums text-slate-300 print:text-slate-800">{{ formatPrice(item.subtotal) }}</span>
+                    <span class="shrink-0 tabular-nums text-slate-300 print:text-slate-800">{{ formatCurrency(item.subtotal, receiptOrder.currency || 'MAD') }}</span>
                   </li>
                 </ul>
               </div>
               <div class="border-t border-dashed border-slate-700/60 pt-2 space-y-1 print:border-slate-300">
                 <div v-if="receiptOrder.promotion_discount > 0" class="flex items-center justify-between gap-2 text-emerald-400">
                   <span>{{ t('customerAccount.receiptPromoDiscount') }}</span>
-                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.promotion_discount) }}</span>
+                  <span class="tabular-nums">-{{ formatCurrency(receiptOrder.promotion_discount, receiptOrder.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="receiptOrder.loyalty_discount > 0" class="flex items-center justify-between gap-2 text-emerald-400">
                   <span>{{ t('customerAccount.receiptLoyaltyDiscount') }}</span>
-                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.loyalty_discount) }}</span>
+                  <span class="tabular-nums">-{{ formatCurrency(receiptOrder.loyalty_discount, receiptOrder.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="receiptOrder.delivery_fee > 0" class="flex items-center justify-between gap-2 text-slate-400">
                   <span>{{ t('customerAccount.receiptDeliveryFee') }}</span>
-                  <span class="tabular-nums">{{ formatPrice(receiptOrder.delivery_fee) }}</span>
+                  <span class="tabular-nums">{{ formatCurrency(receiptOrder.delivery_fee, receiptOrder.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="receiptOrder.tip_amount > 0" class="flex items-center justify-between gap-2 text-slate-400">
                   <span>{{ t('customerAccount.receiptTip') }}</span>
-                  <span class="tabular-nums">{{ formatPrice(receiptOrder.tip_amount) }}</span>
+                  <span class="tabular-nums">{{ formatCurrency(receiptOrder.tip_amount, receiptOrder.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="receiptOrder.wallet_amount_paid > 0" class="flex items-center justify-between gap-2 text-indigo-300">
                   <span>{{ t('customerAccount.receiptWallet') }}</span>
-                  <span class="tabular-nums">-{{ formatPrice(receiptOrder.wallet_amount_paid) }}</span>
+                  <span class="tabular-nums">-{{ formatCurrency(receiptOrder.wallet_amount_paid, receiptOrder.currency || 'MAD') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-2 border-t border-slate-700/60 pt-1.5 font-bold text-slate-100 print:border-slate-300 print:text-slate-900">
                   <span>{{ t('customerAccount.receiptTotal') }}</span>
-                  <span class="tabular-nums">{{ formatPrice(receiptOrder.total) }}</span>
+                  <span class="tabular-nums">{{ formatCurrency(receiptOrder.total, receiptOrder.currency || 'MAD') }}</span>
                 </div>
               </div>
             </div>
@@ -1359,7 +1359,7 @@ import { useReorder } from '../composables/useReorder';
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
 import { groupWalletTransactionsByDate } from '../lib/walletHistory';
 
-const { t, formatPrice, currentLocale } = useI18n();
+const { t, formatPrice, formatCurrency, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
 const currencyStore = useCurrencyStore();
 const tenantStore = useTenantStore();

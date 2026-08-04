@@ -76,7 +76,7 @@
             <p class="text-[11px] text-slate-500"><span class="font-mono">#{{ o.order_number }}</span> · {{ formatDate(o.created_at) }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <span class="text-sm font-semibold tabular-nums text-slate-300">{{ formatPrice(o.total) }}</span>
+            <span class="text-sm font-semibold tabular-nums text-slate-300">{{ formatCurrency(o.total, o.currency || 'MAD') }}</span>
             <button
               v-if="o.restaurant_slug && o.items_snapshot?.length"
               class="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-[var(--color-secondary,#f59e0b)] hover:text-[var(--color-secondary,#f59e0b)] transition-colors"
@@ -226,7 +226,7 @@
                   order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
                   t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
                 }}</span>
-                <span v-if="order.total" class="font-medium tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+                <span v-if="order.total" class="font-medium tabular-nums text-slate-400">{{ formatCurrency(order.total, order.currency || 'MAD') }}</span>
                 <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
               </div>
               <div v-if="order.has_rating" class="flex items-center gap-1 text-[11px] text-amber-400">
@@ -272,26 +272,26 @@
                     {{ item.dish_name }}
                     <span v-if="item.options?.length" class="ms-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
                   </span>
-                  <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatPrice(item.subtotal) }}</span>
+                  <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatCurrency(item.subtotal, order.currency || 'MAD') }}</span>
                 </li>
               </ul>
               <!-- Fee/discount breakdown -->
               <div v-if="order.delivery_fee > 0 || order.tip_amount > 0 || order.promotion_discount > 0 || order.loyalty_discount > 0" class="mt-1.5 space-y-0.5 border-t border-slate-700/40 pt-1.5 text-[11px] text-slate-500">
                 <div v-if="order.promotion_discount > 0" class="flex items-center justify-between gap-2">
                   <span>{{ t('customerAccount.receiptPromoDiscount') }}</span>
-                  <span class="tabular-nums text-emerald-400">-{{ formatPrice(order.promotion_discount) }}</span>
+                  <span class="tabular-nums text-emerald-400">-{{ formatCurrency(order.promotion_discount, order.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="order.loyalty_discount > 0" class="flex items-center justify-between gap-2">
                   <span>{{ t('customerAccount.receiptLoyaltyDiscount') }}</span>
-                  <span class="tabular-nums text-emerald-400">-{{ formatPrice(order.loyalty_discount) }}</span>
+                  <span class="tabular-nums text-emerald-400">-{{ formatCurrency(order.loyalty_discount, order.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="order.delivery_fee > 0" class="flex items-center justify-between gap-2">
                   <span>{{ t('customerAccount.receiptDeliveryFee') }}</span>
-                  <span class="tabular-nums">+{{ formatPrice(order.delivery_fee) }}</span>
+                  <span class="tabular-nums">+{{ formatCurrency(order.delivery_fee, order.currency || 'MAD') }}</span>
                 </div>
                 <div v-if="order.tip_amount > 0" class="flex items-center justify-between gap-2">
                   <span>{{ t('customerAccount.receiptTip') }}</span>
-                  <span class="tabular-nums">+{{ formatPrice(order.tip_amount) }}</span>
+                  <span class="tabular-nums">+{{ formatCurrency(order.tip_amount, order.currency || 'MAD') }}</span>
                 </div>
               </div>
               <button
@@ -332,7 +332,7 @@
               :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
               class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
             >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
-            <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+            <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatCurrency(order.total, order.currency || 'MAD') }}</span>
           </li>
         </ul>
       </template>
@@ -366,7 +366,7 @@ import { RouterLink } from 'vue-router';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 
-const { t, formatPrice, currentLocale } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 
 const props = defineProps({
   /** Vertical (food/shops/pharmacy) filter chips for the marketplace order list. */
