@@ -215,8 +215,10 @@
                 <span
                   v-else-if="(serviceActivity[svc.id]?.count || 0) > 0"
                   class="rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--color-secondary)]"
-                  aria-hidden="true"
-                >{{ serviceActivity[svc.id].count }}</span>
+                >
+                  <span aria-hidden="true">{{ serviceActivity[svc.id].count }}</span>
+                  <span class="sr-only">{{ t('superAppHub.serviceActiveCount', { count: serviceActivity[svc.id].count }) }}</span>
+                </span>
               </div>
               <p class="text-sm leading-relaxed text-slate-400">{{ t('services.' + svc.id + 'Desc') }}</p>
             </div>

@@ -216,7 +216,7 @@
                       : ['pending','confirmed','preparing','ready','completed']).indexOf(order.status) >= si
                       ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
                       : 'bg-slate-800/60 text-slate-600'"
-                  >{{ t(`customerAccount.timelineStep_${step}`) }}</span>
+                  >{{ mktOrderStatus(step) }}</span>
                   <span v-if="si < 4" class="h-px w-2 shrink-0 bg-slate-700/60" aria-hidden="true" />
                 </template>
               </div>

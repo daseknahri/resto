@@ -476,6 +476,7 @@ superAppHub: {
   myBusinessesTitle: "Mes commerces",
   myBusinessesOrders: "{count} commandes",
   myBusinessesFollowing: "Suivi",
+  serviceActiveCount: "{count} actifs",
   followAria: "Suivre {name}",
   unfollowAria: "Ne plus suivre {name}",
   resumeOrderTitle: "Commander chez {name}",
