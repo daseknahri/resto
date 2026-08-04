@@ -34,6 +34,8 @@
         <button
           type="button"
           class="admin-signout-btn"
+          :disabled="signingOut"
+          :aria-busy="signingOut"
           @click="handleSignOut"
         >
           {{ t('common.signOut') }}
@@ -48,6 +50,7 @@
 </template>
 
 <script setup>
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
@@ -71,9 +74,16 @@ const navLinks = [
   { name: "admin-analytics",     labelKey: "adminLayout.analytics" },
 ];
 
+const signingOut = ref(false);
 const handleSignOut = async () => {
-  await session.signOut();
-  router.push({ name: "signin" });
+  if (signingOut.value) return; // in-flight guard: a double-click must not fire signOut twice
+  signingOut.value = true;
+  try {
+    await session.signOut();
+    router.push({ name: "signin" });
+  } finally {
+    signingOut.value = false;
+  }
 };
 </script>
 
@@ -171,7 +181,12 @@ const handleSignOut = async () => {
   white-space: nowrap;
 }
 
-.admin-signout-btn:hover {
+.admin-signout-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-signout-btn:not(:disabled):hover {
   border-color: rgba(252, 165, 165, 0.6);
   background: rgba(239, 68, 68, 0.08);
   color: rgb(252, 165, 165);
