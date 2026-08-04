@@ -607,6 +607,7 @@
         <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
         <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
       </div>
+      <p class="text-xs text-slate-500">{{ t("stepPublish.publishReassurance") }}</p>
     </section>
   </div>
 </template>

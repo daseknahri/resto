@@ -18,6 +18,8 @@
         </div>
       </div>
 
+      <p class="text-sm text-slate-400">{{ t("stepCategories.hierarchyHint") }}</p>
+
       <div v-if="!superCategoryOptions.length" class="ui-empty-state flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center">
         <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-300 shadow-lg shadow-black/20">
           <AppIcon name="info" class="h-5 w-5" aria-hidden="true" />
