@@ -32,6 +32,22 @@
         </div>
       </header>
 
+      <!-- Resume banner: shown when a saved session restored a step past the first. -->
+      <div
+        v-if="resumedStep > 1 && current === resumedStep"
+        class="ui-reveal flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-2.5 text-sm text-sky-100"
+        role="status"
+      >
+        <span>{{ t("onboardingWizard.resumedFromStep", { current: resumedStep }) }}</span>
+        <button
+          type="button"
+          class="ui-btn-outline ui-touch-target shrink-0 px-3 py-1.5 text-xs"
+          @click="startFromStepOne"
+        >
+          {{ t("onboardingWizard.startFromStepOne") }}
+        </button>
+      </div>
+
       <div class="grid min-w-0 gap-6 lg:grid-cols-[320px,1fr]">
         <!-- Step navigation -->
         <aside class="min-w-0">
@@ -128,6 +144,9 @@ const highestCompleted = ref(1);
 // gates the final Publish step so an unfinished setup can't be reached via the nav.
 const canPublishStep = ref(false);
 const published = ref(false);
+// Set to the restored step (>1) when a saved session resumes past the first step,
+// so a small banner can offer to start over from step 1.
+const resumedStep = ref(0);
 const tenant = useTenantStore();
 const router = useRouter();
 const { t } = useI18n();
@@ -217,7 +236,16 @@ const restoreStep = () => {
     current.value = parsed;
     // A previously-reached step is legitimately reachable again on resume.
     if (parsed > highestCompleted.value) highestCompleted.value = parsed;
+    // Surface a resume banner only when we landed past the first step.
+    resumedStep.value = parsed > 1 ? parsed : 0;
   }
+};
+
+// Reset the wizard to the first step and dismiss the resume banner. Behaviour is
+// just moving the step index; the persistStep watcher records the new position.
+const startFromStepOne = () => {
+  current.value = 1;
+  resumedStep.value = 0;
 };
 
 const persistStep = () => {

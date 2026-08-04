@@ -27,7 +27,7 @@
             </p>
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-3">
+          <div class="grid gap-3">
             <article
               class="ui-stat-tile ui-reveal"
               :style="{ '--ui-delay': '40ms' }"
@@ -35,22 +35,6 @@
               <p class="ui-stat-label">{{ t("ownerLaunchSuccess.publicUrl", { catalog }) }}</p>
               <p class="ui-stat-value truncate text-lg md:text-2xl" :title="menuHost">{{ menuHost }}</p>
               <p class="ui-stat-note truncate" :title="tenantName">{{ tenantName }}</p>
-            </article>
-            <article
-              class="ui-stat-tile ui-reveal"
-              :style="{ '--ui-delay': '68ms' }"
-            >
-              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.statActions") }}</p>
-              <p class="ui-stat-value tabular-nums text-lg md:text-2xl">{{ isPublished ? 2 : 1 }}</p>
-              <p class="ui-stat-note">{{ t("ownerLaunchSuccess.nextActions") }}</p>
-            </article>
-            <article
-              class="ui-stat-tile ui-reveal"
-              :style="{ '--ui-delay': '96ms' }"
-            >
-              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.statSteps") }}</p>
-              <p class="ui-stat-value tabular-nums text-lg md:text-2xl">{{ isPublished ? activeActionsCount : 1 }}</p>
-              <p class="ui-stat-note">{{ t("ownerLaunchSuccess.nextActions") }}</p>
             </article>
           </div>
         </div>
@@ -133,15 +117,15 @@
         <div class="space-y-2 text-sm text-slate-300">
           <div class="ui-admin-subcard">
             <p class="font-semibold text-slate-100">{{ t("ownerLaunchSuccess.goDashboard") }}</p>
-            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.nextActions") }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.goDashboardHint") }}</p>
           </div>
           <div class="ui-admin-subcard">
             <p class="font-semibold text-slate-100">{{ t("ownerLaunchSuccess.editMenu", { catalog }) }}</p>
-            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.launch") }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.editMenuHint") }}</p>
           </div>
           <div v-if="isPublished" class="ui-admin-subcard">
             <p class="font-semibold text-slate-100">{{ t("ownerLaunchSuccess.copyUrl") }}</p>
-            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.shareMessageTitle") }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ t("ownerLaunchSuccess.copyUrlHint") }}</p>
           </div>
         </div>
       </article>
@@ -163,7 +147,6 @@ const { t } = useI18n();
 const { catalog } = useVocabulary();
 const isPublished = computed(() => tenant.meta?.profile?.is_menu_published === true);
 const tenantName = computed(() => tenant.meta?.profile?.restaurant_name || tenant.meta?.name || t("ownerLaunchSuccess.defaultRestaurantName"));
-const activeActionsCount = computed(() => (isPublished.value ? 3 : 2));
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
 const menuHost = computed(() => {
