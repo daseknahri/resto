@@ -13,6 +13,14 @@
     </div>
 
     <div class="p-4 space-y-3 bg-slate-950/60">
+      <!-- Advance error — rendered at the top of the sticky hero so a failed
+           "At restaurant"/"Picked up" tap is visible where the driver is looking,
+           instead of off-screen below the pinned hero (parent owns errorMsg). -->
+      <div v-if="error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+      </div>
+
       <!-- Order meta: distance + items count -->
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
         <p class="text-[11px] text-slate-500 shrink-0">{{ t('driver.order') }} #{{ job.order_number }}</p>
@@ -287,6 +295,8 @@ defineProps({
   navigateHref: { type: String, default: '' },
   /** True while a status advance / fail request is in flight (parent-owned). */
   busy: { type: Boolean, default: false },
+  /** Advance/fail error message (parent-owned errorMsg); shown atop the hero. */
+  error: { type: String, default: '' },
   /** Whether the supporting-detail panel is expanded (parent-owned + watcher-driven). */
   detailOpen: { type: Boolean, default: false },
   /** Status → label formatter (status, business_type) => string. */
