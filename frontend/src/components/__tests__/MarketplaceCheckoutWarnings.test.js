@@ -39,6 +39,12 @@ describe("MarketplaceCheckoutWarnings", () => {
     expect(mountIt({ fulfillmentType: "pickup", isAuthenticated: false }).text()).not.toContain("mktMenu.authRequired");
   });
 
+  it("emits signIn when the guest banner's Sign in button is tapped", async () => {
+    const w = mountIt({ fulfillmentType: "delivery", isAuthenticated: false });
+    await w.find('[role="status"] button').trigger("click");
+    expect(w.emitted("signIn")).toHaveLength(1);
+  });
+
   it("can show multiple banners at once", () => {
     const w = mountIt({ fulfillmentType: "delivery", deliveryMinGap: 5, isClosed: true, isAuthenticated: false });
     expect(w.findAll('[role="alert"], [role="status"]')).toHaveLength(3);

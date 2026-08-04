@@ -36,6 +36,7 @@
         id="mkt-address"
         v-model="deliveryAddress"
         rows="2"
+        :placeholder="t('mktMenu.deliveryAddressPlaceholder')"
         class="ui-textarea resize-none"
       />
     </div>

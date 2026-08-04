@@ -434,6 +434,11 @@
         <p class="text-2xl" aria-hidden="true">❤️</p>
         <p class="text-sm font-semibold text-slate-100">{{ t('marketplace.noFavourites') }}</p>
         <p class="text-xs text-slate-400">{{ t('marketplace.noFavouritesHint') }}</p>
+        <button
+          type="button"
+          class="ui-btn-outline mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm"
+          @click="showFavouritesOnly = false"
+        >{{ t('marketplace.noFavouritesBrowse') }}</button>
       </div>
 
       <!-- Empty -->
@@ -491,7 +496,12 @@
                     <span class="tabular-nums">{{ r.rating_average.toFixed(1) }}</span>
                     <span class="text-slate-500 tabular-nums">({{ r.rating_count }})</span>
                   </span>
-                  <span v-if="r.price_tier" class="text-slate-400">{{ '€'.repeat(r.price_tier) }}</span>
+                  <span
+                    v-if="r.price_tier"
+                    class="text-slate-400 tracking-tight"
+                    role="img"
+                    :aria-label="t('marketplace.priceTierLabel', { tier: r.price_tier })"
+                  >{{ '●'.repeat(r.price_tier) }}</span>
                   <span v-if="r.cuisine_type" class="text-slate-500">· {{ r.cuisine_type }}</span>
                 </div>
               </div>
