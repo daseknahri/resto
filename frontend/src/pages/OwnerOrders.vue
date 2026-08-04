@@ -93,7 +93,7 @@
               {{ statusTabs.find(t => t.value === activeStatus)?.label || activeStatus }}
             </span>
             <span v-if="searchQuery" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">"{{ searchQuery }}"</span>
-            <span v-if="activeFulfillmentType" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ fulfillmentLabel(activeFulfillmentType) }}</span>
+            <span v-if="activeFulfillmentType" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ fulfillmentFilterLabel(activeFulfillmentType) }}</span>
             <span v-if="activePaymentStatus" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ paymentLabel(activePaymentStatus) }}</span>
             <span v-if="activeDateFilter !== 'all'" class="rounded-full bg-slate-800 px-1.5 py-0.5 font-semibold text-slate-300">{{ t(`ownerOrders.dateFilter_${activeDateFilter}`) }}</span>
             <button
@@ -1631,7 +1631,10 @@ const paymentStatusTabs = computed(() => {
 // "delivery"/"unpaid" must never leak to the UI (mirrors the filter-tab labels).
 const _FULFILLMENT_LABELS = { pickup: "ownerOrders.fulfillmentPickup", delivery: "ownerOrders.fulfillmentDelivery", table: "ownerOrders.fulfillmentDineIn" };
 const _PAYMENT_LABELS = { unpaid: "ownerOrders.paymentUnpaid", paid: "ownerOrders.paymentPaid" };
-const fulfillmentLabel = (v) => (_FULFILLMENT_LABELS[v] ? t(_FULFILLMENT_LABELS[v]) : v);
+// NB: a per-order `fulfillmentLabel(o)` already exists lower in this file (order-row
+// label incl. table number); this filter-strip helper takes the raw type token, so it
+// must have a distinct name to avoid a redeclaration parse error.
+const fulfillmentFilterLabel = (v) => (_FULFILLMENT_LABELS[v] ? t(_FULFILLMENT_LABELS[v]) : v);
 const paymentLabel = (v) => (_PAYMENT_LABELS[v] ? t(_PAYMENT_LABELS[v]) : v);
 
 // ── Status tabs ───────────────────────────────────────────────────────────────
