@@ -1,5 +1,10 @@
 # Deploy To Coolify
 
+> ⚠️ **SUPERSEDED — dead scaffold, do not follow this.** This describes deploying the dead Node
+> `platform/` monorepo, **not** the real Kepoli app (Django `backend/` + Vue `frontend/`). Use
+> [`infra/DEPLOYMENT_RUNBOOK.md`](../infra/DEPLOYMENT_RUNBOOK.md) + [`infra/`](../infra/)
+> `COOLIFY_*.md` instead. Kept only as history.
+
 This is the correct deployment path for this repository if you want to submit the GitHub repository URL in Coolify and let Coolify build from source.
 
 ## Recommended deployment mode

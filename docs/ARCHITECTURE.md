@@ -6,7 +6,11 @@
 > then this for the mental model, then [`RISK_REGISTER.md`](RISK_REGISTER.md) for the
 > known debt, and the [ADRs](adr/) for the reasoning behind each load-bearing decision.
 >
-> _Last written: 2026-07-10, after a ground-up 11-dimension adversarial architecture review._
+> _Last written: 2026-07-10, after a ground-up 11-dimension adversarial architecture review.
+> Currency pass 2026-08-04 (reconciled against `RISK_REGISTER.md` @ 2026-07-27): §5 notes
+> AUTHZ-1/IDENTITY-1 shipped; §9 updated for FE-1 (i18n single-source) + FE-2 (mega-page
+> decomposition); §12–§14 aligned. Where this snapshot and `RISK_REGISTER.md`/`CLAUDE.md` disagree
+> on what has shipped, the latter two win — they are more recent._
 
 ---
 
@@ -167,11 +171,18 @@ divergent `_is_tenant_owner` helpers** (different signatures, in `menu/views.py`
 duplicated in **5+ places**. Reusable, correct permission classes (`IsPlatformAdmin`,
 `IsTenantEditor`, `IsTenantEditorOrReadOnly`) *exist* but are applied to only ~60 endpoints.
 
-> **This is the #1 structural liability.** On a shared cookie, a single forgotten guard line
-> is a cross-tenant data breach, and "forgot the guard" is the *default* path. The fix —
-> unify identity so customers become `request.user`, collapse the checks into one tested
-> `IsTenantOwner`/`IsOrderOwner` policy layer, and add a queryset-manager backstop — is the
-> highest-leverage refactor in the codebase. See RISK **AUTHZ-1**.
+> **This was the #1 structural liability** (as of the 2026-07-10 review). On a shared cookie, a
+> single forgotten guard line is a cross-tenant data breach, and "forgot the guard" was the
+> *default* path. The fix — unify identity so customers become `request.user`, collapse the checks
+> into one tested `IsTenantOwner`/`IsOrderOwner` policy layer, and add a queryset-manager backstop.
+>
+> **Update (post-review — this shipped):** **AUTHZ-1 ✅ Done (2026-07-27)** — authorization is now
+> a **tested policy layer**, and **IDENTITY-1's keystone shipped (2026-07-11)** so customers,
+> drivers, and admins flow through **one auth stack** (customers now reach `request.user`; the raw
+> `session["customer_id"]` reads are gone from the guard path). The prose above is the *original*
+> state, kept for the "why"; for exact current status and any residual see
+> [`RISK_REGISTER.md`](RISK_REGISTER.md) **AUTHZ-1** / **IDENTITY-1**. The per-view tenant-scoping
+> discipline (§13) still stands regardless of identity unification.
 
 ---
 
@@ -287,14 +298,21 @@ but has growth-limiting choices.
   `ui-panel`, `ui-input`, `ui-btn-primary/outline`, etc.; QA gate = no horizontal overflow at
   390px, explicit loading/empty/error states, ≥44px touch targets, focus-visible, RTL-safe).
 - **i18n is a HAND-ROLLED runtime** (`composables/useI18n.js` + `i18n/`), **not vue-i18n**
-  (older docs say vue-i18n — they are wrong). It is **dual-source**, which is a real footgun:
-  a new key must be added to **all** of `messages.js` (inline `en` + inline `fr` — read by the
-  runtime, the FR-parity gate, and the usage gate), `messages-ar.js` (real Arabic), and
-  `messages-en.js` (AR-parity source). Edit only some and you pass one verify script but fail
-  the other and ship raw keys. See [ADR-0005](adr/0005-i18n-dual-source.md) and RISK **FE-1**.
-  FR text in `messages.js` is ASCII-only by convention (avoids mojibake).
-- **Mega-pages.** Six page components are 2,500–3,700 lines (`WaiterPage.vue` 3,722,
-  `CustomerAccount.vue` 3,654). Single-writer bottlenecks; split by feature. (RISK **FE-2**.)
+  (older docs say vue-i18n — they are wrong). It is **single-source-per-locale** — **FE-1**
+  (done 2026-07-24) collapsed the old dual source and **deleted** the redundant `messages.js`.
+  A new key is added to **one file per locale**: `messages-en.js` (English — the runtime EN
+  **and** the parity/usage source both gates check against), `messages-fr.js` (French), and
+  `messages-ar.js` (Arabic; runtime AR = clone-of-EN + these sparse overrides). Both gates now
+  read these **same runtime files**, so a key that passes the gates is the key the runtime ships
+  — no more "passes one gate, raw key at runtime" drift. Put the key under the **same namespace
+  the template uses** (a `mktMenu.*` key must live under `mktMenu`, not `menu`). See
+  [ADR-0005](adr/0005-i18n-dual-source.md) (superseded) and RISK **FE-1** (done). FR text in
+  `messages-fr.js` is ASCII-only by convention (avoids mojibake).
+- **Mega-pages.** Six page components were originally 2,500–3,700 lines. **FE-2 (done 2026-07-27)**
+  decomposed them into **62 tested child components** (~4,080 lines lifted; vitest 527→924), with
+  all money/order logic (`placeOrder`/settle/cashout) **deliberately kept in the parents**. The
+  parent pages (`WaiterPage.vue`, `CustomerAccount.vue`, …) remain the largest files but are now
+  logic cores, not monoliths. (RISK **FE-2** ✅.)
 - **Realtime + polling** as in §8.
 
 Verification is gate-only (no prod data locally): `npm run verify:i18n`, `lint`, `build`, `test`.
@@ -340,10 +358,12 @@ no PSP needed); hold non-food verticals at `coming_soon` until a paying partner 
 
 The honest debt from the ground-up review lives in **[`RISK_REGISTER.md`](RISK_REGISTER.md)** —
 ranked by severity, each with the failure scenario, the fix, and a rough effort. **Read it
-before any scaling or onboarding push.** The headline: 3 critical-tier items (authz-by-convention
-on a shared cookie; single Postgres no-PITR; on-host backups) and a handful of high items
-(god-files/no `OrderService`, no API versioning, test false-confidence, cron-queue starvation,
-i18n dual-source).
+before any scaling or onboarding push.** The headline (from the original review): 3 critical-tier items — of which the one *code* item,
+**authz-by-convention (AUTHZ-1), has since shipped** ✅; the **two remaining criticals are both
+disaster-recovery** (single Postgres, no PITR; backups written on-host, not off-box). Plus a
+handful of high items (backend god-file `menu/views.py` / no `OrderService`, no API versioning,
+test false-confidence, cron-queue starvation). (Two former frontend items have since shipped: the
+i18n dual-source footgun (FE-1) and the frontend mega-pages (FE-2); see §9.)
 
 ---
 
@@ -358,8 +378,8 @@ These are non-negotiable — a regression here is a security or money incident:
 3. **The cash-out 6-digit code is never logged.**
 4. **Wallet idempotency keys from tenant-local ids are schema-namespaced.**
 5. **Wallet mutations re-check idempotency under the `select_for_update` lock.**
-6. **A new i18n key goes into all of** `messages.js` (inline en+fr) + `messages-ar.js` +
-   `messages-en.js`.
+6. **A new i18n key goes into one file per locale** — `messages-en.js` (EN) + `messages-fr.js`
+   (FR) + `messages-ar.js` (AR); the old dual-source `messages.js` was deleted (FE-1).
 7. **Work on a branch off `main`** (direct push to `main` is blocked); commit only
    gate-verified batches; deploys are manual.
 
@@ -378,7 +398,7 @@ These are non-negotiable — a regression here is a security or money incident:
 | `backend/sales/` | CRM `Lead` (dual-purpose: acquisition funnel AND table reservation), plans |
 | `backend/realtime/` | Channels consumers + `broadcast.py` |
 | `frontend/src/pages/` | 62 Vue pages (incl. the mega-pages) |
-| `frontend/src/composables/useI18n.js`, `src/i18n/` | Hand-rolled i18n runtime + dual-source catalogs |
+| `frontend/src/composables/useI18n.js`, `src/i18n/` | Hand-rolled i18n runtime + per-locale catalogs (`messages-{en,fr,ar}.js`) |
 | `frontend/src/styles/UI_SYSTEM.md` | Design-system contract |
-| `infra/`, `platform/` | Coolify deploy, DNS/TLS, backups, runbooks |
+| `infra/` | Coolify deploy, DNS/TLS, backups, runbooks (the **real** deploy). `platform/` is a **dead Node scaffold** — ignore it; see `docs/README.md` |
 | `docs/` | **This canonical doc set** (architecture, ADRs, risk register) |

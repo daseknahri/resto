@@ -1,5 +1,11 @@
 # Platform Monorepo
 
+> ⚠️ **SUPERSEDED — dead scaffold, do not deploy this.** This Node monorepo
+> (`frontend:3000 / api:4000 / admin:4100`) is **not** the Kepoli app. The real, deployed app is
+> Django [`backend/`](../backend/) + Vue [`frontend/`](../frontend/) via `docker-compose.coolify.yml`.
+> For deployment use [`infra/DEPLOYMENT_RUNBOOK.md`](../infra/DEPLOYMENT_RUNBOOK.md) +
+> [`infra/`](../infra/) `COOLIFY_*.md`. Kept only as history.
+
 Production-ready Docker monorepo scaffold for a SaaS platform designed to run on Coolify as a Docker Compose application.
 
 ## Structure
