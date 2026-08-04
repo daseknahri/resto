@@ -5321,6 +5321,7 @@ kitchen: {
   allClearBody: "No active orders right now.",
   offline: "Offline",
   syncing: "Syncing…",
+  boardStale: "Board not updating - last synced {time}",
   pickup: "Pickup",
   delivery: "Delivery",
   justNow: "just now",

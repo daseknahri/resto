@@ -98,6 +98,42 @@ describe("useWaiterStore", () => {
     expect(store.error).toBeNull();
   });
 
+  // lastSyncAt drives the kitchen "board not updating" staleness alarm. It must
+  // be stamped on every SUCCESSFUL fetch (silent or not) and left UNTOUCHED on a
+  // silent poll failure, so the board's staleness age keeps growing during an
+  // outage instead of resetting to "fresh".
+  it("fetchOrders stamps lastSyncAt on a successful fetch", async () => {
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1)], count: 1 } });
+    const store = useWaiterStore();
+    expect(store.lastSyncAt).toBeNull();
+
+    await store.fetchOrders();
+
+    expect(store.lastSyncAt).not.toBeNull();
+    expect(Number.isNaN(new Date(store.lastSyncAt).getTime())).toBe(false);
+  });
+
+  it("fetchOrders does NOT update lastSyncAt when a silent poll fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-04T10:00:00.000Z"));
+
+    // First: a successful sync stamps lastSyncAt.
+    api.get.mockResolvedValueOnce({ data: { results: [], count: 0 } });
+    const store = useWaiterStore();
+    await store.fetchOrders();
+    const stamped = store.lastSyncAt;
+    expect(stamped).toBe("2026-08-04T10:00:00.000Z");
+
+    // Two minutes later a silent poll fails — lastSyncAt must stay put (had the
+    // failure path stamped it, this would read 10:02 and the assertion would fail).
+    vi.setSystemTime(new Date("2026-08-04T10:02:00.000Z"));
+    api.get.mockRejectedValueOnce(new Error("server hiccup"));
+    await store.fetchOrders({ silent: true });
+
+    expect(store.lastSyncAt).toBe(stamped); // unchanged despite 2 min passing
+    expect(store.error).toBeNull();          // silent → error still swallowed
+  });
+
   // ── advanceStatus — optimistic ─────────────────────────────────────────────
 
   it("advanceStatus immediately changes status optimistically", async () => {
