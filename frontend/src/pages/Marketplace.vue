@@ -200,7 +200,7 @@
             {{ t('marketplace.filterOpenNow') }}
           </button>
 
-          <!-- Favourites toggle -->
+          <!-- Following toggle -->
           <button
             type="button"
             :aria-pressed="showFavouritesOnly"
@@ -426,7 +426,7 @@
         </div>
       </div>
 
-      <!-- Empty: favourites filter on but none saved -->
+      <!-- Empty: following filter on but none saved -->
       <div
         v-else-if="showFavouritesOnly && !displayedRestaurants.length"
         class="ui-empty-state ui-reveal py-8 text-center space-y-2"
@@ -508,7 +508,7 @@
                 <span v-if="nextOpenLabel(r)" class="px-4 text-center text-[10px] leading-snug text-slate-400">{{ nextOpenLabel(r) }}</span>
               </div>
 
-              <!-- Favourite toggle (top-right) — pointer-events kept so click doesn't navigate -->
+              <!-- Follow toggle (top-right) — pointer-events kept so click doesn't navigate -->
               <button
                 class="ui-press absolute end-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
                 :class="isFavourite(r.slug) ? 'bg-red-500/25 text-red-400' : 'bg-slate-900/70 text-slate-500 hover:text-red-400'"
