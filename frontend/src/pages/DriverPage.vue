@@ -352,7 +352,7 @@
               <p class="ui-stat-label">{{ t('driverRides.earningsLabel') }}</p>
               <div class="text-end">
                 <p class="text-sm font-bold tabular-nums text-sky-300">{{ fmtMoney(earnings.ride_earned) }}</p>
-                <p class="text-[11px] text-slate-400">{{ t('driverRides.earningsCount', { n: earnings.rides_completed }) }}</p>
+                <p class="text-[11px] text-slate-400">{{ earnings.rides_completed === 1 ? t('driverRides.earningsCount_one', { n: earnings.rides_completed }) : t('driverRides.earningsCount_other', { n: earnings.rides_completed }) }}</p>
               </div>
             </div>
             <!-- Cash-out -->
@@ -578,7 +578,7 @@
               <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
                 <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
               </span>
-              <span v-if="job.items_count">{{ t('driver.itemsCount', { n: job.items_count }) }}</span>
+              <span v-if="job.items_count">{{ job.items_count === 1 ? t('driver.itemsCount_one', { n: job.items_count }) : t('driver.itemsCount_other', { n: job.items_count }) }}</span>
               <span v-if="job.collect_cash" class="rounded-full bg-amber-500/15 px-2.5 py-0.5 font-semibold text-amber-300">
                 {{ t('driver.cashShort', { amount: fmtMoney(job.order_total) }) }}
               </span>

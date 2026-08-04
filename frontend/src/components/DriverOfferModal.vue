@@ -75,7 +75,7 @@
           <span v-if="offer.distance_km != null" class="inline-flex items-center gap-1">
             <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: offer.distance_km }) }}
           </span>
-          <span v-if="offer.items_count">{{ t('driver.itemsCount', { n: offer.items_count }) }}</span>
+          <span v-if="offer.items_count">{{ offer.items_count === 1 ? t('driver.itemsCount_one', { n: offer.items_count }) : t('driver.itemsCount_other', { n: offer.items_count }) }}</span>
         </div>
 
         <!-- Drop-off address -->

@@ -46,7 +46,7 @@
       >
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-slate-200">{{ seatGroupLabel(seat) }}</p>
-          <p class="text-[10px] text-slate-500">{{ t('waiterPage.seatItemsCount', { n: seat.items.length }) }}</p>
+          <p class="text-[10px] text-slate-500">{{ seat.items.length === 1 ? t('waiterPage.seatItemsCount_one', { n: seat.items.length }) : t('waiterPage.seatItemsCount_other', { n: seat.items.length }) }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
           <button

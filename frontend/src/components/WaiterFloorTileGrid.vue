@@ -34,11 +34,11 @@
       <span
         v-if="tile.orders.length > 0"
         class="ms-auto me-6 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500/20 px-1 text-[9px] font-bold tabular-nums text-amber-300"
-        :title="t('waiterPage.floorOrderCount', { n: tile.orders.length })"
+        :title="tile.orders.length === 1 ? t('waiterPage.floorOrderCount_one', { n: tile.orders.length }) : t('waiterPage.floorOrderCount_other', { n: tile.orders.length })"
       >{{ tile.orders.length }}</span>
 
       <!-- Capacity badge -->
-      <span v-if="tile.tableCapacity" class="text-[10px] text-slate-400 tabular-nums">{{ t('waiterPage.floorCapacity', { n: tile.tableCapacity }) }}</span>
+      <span v-if="tile.tableCapacity" class="text-[10px] text-slate-400 tabular-nums">{{ tile.tableCapacity === 1 ? t('waiterPage.floorCapacity_one', { n: tile.tableCapacity }) : t('waiterPage.floorCapacity_other', { n: tile.tableCapacity }) }}</span>
 
       <!-- Status label -->
       <span
