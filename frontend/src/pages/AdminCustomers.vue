@@ -149,7 +149,7 @@
             </div>
             <div class="shrink-0 text-end">
               <p class="font-semibold tabular-nums text-sm" :class="parseFloat(c.wallet_balance) > 0 ? 'text-emerald-400' : 'text-slate-500'">{{ fmtMoney(c.wallet_balance) }}</p>
-              <p class="text-[10px] text-slate-500 tabular-nums">{{ c.loyalty_points }} pts</p>
+              <p class="text-[10px] text-slate-500 tabular-nums">{{ c.loyalty_points }} {{ t('adminCustomers.pointsUnit') }}</p>
             </div>
           </div>
           <p class="mt-1.5 text-[10px] text-slate-600">{{ fmtDate(c.created_at) }}</p>
@@ -278,6 +278,10 @@
                   <p class="ui-kicker">{{ t('adminCustomers.ordersTitle') }}</p>
                   <div v-if="loadingOrders" class="space-y-1.5">
                     <div v-for="i in 3" :key="i" class="ui-skeleton h-9" />
+                  </div>
+                  <div v-else-if="ordersError" class="ui-empty-state py-3 text-center space-y-2" role="alert">
+                    <p class="text-xs text-red-300">{{ ordersError }}</p>
+                    <button class="ui-btn-outline ui-press px-4 py-1.5 text-xs" @click="fetchOrders(selected.id)">{{ t('common.retry') }}</button>
                   </div>
                   <div v-else-if="!orders.length" class="ui-empty-state py-3 text-center">
                     <p class="text-xs text-slate-400">{{ t('adminCustomers.ordersEmpty') }}</p>
@@ -422,6 +426,7 @@ let creditKey = null;
 const togglingDriver = ref(false);
 const orders = ref([]);
 const loadingOrders = ref(false);
+const ordersError = ref(''); // cross-restaurant orders fetch failed (vs genuinely empty)
 const ordersScanned = ref(0);
 const ledgerStale = ref(false);
 
@@ -437,6 +442,7 @@ const orderStatusLabel = (s) => t(ORDER_STATUS_KEY[s] || 'orderStatus.statusPend
 
 const fetchOrders = async (id) => {
   orders.value = [];
+  ordersError.value = '';
   loadingOrders.value = true;
   try {
     const res = await api.get(`/admin/customers/${id}/orders/`);
@@ -444,6 +450,7 @@ const fetchOrders = async (id) => {
     ordersScanned.value = res.data?.scanned_restaurants || 0;
   } catch {
     orders.value = [];
+    ordersError.value = t('adminCustomers.ordersError');
   } finally {
     loadingOrders.value = false;
   }

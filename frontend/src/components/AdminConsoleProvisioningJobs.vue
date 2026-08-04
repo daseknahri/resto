@@ -39,7 +39,7 @@
       >
         <div class="flex items-center justify-between gap-2">
           <p class="min-w-0 truncate text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
-          <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
+          <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="statusClass(job.status)">{{ statusLabel(job.status) }}</span>
         </div>
         <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
         <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
@@ -65,7 +65,7 @@
             <td class="px-4 py-3 text-slate-200">{{ job.lead_name }}</td>
             <td class="px-4 py-3 text-slate-200">{{ job.tenant_slug || '-' }}</td>
             <td class="px-4 py-3">
-              <span class="ui-status-pill text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
+              <span class="ui-status-pill text-[10px] font-semibold" :class="statusClass(job.status)">{{ statusLabel(job.status) }}</span>
             </td>
             <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
             <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
@@ -100,6 +100,15 @@ defineProps({
 const emit = defineEmits(["toggle-expanded", "refresh"]);
 
 const { t, currentLocale } = useI18n();
+
+// Provisioning job status → i18n label (ProvisioningJob.Status). statusClass keeps the colour.
+const STATUS_LABELS = {
+  pending: "adminConsole.statusPending",
+  running: "adminConsole.statusRunning",
+  success: "adminConsole.statusSuccess",
+  failed: "adminConsole.statusFailed",
+};
+const statusLabel = (status) => t(STATUS_LABELS[status] || "adminConsole.statusPending");
 
 const statusClass = (status) => {
   if (status === "success") return "bg-emerald-600/30 text-emerald-200";
