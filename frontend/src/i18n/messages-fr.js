@@ -5328,6 +5328,7 @@ kitchen: {
   allClearBody: "Aucune commande active pour l'instant.",
   offline: "Hors ligne",
   syncing: "Synchronisation…",
+  boardStale: "Tableau non actualise - derniere synchro {time}",
   pickup: "A emporter",
   delivery: "Livraison",
   justNow: "a l'instant",

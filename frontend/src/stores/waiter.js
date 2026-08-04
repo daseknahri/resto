@@ -93,7 +93,7 @@ export const useWaiterStore = defineStore("waiter", {
     recentError: false,     // recent-orders fetch failed → show an error, not "no recent orders"
     loading: false,
     error: null,
-    lastSyncAt: null,          // ISO string of last successful full fetch
+    lastSyncAt: null,          // ISO string of last successful full fetch (silent or not); drives the kitchen "board not updating" staleness alarm — untouched on failure so its age grows during an outage
     offlineQueue: _loadQueue(), // persisted across refreshes via localStorage
     isSyncing: false,
     isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,

@@ -20,6 +20,21 @@
           role="status"
           aria-live="polite"
         >{{ t("kitchen.syncing") }}</span>
+        <!-- Board-not-updating alarm: the browser is ONLINE but the board hasn't
+             synced in a while (server hiccup / swallowed silent-poll failures).
+             Complements — never duplicates — the offline chip above, which owns
+             the browser-offline case: boardStale requires waiter.isOnline, so the
+             two are mutually exclusive. -->
+        <span
+          v-if="boardStale"
+          class="kitchen-stale-chip inline-flex items-center gap-1.5 rounded-full border border-red-500/60 bg-red-500/15 px-3 py-1 text-xs font-bold tracking-wide text-red-300"
+          role="alert"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.515 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
+          {{ t('kitchen.boardStale', { time: lastSyncedDisplay }) }}
+        </span>
       </div>
 
       <div class="flex items-center flex-wrap gap-2 sm:gap-4 min-w-0">
@@ -626,6 +641,43 @@ const onFullscreenChange = () => {
 // ── Polling ───────────────────────────────────────────────────────────────────
 let pollTimer = null;
 
+// ── Board-staleness alarm ─────────────────────────────────────────────────────
+// The kitchen polls every 10s (startKitchenPolling below). A *silent* poll
+// failure is swallowed by the store (waiter.fetchOrders sets `error` only when
+// NOT silent) and checkNewOrders only runs after a *successful* poll — so during
+// a server hiccup while the browser is still "online" the board silently freezes
+// (no beep, no flash, no warning). We surface that by watching waiter.lastSyncAt
+// (stamped on every successful fetch, left untouched on failure): once its age
+// exceeds the threshold we raise a prominent alarm.
+//
+// Threshold 45s ≈ 4.5× the 10s poll interval — comfortably past the normal
+// 0-10s sync age AND the 30s tickerNow granularity, so a single dropped poll
+// won't false-alarm, but a real ~1-minute freeze will. Reuses the shared 30s
+// `tickerNow` (the elapsed-badge ticker) so no extra timer is added.
+const STALE_THRESHOLD_MS = 45_000;
+const isPolling = ref(false);
+
+const boardStale = computed(() => {
+  if (!isPolling.value) return false;   // only while mounted + actively polling
+  if (!waiter.isOnline) return false;   // browser-offline → offline chip owns it (no double-signal)
+  if (!waiter.lastSyncAt) return false; // never synced yet → loading/error states own it
+  const last = new Date(waiter.lastSyncAt).getTime();
+  if (Number.isNaN(last)) return false;
+  return tickerNow.value - last > STALE_THRESHOLD_MS;
+});
+
+// Last successful sync as HH:MM — mirrors the top-bar clock formatter.
+const lastSyncedDisplay = computed(() => {
+  if (!waiter.lastSyncAt) return "";
+  const d = new Date(waiter.lastSyncAt);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(d);
+  } catch {
+    return d.toLocaleTimeString();
+  }
+});
+
 const playAlert = () => {
   // Two-tone WebAudio beep — uses the lazy context so autoplay policy is satisfied.
   if (kitchenSoundOn.value) {
@@ -705,11 +757,13 @@ const startKitchenPolling = () => {
     // acceptable; an explicit skip means ZERO updates and no alert beep.
     doPoll();
   }, 10_000); // 10s for kitchen — faster than regular waiter view
+  isPolling.value = true;
 };
 
 const stopKitchenPolling = () => {
   clearInterval(pollTimer);
   pollTimer = null;
+  isPolling.value = false;
 };
 
 const startClock = () => {
@@ -1148,6 +1202,19 @@ const djChipLabel = (dj) => {
   border-color: rgba(100, 116, 139, 0.8);
   color: rgb(203, 213, 225);
   background: rgba(30, 41, 59, 0.8);
+}
+
+/* Staleness alarm chip — a soft pulse to catch the eye at arm's length without
+   the obnoxiousness of a full-screen banner (this is a soft-failure signal). */
+.kitchen-stale-chip {
+  animation: kitchen-stale-pulse 2s ease-in-out infinite;
+}
+@keyframes kitchen-stale-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-stale-chip { animation: none; }
 }
 
 /* New-order flash banner */
