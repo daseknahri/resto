@@ -3268,6 +3268,7 @@ Object.assign(arabicMessages, {
     myBusinessesTitle: "\u0645\u062a\u0627\u062c\u0631\u064a",
     myBusinessesOrders: "{count} \u0637\u0644\u0628\u0627\u062a",
     myBusinessesFollowing: "\u0645\u062a\u0627\u0628\u064e\u0639",
+    serviceActiveCount: "{count} \u0646\u0634\u0637",
     followAria: "\u0645\u062a\u0627\u0628\u0639\u0629 {name}",
     unfollowAria: "\u0625\u0644\u063a\u0627\u0621 \u0645\u062a\u0627\u0628\u0639\u0629 {name}",
     resumeOrderTitle: "\u0627\u0637\u0644\u0628 \u0645\u0646 {name}",
