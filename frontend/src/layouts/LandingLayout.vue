@@ -109,13 +109,19 @@
           <AppIcon name="menu" class="h-4 w-4" aria-hidden="true" />
           <span>{{ t("landingLayout.navOrder") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="chat" class="h-4 w-4" aria-hidden="true" />
-          <span>{{ t("common.contact") }}</span>
+        <!-- Returning-customer slots: their own order history + account. Both point at
+             the customer-account page (interface:"landing", reachable on every host);
+             it shows a sign-in prompt when signed-out, so these are safe unauthenticated.
+             Orders deep-links the account "orders" tab (?tab=orders); the page reads
+             route.query.tab and LandingLayout re-keys the view by fullPath, so the tab
+             switches even when already on /account. Owners keep their own OwnerLayout nav. -->
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" :to="{ name: 'customer-account', query: { tab: 'orders' } }" :data-active="$route.path === '/account' && $route.query.tab === 'orders'" :aria-current="($route.path === '/account' && $route.query.tab === 'orders') ? 'page' : undefined" active-class="" exact-active-class="">
+          <AppIcon name="receipt" class="h-4 w-4" aria-hidden="true" />
+          <span>{{ t("customerAccount.tabOrders") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/business" :data-active="$route.path === '/business'" :aria-current="$route.path === '/business' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="settings" class="h-4 w-4" aria-hidden="true" />
-          <span>{{ t("landingLayout.navBusiness") }}</span>
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" :to="{ name: 'customer-account' }" :data-active="$route.path === '/account' && $route.query.tab !== 'orders'" :aria-current="($route.path === '/account' && $route.query.tab !== 'orders') ? 'page' : undefined" active-class="" exact-active-class="">
+          <AppIcon name="user" class="h-4 w-4" aria-hidden="true" />
+          <span>{{ t("common.myAccount") }}</span>
         </RouterLink>
       </div>
     </nav>
