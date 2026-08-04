@@ -14,10 +14,11 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ## 2026-08 — Daily-use, reliability, product-content & flow campaign
 
-**Result:** `main` @ `616f8ed`, green (frontend lint/build/vitest + backend pytest + e2e + Docker
-all pass in CI). **24 PRs merged** (#169–#192). No PR left open except 4 deferred Dependabot majors
-(#147 stripe, #148 eslint, #151 django, #154 tailwind — see `NEXT_SESSION.md`). App is
-code-complete for everything shippable without an owner decision or external prerequisite.
+**Result:** `main` @ `d231144`, green (frontend lint/build/vitest + backend pytest + e2e + Docker
+all pass in CI). **27 PRs merged** (#169–#195; #193 is this handoff-doc set). No PR left open except
+4 deferred Dependabot majors (#147 stripe, #148 eslint, #151 django, #154 tailwind — see
+`NEXT_SESSION.md`). App is code-complete for everything shippable without an owner decision or
+external prerequisite.
 
 **Context:** started from a directive to "guide the app toward a fast, easy-to-navigate, daily-use
 super-app + POS." Early finding that reset the plan: **speed was already done** (the June
@@ -117,6 +118,18 @@ agents on waiter/owner/consumer, then four more on driver/admin/kitchen/consumer
 **Cosmetic:**
 - `#192` count-string pluralization (`{n} item` vs `{n} items` at n=1) across waiter/driver/marketplace
   using the app's existing `x_one`/`x_other` convention.
+
+**Follow-ups (shipped after these handoff docs were first written):**
+- `#193` this handoff-doc set: `SESSION_LOG.md` + `NEXT_SESSION.md`, wired into `docs/README.md` and
+  `CLAUDE.md`'s "Current state".
+- `#194` onboarding activation, wave 2: a **"copy to all days"** helper on the business-hours step
+  (hours defaulted to 0/7 open, forcing per-day toggling — real activation friction) and a
+  **"Save & exit to dashboard"** affordance on the wizard, with the raw `window.confirm` leave prompt
+  replaced by the app's `useConfirmModal` (progress already persists, so leaving is safe).
+- `#195` waiter search no longer flashes a false **"No results"**: searching a dish before its
+  category has lazily loaded now gates the empty state on a synchronous search-loading flag (set
+  before the 200ms debounce) with a per-run token guarding the stale-resolve race. Hits the core
+  add-item loop; regression test `WaiterNewOrderSearchLoading.test.js` added.
 
 ### How the work was run (and what went wrong)
 

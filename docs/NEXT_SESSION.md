@@ -12,9 +12,9 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ## 1. Current state (2026-08-04)
 
-- `main` @ `616f8ed`, **green** — frontend lint/build/vitest (~963 tests) + backend pytest +
+- `main` @ `d231144`, **green** — frontend lint/build/vitest (~964 tests) + backend pytest +
   Playwright e2e + Docker builds all pass in CI. Deployable.
-- The last campaign (24 PRs, #169–#192) is fully merged and cleaned up — see
+- The last campaign (27 PRs, #169–#195) is fully merged and cleaned up — see
   [`SESSION_LOG.md`](SESSION_LOG.md). Deploy is still **manual via Coolify** (git push does NOT
   deploy).
 - **Everything shippable without an owner decision or external prerequisite is done.** What remains
@@ -94,20 +94,12 @@ messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ### B. Flagged this campaign but not shipped (need a decision or are lower value)
 
-- **Onboarding — business-hours "copy to all days"** (med, feature): hours default to 0/7 open and
-  require per-day toggling; a "copy Monday to all days" helper (and/or a sensible default schedule)
-  would cut real activation friction.
-- **Wizard — "Save & exit to dashboard" affordance** + replace the raw `window.confirm` leave prompt
-  with the app's `useConfirmModal` (med): progress already persists, so leaving should feel safe.
 - **Desktop pill-nav vs. mobile dock consistency** (low-med): #185 changed only the *mobile* dock to
   Orders+Account; the desktop pill-nav in `LandingLayout.vue` still shows Landing/Order/Contact/
   Business. Reconcile if desired.
 - **"Order" vs "Orders" dock-label adjacency** (cosmetic): slots 2 and 3 differ by one letter
   (mitigated with distinct icons). Could relabel slot 2 (marketplace) to "Discover"/"Browse" — but
   that also touches the desktop nav for consistency.
-- **Waiter search false "No results"** (W1, med): searching a dish before its category has lazily
-  loaded shows "No results" — the empty state isn't gated on a search-loading flag. Hits the core
-  add-item loop; needs a small loading-flag addition.
 - **Waiter clock-in guard consistency** (W2, product decision): the toolbar "+ New order" blocks with
   a "clock in first" toast, but the floor-tile / table-group "+ New order" bypasses it. Decide
   whether floor-tile new-order should require clock-in, then make them consistent.
