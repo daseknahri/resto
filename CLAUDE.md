@@ -46,10 +46,12 @@ No prod data locally, so you cannot preview the UI — these 4 gates are the ver
 ## Design system
 `frontend/src/styles/UI_SYSTEM.md` is the contract (primitives `ui-panel`, `ui-input`, `ui-btn-primary/outline`, `ui-table-wrap`, `ui-chip`…). QA gate: no horizontal overflow at 390px, explicit loading/empty/error states, one primary CTA per section, ≥44px touch targets, focus-visible, RTL-safe.
 
-## Current state (2026-07-07)
-App is code-complete and hardened. Active branch **`feat/daily-use-hardening`** (pushed, PR-ready) — 4 hardening waves: frontend daily-use UX/logic (51 fixes), backend money-integrity concurrency races, driver-earnings reconciliation command, authz/tenant-scoping (cross-tenant Z-report + order-status IDOR). Details in `DAILY_USE_AUDIT.md` and the commit history.
+## Current state (2026-08-04)
+`main` is green and deployable (all CI jobs pass). The 2026-08 daily-use / reliability / product-content / flow campaign shipped **24 PRs (#169–#192)** — daily-use quality across all four operator + consumer surfaces, two reliability fixes, four owner-directed product/flow decisions, and a conversion/activation pass. **Speed and navigation were already done** (the `PERF_HOSTING_AUDIT.md` backlog is implemented; the IA is mature) — do **not** re-audit them. Everything shippable without an owner decision or external prerequisite is done.
 
-**Remaining work is NOT code — it needs the owner:** ops/infra launch (DNS/TLS, prod env, email, backups, first-tenant smoke), a **Stripe PSP** account (top-up/checkout/payout seam is built but dormant), and 2–3 decisions (commission basis pre- vs post-discount, stuck-delivery refund policy, rides go-live). Also **schedule the two sweep commands** on Coolify: `sweep_delivery_jobs` (~60s) and `reconcile_driver_earnings` (~15 min).
+> **New session? Read [`docs/NEXT_SESSION.md`](docs/NEXT_SESSION.md) first** — current state, the verify/merge discipline (**CI is NOT a required check here → confirm `gh pr checks` green before merging**; the main-tree `node_modules` can't run lint/build/test — only `verify:i18n`), the delegate-and-gate campaign playbook, and the prioritized remaining backlog. [`docs/SESSION_LOG.md`](docs/SESSION_LOG.md) is the changelog of what shipped.
+
+**Remaining work needs the owner** (details in `docs/NEXT_SESSION.md`): a **Stripe PSP** account (top-up/checkout/payout seam built but dormant — the biggest conversion lever), the first **non-MAD tenant** (mixed-currency analytics aggregates), a few product decisions (commission basis, stuck-delivery refund, rides go-live, plus a handful of flagged UX items), the 4 deferred Dependabot majors, ops/infra launch (DNS/TLS, prod env, email, backups), and **scheduling the two sweep commands** on Coolify: `sweep_delivery_jobs` (~60s) and `reconcile_driver_earnings` (~15 min).
 
 ## Conventions
 - Match surrounding code style. Work on a branch off `main` (do **not** push to `main` directly — it's blocked). Commit gate-verified batches; end commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
