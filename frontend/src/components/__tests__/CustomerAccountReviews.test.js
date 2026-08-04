@@ -13,6 +13,7 @@ vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
     t: (k, p) => (p ? `${k}:${JSON.stringify(p)}` : k),
     formatPrice: (n) => `$${n}`,
+    formatCurrency: (n, c) => `${c || "MAD"} ${n}`,
     currentLocale: { value: "en" },
   }),
 }));
@@ -80,7 +81,7 @@ describe("CustomerAccountReviews", () => {
       pendingReviews: [order],
     });
     expect(w.text()).toContain("#1001");
-    expect(w.text()).toContain("$42.5");
+    expect(w.text()).toContain("MAD 42.5");
   });
 
   it("emits draft-score when a star is clicked, and hover on mouseenter/mouseleave", async () => {
