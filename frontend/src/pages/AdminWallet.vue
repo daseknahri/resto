@@ -466,11 +466,19 @@ const generateVouchers = async () => {
     voucherGenError.value = t('adminWallet.voucherAmountRequired');
     return;
   }
+  const count = Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50);
+  const okVouchers = await confirm({
+    title: t('adminWallet.voucherConfirmTitle'),
+    body: t('adminWallet.voucherConfirmBody', { count, amount: fmtBalance(amount), total: fmtBalance(count * amount) }),
+    confirmLabel: t('adminWallet.voucherConfirmCta'),
+    danger: true,
+  });
+  if (!okVouchers) return;
   voucherGenerating.value = true;
   if (!voucherKey) voucherKey = newIdempotencyKey();
   try {
     const payload = {
-      count: Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50),
+      count,
       amount: amount.toFixed(2),
       idempotency_key: voucherKey,
     };
@@ -639,6 +647,13 @@ const issueBonus = async () => {
     bonusError.value = t('adminWallet.bonusAmountRequired');
     return;
   }
+  const okBonus = await confirm({
+    title: t('adminWallet.bonusConfirmTitle'),
+    body: t('adminWallet.bonusConfirmBody', { amount: fmtBalance(amount), name: bonusTarget.value?.name || t('adminWallet.thisCustomer') }),
+    confirmLabel: t('adminWallet.bonusConfirmCta'),
+    danger: true,
+  });
+  if (!okBonus) return;
   bonusSaving.value = true;
   if (!bonusKey) bonusKey = newIdempotencyKey();
   try {
