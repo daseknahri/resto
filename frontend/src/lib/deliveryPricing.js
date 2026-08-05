@@ -33,3 +33,36 @@ export function validCoord(lat, lng) {
   if (a < -90 || a > 90 || o < -180 || o > 180) return false;
   return !(Math.abs(a) < 1e-6 && Math.abs(o) < 1e-6);
 }
+
+// Coerce a free-text / model coordinate field to a finite number, or null when blank/garbage.
+// Used by the manual lat/lng inputs so an emptied field reads as "no coordinate" (not NaN/"")
+// and never leaks an empty string into the order payload.
+export function parseCoordinateValue(value) {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : null;
+}
+
+// Best-effort extraction of {lat, lng} from a pasted map link (Google Maps @lat,lng or
+// ?q=/ll=/destination=, and OpenStreetMap #map=z/lat/lng). Returns null when no in-range
+// pair is found. This is the no-GPS fallback path shared by the tenant Cart and the
+// marketplace checkout — a customer who denies geolocation can paste a link instead.
+export function parseCoordinatesFromMapUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  let match = raw.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (!match) {
+    match = raw.match(/[?&](?:q|query|ll|destination)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i);
+  }
+  if (!match) {
+    match = raw.match(/#map=\d+\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)/i);
+  }
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
+}

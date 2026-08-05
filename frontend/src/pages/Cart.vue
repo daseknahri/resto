@@ -587,7 +587,7 @@
               </p>
               <RouterLink
                 v-if="prepayShortfall"
-                :to="{ name: 'customer-account' }"
+                :to="{ name: 'customer-account', query: { tab: 'wallet' } }"
                 class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 underline decoration-amber-300/40 underline-offset-2 hover:text-amber-200 transition-colors"
               >
                 {{ t('cartPage.topUpWallet') }}
@@ -909,7 +909,7 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import { useCurrencyStore } from '../stores/currency';
 import api from '../lib/api';
-import { ROAD_FACTOR, AVG_SPEED_KMH, haversineKm, validCoord } from '../lib/deliveryPricing';
+import { ROAD_FACTOR, AVG_SPEED_KMH, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
 import { trackEvent } from '../lib/analytics';
 import { safeExternalUrl } from '../lib/escape';
 import { addTileLayer } from '../lib/mapTiles';
@@ -1334,14 +1334,6 @@ const canPayWithCredits = computed(() =>
 );
 const walletDeduction = computed(() => Math.min(walletBalance.value, orderGrandTotal.value));
 
-const parseCoordinateValue = (value) => {
-  if (value === null || value === undefined) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const number = Number(raw);
-  return Number.isFinite(number) ? number : null;
-};
-
 const currency = computed(() => {
   const firstItemCurrency = cart.items.find((item) => item.currency)?.currency;
   return firstItemCurrency || meta.value?.plan?.currency || 'MAD';
@@ -1505,26 +1497,6 @@ const clearCart = async () => {
   cart.clear();
   unavailableSlugs.value = [];
   toast.show(t('cartPage.cartCleared'), 'info');
-};
-
-const parseCoordinatesFromMapUrl = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  let match = raw.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-  if (!match) {
-    match = raw.match(
-      /[?&](?:q|query|ll|destination)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i
-    );
-  }
-  if (!match) {
-    match = raw.match(/#map=\d+\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)/i);
-  }
-  if (!match) return null;
-  const lat = Number(match[1]);
-  const lng = Number(match[2]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-  return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
 };
 
 const setLocationCoordinates = (lat, lng) => {

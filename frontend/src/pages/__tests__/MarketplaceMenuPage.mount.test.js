@@ -42,7 +42,19 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+import api from "../../lib/api";
 import MarketplaceMenuPage from "../MarketplaceMenuPage.vue";
+
+const mountPage = () =>
+  shallowMount(MarketplaceMenuPage, {
+    global: {
+      stubs: {
+        RouterLink: { template: "<a><slot /></a>" },
+        Transition: { template: "<slot />" },
+        Teleport: { template: "<slot />" },
+      },
+    },
+  });
 
 describe("MarketplaceMenuPage — mount smoke", () => {
   beforeEach(() => {
@@ -55,18 +67,42 @@ describe("MarketplaceMenuPage — mount smoke", () => {
     // The TDZ bug threw synchronously inside setup(), so mount() itself would
     // throw. This assertion is the guard.
     expect(() => {
-      wrapper = shallowMount(MarketplaceMenuPage, {
-        global: {
-          stubs: {
-            RouterLink: { template: "<a><slot /></a>" },
-            Transition: { template: "<slot />" },
-            Teleport: { template: "<slot />" },
-          },
-        },
-      });
+      wrapper = mountPage();
     }).not.toThrow();
 
     await flushPromises();
     expect(wrapper.exists()).toBe(true);
+  });
+});
+
+describe("MarketplaceMenuPage — guest pickup payment payload", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  // Regression guard: a guest (unauthenticated) has no wallet to draw on, so the
+  // marketplace order must NOT send use_wallet for a guest pickup order. Before the fix
+  // the `else` branch set use_wallet=true unconditionally.
+  it("does not send use_wallet for an unauthenticated guest pickup order", async () => {
+    api.post.mockResolvedValueOnce({ data: { order_number: "A123" } });
+    const wrapper = mountPage();
+    await flushPromises();
+
+    // Guest (no customer in the store) placing a pickup order.
+    wrapper.vm.form.fulfillment_type = "pickup";
+    wrapper.vm.form.customer_name = "Sara";
+    wrapper.vm.form.customer_phone = "0612345678";
+    wrapper.vm.cart.push({ slug: "burger", qty: 1 });
+    await flushPromises();
+
+    await wrapper.vm.placeOrder();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith("/marketplace/order/", expect.any(Object));
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.use_wallet).toBeUndefined();
+    expect(payload.payment_method).toBeUndefined();
+    expect(payload.fulfillment_type).toBe("pickup");
   });
 });

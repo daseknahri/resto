@@ -38,7 +38,10 @@
         rows="2"
         :placeholder="t('mktMenu.deliveryAddressPlaceholder')"
         class="ui-textarea resize-none"
+        :aria-invalid="addressError ? 'true' : undefined"
+        aria-describedby="mkt-address-error"
       />
+      <p v-if="addressError" id="mkt-address-error" role="alert" class="mt-1 text-xs text-red-300">{{ addressError }}</p>
     </div>
     <!-- Save address checkbox (authenticated customers only) -->
     <div v-if="isAuthenticated && deliveryAddress" class="space-y-1.5">
@@ -80,6 +83,74 @@
       <AppIcon name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
       {{ t('mktMenu.deliveryNeedsLocation') }}
     </p>
+
+    <!-- No-GPS fallback (parity with the tenant Cart): when the fee is priced per-km, a
+         customer who denies geolocation / is on desktop / times out can still set a
+         delivery point by pasting a map link or typing coordinates. Without this the
+         order dead-ends — Place Order stays permanently disabled (needsLocation). The
+         section auto-reveals when a locate attempt just failed. -->
+    <div v-if="perKm > 0" class="space-y-2 pt-1">
+      <button
+        type="button"
+        class="ui-press inline-flex items-center gap-1 rounded text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+        :aria-expanded="manualOpen"
+        @click="showManual = !showManual"
+      >
+        <span aria-hidden="true" class="text-[10px]">{{ manualOpen ? '▾' : '▸' }}</span>
+        {{ t('mktMenu.locationManualToggle') }}
+      </button>
+      <div v-show="manualOpen" class="space-y-2">
+        <p class="text-[11px] text-slate-500">{{ t('mktMenu.locationManualHint') }}</p>
+        <!-- Paste a map link -->
+        <div>
+          <label for="mkt-map-link" class="mb-1 block text-[11px] text-slate-400">{{ t('mktMenu.mapLinkLabel') }}</label>
+          <div class="flex gap-1.5">
+            <input
+              id="mkt-map-link"
+              v-model.trim="mapLink"
+              type="text"
+              inputmode="url"
+              maxlength="500"
+              placeholder="https://maps.google.com/..."
+              class="ui-input min-w-0 flex-1"
+              :aria-label="t('mktMenu.mapLinkLabel')"
+            />
+            <button
+              type="button"
+              class="ui-press shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+              @click="emit('pasteMapLink')"
+            >{{ t('cartPage.pasteLink') }}</button>
+          </div>
+        </div>
+        <!-- Manual latitude / longitude -->
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block space-y-1">
+            <span class="text-[11px] text-slate-400">{{ t('cartPage.latitudeOptional') }}</span>
+            <input
+              v-model.number="deliveryLat"
+              type="number"
+              step="any"
+              inputmode="decimal"
+              placeholder="33.5731"
+              class="ui-input"
+              :aria-label="t('cartPage.latitudeOptional')"
+            />
+          </label>
+          <label class="block space-y-1">
+            <span class="text-[11px] text-slate-400">{{ t('cartPage.longitudeOptional') }}</span>
+            <input
+              v-model.number="deliveryLng"
+              type="number"
+              step="any"
+              inputmode="decimal"
+              placeholder="-7.5898"
+              class="ui-input"
+              :aria-label="t('cartPage.longitudeOptional')"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -97,6 +168,7 @@
 // perKm). The three editable fields (delivery_address / saveAddressAfterOrder /
 // saveAddressLabel) are two-way models bound to the parent's refs; apply/delete/
 // locate are emits. Markup + the v-model.trim on the label are verbatim.
+import { ref, computed } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import AppIcon from './AppIcon.vue';
 
@@ -108,8 +180,14 @@ const deliveryAddress = defineModel('deliveryAddress', { type: String, default: 
 const saveAddress = defineModel('saveAddress', { type: Boolean, default: false });
 /** Optional label for the saved address (saveAddressLabel), two-way. */
 const saveAddressLabel = defineModel('saveAddressLabel', { type: String, default: '' });
+/** Manual latitude (form.delivery_lat), two-way — the no-GPS fallback. */
+const deliveryLat = defineModel('deliveryLat', { type: [Number, String], default: null });
+/** Manual longitude (form.delivery_lng), two-way — the no-GPS fallback. */
+const deliveryLng = defineModel('deliveryLng', { type: [Number, String], default: null });
+/** Pasted / typed map link the parent parses into coordinates, two-way. */
+const mapLink = defineModel('mapLink', { type: String, default: '' });
 
-defineProps({
+const props = defineProps({
   /** Whether a customer is signed in (customerStore.isAuthenticated). */
   isAuthenticated: { type: Boolean, default: false },
   /** The customer's saved delivery addresses (mktSavedAddresses). */
@@ -132,9 +210,16 @@ defineProps({
   distanceKm: { type: [Number, String], default: 0 },
   /** Per-km delivery rate (deliveryPricing.perKm) — gates the needs-location hint. */
   perKm: { type: Number, default: 0 },
+  /** Inline validation error for the address field (fieldErrors.delivery_address). */
+  addressError: { type: String, default: '' },
   /** Price formatter (fmtPrice). */
   fmtPrice: { type: Function, required: true },
 });
 
-const emit = defineEmits(['applyAddress', 'deleteAddress', 'locate']);
+// Presentation-only disclosure state for the no-GPS fallback. Auto-opens when the
+// parent reports a locate failure so a denied-GPS user immediately sees the way out.
+const showManual = ref(false);
+const manualOpen = computed(() => showManual.value || !!props.locateError);
+
+const emit = defineEmits(['applyAddress', 'deleteAddress', 'locate', 'pasteMapLink']);
 </script>
