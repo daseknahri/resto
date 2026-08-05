@@ -89,7 +89,8 @@
               {{ t('closureDates.today') }}
             </span>
             <button
-              class="ui-btn-outline ui-press ui-touch-target p-2 shrink-0 hover:border-red-500/50 hover:text-red-400"
+              class="ui-btn-outline ui-press ui-touch-target p-2 shrink-0 hover:border-red-500/50 hover:text-red-400 disabled:opacity-60"
+              :disabled="deletingId === closure.id"
               :aria-label="`${t('common.remove')} ${formatDate(closure.date)}`"
               @click="removeDate(closure.id)"
             >
@@ -178,13 +179,18 @@ const addDate = async () => {
   }
 }
 
+const deletingId = ref(null)
 const removeDate = async (id) => {
+  if (deletingId.value === id) return // in-flight guard: a double-tap must not fire two DELETEs (the 2nd 404s → spurious toast)
+  deletingId.value = id
   try {
     await api.delete(`/owner/closure-dates/${id}/`)
     dates.value = dates.value.filter((d) => d.id !== id)
     toast.show(t('closureDates.removed'), 'success')
   } catch {
     toast.show(t('closureDates.removeFailed'), 'error')
+  } finally {
+    deletingId.value = null
   }
 }
 
