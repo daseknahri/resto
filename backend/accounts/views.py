@@ -8557,9 +8557,9 @@ class CustomerTopUpWebhookView(APIView):
     deduplicates on ``idempotency_key="stripe:<event_id>"``.
 
     Stripe-Signature verification is enforced when PSP_STRIPE_WEBHOOK_SECRET is set
-    (required in production). Without a secret the handler still runs (useful in
-    staging/dev where the signing secret is unknown), but any malicious caller
-    could fabricate top-ups — always set the secret in production.
+    (required in production). Without a secret the handler accepts unsigned JSON ONLY
+    when DEBUG is on (local testing); outside DEBUG a missing secret fails closed (503),
+    so a forged event can never mint credit. Always set the secret before enabling PSP.
     """
 
     permission_classes = [AllowAny]
@@ -8573,6 +8573,21 @@ class CustomerTopUpWebhookView(APIView):
         sig = request.META.get("HTTP_STRIPE_SIGNATURE", "")
         webhook_secret = settings.PSP_STRIPE_WEBHOOK_SECRET
 
+        # Fail CLOSED: with PSP enabled, a missing signing secret means we cannot verify the
+        # caller. Outside DEBUG (i.e. production/staging) we refuse rather than trust unsigned
+        # input — otherwise anyone could POST a forged checkout.session.completed and mint
+        # arbitrary wallet credit. The unsigned-JSON path below is a DEBUG-only local-testing
+        # convenience. Checked BEFORE importing stripe so the guard holds even where the SDK
+        # isn't installed.
+        if not webhook_secret and not settings.DEBUG:
+            logger.error(
+                "Stripe webhook rejected: PSP_TOPUP_ENABLED but PSP_STRIPE_WEBHOOK_SECRET is unset"
+            )
+            return Response(
+                {"ok": False, "detail": "Webhook signing secret not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         try:
             import stripe as _stripe
             _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
@@ -8585,6 +8600,8 @@ class CustomerTopUpWebhookView(APIView):
             except (_stripe.error.SignatureVerificationError, ValueError):
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
         else:
+            # DEBUG-only local-testing path: no signing secret configured, so accept raw JSON.
+            # Unreachable outside DEBUG — the fail-closed guard above returns first.
             import json as _json
             try:
                 event = _json.loads(payload)
