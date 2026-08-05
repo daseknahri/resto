@@ -12,14 +12,16 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ## 1. Current state (2026-08-04)
 
-- `main` @ `d231144`, **green** — frontend lint/build/vitest (~964 tests) + backend pytest +
+- `main` @ `fcdf75b`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest +
   Playwright e2e + Docker builds all pass in CI. Deployable.
-- The last campaign (27 PRs, #169–#195) is fully merged and cleaned up — see
-  [`SESSION_LOG.md`](SESSION_LOG.md). Deploy is still **manual via Coolify** (git push does NOT
-  deploy).
-- **Everything shippable without an owner decision or external prerequisite is done.** What remains
-  (§4) is gated on the owner: a payment provider, the first non-MAD tenant, a few product decisions,
-  and the deferred dependency majors.
+- Recent campaigns are fully merged + cleaned up (#169–#204; the 2026-08-05 super-app hardening +
+  calibration campaign is #199–#204) — see [`SESSION_LOG.md`](SESSION_LOG.md). Deploy is still
+  **manual via Coolify** (git push does NOT deploy).
+- **The quick-win [CODE] backlog is drained.** Two audit campaigns (daily-use, then money/coherence/
+  robustness + a calibration pass that confirmed the app is otherwise production-grade) fixed the real
+  bugs. What remains (§4) is **owner-gated or structural**: a payment provider, the first non-MAD
+  tenant, a few product decisions, the deferred dependency majors, and the big structural phases (POS
+  offline reliability, unifying the two consumer front-ends, a dedicated driver surface).
 
 ## 2. Don't re-audit these — they're done
 
