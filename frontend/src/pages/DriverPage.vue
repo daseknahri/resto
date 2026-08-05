@@ -176,11 +176,13 @@
         <p class="ui-subtle">{{ t('driver.pendingBody') }}</p>
       </div>
       <button
-        class="ui-btn-outline ui-press px-5 py-2 text-sm"
-        :disabled="busy"
-        @click="fetchStatus"
+        class="ui-btn-outline ui-press ui-touch-target inline-flex items-center justify-center gap-2 px-5 py-2 text-sm"
+        :disabled="busy || refreshingStatus"
+        :aria-busy="refreshingStatus"
+        @click="refreshStatus"
       >
-        {{ t('driver.pendingRefresh') }}
+        <svg v-if="refreshingStatus" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+        {{ refreshingStatus ? t('common.loading') : t('driver.pendingRefresh') }}
       </button>
     </div>
 
@@ -1669,6 +1671,20 @@ const fetchStatus = async () => {
   }
 };
 
+// Dedicated busy flag for the manual "Refresh" affordance on the pending-approval
+// screen — fetchStatus itself stays side-effect-free (it also runs on mount and
+// after terminal transitions), so wrapping the shared `busy` in it would be wrong.
+const refreshingStatus = ref(false);
+const refreshStatus = async () => {
+  if (refreshingStatus.value) return;
+  refreshingStatus.value = true;
+  try {
+    await fetchStatus();
+  } finally {
+    refreshingStatus.value = false;
+  }
+};
+
 // D-9: background poll failures were silently swallowed — surface a subtle
 // "connection lost / retrying" indicator after a few consecutive misses, instead
 // of leaving an extended outage invisible. Clears as soon as a poll succeeds again.
@@ -2180,6 +2196,33 @@ const onVisibilityChange = () => {
 // Keep the wake-lock in step with the active-work state.
 watch([activeJob, activeRide, online], syncWakeLock);
 
+// ── Approved-driver dashboard bootstrap ───────────────────────────────────────
+// Loads jobs/earnings/cash-out (+ rides), starts geo + push, and kicks off polling.
+// Runs once on mount AND again if a driver is approved mid-session — they tap
+// "Refresh" on the pending screen, `approved` flips false→true and the dashboard
+// renders, but without this it would sit inert (no data, no polling) until a manual
+// reload. Guarded so the two entry points can't double-start geo/polling.
+let dashboardBootstrapped = false;
+const bootstrapDriverDashboard = async () => {
+  if (!isDriver.value || !approved.value || dashboardBootstrapped) return;
+  dashboardBootstrapped = true;
+  await fetchJobs();
+  fetchEarnings();
+  fetchCashout();
+  if (driverVehicleType.value === 'car') fetchRides();
+  if (online.value) {
+    startGeo(); // idempotent — no-op if the geo watch is already running
+    driverPush.autoRestore().catch(() => {}); // re-arm push if previously opted in
+  }
+  ensurePoll(); // idempotent — never double-starts the poll timer
+};
+
+// Mid-session approval (false→true) bootstraps the dashboard the same as a fresh
+// mount; the guard above keeps it from running twice.
+watch(approved, (isApproved, wasApproved) => {
+  if (isApproved && !wasApproved && isDriver.value) bootstrapDriverDashboard();
+});
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
@@ -2208,17 +2251,7 @@ onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await fetchStatus();
-  if (isDriver.value && approved.value) {
-    await fetchJobs();
-    fetchEarnings();
-    fetchCashout();
-    if (driverVehicleType.value === 'car') fetchRides();
-    if (online.value) {
-      startGeo();
-      driverPush.autoRestore().catch(() => {}); // re-arm push if previously opted in
-    }
-    ensurePoll();
-  }
+  await bootstrapDriverDashboard();
 });
 
 onBeforeUnmount(() => {
