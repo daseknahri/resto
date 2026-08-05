@@ -12,6 +12,61 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-05 — Super-app hardening campaign (money correctness + coherence + robustness)
+
+**Result:** `main` @ `fcdf75b`, green (all CI jobs pass). **6 PRs** (#199–#204). Triggered by an
+uncommitted fix found while reviewing a stale worktree, then driven by **4 parallel read-only audits**
+(money-correctness, cross-side coherence, consumer-conversion, operator-money) — plus a follow-on
+**calibration pass** (driver flow, onboarding→first-order, retention, cross-cutting resilience) that
+confirmed the app is otherwise production-grade but surfaced a tail of 8 real flow/resilience bugs. Each
+audit → a prioritized [CODE] backlog → gate-verified themed PRs (delegate-and-gate: worktree agents
+implement + run the full frontend gate, the main loop reviews every money/checkout diff and merges only
+on confirmed CI green).
+
+**What shipped:**
+- `#199` **money — refund tenant-scoping.** `MarketplaceOrderCancelView` refunded without `tenant_id`,
+  so marketplace-cancel refunds landed as `tenant_id=None` and dropped out of the tenant's refund
+  reports (Z-report filters on `tenant_id`). Recovered from a stale worktree, verified still-live on
+  main, shipped with a mock regression test. The money audit then confirmed this was the ONLY instance
+  of that cross-plane class (~30 money call sites enumerated).
+- `#200` **money — Stripe webhook fail-closed.** The dormant PSP top-up webhook parsed RAW UNSIGNED
+  JSON and credited the wallet when `PSP_STRIPE_WEBHOOK_SECRET` was empty — enabling PSP in prod
+  without the secret would let a forged event mint unlimited credit. Now fails closed (503) outside
+  DEBUG; the unsigned path is DEBUG-only. Reconciled `ARCHITECTURE.md` §7 (MONEY-2/3 already fixed).
+- `#201` **money-UX — confirm amount/identity echo.** Operator money confirms now say *how much* and
+  *which tenant*: the HIGH fix — tenant Suspend/Cancel prompt names the tenant (a mis-tap on the dense
+  grid used to terminate a restaurant with a generic prompt); refund/no-show/voucher confirms echo the
+  amount; bonus/top-up/credit gained an amount+identity confirm (mirroring `fundFloat`).
+- `#202` **coherence — reconciling receipts + fulfillment-aware status.** Customer receipts derived
+  "Subtotal" as `total − delivery_fee` and omitted the tip, so a tipped order never reconciled; now the
+  subtotal inverts the backend total identity and the rendered rows (Subtotal + Delivery + Tip − Promo −
+  Loyalty) sum to total *exactly* (locked by an algebraic-identity test). "Ready" is now fulfillment-aware
+  (delivery → "Ready to dispatch", dine-in → "Served") across trackers/pill/global-bar/account-timeline.
+  Additive backend fields (`tip_amount`, `promotion_discount`) added to the customer order-status payloads.
+- `#203` **marketplace — checkout robustness.** GPS-denied delivery was a hard dead-end (no way to set
+  coords without geolocation); now a paste-map-link + manual-coordinate fallback (parity with the tenant
+  Cart), gated on `validCoord` (which also fixes a latent null-island `(0,0)` bug). Plus per-field
+  validation with scroll-to-field, 404-vs-transient on the tracker, localized loyalty/schedule errors,
+  a guest `use_wallet` gate, and a load-more toast. Shared coord-parse helpers extracted to
+  `lib/deliveryPricing.js`.
+- `#204` **flow + resilience — 8 bugs from the calibration pass.** *Onboarding:* the post-publish
+  "Edit Menu" CTA dead-ended (it linked to the wizard, which redirects already-published tenants to the
+  dashboard) → repointed to the menu builder; the **Publish** button rendered a blank noun
+  (`catalog.value` is `undefined` in a `<script setup>` template) → dropped `.value`. *Flow:* a driver
+  approved **mid-session** got an inert dashboard (bootstrap ran only in `onMounted`) → extracted into a
+  guarded fn + `watch(approved)`. *Resilience:* a non-404 first-load failure on the post-checkout
+  `OrderStatus` page left a **permanently blank screen** → added a retryable error card (same for
+  `RecipientTrackPage`); sign-out and closure-date delete gained double-submit guards.
+
+**Queued for the owner** (surfaced by the audits; each needs a decision, not code):
+- No-show driver payout confirm echoes `o.delivery_fee` — confirm the backend pays exactly that.
+- Two commission reports use different status filters (both exclude CANCELLED, so no refund over-billing)
+  — confirm the intended PENDING/SCHEDULED/OUT_FOR_DELIVERY treatment.
+- Marketplace checkout doesn't collect tips today (the receipt tip line is future-proof/dormant).
+- Pre-PSP-launch: set `PSP_STRIPE_WEBHOOK_SECRET` — the webhook now refuses to run without it in prod.
+
+---
+
 ## 2026-08-05 — Documentation onboarding-completeness pass
 
 **Result:** `main` @ `9d16935`, green. A docs-only campaign to make the doc set complete + accurate
