@@ -222,7 +222,7 @@
                     class="relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500"
                     :class="stepClass(step.key)"
                     :aria-current="isCurrentStep(step.key) ? 'step' : undefined"
-                    :aria-label="t(`mktOrderStatus.${step.key}`) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
+                    :aria-label="stepLabel(step.key) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
                   >
                     <span v-if="isStepDone(step.key)" aria-hidden="true">✓</span>
                     <span v-else-if="isCurrentStep(step.key)" aria-hidden="true">
@@ -235,7 +235,7 @@
                   class="text-center text-[10px] leading-tight transition-colors duration-300"
                   :class="isCurrentStep(step.key) ? 'font-semibold text-[var(--color-secondary)]' : isStepDone(step.key) ? 'text-emerald-500/70' : 'text-slate-500'"
                 >
-                  {{ t(`mktOrderStatus.${step.key}`) }}
+                  {{ stepLabel(step.key) }}
                 </span>
                 <!-- Connector line — sits inside the listitem, bridging to the next step -->
                 <div
@@ -390,11 +390,20 @@
             </li>
           </ul>
 
-          <!-- Totals -->
+          <!-- Totals — reconciles to the total:
+               subtotal + delivery fee + tip − promo − loyalty = total. -->
           <div class="space-y-1 border-t border-slate-800/80 pt-2 text-sm">
+            <div class="flex justify-between text-slate-500">
+              <span>{{ t('mktOrderStatus.subtotal') }}</span>
+              <span class="tabular-nums">{{ formatCurrency(mktSubtotal, order.currency) }}</span>
+            </div>
             <div v-if="Number(order.delivery_fee) > 0" class="flex justify-between text-slate-500">
               <span>{{ t('mktOrderStatus.deliveryFee') }}</span>
               <span class="tabular-nums">{{ formatCurrency(order.delivery_fee, order.currency) }}</span>
+            </div>
+            <div v-if="Number(order.tip_amount) > 0" class="flex justify-between text-slate-500">
+              <span>{{ t('mktOrderStatus.tip') }}</span>
+              <span class="tabular-nums">{{ formatCurrency(order.tip_amount, order.currency) }}</span>
             </div>
             <div v-if="Number(order.promotion_discount) > 0" class="flex justify-between text-amber-300">
               <span>{{ order.applied_promotion_name || t('mktOrderStatus.promoDiscount') }}</span>
@@ -404,13 +413,14 @@
               <span>{{ t('mktOrderStatus.loyaltyDiscount') }}</span>
               <span class="tabular-nums">−{{ formatCurrency(order.loyalty_discount, order.currency) }}</span>
             </div>
-            <div v-if="Number(order.wallet_amount_paid) > 0" class="flex justify-between text-emerald-400/80">
-              <span>{{ t('mktOrderStatus.walletPaid') }}</span>
-              <span class="tabular-nums">−{{ formatCurrency(order.wallet_amount_paid, order.currency) }}</span>
-            </div>
             <div class="flex justify-between font-bold text-white">
               <span>{{ t('mktOrderStatus.total') }}</span>
               <span class="tabular-nums">{{ formatCurrency(order.total, order.currency) }}</span>
+            </div>
+            <!-- Wallet payment — applied toward the total, shown after it (not a line in the breakdown) -->
+            <div v-if="Number(order.wallet_amount_paid) > 0" class="flex justify-between text-emerald-400/80">
+              <span>{{ t('mktOrderStatus.walletPaid') }}</span>
+              <span class="tabular-nums">−{{ formatCurrency(order.wallet_amount_paid, order.currency) }}</span>
             </div>
             <!-- Points earned celebration — visible on completed orders with loyalty earn -->
             <div
@@ -691,6 +701,27 @@ const statusSteps = computed(() => {
   if (order.value?.fulfillment_type === 'delivery') steps.push({ key: 'out_for_delivery' });
   steps.push({ key: 'completed' });
   return steps;
+});
+
+// Stepper node label. A delivery order's "ready" node means the food is packed
+// and waiting for a driver — "Ready to dispatch" — not "Ready for pickup".
+const stepLabel = (key) =>
+  key === 'ready' && order.value?.fulfillment_type === 'delivery'
+    ? t('mktOrderStatus.readyDispatch')
+    : t(`mktOrderStatus.${key}`);
+
+// True food subtotal, derived by inverting the backend total identity
+// (total = food_subtotal + delivery_fee − promo − loyalty + tip) so the receipt
+// breakdown reconciles to the total exactly.
+const mktSubtotal = computed(() => {
+  const o = order.value || {};
+  return (
+    (Number(o.total) || 0)
+    - (Number(o.delivery_fee) || 0)
+    - (Number(o.tip_amount) || 0)
+    + (Number(o.promotion_discount) || 0)
+    + (Number(o.loyalty_discount) || 0)
+  );
 });
 
 const currentStatusIdx = computed(() => {

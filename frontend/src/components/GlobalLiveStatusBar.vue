@@ -105,13 +105,13 @@ onUnmounted(() => {
 });
 
 // ── status translation helpers ────────────────────────────────────────────
+// Use the canonical orderStatus.* labels the trackers/account use so the same order
+// never reads one thing here and another there. "ready" is resolved per fulfillment
+// type in _orderStatus below (delivery ≠ pickup ≠ dine-in).
 const ORDER_STATUS_LABEL = {
-  pending:          "globalLiveStatusBar.statusPending",
-  confirmed:        "globalLiveStatusBar.statusConfirmed",
-  preparing:        "globalLiveStatusBar.statusPreparing",
-  // Use the canonical orderStatus.* labels the trackers/account use so the same order
-  // never reads "Ready"/"On the way" here but "Ready for pickup"/"Out for delivery" there.
-  ready:            "orderStatus.statusReady",
+  pending:          "orderStatus.statusPending",
+  confirmed:        "orderStatus.statusConfirmed",
+  preparing:        "orderStatus.statusPreparing",
   out_for_delivery: "orderStatus.stepOutForDelivery",
 };
 const RIDE_STATUS_LABEL = {
@@ -128,7 +128,17 @@ const PKG_STATUS_LABEL = {
   in_progress: "globalLiveStatusBar.statusPackageInProgress",
 };
 
-const _orderStatus  = (s) => t(ORDER_STATUS_LABEL[s] || "globalLiveStatusBar.statusPending");
+// "ready" is fulfillment-specific: a delivery order is waiting to be dispatched and
+// a dine-in bill has been served — neither reads "Ready for pickup".
+const _orderStatus = (order) => {
+  const s = order?.status;
+  if (s === "ready") {
+    if (order?.fulfillment_type === "delivery") return t("orderStatus.stepReadyDispatch");
+    if (order?.fulfillment_type === "table") return t("orderStatus.stepServed");
+    return t("orderStatus.statusReady");
+  }
+  return t(ORDER_STATUS_LABEL[s] || "globalLiveStatusBar.statusPending");
+};
 const _rideStatus   = (s) => t(RIDE_STATUS_LABEL[s]  || "globalLiveStatusBar.statusInProgress");
 const _pkgStatus    = (s) => t(PKG_STATUS_LABEL[s]   || "globalLiveStatusBar.statusInProgress");
 
@@ -148,7 +158,7 @@ const primaryCard = computed(() => {
       label: o.restaurant_name
         ? t("globalLiveStatusBar.orderFromName", { name: o.restaurant_name })
         : t("globalLiveStatusBar.orderLabel"),
-      statusText: _orderStatus(o.status),
+      statusText: _orderStatus(o),
       to: o.restaurant_slug
         ? { name: "marketplace-order-status", params: { slug: o.restaurant_slug, orderNumber: o.order_number } }
         : { name: "order-status", params: { orderNumber: o.order_number } },

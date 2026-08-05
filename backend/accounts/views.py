@@ -5373,6 +5373,11 @@ class MarketplaceOrderStatusView(APIView):
             "fulfillment_type": order.fulfillment_type,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
+            # Tip is folded into `total` (total = food_subtotal + delivery_fee
+            # - promo - loyalty + tip); expose it so the marketplace receipt can
+            # show a breakdown that reconciles to the total. (Marketplace checkout
+            # does not collect tips today, so this is 0 in practice / future-proof.)
+            "tip_amount": str(order.tip_amount),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "loyalty_discount": str(order.loyalty_discount),
             "redeemed_loyalty_points": order.redeemed_loyalty_points,

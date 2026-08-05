@@ -204,20 +204,16 @@
                 style="scrollbar-width:none"
               >
                 <template
-                  v-for="(step, si) in (order.fulfillment_type === 'delivery'
-                    ? ['pending','confirmed','preparing','out_for_delivery','completed']
-                    : ['pending','confirmed','preparing','ready','completed'])"
+                  v-for="(step, si) in miniSteps(order)"
                   :key="step"
                 >
                   <span
                     class="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap transition-colors"
-                    :class="(order.fulfillment_type === 'delivery'
-                      ? ['pending','confirmed','preparing','out_for_delivery','completed']
-                      : ['pending','confirmed','preparing','ready','completed']).indexOf(order.status) >= si
+                    :class="miniSteps(order).indexOf(order.status) >= si
                       ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
                       : 'bg-slate-800/60 text-slate-600'"
-                  >{{ mktOrderStatus(step) }}</span>
-                  <span v-if="si < 4" class="h-px w-2 shrink-0 bg-slate-700/60" aria-hidden="true" />
+                  >{{ miniStepLabel(order, step) }}</span>
+                  <span v-if="si < miniSteps(order).length - 1" class="h-px w-2 shrink-0 bg-slate-700/60" aria-hidden="true" />
                 </template>
               </div>
               <div class="flex flex-wrap items-center gap-2 text-slate-500">
@@ -450,6 +446,26 @@ const STATUS_I18N = {
 };
 const statusLabel = (s) => (s ? t(STATUS_I18N[s] || 'orderStatus.statusPending') : '');
 const mktOrderStatus = (s) => t(STATUS_I18N[s] || 'orderStatus.statusPending');
+
+// Compact per-order progress rail. Mirrors the tracker/stepper flow so the same
+// order reads consistently here and on its status page: a delivery order keeps a
+// "ready" node (packed, awaiting dispatch) between preparing and out_for_delivery,
+// so a delivery order sitting at "ready" lights up its progress instead of showing
+// nothing; pickup/dine-in have no delivery leg and end at "ready".
+const DELIVERY_MINI_STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
+const DEFAULT_MINI_STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
+const miniSteps = (order) =>
+  order.fulfillment_type === 'delivery' ? DELIVERY_MINI_STEPS : DEFAULT_MINI_STEPS;
+
+// Fulfillment-aware label for a rail node. "Ready" reads differently per type:
+// delivery → "Ready to dispatch", dine-in → "Served", pickup → "Ready for pickup".
+const miniStepLabel = (order, step) => {
+  if (step === 'ready') {
+    if (order.fulfillment_type === 'delivery') return t('orderStatus.stepReadyDispatch');
+    if (order.fulfillment_type === 'table') return t('orderStatus.stepServed');
+  }
+  return mktOrderStatus(step);
+};
 
 const formatDate = (iso) => {
   if (!iso) return '';

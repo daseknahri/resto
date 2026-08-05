@@ -1855,7 +1855,7 @@ const fulfillmentLabel = (o) => {
   return "";
 };
 
-const formatCurrency = (amount, currency = "USD") => {
+const formatCurrency = (amount, currency = "MAD") => {
   try {
     return formatNumber(Number(amount) || 0, { style: "currency", currency });
   } catch {
