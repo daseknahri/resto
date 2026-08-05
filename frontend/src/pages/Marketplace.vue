@@ -640,6 +640,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
+import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
 import { SERVICES } from '../lib/services';
@@ -712,6 +713,7 @@ const validateActiveOrder = async () => {
 };
 
 const { t, currentLocale: locale } = useI18n();
+const toast = useToastStore();
 
 // ── Business-type category tabs ───────────────────────────────────────────────
 const BUSINESS_TYPE_TABS = computed(() => [
@@ -1064,7 +1066,9 @@ const loadMoreRestaurants = async () => {
     if (incomingFilters.cuisines?.length) filters.value.cuisines = incomingFilters.cuisines;
     if (incomingFilters.tags?.length) filters.value.tags = incomingFilters.tags;
   } catch {
-    // Non-fatal: keep existing results, button remains visible so user can retry
+    // Non-fatal: keep existing results, button remains visible so user can retry.
+    // Surface a toast so a flaky-connection tap isn't a silent no-op.
+    toast.show(t('marketplace.loadMoreFailed'), 'error');
   } finally {
     loadingMore.value = false;
   }
