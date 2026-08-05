@@ -251,10 +251,13 @@ crash mid-move produced silent, permanent drift. This is now covered by
 `accounts/management/commands/reconcile_wallet_balances.py` (RISK **MONEY-1**, addressed): it
 asserts `balance == the latest ledger row's balance_after` (a sign-agnostic anchor) for both the
 customer wallet and the tenant float, runs detect-only on Beat every 6h alerting on the
-`payments` channel, and offers a lock-safe `--fix` for triage. Two smaller gaps remain: the driver-payout
-"owed" check reads an *unlocked* aggregate (double-pay race), and the dormant Stripe webhook
-would credit session metadata instead of the settled `amount_total` — fix both before the PSP
-goes live (RISK **MONEY-2/3**).
+`payments` channel, and offers a lock-safe `--fix` for triage. Two smaller gaps the review flagged
+here have **since been closed** in code (verified 2026-08-05): the driver-payout "owed" check now
+reads the balance **under a `select_for_update` lock** and re-checks idempotency (MONEY-2), and the
+Stripe webhook credits the settled `amount_total` (not client-echoed metadata) and only for a
+cleared session (MONEY-3). The dormant Stripe webhook additionally now **fails closed** (503) when
+`PSP_TOPUP_ENABLED` is set without `PSP_STRIPE_WEBHOOK_SECRET`, so a forged event can never mint
+credit — the unsigned path is DEBUG-only. **Still set the signing secret before enabling PSP.**
 
 ### Invariants that MUST hold (never regress these)
 - The driver cash-out **6-digit code is a live bearer credential — never log it.**

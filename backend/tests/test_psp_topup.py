@@ -25,6 +25,10 @@ _PSP_ON = dict(
     PSP_STRIPE_SECRET_KEY="sk_test_dummy",
     PSP_STRIPE_WEBHOOK_SECRET="",
     PSP_SITE_URL="https://example.com",
+    # These webhook tests exercise the unsigned event-handling path (no signing secret set).
+    # That path is now DEBUG-only (the fail-closed guard returns 503 without a secret outside
+    # DEBUG), and Django's test runner forces DEBUG=False — so opt in explicitly.
+    DEBUG=True,
 )
 
 _PSP_OFF = dict(
@@ -227,3 +231,66 @@ class WebhookEventHandlingTests(SimpleTestCase):
             resp = CustomerTopUpWebhookView.as_view()(req)
 
         self.assertEqual(resp.status_code, 400)
+
+
+class WebhookFailsClosedWithoutSecretTests(SimpleTestCase):
+    """Security (defense-in-depth): with PSP enabled but no signing secret, the webhook must
+    fail CLOSED outside DEBUG. Otherwise a forged checkout.session.completed could be POSTed by
+    anyone and mint arbitrary wallet credit. The unsigned-JSON fallback is a DEBUG-only
+    local-testing convenience.
+    """
+
+    _NO_SECRET = dict(
+        PSP_TOPUP_ENABLED=True,
+        PSP_STRIPE_SECRET_KEY="sk_test_dummy",
+        PSP_STRIPE_WEBHOOK_SECRET="",
+        PSP_SITE_URL="https://example.com",
+    )
+
+    def _forged_event_request(self):
+        event = {
+            "id": "evt_forged",
+            "type": "checkout.session.completed",
+            "data": {"object": {
+                "id": "cs_forged", "payment_status": "paid", "amount_total": 9999999,
+                "metadata": {"customer_id": "42", "amount": "99999.99"},
+            }},
+        }
+        payload = json.dumps(event).encode()
+        return APIRequestFactory().post(
+            "/api/customer/topup/webhook/", data=payload, content_type="application/json"
+        )
+
+    @override_settings(DEBUG=False, **_NO_SECRET)
+    def test_forged_event_rejected_when_secret_unset_in_production(self):
+        from accounts.views import CustomerTopUpWebhookView
+        req = self._forged_event_request()
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 503)
+        mock_credit.assert_not_called()  # no wallet credit from unsigned input
+
+    @override_settings(DEBUG=True, **_NO_SECRET)
+    def test_unsigned_still_accepted_in_debug(self):
+        """DEBUG keeps the local-testing unsigned path working (guards against over-closing)."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = {
+            "id": "evt_dev", "type": "checkout.session.completed",
+            "data": {"object": {
+                "id": "cs_dev", "payment_status": "paid", "amount_total": 15000,
+                "metadata": {"customer_id": "42", "amount": "150.00"},
+            }},
+        }
+        payload = json.dumps(event).encode()
+        req = APIRequestFactory().post(
+            "/api/customer/topup/webhook/", data=payload, content_type="application/json"
+        )
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            mock_credit.return_value = MagicMock()
+            mock_stripe = MagicMock()
+            mock_stripe.api_key = ""
+            mock_stripe.error.SignatureVerificationError = Exception
+            with patch.dict("sys.modules", {"stripe": mock_stripe}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        mock_credit.assert_called_once()
