@@ -133,6 +133,28 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
             self.assertIn(field, resp.data, f"Missing field: {field}")
 
     @patch("menu.views.Order.objects")
+    def test_payload_exposes_tip_and_promotion_for_receipt_reconciliation(self, objects_mock):
+        # The tracker receipt derives the food subtotal by inverting
+        #   total = food_subtotal + delivery_fee − promotion − loyalty + tip
+        # so the customer-facing payload MUST expose tip_amount and
+        # promotion_discount (both folded into `total`). Regression for the receipt
+        # that could not reconcile because these two fields were absent here.
+        order = _make_order()
+        order.customer_id = None  # anonymous → full body
+        order.tip_amount = Decimal("10.00")
+        order.promotion_discount = Decimal("5.00")
+        order.delivery_fee = Decimal("15.00")
+        order.loyalty_discount = Decimal("0.00")
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["tip_amount"], "10.00")
+        self.assertEqual(resp.data["promotion_discount"], "5.00")
+        # JSON-safe decimal strings, like the other money fields.
+        self.assertIsInstance(resp.data["tip_amount"], str)
+        self.assertIsInstance(resp.data["promotion_discount"], str)
+
+    @patch("menu.views.Order.objects")
     def test_items_count_matches_qty_sum(self, objects_mock):
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
         resp = self._get()

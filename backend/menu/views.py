@@ -3813,6 +3813,12 @@ class CustomerOrderStatusView(APIView):
             "delivery_address": order.delivery_address,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
+            # Tip + promotion are folded into `total` by the backend
+            # (total = food_subtotal + delivery_fee - promo - loyalty + tip), so the
+            # customer receipt needs them to show a breakdown that reconciles to the
+            # total instead of mis-deriving "Subtotal" as total - delivery_fee.
+            "tip_amount": str(order.tip_amount),
+            "promotion_discount": str(order.promotion_discount),
             "loyalty_discount": str(order.loyalty_discount),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
