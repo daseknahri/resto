@@ -341,12 +341,14 @@
 import { ref, computed, onMounted } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const loading = ref(true);
@@ -509,6 +511,14 @@ const creditWallet = async () => {
   creditError.value = '';
   const amount = parseFloat(creditAmount.value);
   if (!amount || amount <= 0) { creditError.value = t('adminCustomers.creditFailed'); return; }
+  const projected = parseFloat(detail.value?.wallet_balance || 0) + amount;
+  const okCredit = await confirm({
+    title: t('adminCustomers.creditConfirmTitle'),
+    body: t('adminCustomers.creditConfirmBody', { amount: fmtMoney(amount), name: selected.value?.name || t('adminCustomers.unnamed'), balance: fmtMoney(projected) }),
+    confirmLabel: t('adminCustomers.creditConfirmCta'),
+    danger: true,
+  });
+  if (!okCredit) return;
   crediting.value = true;
   if (!creditKey) creditKey = newIdempotencyKey();
   try {

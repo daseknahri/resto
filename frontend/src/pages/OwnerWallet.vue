@@ -308,12 +308,14 @@ import { onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const route = useRoute();
@@ -558,6 +560,14 @@ const doTopup = async () => {
     topupError.value = t('ownerWallet.amountRequired');
     return;
   }
+  const projected = parseFloat(selected.value.wallet_balance || 0) + amount;
+  const okTopup = await confirm({
+    title: t('ownerWallet.topupConfirmTitle'),
+    body: t('ownerWallet.topupConfirmBody', { amount: fmtBalance(amount), name: selected.value.name, balance: fmtBalance(projected) }),
+    confirmLabel: t('ownerWallet.topupConfirmCta'),
+    danger: true,
+  });
+  if (!okTopup) return;
   saving.value = true;
   if (!topupKey) topupKey = newIdempotencyKey();
   try {
