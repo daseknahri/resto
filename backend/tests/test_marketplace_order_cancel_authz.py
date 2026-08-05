@@ -84,3 +84,59 @@ class MarketplaceOrderCancelAuthzTests(SimpleTestCase):
             resp = self.view(req, order_number="ORD-1")
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.data["code"], "not_owner")
+
+
+class MarketplaceOrderCancelRefundTenantScopingTests(SimpleTestCase):
+    """Regression: the marketplace cancel path must forward the OWNING tenant's id to the
+    wallet-refund helper.
+
+    The refund WalletTransaction lives in the shared/public schema, so it is only tagged to
+    a tenant if the caller passes tenant_id. The bug called _refund(order) with no tenant_id,
+    so the refund row was attributed to tenant_id=None and silently dropped from that tenant's
+    per-tenant refund reports (the Z-report/refund query filters on tenant_id). Every sibling
+    caller in menu/views.py already forwards it. This locks the marketplace-side view to the
+    same contract.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # MarketplaceOrderStatusThrottle counts per-actor
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceOrderCancelView.as_view()
+
+    def test_cancel_forwards_owning_tenant_id_to_refund(self):
+        customer = Customer(id=42)
+        order = MagicMock()
+        order.customer_id = 42  # == customer.id → IsOrderOwner passes
+        order.status = Order.Status.PENDING  # cancellable; not the idempotent-cancelled 200
+
+        req = self.factory.post(
+            "/api/marketplace/order/ORD-1/cancel/", {"restaurant": "tacos"}, format="json"
+        )
+        req.session = {"customer_id": 42}
+        force_authenticate(req, user=customer)
+
+        tenant = SimpleNamespace(id=7, schema_name="tacos", slug="tacos")
+        Tenant = MagicMock()
+        Tenant.objects.get.return_value = tenant
+        OrderObjs = MagicMock()
+        OrderObjs.filter.return_value.first.return_value = order
+
+        # The cancel helpers are imported inside the view from menu.views at call time, so
+        # patching them there intercepts the aliased imports. _customer_can_cancel is forced
+        # True so the flow reaches the atomic block; the other side-effects are no-ops.
+        with patch("tenancy.models.Tenant", Tenant), \
+             patch("menu.models.Order.objects", OrderObjs), \
+             patch("django_tenants.utils.schema_context", return_value=_noop_cm()), \
+             patch("django.db.transaction.atomic", return_value=_noop_cm()), \
+             patch("menu.views._customer_can_cancel", return_value=True), \
+             patch("menu.views._refund_wallet_for_cancelled_order") as mock_refund, \
+             patch("menu.views._reverse_loyalty_for_cancelled_order"), \
+             patch("menu.views._restock_cancelled_order"), \
+             patch("menu.views._broadcast_order_change"):
+            resp = self.view(req, order_number="ORD-1")
+
+        self.assertEqual(resp.status_code, 200)
+        # The fix: tenant.id (7) is forwarded so the refund row is tenant-scoped, rather than
+        # attributed to tenant_id=None and dropped from this tenant's refund reporting.
+        mock_refund.assert_called_once_with(order, tenant_id=7)

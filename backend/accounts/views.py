@@ -5449,7 +5449,11 @@ class MarketplaceOrderCancelView(APIView):
                     order.status = _Order.Status.CANCELLED
                     order.status_updated_at = _tz.now()
                     order.save(update_fields=["status", "status_updated_at", "updated_at"])
-                    _refund(order)
+                    # tenant_id tags the refund WalletTransaction (shared/public schema)
+                    # to this tenant so it shows up in the tenant's per-tenant refund
+                    # reports; without it the row is attributed to tenant_id=None. Mirrors
+                    # the sibling callers in menu/views.py.
+                    _refund(order, tenant_id=tenant.id)
                     _revloy(order)
                     _restock(order)
                 try:
