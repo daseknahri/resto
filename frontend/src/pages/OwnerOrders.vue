@@ -815,7 +815,7 @@
                     </svg>
                     <div class="space-y-0.5">
                       <p class="text-xs font-semibold text-rose-100">{{ t('ownerOrders.djRefundCancelConfirm') }}</p>
-                      <p class="text-[11px] leading-relaxed text-rose-200/75">{{ t('ownerOrders.djRefundCancelBody') }}</p>
+                      <p class="text-[11px] leading-relaxed text-rose-200/75">{{ t('ownerOrders.djRefundCancelBody', { amount: formatCurrency(o.amount_paid ?? o.wallet_amount_paid ?? o.total, o.currency) }) }}</p>
                     </div>
                   </div>
                   <div class="flex gap-2">
@@ -2128,7 +2128,7 @@ const deliveryAction = async (o, action) => {
   if (action === 'confirm_noshow') {
     const okNoshow = await confirm({
       title: t('ownerOrders.djPayNoshowConfirmTitle'),
-      body: t('ownerOrders.djPayNoshowConfirmBody'),
+      body: t('ownerOrders.djPayNoshowConfirmBody', { amount: formatCurrency(o.delivery_fee, o.currency) }),
       confirmLabel: t('ownerOrders.djPayNoshow'),
       danger: true,
     });
