@@ -927,6 +927,7 @@
           <div>
             <p class="ui-kicker">{{ t('waiterPage.voidItem') }}</p>
             <p class="mt-0.5 text-xs font-semibold text-slate-200 truncate">{{ voidSheet.item.dish_name }}</p>
+            <p class="mt-0.5 text-[11px] font-medium tabular-nums text-slate-400">{{ fmtOrderPrice(voidSheet.item.subtotal ?? (voidSheet.item.unit_price * voidSheet.item.qty), voidSheet.order.currency) }}</p>
             <p class="mt-1 text-[11px] text-slate-400">{{ t('waiterPage.voidReasonSheet') }}</p>
           </div>
           <!-- Preset chips -->
@@ -991,6 +992,7 @@
           <div>
             <p class="ui-kicker">{{ t('waiterPage.compItem') }}</p>
             <p class="mt-0.5 text-xs font-semibold text-slate-200 truncate">{{ compSheet.item.dish_name }}</p>
+            <p class="mt-0.5 text-[11px] font-medium tabular-nums text-slate-400">{{ fmtOrderPrice(compSheet.item.subtotal ?? (compSheet.item.unit_price * compSheet.item.qty), compSheet.order.currency) }}</p>
             <p class="mt-1 text-[11px] text-slate-400">{{ t('waiterPage.compReasonSheet') }}</p>
           </div>
           <!-- Preset chips -->
