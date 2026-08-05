@@ -43,6 +43,25 @@
         </div>
       </div>
 
+      <!-- Not found: a dead / expired / mistyped order link. Distinct from a transient
+           load error — retrying a 404 loops forever, so route the customer back to the
+           marketplace instead of offering a Retry that can never succeed. -->
+      <div
+        v-else-if="notFound && !order"
+        class="ui-panel flex flex-col items-center gap-4 px-4 py-8 text-center"
+      >
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700/60 bg-slate-800/50">
+          <svg aria-hidden="true" viewBox="0 0 20 20" class="h-6 w-6 text-slate-400" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+        </div>
+        <div class="space-y-1">
+          <h1 class="ui-display text-lg text-white">{{ t('mktOrderStatus.notFoundTitle') }}</h1>
+          <p class="text-sm text-slate-400">{{ t('mktOrderStatus.notFoundBody') }}</p>
+        </div>
+        <router-link :to="{ name: 'marketplace' }" class="ui-btn-primary ui-touch-target">
+          {{ t('mktOrderStatus.notFoundCta') }}
+        </router-link>
+      </div>
+
       <!-- Error -->
       <div
         v-else-if="fetchError && !order"
@@ -547,6 +566,9 @@ const orderNumber = route.params.orderNumber;
 const loading = ref(true);
 const refreshing = ref(false);
 const fetchError = ref(false);
+// Distinguish a 404 (dead / expired / mistyped link) from a transient error so the
+// UI can offer "back to marketplace" instead of a Retry that loops forever.
+const notFound = ref(false);
 const order = ref(null);
 const pollFailures = ref(0);
 // Only announce when status genuinely changes — not on every poll cycle that
@@ -762,6 +784,7 @@ const manualRefresh = async () => {
 
 const fetchStatus = async () => {
   fetchError.value = false;
+  notFound.value = false;
   try {
     const res = await api.get(`/marketplace/order/${orderNumber}/`, {
       params: { restaurant: slug },
@@ -773,9 +796,18 @@ const fetchStatus = async () => {
       clearInterval(_pollTimer);
       _pollTimer = null;
     }
-  } catch {
-    fetchError.value = true;
-    pollFailures.value += 1;
+  } catch (err) {
+    // A 404 means the order number is dead / expired / mistyped — retrying can never
+    // succeed, so flag it as not-found (only when we have no order to keep showing) and
+    // stop the poll instead of hammering a permanent 404.
+    if (err?.response?.status === 404 && !order.value) {
+      notFound.value = true;
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    } else {
+      fetchError.value = true;
+      pollFailures.value += 1;
+    }
   } finally {
     loading.value = false;
   }

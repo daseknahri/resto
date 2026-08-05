@@ -617,9 +617,12 @@
                 type="text"
                 autocomplete="name"
                 aria-required="true"
+                :aria-invalid="fieldErrors.customer_name ? 'true' : undefined"
+                aria-describedby="mkt-name-error"
                 :placeholder="t('mktMenu.customerNamePlaceholder')"
                 class="ui-input"
               />
+              <p v-if="fieldErrors.customer_name" id="mkt-name-error" role="alert" class="mt-1 text-xs text-red-300">{{ fieldErrors.customer_name }}</p>
             </div>
             <div>
               <label for="mkt-phone" class="block text-xs font-medium text-slate-400 mb-1">
@@ -631,9 +634,13 @@
                 type="tel"
                 inputmode="tel"
                 autocomplete="tel"
+                aria-required="true"
+                :aria-invalid="fieldErrors.customer_phone ? 'true' : undefined"
+                aria-describedby="mkt-phone-error"
                 :placeholder="t('mktMenu.customerPhonePlaceholder')"
                 class="ui-input"
               />
+              <p v-if="fieldErrors.customer_phone" id="mkt-phone-error" role="alert" class="mt-1 text-xs text-red-300">{{ fieldErrors.customer_phone }}</p>
             </div>
             <!-- Delivery details (address / saved addresses / geolocation / fee) (RISK FE-2) -->
             <MarketplaceCheckoutDelivery
@@ -641,21 +648,26 @@
               v-model:delivery-address="form.delivery_address"
               v-model:save-address="saveAddressAfterOrder"
               v-model:save-address-label="saveAddressLabel"
+              v-model:delivery-lat="form.delivery_lat"
+              v-model:delivery-lng="form.delivery_lng"
+              v-model:map-link="mktMapLink"
               :is-authenticated="customerStore.isAuthenticated"
               :saved-addresses="mktSavedAddresses"
               :locating="locatingMkt"
               :locate-error="locateError"
-              :has-location="!!form.delivery_lat"
+              :has-location="validCoord(form.delivery_lat, form.delivery_lng)"
               :out-of-range="deliveryOutOfRange"
               :radius-km="deliveryPricing.radiusKm"
               :fee-is-distance="deliveryFeeIsDistance"
               :delivery-fee="deliveryFee"
               :distance-km="deliveryDistanceKm"
               :per-km="deliveryPricing.perKm"
+              :address-error="fieldErrors.delivery_address"
               :fmt-price="fmtPrice"
               @apply-address="applyMktSavedAddress"
               @delete-address="deleteMktSavedAddress"
               @locate="useMyLocation"
+              @paste-map-link="pasteMktMapLink"
             />
             <div>
               <label for="mkt-note" class="block text-xs font-medium text-slate-400 mb-1">
@@ -822,7 +834,7 @@ import MarketplaceMenuLoyaltyTeaser from '../components/MarketplaceMenuLoyaltyTe
 import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
-import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord } from '../lib/deliveryPricing';
+import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
 import { classifyClosedOrderState } from '../lib/businessHours';
 import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
@@ -1016,6 +1028,27 @@ const form = reactive({
   customer_note: '',
 });
 
+// Per-field checkout validation errors (parity with the tenant Cart). Kept separate
+// from the global `checkoutError` so an invalid name/phone/address surfaces INLINE at
+// the field — on a phone the summary banner can be scrolled off-screen, leaving the
+// customer unsure what to fix. `failValidation` also scrolls + focuses the field.
+const fieldErrors = reactive({ customer_name: '', customer_phone: '', delivery_address: '' });
+const FIELD_INPUT_IDS = { customer_name: 'mkt-name', customer_phone: 'mkt-phone', delivery_address: 'mkt-address' };
+const failValidation = (field, message) => {
+  fieldErrors[field] = message;
+  nextTick(() => {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById(FIELD_INPUT_IDS[field]);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+  });
+};
+// Clear a field's error as the customer edits it, so a fixed field stops showing red.
+watch(() => form.customer_name, () => { if (fieldErrors.customer_name) fieldErrors.customer_name = ''; });
+watch(() => form.customer_phone, () => { if (fieldErrors.customer_phone) fieldErrors.customer_phone = ''; });
+watch(() => form.delivery_address, () => { if (fieldErrors.delivery_address) fieldErrors.delivery_address = ''; });
+
 // Persist the fulfillment type. MUST come after `const form` above: watch()
 // evaluates its source getter synchronously at registration, so referencing
 // `form` before its declaration throws "Cannot access 'form' before
@@ -1123,6 +1156,42 @@ const useMyLocation = () => {
     },
     { enableHighAccuracy: true, timeout: 10000 },
   );
+};
+
+// No-GPS fallback (parity with the tenant Cart): a customer who denies geolocation /
+// is on desktop can paste a Google/OSM map link or type coordinates. Parsing a valid
+// pair sets the delivery coords, which clears `needsLocation` so the order is no longer
+// a dead-end. The watch only SETS on a successful parse — it never clears coords the
+// customer already captured via GPS.
+const mktMapLink = ref('');
+watch(mktMapLink, (value) => {
+  const parsed = parseCoordinatesFromMapUrl(value);
+  if (parsed) {
+    form.delivery_lat = parsed.lat;
+    form.delivery_lng = parsed.lng;
+    locateError.value = '';
+  }
+});
+const pasteMktMapLink = async () => {
+  try {
+    if (navigator.clipboard?.readText) {
+      const text = await navigator.clipboard.readText();
+      if (!text?.trim()) {
+        toastStore.show(t('cartPage.clipboardEmpty'), 'info');
+        return;
+      }
+      mktMapLink.value = text.trim();
+      if (parseCoordinatesFromMapUrl(mktMapLink.value)) {
+        toastStore.show(t('cartPage.mapLinkPasted'), 'success');
+      }
+    } else {
+      // Clipboard API unavailable — the customer can paste manually into the field.
+      toastStore.show(t('cartPage.pasteMapLinkManually'), 'info');
+    }
+  } catch {
+    // Permission denied — fall back to manual paste into the field.
+    toastStore.show(t('cartPage.pasteMapLinkManually'), 'info');
+  }
 };
 
 // Advance/scheduled order + loyalty redemption (parity with the direct checkout).
@@ -1485,10 +1554,14 @@ const deliveryOutOfRange = computed(() => {
 const deliveryFeeIsDistance = computed(
   () => deliveryPricing.value.perKm > 0 && deliveryDistanceKm.value != null,
 );
+// Distance pricing needs a usable coordinate. Any of the three entry paths — GPS,
+// pasted map link, or manual lat/lng — satisfies this, so it is no longer a dead-end
+// when geolocation is denied. `validCoord` also rejects the null-island (0,0) a failed
+// geocode can leave behind, which the old `== null` check let through.
 const needsLocation = computed(
   () => form.fulfillment_type === 'delivery'
     && deliveryPricing.value.perKm > 0
-    && (form.delivery_lat == null || form.delivery_lng == null),
+    && !validCoord(form.delivery_lat, form.delivery_lng),
 );
 const deliveryIsFree = computed(() => {
   const p = deliveryPricing.value;
@@ -1696,20 +1769,23 @@ const fetchMenu = async () => {
 
 const placeOrder = async () => {
   checkoutError.value = '';
+  fieldErrors.customer_name = '';
+  fieldErrors.customer_phone = '';
+  fieldErrors.delivery_address = '';
   if (!form.customer_name.trim()) {
-    checkoutError.value = t('mktMenu.nameRequired');
+    failValidation('customer_name', t('mktMenu.nameRequired'));
     return;
   }
   if (!form.customer_phone.trim()) {
-    checkoutError.value = t('mktMenu.phoneRequired');
+    failValidation('customer_phone', t('mktMenu.phoneRequired'));
     return;
   }
   if (form.customer_phone.replace(/\D/g, '').length < 7) {
-    checkoutError.value = t('mktMenu.phoneInvalid');
+    failValidation('customer_phone', t('mktMenu.phoneInvalid'));
     return;
   }
   if (form.fulfillment_type === 'delivery' && !form.delivery_address.trim()) {
-    checkoutError.value = t('mktMenu.addressRequired');
+    failValidation('delivery_address', t('mktMenu.addressRequired'));
     return;
   }
   if (scheduleEnabled.value) {
@@ -1783,12 +1859,16 @@ const placeOrder = async () => {
       customer_phone: form.customer_phone,
       customer_note: form.customer_note,
       delivery_address: form.delivery_address,
-      delivery_lat: form.delivery_lat,
-      delivery_lng: form.delivery_lng,
+      // Coerce the (possibly manually-typed) coordinate fields to number|null so an
+      // emptied manual input never posts '' to the backend serializer.
+      delivery_lat: parseCoordinateValue(form.delivery_lat),
+      delivery_lng: parseCoordinateValue(form.delivery_lng),
     };
     if (codChosen.value) {
       payload.payment_method = 'cash';
-    } else {
+    } else if (customerStore.isAuthenticated) {
+      // Wallet is a signed-in-only rail — a guest (pickup) order has no wallet to draw
+      // on, so never send use_wallet for an unauthenticated customer.
       payload.use_wallet = true;
     }
     if (scheduleEnabled.value && scheduledFor.value) {
@@ -1810,8 +1890,8 @@ const placeOrder = async () => {
           label: saveAddressLabel.value.trim() || '',
           address: form.delivery_address,
           location_url: '',
-          lat: form.delivery_lat || null,
-          lng: form.delivery_lng || null,
+          lat: parseCoordinateValue(form.delivery_lat),
+          lng: parseCoordinateValue(form.delivery_lng),
         });
       } catch { /* non-critical */ }
     }
@@ -1846,11 +1926,14 @@ const placeOrder = async () => {
         ? t('mktMenu.deliveryMinOrderNotMet', { amount: minimum })
         : t('mktMenu.orderError');
     } else if (typeof code === 'string' && code.startsWith('loyalty_')) {
+      // Points balance changed under us → refresh the customer so the UI re-syncs.
       customerStore.fetchCustomer(true);
       useLoyalty.value = false;
-      checkoutError.value = err?.response?.data?.detail || t('mktMenu.orderError');
+      // OPS-6b: never surface raw backend detail to customers — use the localized message.
+      checkoutError.value = t('cartPage.loyaltyRedeemFailed');
     } else if (typeof code === 'string' && code.startsWith('schedule_')) {
-      checkoutError.value = err?.response?.data?.detail || t('mktMenu.orderError');
+      // OPS-6b: never surface raw backend detail to customers — use the localized message.
+      checkoutError.value = t('cartPage.scheduleInvalid');
     } else {
       checkoutError.value = t('mktMenu.orderError');
     }

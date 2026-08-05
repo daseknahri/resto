@@ -50,6 +50,13 @@ vi.mock("../../lib/services", () => ({
   SERVICES: [],
 }));
 
+// ── toast mock ────────────────────────────────────────────────────────────────
+// Load-more failure must surface a toast instead of being a silent no-op.
+const mockToastShow = vi.fn();
+vi.mock("../../stores/toast", () => ({
+  useToastStore: () => ({ show: mockToastShow }),
+}));
+
 import api from "../../lib/api";
 import Marketplace from "../Marketplace.vue";
 
@@ -256,5 +263,22 @@ describe("Marketplace — Load More logic", () => {
     expect(
       wrapper.find("button[aria-label='marketplace.loadMoreAriaLabel']").exists()
     ).toBe(false);
+  });
+
+  // ── (e) load-more failure is not silent ───────────────────────────────────
+  it("(e) shows an error toast on load-more failure and keeps the button for retry", async () => {
+    const wrapper = await mountMarketplace();
+
+    api.get.mockRejectedValueOnce(new Error("network"));
+
+    const btn = wrapper.find("button[aria-label='marketplace.loadMoreAriaLabel']");
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(mockToastShow).toHaveBeenCalledWith("marketplace.loadMoreFailed", "error");
+    // has_more stayed true, so the button remains visible for the user to retry.
+    expect(
+      wrapper.find("button[aria-label='marketplace.loadMoreAriaLabel']").exists()
+    ).toBe(true);
   });
 });
