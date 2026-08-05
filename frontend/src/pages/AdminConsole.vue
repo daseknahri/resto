@@ -1786,6 +1786,7 @@ const applyTenantLifecycle = async (tenant, action) => {
   if (action === "cancel") {
     const value = await prompt({
       title: t("adminConsole.cancellationReasonRequiredPrompt"),
+      body: t("adminConsole.tenantCancelConfirmBody", { name: tenant.name || tenant.slug }),
       label: t("adminConsole.cancellationReasonRequired"),
       required: true,
       confirmLabel: t("adminConsole.tenantCancelConfirm"),
@@ -1796,6 +1797,7 @@ const applyTenantLifecycle = async (tenant, action) => {
   } else if (action === "suspend") {
     const value = await prompt({
       title: t("adminConsole.suspendReasonOptionalPrompt"),
+      body: t("adminConsole.tenantSuspendConfirmBody", { name: tenant.name || tenant.slug }),
       confirmLabel: t("adminConsole.suspend"),
       danger: true,
     });
