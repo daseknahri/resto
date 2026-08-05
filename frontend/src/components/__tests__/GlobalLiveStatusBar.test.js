@@ -37,8 +37,6 @@ vi.mock("../../composables/useI18n", () => ({
         "globalLiveStatusBar.statusPending":         "Pending",
         "globalLiveStatusBar.statusConfirmed":       "Confirmed",
         "globalLiveStatusBar.statusPreparing":       "Preparing",
-        "globalLiveStatusBar.statusReady":           "Ready",
-        "globalLiveStatusBar.statusOutForDelivery":  "On the way",
         "globalLiveStatusBar.statusSearchingDriver": "Finding driver",
         "globalLiveStatusBar.statusDriverOnWay":     "Driver on the way",
         "globalLiveStatusBar.statusDriverArrived":   "Driver arrived",
@@ -48,7 +46,12 @@ vi.mock("../../composables/useI18n", () => ({
         "globalLiveStatusBar.statusPackageInProgress":"In transit",
         "globalLiveStatusBar.statusInProgress":      "In progress",
         "tripSchedule.statusScheduled":              "Scheduled",
+        "orderStatus.statusPending":                 "Pending",
+        "orderStatus.statusConfirmed":               "Confirmed",
+        "orderStatus.statusPreparing":               "Preparing",
         "orderStatus.statusReady":                   "Ready for pickup",
+        "orderStatus.stepReadyDispatch":             "Ready to dispatch",
+        "orderStatus.stepServed":                    "Served",
         "orderStatus.stepOutForDelivery":            "Out for delivery",
       };
       return map[key] ?? key;
@@ -163,6 +166,36 @@ describe("GlobalLiveStatusBar", () => {
     await w.vm.$nextTick();
     expect(w.find(".glsb-label").text()).toContain("Pizza Co");
     expect(w.find(".glsb-chip").text()).toBe("Out for delivery");
+  });
+
+  it("labels a ready DELIVERY order 'Ready to dispatch' (coheres with the tracker, not 'Ready for pickup')", async () => {
+    setActive({
+      orders: [{
+        order_number: "ORD-RD",
+        status: "ready",
+        fulfillment_type: "delivery",
+        restaurant_name: "Pizza Co",
+        restaurant_slug: "pizza-co",
+      }],
+    });
+    const w = mountBar();
+    await w.vm.$nextTick();
+    expect(w.find(".glsb-chip").text()).toBe("Ready to dispatch");
+  });
+
+  it("labels a ready PICKUP order 'Ready for pickup'", async () => {
+    setActive({
+      orders: [{
+        order_number: "ORD-RP",
+        status: "ready",
+        fulfillment_type: "pickup",
+        restaurant_name: "Pizza Co",
+        restaurant_slug: "pizza-co",
+      }],
+    });
+    const w = mountBar();
+    await w.vm.$nextTick();
+    expect(w.find(".glsb-chip").text()).toBe("Ready for pickup");
   });
 
   it("routes to marketplace-order-status when restaurant_slug is present", async () => {

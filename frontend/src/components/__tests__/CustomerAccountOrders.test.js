@@ -116,6 +116,24 @@ describe("CustomerAccountOrders", () => {
     expect(w.text()).toContain("orderStatus.statusPending");
   });
 
+  it("mini-timeline: a ready DELIVERY order shows progress (ready node + dispatch leg), not zero", () => {
+    // Regression: the delivery rail had no 'ready' node, so a ready delivery order
+    // highlighted nothing. It now keeps a 'ready' node (labeled Ready to dispatch)
+    // before out_for_delivery, so the order lights up its progress.
+    const o = tenantOrder({ status: "ready", fulfillment_type: "delivery" });
+    const w = mountComp({ apiOrders: [o] });
+    expect(w.text()).toContain("orderStatus.stepReadyDispatch");
+    expect(w.text()).toContain("orderStatus.stepOutForDelivery");
+    const highlighted = (w.html().match(/bg-\[var\(--color-secondary\)\]\/20/g) || []).length;
+    expect(highlighted).toBeGreaterThan(0);
+  });
+
+  it("mini-timeline: a ready DINE-IN order reads 'Served', not 'Ready for pickup'", () => {
+    const o = tenantOrder({ status: "ready", fulfillment_type: "table" });
+    const w = mountComp({ apiOrders: [o] });
+    expect(w.text()).toContain("orderStatus.stepServed");
+  });
+
   it("renders each order total in the order's OWN charged currency, not a converted display currency", () => {
     // Regression: account order history must format totals with
     // formatCurrency(total, order.currency) — the actual charged currency,

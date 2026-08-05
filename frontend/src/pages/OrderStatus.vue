@@ -361,44 +361,50 @@
           <p class="shrink-0 font-semibold tabular-nums" :class="item.is_voided ? 'line-through text-slate-500' : 'text-[var(--color-secondary)]'">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
         </div>
 
-        <!-- Delivery fee breakdown — only shown for delivery orders with a fee -->
-        <template v-if="orderData.fulfillment_type === 'delivery' && Number(orderData.delivery_fee) > 0">
+        <!-- Money breakdown — every line reconciles to the total:
+             subtotal + delivery fee + tip − promo − loyalty = total.
+             (VAT is inclusive, shown for information only.) -->
+        <template v-if="showMoneyBreakdown">
           <div class="flex justify-between border-t border-slate-800 pt-3 text-sm text-slate-400">
             <span>{{ t("orderStatus.subtotal") }}</span>
-            <span>{{ formatCurrency(Number(orderData.total) - Number(orderData.delivery_fee), orderData.currency) }}</span>
+            <span class="tabular-nums">{{ formatCurrency(orderSubtotal, orderData.currency) }}</span>
           </div>
-          <div class="flex justify-between text-sm text-slate-400">
+          <div v-if="orderData.fulfillment_type === 'delivery' && Number(orderData.delivery_fee) > 0" class="flex justify-between text-sm text-slate-400">
             <span>{{ t("orderStatus.deliveryFee") }}</span>
-            <span>{{ formatCurrency(orderData.delivery_fee, orderData.currency) }}</span>
+            <span class="tabular-nums">{{ formatCurrency(orderData.delivery_fee, orderData.currency) }}</span>
           </div>
-          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between text-sm text-slate-400">
+          <div v-if="Number(orderData.tip_amount) > 0" class="flex justify-between text-sm text-slate-400">
+            <span>{{ t("orderStatus.tip") }}</span>
+            <span class="tabular-nums">{{ formatCurrency(orderData.tip_amount, orderData.currency) }}</span>
+          </div>
+          <div v-if="Number(orderData.promotion_discount) > 0" class="flex justify-between text-sm text-amber-300">
+            <span>{{ t("orderStatus.promoDiscount") }}</span>
+            <span class="tabular-nums">−{{ formatCurrency(orderData.promotion_discount, orderData.currency) }}</span>
+          </div>
+          <div v-if="Number(orderData.loyalty_discount) > 0" class="flex justify-between text-sm text-amber-300">
+            <span>{{ t("orderStatus.loyaltyDiscount") }}</span>
+            <span class="tabular-nums">−{{ formatCurrency(orderData.loyalty_discount, orderData.currency) }}</span>
+          </div>
+          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between text-xs text-slate-500">
             <span>{{ t("orderStatus.vatIncluded", { label: orderData.vat_label, rate: Number(orderData.vat_rate) }) }}</span>
-            <span>{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
+            <span class="tabular-nums">{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
           </div>
           <div class="flex justify-between border-t border-slate-700 pt-2.5">
             <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
-            <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
+            <span class="text-base font-bold text-white tabular-nums">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
           </div>
         </template>
         <template v-else>
-          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between border-t border-slate-800 pt-3 text-sm text-slate-400">
+          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between border-t border-slate-800 pt-3 text-xs text-slate-500">
             <span>{{ t("orderStatus.vatIncluded", { label: orderData.vat_label, rate: Number(orderData.vat_rate) }) }}</span>
-            <span>{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
+            <span class="tabular-nums">{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
           </div>
           <div class="flex justify-between border-slate-800 pt-3" :class="{ 'border-t': !(Number(orderData.vat_amount) > 0) }">
             <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
-            <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
+            <span class="text-base font-bold text-white tabular-nums">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
           </div>
         </template>
-        <!-- Loyalty discount applied -->
-        <div
-          v-if="Number(orderData.loyalty_discount) > 0"
-          class="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs"
-        >
-          <span class="text-amber-300">{{ t('orderStatus.loyaltyDiscount') }}</span>
-          <span class="font-semibold text-amber-200">−{{ formatCurrency(orderData.loyalty_discount, orderData.currency) }}</span>
-        </div>
-        <!-- Wallet credits applied -->
+        <!-- Wallet credits applied (a payment toward the total, not a line in the breakdown above) -->
         <div
           v-if="Number(orderData.wallet_amount_paid) > 0"
           class="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs"
@@ -913,6 +919,35 @@ const statusHint = computed(() => {
   return null;
 });
 
+// ── Money breakdown ───────────────────────────────────────────────────────────
+// The backend folds delivery fee, tip and discounts into `total`:
+//   total = food_subtotal + delivery_fee − promotion − loyalty + tip.
+// Derive the true food subtotal by inverting that identity (not `total − delivery`,
+// which wrongly swallowed the tip and discounts) so every line reconciles to the
+// total exactly. VAT is inclusive and shown for information only.
+const orderSubtotal = computed(() => {
+  const d = orderData.value || {};
+  return (
+    (Number(d.total) || 0)
+    - (Number(d.delivery_fee) || 0)
+    - (Number(d.tip_amount) || 0)
+    + (Number(d.promotion_discount) || 0)
+    + (Number(d.loyalty_discount) || 0)
+  );
+});
+
+// Show the itemised breakdown only when there is at least one adjustment to the
+// food subtotal; a plain order (no fee/tip/discount) just shows the total.
+const showMoneyBreakdown = computed(() => {
+  const d = orderData.value || {};
+  return (
+    (d.fulfillment_type === 'delivery' && Number(d.delivery_fee) > 0)
+    || Number(d.tip_amount) > 0
+    || Number(d.promotion_discount) > 0
+    || Number(d.loyalty_discount) > 0
+  );
+});
+
 // ETA ring: stroke-dashoffset for a circle with r=16 (circumference ≈ 100.53).
 // Offset=0 → full ring (all time left); offset=100.53 → empty (no time left).
 const etaRingOffset = computed(() => {
@@ -986,16 +1021,26 @@ const statusClass = (s) => ({
   cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
 }[s] || "bg-slate-700 text-slate-300");
 
-const statusLabel = (s) => ({
-  scheduled: t("orderStatus.statusScheduled"),
-  pending: t("orderStatus.statusPending"),
-  confirmed: t("orderStatus.statusConfirmed"),
-  preparing: t("orderStatus.statusPreparing"),
-  ready: t("orderStatus.statusReady"),
-  out_for_delivery: t("orderStatus.stepOutForDelivery"),
-  completed: t("orderStatus.statusCompleted"),
-  cancelled: t("orderStatus.statusCancelled"),
-}[s] || s);
+const statusLabel = (s) => {
+  // "Ready" is fulfillment-specific: a delivery order that's ready is waiting to
+  // be dispatched (not "Ready for pickup"), and a served dine-in bill reads
+  // "Served" — keep the pill/aria in step with the timeline node labels.
+  if (s === "ready") {
+    const ft = orderData.value?.fulfillment_type;
+    if (ft === "delivery") return t("orderStatus.stepReadyDispatch");
+    if (ft === "table") return t("orderStatus.stepServed");
+    return t("orderStatus.statusReady");
+  }
+  return ({
+    scheduled: t("orderStatus.statusScheduled"),
+    pending: t("orderStatus.statusPending"),
+    confirmed: t("orderStatus.statusConfirmed"),
+    preparing: t("orderStatus.statusPreparing"),
+    out_for_delivery: t("orderStatus.stepOutForDelivery"),
+    completed: t("orderStatus.statusCompleted"),
+    cancelled: t("orderStatus.statusCancelled"),
+  }[s] || s);
+};
 
 const formatScheduledFor = (iso) => {
   if (!iso) return "";
