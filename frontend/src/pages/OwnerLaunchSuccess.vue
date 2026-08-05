@@ -68,7 +68,7 @@
               <RouterLink to="/owner" class="ui-btn-primary ui-touch-target w-full justify-center">
                 {{ t("ownerLaunchSuccess.goDashboard") }}
               </RouterLink>
-              <RouterLink to="/owner/onboarding" class="ui-btn-outline ui-touch-target w-full justify-center">
+              <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-outline ui-touch-target w-full justify-center">
                 {{ t("ownerLaunchSuccess.editMenu", { catalog }) }}
               </RouterLink>
             </div>

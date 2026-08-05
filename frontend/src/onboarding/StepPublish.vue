@@ -126,7 +126,7 @@
           :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
           @click="publish"
         >
-          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog: catalog.value }) }}
+          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog }) }}
         </button>
         <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
           {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
@@ -134,7 +134,7 @@
         <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
           {{ t("stepPublish.launchSummary") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu", { catalog: catalog.value }) }}</RouterLink>
+        <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu", { catalog }) }}</RouterLink>
         <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
         <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
       </div>

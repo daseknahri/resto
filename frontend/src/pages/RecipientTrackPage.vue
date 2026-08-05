@@ -14,6 +14,18 @@
         {{ t('recipientTrack.notFound') }}
       </div>
 
+      <!-- Load error (non-404) — retryable so the page never sits permanently blank -->
+      <div
+        v-else-if="loadError"
+        role="alert"
+        class="mt-6 space-y-3 rounded-xl border border-red-500/30 bg-red-500/8 p-4 text-sm text-red-300"
+      >
+        <p>{{ t('recipientTrack.loadError') }}</p>
+        <button class="ui-btn-outline ui-touch-target px-4 py-2 text-sm" @click="fetchTrack">
+          {{ t('common.retry') }}
+        </button>
+      </div>
+
       <template v-else-if="track">
         <p class="mt-1 text-sm text-slate-400">
           {{ introText }}
@@ -99,6 +111,9 @@ const token = route.params.token;
 const track = ref(null);
 const loading = ref(true);
 const notFound = ref(false);
+// Non-404 first-load failure (5xx / network) — polling is gated on track.value so it
+// never starts here; surface a retryable error card instead of a permanently blank page.
+const loadError = ref(false);
 let pollTimer = null;
 
 const TERMINAL = ['completed', 'cancelled'];
@@ -148,13 +163,17 @@ const fetchTrack = async () => {
     const res = await api.get(`/track/${encodeURIComponent(token)}/`);
     track.value = res.data;
     notFound.value = false;
+    loadError.value = false;
   } catch (e) {
     if (e?.response?.status === 404) {
       notFound.value = true;
       track.value = null;
       stopPolling();
+    } else if (!track.value) {
+      // First load failed with nothing to show — Retry re-runs fetchTrack.
+      loadError.value = true;
     }
-    // transient (5xx/network): keep the last good state, let polling retry
+    // transient (5xx/network) with existing data: keep the last good state, let polling retry
   } finally {
     loading.value = false;
   }

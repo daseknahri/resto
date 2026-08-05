@@ -2228,7 +2228,7 @@ const cancelOrder = async (order) => {
   } catch (err) {
     const code = err?.response?.data?.code;
     if (code === 'cannot_cancel') {
-      toast.show(t('customerAccount.orderCancelFailed'), 'error');
+      toast.show(t('customerAccount.orderCannotCancel'), 'error');
     } else {
       toast.show(t('customerAccount.orderCancelFailed'), 'error');
     }

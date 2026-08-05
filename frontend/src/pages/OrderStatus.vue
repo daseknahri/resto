@@ -48,6 +48,15 @@
       </RouterLink>
     </div>
 
+    <!-- First-load error (non-404) — retryable so the page never sits permanently blank -->
+    <div v-else-if="fetchError && !orderData" role="alert" class="ui-empty-state p-10 text-center space-y-4">
+      <AppIcon name="info" class="mx-auto h-10 w-10 text-red-400" aria-hidden="true" />
+      <p class="text-base font-semibold text-slate-100">{{ t("orderStatus.loadError") }}</p>
+      <button class="ui-btn-outline inline-flex px-5 py-2.5 text-sm" @click="fetchStatus">
+        {{ t("common.retry") }}
+      </button>
+    </div>
+
     <template v-else-if="orderData">
       <!-- 🎉 Just-placed celebration banner — shown for ~5s right after order placement -->
       <Transition name="ui-fade">
@@ -771,6 +780,9 @@ const POLL_SAFETY_NET_S = 60;
 const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
+// First-load failure that is NOT a 404 (5xx / network / other 4xx) — retryable, so
+// it gets its own error card with a Retry button instead of a permanently blank page.
+const fetchError = ref(false);
 const pollFailures = ref(0);  // consecutive refresh failures → warn the user
 const readyAlertShown = ref(false);
 
@@ -1140,6 +1152,7 @@ watch(
 
 const fetchStatus = async () => {
   loading.value = true;
+  fetchError.value = false;
   try {
     const res = await api.get(`/order-status/${props.orderNumber}/`);
     const prev = orderData.value?.status;
@@ -1154,6 +1167,9 @@ const fetchStatus = async () => {
     if (err?.response?.status === 404) {
       notFound.value = true;
     } else {
+      // On a first load (no orderData yet) surface a retryable error card; once we
+      // already have data this is a background-poll blip handled by pollFailures.
+      if (!orderData.value) fetchError.value = true;
       pollFailures.value++;  // track network / server errors so we can warn the user
     }
   } finally {

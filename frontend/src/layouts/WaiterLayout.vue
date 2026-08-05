@@ -81,8 +81,9 @@
 
           <!-- Sign out — always visible to all waiter/staff users -->
           <button
-            class="flex h-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 px-2.5 text-xs text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+            class="flex h-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 px-2.5 text-xs text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:opacity-60"
             type="button"
+            :disabled="signingOut"
             @click="handleSignOut"
           >
             {{ t('common.signOut') }}
@@ -246,9 +247,16 @@ const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: dea
 const tenantName = computed(() => tenant.meta?.name || "Restaurant");
 const tenantLogo = computed(() => tenant.meta?.logo_url || "");
 
+const signingOut = ref(false);
 const handleSignOut = async () => {
-  await session.signOut();
-  router.push({ name: "signin" });
+  if (signingOut.value) return; // in-flight guard: a double-click must not fire signOut twice
+  signingOut.value = true;
+  try {
+    await session.signOut();
+    router.push({ name: "signin" });
+  } finally {
+    signingOut.value = false;
+  }
 };
 
 onMounted(() => {
