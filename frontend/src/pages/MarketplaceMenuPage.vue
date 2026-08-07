@@ -835,6 +835,7 @@ import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
+import { resolveMarketplaceReorderItems } from '../lib/reorder';
 import { classifyClosedOrderState } from '../lib/businessHours';
 import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
@@ -2042,26 +2043,10 @@ const unavailableSlugs = computed(() => {
 const applyReorderItems = () => {
   const items = history.state?.reorderItems;
   if (!Array.isArray(items) || !items.length) return;
-  const dishMap = _buildDishMap();
-  const newCart = [];
-  let priceChanged = false;
-  let dropped = false;
-  for (const item of items) {
-    if (!item.slug) continue;
-    const live = dishMap.get(item.slug);
-    if (!live) { dropped = true; continue; }
-    const snapshotPrice = Number(item.price) || 0;
-    const livePrice = Number(live.price) || 0;
-    if (snapshotPrice !== livePrice) priceChanged = true;
-    newCart.push({
-      slug: live.slug,
-      name: live.name || item.name || live.slug,
-      price: livePrice,
-      unitPrice: livePrice,
-      qty: Math.max(1, Math.floor(Number(item.qty) || 1)),
-      options: [],
-    });
-  }
+  // Resolve against the live menu: drops sold-out / off-menu dishes and re-prices the
+  // rest (see lib/reorder.js). Dropping sold-out items here keeps reorder from seeding
+  // a dish that would then block checkout via the unavailableSlugs guard.
+  const { cart: newCart, priceChanged, dropped } = resolveMarketplaceReorderItems(items, _buildDishMap());
   if (!newCart.length) return;
   cart.value = newCart;
   if (priceChanged || dropped) {
