@@ -30,3 +30,13 @@ GHSA-mh99-v99m-4gvg  # same advisory — GitHub Advisory DB id Trivy uses for np
 # breaks eslint's minimatch 3.x, and eslint 9 is peer-capped by eslint-plugin-vue 9.29.0).
 # Accepted 2026-08-03; revisit when the eslint/minimatch chain ships a patched range.
 GHSA-rgw5-rvv9-x895  # brace-expansion unbounded-intermediate-array DoS (npm audit id)
+
+# ── Deferred: js-yaml quadratic-CPU DoS — dev/build tooling only ──────────────
+# js-yaml 4.3.0 is dev-only (dev:true), pulled solely by @eslint/eslintrc (eslint's
+# config loader) to parse our own eslint config — NEVER in the shipped bundle and
+# never fed untrusted input, so the !!omap quadratic-CPU DoS is unreachable at runtime.
+# No in-range fix: CVE-2026-59870 is not backported to js-yaml 4.x, and @eslint/eslintrc
+# caps js-yaml at ^4.1.1. Accepted 2026-08-07; revisit when the eslint config chain ships
+# a patched js-yaml in range. Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs.
+CVE-2026-59870       # js-yaml <=4.x !!omap quadratic-CPU DoS
+GHSA-5p4m-2wfm-xmqj  # same advisory — GitHub Advisory DB id Trivy uses for npm
