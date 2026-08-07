@@ -34,6 +34,14 @@ const ALLOWLIST = {
     '9 cannot be bumped to unbind it (eslint-plugin-vue 9.29.0 peer-caps eslint at 9). ' +
     'Mirrored in .trivyignore. Revisit when the eslint/minimatch chain ships a patched ' +
     'brace-expansion in range.',
+  'GHSA-5p4m-2wfm-xmqj':
+    'js-yaml quadratic CPU on !!omap resolution (CVE-2026-59870, affects 3.x and 4.x). ' +
+    'js-yaml 4.3.0 is dev/build-tooling only (dev:true in the lockfile) — pulled solely by ' +
+    "@eslint/eslintrc (eslint's config loader) to parse our own eslint config, never in the " +
+    'shipped bundle and never fed untrusted input, so the !!omap quadratic-CPU DoS is ' +
+    'unreachable at runtime. No in-range fix: not backported to 4.x, and @eslint/eslintrc caps ' +
+    "js-yaml at ^4.1.1 (can't move to a fixed major without an eslint-chain bump). Mirrored in " +
+    '.trivyignore. Revisit when the eslint config chain ships a patched js-yaml in range.',
 }
 
 // Match the old gate: fail on moderate and above (low stays informational).
