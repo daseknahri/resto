@@ -65,6 +65,14 @@ on confirmed CI green).
 - Marketplace checkout doesn't collect tips today (the receipt tip line is future-proof/dormant).
 - Pre-PSP-launch: set `PSP_STRIPE_WEBHOOK_SECRET` — the webhook now refuses to run without it in prod.
 
+**Follow-up (Phase-3 consumer-coherence scope).** A read-only scoping pass found consumer coherence is
+**~80% already shipped** and the headline "unify the carts / front-ends" is **architecturally owner-gated**:
+the storefront and marketplace run on **different origins**, so a unified cart needs a **server-side cart**,
+not a frontend refactor. Shipped the one safe increment the scope surfaced — `#206` (marketplace reorder now
+**drops sold-out items** instead of seeding a checkout-blocked cart). The structural remainder (server-side
+cart, server-backed dish favorites, shared-checkout-composable) is captured in
+[`NEXT_SESSION.md`](NEXT_SESSION.md) §4.E.
+
 ---
 
 ## 2026-08-05 — Documentation onboarding-completeness pass

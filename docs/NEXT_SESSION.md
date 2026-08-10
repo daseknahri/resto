@@ -127,6 +127,35 @@ Each has a real blocker — don't merge blind:
 - **Schedule the two sweep commands on Coolify:** `sweep_delivery_jobs` (~60s) and
   `reconcile_driver_earnings` (~15 min).
 
+### E. Structural super-app phases (scoped 2026-08-05; owner-gated — need a go-ahead, not autonomous)
+
+The big vision levers. The audit campaigns hardened the existing surfaces; these change *structure* and
+touch the working money/checkout path, so they need owner approval + careful staging (not overnight work).
+
+**Phase 3 — consumer coherence** (scoped in detail; `PRODUCT_VISION` §"Surface 2" is now partly **stale** —
+coherence is **~80% already shipped**). Remaining, ranked:
+- **Unify the two carts / front-ends (the headline item) — architecturally blocked.** The storefront
+  (`Menu`/`Cart`/`OrderStatus`, on a **tenant subdomain**) and the marketplace/hub (`Marketplace`/
+  `MarketplaceMenuPage`/`SuperAppHub`/`CustomerAccount`, on the **platform host**) run on **different
+  origins**, so their localStorage carts **cannot** share client state. A truly unified cart needs a
+  **server-side cart** (new model + endpoints **on the checkout path**) — not a frontend refactor.
+- **Server-back dish favorites** — today localStorage-only per-slug (business *follow* is already
+  server-backed via `CustomerTenantFollow`). Needs a `CustomerDishFavorite` model + migration + a
+  follow-style view + FE wiring. Additive, but backend + migration.
+- **Extract the duplicated stale-happy-hour re-price + validation guards** (`Cart.vue` ≈
+  `MarketplaceMenuPage.vue`) into a shared checkout composable — sensible DRY, but it runs **inside the
+  place-order path**, so stage it deliberately with full verification.
+- *Already coherent (no action):* status vocab + reconciling receipts (#202), marketplace checkout parity
+  (#203), server-hydrated **tenant-scoped** storefront history, shared saved-addresses. Forcing
+  cross-tenant history onto the storefront would be **wrong** product behavior.
+- *Shipped from this scope:* `#206` — marketplace reorder now **drops sold-out items** (was seeding them
+  into a checkout-blocked cart) — the one safe, self-contained increment the scope surfaced.
+
+**Phase 2 — POS terminal reliability** (offline-first order entry + payment, ticket concurrency,
+multi-drawer/PIN, ESC/POS printing) and **Phase 5 — dedicated driver surface** (carve out a `/driver`
+bundle, WebSocket offers/status, native push, offline action queue) are the other two structural levers —
+both large and money-adjacent. See `PRODUCT_VISION` §"Surface 1/3" for the decomposition.
+
 ## 5. Repo hygiene (needs owner sign-off — not done automatically)
 
 - **Stale leftover git worktrees** — mostly pruned (2026-08-05): `optimistic-wilson-678c57`,
