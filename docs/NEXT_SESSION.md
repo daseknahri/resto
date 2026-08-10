@@ -12,8 +12,10 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ## 1. Current state (2026-08-04)
 
-- `main` @ `fcdf75b`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest +
-  Playwright e2e + Docker builds all pass in CI. Deployable.
+- `main` @ `3773ed8`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest +
+  Playwright e2e + Docker builds all pass in CI. Deployable. *(2026-08-10: the CI security gates
+  needed a dependency-advisory unblock — the nanoid HIGH was fixed, six EOL-Django Lows deferred.
+  **The EOL-Django security clock is now the top priority — see §4.C.**)*
 - Recent campaigns are fully merged + cleaned up (#169–#204; the 2026-08-05 super-app hardening +
   calibration campaign is #199–#204) — see [`SESSION_LOG.md`](SESSION_LOG.md). Deploy is still
   **manual via Coolify** (git push does NOT deploy).
@@ -108,12 +110,25 @@ messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - **Consumer in-menu qty-stepper touch targets** (C2, visual-density judgment): the `±` steppers are
   ~28px (< the 44px design-system gate) but deliberately compact; enlarging changes card density.
 
-### C. Deferred dependency majors (4 open Dependabot PRs)
+### C. Deferred dependency majors + ⚠️ the EOL-Django security clock
 
-Each has a real blocker — don't merge blind:
+**⚠️ SECURITY-URGENT (as of 2026-08-10): Django 4.2 is END-OF-LIFE (Apr 2026) and accumulating CVEs.**
+Pinned `Django==4.2.30` now carries **six advisories** — all severity **Low** (cache/header/validator
+edge cases with near-zero exposure here), each fixed only in Django 5.2.x / 6.0.x (no 4.2.x patch).
+They are **temporarily deferred** in the CI security gates (`--ignore-vuln` in
+`.github/workflows/ci.yml` + mirrored in `.trivyignore`, PR #213) so CI stays usable — but this is a
+**treadmill**: every new Django CVE re-reddens the gate, and they will keep coming. **The Django 5.2
+LTS upgrade (Dependabot `#151`) is now the top priority.** Feasibility looks *contained*: the stack is
+already modern (`django-tenants==3.10.2`, `djangorestframework==3.17.1`, `channels==4.3.2`,
+`drf-spectacular==0.30.0` all support Django 5.x) — the linchpin is confirming django-tenants 3.10.2
+fully backs 5.2, then bump `Django 4.2.30 → 5.2.16`, run the full CI suite, sweep deprecations, and
+**delete the six `--ignore-vuln` deferrals**. Dependabot `#212` proposes **6.1** — prefer **5.2 LTS**.
+*(A separate npm `nanoid` HIGH was properly FIXED, not deferred — bumped to 3.3.18 via an override in #213.)*
+
+Each Dependabot major has a real blocker — don't merge blind:
 - **`#154` tailwind 4** — a CSS-layer / config rewrite; high-risk, defer until deliberately scheduled.
-- **`#151` django 6** — really a **Django 5.2 LTS** decision (4.2 is EOL; `django-tenants` compat +
-  6.0 churn). Pick the LTS target first.
+- **`#151` django** — **now security-forced** (see the ⚠️ note above). Target **Django 5.2 LTS**, not
+  Dependabot's 6.1; a careful, gate-verified, multi-tenant-sensitive upgrade.
 - **`#148` eslint 10** — tractable: `eslint-plugin-vue` caps eslint ≤9, so bump the companion plugin
   (`eslint-plugin-vue` 9→10) on the same branch, then eslint. CI-gate it.
 - **`#147` stripe 15** — dormant seam; `stripe.error` removed → runtime break. Migrate when wiring the
