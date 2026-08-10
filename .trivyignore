@@ -40,3 +40,16 @@ GHSA-rgw5-rvv9-x895  # brace-expansion unbounded-intermediate-array DoS (npm aud
 # a patched js-yaml in range. Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs.
 CVE-2026-59870       # js-yaml <=4.x !!omap quadratic-CPU DoS
 GHSA-5p4m-2wfm-xmqj  # same advisory — GitHub Advisory DB id Trivy uses for npm
+
+# ── Deferred: Django 4.2 EOL — six LOW CVEs, no in-range fix ──────────────────
+# Django 4.2.30 is END-OF-LIFE (Apr 2026). As of 2026-08-10 it carries six advisories, ALL
+# severity LOW (cache/header/validator edge cases with near-zero exposure here), each fixed
+# ONLY in Django 5.2.x / 6.0.x — no 4.2.x patch exists. TEMPORARY until the security-urgent
+# Django 5.2 LTS upgrade (the real fix). Accepted 2026-08-10; remove all six when Django is
+# upgraded. Mirror of the pip-audit --ignore-vuln list in .github/workflows/ci.yml.
+CVE-2026-48587       # Vary whitespace padding
+CVE-2026-6873        # signed-cookie salt namespace collision
+CVE-2026-8404        # Cache-Control case-sensitivity
+CVE-2026-48588       # cached Set-Cookie leak
+CVE-2026-53877       # GeoDjango GDALRaster heap over-read
+CVE-2026-53878       # DomainNameValidator newline / header injection
