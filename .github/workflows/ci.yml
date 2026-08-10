@@ -56,29 +56,11 @@ jobs:
         # After the dep bumps this runs clean with no ignores. If a specific
         # CVE ever has no in-range fix, add `--ignore-vuln <ID>` here with an
         # inline comment naming the CVE + why it is deferred — never blanket-disable.
-        #
-        # ── TEMPORARY: Django 4.2 is EOL (Apr 2026) — six CVEs, all LOW, no in-range fix ──
-        # As of 2026-08-10 the pinned Django 4.2.30 (end-of-life) carries six advisories, ALL
-        # severity Low (Django's Jun + Jul 2026 releases were five-Low batches each), each fixed
-        # ONLY in Django 5.2.x / 6.0.x — there is NO 4.2.x patch because 4.2 is EOL. They are
-        # cache/header/validator edge cases with near-zero practical exposure in THIS app (Vary
-        # / Cache-Control / Set-Cookie padding we don't produce; a signed-cookie salt collision;
-        # a GeoDjango GDALRaster bytes path; a DomainNameValidator newline). Deferred ONLY as a
-        # temporary measure so CI stays usable; the real fix is the now-SECURITY-URGENT Django
-        # 5.2 LTS upgrade (Dependabot #212 proposes 6.1 — 5.2 LTS is the safer target). Being on
-        # EOL Django is a treadmill: new Django CVEs will keep landing here until the upgrade —
-        # REMOVE all six --ignore-vuln below when Django is upgraded. Django-only; add nothing else.
         run: |
           cd backend
           . .venv/bin/activate
           pip install pip-audit
-          pip-audit -r requirements.txt --progress-spinner off \
-            --ignore-vuln CVE-2026-48587 \
-            --ignore-vuln CVE-2026-6873 \
-            --ignore-vuln CVE-2026-8404 \
-            --ignore-vuln CVE-2026-48588 \
-            --ignore-vuln CVE-2026-53877 \
-            --ignore-vuln CVE-2026-53878
+          pip-audit -r requirements.txt --progress-spinner off
       - name: Check migration drift
         run: |
           cd backend
