@@ -1,6 +1,6 @@
 Django==5.2.17
 psycopg2==2.9.12
-djangorestframework==3.17.1
+djangorestframework==3.18.0
 # OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
 # generateschema` with drf-spectacular, used by the CI "Export OpenAPI schema"
 # step (`manage.py spectacular --validate`) and by tests/test_openapi_schema.py.
@@ -8,7 +8,7 @@ djangorestframework==3.17.1
 drf-spectacular==0.30.0
 inflection==0.5.1
 uritemplate==4.2.0
-django-tenants==3.10.2
+django-tenants==3.14.0
 python-dotenv==1.2.2
 dj-database-url==2.1.0
 django-cors-headers==4.9.0
@@ -19,20 +19,20 @@ gunicorn==23.0.0
 whitenoise==6.12.0
 sentry-sdk==2.66.1
 django-storages==1.14.6
-boto3==1.43.61
+boto3==1.43.67
 django-redis==5.4.0
 redis==8.1.0
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
 # Optional at runtime: without a broker the app falls back to in-process dispatch.
 celery==5.6.3
-pywebpush==2.3.0
+pywebpush==2.4.0
 # Real-time (WebSockets). Channels activates only when installed; the app and its
 # polling fall back gracefully without it. Serve under ASGI (uvicorn/daphne) and
 # set REDIS_URL for the cross-process channel layer in production.
 channels==4.3.2
 channels-redis==4.3.0
 daphne==4.2.3
-uvicorn[standard]==0.52.0
+uvicorn[standard]==0.52.1
 pyotp==2.10.0
 # PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
 stripe>=10.0.0,<13.0.0
