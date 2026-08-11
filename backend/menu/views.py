@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal, ROUND_HALF_UP
 import csv
 import hashlib
@@ -354,7 +354,8 @@ def _validate_scheduled_for(profile, fulfillment_type, scheduled_for):
         return None, "schedule_not_supported"
     dt = scheduled_for
     if timezone.is_naive(dt):
-        dt = timezone.make_aware(dt, timezone.utc)
+        # django.utils.timezone.utc was removed in Django 5.0; use datetime's UTC.
+        dt = timezone.make_aware(dt, dt_timezone.utc)
     now = timezone.now()
     if dt < now + timedelta(minutes=_SCHEDULE_MIN_LEAD_MINUTES):
         return None, "schedule_too_soon"
