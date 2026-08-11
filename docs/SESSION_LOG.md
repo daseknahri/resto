@@ -12,6 +12,38 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-10 — Dependency-security unblock + Django 5.2 LTS upgrade
+
+**Result:** `main` @ `3e25974`, green. What began as continued super-app work surfaced an escalating
+CI-security situation: over a multi-day gap, newly-published advisories reddened every CI gate on `main`
+and every PR, blocking all merges. Resolved by *fixability*, then by eliminating the root cause.
+
+**What shipped:**
+- `#206` — marketplace reorder now drops sold-out items (the one safe Phase-3 increment; a scoping pass —
+  NEXT_SESSION §4.E — found consumer coherence is ~80% done, the rest owner-gated/structural).
+- `#207` — Phase-3 consumer-coherence scoping captured.
+- `#208`, `#213` — **CI-security unblock.** Handled each advisory by whether an in-range fix exists:
+  **FIXED** the frontend `nanoid` HIGH (bumped to 3.3.18 via an npm override — a proper fix, not a mask);
+  **DEFERRED** (documented, temporary) the dev-only js-yaml/brace-expansion advisories and the six
+  **all-Low** Django CVEs with no in-range fix (EOL Django). Verified the gates clean locally.
+- `#214` — recorded the EOL-Django security clock as the top priority in the handoff docs.
+- `#215` — **Django 4.2.30 → 5.2.17 LTS.** Got the backend off end-of-life Django. Small/surgical (the
+  stack was already 5.2-ready — django-tenants 3.10.2 / DRF 3.17.1 / Channels 4.3.2 needed no bump; only
+  `make_random_password` [removed 5.1] and `django.utils.timezone.utc` [removed 5.0] usages changed) and
+  removed the six CVE deferrals (5.2.17 fixes them). Validated end-to-end in CI — full DB suite on real
+  Postgres + e2e + Docker, no model drift. Owner made the final merge.
+
+**Lessons.** (1) EOL frameworks are a security *treadmill* — deferring their CVEs is a bandage; the fix
+is the upgrade. (2) Split advisories by *fixability*: bump what has an in-range fix, defer only the
+genuinely-unfixable (and only when Low / non-exploitable), never silently. (3) A major framework upgrade
+run branch-first + CI-gated (full DB + e2e), with the owner making the final merge, lands with zero risk
+to `main`.
+
+**Flagged, not fixed:** the dormant schema-pinned `SessionStore` doesn't cover Django 5.x's async session
+path — pin it before activating under ASGI (see NEXT_SESSION §4.C).
+
+---
+
 ## 2026-08-05 — Super-app hardening campaign (money correctness + coherence + robustness)
 
 **Result:** `main` @ `fcdf75b`, green (all CI jobs pass). **6 PRs** (#199–#204). Triggered by an
