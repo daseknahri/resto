@@ -5228,17 +5228,22 @@ class StaffVoidOrderItemView(APIView):
             _recompute_order_totals(order)
 
             # ── A5-followup FIX 2: reduce platform commission on the void ──────────
-            # A marketplace order is billed commission on its PRE-discount food
-            # subtotal (sum of item.subtotal — see accounts/views.py checkout, which
-            # snapshots commission_rate_applied). Voiding an item removes food
-            # revenue, so the commission the platform charges must shrink with it —
-            # otherwise the restaurant keeps paying commission on a line it refunded.
-            # We RECOMPUTE (not prorate) from the new effective food subtotal using
-            # the order's SNAPSHOTTED rate, which is exactly the basis A5 used at
-            # placement, so the result is consistent and self-correcting across any
-            # sequence of voids (each void recomputes from the current non-voided
-            # lines). Direct orders carry no rate (commission_rate_applied == 0) and
-            # are left untouched. Clamped at >= 0 (a fully-voided order → 0).
+            # Voiding an item removes food revenue, so the commission the platform
+            # charges must shrink with it — otherwise the restaurant keeps paying
+            # commission on a line it refunded. We RECOMPUTE (not prorate) from the new
+            # non-voided food subtotal using the order's SNAPSHOTTED rate, so the result
+            # is self-correcting across any sequence of voids (each void recomputes from
+            # the current non-voided lines). Direct orders carry no rate
+            # (commission_rate_applied == 0) and are left untouched. Clamped at >= 0.
+            #
+            # KNOWN FOLLOW-UP (owner decision pending): this recompute uses the
+            # PRE-discount line-sum basis (sum of non-voided item.subtotal). Marketplace
+            # *checkout* now bills commission POST-discount (commissionable_food_base =
+            # food - promo - loyalty; menu/commission.py + accounts/views.py). For a
+            # DISCOUNTED order later partly voided, the two diverge — this can slightly
+            # over-state commission because it does not net out the order-level
+            # promo/loyalty. Aligning them needs a rule for allocating an order-level
+            # discount across the individual voided lines.
             # Gate on source FIRST: a direct order never carries commission, so we
             # skip the recompute (and the rate conversion) entirely for it. Only a
             # marketplace order with a positive snapshotted rate is recomputed.
@@ -7807,11 +7812,20 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
 
     newly_cancelled = False
     with _tx.atomic():
-        if order.status != Order.Status.CANCELLED:
+        # Lock the order row so concurrent callers serialize HERE — a manual refund_cancel
+        # racing the auto-refund sweep, or two owner taps — instead of both reading a stale
+        # pre-cancel status and each running the non-idempotent loyalty claw-back + restock.
+        # The first caller flips it to CANCELLED under the lock; the next then reads CANCELLED
+        # and skips them. (The wallet credit is separately idempotent via its namespaced key,
+        # so it safely replays either way.) Falls back to the passed copy if the row vanished.
+        locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+        if (locked or order).status != Order.Status.CANCELLED:
             order.status = Order.Status.CANCELLED
             order.status_updated_at = _tz.now()
             order.save(update_fields=["status", "status_updated_at", "updated_at"])
             newly_cancelled = True
+        else:
+            order.status = Order.Status.CANCELLED  # already cancelled by a peer — reflect it for the caller
         # Wallet credit is idempotent (schema-namespaced key) regardless of caller/retries.
         _refund_wallet_for_cancelled_order(order, tenant_id=tenant_id)
         if newly_cancelled:
