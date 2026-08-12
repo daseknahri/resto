@@ -270,8 +270,11 @@ class Command(BaseCommand):
                         # Shared idempotent path: cancel + wallet-refund + reverse loyalty
                         # + restock + stand the driver down + realtime-broadcast to the
                         # customer's tracking page AND the owner's orders screen.
-                        refund_and_cancel_delivery_order(order, j.tenant_id)
-                        did_refund = True
+                        # Use the helper's return: True only if THIS call performed the
+                        # cancellation. If the order was already cancelled (e.g. the owner
+                        # manually refunded first), it returns False — so we don't re-count
+                        # or re-alert "auto-refunded" for a job a later sweep re-examines.
+                        did_refund = refund_and_cancel_delivery_order(order, j.tenant_id)
             except Exception:
                 logger.exception("auto-refund failed for delivery job %s", job.id)
                 continue
