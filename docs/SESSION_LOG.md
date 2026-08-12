@@ -12,6 +12,54 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-12 — Operational-gaps closure + big-test QA sweep
+
+**Result:** `main` @ `7e5df0f`, green (all CI jobs pass on Django 5.2.17). **4 PRs** (#217–#220). Closed the
+four remaining flagged UX gaps, made four owner-delegated money/product decisions, then ran a **"big test of
+every part"** — automated CI plus a two-agent read-only review across all four surfaces — which caught and
+fixed one concurrency bug.
+
+**What shipped:**
+- `#217` — **the four flagged UX gaps** (NEXT_SESSION §4.B): the waiter floor-tile "+ New order" now shares
+  the toolbar's **clock-in guard**; consumer qty-steppers get a 44×44 hit area (`ui-tap-expand`) meeting the
+  touch-target gate without density change; the desktop nav gains **Account**; the marketplace slot is
+  relabeled **"Order" → "Browse"** (all three locales).
+- `#218` — **two owner-delegated money decisions.** (1) **Commission basis → POST-discount:** checkout bills
+  `rate × max(0, food − promo − loyalty)` via a new shared `menu/commission.py` (`commissionable_food_base` +
+  `COMMISSIONABLE_STATUSES`), used identically by checkout, the owner statement, and analytics so they can't
+  drift (analytics also gained the missing `out_for_delivery` status — a latent under-count). (2)
+  **Stuck-delivery auto-refund:** `sweep_delivery_jobs` now auto-refunds a **pre-pickup, provably-
+  unfulfillable** job past `Profile.delivery_auto_refund_minutes` (default 30, `0` = off), reusing the shared
+  idempotent refund helper and re-verifying "not picked up" under a row lock.
+- `#219` — **no-show payout display:** the owner's no-show confirm now echoes the real `driver_payout` the
+  backend pays, not the gross `delivery_fee`.
+- `#220` — **the big-test fix.** The verification sweep caught a LOW-severity concurrency defect: the shared
+  `refund_and_cancel_delivery_order` checked its cancel-guard on an **unlocked** in-memory order, so a true
+  sub-second overlap (a manual refund racing the sweep, or two owner taps) could double-apply the two
+  non-idempotent side effects — loyalty claw-back + inventory restock. Fixed by re-reading the order under
+  `select_for_update` and branching on the locked row (the wallet credit was already keyed-safe, never
+  double-credited). Plus the sweep now counts/alerts off the helper's return value, and a stale commission
+  comment was corrected. Two new regression tests.
+
+**The big test.** (1) *Automated:* full CI green on final `main` — backend DB suite + e2e + frontend
+(~993 tests) + Docker + Trivy, all on Django 5.2.17 with every change layered in. (2) *Review sweep:* two
+read-only agents (money/Django integration; end-to-end flows on all four surfaces) verified Django 5.2, the
+commission-basis switch, the auto-refund, the no-show fix, and every surface flow as **correct with zero
+regressions** — surfacing only the one concurrency bug, which #220 fixed.
+
+**Flagged, not fixed:** the void-item commission recompute (`StaffVoidOrderItemView`) still uses the
+pre-discount line-sum basis — aligning it with the new post-discount checkout needs an owner decision on
+allocating an order-level discount across voided lines (NEXT_SESSION §4.D). **Deferred (owner-gated):** the
+three structural phases (unified cart / offline POS / driver surface) — all money-path, reviewed and left for
+deliberate staging (§4.E).
+
+**Lessons.** (1) A final "big test" review sweep earns its cost: automated CI plus a focused adversarial read
+across surfaces caught a real concurrency defect that per-PR review and green CI both missed. (2) Check-then-
+act on an **unlocked** read is a race even when each side effect looks individually gated — put the guard
+behind the same row lock the mutation uses.
+
+---
+
 ## 2026-08-10 — Dependency-security unblock + Django 5.2 LTS upgrade
 
 **Result:** `main` @ `3e25974`, green. What began as continued super-app work surfaced an escalating
