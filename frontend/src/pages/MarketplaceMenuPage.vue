@@ -218,7 +218,7 @@
                     <!-- Inline qty stepper once in cart, plain add button otherwise -->
                     <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
                       <button
-                        class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                        class="ui-press ui-tap-expand flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                         :aria-label="`${t('dishPage.decreaseQuantity')} ${dish.name}`"
                         @click="removeFromCart(dish.slug)"
                       >
@@ -226,7 +226,7 @@
                       </button>
                       <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ cartQty(dish.slug) }}</span>
                       <button
-                        class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                        class="ui-press ui-tap-expand flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                         :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
                         @click="addToCart(dish)"
                       >
@@ -451,7 +451,7 @@
                       <!-- Inline qty stepper once in cart, plain add button otherwise -->
                       <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
                         <button
-                          class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                          class="ui-press ui-tap-expand flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                           :aria-label="`${t('dishPage.decreaseQuantity')} ${dish.name}`"
                           @click="removeFromCart(dish.slug)"
                         >
@@ -459,7 +459,7 @@
                         </button>
                         <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ cartQty(dish.slug) }}</span>
                         <button
-                          class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                          class="ui-press ui-tap-expand flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                           :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
                           @click="addToCart(dish)"
                         >

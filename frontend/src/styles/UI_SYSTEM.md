@@ -49,11 +49,13 @@ Rules:
 
 - `ui-input`
 - `ui-textarea`
-- `ui-touch-target` (minimum tap target)
+- `ui-touch-target` (minimum tap target — sets `min-height: 44px`)
+- `ui-tap-expand` (invisible 44×44 hit area for controls that must stay visually small — e.g. compact qty steppers)
 
 Rules:
 - All interactive inputs should use focus-visible ring behavior from these classes.
 - Keep control height mobile-safe (`>= 44px`) using `ui-touch-target` when needed.
+- When a control must look small but still needs a 44×44 tap target (icon-only steppers), add `ui-tap-expand` instead of enlarging the visual box.
 
 ## 5. Action Primitives
 
