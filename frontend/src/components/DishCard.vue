@@ -236,11 +236,11 @@
           style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
-          <button class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
+          <button class="ui-press ui-touch-target ui-tap-expand flex h-8 w-8 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
             <AppIcon name="minus" class="h-3.5 w-3.5" />
           </button>
           <span class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)" aria-live="polite" aria-atomic="true">{{ qtyInCart }}</span>
-          <button class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
+          <button class="ui-press ui-touch-target ui-tap-expand flex h-8 w-8 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
@@ -302,20 +302,20 @@
     <div class="relative z-10 shrink-0" @click.stop>
       <div v-if="canOrder && qtyInCart > 0" class="flex items-center gap-1">
         <button
-          class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+          class="ui-press ui-touch-target ui-tap-expand flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.decreaseQty')"
           @click.stop="handleDecrement"
         ><AppIcon name="minus" class="h-3 w-3" /></button>
         <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ qtyInCart }}</span>
         <button
-          class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+          class="ui-press ui-touch-target ui-tap-expand flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.increaseQty')"
           @click.stop="handleAdd"
         ><AppIcon name="plus" class="h-3 w-3" /></button>
       </div>
       <button
         v-else-if="canOrder"
-        class="ui-press flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+        class="ui-press ui-tap-expand flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
         style="background-color:var(--color-secondary)"
         :aria-label="t('dishPage.addToCart')"
         @click.stop="handleAdd"
