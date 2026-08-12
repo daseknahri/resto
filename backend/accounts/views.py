@@ -4718,9 +4718,7 @@ class MarketplacePlaceOrderView(APIView):
                 # A5: the platform's take rate is per-tenant (Profile.marketplace_commission_pct,
                 # a fraction — 0.10 = 10%), defaulting to 0.10 so behaviour is unchanged unless
                 # the platform overrides it for this tenant. Fall back to 0.10 if the field is
-                # null/missing/unparseable (a malformed rate must never 500 a checkout). The
-                # BASIS is unchanged — still food_subtotal, the PRE-discount food total (switching
-                # to post-discount food is an owner decision; see A5-followup).
+                # null/missing/unparseable (a malformed rate must never 500 a checkout).
                 _mkt_rate_raw = getattr(profile, "marketplace_commission_pct", None)
                 try:
                     commission_rate = (
@@ -4728,7 +4726,16 @@ class MarketplacePlaceOrderView(APIView):
                     )
                 except (InvalidOperation, ValueError, TypeError):
                     commission_rate = Decimal("0.10")
-                commission_amount = (food_subtotal * commission_rate).quantize(Decimal("0.01"))
+                # BASIS: the POST-discount food total the restaurant actually keeps —
+                # food_subtotal minus both discounts, floored at zero (delivery fee + tip
+                # stay OUT of the base). Charging commission on the pre-discount subtotal
+                # billed the restaurant for revenue a promo/loyalty redemption gave away.
+                # The base definition is shared with the owner statement + analytics via
+                # menu.commission so the three can never drift. The rate snapshot
+                # (commission_rate_applied) is unchanged.
+                from menu.commission import commissionable_food_base as _commissionable_base
+                _commission_base = _commissionable_base(food_subtotal, _promo_discount, _loyalty_discount)
+                commission_amount = (_commission_base * commission_rate).quantize(Decimal("0.01"))
 
                 # Marketplace pickup & delivery are pay-now: the bill must be settled in
                 # full from the customer's wallet at checkout (mirrors the restaurant

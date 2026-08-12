@@ -63,6 +63,7 @@ from tenancy.openstate import schedule_open_now
 
 from django_tenants.utils import schema_context
 
+from .commission import COMMISSIONABLE_STATUSES
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
@@ -9990,17 +9991,15 @@ class OwnerCommissionStatementView(APIView):
 
         # Query marketplace orders for this local month.
         #
-        # A5-followup FIX 1: EXCLUDE cancelled orders. A cancelled marketplace order
-        # has had its food revenue fully refunded (MarketplaceOrderCancelView /
-        # _refund_wallet_for_cancelled_order), so the platform must NOT bill
-        # commission on it — billing commission on a refunded order would charge the
-        # restaurant for revenue it never kept. CANCELLED is the only "no revenue
-        # collected" terminal status in Order.Status (there is no separate
-        # declined/refunded terminal state; a fully item-voided order keeps its
-        # status but its commission is reduced to 0 at void time — FIX 2). COMPLETED
-        # and all in-progress states (PENDING/SCHEDULED/CONFIRMED/PREPARING/READY/
-        # OUT_FOR_DELIVERY) stay INCLUDED. The exclusion is applied ONCE on the base
-        # queryset so the aggregate Sum and the per-order rows below agree.
+        # Bill only orders that have EARNED commission: the shared COMMISSIONABLE_STATUSES
+        # (menu.commission) — CONFIRMED / PREPARING / READY / OUT_FOR_DELIVERY / COMPLETED.
+        # Commission is earned once the restaurant confirms the order. PENDING / SCHEDULED
+        # orders can still be cancelled before the kitchen commits, so they are NOT yet
+        # billable; a CANCELLED order had its food revenue fully refunded and never counts
+        # (a fully item-voided order keeps its status but its commission is reduced to 0 at
+        # void time). This is the IDENTICAL status set the owner analytics
+        # (sales.views billable_statuses) bills on, so the two never disagree. The filter is
+        # applied ONCE on the base queryset so the aggregate Sum and the per-order rows agree.
         qs = (
             Order.objects
             .filter(
@@ -10008,18 +10007,18 @@ class OwnerCommissionStatementView(APIView):
                 created_at__gte=month_start,
                 created_at__lt=next_month_start,
             )
-            .exclude(status=Order.Status.CANCELLED)
+            .filter(status__in=COMMISSIONABLE_STATUSES)
             .order_by("created_at")
         )
 
-        # ── Commission BASIS note (A5, step 5) ────────────────────────────────
-        # commission_amount is charged on the PRE-discount food_subtotal (see
-        # accounts/views.py marketplace checkout), whereas total_revenue below is
-        # the sum of Order.total which is POST-discount AND tip-inclusive. So when a
-        # discount or tip applies, net_payout = total_revenue - total_commission
-        # MIXES bases (commission on pre-discount food vs revenue on post-discount
-        # + tip). This is documented, not silently changed: whether to switch
-        # commission to the post-discount food total is an OWNER business decision.
+        # ── Commission BASIS note ─────────────────────────────────────────────
+        # commission_amount is charged on the POST-discount food base (food_subtotal
+        # minus promo + loyalty discounts; see accounts/views.py marketplace checkout
+        # and menu.commission.commissionable_food_base). total_revenue below is the sum
+        # of Order.total, which is also post-discount but is additionally tip-INCLUSIVE.
+        # So net_payout = total_revenue - delivery_fee - total_commission is coherent on
+        # the discount dimension; the only remaining spread is the customer tip, which is
+        # revenue that belongs to staff, not a commission base.
         orders_data = [
             {
                 "order_number": o.order_number,
