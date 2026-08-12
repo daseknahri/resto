@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 
 from .throttles import PublicLeadThrottle, UserLeadsThrottle
 
+from menu.commission import COMMISSIONABLE_STATUSES
 from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
@@ -2593,7 +2594,13 @@ class OwnerDashboardView(APIView):
                 }
             )
 
-        billable_statuses = [Order.Status.COMPLETED, Order.Status.READY, Order.Status.PREPARING, Order.Status.CONFIRMED]
+        # Committed revenue / commission bills on the SHARED status set (menu.commission)
+        # — CONFIRMED / PREPARING / READY / OUT_FOR_DELIVERY / COMPLETED — the IDENTICAL
+        # set the owner commission statement (menu.views) bills on, so analytics and the
+        # statement can never disagree. (This set adds OUT_FOR_DELIVERY, which the old
+        # local list dropped: a delivery order in flight is committed revenue and must be
+        # counted here too, not just billed on the statement.)
+        billable_statuses = COMMISSIONABLE_STATUSES
         revenue_qs = Order.objects.filter(
             created_at__gte=since,
             status__in=billable_statuses,

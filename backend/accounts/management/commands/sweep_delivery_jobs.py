@@ -5,19 +5,28 @@ cascades stay live between driver polls:
 
     python manage.py sweep_delivery_jobs
 
-Rules (policy: re-dispatch + alert restaurant; never auto-cancel/refund):
+Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last resort):
   (0) Exclusive offer window lapsed → cascade to the next-nearest driver / open pool.
   (a) Unclaimed OPEN-POOL SEARCHING > 3 min  → re-broadcast to online drivers (throttled).
   (b) Unclaimed SEARCHING > 10 min → alert the restaurant ONCE (owner_alerted_at).
   (c) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver went offline / stale > 10 min
       → release back to the pool + re-offer + alert the restaurant.
-Picked-up jobs are never auto-touched (the food is with the driver — that's a `failed` case).
+  (d) Still PRE-PICKUP and provably unfulfillable past the tenant's
+      Profile.delivery_auto_refund_minutes deadline (never assigned, OR abandoned after the
+      re-dispatch cap) → auto-refund & cancel, reusing the owner's manual idempotent
+      "refund & cancel" path. 0 = disabled. Prepaid delivery money is otherwise stranded
+      indefinitely when no driver ever completes.
+Picked-up jobs are NEVER auto-touched or auto-refunded (the food is with the driver — that
+stays a `failed` case + owner decision).
 """
+import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 REDISPATCH_AFTER = timedelta(minutes=3)
 OWNER_ALERT_AFTER = timedelta(minutes=10)
@@ -154,7 +163,11 @@ class Command(BaseCommand):
                         f"Order #{job.order_number}'s driver went offline; finding another.")
             released += 1
 
-        # (d) Expire stale PENDING cash-out requests (lazily expired on confirm, but a code
+        # (d) Bounded auto-refund for stuck PRE-PICKUP jobs (money safety net). See
+        #     _auto_refund_stuck_jobs — extracted so its money logic is unit-testable.
+        refunded = self._auto_refund_stuck_jobs(now, tenant_info, alert_owner)
+
+        # (e) Expire stale PENDING cash-out requests (lazily expired on confirm, but a code
         #     that's never shown would otherwise linger as 'pending').
         from accounts.models import DriverCashoutRequest
         cashouts = DriverCashoutRequest.objects.filter(
@@ -163,5 +176,112 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"sweep_delivery_jobs: repushed={repushed} alerted={alerted} "
-            f"released={released} cashouts_expired={cashouts}"
+            f"released={released} refunded={refunded} cashouts_expired={cashouts}"
         ))
+
+    def _auto_refund_stuck_jobs(self, now, tenant_info, alert_owner) -> int:
+        """Auto-refund & cancel delivery jobs that are stuck PRE-PICKUP and provably
+        unfulfillable, once past the tenant's Profile.delivery_auto_refund_minutes
+        deadline (0 = disabled). "Provably unfulfillable" = still unassigned/SEARCHING,
+        OR abandoned after the re-dispatch cap is exhausted.
+
+        Reuses the owner's manual "refund & cancel" implementation
+        (menu.views.refund_and_cancel_delivery_order) so the two paths share ONE
+        idempotent, keyed-wallet-credit money path. A picked-up job is NEVER refunded
+        (the food is with the driver — an owner decision). Best-effort per job: a
+        failure logs + is retried next sweep, and the shared credit is idempotent so a
+        partial-then-full pass never double-refunds. Returns the count refunded.
+        """
+        from django.db.models import Q
+        from django_tenants.utils import schema_context
+        from accounts.models import DeliveryJob
+        from tenancy.models import Profile
+        from menu.views import refund_and_cancel_delivery_order
+
+        deadline_cache: dict = {}
+
+        def refund_deadline_minutes(tid):
+            """Per-tenant auto-refund deadline (0 = disabled). Profile is in the shared
+            public schema keyed by tenant, so it reads directly with no schema switch."""
+            if tid not in deadline_cache:
+                p = (
+                    Profile.objects.filter(tenant_id=tid)
+                    .values_list("delivery_auto_refund_minutes", flat=True)
+                    .first()
+                )
+                deadline_cache[tid] = int(p or 0)
+            return deadline_cache[tid]
+
+        # Scan pre-pickup, non-terminal jobs that are provably unfulfillable:
+        #   (a) still SEARCHING with no driver ever assigned, OR
+        #   (b) re-dispatch cap exhausted (abandoned).
+        refund_candidates = DeliveryJob.objects.filter(
+            picked_up_at__isnull=True,
+            status__in=[
+                DeliveryJob.Status.SEARCHING,
+                DeliveryJob.Status.ASSIGNED,
+                DeliveryJob.Status.AT_RESTAURANT,
+            ],
+        ).filter(
+            Q(status=DeliveryJob.Status.SEARCHING, driver__isnull=True)
+            | Q(redispatch_count__gte=MAX_AUTO_REDISPATCH)
+        )
+
+        refunded = 0
+        for job in refund_candidates:
+            minutes = refund_deadline_minutes(job.tenant_id)
+            if minutes <= 0:
+                continue  # auto-refund disabled for this tenant
+            if job.created_at > now - timedelta(minutes=minutes):
+                continue  # not stuck long enough yet
+            _, schema = tenant_info(job.tenant_id)
+            if not schema:
+                continue
+            did_refund = False
+            try:
+                with transaction.atomic():
+                    # Re-lock and re-verify UNDER the lock — a driver may have accepted or
+                    # even picked up between the scan and now. We must NEVER refund a
+                    # picked-up job, and only refund one that is still provably stuck.
+                    j = (
+                        DeliveryJob.objects.select_for_update()
+                        .filter(pk=job.id, picked_up_at__isnull=True)
+                        .exclude(status__in=[
+                            DeliveryJob.Status.PICKED_UP,
+                            DeliveryJob.Status.DELIVERED,
+                            DeliveryJob.Status.FAILED,
+                            DeliveryJob.Status.CANCELLED,
+                        ])
+                        .first()
+                    )
+                    if j is None:
+                        continue  # picked up / terminal / gone since the scan
+                    still_stuck = (
+                        (j.status == DeliveryJob.Status.SEARCHING and j.driver_id is None)
+                        or (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
+                    )
+                    if not still_stuck:
+                        continue  # a driver was just assigned — let dispatch play out
+                    with schema_context(schema):
+                        from menu.models import Order
+                        order = Order.objects.filter(order_number=j.order_number).first()
+                        if order is None:
+                            continue  # order gone — leave the orphan for reconcile_order_refs
+                        # Shared idempotent path: cancel + wallet-refund + reverse loyalty
+                        # + restock + stand the driver down + realtime-broadcast to the
+                        # customer's tracking page AND the owner's orders screen.
+                        refund_and_cancel_delivery_order(order, j.tenant_id)
+                        did_refund = True
+            except Exception:
+                logger.exception("auto-refund failed for delivery job %s", job.id)
+                continue
+            if did_refund:
+                refunded += 1
+                # Actively notify the owner via the sweep's existing push mechanism (the
+                # customer's realtime tracking page was refreshed by the broadcast above).
+                alert_owner(
+                    job.tenant_id, job.order_number, "Delivery auto-refunded",
+                    f"Order #{job.order_number} had no driver after {minutes} min and was "
+                    f"auto-cancelled; any wallet prepayment was refunded to the customer.",
+                )
+        return refunded

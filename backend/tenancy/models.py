@@ -590,6 +590,25 @@ class Profile(models.Model):
         ),
     )
 
+    # ── Stuck-delivery auto-refund (bounded money safety net) ─────────────────
+    # Prepaid delivery money is otherwise stranded indefinitely when no driver ever
+    # completes a job. After this many minutes, a delivery job that is STILL
+    # pre-pickup (the food was never collected) AND provably unfulfillable — never
+    # assigned, or abandoned after the re-dispatch cap is exhausted — is
+    # auto-refunded & cancelled by sweep_delivery_jobs, reusing the SAME idempotent
+    # path as the owner's manual "refund & cancel". A picked-up job is NEVER
+    # auto-refunded (the food is with the driver — that stays an owner decision).
+    # Owned by the sweep agent; declared here to keep the tenancy migration chain
+    # linear (same convention as pending_sla_minutes above).
+    delivery_auto_refund_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text=(
+            "Minutes a prepaid delivery order may stay stuck pre-pickup before the "
+            "platform auto-refunds & cancels it. 0 = never auto-refund (the owner "
+            "resolves every stuck delivery manually)."
+        ),
+    )
+
     # ── Auto-accept (Toast/Square parity) ─────────────────────────────────────
     # When enabled, incoming online orders skip the manual-confirm tap: they are
     # created directly in CONFIRMED with a quoted prep time (default_prep_minutes,

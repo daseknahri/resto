@@ -63,6 +63,7 @@ from tenancy.openstate import schedule_open_now
 
 from django_tenants.utils import schema_context
 
+from .commission import COMMISSIONABLE_STATUSES
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
@@ -6682,23 +6683,11 @@ class OwnerDeliveryJobActionView(APIView):
 
         # ── Refund & cancel ────────────────────────────────────────────────────
         if action == "refund_cancel":
-            with _tx.atomic():
-                if order.status != Order.Status.CANCELLED:
-                    order.status = Order.Status.CANCELLED
-                    order.status_updated_at = _tz.now()
-                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
-                _refund_wallet_for_cancelled_order(order, tenant_id=tenant.id)   # idempotent
-                _reverse_loyalty_for_cancelled_order(order)
-                _restock_cancelled_order(order)
-            try:
-                from accounts.delivery_service import cancel_delivery_job_for_order
-                cancel_delivery_job_for_order(tenant.id, order.order_number)
-                _DJob.objects.filter(tenant_id=tenant.id, order_number=order.order_number).update(
-                    resolution=_DJob.Resolution.REFUNDED_CANCELLED
-                )
-            except Exception:
-                pass
-            _broadcast_order_change(order)
+            # Shared idempotent implementation (also used by the stuck-job auto-refund
+            # sweep): cancel + wallet-refund + reverse loyalty + restock + stand the
+            # driver down (Resolution.REFUNDED_CANCELLED) + realtime broadcast. Runs in
+            # this request's tenant schema, as the helper requires.
+            refund_and_cancel_delivery_order(order, tenant.id)
             return Response({"ok": True, "order_status": order.status,
                              "payment_status": order.payment_status, "resolution": "refunded_cancelled"})
 
@@ -7786,6 +7775,60 @@ def _restock_cancelled_order(order) -> None:
                     )
     except Exception:
         pass  # restock is best-effort — never block a cancellation
+
+
+def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
+    """Refund + cancel a delivery order — the ONE idempotent implementation shared by
+    the owner's manual "refund & cancel" action (OwnerDeliveryJobActionView) and the
+    stuck-job auto-refund sweep (accounts.sweep_delivery_jobs).
+
+    Steps (all idempotent / safe to replay):
+      1. Transition the order → CANCELLED (once).
+      2. Credit the customer's wallet — keyed on cancelrefund:{schema}:{order.id}, so a
+         second call REPLAYS instead of double-refunding.
+      3. Reverse loyalty (claw back earned / restore spent) and restock inventory, but
+         ONLY on the call that actually cancelled the order: neither is internally
+         idempotent, so a replay (or a concurrent second sweep) must not run them twice.
+      4. Cancel the public-schema delivery job (stands the driver down) + stamp
+         Resolution.REFUNDED_CANCELLED (best-effort, post-commit).
+      5. Broadcast the change so the customer's tracking page AND the owner's orders
+         screen refresh live — the existing realtime mechanism; no new user-facing copy.
+
+    MUST run inside the order's tenant schema_context: the wallet-refund idempotency key
+    and the restock/loyalty queries are tenant-scoped. Returns True if THIS call performed
+    the cancellation, False if the order was already cancelled (a replay).
+
+    Caller contract: NEVER call this for a job whose food was already picked up — that is
+    an owner decision, not an automatic refund.
+    """
+    from django.db import transaction as _tx
+    from django.utils import timezone as _tz
+    from accounts.models import DeliveryJob as _DJob
+
+    newly_cancelled = False
+    with _tx.atomic():
+        if order.status != Order.Status.CANCELLED:
+            order.status = Order.Status.CANCELLED
+            order.status_updated_at = _tz.now()
+            order.save(update_fields=["status", "status_updated_at", "updated_at"])
+            newly_cancelled = True
+        # Wallet credit is idempotent (schema-namespaced key) regardless of caller/retries.
+        _refund_wallet_for_cancelled_order(order, tenant_id=tenant_id)
+        if newly_cancelled:
+            _reverse_loyalty_for_cancelled_order(order)
+            _restock_cancelled_order(order)
+
+    try:
+        from accounts.delivery_service import cancel_delivery_job_for_order
+        cancel_delivery_job_for_order(tenant_id, order.order_number)
+        _DJob.objects.filter(tenant_id=tenant_id, order_number=order.order_number).update(
+            resolution=_DJob.Resolution.REFUNDED_CANCELLED
+        )
+    except Exception:
+        pass
+
+    _broadcast_order_change(order)
+    return newly_cancelled
 
 
 def _customer_can_cancel(order) -> bool:
@@ -9990,17 +10033,15 @@ class OwnerCommissionStatementView(APIView):
 
         # Query marketplace orders for this local month.
         #
-        # A5-followup FIX 1: EXCLUDE cancelled orders. A cancelled marketplace order
-        # has had its food revenue fully refunded (MarketplaceOrderCancelView /
-        # _refund_wallet_for_cancelled_order), so the platform must NOT bill
-        # commission on it — billing commission on a refunded order would charge the
-        # restaurant for revenue it never kept. CANCELLED is the only "no revenue
-        # collected" terminal status in Order.Status (there is no separate
-        # declined/refunded terminal state; a fully item-voided order keeps its
-        # status but its commission is reduced to 0 at void time — FIX 2). COMPLETED
-        # and all in-progress states (PENDING/SCHEDULED/CONFIRMED/PREPARING/READY/
-        # OUT_FOR_DELIVERY) stay INCLUDED. The exclusion is applied ONCE on the base
-        # queryset so the aggregate Sum and the per-order rows below agree.
+        # Bill only orders that have EARNED commission: the shared COMMISSIONABLE_STATUSES
+        # (menu.commission) — CONFIRMED / PREPARING / READY / OUT_FOR_DELIVERY / COMPLETED.
+        # Commission is earned once the restaurant confirms the order. PENDING / SCHEDULED
+        # orders can still be cancelled before the kitchen commits, so they are NOT yet
+        # billable; a CANCELLED order had its food revenue fully refunded and never counts
+        # (a fully item-voided order keeps its status but its commission is reduced to 0 at
+        # void time). This is the IDENTICAL status set the owner analytics
+        # (sales.views billable_statuses) bills on, so the two never disagree. The filter is
+        # applied ONCE on the base queryset so the aggregate Sum and the per-order rows agree.
         qs = (
             Order.objects
             .filter(
@@ -10008,18 +10049,18 @@ class OwnerCommissionStatementView(APIView):
                 created_at__gte=month_start,
                 created_at__lt=next_month_start,
             )
-            .exclude(status=Order.Status.CANCELLED)
+            .filter(status__in=COMMISSIONABLE_STATUSES)
             .order_by("created_at")
         )
 
-        # ── Commission BASIS note (A5, step 5) ────────────────────────────────
-        # commission_amount is charged on the PRE-discount food_subtotal (see
-        # accounts/views.py marketplace checkout), whereas total_revenue below is
-        # the sum of Order.total which is POST-discount AND tip-inclusive. So when a
-        # discount or tip applies, net_payout = total_revenue - total_commission
-        # MIXES bases (commission on pre-discount food vs revenue on post-discount
-        # + tip). This is documented, not silently changed: whether to switch
-        # commission to the post-discount food total is an OWNER business decision.
+        # ── Commission BASIS note ─────────────────────────────────────────────
+        # commission_amount is charged on the POST-discount food base (food_subtotal
+        # minus promo + loyalty discounts; see accounts/views.py marketplace checkout
+        # and menu.commission.commissionable_food_base). total_revenue below is the sum
+        # of Order.total, which is also post-discount but is additionally tip-INCLUSIVE.
+        # So net_payout = total_revenue - delivery_fee - total_commission is coherent on
+        # the discount dimension; the only remaining spread is the customer tip, which is
+        # revenue that belongs to staff, not a commission base.
         orders_data = [
             {
                 "order_number": o.order_number,
