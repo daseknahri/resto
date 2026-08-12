@@ -106,7 +106,7 @@ const arabicMessages = {
     "footerTitle": "Kepoli",
     "navDesktop": "التنقل الرئيسي",
     "navMobile": "التنقل الرئيسي",
-    "navOrder": "اطلب الآن",
+    "navOrder": "تصفح",
     "navBusiness": "للشركاء",
     "navDrive": "وضع السائق"
   },
