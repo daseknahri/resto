@@ -6683,23 +6683,11 @@ class OwnerDeliveryJobActionView(APIView):
 
         # ── Refund & cancel ────────────────────────────────────────────────────
         if action == "refund_cancel":
-            with _tx.atomic():
-                if order.status != Order.Status.CANCELLED:
-                    order.status = Order.Status.CANCELLED
-                    order.status_updated_at = _tz.now()
-                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
-                _refund_wallet_for_cancelled_order(order, tenant_id=tenant.id)   # idempotent
-                _reverse_loyalty_for_cancelled_order(order)
-                _restock_cancelled_order(order)
-            try:
-                from accounts.delivery_service import cancel_delivery_job_for_order
-                cancel_delivery_job_for_order(tenant.id, order.order_number)
-                _DJob.objects.filter(tenant_id=tenant.id, order_number=order.order_number).update(
-                    resolution=_DJob.Resolution.REFUNDED_CANCELLED
-                )
-            except Exception:
-                pass
-            _broadcast_order_change(order)
+            # Shared idempotent implementation (also used by the stuck-job auto-refund
+            # sweep): cancel + wallet-refund + reverse loyalty + restock + stand the
+            # driver down (Resolution.REFUNDED_CANCELLED) + realtime broadcast. Runs in
+            # this request's tenant schema, as the helper requires.
+            refund_and_cancel_delivery_order(order, tenant.id)
             return Response({"ok": True, "order_status": order.status,
                              "payment_status": order.payment_status, "resolution": "refunded_cancelled"})
 
@@ -7787,6 +7775,60 @@ def _restock_cancelled_order(order) -> None:
                     )
     except Exception:
         pass  # restock is best-effort — never block a cancellation
+
+
+def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
+    """Refund + cancel a delivery order — the ONE idempotent implementation shared by
+    the owner's manual "refund & cancel" action (OwnerDeliveryJobActionView) and the
+    stuck-job auto-refund sweep (accounts.sweep_delivery_jobs).
+
+    Steps (all idempotent / safe to replay):
+      1. Transition the order → CANCELLED (once).
+      2. Credit the customer's wallet — keyed on cancelrefund:{schema}:{order.id}, so a
+         second call REPLAYS instead of double-refunding.
+      3. Reverse loyalty (claw back earned / restore spent) and restock inventory, but
+         ONLY on the call that actually cancelled the order: neither is internally
+         idempotent, so a replay (or a concurrent second sweep) must not run them twice.
+      4. Cancel the public-schema delivery job (stands the driver down) + stamp
+         Resolution.REFUNDED_CANCELLED (best-effort, post-commit).
+      5. Broadcast the change so the customer's tracking page AND the owner's orders
+         screen refresh live — the existing realtime mechanism; no new user-facing copy.
+
+    MUST run inside the order's tenant schema_context: the wallet-refund idempotency key
+    and the restock/loyalty queries are tenant-scoped. Returns True if THIS call performed
+    the cancellation, False if the order was already cancelled (a replay).
+
+    Caller contract: NEVER call this for a job whose food was already picked up — that is
+    an owner decision, not an automatic refund.
+    """
+    from django.db import transaction as _tx
+    from django.utils import timezone as _tz
+    from accounts.models import DeliveryJob as _DJob
+
+    newly_cancelled = False
+    with _tx.atomic():
+        if order.status != Order.Status.CANCELLED:
+            order.status = Order.Status.CANCELLED
+            order.status_updated_at = _tz.now()
+            order.save(update_fields=["status", "status_updated_at", "updated_at"])
+            newly_cancelled = True
+        # Wallet credit is idempotent (schema-namespaced key) regardless of caller/retries.
+        _refund_wallet_for_cancelled_order(order, tenant_id=tenant_id)
+        if newly_cancelled:
+            _reverse_loyalty_for_cancelled_order(order)
+            _restock_cancelled_order(order)
+
+    try:
+        from accounts.delivery_service import cancel_delivery_job_for_order
+        cancel_delivery_job_for_order(tenant_id, order.order_number)
+        _DJob.objects.filter(tenant_id=tenant_id, order_number=order.order_number).update(
+            resolution=_DJob.Resolution.REFUNDED_CANCELLED
+        )
+    except Exception:
+        pass
+
+    _broadcast_order_change(order)
+    return newly_cancelled
 
 
 def _customer_can_cancel(order) -> bool:
