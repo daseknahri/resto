@@ -145,7 +145,7 @@ landingLayout: {
   footerTitle: "Kepoli",
   navDesktop: "Main navigation",
   navMobile: "Main navigation",
-  navOrder: "Order",
+  navOrder: "Browse",
   navBusiness: "For business",
   navDrive: "Drive",
 },

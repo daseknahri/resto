@@ -232,6 +232,35 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
         self.assertEqual(kwargs["commission_amount"], Decimal("2.00"))
         self.assertEqual(kwargs["commission_rate_applied"], Decimal("0.10"))
 
+    def test_commission_charged_on_post_discount_base(self):
+        """Checkout basis is POST-discount: the commission is rate × the shared
+        commissionable_food_base(food_subtotal, promo, loyalty), NOT rate ×
+        food_subtotal. We patch the shared base helper to return a base (15.00)
+        distinct from the 20.00 food_subtotal and prove BOTH that the checkout
+        delegates the base to it — passing food_subtotal AND both discounts so a
+        promo/loyalty redemption shrinks it — and that commission is charged on the
+        returned base (10% × 15.00 = 1.50), while the rate snapshot is unchanged."""
+        with patch("menu.commission.commissionable_food_base",
+                   return_value=Decimal("15.00")) as base_spy:
+            resp, order_cls = self._run_order(
+                profile=_profile(marketplace_commission_pct="0.10"),
+                customer=_customer(wallet="1000"),
+            )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        # Delegates the base to the shared post-discount helper, threading the
+        # pre-discount food subtotal + both discounts (0 here — no promo/loyalty).
+        base_spy.assert_called_once()
+        args = base_spy.call_args.args
+        self.assertEqual(args[0], Decimal("20.00"))  # food_subtotal (pre-discount)
+        self.assertEqual(args[1], Decimal("0"))      # promo_discount
+        self.assertEqual(args[2], Decimal("0"))      # loyalty_discount
+
+        # Commission is rate × the RETURNED base (15.00), not × food_subtotal (20.00).
+        kwargs = order_cls.objects.create.call_args.kwargs
+        self.assertEqual(kwargs["commission_amount"], Decimal("1.50"))
+        self.assertEqual(kwargs["commission_rate_applied"], Decimal("0.10"))
+
 
 # ── Commission STATEMENT — tenant-local month bucketing ───────────────────────
 
@@ -251,14 +280,17 @@ class CommissionStatementBucketTests(SimpleTestCase):
         tenant.profile = profile
 
         qs = MagicMock()
-        # A5-followup: the statement query is now filter(...).exclude(...).order_by(...)
-        # — the .exclude() drops cancelled orders. Chain it back to the same qs.
-        qs.exclude.return_value = qs
+        # The statement query is now filter(source, created_at range)
+        # .filter(status__in=COMMISSIONABLE_STATUSES).order_by(...) — the second
+        # .filter() keeps only commissionable statuses. Chain every step back to qs.
+        qs.filter.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {"order_count": 0, "total_revenue": None, "total_commission": None}
         qs.__iter__ = lambda s: iter([])
 
         def _filter(**kwargs):
+            # Captures the FIRST .filter() (source + created_at range); the chained
+            # status filter runs on qs and is not re-captured.
             capture.update(kwargs)
             return qs
 
@@ -339,7 +371,7 @@ class CommissionStatementBucketTests(SimpleTestCase):
             status="completed",
         )
         qs = MagicMock()
-        qs.exclude.return_value = qs
+        qs.filter.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {
             "order_count": 1,
@@ -398,7 +430,7 @@ class CommissionStatementPdfLabelTests(SimpleTestCase):
         total_rev = sum((o.total for o in orders), Decimal("0"))
         total_com = sum((o.commission_amount for o in orders), Decimal("0"))
         qs = MagicMock()
-        qs.exclude.return_value = qs
+        qs.filter.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {
             "order_count": len(orders),

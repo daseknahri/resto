@@ -12,6 +12,86 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-12 — Operational-gaps closure + big-test QA sweep
+
+**Result:** `main` @ `7e5df0f`, green (all CI jobs pass on Django 5.2.17). **4 PRs** (#217–#220). Closed the
+four remaining flagged UX gaps, made four owner-delegated money/product decisions, then ran a **"big test of
+every part"** — automated CI plus a two-agent read-only review across all four surfaces — which caught and
+fixed one concurrency bug.
+
+**What shipped:**
+- `#217` — **the four flagged UX gaps** (NEXT_SESSION §4.B): the waiter floor-tile "+ New order" now shares
+  the toolbar's **clock-in guard**; consumer qty-steppers get a 44×44 hit area (`ui-tap-expand`) meeting the
+  touch-target gate without density change; the desktop nav gains **Account**; the marketplace slot is
+  relabeled **"Order" → "Browse"** (all three locales).
+- `#218` — **two owner-delegated money decisions.** (1) **Commission basis → POST-discount:** checkout bills
+  `rate × max(0, food − promo − loyalty)` via a new shared `menu/commission.py` (`commissionable_food_base` +
+  `COMMISSIONABLE_STATUSES`), used identically by checkout, the owner statement, and analytics so they can't
+  drift (analytics also gained the missing `out_for_delivery` status — a latent under-count). (2)
+  **Stuck-delivery auto-refund:** `sweep_delivery_jobs` now auto-refunds a **pre-pickup, provably-
+  unfulfillable** job past `Profile.delivery_auto_refund_minutes` (default 30, `0` = off), reusing the shared
+  idempotent refund helper and re-verifying "not picked up" under a row lock.
+- `#219` — **no-show payout display:** the owner's no-show confirm now echoes the real `driver_payout` the
+  backend pays, not the gross `delivery_fee`.
+- `#220` — **the big-test fix.** The verification sweep caught a LOW-severity concurrency defect: the shared
+  `refund_and_cancel_delivery_order` checked its cancel-guard on an **unlocked** in-memory order, so a true
+  sub-second overlap (a manual refund racing the sweep, or two owner taps) could double-apply the two
+  non-idempotent side effects — loyalty claw-back + inventory restock. Fixed by re-reading the order under
+  `select_for_update` and branching on the locked row (the wallet credit was already keyed-safe, never
+  double-credited). Plus the sweep now counts/alerts off the helper's return value, and a stale commission
+  comment was corrected. Two new regression tests.
+
+**The big test.** (1) *Automated:* full CI green on final `main` — backend DB suite + e2e + frontend
+(~993 tests) + Docker + Trivy, all on Django 5.2.17 with every change layered in. (2) *Review sweep:* two
+read-only agents (money/Django integration; end-to-end flows on all four surfaces) verified Django 5.2, the
+commission-basis switch, the auto-refund, the no-show fix, and every surface flow as **correct with zero
+regressions** — surfacing only the one concurrency bug, which #220 fixed.
+
+**Flagged, not fixed:** the void-item commission recompute (`StaffVoidOrderItemView`) still uses the
+pre-discount line-sum basis — aligning it with the new post-discount checkout needs an owner decision on
+allocating an order-level discount across voided lines (NEXT_SESSION §4.D). **Deferred (owner-gated):** the
+three structural phases (unified cart / offline POS / driver surface) — all money-path, reviewed and left for
+deliberate staging (§4.E).
+
+**Lessons.** (1) A final "big test" review sweep earns its cost: automated CI plus a focused adversarial read
+across surfaces caught a real concurrency defect that per-PR review and green CI both missed. (2) Check-then-
+act on an **unlocked** read is a race even when each side effect looks individually gated — put the guard
+behind the same row lock the mutation uses.
+
+---
+
+## 2026-08-10 — Dependency-security unblock + Django 5.2 LTS upgrade
+
+**Result:** `main` @ `3e25974`, green. What began as continued super-app work surfaced an escalating
+CI-security situation: over a multi-day gap, newly-published advisories reddened every CI gate on `main`
+and every PR, blocking all merges. Resolved by *fixability*, then by eliminating the root cause.
+
+**What shipped:**
+- `#206` — marketplace reorder now drops sold-out items (the one safe Phase-3 increment; a scoping pass —
+  NEXT_SESSION §4.E — found consumer coherence is ~80% done, the rest owner-gated/structural).
+- `#207` — Phase-3 consumer-coherence scoping captured.
+- `#208`, `#213` — **CI-security unblock.** Handled each advisory by whether an in-range fix exists:
+  **FIXED** the frontend `nanoid` HIGH (bumped to 3.3.18 via an npm override — a proper fix, not a mask);
+  **DEFERRED** (documented, temporary) the dev-only js-yaml/brace-expansion advisories and the six
+  **all-Low** Django CVEs with no in-range fix (EOL Django). Verified the gates clean locally.
+- `#214` — recorded the EOL-Django security clock as the top priority in the handoff docs.
+- `#215` — **Django 4.2.30 → 5.2.17 LTS.** Got the backend off end-of-life Django. Small/surgical (the
+  stack was already 5.2-ready — django-tenants 3.10.2 / DRF 3.17.1 / Channels 4.3.2 needed no bump; only
+  `make_random_password` [removed 5.1] and `django.utils.timezone.utc` [removed 5.0] usages changed) and
+  removed the six CVE deferrals (5.2.17 fixes them). Validated end-to-end in CI — full DB suite on real
+  Postgres + e2e + Docker, no model drift. Owner made the final merge.
+
+**Lessons.** (1) EOL frameworks are a security *treadmill* — deferring their CVEs is a bandage; the fix
+is the upgrade. (2) Split advisories by *fixability*: bump what has an in-range fix, defer only the
+genuinely-unfixable (and only when Low / non-exploitable), never silently. (3) A major framework upgrade
+run branch-first + CI-gated (full DB + e2e), with the owner making the final merge, lands with zero risk
+to `main`.
+
+**Flagged, not fixed:** the dormant schema-pinned `SessionStore` doesn't cover Django 5.x's async session
+path — pin it before activating under ASGI (see NEXT_SESSION §4.C).
+
+---
+
 ## 2026-08-05 — Super-app hardening campaign (money correctness + coherence + robustness)
 
 **Result:** `main` @ `fcdf75b`, green (all CI jobs pass). **6 PRs** (#199–#204). Triggered by an
