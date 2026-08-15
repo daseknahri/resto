@@ -2128,7 +2128,10 @@ const deliveryAction = async (o, action) => {
   if (action === 'confirm_noshow') {
     const okNoshow = await confirm({
       title: t('ownerOrders.djPayNoshowConfirmTitle'),
-      body: t('ownerOrders.djPayNoshowConfirmBody', { amount: formatCurrency(o.delivery_fee, o.currency) }),
+      // Show the ACTUAL payout the backend pays the driver — DeliveryJob.driver_payout
+      // (delivery_fee minus the platform's delivery commission), not the gross delivery_fee.
+      // They match only at 0% delivery commission; echoing delivery_fee overstated the payout.
+      body: t('ownerOrders.djPayNoshowConfirmBody', { amount: formatCurrency(o.delivery_job?.driver_payout ?? o.delivery_fee, o.currency) }),
       confirmLabel: t('ownerOrders.djPayNoshow'),
       danger: true,
     });

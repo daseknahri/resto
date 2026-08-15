@@ -10,18 +10,23 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ---
 
-## 1. Current state (2026-08-04)
+## 1. Current state (2026-08-12)
 
-- `main` @ `fcdf75b`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest +
-  Playwright e2e + Docker builds all pass in CI. Deployable.
-- Recent campaigns are fully merged + cleaned up (#169–#204; the 2026-08-05 super-app hardening +
-  calibration campaign is #199–#204) — see [`SESSION_LOG.md`](SESSION_LOG.md). Deploy is still
-  **manual via Coolify** (git push does NOT deploy).
-- **The quick-win [CODE] backlog is drained.** Two audit campaigns (daily-use, then money/coherence/
-  robustness + a calibration pass that confirmed the app is otherwise production-grade) fixed the real
-  bugs. What remains (§4) is **owner-gated or structural**: a payment provider, the first non-MAD
-  tenant, a few product decisions, the deferred dependency majors, and the big structural phases (POS
-  offline reliability, unifying the two consumer front-ends, a dedicated driver surface).
+- `main` @ `7e5df0f`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest (on
+  **Django 5.2.17 LTS**) + Playwright e2e + Docker builds all pass in CI. Deployable. *(2026-08-10: got
+  the backend **off end-of-life Django** — upgraded 4.2.30 → 5.2.17 LTS (#215); the CI security gates run
+  clean, no CVE deferrals. See §4.C.)*
+- Recent campaigns are fully merged + cleaned up (#169–#220) — see [`SESSION_LOG.md`](SESSION_LOG.md).
+  The **2026-08-12 operational-gaps closure** (#217–#220) closed the four remaining flagged UX gaps and
+  made four owner-delegated money/product decisions, then a **big-test QA sweep** (automated CI + a
+  two-agent read-only review across all four surfaces) validated the whole session's changes — catching
+  and fixing one concurrency bug (#220). Deploy is still **manual via Coolify** (git push does NOT deploy).
+- **The quick-win [CODE] backlog is drained.** Three audit/closure campaigns (daily-use, then money/
+  coherence/robustness + calibration, then the operational-gaps pass) fixed the real bugs and closed the
+  flagged gaps. What remains (§4) is **owner-gated or structural**: a payment provider, the first non-MAD
+  tenant, a couple of product decisions, the deferred dependency majors, scheduling the two Coolify sweeps,
+  and the big structural phases (POS offline reliability, unifying the two consumer front-ends, a dedicated
+  driver surface).
 
 ## 2. Don't re-audit these — they're done
 
@@ -94,38 +99,97 @@ messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
    and build it. Per-order currency display in the admin console is already done (#187); this is the
    *aggregate* case only.
 
-### B. Flagged this campaign but not shipped (need a decision or are lower value)
+### B. Flagged earlier campaigns — ✅ ALL CLOSED (2026-08-12, #217)
 
-- **Desktop pill-nav vs. mobile dock consistency** (low-med): #185 changed only the *mobile* dock to
-  Orders+Account; the desktop pill-nav in `LandingLayout.vue` still shows Landing/Order/Contact/
-  Business. Reconcile if desired.
-- **"Order" vs "Orders" dock-label adjacency** (cosmetic): slots 2 and 3 differ by one letter
-  (mitigated with distinct icons). Could relabel slot 2 (marketplace) to "Discover"/"Browse" — but
-  that also touches the desktop nav for consistency.
-- **Waiter clock-in guard consistency** (W2, product decision): the toolbar "+ New order" blocks with
-  a "clock in first" toast, but the floor-tile / table-group "+ New order" bypasses it. Decide
-  whether floor-tile new-order should require clock-in, then make them consistent.
-- **Consumer in-menu qty-stepper touch targets** (C2, visual-density judgment): the `±` steppers are
-  ~28px (< the 44px design-system gate) but deliberately compact; enlarging changes card density.
+The four UX gaps flagged (but deferred) by the prior campaigns were all closed in the operational-gaps
+pass. Kept here as a record; nothing outstanding:
 
-### C. Deferred dependency majors (4 open Dependabot PRs)
+- ✅ **Desktop pill-nav vs. mobile dock consistency** — `LandingLayout.vue` desktop nav now carries
+  **Account** (Landing/Browse/Account/Business), matching the mobile dock's Orders+Account direction.
+- ✅ **"Order" vs "Orders" dock-label adjacency** — the marketplace slot was relabeled **"Order" →
+  "Browse"** (`landingLayout.navOrder`, all three locales), removing the one-letter adjacency.
+- ✅ **Waiter clock-in guard consistency (W2)** — the floor-tile / table-group "+ New order"
+  (`openNewOrderForTable`) now applies the **same clock-in guard** as the toolbar (a not-clocked-in
+  waiter gets the "clock in first" toast; a clocked-in one is unaffected).
+- ✅ **Consumer in-menu qty-stepper touch targets (C2)** — the `±` steppers get a 44×44 invisible hit
+  area (`ui-tap-expand`) that meets the design-system gate **without** changing visual card density.
 
-Each has a real blocker — don't merge blind:
+### C. Deferred dependency majors + the EOL-Django clock (✅ RESOLVED)
+
+**✅ RESOLVED (2026-08-10): Django upgraded 4.2.30 → 5.2.17 LTS (#215).** The app is **off end-of-life
+Django** and onto supported 5.2 LTS. The six deferred Low CVEs are now genuinely *fixed* (5.2.17 ships
+them), so the six `--ignore-vuln` deferrals were removed from `ci.yml` + `.trivyignore` and the security
+gates run clean again. The upgrade was small/surgical — django-tenants 3.10.2 + DRF/Channels needed no
+bump; only `make_random_password` (removed 5.1) and `django.utils.timezone.utc` (removed 5.0) usages had
+to change — and was validated end-to-end in CI (full DB suite + e2e + Docker on 5.2.17, no model drift).
+*(The separate npm `nanoid` HIGH was fixed to 3.3.18 in #213. Dependabot `#212`, which targeted 6.1, is
+now superseded — close it.)* **One follow-up, flagged not fixed:** the *dormant* schema-pinned
+`accounts/session_backends.SessionStore` only pins Django's **sync** session methods — pin the 5.x
+**async** path (`asave`/`aexists`/…) before ever activating that store under ASGI (documented in
+`backend/tests/test_ops3_session_backend.py`).
+
+Each remaining Dependabot major has a real blocker — don't merge blind:
 - **`#154` tailwind 4** — a CSS-layer / config rewrite; high-risk, defer until deliberately scheduled.
-- **`#151` django 6** — really a **Django 5.2 LTS** decision (4.2 is EOL; `django-tenants` compat +
-  6.0 churn). Pick the LTS target first.
 - **`#148` eslint 10** — tractable: `eslint-plugin-vue` caps eslint ≤9, so bump the companion plugin
   (`eslint-plugin-vue` 9→10) on the same branch, then eslint. CI-gate it.
 - **`#147` stripe 15** — dormant seam; `stripe.error` removed → runtime break. Migrate when wiring the
   PSP (item A.1).
 
-### D. Pre-existing owner items (from `CLAUDE.md`, still open)
+### D. Pre-existing owner items (from `CLAUDE.md`)
 
-- **Product decisions:** commission basis (pre- vs post-discount), stuck-delivery refund policy,
-  rides go-live.
+- **Product decisions — two resolved 2026-08-12 (#218), the rest open:**
+  - ✅ **Commission basis → POST-discount** (#218, revenue-affecting): marketplace checkout now bills
+    `rate × max(0, food − promo − loyalty)` via the shared `menu/commission.py` `commissionable_food_base`
+    (owner statement + analytics use the same constant, so the three can't drift). *Follow-up (owner
+    decision pending):* the **void-item commission recompute** (`StaffVoidOrderItemView`) still uses the
+    **pre-discount** line-sum basis, so a discounted order later partly voided can slightly over-state
+    commission. Aligning it needs a rule for **allocating an order-level discount across the voided lines**
+    — decide the allocation, then apply (documented at the recompute site in `menu/views.py`).
+  - ✅ **Stuck-delivery refund → bounded auto-refund** (#218): the `sweep_delivery_jobs` sweep now
+    auto-refunds a **pre-pickup, provably-unfulfillable** delivery job past
+    `Profile.delivery_auto_refund_minutes` (default **30 min**; `0` disables). It never touches a
+    picked-up job (re-verified under a row lock) and reuses the shared idempotent refund helper (hardened
+    against concurrent double-apply in #220). **Needs the sweep scheduled on Coolify to actually fire** —
+    see below.
+  - ⬜ **Rides go-live** — still open.
 - **Ops / infra launch:** DNS/TLS, prod env, email, backups, first-tenant smoke.
-- **Schedule the two sweep commands on Coolify:** `sweep_delivery_jobs` (~60s) and
+- **Schedule the two sweep commands on Coolify:** `sweep_delivery_jobs` (~60s — now also drives the
+  stuck-delivery **auto-refund**, so scheduling it is what turns that feature on) and
   `reconcile_driver_earnings` (~15 min).
+
+### E. Structural super-app phases (scoped 2026-08-05; owner-gated — need a go-ahead, not autonomous)
+
+The big vision levers. The audit campaigns hardened the existing surfaces; these change *structure* and
+touch the working money/checkout path, so they need owner approval + careful staging (not overnight work).
+
+> **Reviewed again 2026-08-12 and deliberately deferred.** Asked to "decide for me" on these, the call
+> was **not** to start them autonomously: all three (unified server-side cart, offline-first POS, dedicated
+> driver surface) sit **on the money/checkout path** and need deliberate staging + owner sign-off, not
+> unattended work. The one safe, self-contained increment the scoping surfaced was already shipped (#206).
+
+**Phase 3 — consumer coherence** (scoped in detail; `PRODUCT_VISION` §"Surface 2" is now partly **stale** —
+coherence is **~80% already shipped**). Remaining, ranked:
+- **Unify the two carts / front-ends (the headline item) — architecturally blocked.** The storefront
+  (`Menu`/`Cart`/`OrderStatus`, on a **tenant subdomain**) and the marketplace/hub (`Marketplace`/
+  `MarketplaceMenuPage`/`SuperAppHub`/`CustomerAccount`, on the **platform host**) run on **different
+  origins**, so their localStorage carts **cannot** share client state. A truly unified cart needs a
+  **server-side cart** (new model + endpoints **on the checkout path**) — not a frontend refactor.
+- **Server-back dish favorites** — today localStorage-only per-slug (business *follow* is already
+  server-backed via `CustomerTenantFollow`). Needs a `CustomerDishFavorite` model + migration + a
+  follow-style view + FE wiring. Additive, but backend + migration.
+- **Extract the duplicated stale-happy-hour re-price + validation guards** (`Cart.vue` ≈
+  `MarketplaceMenuPage.vue`) into a shared checkout composable — sensible DRY, but it runs **inside the
+  place-order path**, so stage it deliberately with full verification.
+- *Already coherent (no action):* status vocab + reconciling receipts (#202), marketplace checkout parity
+  (#203), server-hydrated **tenant-scoped** storefront history, shared saved-addresses. Forcing
+  cross-tenant history onto the storefront would be **wrong** product behavior.
+- *Shipped from this scope:* `#206` — marketplace reorder now **drops sold-out items** (was seeding them
+  into a checkout-blocked cart) — the one safe, self-contained increment the scope surfaced.
+
+**Phase 2 — POS terminal reliability** (offline-first order entry + payment, ticket concurrency,
+multi-drawer/PIN, ESC/POS printing) and **Phase 5 — dedicated driver surface** (carve out a `/driver`
+bundle, WebSocket offers/status, native push, offline action queue) are the other two structural levers —
+both large and money-adjacent. See `PRODUCT_VISION` §"Surface 1/3" for the decomposition.
 
 ## 5. Repo hygiene (needs owner sign-off — not done automatically)
 

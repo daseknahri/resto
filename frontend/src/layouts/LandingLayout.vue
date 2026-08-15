@@ -19,10 +19,13 @@
         </RouterLink>
 
         <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex" :aria-label="t('landingLayout.navDesktop')">
-          <!-- Consumer-first nav: hub → order, then low-key business/contact -->
+          <!-- Consumer-first nav: hub → order → account, then low-key business.
+               Account mirrors the mobile bottom-dock's Account entry (#185) so a
+               signed-in consumer has quick desktop account access; Contact drops
+               from the top bar to keep it at 4 pills (it stays in the footer). -->
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/' || $route.path === '/hub'" :aria-current="($route.path === '/' || $route.path === '/hub') ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/order" :data-active="$route.path.startsWith('/order')" :aria-current="$route.path.startsWith('/order') ? 'page' : undefined" active-class="" exact-active-class="">{{ t("landingLayout.navOrder") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" :to="{ name: 'customer-account' }" :data-active="$route.path === '/account'" :aria-current="$route.path === '/account' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.myAccount") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap opacity-70 hover:opacity-100" to="/business" :data-active="$route.path === '/business'" :aria-current="$route.path === '/business' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("landingLayout.navBusiness") }}</RouterLink>
         </nav>
 

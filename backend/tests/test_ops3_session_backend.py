@@ -34,12 +34,20 @@ from accounts import session_backends
 
 class DjangoVersionPinTests(SimpleTestCase):
     """The override set below (which methods need their own schema_context wrap) was
-    derived by reading db.py/cached_db.py for Django 4.2 specifically. Upgrading Django
+    derived by reading db.py/cached_db.py for Django 5.2 specifically. Upgrading Django
     means re-reading those two files before trusting the rest of this file — pin the
-    version here so an upgrade fails this test loudly instead of silently drifting."""
+    version here so an upgrade fails this test loudly instead of silently drifting.
 
-    def test_pinned_against_django_4_2(self):
-        self.assertEqual(django.VERSION[:2], (4, 2))
+    Re-verified against Django 5.2 on the 4.2->5.2 upgrade: the SYNC call graph is
+    unchanged — cached_db.load() still reaches the DB only via _get_session_from_db(),
+    and exists()/save()/delete() still wrap their DB access through super(), so the same
+    5 sync overrides remain exactly right. NOTE: Django 5.x added an ASYNC session path
+    (asave/adelete/aexists/_aget_session_from_db) that this backend does NOT schema-pin;
+    that is a no-op today (the backend is dormant and the app runs sync sessions) but
+    MUST be pinned before activating this store under async/ASGI views."""
+
+    def test_pinned_against_django_5_2(self):
+        self.assertEqual(django.VERSION[:2], (5, 2))
 
 
 class SessionStoreResolutionTests(SimpleTestCase):

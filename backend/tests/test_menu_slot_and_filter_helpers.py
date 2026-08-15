@@ -7,10 +7,9 @@ Unit tests for private helper functions in menu/views.py:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-from datetime import datetime, date
+from datetime import datetime, date, timezone as dt_timezone
 from unittest.mock import MagicMock
 
-import pytz
 from django.test import SimpleTestCase
 
 from menu.views import (
@@ -106,7 +105,7 @@ class SlotFloorTests(SimpleTestCase):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BuildDaySlotsTests(SimpleTestCase):
-    UTC = pytz.UTC
+    UTC = dt_timezone.utc
 
     def test_returns_list(self):
         slots = _build_day_slots(date(2024, 6, 1), 30, self.UTC)

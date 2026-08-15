@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django_tenants.utils import get_public_schema_name, schema_context
 from django.utils.text import slugify
 
@@ -320,7 +321,10 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                 },
             )
             if created:
-                user.set_password(User.objects.make_random_password())
+                # Temp password: user never sees it and authenticates via the
+                # activation link, so it just needs to be strong and unguessable.
+                # (User.objects.make_random_password() was removed in Django 5.1.)
+                user.set_password(get_random_string(length=32))
             user.tenant = tenant
             user.save()
 

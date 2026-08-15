@@ -3,11 +3,12 @@ A5-followup — Marketplace billing CORRECTNESS (commission reversal + multi-cur
 
 Three independent money fixes, each unit-tested (SimpleTestCase + mocks — no DB):
 
-  FIX 1 — OwnerCommissionStatementView EXCLUDES cancelled marketplace orders from
-          the commission query. A cancelled order's food revenue is fully refunded,
-          so the platform must never bill commission on it. The exclusion is applied
-          on the base queryset so the aggregate AND the per-order rows agree; a
-          COMPLETED order is still billed.
+  FIX 1 — OwnerCommissionStatementView bills only the shared COMMISSIONABLE_STATUSES
+          (menu.commission) via .filter(status__in=...) — the IDENTICAL set the owner
+          analytics bills on. A cancelled order's food revenue is fully refunded and a
+          pending/scheduled order hasn't earned commission yet, so none of them are
+          billed; a COMPLETED order still is. The filter is applied on the base queryset
+          so the aggregate AND the per-order rows agree.
 
   FIX 2 — StaffVoidOrderItemView RECOMPUTES Order.commission_amount when an item is
           voided off a MARKETPLACE order, from the new (post-void) pre-discount food
@@ -19,7 +20,7 @@ Three independent money fixes, each unit-tested (SimpleTestCase + mocks — no D
           currency block with its OWN code/total — never orders_data[0]['currency']
           for everything.
 
-The statement view filters with Order.objects.filter(...).exclude(...).order_by(...);
+The statement view filters with Order.objects.filter(...).filter(status__in=...).order_by(...);
 the void view reloads the order via Order.objects.select_for_update().prefetch_related().get().
 Both import models at module top, so we patch menu.views.Order directly (same technique
 as test_a5_commission.py / test_loyalty_void_clawback.py).
@@ -71,33 +72,34 @@ class _CommissionStatementHarness(SimpleTestCase):
             status=status_val,
         )
 
-    def _run_json(self, orders, *, capture_filter=None, capture_exclude=None):
-        """Drive the JSON branch. The view's qs is filter(...).exclude(...).order_by(...);
-        we make those chain back to a qs that iterates `orders` and aggregates over them."""
+    def _run_json(self, orders, *, capture_filter=None, capture_status_filter=None):
+        """Drive the JSON branch. The view's qs is now
+        filter(source, created_at range).filter(status__in=COMMISSIONABLE_STATUSES)
+        .order_by(...); we make both filters chain back to a qs that iterates `orders`.
+        capture_filter captures the first filter's kwargs; capture_status_filter the
+        second (status__in)."""
         tenant = self._tenant()
 
         qs = MagicMock()
-        qs.exclude.return_value = qs
         qs.order_by.return_value = qs
         qs.__iter__ = lambda s: iter(orders)
 
-        def _filter(**kwargs):
+        def _first_filter(**kwargs):
             if capture_filter is not None:
                 capture_filter.update(kwargs)
             return qs
 
-        def _exclude(**kwargs):
-            if capture_exclude is not None:
-                capture_exclude.update(kwargs)
+        def _second_filter(**kwargs):
+            if capture_status_filter is not None:
+                capture_status_filter.update(kwargs)
             return qs
 
-        qs.exclude.side_effect = _exclude
+        qs.filter.side_effect = _second_filter
 
         with patch("menu.views._is_tenant_owner", return_value=True), \
                 patch("menu.views.Order") as mock_order:
             mock_order.Source.MARKETPLACE = "marketplace"
-            mock_order.Status.CANCELLED = "cancelled"
-            mock_order.objects.filter.side_effect = _filter
+            mock_order.objects.filter.side_effect = _first_filter
             req = self.factory.get("/api/owner/commission-statement/?year=2026&month=6")
             req.user = MagicMock(is_authenticated=True)
             req.tenant = tenant
@@ -107,14 +109,13 @@ class _CommissionStatementHarness(SimpleTestCase):
     def _pdf_text(self, orders):
         tenant = self._tenant()
         qs = MagicMock()
-        qs.exclude.return_value = qs
+        qs.filter.return_value = qs
         qs.order_by.return_value = qs
         qs.__iter__ = lambda s: iter(orders)
 
         with patch("menu.views._is_tenant_owner", return_value=True), \
                 patch("menu.views.Order") as mock_order:
             mock_order.Source.MARKETPLACE = "marketplace"
-            mock_order.Status.CANCELLED = "cancelled"
             mock_order.objects.filter.return_value = qs
             req = self.factory.get(
                 "/api/owner/commission-statement/?year=2026&month=6&format=pdf"
@@ -134,25 +135,33 @@ class _CommissionStatementHarness(SimpleTestCase):
         return "".join(page.extract_text() for page in reader.pages)
 
 
-# ── FIX 1: cancelled orders excluded from the commission statement ────────────
+# ── FIX 1: only commissionable statuses billed on the commission statement ────
 
 class CancelledOrderExclusionTests(_CommissionStatementHarness):
-    def test_query_excludes_cancelled_status(self):
-        """The statement queryset must .exclude(status=CANCELLED) so the platform
-        never bills commission on a fully-refunded (cancelled) marketplace order.
-        The exclusion sits on the base qs → aggregate AND rows agree."""
-        capture_exclude = {}
+    def test_query_filters_to_commissionable_statuses(self):
+        """The statement queryset must .filter(status__in=COMMISSIONABLE_STATUSES) so
+        the platform bills only orders that have EARNED commission — and never a
+        fully-refunded (cancelled) order, nor a not-yet-confirmed pending/scheduled one.
+        This is the IDENTICAL set the analytics view bills on. The filter sits on the
+        base qs → aggregate AND rows agree."""
+        from menu.commission import COMMISSIONABLE_STATUSES
+
+        capture_status = {}
         resp = self._run_json(
             [self._order_row(number="ORD-OK", status_val="completed")],
-            capture_exclude=capture_exclude,
+            capture_status_filter=capture_status,
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(capture_exclude.get("status"), "cancelled")
+        self.assertEqual(capture_status.get("status__in"), COMMISSIONABLE_STATUSES)
+        # A refunded (cancelled) and a not-yet-earned (pending/scheduled) order are excluded.
+        self.assertNotIn("cancelled", COMMISSIONABLE_STATUSES)
+        self.assertNotIn("pending", COMMISSIONABLE_STATUSES)
+        self.assertNotIn("scheduled", COMMISSIONABLE_STATUSES)
 
     def test_completed_included_cancelled_excluded_in_totals_and_rows(self):
         """A COMPLETED marketplace order is billed; a CANCELLED one never reaches the
-        statement (the DB .exclude removes it). We simulate the DB exclusion by only
-        feeding the surviving COMPLETED order, and assert the totals + rows reflect
+        statement (the DB status__in filter removes it). We simulate the DB filter by
+        only feeding the surviving COMPLETED order, and assert the totals + rows reflect
         exactly that one order — proving cancelled revenue/commission is not summed."""
         completed = self._order_row(number="ORD-DONE", total="40.00",
                                     commission="6.00", rate="0.15",

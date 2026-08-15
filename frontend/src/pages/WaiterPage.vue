@@ -1150,6 +1150,13 @@ const overflowOrder = ref(null); // order object whose overflow sheet is open
 // If the table already has active orders, confirm first — nudges the waiter
 // toward the existing running tab instead of silently starting a second, independent order.
 const openNewOrderForTable = async (tile) => {
+  // Same clock-in guard as the toolbar "+ New order" (onNewOrderClick): a
+  // not-clocked-in staff member is blocked from every new-order entry point
+  // with the identical toast, not just the toolbar one.
+  if (!currentShift.value) {
+    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+    return;
+  }
   if (tile.orders?.length > 0) {
     const ok = await confirm({
       title: t('waiterPage.dupOrderConfirmTitle'),
