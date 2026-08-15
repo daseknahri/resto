@@ -46,7 +46,7 @@
     "@vue/test-utils": "^2.4.11",
     "autoprefixer": "10.5.4",
     "eslint": "9.39.4",
-    "eslint-plugin-vue": "9.29.0",
+    "eslint-plugin-vue": "10.10.0",
     "jsdom": "^30.0.1",
     "postcss": "8.5.26",
     "prettier": "3.9.6",
