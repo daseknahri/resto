@@ -338,6 +338,11 @@ class AnalyticsEventThrottleTests(SimpleTestCase):
     def _request(self, remote_addr="1.2.3.4"):
         req = MagicMock()
         req.META = {"REMOTE_ADDR": remote_addr, "HTTP_X_FORWARDED_FOR": ""}
+        # DRF's BaseThrottle.get_ident() reads X-Forwarded-For from request.headers
+        # (DRF 3.18+), not request.META. An explicit empty mapping means "no XFF", so
+        # get_ident falls back to REMOTE_ADDR — the client IP these tests assert on.
+        # (A bare MagicMock would auto-spawn a truthy .headers and poison the ident.)
+        req.headers = {}
         return req
 
     def test_cache_key_contains_schema_and_ip(self):

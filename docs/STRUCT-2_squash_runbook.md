@@ -45,7 +45,8 @@ check` clean.
 1. **Every schema is at/past the squash endpoint.** For each app, confirm all tenant schemas have applied
    through the last migration in the squash range (a schema mid-range would fall back to replaying the
    originals, which must therefore still exist during the transition). Check per schema, e.g.
-   `python manage.py migrate_schemas --list` / inspect `django_migrations` in each schema. At the current
+   `python manage.py tenant_command showmigrations --schema=<tenant>` (django-tenants 3.13+ removed
+   `migrate_schemas --list`) / inspect `django_migrations` in each schema. At the current
    pre-launch scale (public + the `demo` tenant) this is trivially true, but re-verify on the real target.
 2. A clean, backed-up DB and a staging environment that mirrors prod tenant topology.
 

@@ -205,6 +205,7 @@ class StaffChangePasswordViewTests(SimpleTestCase):
         throttle = StaffChangePasswordThrottle()
         req = SimpleNamespace(
             META={"REMOTE_ADDR": "203.0.113.7"},
+            headers={},  # DRF 3.18+ get_ident reads XFF from request.headers; empty -> REMOTE_ADDR
             user=SimpleNamespace(is_authenticated=False, pk=None),
         )
         key = throttle.get_cache_key(req, None)

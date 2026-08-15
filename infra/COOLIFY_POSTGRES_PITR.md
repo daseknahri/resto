@@ -82,7 +82,8 @@ VPS to keep latency low.
    `?sslmode=require` (RDS/DO/Supabase all do).
 5. **Verify before unfreezing** (see [Verification](#verification-the-drill-is-the-proof)):
    ```bash
-   python manage.py migrate_schemas --list        # every tenant schema present & migrated
+   # (django-tenants 3.13+ removed `migrate_schemas --list`; check each tenant schema)
+   python manage.py tenant_command showmigrations --schema=<tenant>  # each tenant at head
    python manage.py check_schema_health           # returns 0
    python manage.py reconcile_wallet_balances     # balance == sum(ledger), no drift
    ```
@@ -201,7 +202,8 @@ Path 1 or 2 unless "zero new dependencies" is a hard constraint.
 
 On the restored DB — whichever path — these three must pass before you trust it:
 
-1. `python manage.py migrate_schemas --list` — every tenant schema present and at head.
+1. `python manage.py tenant_command showmigrations --schema=<tenant>` — each tenant schema at head
+   (django-tenants 3.13+ removed `migrate_schemas --list`; run per tenant, or rely on `check_schema_health` below).
 2. `python manage.py check_schema_health` — returns 0.
 3. `python manage.py reconcile_wallet_balances` — `balance == sum(ledger)` with no drift, **and** spot-check
    that the last wallet transaction / order that existed just before your target timestamp is present.
