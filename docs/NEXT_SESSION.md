@@ -10,17 +10,19 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ---
 
-## 1. Current state (2026-08-12)
+## 1. Current state (2026-08-16)
 
-- `main` @ `7e5df0f`, **green** — frontend lint/build/vitest (~993 tests) + backend pytest (on
-  **Django 5.2.17 LTS**) + Playwright e2e + Docker builds all pass in CI. Deployable. *(2026-08-10: got
-  the backend **off end-of-life Django** — upgraded 4.2.30 → 5.2.17 LTS (#215); the CI security gates run
-  clean, no CVE deferrals. See §4.C.)*
-- Recent campaigns are fully merged + cleaned up (#169–#220) — see [`SESSION_LOG.md`](SESSION_LOG.md).
-  The **2026-08-12 operational-gaps closure** (#217–#220) closed the four remaining flagged UX gaps and
-  made four owner-delegated money/product decisions, then a **big-test QA sweep** (automated CI + a
-  two-agent read-only review across all four surfaces) validated the whole session's changes — catching
-  and fixing one concurrency bug (#220). Deploy is still **manual via Coolify** (git push does NOT deploy).
+- `main` @ `7629db9`, **green** — frontend lint/build/vitest + backend pytest (on **Django 5.2.17 LTS**) +
+  Playwright e2e + Docker builds all pass in CI. Deployable. *(2026-08-10: backend off end-of-life Django —
+  upgraded 4.2.30 → 5.2.17 LTS (#215); CI security gates clean. See §4.C.)*
+- Recent campaigns are fully merged + cleaned up (#169–#225) — see [`SESSION_LOG.md`](SESSION_LOG.md). The
+  latest, the **2026-08-16 full-app hardening campaign** (#222–#225), ran a **45-agent adversarial gap
+  scan** (34 → 32 confirmed defects, 2 false claims killed) and shipped the **22 safe-autonomous** fixes: a
+  driver proof-of-delivery **security bypass**, a cross-tenant loyalty **IDOR**, three concurrency races
+  (cancel / void / clock-in), a revoked-driver payout gate, the MFA-disable audit log, and
+  marketplace-reorder / receipt-coherence / i18n fixes. Full record:
+  [`HARDENING_GAPS.md`](HARDENING_GAPS.md). The **9 owner-decision** items it surfaced are in **§4.F**.
+  Deploy is still **manual via Coolify** (git push does NOT deploy).
 - **The quick-win [CODE] backlog is drained.** Three audit/closure campaigns (daily-use, then money/
   coherence/robustness + calibration, then the operational-gaps pass) fixed the real bugs and closed the
   flagged gaps. What remains (§4) is **owner-gated or structural**: a payment provider, the first non-MAD
@@ -190,6 +192,36 @@ coherence is **~80% already shipped**). Remaining, ranked:
 multi-drawer/PIN, ESC/POS printing) and **Phase 5 — dedicated driver surface** (carve out a `/driver`
 bundle, WebSocket offers/status, native push, offline action queue) are the other two structural levers —
 both large and money-adjacent. See `PRODUCT_VISION` §"Surface 1/3" for the decomposition.
+
+### F. Hardening-campaign decisions (owner) — surfaced 2026-08-16 by the gap scan
+
+The full-app hardening scan (#222–#225) shipped all 22 safe fixes but surfaced **9 money/product-policy
+items** that are the owner's call (not acted on autonomously), plus 1 structural. Full per-item evidence in
+[`HARDENING_GAPS.md`](HARDENING_GAPS.md). Ranked:
+
+1. **Driver-payout double-booking** (high, money) — the admin `owed` ledger and the wallet+cash-out rail
+   settle the *same* delivered-job money independently, so a manual admin settlement can double-pay a
+   driver. *Rec:* make the wallet+cash-out rail the single source of truth; `owed` excludes payouts already
+   credited to the wallet.
+2. **Transfer/merge a partially-paid table** strands the collected `OrderPayment` (money loss /
+   double-charge). *Rec:* carry the OrderPayment rows onto the target order on transfer/merge.
+3. **No-show → redispatch pays two drivers** for one delivery fee. *Rec:* only pay the no-show driver if the
+   job isn't redispatched (or deduct it).
+4. **Wallet self-pay ignores the cash/card `OrderPayment` ledger** — a customer paying the remainder of a
+   partly-cash-settled tab is over-charged. *Rec:* outstanding = total − wallet_paid − OrderPayment sum.
+5. **Currency rounding** — browsing/cart round MAD to whole dirhams while prices/receipts carry 2 decimals.
+   *Rec:* round to 2 decimals everywhere.
+6. **ETA anchoring** — the countdown is anchored to placement time, but owners mean "ready in X min *from
+   now*". *Rec:* add a server-set `ready_at` anchor when the ETA is set/edited.
+7. **Failed-delivery status divergence** — the customer page shows "Out for delivery" while the same page's
+   tracker shows a red "Failed" pill. *Rec:* show a coherent "delivery failed — being resolved" state.
+8. **Code-less DELIVERED completion** *policy* residual — the client-URL bypass is already fixed (#222);
+   whether to additionally *require* a real photo for code-less completion is a policy call.
+9. **Structural — a driver can hold an active ride AND an active delivery** at once (cross-vertical
+   double-booking); tied to the owner-gated rides go-live (§4.D / §4.E).
+
+**Deferred (not a decision):** the Arabic back-arrow glyph (low) — the FR arrows were cleaned in #225 but
+`messages-ar.js` was untouched; a one-line follow-up.
 
 ## 5. Repo hygiene (needs owner sign-off — not done automatically)
 
