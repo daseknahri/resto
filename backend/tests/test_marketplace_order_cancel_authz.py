@@ -121,10 +121,16 @@ class MarketplaceOrderCancelRefundTenantScopingTests(SimpleTestCase):
         Tenant.objects.get.return_value = tenant
         OrderObjs = MagicMock()
         OrderObjs.filter.return_value.first.return_value = order
+        # The view now re-loads the order UNDER select_for_update inside the atomic block
+        # (concurrency hardening) and runs the refund against THAT locked row. Point the
+        # lock at the same order so the tenant-scoping assertion below still targets it.
+        (OrderObjs.select_for_update.return_value
+            .filter.return_value.first.return_value) = order
 
         # The cancel helpers are imported inside the view from menu.views at call time, so
         # patching them there intercepts the aliased imports. _customer_can_cancel is forced
         # True so the flow reaches the atomic block; the other side-effects are no-ops.
+        # cancel_delivery_job_for_order is the best-effort post-commit driver stand-down.
         with patch("tenancy.models.Tenant", Tenant), \
              patch("menu.models.Order.objects", OrderObjs), \
              patch("django_tenants.utils.schema_context", return_value=_noop_cm()), \
@@ -133,7 +139,8 @@ class MarketplaceOrderCancelRefundTenantScopingTests(SimpleTestCase):
              patch("menu.views._refund_wallet_for_cancelled_order") as mock_refund, \
              patch("menu.views._reverse_loyalty_for_cancelled_order"), \
              patch("menu.views._restock_cancelled_order"), \
-             patch("menu.views._broadcast_order_change"):
+             patch("menu.views._broadcast_order_change"), \
+             patch("accounts.delivery_service.cancel_delivery_job_for_order"):
             resp = self.view(req, order_number="ORD-1")
 
         self.assertEqual(resp.status_code, 200)
