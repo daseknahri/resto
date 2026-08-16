@@ -10,7 +10,7 @@
     >{{ statusLabel(orderData?.status) }}</div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading && !orderData" class="space-y-3" aria-busy="true" aria-label="Loading order status">
+    <div v-if="loading && !orderData" class="space-y-3" aria-busy="true" :aria-label="t('orderStatus.loading')">
       <div class="ui-skeleton animate-pulse p-5 space-y-3">
         <div class="h-2.5 w-16 rounded bg-slate-700/60" />
         <div class="flex items-start justify-between gap-3">

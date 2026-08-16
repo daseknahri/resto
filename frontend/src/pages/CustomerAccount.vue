@@ -1379,7 +1379,7 @@ const topUpQueryMsg = computed(() => {
 });
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
-const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'reviews'];
+const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'reviews', 'profile'];
 // 'loyalty' and 'referral' are legacy deep-link ids from before that content was
 // merged into 'wallet' (loyalty) and 'overview' (referral card) — redirect them
 // rather than 404-ing a bookmarked/shared link into a blank pane.

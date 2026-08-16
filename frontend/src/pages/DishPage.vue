@@ -2,7 +2,7 @@
   <div class="relative ui-safe-bottom" :class="dish ? 'pb-56 sm:pb-10' : 'pb-8'">
 
     <!-- ── Loading ─────────────────────────────────────────────── -->
-    <div v-if="menu.loading" role="status" aria-live="polite" aria-label="Loading dish details">
+    <div v-if="menu.loading" role="status" aria-live="polite" :aria-label="t('dishPage.loadingDish')">
       <div class="ui-skeleton" style="height:min(70vw,400px)"></div>
       <div class="mt-5 space-y-4 px-4">
         <div class="flex gap-2">
