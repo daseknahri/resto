@@ -6839,7 +6839,6 @@ class DriverJobStatusUpdateView(APIView):
                 # _credit_driver_earnings banks the payout while the customer never got the
                 # food. The frontend only ever uploads a FILE, so accepting a URL was pure
                 # attack surface. _has_photo is therefore set solely from a saved FILE.
-                _proof_photo_url = ""  # must be defined for the no-file code-based path
                 _upload = request.FILES.get("proof_photo")
                 if _upload:
                     try:
