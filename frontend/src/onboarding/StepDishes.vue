@@ -96,7 +96,7 @@
             <div
               class="flex shrink-0 cursor-grab items-center justify-center rounded px-0.5 text-slate-500 transition hover:text-slate-300 active:cursor-grabbing"
               :aria-label="t('stepDishes.dragToReorder')"
-              title="Drag to reorder"
+              :title="t('stepDishes.dragToReorder')"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" fill="currentColor" class="h-4 w-4 shrink-0" aria-hidden="true">
                 <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>

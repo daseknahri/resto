@@ -448,7 +448,7 @@
           </div>
 
           <!-- Loading skeletons -->
-          <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass" aria-busy="true" aria-label="Loading dishes">
+          <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass" aria-busy="true" :aria-label="t('menu.loadingDishes')">
             <div v-for="n in 3" :key="n" class="ui-skeleton" :class="cardLayout === 'card' ? 'h-80 rounded-[1.8rem]' : 'h-[7rem] rounded-2xl'" />
           </div>
 

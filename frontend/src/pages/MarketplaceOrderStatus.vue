@@ -693,6 +693,12 @@ const reorder = () => {
         name: i.dish_name,
         price: Number(i.unit_price),
         qty: i.qty,
+        // Carry the selected options + note so reorder rebuilds the exact line (the
+        // resolver revalidates + re-prices them). Dropping them re-priced at base and
+        // hard-failed checkout for required-option dishes. The track payload exposes
+        // both (accounts.views MarketplaceOrderStatusView items).
+        options: Array.isArray(i.options) ? i.options : [],
+        note: typeof i.note === 'string' ? i.note : '',
       })),
     },
   });

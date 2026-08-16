@@ -2085,8 +2085,20 @@ const settleOrder = async (o) => {
     o.payment_status = res.data.payment_status;
     if (res.data.completed) o.status = res.data.status;
     toast.show(t("ownerOrders.markedPaid"), "success");
-  } catch {
-    toast.show(t("ownerOrders.markPaidFailed"), "error");
+  } catch (err) {
+    // Mirror the waiter path: when the order has tracked partial payments that don't
+    // cover the total, the backend refuses with `payment_short` + collected/total —
+    // surface the actual numbers instead of a generic error so the owner knows how much
+    // is still owed.
+    const d = err?.response?.data;
+    if (d?.code === "payment_short") {
+      toast.show(t("ownerOrders.paymentShort", {
+        collected: formatCurrency(d.collected, o.currency),
+        total: formatCurrency(d.total, o.currency),
+      }), "error");
+    } else {
+      toast.show(t("ownerOrders.markPaidFailed"), "error");
+    }
   } finally {
     settlingOrderId.value = null;
   }
