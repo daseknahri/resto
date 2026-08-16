@@ -55,6 +55,11 @@ def _make_order(
     item.subtotal = Decimal("30.00")
     item.options = []
     item.note = ""
+    # Real bool flags (not auto-MagicMocks): the customer payload now exposes is_comped
+    # and items_count excludes voided lines, so the fixture must set these explicitly or
+    # a truthy auto-MagicMock would (wrongly) read as voided and zero out items_count.
+    item.is_voided = False
+    item.is_comped = False
 
     items_qs = MagicMock()
     items_qs.all.return_value = [item]
