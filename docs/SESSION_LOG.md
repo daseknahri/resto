@@ -12,6 +12,49 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-16 — Full-app hardening campaign (adversarial gap scan → 22 fixes)
+
+**Result:** `main` @ `7629db9`, green (all CI jobs pass). A **45-agent adversarial gap scan** across the
+whole app (money, tenancy, security, the four surfaces, content/i18n, coherence, structure) found 34 →
+**32 confirmed** (2 false claims killed by per-finding verification). The **22 safe-autonomous** fixes
+shipped as 4 file-partitioned, gate-verified PRs; the **9 owner-decision** items + 1 structural are
+captured for the owner (NEXT_SESSION §4.F). Full record: [`HARDENING_GAPS.md`](HARDENING_GAPS.md).
+
+**What shipped (#222–#225):**
+- `#222` **accounts** — **SECURITY:** a driver could bank a payout + mark a COD order paid by PATCHing an
+  arbitrary `proof_photo_url` with no delivery code; now only a server-saved, Pillow-validated FILE
+  satisfies proof-of-delivery. Plus a #220-class marketplace-cancel race (lock + `newly_cancelled` guard +
+  stand the driver down), the dead marketplace ETA countdown (payload now ships `created_at`), and
+  analytics realized-basis (exclude CANCELLED from "active"; fee/payout sums delivered-only).
+- `#223` **services** — owner-completion re-checks driver approval under the lock (OPS-5f), so a revoked
+  driver isn't paid; MFA-disable is finally audit-logged (`log_admin_action(detail=…)` raised a swallowed
+  `TypeError` → `metadata=` + `request=`).
+- `#224` **menu** — three concurrency guards: customer-cancel race (mirrors #220), void-item race (atomic
+  compare-and-set `UPDATE … WHERE is_voided=False` gated on rowcount), clock-in race (per-`(schema,user)`
+  advisory lock); a **cross-tenant loyalty IDOR** guard (loyalty_points is one global balance → gate the
+  owner grant on an ordered-here check) + the same gate on customer-notes; receipt coherence (comped lines,
+  voided-count parity, `Profile.phone`) and swallowed-exception logging.
+- `#225` **frontend** — marketplace "Order again" now carries selected options + notes and revalidates them
+  against the live menu (was hard-failing checkout on must-customize dishes + silently dropping paid
+  extras); `?tab=profile` deep-link, localized aria-labels, operator `payment_short` reason, `{days}`
+  analytics title.
+
+**Process.** Scan = one Workflow (10 finder lenses → dedup → per-finding adversarial verify → synthesis).
+Fixes = 4 worktree-isolated agents partitioned by owner file (disjoint → no merge conflicts), each with
+regression tests; the main loop kept the diff-review/CI/merge gate. **Two things were caught at the gate:**
+a `NameError` in the proof-photo fix (uninitialized var on the no-photo path → would 500 every normal
+delivery) and confirmation that the 8 modified menu tests were honest adaptations, not weakenings.
+
+**Lessons.** (1) A verify-every-finding scan is worth it: it killed 2 plausible-but-wrong findings and
+surfaced a real security bypass + a cross-tenant IDOR that three prior campaigns missed. (2) Delegated
+worktree agents get you parallel coverage, but the diff/CI/merge gate is non-negotiable — one agent's fix
+had a 500-on-every-delivery regression that only a human read caught. (3) Don't hand-edit a worktree while
+its agent may still be alive (a concurrent edit produced a duplicate line, cleaned up before merge).
+
+**Deferred:** the Arabic back-arrow glyph (low). **For the owner:** see NEXT_SESSION §4.F.
+
+---
+
 ## 2026-08-12 — Operational-gaps closure + big-test QA sweep
 
 **Result:** `main` @ `7e5df0f`, green (all CI jobs pass on Django 5.2.17). **4 PRs** (#217–#220). Closed the
