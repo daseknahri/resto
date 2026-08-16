@@ -3687,6 +3687,12 @@ class CustomerOrderStatusView(APIView):
                 "options": item.options,
                 "note": item.note,
                 "is_voided": item.is_voided,
+                # Expose comp state like the staff payload does (see the staff order
+                # dict) so the receipt can render a comped line as contributing 0 —
+                # otherwise a comped item shows at full price while being excluded from
+                # the total (_recompute_order_totals drops comped items), so the visible
+                # lines don't reconcile to the displayed Subtotal/Total.
+                "is_comped": item.is_comped,
                 "combo_components": item.combo_components,
             }
             for item in order.items.all()
@@ -3744,15 +3750,19 @@ class CustomerOrderStatusView(APIView):
         try:
             _profile = request.tenant.profile
             receipt_message = getattr(_profile, "receipt_message", "") or ""
+            # The contact phone lives on Profile, NOT on the django-tenants Tenant model
+            # (Tenant has no `phone` field), so read it from the profile just loaded.
+            # Reading `request.tenant.phone` always fell through to the getattr default ""
+            # so the "Contact restaurant" button never rendered on the direct/QR order
+            # page — this matches the marketplace order-status path (accounts.views).
+            tenant_phone = getattr(_profile, "phone", "") or ""
             vat_fields = order_vat_fields(
                 order, getattr(_profile, "vat_rate", 0), getattr(_profile, "vat_label", "") or ""
             )
         except Exception:
+            # Best-effort: tenant_phone stays "" (initialized above) if the profile is
+            # missing/unreadable.
             pass
-        try:
-            tenant_phone = getattr(request.tenant, "phone", "") or ""
-        except Exception:
-            tenant_phone = ""
 
         # Wallet self-pay — offer the signed-in order owner a one-tap "pay from
         # wallet" while the bill is still open (e.g. a dine-in tab). We surface
@@ -3850,7 +3860,9 @@ class CustomerOrderStatusView(APIView):
                     and _owns)
                 else None
             ),
-            "items_count": sum(i["qty"] for i in items),
+            # Exclude voided lines so the customer header count matches the owner/staff
+            # payload (which filters `not i.is_voided`) and the visible non-voided lines.
+            "items_count": sum(i["qty"] for i in items if not i["is_voided"]),
             "items": items,
             "created_at": order.created_at.isoformat(),
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
@@ -3920,12 +3932,28 @@ class CustomerOrderCancelView(APIView):
         _cancel_tenant = getattr(request, "tenant", None)
         _cancel_tenant_id = _cancel_tenant.id if _cancel_tenant else None
         with _tx.atomic():
-            order.status = Order.Status.CANCELLED
-            order.status_updated_at = timezone.now()
-            order.save(update_fields=["status", "status_updated_at", "updated_at"])
+            # Lock the order row so concurrent cancels serialize HERE — a customer
+            # double-tap on a flaky connection, or a self-cancel racing the
+            # sweep_delivery_jobs auto-refund on the same delivery order — instead of
+            # both reading the stale pre-atomic status (checked above on an UNLOCKED row)
+            # and each running the NON-idempotent loyalty claw-back + restock. The first
+            # caller flips it to CANCELLED under the lock; the next reads CANCELLED and
+            # skips them. Mirrors refund_and_cancel_delivery_order exactly. (The wallet
+            # credit is separately idempotent via its schema-namespaced key, so it safely
+            # replays either way.) Falls back to the passed copy if the row vanished.
+            _locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+            _newly_cancelled = False
+            if (_locked or order).status != Order.Status.CANCELLED:
+                order.status = Order.Status.CANCELLED
+                order.status_updated_at = timezone.now()
+                order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                _newly_cancelled = True
+            else:
+                order.status = Order.Status.CANCELLED  # already cancelled by a peer — reflect it for the caller
             _refund_wallet_for_cancelled_order(order, tenant_id=_cancel_tenant_id)  # idempotent wallet credit
-            _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
-            _restock_cancelled_order(order)
+            if _newly_cancelled:
+                _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
+                _restock_cancelled_order(order)
 
         # Stand down any assigned delivery driver (public-schema job; best-effort).
         tenant = getattr(request, "tenant", None)
@@ -5164,13 +5192,36 @@ class StaffVoidOrderItemView(APIView):
 
         # ── Atomic: void + restock + recompute totals ─────────────────────────
         with transaction.atomic():
-            # Mark voided
             now = timezone.now()
+            _void_by = getattr(request.user, "id", None)
+            # Compare-and-set the void flag ATOMICALLY, and gate ALL side effects on its
+            # rowcount. Two concurrent voids on the same line both pass the unlocked
+            # `if item.is_voided` fast-path above; the loser's UPDATE blocks on the row
+            # lock, and when it unblocks after the winner commits, Postgres re-evaluates
+            # the `is_voided=False` predicate (EvalPlanQual) against the now-True row →
+            # 0 rows affected → the loser bails with 409 BEFORE restocking or clawing
+            # loyalty. Previously the mark + non-idempotent restock ran here, ahead of the
+            # order-row select_for_update acquired further down, so a true-concurrency
+            # double-tap double-restocked inventory (money was already safe via the
+            # idempotent voiditem: refund key; only the restock/clawback leaked).
+            _marked = OrderItem.objects.filter(pk=item_id, is_voided=False).update(
+                is_voided=True,
+                voided_at=now,
+                void_reason=reason,
+                voided_by_user_id=_void_by,
+            )
+            if not _marked:
+                return Response(
+                    {"detail": "Item is already voided.", "code": "already_voided"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            # Reflect the win in-memory so later reads (subtotal capture, restock inputs)
+            # see the voided item; the order.items re-fetched under lock below already
+            # reads is_voided=True from the committed-in-transaction row.
             item.is_voided = True
             item.voided_at = now
             item.void_reason = reason
-            item.voided_by_user_id = getattr(request.user, "id", None)
-            item.save(update_fields=["is_voided", "voided_at", "void_reason", "voided_by_user_id"])
+            item.voided_by_user_id = _void_by
 
             # Restock — same locked pattern as _restock_cancelled_order but per-item.
             # For combo items, also restock each component (component.qty × item.qty).
@@ -5304,7 +5355,14 @@ class StaffVoidOrderItemView(APIView):
                         )
                         order.points_earned = _orig_earned - _loyalty_clawback_pts
             except Exception:
-                pass  # Loyalty clawback is best-effort — never block a void
+                # Best-effort — never block a void — but log so a swallowed over-credit
+                # is reconcilable (was a silent bare `pass`, unlike the observable
+                # best-effort handlers in menu/signals.py).
+                import logging as _logging
+                _logging.getLogger(__name__).exception(
+                    "Loyalty clawback failed for voided item on order %s",
+                    getattr(order, "order_number", getattr(order, "pk", "?")),
+                )
 
             # Partial wallet refund — two cases:
             #   A. PAID order: refund min(line_total, wallet_amount_paid); status stays PAID.
@@ -6120,19 +6178,40 @@ class StaffClockInView(APIView):
         from django.utils import timezone as _tz
 
         user_id = request.user.id
-        if _Shift.objects.filter(user_id=user_id, clock_out__isnull=True).exists():
-            return Response(
-                {"detail": "You are already clocked in.", "code": "already_clocked_in"},
-                status=status.HTTP_409_CONFLICT,
-            )
+        # At most one OPEN shift per staffer. The check-then-create is a race — two
+        # devices (or a double-tap racing the frontend clockBusy flag) could both pass
+        # .exists() and INSERT two open Shift rows (the Shift model has no partial-unique
+        # constraint), and clock-out closes only .first() so the earlier duplicate dangles
+        # open forever (garbling Z-report labor + is_clocked_in). Serialize concurrent
+        # clock-ins for THIS staffer within this tenant schema with a transaction-scoped
+        # Postgres advisory lock so the loser blocks until the winner commits, then sees
+        # the open shift → 409. Mirrors DrawerOpenView's 'at most one open' hardening.
+        # Best-effort: if the advisory lock is unavailable the (still-atomic)
+        # check-then-create runs anyway — no worse than before.
+        with transaction.atomic():
+            try:
+                from django.db import connection as _clockin_conn
+                with _clockin_conn.cursor() as _cur:
+                    _cur.execute(
+                        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                        [f"clock_in:{_clockin_conn.schema_name}:{user_id}"],
+                    )
+            except Exception:
+                pass
 
-        note = (request.data.get("note") or "").strip()[:200]
-        shift = _Shift.objects.create(
-            user_id=user_id,
-            user_name=request.user.get_full_name() or request.user.username or "",
-            clock_in=_tz.now(),
-            note=note,
-        )
+            if _Shift.objects.filter(user_id=user_id, clock_out__isnull=True).exists():
+                return Response(
+                    {"detail": "You are already clocked in.", "code": "already_clocked_in"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            note = (request.data.get("note") or "").strip()[:200]
+            shift = _Shift.objects.create(
+                user_id=user_id,
+                user_name=request.user.get_full_name() or request.user.username or "",
+                clock_in=_tz.now(),
+                note=note,
+            )
         return Response(_shift_payload(shift), status=status.HTTP_201_CREATED)
 
 
@@ -7779,7 +7858,16 @@ def _restock_cancelled_order(order) -> None:
                         stock_qty=_F("stock_qty") + total_qty, is_available=True, stock_auto_zeroed=False
                     )
     except Exception:
-        pass  # restock is best-effort — never block a cancellation
+        # Best-effort — never block a cancellation — but log so a swallowed inventory
+        # desync (e.g. a malformed combo_components snapshot raising in the loop) is
+        # reconcilable. This shared helper is used by all three cancel paths, so a
+        # systematic failure was previously invisible on every cancellation. Mirrors the
+        # observable best-effort handlers in menu/signals.py.
+        import logging as _logging
+        _logging.getLogger(__name__).exception(
+            "Restock failed for cancelled order %s",
+            getattr(order, "order_number", getattr(order, "pk", "?")),
+        )
 
 
 def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
@@ -11126,6 +11214,18 @@ class OwnerCustomerNotesView(APIView):
     permission_classes = [IsTenantOwnerAccessDenied]
 
     def patch(self, request, customer_id, *args, **kwargs):
+        # Only annotate customers who have actually ordered at this restaurant — the same
+        # ordered-here gate the sibling wallet endpoints use (OwnerWalletTopupView /
+        # History / ResolveToken). We're already routed into this restaurant's schema, so
+        # Order.objects is scoped to it (Order has no tenant FK). This is a hygiene /
+        # input-validation consistency fix, NOT a security patch: CustomerNote is
+        # tenant-schema and the CRM only reads notes back for this tenant's own order
+        # customer_ids, so an unrelated customer_id never leaks across tenants.
+        if not Order.objects.filter(customer_id=customer_id).exists():
+            return Response(
+                {"detail": "Customer has no orders at this restaurant.", "code": "no_orders"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         notes_text = (request.data.get("notes") or "").strip()
         obj, _ = CustomerNote.objects.update_or_create(
             customer_id=customer_id,
@@ -11163,6 +11263,22 @@ class OwnerCustomerLoyaltyGrantView(APIView):
             return Response(
                 {"detail": f"Adjustment magnitude exceeds the per-call cap of {self._MAX_DELTA} points."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cross-tenant IDOR guard. loyalty_points is a SINGLE GLOBAL balance on the
+        # public-schema Customer, earned and redeemed across EVERY tenant (checkout in
+        # any restaurant reads + debits it). customer_id comes straight from the URL, so
+        # without this gate an owner of tenant A could reach into the balance of a
+        # customer who only ever ordered at tenant B — floor it to 0 (value destruction)
+        # or inflate it (a discount liability B silently absorbs at checkout). Restrict
+        # the mutation to customers with a real order relationship to THIS tenant — the
+        # exact ordered-here gate the sibling wallet endpoints use (OwnerWalletTopupView /
+        # History / ResolveToken). We're already in this restaurant's schema, so
+        # Order.objects is scoped to it (Order has no tenant FK).
+        if not Order.objects.filter(customer_id=customer_id).exists():
+            return Response(
+                {"detail": "Customer has no orders at this restaurant.", "code": "no_orders"},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         from accounts.models import Customer as _PlatformCustomer

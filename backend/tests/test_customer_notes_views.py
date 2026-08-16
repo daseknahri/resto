@@ -71,6 +71,15 @@ def _factory():
 
 class OwnerCustomerNotesViewTests(SimpleTestCase):
 
+    def setUp(self):
+        # The view now gates on an "ordered here" check (Order.objects.filter(...).exists())
+        # before the upsert. Default it True so the existing mutation-path tests still
+        # exercise update_or_create; individual tests flip it False for the no_orders 404.
+        _order_patcher = patch("menu.views.Order")
+        self.MockOrder = _order_patcher.start()
+        self.addCleanup(_order_patcher.stop)
+        self.MockOrder.objects.filter.return_value.exists.return_value = True
+
     def _patch_req(self, data, user=None):
         req = _factory().patch(
             "/api/owner/customers/42/notes/", data, format="json"
@@ -78,6 +87,16 @@ class OwnerCustomerNotesViewTests(SimpleTestCase):
         req.user = user or _owner()
         req.tenant = _tenant()
         return req
+
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    @patch("menu.views.CustomerNote")
+    def test_no_orders_here_is_404(self, MockNote, _mock_owner):
+        """Customer never ordered at this restaurant → 404 no_orders, no upsert."""
+        self.MockOrder.objects.filter.return_value.exists.return_value = False
+        resp = OwnerCustomerNotesView.as_view()(self._patch_req({"notes": "x"}), customer_id=42)
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.data["code"], "no_orders")
+        MockNote.objects.update_or_create.assert_not_called()
 
     @patch("menu.views._is_tenant_owner", return_value=True)
     @patch("menu.views.CustomerNote")
@@ -176,6 +195,15 @@ class _FakeDoesNotExist(Exception):
 
 class OwnerCustomerLoyaltyGrantViewTests(SimpleTestCase):
 
+    def setUp(self):
+        # The view now gates on an "ordered here" check (Order.objects.filter(...).exists())
+        # after delta validation and before touching the global Customer.loyalty_points.
+        # Default it True so the existing mutation-path tests still run; flip False for 404.
+        _order_patcher = patch("menu.views.Order")
+        self.MockOrder = _order_patcher.start()
+        self.addCleanup(_order_patcher.stop)
+        self.MockOrder.objects.filter.return_value.exists.return_value = True
+
     def _post_req(self, data, user=None):
         req = _factory().post(
             "/api/owner/customers/42/loyalty-grant/", data, format="json"
@@ -183,6 +211,20 @@ class OwnerCustomerLoyaltyGrantViewTests(SimpleTestCase):
         req.user = user or _owner()
         req.tenant = _tenant()
         return req
+
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    def test_no_orders_here_is_404(self, _):
+        """Customer with no orders at THIS tenant → 404 no_orders; the global
+        loyalty balance is never touched (cross-tenant IDOR guard)."""
+        self.MockOrder.objects.filter.return_value.exists.return_value = False
+        with patch("accounts.models.Customer") as MockCust:
+            MockCust.DoesNotExist = _FakeDoesNotExist
+            resp = OwnerCustomerLoyaltyGrantView.as_view()(
+                self._post_req({"delta": 5000}), customer_id=9999
+            )
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.data["code"], "no_orders")
+        MockCust.objects.select_for_update.assert_not_called()
 
     def test_non_owner_gets_403(self):
         # RISK AUTHZ-1: drive a REAL non-owner (staff); the _is_tenant_owner patch is dead.

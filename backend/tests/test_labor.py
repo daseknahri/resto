@@ -86,7 +86,11 @@ class StaffClockInViewTests(SimpleTestCase):
 
     def test_happy_path_creates_shift(self):
         shift = _make_shift()
-        with patch("menu.models.Shift") as _S, patch("django.utils.timezone.now") as _now:
+        # The single-open guard now runs the exists-check + create inside
+        # transaction.atomic() behind a Postgres advisory lock (mirrors DrawerOpenView);
+        # patch menu.views.transaction so the mock test doesn't need a real DB txn.
+        with patch("menu.models.Shift") as _S, patch("django.utils.timezone.now") as _now, \
+                patch("menu.views.transaction"):
             _now.return_value = shift.clock_in
             _S.objects.filter.return_value.exists.return_value = False
             _S.objects.create.return_value = shift
@@ -97,7 +101,7 @@ class StaffClockInViewTests(SimpleTestCase):
         self.assertIsNone(resp.data["clock_out"])
 
     def test_already_clocked_in_is_409(self):
-        with patch("menu.models.Shift") as _S:
+        with patch("menu.models.Shift") as _S, patch("menu.views.transaction"):
             _S.objects.filter.return_value.exists.return_value = True
             resp = self._post()
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
