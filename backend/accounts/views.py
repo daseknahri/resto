@@ -5393,6 +5393,11 @@ class MarketplaceOrderStatusView(APIView):
             "applied_promotion_name": order.applied_promotion_name or "",
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            # The marketplace tracking page's ETA countdown computes
+            # readyAt = created_at + estimated_ready_minutes; without created_at it
+            # can't and falls back to "Ready any moment now". Mirror the direct page's
+            # payload (menu/views.py) which already ships created_at.
+            "created_at": order.created_at.isoformat(),
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             "items": items,
             "restaurant_slug": slug,
@@ -5458,16 +5463,43 @@ class MarketplaceOrderCancelView(APIView):
                                     status=status.HTTP_409_CONFLICT)
 
                 with _dbtx.atomic():
-                    order.status = _Order.Status.CANCELLED
-                    order.status_updated_at = _tz.now()
-                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                    # Lock the order row so concurrent cancels serialize HERE (a customer
+                    # double-tap — the throttle only rate-limits, it doesn't serialize — or
+                    # the stuck-job auto-refund sweep firing on the same order at the same
+                    # instant) instead of both reading a stale pre-cancel status and each
+                    # running the NON-idempotent loyalty claw-back + restock twice. The
+                    # first caller flips it to CANCELLED under the lock; the next reads
+                    # CANCELLED and skips them. Mirrors refund_and_cancel_delivery_order
+                    # (menu/views.py). Falls back to the pre-lock copy if the row vanished.
+                    locked = _Order.objects.select_for_update().filter(pk=order.pk).first() or order
+                    newly_cancelled = locked.status != _Order.Status.CANCELLED
+                    if newly_cancelled:
+                        locked.status = _Order.Status.CANCELLED
+                        locked.status_updated_at = _tz.now()
+                        locked.save(update_fields=["status", "status_updated_at", "updated_at"])
+                    order = locked
                     # tenant_id tags the refund WalletTransaction (shared/public schema)
                     # to this tenant so it shows up in the tenant's per-tenant refund
                     # reports; without it the row is attributed to tenant_id=None. Mirrors
-                    # the sibling callers in menu/views.py.
+                    # the sibling callers in menu/views.py. The wallet credit is idempotent
+                    # (schema-namespaced key), so it safely replays either way.
                     _refund(order, tenant_id=tenant.id)
-                    _revloy(order)
-                    _restock(order)
+                    # Loyalty reversal + restock are NOT internally idempotent — run them
+                    # only on the call that actually flipped the row to CANCELLED, so a
+                    # concurrent second cancel replays the refund but doesn't double-claw
+                    # loyalty or double-restock inventory.
+                    if newly_cancelled:
+                        _revloy(order)
+                        _restock(order)
+                # Stand down any assigned delivery driver (public-schema job; best-effort,
+                # outside the lock so a hiccup doesn't roll back the cancel). Without this a
+                # cancelled+refunded marketplace delivery order leaves its live DeliveryJob
+                # dispatching a driver. Mirrors the owner cancel path (menu/views.py).
+                try:
+                    from accounts.delivery_service import cancel_delivery_job_for_order
+                    cancel_delivery_job_for_order(tenant.id, order.order_number)
+                except Exception:
+                    pass
                 try:
                     _broadcast(order)
                 except Exception:
@@ -6798,23 +6830,28 @@ class DriverJobStatusUpdateView(APIView):
                 # Photo proof: a driver who can't get the customer code can take a
                 # photo (leave-at-door). Handle the photo FIRST so its presence can
                 # bypass the code requirement. Pillow-validated, same rules as driver-docs.
-                _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
-                if _proof_photo_url and not _proof_photo_url.lower().startswith(("http://", "https://")):
-                    _proof_photo_url = ""
-                if not _proof_photo_url:
-                    _upload = request.FILES.get("proof_photo")
-                    if _upload:
-                        try:
-                            from .ride_views import _save_driver_doc_image
-                            _proof_photo_url = _save_driver_doc_image(_upload, request)
-                        except ValueError as _ve:
-                            return Response(
-                                {"detail": str(_ve), "code": "bad_proof_photo"},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                        except Exception:
-                            logger.exception("proof_photo upload failed job_id=%s", job_id)
-                            # Non-fatal: proceed without a photo URL rather than blocking the delivery.
+                #
+                # SECURITY: the proof photo MUST be a real, server-saved, Pillow-validated
+                # FILE upload — NEVER a client-supplied URL. Trusting a proof_photo_url let a
+                # driver PATCH {status:delivered, proof_photo_url:"https://…"} with no code
+                # and no real photo, fully bypassing the delivery-code anti-fraud gate:
+                # _complete_delivered_order then flips the order to COMPLETED+PAID and
+                # _credit_driver_earnings banks the payout while the customer never got the
+                # food. The frontend only ever uploads a FILE, so accepting a URL was pure
+                # attack surface. _has_photo is therefore set solely from a saved FILE.
+                _upload = request.FILES.get("proof_photo")
+                if _upload:
+                    try:
+                        from .ride_views import _save_driver_doc_image
+                        _proof_photo_url = _save_driver_doc_image(_upload, request)
+                    except ValueError as _ve:
+                        return Response(
+                            {"detail": str(_ve), "code": "bad_proof_photo"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    except Exception:
+                        logger.exception("proof_photo upload failed job_id=%s", job_id)
+                        # Non-fatal: proceed without a photo URL rather than blocking the delivery.
                 _has_photo = bool(_proof_photo_url)
 
                 # Proof-of-delivery code, with a brute-force lockout.
@@ -7843,11 +7880,20 @@ class AdminPlatformAnalyticsView(APIView):
             failed=Count("id", filter=Q(status="failed")),
             searching=Count("id", filter=Q(status="searching")),
             avg_rating=Avg("customer_driver_rating"),
-            total_fees=Sum("delivery_fee"),
-            total_payouts=Sum("driver_payout"),
+            # Money-card sums use the REALIZED basis (delivered only), the same basis as
+            # the financials block below (driver_earned/owed). delivery_fee & driver_payout
+            # are stamped at job creation and left intact on cancelled/failed/searching jobs
+            # (cancel only zeroes platform_commission), so an unfiltered Sum would count
+            # money that was never collected/paid and wouldn't reconcile with settlements.
+            total_fees=Sum("delivery_fee", filter=Q(status="delivered")),
+            total_payouts=Sum("driver_payout", filter=Q(status="delivered")),
         )
+        # "cancelled" is a THIRD terminal status (is_terminal + the driver is stood down),
+        # so exclude it too — otherwise every cancelled job is miscounted as active and the
+        # "active deliveries" KPI grows monotonically and never returns to 0. Parity with the
+        # rides active metric and DeliveryJob.is_terminal.
         active_jobs = (
-            DeliveryJob.objects.exclude(status__in=["delivered", "failed"]).count()
+            DeliveryJob.objects.exclude(status__in=["delivered", "failed", "cancelled"]).count()
         )
 
         # ── Delivery zones ────────────────────────────────────────────────────

@@ -471,16 +471,21 @@ class MFADisableView(APIView):
 
         device.delete()
 
-        # Audit log (best-effort; must not raise).
+        # Audit log (best-effort; must not raise). Use metadata= (log_admin_action's real
+        # kwarg — detail= is not accepted and previously raised TypeError, silently swallowed
+        # below, so this security-control downgrade was never recorded) and pass request so the
+        # client IP is captured. A failure is logged rather than fully swallowed, so a future
+        # signature drift surfaces instead of silently dropping the audit trail again.
         try:
             log_admin_action(
                 actor=user,
                 action="mfa_device_disabled",
+                request=request,
                 target_repr=f"User#{user.pk}",
-                detail={"user_id": user.pk, "username": user.username},
+                metadata={"user_id": user.pk, "username": user.username},
             )
         except Exception:
-            pass
+            logger.exception("Failed to write MFA-disable audit log for user %s", user.pk)
 
         logger.info("MFA device disabled for user %s", user.pk)
 
