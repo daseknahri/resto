@@ -244,6 +244,13 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         _patcher.start()
         self.addCleanup(_patcher.stop)
+        # The void mark is now an atomic compare-and-set:
+        #   OrderItem.objects.filter(pk=item_id, is_voided=False).update(...)
+        # Default its rowcount to 1 so the refund path runs as before.
+        _oi_patcher = patch("menu.views.OrderItem")
+        self._orderitem_mock = _oi_patcher.start()
+        self.addCleanup(_oi_patcher.stop)
+        self._orderitem_mock.objects.filter.return_value.update.return_value = 1
 
     def _make_item(self, item_id=901, subtotal=Decimal("20.00"), is_voided=False):
         item = MagicMock()

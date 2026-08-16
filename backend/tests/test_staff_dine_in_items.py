@@ -452,6 +452,15 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _patcher.start()
         self.addCleanup(_patcher.stop)
+        # The void mark is now an atomic compare-and-set:
+        #   OrderItem.objects.filter(pk=item_id, is_voided=False).update(...)
+        # (replacing item.save) so a concurrent double-tap can't double-restock. Default
+        # its rowcount to 1 ("this call won the mark → proceed"); the double-void tests
+        # short-circuit on the unlocked fast-path before reaching it.
+        _oi_patcher = patch("menu.views.OrderItem")
+        self._orderitem_mock = _oi_patcher.start()
+        self.addCleanup(_oi_patcher.stop)
+        self._orderitem_mock.objects.filter.return_value.update.return_value = 1
 
     def _post(self, order_id=10, item_id=901, body=None, user=None):
         body = body or {}
@@ -546,8 +555,14 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         resp = self._post()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # item.save called with the exact update_fields
-        item.save.assert_called_once_with(update_fields=["is_voided", "voided_at", "void_reason", "voided_by_user_id"])
+        # The void mark is now an atomic compare-and-set on OrderItem (not item.save):
+        # OrderItem.objects.filter(pk=item_id, is_voided=False).update(is_voided=True, ...)
+        self._orderitem_mock.objects.filter.assert_any_call(pk=901, is_voided=False)
+        _upd_kwargs = self._orderitem_mock.objects.filter.return_value.update.call_args.kwargs
+        self.assertTrue(_upd_kwargs.get("is_voided"))
+        self.assertIn("voided_at", _upd_kwargs)
+        self.assertIn("void_reason", _upd_kwargs)
+        self.assertIn("voided_by_user_id", _upd_kwargs)
         # order.save — no wallet refund so wallet_amount_paid NOT in update_fields
         second_order.save.assert_called_once_with(
             update_fields=["total", "updated_at"]

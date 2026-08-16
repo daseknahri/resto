@@ -394,12 +394,15 @@ class VoidCommissionRecomputeTests(SimpleTestCase):
         with patch("menu.views._can_edit_tenant_order", return_value=True), \
                 patch("menu.views.transaction") as tx_mock, \
                 patch("menu.views.Order.objects") as order_om, \
+                patch("menu.views.OrderItem") as oi_mock, \
                 patch("menu.views.Dish.objects") as dish_om, \
                 patch("menu.views._broadcast_order_change"):
             tx_mock.atomic.return_value = _FakeAtomic()
             order_om.prefetch_related.return_value.filter.return_value.first.return_value = order_initial
             order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = order_locked
             order_om.filter.return_value.update.return_value = 1
+            # Void mark is now an atomic compare-and-set on OrderItem (rowcount 1 = won).
+            oi_mock.objects.filter.return_value.update.return_value = 1
             dish_om.select_for_update.return_value.filter.return_value = []
             return self._post(order_id=order_initial.id, item_id=901)
 
