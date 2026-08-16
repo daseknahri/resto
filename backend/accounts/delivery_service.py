@@ -57,9 +57,20 @@ def complete_delivery_job_for_order(tenant_id, order_number):
     fight a driver who also tapped delivered) or has no assigned driver. Otherwise marks the job
     ``DELIVERED`` and credits the driver, reusing ``_credit_driver_earnings`` (idempotent on
     ``earning:{job.id}``) so double-completion never double-pays. Returns the job (or None).
+
+    OPS-5f: the credit is gated on the driver still being ``driver_approved``, exactly as the
+    driver's own DELIVERED tap re-checks it (``DriverJobStatusUpdateView`` in ``accounts/views.py``).
+    A driver who was approved, accepted + picked up, then had approval revoked (fraud / expired
+    docs) must NOT bank earnings through the owner-completion side either. On revocation this is a
+    **no-op** — the job is deliberately left un-transitioned rather than marked ``DELIVERED``:
+    ``reconcile_driver_earnings`` re-credits any ``DELIVERED`` job with a driver + payout (it
+    intentionally does not re-check live approval, so it can't wrongly deny a delivered-then-revoked
+    driver), so marking it ``DELIVERED`` here would let the sweep silently re-pay the revoked driver.
+    Leaving it un-transitioned mirrors the driver path (which also returns before mutating) and keeps
+    the sweep out of it (it only scans ``status=DELIVERED``).
     """
     from django.utils import timezone
-    from .models import DeliveryJob
+    from .models import DeliveryJob, Customer
 
     job = None
     with transaction.atomic():
@@ -69,6 +80,10 @@ def complete_delivery_job_for_order(tenant_id, order_number):
             .first()
         )
         if job is None or job.is_terminal or not job.driver_id:
+            return job
+        # OPS-5f approval re-check at the money-emitting transition. Re-read the flag under
+        # the lock; a revoked driver is neither credited nor marked DELIVERED (see docstring).
+        if not Customer.objects.filter(pk=job.driver_id, driver_approved=True).exists():
             return job
         job.status = DeliveryJob.Status.DELIVERED
         job.delivered_at = timezone.now()

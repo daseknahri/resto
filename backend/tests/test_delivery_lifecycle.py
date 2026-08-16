@@ -64,10 +64,12 @@ class CompleteDeliveryJobTests(SimpleTestCase):
 
     @patch("accounts.views._credit_driver_earnings")
     @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.Customer")
     @patch("accounts.models.DeliveryJob")
-    def test_picked_up_job_delivered_and_driver_credited(self, mock_dj, _atomic, mock_credit):
+    def test_picked_up_job_delivered_and_driver_credited(self, mock_dj, mock_customer, _atomic, mock_credit):
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.DELIVERED = "delivered"
+        mock_customer.objects.filter.return_value.exists.return_value = True  # OPS-5f: still approved
         job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
                               delivered_at=None, save=MagicMock())
         mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
