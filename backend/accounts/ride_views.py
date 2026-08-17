@@ -937,6 +937,15 @@ class DriverRideAcceptView(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
+            # Cross-vertical capacity: a driver mid-delivery must not also take a ride. Same
+            # Customer-row lock as the delivery-accept endpoint → consistent lock order, race closed.
+            from .models import DeliveryJob as _DJ
+            if _DJ.objects.filter(driver=driver, status__in=_DJ.ACTIVE_STATUSES).exists():
+                return Response(
+                    {"detail": "Complete your current delivery before accepting a trip.", "code": "busy_other_vertical"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             try:
                 ride = RideRequest.objects.select_for_update().get(
                     pk=ride_id,

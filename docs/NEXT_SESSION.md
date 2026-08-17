@@ -233,8 +233,11 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    Presentational only; the owner-decides backend model is untouched.
 8. **Code-less DELIVERED completion** *policy* residual — the client-URL bypass is already fixed (#222);
    whether to additionally *require* a real photo for code-less completion is a policy call.
-9. **Structural — a driver can hold an active ride AND an active delivery** at once (cross-vertical
-   double-booking); tied to the owner-gated rides go-live (§4.D / §4.E).
+9. ✅ **RESOLVED (#234) — Ride + delivery double-booking:** both accept endpoints now enforce a
+   cross-vertical capacity check under the Customer-row lock — a driver holding a non-terminal ride can't
+   accept a delivery and vice-versa (409 `busy_other_vertical`). Inert until rides go live, then it prevents
+   a driver owing a ride and a delivery simultaneously. (The "structural" framing was over-cautious; the fix
+   is a clean guard on the two accept endpoints.)
 
 **Deferred (not a decision):** the Arabic back-arrow glyph (low) — the FR arrows were cleaned in #225 but
 `messages-ar.js` was untouched; a one-line follow-up.

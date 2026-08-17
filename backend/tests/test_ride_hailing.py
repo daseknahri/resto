@@ -332,6 +332,13 @@ class DriverRideAcceptViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DriverRideAcceptView.as_view()
+        # The ride-accept flow now cross-checks DeliveryJob (a driver mid-delivery can't take a
+        # ride). Default it to "no active delivery" so the existing ride tests reach the ride
+        # logic; the cross-vertical test flips it to True.
+        _dj = patch("accounts.models.DeliveryJob")
+        self.MockDJ = _dj.start()
+        self.addCleanup(_dj.stop)
+        self.MockDJ.objects.filter.return_value.exists.return_value = False
 
     def _post(self, ride_id=1, session=None):
         req = self.factory.post(f"/api/driver/rides/{ride_id}/accept/")
@@ -365,6 +372,25 @@ class DriverRideAcceptViewTests(SimpleTestCase):
         req = self._post(session=_session(customer_id=2))
         resp = self.view(req, ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+
+    @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_active_delivery_blocks_ride_accept_409(self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
+        """Cross-vertical guard: a driver mid-delivery (an active DeliveryJob) is refused a ride."""
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True,
+                                is_driver_online=True, driver_vehicle_type="car",
+                                driver_car_approved=True)
+        mock_cust_objs.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = driver
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False  # no active ride
+        self.MockDJ.objects.filter.return_value.exists.return_value = True                    # active delivery
+        req = self._post(session=_session(customer_id=2))
+        resp = self.view(req, ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "busy_other_vertical")
 
     @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views.RideRequest.objects")
@@ -838,6 +864,11 @@ class CarApprovedGateTests(SimpleTestCase):
 
     def setUp(self):
         self.factory = APIRequestFactory()
+        # Ride-accept now cross-checks DeliveryJob — default it to "no active delivery".
+        _dj = patch("accounts.models.DeliveryJob")
+        self.MockDJ = _dj.start()
+        self.addCleanup(_dj.stop)
+        self.MockDJ.objects.filter.return_value.exists.return_value = False
 
     @patch("accounts.ride_views.RideDriverThrottle.allow_request", return_value=True)
     @patch("accounts.ride_views.RideRequest.objects")
@@ -2186,6 +2217,11 @@ class PackageAcceptViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DriverRideAcceptView.as_view()
+        # Ride-accept now cross-checks DeliveryJob — default it to "no active delivery".
+        _dj = patch("accounts.models.DeliveryJob")
+        self.MockDJ = _dj.start()
+        self.addCleanup(_dj.stop)
+        self.MockDJ.objects.filter.return_value.exists.return_value = False
 
     def _post(self, ride_id=50, session=None):
         req = self.factory.post(f"/api/driver/rides/{ride_id}/accept/")
