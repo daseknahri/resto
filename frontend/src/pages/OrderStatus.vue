@@ -842,7 +842,12 @@ const updateCountdown = () => {
     countdownSeconds.value = null;
     return;
   }
-  const readyAt = new Date(d.created_at).getTime() + d.estimated_ready_minutes * 60_000;
+  // Prefer the server "ready by" anchor (the owner's "ready in X min from now" intent); fall
+  // back to created_at + minutes for pre-migration / placement-time ETAs where created_at is a
+  // valid origin. This fixes ETAs set/edited after placement (target was measured too early).
+  const readyAt = d.estimated_ready_at
+    ? new Date(d.estimated_ready_at).getTime()
+    : new Date(d.created_at).getTime() + d.estimated_ready_minutes * 60_000;
   countdownSeconds.value = Math.floor((readyAt - Date.now()) / 1000);
 };
 

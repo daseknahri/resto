@@ -221,8 +221,11 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    to whole dirhams — it always renders 2 decimals, matching `formatCurrency` (receipts/trackers) and the
    2-decimal amount actually charged, so browse/cart line items reconcile with the total. (Display/trust
    only; no charge was ever wrong.)
-6. **ETA anchoring** — the countdown is anchored to placement time, but owners mean "ready in X min *from
-   now*". *Rec:* add a server-set `ready_at` anchor when the ETA is set/edited.
+6. ✅ **RESOLVED (#232) — ETA anchoring:** new `Order.estimated_ready_at` (migration 0077) is stamped
+   `now + minutes` whenever the owner sets/edits the ETA; both consumer order-status pages anchor the
+   countdown to it, falling back to `created_at + minutes` when null (correct for placement-time ETAs). An
+   ETA set/edited long after placement now counts down correctly instead of expiring early or inverting on
+   a delay bump.
 7. **Failed-delivery status divergence** — the customer page shows "Out for delivery" while the same page's
    tracker shows a red "Failed" pill. *Rec:* show a coherent "delivery failed — being resolved" state.
 8. **Code-less DELIVERED completion** *policy* residual — the client-URL bypass is already fixed (#222);

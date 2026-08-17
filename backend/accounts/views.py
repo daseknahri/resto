@@ -5393,10 +5393,11 @@ class MarketplaceOrderStatusView(APIView):
             "applied_promotion_name": order.applied_promotion_name or "",
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
-            # The marketplace tracking page's ETA countdown computes
-            # readyAt = created_at + estimated_ready_minutes; without created_at it
-            # can't and falls back to "Ready any moment now". Mirror the direct page's
-            # payload (menu/views.py) which already ships created_at.
+            # Absolute "ready by" anchor (the owner's from-now intent) — the page prefers this
+            # and falls back to created_at + estimated_ready_minutes when null (pre-migration
+            # orders, or placement-time ETAs where created_at is a valid anchor).
+            "estimated_ready_at": order.estimated_ready_at.isoformat() if order.estimated_ready_at else None,
+            # created_at is the fallback anchor and the countdown needs it either way.
             "created_at": order.created_at.isoformat(),
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             "items": items,
