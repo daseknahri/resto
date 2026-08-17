@@ -226,8 +226,11 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    countdown to it, falling back to `created_at + minutes` when null (correct for placement-time ETAs). An
    ETA set/edited long after placement now counts down correctly instead of expiring early or inverting on
    a delay bump.
-7. **Failed-delivery status divergence** — the customer page shows "Out for delivery" while the same page's
-   tracker shows a red "Failed" pill. *Rec:* show a coherent "delivery failed — being resolved" state.
+7. ✅ **RESOLVED (#233) — Failed-delivery status divergence:** `OrderStatus.vue` now derives a
+   `deliveryFailed` state (delivery failed + order still `out_for_delivery`) that relabels the header pill
+   to "Delivery issue" (amber, not the indigo "Out for delivery") and shows a reassuring "your delivery hit
+   a problem — the restaurant is sorting it out" banner (new `orderStatus.deliveryProblem*` keys, en/fr/ar).
+   Presentational only; the owner-decides backend model is untouched.
 8. **Code-less DELIVERED completion** *policy* residual — the client-URL bypass is already fixed (#222);
    whether to additionally *require* a real photo for code-less completion is a policy call.
 9. **Structural — a driver can hold an active ride AND an active delivery** at once (cross-vertical

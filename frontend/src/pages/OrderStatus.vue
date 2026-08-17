@@ -237,6 +237,14 @@
       </div>
 
       <!-- Live driver tracking (driver card + call + map) -->
+      <div
+        v-if="deliveryFailed"
+        class="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3"
+        role="status"
+      >
+        <p class="text-sm font-semibold text-amber-200">{{ t('orderStatus.deliveryProblemTitle') }}</p>
+        <p class="mt-1 text-sm leading-relaxed text-amber-100/80">{{ t('orderStatus.deliveryProblemBody') }}</p>
+      </div>
       <DeliveryTracker v-if="orderData.delivery" :delivery="orderData.delivery" />
       <!-- Self-delivery (restaurant delivers itself — no platform driver to track) -->
       <div
@@ -832,6 +840,16 @@ const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)
 );
 
+// A driver marked the delivery FAILED, but the backend deliberately leaves order.status at
+// out_for_delivery (the owner decides re-dispatch vs refund). Without this, the header pill
+// keeps asserting "Out for delivery" while the driver card below shows a red "Failed" — a
+// direct on-screen contradiction with no clear problem state for the customer. When true we
+// relabel the pill and show a reassuring banner.
+const deliveryFailed = computed(() =>
+  orderData.value?.delivery?.status === "failed"
+  && orderData.value?.status === "out_for_delivery"
+);
+
 // ── Countdown timer ───────────────────────────────────────────────────────────
 const countdownSeconds = ref(null);
 let countdownTimer = null;
@@ -1027,18 +1045,25 @@ const stepClass = (stepValue) => {
   return "border-slate-700 bg-slate-900 text-slate-600";
 };
 
-const statusClass = (s) => ({
-  scheduled: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
-  pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
-  confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
-  preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
-  ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
-  out_for_delivery: "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30",
-  completed: "bg-slate-700 text-slate-300",
-  cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
-}[s] || "bg-slate-700 text-slate-300");
+const statusClass = (s) => {
+  // Delivery-issue state overrides the (otherwise indigo "out for delivery") pill colour.
+  if (deliveryFailed.value) return "bg-amber-500/20 text-amber-200 border border-amber-500/30";
+  return ({
+    scheduled: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
+    pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
+    confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
+    preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
+    ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
+    out_for_delivery: "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30",
+    completed: "bg-slate-700 text-slate-300",
+    cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
+  }[s] || "bg-slate-700 text-slate-300");
+};
 
 const statusLabel = (s) => {
+  // A driver-failed delivery keeps order.status = out_for_delivery, but the pill must not
+  // keep asserting "Out for delivery" while the driver card shows "Failed".
+  if (deliveryFailed.value) return t("orderStatus.statusDeliveryIssue");
   // "Ready" is fulfillment-specific: a delivery order that's ready is waiting to
   // be dispatched (not "Ready for pickup"), and a served dine-in bill reads
   // "Served" — keep the pill/aria in step with the timeline node labels.
