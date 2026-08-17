@@ -69,18 +69,22 @@ export const useCurrencyStore = defineStore("currency", () => {
   function formatPrice(madAmount, locale = "en") {
     const converted = convert(madAmount);
     const code = selected.value;
-    const isMAD = code === BASE_CODE;
     try {
+      // Always 2 decimals. MAD amounts (dish prices, fees, discounts) carry 2 decimal
+      // places, and placed-order receipts/trackers already show them via
+      // formatCurrency(..., 2). Rounding the browse/cart display to whole dirhams made
+      // line items not reconcile with the total (two "MAD 13" lines summing to "MAD 25")
+      // and diverge from the amount actually charged (a 12.50 dish showed "MAD 13").
       return new Intl.NumberFormat(locale, {
         style: "currency",
         currency: code,
-        minimumFractionDigits: isMAD ? 0 : 2,
-        maximumFractionDigits: isMAD ? 0 : 2,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       }).format(converted);
     } catch {
       // Intl.NumberFormat doesn't know some symbols — fall back gracefully
       const sym = selectedSymbol.value;
-      return `${sym}${converted.toFixed(isMAD ? 0 : 2)}`;
+      return `${sym}${converted.toFixed(2)}`;
     }
   }
 

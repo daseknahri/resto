@@ -217,8 +217,10 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    wallet-pays, de-duplicated) under an order row lock, so a customer settling the remainder of a
    partly-cash-settled tab is charged only what is still owed. `_settle_order_if_wallet_covers` uses the same
    reconciliation.
-5. **Currency rounding** — browsing/cart round MAD to whole dirhams while prices/receipts carry 2 decimals.
-   *Rec:* round to 2 decimals everywhere.
+5. ✅ **RESOLVED (#231) — Currency display rounding:** `currency.js formatPrice` no longer special-cases MAD
+   to whole dirhams — it always renders 2 decimals, matching `formatCurrency` (receipts/trackers) and the
+   2-decimal amount actually charged, so browse/cart line items reconcile with the total. (Display/trust
+   only; no charge was ever wrong.)
 6. ✅ **RESOLVED (#232) — ETA anchoring:** new `Order.estimated_ready_at` (migration 0077) is stamped
    `now + minutes` whenever the owner sets/edits the ETA; both consumer order-status pages anchor the
    countdown to it, falling back to `created_at + minutes` when null (correct for placement-time ETAs). An
