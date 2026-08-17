@@ -6530,6 +6530,14 @@ class DriverJobAcceptView(APIView):
                 driver=customer, status__in=DeliveryJob.ACTIVE_STATUSES,
             ).exists():
                 return Response({"detail": "Complete your current delivery before accepting a new one."}, status=status.HTTP_409_CONFLICT)
+            # Cross-vertical capacity: a driver mid-ride must not also take a delivery (they'd
+            # physically owe two jobs at once — one customer gets a driver who is elsewhere).
+            # Checked under the SAME Customer-row lock the ride-accept endpoint takes, so
+            # cross-vertical accepts serialize with a consistent lock order (no deadlock). Inert
+            # until rides go live (no non-terminal RideRequest exists yet).
+            from .models import RideRequest as _RR
+            if _RR.objects.filter(driver=customer).exclude(status__in=_RR.TERMINAL_STATUSES).exists():
+                return Response({"detail": "Complete your current trip before accepting a delivery.", "code": "busy_other_vertical"}, status=status.HTTP_409_CONFLICT)
             try:
                 job = DeliveryJob.objects.select_for_update().get(
                     pk=job_id,

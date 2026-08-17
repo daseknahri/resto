@@ -507,6 +507,13 @@ class DriverJobAcceptViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DriverJobAcceptView.as_view()
+        # The accept flow now cross-checks RideRequest (a driver mid-ride can't take a
+        # delivery). Default it to "no active ride" so the existing delivery tests still reach
+        # the job logic; the cross-vertical test flips it to True.
+        _rr = patch("accounts.models.RideRequest")
+        self.MockRR = _rr.start()
+        self.addCleanup(_rr.stop)
+        self.MockRR.objects.filter.return_value.exclude.return_value.exists.return_value = False
 
     def _post(self, job_id, customer=None):
         req = self.factory.post(f"/api/driver/jobs/{job_id}/accept/")
@@ -540,6 +547,25 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         mock_dj.objects.filter.return_value.exists.return_value = True
         resp = self._post(1, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_active_ride_blocks_delivery_accept_409(self, mock_cust_objs, mock_dj):
+        """Cross-vertical guard: a driver mid-ride (a non-terminal RideRequest) is refused a
+        delivery, so they can't physically owe a ride and a delivery at once."""
+        customer = _make_customer(is_driver_online=True)
+        mock_dj.Status.ASSIGNED = "assigned"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.objects.filter.return_value.exists.return_value = False   # no active delivery
+        # An active ride (the setUp default is False; flip it on for this case).
+        self.MockRR.objects.filter.return_value.exclude.return_value.exists.return_value = True
+        # The cross-vertical guard runs inside transaction.atomic() — neutralise it (no DB).
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "busy_other_vertical")
 
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
