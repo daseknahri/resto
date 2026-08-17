@@ -1787,12 +1787,17 @@ class SettleRideEarningTypeTests(SimpleTestCase):
 class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
     """driver_earnings_summary must include ride_earned and rides_completed."""
 
+    @patch("accounts.models.Customer")
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.WalletTransaction")
     @patch("accounts.models.DriverPayout")
     @patch("accounts.models.DeliveryJob")
-    def test_summary_includes_ride_fields(self, mock_job, mock_payout, mock_wtx, mock_rr):
+    def test_summary_includes_ride_fields(self, mock_job, mock_payout, mock_wtx, mock_rr, mock_cust):
         from accounts.driver_service import driver_earnings_summary
+
+        # wallet_balance query (added by the driver-payout single-ledger fix) — mock it too so
+        # this stays a no-DB SimpleTestCase.
+        mock_cust.objects.filter.return_value.values_list.return_value.first.return_value = Decimal("70.00")
 
         # Delivery side: 100 earned, 40 paid
         mock_job.objects.filter.return_value.aggregate.return_value = {"s": Decimal("100.00")}
@@ -1816,13 +1821,18 @@ class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
         self.assertEqual(str(result["earned"]), "100.00")
         self.assertEqual(str(result["paid"]), "40.00")
         self.assertEqual(str(result["owed"]), "60.00")
+        self.assertEqual(str(result["wallet_balance"]), "70.00")
 
+    @patch("accounts.models.Customer")
     @patch("accounts.models.RideRequest")
     @patch("accounts.models.WalletTransaction")
     @patch("accounts.models.DriverPayout")
     @patch("accounts.models.DeliveryJob")
-    def test_ride_fields_zero_when_no_rides(self, mock_job, mock_payout, mock_wtx, mock_rr):
+    def test_ride_fields_zero_when_no_rides(self, mock_job, mock_payout, mock_wtx, mock_rr, mock_cust):
         from accounts.driver_service import driver_earnings_summary
+
+        # wallet_balance query (driver-payout single-ledger fix) — mock it (None → 0.00).
+        mock_cust.objects.filter.return_value.values_list.return_value.first.return_value = None
 
         mock_job.objects.filter.return_value.aggregate.return_value = {"s": None}
         mock_job.Status.DELIVERED = "delivered"
