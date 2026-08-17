@@ -3847,6 +3847,9 @@ class CustomerOrderStatusView(APIView):
             "amount_due": str(order_outstanding if order_outstanding > Decimal("0") else Decimal("0.00")),
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            # Absolute "ready by" anchor for the countdown (the owner's from-now intent). The
+            # page uses this; it falls back to created_at + estimated_ready_minutes when null.
+            "estimated_ready_at": order.estimated_ready_at.isoformat() if order.estimated_ready_at else None,
             # Advance/scheduled fulfilment time (ISO 8601, null for ASAP orders).
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             # Proof-of-delivery code — shown ONLY to the signed-in owner of an active
@@ -8171,6 +8174,17 @@ class OwnerOrderStatusUpdateView(APIView):
                     order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
                 except (TypeError, ValueError):
                     order.estimated_ready_minutes = None
+                # Stamp the absolute "ready by" anchor = now + minutes (the owner's from-now
+                # intent), so the consumer countdown is right even for an ETA set/edited long
+                # after placement. Cleared to None when the ETA is cleared.
+                from datetime import timedelta as _eta_timedelta
+                from django.utils import timezone as _eta_tz
+                order.estimated_ready_at = (
+                    _eta_tz.now() + _eta_timedelta(minutes=order.estimated_ready_minutes)
+                    if order.estimated_ready_minutes else None
+                )
+                if "estimated_ready_at" not in update_fields:
+                    update_fields.append("estimated_ready_at")
 
             # K-8: stamp the canned cancel reason (+ optional note) on the same save
             # as the status change — covers both the decline-new-order and

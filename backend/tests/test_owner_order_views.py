@@ -680,6 +680,15 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
         resp = self._patch(data={"estimated_ready_minutes": 15})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(order.estimated_ready_minutes, 15)
+        # The absolute anchor is stamped now + minutes (the owner's from-now intent), NOT measured
+        # from created_at — so an ETA set long after placement still counts down ~15 min.
+        # estimated_ready_at uses the real clock (a local import in the view), not tz_mock.
+        from django.utils import timezone as _real_tz
+        from datetime import timedelta as _td
+        self.assertIsNotNone(order.estimated_ready_at)
+        _delta = order.estimated_ready_at - _real_tz.now()
+        self.assertGreater(_delta, _td(minutes=14))
+        self.assertLess(_delta, _td(minutes=16))
 
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
@@ -690,6 +699,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
         resp = self._patch(data={"estimated_ready_minutes": "bad"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIsNone(order.estimated_ready_minutes)
+        self.assertIsNone(order.estimated_ready_at)  # cleared alongside the minutes
 
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")

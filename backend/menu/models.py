@@ -605,6 +605,13 @@ class Order(models.Model):
     )
     owner_note = models.TextField(blank=True)
     estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
+    # Absolute "ready by" target, stamped = now + estimated_ready_minutes whenever the ETA is
+    # written (at placement AND when the owner sets/edits it later). The consumer countdown
+    # anchors to THIS, not created_at: the owner means "ready in X minutes FROM NOW", so an ETA
+    # set/edited after placement was otherwise measured from the wrong origin (target too early,
+    # and raising the ETA to signal a delay moved the target into the past). Null = no ETA
+    # (or a pre-migration order → the page falls back to created_at + estimated_ready_minutes).
+    estimated_ready_at = models.DateTimeField(null=True, blank=True)
     scheduled_for = models.DateTimeField(
         null=True,
         blank=True,

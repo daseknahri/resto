@@ -626,10 +626,14 @@ const _updateCountdown = () => {
     countdownSeconds.value = null;
     return;
   }
-  const readyAt = new Date(o.created_at).getTime() + o.estimated_ready_minutes * 60_000;
+  // Prefer the server "ready by" anchor (owner's "ready in X min from now" intent); fall back to
+  // created_at + minutes for pre-migration / placement-time ETAs where created_at is valid.
+  const readyAt = o.estimated_ready_at
+    ? new Date(o.estimated_ready_at).getTime()
+    : new Date(o.created_at).getTime() + o.estimated_ready_minutes * 60_000;
   countdownSeconds.value = Math.floor((readyAt - Date.now()) / 1000);
 };
-watch(() => [order.value?.estimated_ready_minutes, order.value?.created_at, order.value?.status], () => {
+watch(() => [order.value?.estimated_ready_minutes, order.value?.estimated_ready_at, order.value?.created_at, order.value?.status], () => {
   _updateCountdown();
   clearInterval(_countdownTimer);
   if (countdownSeconds.value !== null) _countdownTimer = setInterval(_updateCountdown, 1000);
