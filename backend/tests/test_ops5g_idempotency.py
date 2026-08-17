@@ -70,6 +70,17 @@ class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
         from menu.views import CustomerOrderPayWalletView
         self.factory = APIRequestFactory()
         self.view = CustomerOrderPayWalletView.as_view()
+        # The settle now runs in transaction.atomic() + select_for_update and reconciles the
+        # OrderPayment ledger — neutralise both for these no-DB unit tests.
+        import contextlib
+        _atomic = patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext())
+        _atomic.start()
+        self.addCleanup(_atomic.stop)
+        _op = patch("menu.models.OrderPayment")
+        _mock_op = _op.start()
+        self.addCleanup(_op.stop)
+        _mock_op.objects.filter.return_value = []
+        _mock_op.Method.WALLET = "wallet"
 
     def _post(self, session):
         """`session` keeps its {"customer_id": N} shape — it now drives BOTH the request
@@ -90,6 +101,7 @@ class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
     def test_key_is_schema_namespaced(self, om, debit):
         order = self._order(total="45.00", paid="0.00")
         om.filter.return_value.first.return_value = order
+        om.select_for_update.return_value = om  # locked re-read resolves to the same order
         debit.return_value = SimpleNamespace(balance_after=Decimal("5.00"))
 
         resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")

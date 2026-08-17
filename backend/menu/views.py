@@ -12104,10 +12104,33 @@ class OwnerWalletResolveTokenView(APIView):
         })
 
 
+def _order_collected(order):
+    """Total already collected against an order, reconciling BOTH payment signals so no
+    endpoint over-collects:
+      * the OrderPayment ledger — cash/card/wallet split-bill rows (StaffOrderPaymentView), and
+      * order.wallet_amount_paid — incremented by the customer wallet-pay endpoint, which
+        writes NO ledger row.
+    A wallet split-bill payment appears in BOTH (a WALLET OrderPayment row AND
+    wallet_amount_paid), so count the ledger once and add only the wallet paid that is not
+    already a ledger WALLET row. Without this, CustomerOrderPayWalletView charged the full
+    total from the wallet even when staff had already collected cash/card partials (which
+    live only in the ledger, never in wallet_amount_paid) — a silent over-charge.
+    """
+    from menu.models import OrderPayment
+    rows = list(OrderPayment.objects.filter(order_id=order.id))
+    ledger_paid = sum((Decimal(str(p.amount or "0")) for p in rows), Decimal("0"))
+    ledger_wallet = sum(
+        (Decimal(str(p.amount or "0")) for p in rows if p.method == OrderPayment.Method.WALLET),
+        Decimal("0"),
+    )
+    non_ledger_wallet = max(Decimal("0"), (order.wallet_amount_paid or Decimal("0")) - ledger_wallet)
+    return ledger_paid + non_ledger_wallet
+
+
 def _settle_order_if_wallet_covers(order_number):
-    """Flip an order to PAID once its accumulated wallet payments cover the total.
-    This is what lets paying a (dine-in) tab from the wallet actually close the
-    bill. Best-effort — the wallet ledger is the source of truth regardless.
+    """Flip an order to PAID once its accumulated payments cover the total. This is what
+    lets paying a (dine-in) tab from the wallet actually close the bill. Best-effort — the
+    wallet ledger is the source of truth regardless.
     """
     if not order_number:
         return
@@ -12119,7 +12142,9 @@ def _settle_order_if_wallet_covers(order_number):
             o is not None
             and o.payment_status != Order.PaymentStatus.PAID
             and o.total > Decimal("0")
-            and o.wallet_amount_paid >= o.total
+            # Ledger-aware: a cash/card partial (OrderPayment rows) + wallet together can
+            # cover the tab even when wallet_amount_paid alone does not.
+            and _order_collected(o) >= o.total
         ):
             o.mark_paid()  # sets payment_status=PAID + paid_at + saves
             _broadcast_order_change(o)
@@ -12156,46 +12181,61 @@ class CustomerOrderPayWalletView(APIView):
         if order.payment_status == Order.PaymentStatus.PAID:
             return Response({"status": "paid", "payment_status": order.payment_status})
 
-        outstanding = (order.total or Decimal("0")) - (order.wallet_amount_paid or Decimal("0"))
-        if outstanding <= Decimal("0"):
-            order.mark_paid()
-            return Response({"status": "paid", "payment_status": order.payment_status})
-
         tenant = getattr(request, "tenant", None)
+        from django.db import transaction as _tx
         from accounts.wallet_service import debit_wallet, InsufficientFunds, WalletError
         from accounts.models import Customer as _Cust
         from django.db import connection as _ws_conn
-        # OPS-5g: WalletTransaction lives in the PUBLIC schema, so idempotency_key is a
-        # GLOBAL namespace across tenants. order_number is only tenant-schema-unique, so a
-        # bare f"order-pay-{order_number}" could collide with another tenant's order of the
-        # same number — the OPS-5f customer-match guard would PASS (same customer can hold
-        # orders in two tenants) and silently replay, marking THIS order PAID with no money
-        # moved. Namespace the key with the tenant schema. The order already-PAID guard
-        # above (and the customer's wallet ledger) is the durable backstop against double
-        # payment; the namespacing just stops the cross-tenant collision.
         _schema = _ws_conn.schema_name
-        try:
-            tx = debit_wallet(
-                order.customer_id, outstanding,
-                reference=order_number, tenant_id=(tenant.id if tenant else None),
-                note="Order payment", idempotency_key=f"order-pay-{_schema}-{order_number}",
-            )
-        except InsufficientFunds:
-            cust = _Cust.objects.filter(pk=order.customer_id).first()
-            return Response(
-                {"detail": "Insufficient wallet balance.", "code": "insufficient",
-                 "balance": str(cust.wallet_balance) if cust else "0.00",
-                 "outstanding": str(outstanding)},
-                status=status.HTTP_402_PAYMENT_REQUIRED,
-            )
-        except WalletError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        tx = None
 
-        order.wallet_amount_paid = (order.wallet_amount_paid or Decimal("0")) + outstanding
-        order.mark_paid(save=False)
-        order.save(update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"])
+        with _tx.atomic():
+            # Lock the order so a concurrent staff cash/card partial (an OrderPayment row) or a
+            # racing wallet-pay double-tap is committed before we compute what's still
+            # outstanding — otherwise the customer could be debited the full total while cash was
+            # collected in parallel. Mirrors StaffOrderPaymentView's locking.
+            locked = Order.objects.select_for_update().filter(pk=order.pk).first() or order
+            if locked.payment_status == Order.PaymentStatus.PAID:
+                return Response({"status": "paid", "payment_status": locked.payment_status})
+
+            # LEDGER-AWARE outstanding: count cash/card OrderPayment rows already collected, not
+            # just wallet_amount_paid. Before this, a tab with a 60 cash split-bill row
+            # (wallet_amount_paid still 0) charged the customer the FULL total from their wallet,
+            # over-collecting by the 60 already taken in cash.
+            collected = _order_collected(locked)
+            outstanding = max(Decimal("0"), (locked.total or Decimal("0")) - collected)
+            if outstanding <= Decimal("0"):
+                locked.mark_paid()
+                return Response({"status": "paid", "payment_status": locked.payment_status})
+
+            # OPS-5g: WalletTransaction lives in the PUBLIC schema, so idempotency_key is a GLOBAL
+            # namespace across tenants. order_number is only tenant-schema-unique, so a bare
+            # f"order-pay-{order_number}" could collide with another tenant's order of the same
+            # number — the OPS-5f customer-match guard would PASS (same customer can hold orders in
+            # two tenants) and silently replay. Namespace the key with the tenant schema.
+            try:
+                tx = debit_wallet(
+                    locked.customer_id, outstanding,
+                    reference=order_number, tenant_id=(tenant.id if tenant else None),
+                    note="Order payment", idempotency_key=f"order-pay-{_schema}-{order_number}",
+                )
+            except InsufficientFunds:
+                cust = _Cust.objects.filter(pk=locked.customer_id).first()
+                return Response(
+                    {"detail": "Insufficient wallet balance.", "code": "insufficient",
+                     "balance": str(cust.wallet_balance) if cust else "0.00",
+                     "outstanding": str(outstanding)},
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
+            except WalletError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            locked.wallet_amount_paid = (locked.wallet_amount_paid or Decimal("0")) + outstanding
+            locked.mark_paid(save=False)
+            locked.save(update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"])
+            order = locked
+
         _broadcast_order_change(order)
-
         return Response({
             "status": "paid",
             "payment_status": order.payment_status,

@@ -36,6 +36,18 @@ class PayWalletTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = CustomerOrderPayWalletView.as_view()
+        # The settle now runs in transaction.atomic() + select_for_update and reconciles the
+        # OrderPayment ledger via _order_collected. Neutralise both for these no-DB unit tests:
+        # atomic → passthrough; ledger → empty by default (a test overrides self.MockOP for rows).
+        import contextlib
+        _atomic = patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext())
+        _atomic.start()
+        self.addCleanup(_atomic.stop)
+        _op = patch("menu.models.OrderPayment")
+        self.MockOP = _op.start()
+        self.addCleanup(_op.stop)
+        self.MockOP.objects.filter.return_value = []
+        self.MockOP.Method.WALLET = "wallet"
 
     def _post(self, session):
         """`session` keeps its {"customer_id": N} / {} shape — it now drives BOTH the
@@ -81,6 +93,7 @@ class PayWalletTests(SimpleTestCase):
     def test_pays_outstanding_and_marks_paid(self, om, debit):
         order = _order(total="45.00", paid="0.00")
         om.filter.return_value.first.return_value = order
+        om.select_for_update.return_value = om  # the locked re-read resolves to the same order
         tx = MagicMock()
         tx.balance_after = Decimal("5.00")
         debit.return_value = tx
@@ -105,9 +118,33 @@ class PayWalletTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_insufficient_balance_402(self, om, debit, Cust):
         om.filter.return_value.first.return_value = _order(total="45.00")
+        om.select_for_update.return_value = om
         debit.side_effect = InsufficientFunds()
         Cust.objects.filter.return_value.first.return_value = MagicMock(wallet_balance=Decimal("10.00"))
         resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
         self.assertEqual(resp.status_code, 402)
         self.assertEqual(resp.data["code"], "insufficient")
         self.assertEqual(resp.data["balance"], "10.00")
+
+    @patch("accounts.wallet_service.debit_wallet")
+    @patch("menu.views.Order.objects")
+    def test_cash_partial_in_ledger_is_not_overcharged(self, om, debit):
+        """Regression: a staff cash split-bill (an OrderPayment row) that never touched
+        wallet_amount_paid must count as already collected. A 100 tab with a 60 cash row debits
+        only the remaining 40 from the wallet — before this fix it charged the full 100
+        (over-collecting the 60 already taken in cash)."""
+        order = _order(total="100.00", paid="0.00")
+        om.filter.return_value.first.return_value = order
+        om.select_for_update.return_value = om
+        cash_row = MagicMock(amount=Decimal("60.00"), method="cash")   # method != 'wallet'
+        self.MockOP.objects.filter.return_value = [cash_row]
+        tx = MagicMock()
+        tx.balance_after = Decimal("10.00")
+        debit.return_value = tx
+
+        resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["amount_paid"], "40.00")            # NOT 100
+        self.assertEqual(debit.call_args.args[1], Decimal("40.00"))    # only the reconciled remainder
+        self.assertEqual(order.wallet_amount_paid, Decimal("40.00"))

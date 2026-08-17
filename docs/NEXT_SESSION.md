@@ -210,8 +210,11 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    — reparenting OrderPayment rows — remains a possible future change.)
 3. **No-show → redispatch pays two drivers** for one delivery fee. *Rec:* only pay the no-show driver if the
    job isn't redispatched (or deduct it).
-4. **Wallet self-pay ignores the cash/card `OrderPayment` ledger** — a customer paying the remainder of a
-   partly-cash-settled tab is over-charged. *Rec:* outstanding = total − wallet_paid − OrderPayment sum.
+4. ✅ **RESOLVED (#229) — Wallet self-pay over-charge:** `CustomerOrderPayWalletView` now derives
+   outstanding from a shared ledger-aware `_order_collected` helper (cash/card `OrderPayment` rows + direct
+   wallet-pays, de-duplicated) under an order row lock, so a customer settling the remainder of a
+   partly-cash-settled tab is charged only what is still owed. `_settle_order_if_wallet_covers` uses the same
+   reconciliation.
 5. **Currency rounding** — browsing/cart round MAD to whole dirhams while prices/receipts carry 2 decimals.
    *Rec:* round to 2 decimals everywhere.
 6. **ETA anchoring** — the countdown is anchored to placement time, but owners mean "ready in X min *from
