@@ -31,13 +31,28 @@ class RecordDriverPayoutTests(TransactionTestCase):
         )
 
     def _deliver(self, driver, payout):
-        """A DELIVERED job with a driver_payout — this is what `earned` sums over."""
-        from accounts.models import DeliveryJob
-        return DeliveryJob.objects.create(
+        """A DELIVERED job with a driver_payout — what `earned` sums over — AND its wallet
+        credit, mirroring the real flow (_credit_driver_earnings credits the driver's wallet
+        on delivery). record_driver_payout now debits the wallet, so a settlement needs the
+        earnings to actually sit in the wallet, exactly as in production."""
+        from django.db.models import F
+        from accounts.models import Customer, DeliveryJob
+        job = DeliveryJob.objects.create(
             tenant_id=1, order_number=f"ORD-{next(_ordn_seq)}", driver=driver,
             status=DeliveryJob.Status.DELIVERED, driver_payout=Decimal(payout),
             delivered_at=timezone.now(),
         )
+        Customer.objects.filter(pk=driver.id).update(
+            wallet_balance=F("wallet_balance") + Decimal(payout)
+        )
+        return job
+
+    def _cashout_all(self, driver):
+        """Simulate the driver cashing their wallet out at a restaurant (confirm_cashout debits
+        the wallet). We drain it directly — the point is only that the wallet is now empty, as
+        it would be after a real cash-out."""
+        from accounts.models import Customer
+        Customer.objects.filter(pk=driver.id).update(wallet_balance=Decimal("0"))
 
     def test_payout_up_to_owed_succeeds_and_reduces_owed(self):
         d = self._driver()
@@ -93,3 +108,30 @@ class RecordDriverPayoutTests(TransactionTestCase):
         free_id = (Customer.objects.aggregate(m=Max("id"))["m"] or 0) + 100000
         with self.assertRaises(WalletError):
             record_driver_payout(free_id, "10")
+
+    # ── Single-ledger double-booking guard (driver_service driver-payout fix) ──────
+
+    def test_direct_settlement_debits_the_wallet(self):
+        # A direct settlement extracts from the SAME wallet a cash-out would, so the earnings
+        # can only leave once. Recording a payout must reduce wallet_balance by that amount.
+        from accounts.models import Customer
+        d = self._driver()
+        self._deliver(d, "100")                                   # earned + wallet = 100
+        record_driver_payout(d.id, "60")
+        self.assertEqual(Customer.objects.get(pk=d.id).wallet_balance, Decimal("40.00"))
+
+    def test_cannot_settle_after_cashout_double_pay_guard(self):
+        # The double-booking bug: a driver earns 100 (wallet credited 100), then CASHES OUT
+        # (wallet -> 0). `owed` still reads 100 because it ignores cash-outs, so the old code
+        # would record another 100 payout — paying the same earnings twice. Now the wallet
+        # debit raises InsufficientFunds (a WalletError) and no DriverPayout is written.
+        from accounts.models import Customer, DriverPayout
+        d = self._driver()
+        self._deliver(d, "100")
+        self._cashout_all(d)                                      # driver already took the cash
+        self.assertEqual(driver_earnings_summary(d.id)["owed"], Decimal("100.00"))          # owed unaware
+        self.assertEqual(driver_earnings_summary(d.id)["wallet_balance"], Decimal("0.00"))  # truth
+        with self.assertRaises(WalletError):
+            record_driver_payout(d.id, "100")
+        self.assertEqual(DriverPayout.objects.filter(driver_id=d.id).count(), 0)            # nothing recorded
+        self.assertEqual(Customer.objects.get(pk=d.id).wallet_balance, Decimal("0.00"))     # unchanged

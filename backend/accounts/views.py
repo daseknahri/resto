@@ -7565,6 +7565,11 @@ class AdminDriverEarningsView(APIView):
             "earned": str(summary["earned"]),
             "paid": str(summary["paid"]),
             "owed": str(summary["owed"]),
+            # wallet_balance = the driver's real extractable cash (delivery earnings still in
+            # the wallet, net of any cash-outs). The admin payout form should cap on THIS, not
+            # `owed` — a driver who already cashed out shows 0 claimable, so the UI doesn't
+            # invite a settlement the backend would (correctly) reject as InsufficientFunds.
+            "wallet_balance": str(summary["wallet_balance"]),
             "deliveries": [
                 {
                     "order_number": j.order_number,
@@ -7621,6 +7626,7 @@ class AdminDriverEarningsView(APIView):
             "amount": str(payout.amount),
             "owed": str(summary["owed"]),
             "paid": str(summary["paid"]),
+            "wallet_balance": str(summary["wallet_balance"]),
         })
 
 

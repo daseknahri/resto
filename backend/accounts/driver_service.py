@@ -32,7 +32,7 @@ def driver_earnings_summary(driver_id) -> dict:
     """Return {earned, paid, owed, ride_earned, rides_completed, earned_today, deliveries_today}
     for a driver, as quantised Decimals."""
     from django.utils import timezone as _tz
-    from .models import DeliveryJob, DriverPayout, RideRequest, WalletTransaction
+    from .models import Customer, DeliveryJob, DriverPayout, RideRequest, WalletTransaction
 
     earned = (
         DeliveryJob.objects
@@ -65,10 +65,18 @@ def driver_earnings_summary(driver_id) -> dict:
 
     earned = _money(earned)
     paid = _money(paid)
+    # wallet_balance is the driver's REAL extractable amount: delivery earnings are credited
+    # to the wallet on DELIVERED and leave it via cash-out (or a direct settlement — see
+    # record_driver_payout). It — not `earned - paid`, which ignores cash-outs — is the true
+    # cash still claimable, and the amount a direct settlement can debit.
+    wallet_balance = (
+        Customer.objects.filter(pk=driver_id).values_list("wallet_balance", flat=True).first()
+    ) or Decimal("0")
     return {
         "earned": earned,
         "paid": paid,
         "owed": _money(earned - paid),
+        "wallet_balance": _money(wallet_balance),
         "ride_earned": _money(ride_earned_raw),
         "rides_completed": rides_completed,
         "earned_today": _money(earned_today_raw),
@@ -79,8 +87,10 @@ def driver_earnings_summary(driver_id) -> dict:
 @transaction.atomic
 def record_driver_payout(driver_id, amount, *, method="cash", reference="", note="",
                          actor_user_id=None, idempotency_key=None, currency="MAD"):
-    """Record a settlement paid to a driver. Idempotent; never pays more than owed."""
-    from .models import Customer, DriverPayout
+    """Record a settlement paid to a driver. Idempotent; never pays more than owed AND
+    debits the wallet so a direct settlement and a restaurant cash-out can't both extract
+    the same earnings (single-ledger double-booking guard)."""
+    from .models import Customer, DriverPayout, WalletTransaction
 
     amount = _money(amount)
     if amount <= 0:
@@ -127,7 +137,7 @@ def record_driver_payout(driver_id, amount, *, method="cash", reference="", note
     if amount > owed:
         raise WalletError("payout exceeds the amount owed to this driver")
 
-    return DriverPayout.objects.create(
+    payout = DriverPayout.objects.create(
         driver_id=driver_id,
         amount=amount,
         method=(method if method in dict(DriverPayout.Method.choices) else DriverPayout.Method.CASH),
@@ -137,6 +147,28 @@ def record_driver_payout(driver_id, amount, *, method="cash", reference="", note
         idempotency_key=idempotency_key or None,
         currency=currency,
     )
+
+    # SINGLE-LEDGER GUARD (driver-payout double-booking fix). Drivers are actually paid via
+    # the WALLET: a DELIVERED job credits the wallet (EARNING) and the driver extracts it by
+    # cashing out at a restaurant (confirm_cashout debits the wallet). A DIRECT admin
+    # settlement must extinguish the SAME balance, or the earnings can leave twice — once via
+    # cash-out, once via this payout. Debit the wallet for the settled amount in this SAME
+    # atomic block: allow_partial=False raises InsufficientFunds if the driver already cashed
+    # the balance out, rolling back this DriverPayout — that failure IS the double-pay guard.
+    # (`owed` = earned − sum(payouts) ignored cash-outs, so it never protected against this.)
+    # Keyed on the payout row so an idempotent replay never double-debits.
+    from .wallet_service import debit_wallet
+    from .verticals import DRIVER
+    debit_wallet(
+        driver_id, amount,
+        tx_type=WalletTransaction.Type.CASHOUT,
+        idempotency_key=f"driverpayout:{payout.id}",
+        reference=f"driverpayout:{payout.id}",
+        note="Direct driver settlement",
+        vertical=DRIVER,
+        currency=currency,
+    )
+    return payout
 
 
 # ── Driver cash-out (redeem wallet balance for cash at a restaurant) ─────────────
