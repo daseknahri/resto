@@ -12,6 +12,49 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-17 — §4.F hardening-decisions closure (8 of 9 owner-flagged items shipped)
+
+**Result:** `main` @ `42f37f9`, green (all CI jobs pass). The 9 owner-decision items the 2026-08-16 gap
+scan surfaced (NEXT_SESSION §4.F) were worked through one at a time; **8 shipped** as individually
+CI-gated PRs (#227–#234), each with regression tests. The 9th is a genuine product decision left for the
+owner.
+
+**What shipped:**
+- **Money (4):** `#227` driver-payout double-booking — `record_driver_payout` now DEBITS the driver's
+  wallet, so a direct admin settlement and a restaurant cash-out extract the SAME balance (double-pay
+  structurally impossible). `#228` transfer/merge of a partially-paid table — `StaffTransferItemsView` /
+  `StaffMergeOrdersView` reject a source carrying collected payment (`source_has_payment` 409) instead of
+  cancelling it and stranding the money. `#229` wallet self-pay over-charge — `CustomerOrderPayWalletView`
+  reconciles the OrderPayment ledger via a shared `_order_collected()` under an order lock, charging only
+  the true remainder. `#230` no-show + redispatch double-pay — a `NOSHOW_PAID` job (by resolution or the
+  `noshow:` wallet ledger row) is refused redispatch.
+- **Display / UX (3):** `#231` currency — `formatPrice` always 2 decimals (MAD no longer rounded to whole
+  dirhams, so cart lines reconcile with the total). `#232` ETA anchoring — new `Order.estimated_ready_at`
+  (migration 0077) stamped `now + minutes` on every ETA write; both consumer countdowns anchor to it,
+  fixing an ETA set/edited long after placement. `#233` failed-delivery status — `OrderStatus.vue` shows a
+  coherent "delivery issue" pill + banner instead of "Out for delivery" contradicting the driver card's
+  red "Failed".
+- **Correctness (1):** `#234` ride + delivery double-booking — both accept endpoints enforce a
+  cross-vertical capacity check under the Customer-row lock (a driver can't hold a ride and a delivery at
+  once). Inert until rides go live.
+
+**Process.** Sequential single-item PRs (fix → regression tests → local verify → CI-gate → merge → mark
+§4.F resolved). Two money PRs (driver-payout, wallet self-pay) needed extra CI rounds to flush out sibling
+tests that shared a never-credit-the-wallet / no-mock assumption — the exact pattern the gap scan
+predicted. A stacked-branch mistake (items 5/6/7 branched off the same `main` before #231 merged) caused a
+NEXT_SESSION §4.F merge conflict; resolved by hand + `rebase --onto` to drop an already-merged commit.
+
+**Lessons.** (1) A shared reconciliation helper beats per-endpoint money math — the wallet-ledger
+"already collected" and the driver "single balance" bugs both came from two code paths disagreeing on one
+definition. (2) Sequential PRs that edit the same doc section must be based on the latest merged `main`,
+not branched in parallel, or the doc conflicts. (3) Adding a model query to a view breaks every no-DB test
+that reaches it — budget for mocking the new query (and `transaction.atomic`) in each affected test class.
+
+**Left for the owner:** §4.F item 8 — whether to MANDATE a photo for a code-less DELIVERED completion (the
+security bypass itself is already fixed, #222). Product-policy call, not a defect.
+
+---
+
 ## 2026-08-16 — Full-app hardening campaign (adversarial gap scan → 22 fixes)
 
 **Result:** `main` @ `7629db9`, green (all CI jobs pass). A **45-agent adversarial gap scan** across the
