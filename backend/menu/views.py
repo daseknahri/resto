@@ -5994,6 +5994,20 @@ class StaffTransferItemsView(APIView):
                 return Response({"detail": "Source order status does not allow item transfer.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
             if src.payment_status == Order.PaymentStatus.PAID:
                 return Response({"detail": "Source order is already paid.", "code": "already_paid"}, status=status.HTTP_409_CONFLICT)
+            # A PARTIALLY-settled source strands money: payment_status is only UNPAID/PAID
+            # (never PARTIAL), so a split-bill diner who paid their share leaves the order
+            # 'unpaid' with a collected OrderPayment row / wallet_amount_paid > 0. If all items
+            # then move, the source is CANCELLED below via a bare save() that never refunds,
+            # and that payment is neither refunded nor carried to the dest — money lost /
+            # double-charged. Refuse until the tab is settled or voided. (payments is prefetched
+            # on the lock query above.) A richer "carry the payment to the dest" flow can come
+            # later as a separate change that reparents OrderPayment rows.
+            if Decimal(str(src.wallet_amount_paid or "0")) > 0 or src.payments.exists():
+                return Response(
+                    {"detail": "Source order has a partial payment collected; settle or void it before transferring items.",
+                     "code": "source_has_payment"},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             dest = _locked_orders.get(dest_order_id)
             if dest is None:
@@ -6112,6 +6126,17 @@ class StaffMergeOrdersView(APIView):
                     return Response({"detail": f"{label} order status does not allow merge.", "code": "bad_status"}, status=status.HTTP_409_CONFLICT)
                 if order.payment_status == Order.PaymentStatus.PAID:
                     return Response({"detail": f"{label} order is already paid.", "code": "already_paid"}, status=status.HTTP_409_CONFLICT)
+
+            # Only the SOURCE is cancelled below (via a bare save that never refunds), so a
+            # partially-settled source would strand its collected split-bill payment. A
+            # partially-paid DEST is fine — moved items just add to what it still owes. Refuse a
+            # merge whose source carries a collected payment until it's settled/voided.
+            if Decimal(str(src.wallet_amount_paid or "0")) > 0 or src.payments.exists():
+                return Response(
+                    {"detail": "Source order has a partial payment collected; settle or void it before merging.",
+                     "code": "source_has_payment"},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             # Move all non-voided items from src → dest
             active_src_item_ids = [i.id for i in src.items.all() if not i.is_voided]

@@ -880,13 +880,13 @@
           </p>
           <!-- Transfer items -->
           <button
-            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid' && overflowOrder.items?.length"
+            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid' && !Number(overflowOrder.wallet_amount_paid) && !Number(overflowOrder.amount_paid) && overflowOrder.items?.length"
             class="ui-press ui-touch-target flex w-full items-center gap-3 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 transition-colors hover:border-indigo-400 focus-visible:outline-none"
             @click="openTransfer(overflowOrder); overflowOrder = null"
           >{{ t('waiterPage.transferBtn') }}</button>
           <!-- Merge into… -->
           <button
-            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid'"
+            v-if="canManageOrders && overflowOrder.fulfillment_type === 'table' && ACTIVE_TABLE_STATUSES.has(overflowOrder.status) && overflowOrder.payment_status !== 'paid' && !Number(overflowOrder.wallet_amount_paid) && !Number(overflowOrder.amount_paid)"
             class="ui-press ui-touch-target flex w-full items-center gap-3 rounded-xl border border-teal-500/40 bg-teal-500/10 px-4 py-3 text-sm font-semibold text-teal-300 transition-colors hover:border-teal-400 focus-visible:outline-none"
             @click="openMerge(overflowOrder); overflowOrder = null"
           >{{ t('waiterPage.mergeBtn') }}</button>
