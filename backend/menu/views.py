@@ -6815,6 +6815,20 @@ class OwnerDeliveryJobActionView(APIView):
                     return Response({"detail": "This job isn't awaiting a decision.", "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
                 if (job.redispatch_count or 0) >= self.MAX_REDISPATCH:
                     return Response({"detail": "Re-dispatched too many times — refund instead.", "code": "redispatch_limit"}, status=status.HTTP_409_CONFLICT)
+                # A no-show that was already PAID must NOT re-enter dispatch. confirm_noshow
+                # leaves job.status = FAILED, so the status/count guards above still pass — but
+                # re-dispatching would let a SECOND driver deliver and be credited via
+                # earning:{job.id}, paying driver_payout twice for one delivery fee. resolution
+                # is the fast signal; the wallet ledger (noshow:{job.id}) is the durable backstop
+                # if resolution was ever overwritten. Owner must refund/cancel instead.
+                from accounts.models import WalletTransaction as _WTx
+                if (job.resolution == _DJob.Resolution.NOSHOW_PAID
+                        or _WTx.objects.filter(idempotency_key=f"noshow:{job.id}").exists()):
+                    return Response(
+                        {"detail": "This no-show was already paid out; refund/cancel instead.",
+                         "code": "already_paid"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
                 job.driver = None
                 job.status = _DJob.Status.SEARCHING
                 job.assigned_at = None
@@ -6856,9 +6870,10 @@ class OwnerDeliveryJobActionView(APIView):
                     # tenant's consumer vertical that tenant_id would auto-derive.
                     vertical=_DRIVER,
                 )
-                if not job.resolution:
-                    job.resolution = _DJob.Resolution.NOSHOW_PAID
-                    job.save(update_fields=["resolution"])
+                # Always stamp NOSHOW_PAID after a payout (not only when resolution was unset)
+                # so the redispatch guard above can reliably tell this job already disbursed.
+                job.resolution = _DJob.Resolution.NOSHOW_PAID
+                job.save(update_fields=["resolution"])
 
         if action == "redispatch":
             try:

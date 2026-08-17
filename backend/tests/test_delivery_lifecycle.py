@@ -177,3 +177,43 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
         resp = self._post(1, {"action": "frobnicate"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data.get("code"), "bad_action")
+
+    # ── No-show-paid job must not re-enter dispatch (double-pay guard) ────────────
+
+    def _redispatch(self, *, job_resolution, ledger_exists, redispatch_count=0):
+        """Drive a `redispatch` action on a FAILED job with the DB collaborators mocked."""
+        import contextlib
+        order = SimpleNamespace(order_number="ORD-1", status="ready", pk=1)
+        job = MagicMock()
+        job.id = 55
+        job.status = "failed"
+        job.redispatch_count = redispatch_count
+        job.resolution = job_resolution
+        req = self.factory.post("/api/owner/orders/1/delivery-action/", {"action": "redispatch"}, format="json")
+        force_authenticate(req, user=MagicMock(is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1, name="R")
+        with patch("menu.views._can_edit_tenant_order", return_value=True), \
+             patch("menu.views.Order.objects") as om, \
+             patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
+             patch("accounts.models.DeliveryJob") as DJ, \
+             patch("accounts.models.WalletTransaction") as WT:
+            om.filter.return_value.first.return_value = order
+            DJ.Status.FAILED = "failed"
+            DJ.Resolution.NOSHOW_PAID = "noshow_paid"
+            DJ.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+            WT.objects.filter.return_value.exists.return_value = ledger_exists
+            return self.view(req, order_id=1)
+
+    def test_redispatch_after_noshow_paid_is_rejected(self):
+        """A no-show that was already paid (resolution=NOSHOW_PAID) cannot be re-dispatched —
+        otherwise a second driver would deliver and be credited too (two payouts, one fee)."""
+        resp = self._redispatch(job_resolution="noshow_paid", ledger_exists=False)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "already_paid")
+
+    def test_redispatch_blocked_by_noshow_ledger_backstop(self):
+        """Even if resolution was overwritten, a wallet noshow:{job.id} credit on the ledger
+        blocks redispatch — money already left, so refund/cancel is the only safe path."""
+        resp = self._redispatch(job_resolution="redispatched", ledger_exists=True)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "already_paid")

@@ -208,8 +208,10 @@ items** that are the owner's call (not acted on autonomously), plus 1 structural
    (`wallet_amount_paid > 0` or an `OrderPayment` row) with a 409 `source_has_payment`, and the waiter
    overflow-sheet buttons hide on partially-paid tabs. (A richer "carry the payment to the destination" flow
    — reparenting OrderPayment rows — remains a possible future change.)
-3. **No-show → redispatch pays two drivers** for one delivery fee. *Rec:* only pay the no-show driver if the
-   job isn't redispatched (or deduct it).
+3. ✅ **RESOLVED (#230) — No-show + redispatch double-pay:** a no-show-paid job (resolution `NOSHOW_PAID`,
+   or a `noshow:{job.id}` wallet credit on the ledger) is now rejected from redispatch with a 409
+   `already_paid`, and `confirm_noshow` stamps the resolution unconditionally — so the same delivery fee
+   can't be disbursed to a second driver. Refund/cancel is the path for an already-paid no-show.
 4. ✅ **RESOLVED (#229) — Wallet self-pay over-charge:** `CustomerOrderPayWalletView` now derives
    outstanding from a shared ledger-aware `_order_collected` helper (cash/card `OrderPayment` rows + direct
    wallet-pays, de-duplicated) under an order row lock, so a customer settling the remainder of a
