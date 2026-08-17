@@ -169,12 +169,20 @@ class DriverPayoutConcurrencyTests(TransactionTestCase):
         )
 
     def _deliver(self, driver, payout):
-        from accounts.models import DeliveryJob
-        return DeliveryJob.objects.create(
+        # Credit the wallet too (as the real delivery flow does via _credit_driver_earnings):
+        # record_driver_payout now DEBITS the wallet, so the earnings must actually sit there
+        # for a settlement to land — otherwise every payout fails InsufficientFunds.
+        from django.db.models import F
+        from accounts.models import Customer, DeliveryJob
+        job = DeliveryJob.objects.create(
             tenant_id=1, order_number=f"ORDC-{next(_ordn_seq)}", driver=driver,
             status=DeliveryJob.Status.DELIVERED, driver_payout=Decimal(payout),
             delivered_at=timezone.now(),
         )
+        Customer.objects.filter(pk=driver.id).update(
+            wallet_balance=F("wallet_balance") + Decimal(payout)
+        )
+        return job
 
     def test_concurrent_payouts_cannot_exceed_owed(self):
         driver = self._driver()
