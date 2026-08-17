@@ -119,6 +119,9 @@ def _make_order(
     o.items = MagicMock()
     o.payments = MagicMock()
     o.payments.all = MagicMock(return_value=[])
+    # No collected split-bill payment by default — otherwise the auto-MagicMock would make
+    # payments.exists() truthy and (correctly) trip the source_has_payment transfer/merge guard.
+    o.payments.exists = MagicMock(return_value=False)
     _items = items or []
     o.items.all = MagicMock(return_value=_items)
     o.refresh_from_db = MagicMock()
@@ -257,6 +260,51 @@ class StaffTransferItemsViewTests(SimpleTestCase):
         # View reached the post-atomic broadcast phase (or hit the src.refresh_from_db)
         # If no 4xx was returned the guards all passed.
         self.assertNotIn(resp.status_code, [400, 403, 409])
+
+    @patch("menu.views._recompute_order_totals")
+    def test_source_with_wallet_payment_is_rejected(self, recompute_mock):
+        """A source with a collected split-bill payment (wallet_amount_paid > 0) must be refused
+        409 source_has_payment — transferring its items would cancel the source with no refund
+        and strand the money. The items must NOT be moved."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1])
+        src.wallet_amount_paid = Decimal("50.00")            # a diner already paid their share
+        dest = _make_order(pk=2, order_number="ORD-002")
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "source_has_payment")
+        oi_model.objects.filter.return_value.update.assert_not_called()   # items NOT moved
+        self.assertNotEqual(src.status, Order.Status.CANCELLED)           # source NOT cancelled
+
+    @patch("menu.views._recompute_order_totals")
+    def test_source_with_payment_ledger_row_is_rejected(self, recompute_mock):
+        """Same guard via the OrderPayment ledger (payments.exists()) — e.g. a cash split-bill row."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1])
+        src.payments.exists = MagicMock(return_value=True)
+        dest = _make_order(pk=2, order_number="ORD-002")
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "source_has_payment")
+        oi_model.objects.filter.return_value.update.assert_not_called()
 
     def test_missing_item_ids_is_400(self):
         resp = self._post(1, {"dest_order_id": 2})
@@ -427,6 +475,32 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
         force_authenticate(req, user=u)
         req.tenant = _tenant(tenant_id=tenant_id)
         return self.view(req, dest_order_id=dest_order_id)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 2})
+    @patch("menu.views._recompute_order_totals")
+    def test_source_with_payment_is_rejected(self, recompute_mock, payload_mock, broadcast_mock):
+        """A merge whose SOURCE carries a collected split-bill payment is refused 409 — the source
+        is cancelled with no refund, so its money would be stranded. (A partially-paid DEST is
+        fine; only the source is guarded.) Items must NOT move; source must NOT be cancelled."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1])
+        src.wallet_amount_paid = Decimal("50.00")
+        dest = _make_order(pk=2, order_number="ORD-002")
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            resp = self._post(2, {"src_order_id": 1})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "source_has_payment")
+        oi_model.objects.filter.return_value.update.assert_not_called()
+        self.assertNotEqual(src.status, Order.Status.CANCELLED)
 
     def test_missing_src_order_id_is_400(self):
         resp = self._post(1, {})

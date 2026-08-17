@@ -199,12 +199,15 @@ The full-app hardening scan (#222–#225) shipped all 22 safe fixes but surfaced
 items** that are the owner's call (not acted on autonomously), plus 1 structural. Full per-item evidence in
 [`HARDENING_GAPS.md`](HARDENING_GAPS.md). Ranked:
 
-1. **Driver-payout double-booking** (high, money) — the admin `owed` ledger and the wallet+cash-out rail
-   settle the *same* delivered-job money independently, so a manual admin settlement can double-pay a
-   driver. *Rec:* make the wallet+cash-out rail the single source of truth; `owed` excludes payouts already
-   credited to the wallet.
-2. **Transfer/merge a partially-paid table** strands the collected `OrderPayment` (money loss /
-   double-charge). *Rec:* carry the OrderPayment rows onto the target order on transfer/merge.
+1. ✅ **RESOLVED (#227) — Driver-payout double-booking:** `record_driver_payout` now debits the driver's
+   wallet in the same atomic block, so a direct admin settlement and a restaurant cash-out extract the SAME
+   balance — the wallet's insufficient-funds check makes double-pay structurally impossible. `wallet_balance`
+   is surfaced as the real claimable.
+2. ✅ **RESOLVED (#228) — Transfer/merge a partially-paid table strands the collected payment:** both
+   `StaffTransferItemsView` and `StaffMergeOrdersView` now reject a source that carries a collected payment
+   (`wallet_amount_paid > 0` or an `OrderPayment` row) with a 409 `source_has_payment`, and the waiter
+   overflow-sheet buttons hide on partially-paid tabs. (A richer "carry the payment to the destination" flow
+   — reparenting OrderPayment rows — remains a possible future change.)
 3. **No-show → redispatch pays two drivers** for one delivery fee. *Rec:* only pay the no-show driver if the
    job isn't redispatched (or deduct it).
 4. **Wallet self-pay ignores the cash/card `OrderPayment` ledger** — a customer paying the remainder of a
