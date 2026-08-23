@@ -24,6 +24,7 @@ from tenancy.api import (
     ImageDeleteView,
     ImageUploadView,
     OwnerDeletionRequestView,
+    ProfileView,
     TranslateView,
 )
 from accounts.models import User
@@ -332,6 +333,48 @@ class OwnerDeletionRequestViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(tenant_obj.deletion_reason, "Closing down")
+
+
+# ── ProfileView ───────────────────────────────────────────────────────────────
+
+class ProfileViewWriteGuardTests(SimpleTestCase):
+    """Defense-in-depth: the tenant-settings write path (PUT/PATCH) now enforces the same
+    explicit tenant/role check (`_can_edit_tenant`) as its sibling settings-write endpoints
+    (ImageUploadView, ImageDeleteView), instead of relying on the middleware backstop alone.
+    The read path (GET) is intentionally left to `IsAuthenticated` — unchanged same-tenant
+    behaviour."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = ProfileView.as_view()
+
+    def _put(self, data=None, user=None, tenant=None):
+        req = self.factory.put("/api/profile/", data or {}, format="json")
+        req.user = user if user is not None else _owner()
+        req.tenant = tenant if tenant is not None else _tenant()
+        return self.view(req)
+
+    def test_unauthenticated_returns_403(self):
+        resp = self._put(user=_anon())
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_wrong_tenant_returns_403(self):
+        # An authenticated owner of a DIFFERENT tenant must not write this tenant's settings,
+        # even though the session cookie is valid across tenant subdomains.
+        user = _owner(tenant_id=99)
+        resp = self._put(user=user, tenant=_tenant(tenant_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_same_tenant_owner_passes_guard_to_update(self):
+        # Same-tenant owner: the guard lets the write through to the DRF update path unchanged.
+        from rest_framework.response import Response as DRFResponse
+        with patch(
+            "rest_framework.mixins.UpdateModelMixin.update",
+            return_value=DRFResponse({"ok": True}, status=200),
+        ) as mock_update:
+            resp = self._put(data={"primary_color": "#ffffff"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_update.assert_called_once()
 
 
 # ── AppManifestView ───────────────────────────────────────────────────────────
