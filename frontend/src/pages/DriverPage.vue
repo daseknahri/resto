@@ -289,9 +289,11 @@
 
       <!-- Page-level error for the no-active-job dashboard (online toggle, accept/
            decline, cash-out). When an active job exists the same errorMsg is shown
-           inside the sticky hero (:error) instead, so suppress it here to avoid a
-           duplicate that would land off-screen below the tall hero. -->
-      <div v-if="errorMsg && !activeJob" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+           inside the sticky hero (:error) instead, and when the exclusive-offer
+           takeover is up it is shown inside that overlay (:error) — so suppress it
+           here in both cases to avoid a duplicate stranded off-screen (below the
+           tall hero, or behind the opaque full-screen offer modal). -->
+      <div v-if="errorMsg && !activeJob && !exclusiveOffer" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
       </div>
@@ -960,6 +962,7 @@
     :seconds-left="exclusiveOfferSeconds"
     :total-seconds="OFFER_WINDOW_SECONDS"
     :busy="busy"
+    :error="errorMsg"
     :fmt-money="fmtMoney"
     @accept="accept"
     @pass="decline"
@@ -1277,6 +1280,18 @@ const exclusiveOffer = computed(() => {
 });
 const exclusiveOfferSeconds = computed(() =>
   exclusiveOffer.value ? offerSecondsLeft(exclusiveOffer.value.offer_expires_at) : 0,
+);
+
+// Clear a stale accept/decline error when a DIFFERENT exclusive offer takes over
+// the screen, so the fresh offer never carries the previous one's failure message
+// (accept()/decline() only reset errorMsg on the driver's own tap). A failed tap
+// on the SAME offer keeps its error visible (id unchanged → watcher doesn't fire),
+// letting the driver see why it failed and retry or pass.
+watch(
+  () => exclusiveOffer.value?.id,
+  (id, prevId) => {
+    if (id != null && id !== prevId) errorMsg.value = '';
+  },
 );
 
 // ── Item D: post-delivery "go online for next drop" sticky CTA ────────────────

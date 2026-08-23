@@ -98,6 +98,14 @@
       <!-- The one-time enable-sound prompt has moved to toggleOnline() in DriverPage
            so this modal shows only the core decision: Accept or Pass. -->
       <div class="w-full max-w-md space-y-3">
+        <!-- Accept/pass error — rendered INSIDE the opaque overlay (role="alert")
+             right above the actions, so a failed accept/decline is visible where
+             the driver is looking instead of stranded on the page banner behind
+             this full-screen takeover. Mirrors DriverPageActiveJob's error region. -->
+        <div v-if="error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+        </div>
         <button
           class="ui-btn-primary w-full rounded-2xl py-4 text-lg font-bold shadow-lg shadow-emerald-900/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
           style="min-height: 56px"
@@ -134,6 +142,10 @@ const props = defineProps({
   totalSeconds: { type: Number, default: 30 },
   // Disables the action buttons while an accept/pass request is in flight.
   busy: { type: Boolean, default: false },
+  // Accept/pass error message (parent-owned errorMsg). Rendered INSIDE this
+  // opaque full-screen overlay so a failed accept/decline is visible to the
+  // driver instead of hidden behind the takeover on the page-level banner.
+  error: { type: String, default: '' },
   // Per-locale currency formatter from the parent (keeps one source of truth).
   fmtMoney: { type: Function, default: (v) => String(v ?? '') },
 });
