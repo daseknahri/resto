@@ -91,11 +91,23 @@ describe("useWaiterStore", () => {
     expect(store.loading).toBe(false);
   });
 
-  it("fetchOrders silent mode does not set error on failure", async () => {
-    api.get.mockRejectedValueOnce(new Error("Network error"));
+  // A silent background poll that fails while there is ALREADY a good board to
+  // show must stay quiet — a transient hiccup must not wipe a populated list
+  // over an error banner. (The empty-board / prior-error cases are covered by
+  // the regression tests below, where a silent failure now DOES surface.)
+  it("fetchOrders silent failure stays quiet when orders are already populated", async () => {
+    // Seed a populated board first.
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1)], count: 1 } });
     const store = useWaiterStore();
+    await store.fetchOrders();
+    expect(store.orders).toHaveLength(1);
+
+    // Now a silent poll fails — the good board and null error must be preserved.
+    api.get.mockRejectedValueOnce(new Error("Network error"));
     await store.fetchOrders({ silent: true });
+
     expect(store.error).toBeNull();
+    expect(store.orders).toHaveLength(1); // good board preserved
   });
 
   // lastSyncAt drives the kitchen "board not updating" staleness alarm. It must
@@ -117,8 +129,9 @@ describe("useWaiterStore", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-04T10:00:00.000Z"));
 
-    // First: a successful sync stamps lastSyncAt.
-    api.get.mockResolvedValueOnce({ data: { results: [], count: 0 } });
+    // First: a successful sync stamps lastSyncAt AND leaves a populated board, so
+    // the later silent failure stays quiet (see the populated-board semantics).
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1)], count: 1 } });
     const store = useWaiterStore();
     await store.fetchOrders();
     const stamped = store.lastSyncAt;
@@ -131,7 +144,79 @@ describe("useWaiterStore", () => {
     await store.fetchOrders({ silent: true });
 
     expect(store.lastSyncAt).toBe(stamped); // unchanged despite 2 min passing
-    expect(store.error).toBeNull();          // silent → error still swallowed
+    expect(store.error).toBeNull();          // populated board → error still swallowed
+  });
+
+  // ── fetchOrders — failed-retry regression (false "All caught up") ───────────
+  // The KDS error-banner Retry button re-polls SILENTLY (doPoll →
+  // fetchOrders({ silent: true })). Before the fix, fetchOrders optimistically
+  // cleared error at the top but only re-set it `if (!silent)`, so a silent
+  // retry that ALSO failed swallowed the error: waiter.error stayed null and
+  // waiter.orders stayed [] → the UI showed a false "All caught up" empty state
+  // instead of the error. A silent poll that fails with nothing good to show
+  // (orders empty) or after a prior error must now surface the error.
+
+  it("silent retry that fails while orders are empty surfaces the error (regression)", async () => {
+    api.get.mockRejectedValueOnce(new Error("Network error"));
+    const store = useWaiterStore();
+
+    // A silent poll fails on a cold store (orders empty) — must surface, not
+    // fall through to a false "All caught up".
+    await store.fetchOrders({ silent: true });
+
+    expect(store.error).toBeTruthy();
+    expect(store.orders).toHaveLength(0);
+  });
+
+  it("silent retry that fails after a prior surfaced error keeps the error (regression)", async () => {
+    const store = useWaiterStore();
+
+    // 1) Initial non-silent load fails → error banner shows.
+    api.get.mockRejectedValueOnce(new Error("boom"));
+    await store.fetchOrders();
+    expect(store.error).toBeTruthy();
+    const firstError = store.error;
+
+    // 2) Staff taps Retry → doPoll re-polls SILENTLY → this retry ALSO fails.
+    //    error must NOT be swallowed by the optimistic top-of-fetch clear.
+    api.get.mockRejectedValueOnce(new Error("still down"));
+    await store.fetchOrders({ silent: true });
+
+    expect(store.error).toBeTruthy();   // was null forever before the fix
+    expect(store.error).toBe(firstError);
+    expect(store.orders).toHaveLength(0); // no false "All caught up"
+  });
+
+  it("silent poll that fails while orders are populated preserves the good board", async () => {
+    // Seed a good board.
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1), makeOrder(2)], count: 2 } });
+    const store = useWaiterStore();
+    await store.fetchOrders();
+    expect(store.orders).toHaveLength(2);
+    expect(store.error).toBeNull();
+
+    // A transient silent background poll fails — keep the board, stay quiet.
+    api.get.mockRejectedValueOnce(new Error("transient"));
+    await store.fetchOrders({ silent: true });
+
+    expect(store.orders).toHaveLength(2); // preserved
+    expect(store.error).toBeNull();       // no error banner over a good board
+  });
+
+  it("a successful fetch clears a prior error and populates orders", async () => {
+    const store = useWaiterStore();
+
+    // Prior failed load leaves an error and an empty board.
+    api.get.mockRejectedValueOnce(new Error("down"));
+    await store.fetchOrders();
+    expect(store.error).toBeTruthy();
+
+    // Recovery: the next fetch succeeds → error cleared, orders populated.
+    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1)], count: 1 } });
+    await store.fetchOrders({ silent: true });
+
+    expect(store.error).toBeNull();
+    expect(store.orders).toHaveLength(1);
   });
 
   // ── advanceStatus — optimistic ─────────────────────────────────────────────
