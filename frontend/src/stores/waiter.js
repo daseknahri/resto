@@ -185,6 +185,13 @@ export const useWaiterStore = defineStore("waiter", {
     // -------------------------------------------------------
     async fetchOrders({ silent = false } = {}) {
       if (!silent) this.loading = true;
+      // Was an error already surfaced before this fetch cleared it? The KDS
+      // error-banner Retry button re-polls SILENTLY (doPoll → fetchOrders({
+      // silent: true })). Capturing this lets a silent retry re-surface the
+      // error if it ALSO fails — without it, the optimistic clear below would
+      // leave error=null forever and the UI would fall through to a false
+      // "All caught up" empty state instead of the error.
+      const hadPriorError = this.error !== null;
       this.error = null;
       try {
         const res = await api.get("/staff/orders/");
@@ -192,7 +199,14 @@ export const useWaiterStore = defineStore("waiter", {
         this.lastSyncAt = new Date().toISOString();
         return this.orders;
       } catch {
-        if (!silent) this.error = "Failed to load orders.";
+        // Surface the error on any non-silent load, AND on a silent poll that
+        // fails while there is nothing good to show (orders empty) or while an
+        // error was already surfaced. A silent background poll that fails while
+        // orders ARE already populated stays quiet — a transient hiccup must not
+        // wipe a good board over an error banner.
+        if (!silent || hadPriorError || this.orders.length === 0) {
+          this.error = "Failed to load orders.";
+        }
       } finally {
         if (!silent) this.loading = false;
       }
