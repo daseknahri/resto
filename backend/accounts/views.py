@@ -2615,6 +2615,22 @@ class AdminWalletBonusView(APIView):
             ids = list(qs.values_list("id", flat=True))
             if not ids:
                 return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
+            # Self-defending idempotency: bonus credits are REAL money, so a retry
+            # (double-click, network retry, proxy replay) must never double-credit —
+            # even from a client that sends no idempotency_key. Prefer the client key
+            # when present, but ALWAYS fall back to a deterministic server-side
+            # fingerprint of the actor + amount + the normalized target set, so the same
+            # logical bonus maps to the same idempotency namespace regardless of client.
+            # (Fail closed so the endpoint is self-defending — mirrors record_driver_payout
+            # in accounts/driver_service.py.) The fingerprint is short (46 chars) so the
+            # per-customer key f"{bonus_idem}:{cid}" stays well within DB max_length=120.
+            # NOTE: to intentionally issue a SECOND identical bonus (same actor+amount+
+            # targets), the caller must supply a distinct idempotency_key.
+            if bonus_idem is None:
+                _actor_id = getattr(getattr(request, "user", None), "id", None)
+                _fp_src = f"{_actor_id}|{amount}|{','.join(str(i) for i in sorted(ids))}"
+                _fp = hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+                bonus_idem = f"adminbonus:fp:{_fp}"
             # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
             # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
             # so two concurrent POSTs with the same key could both clear exists() and both
@@ -2623,13 +2639,12 @@ class AdminWalletBonusView(APIView):
             # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
             # holds the lock and a corrected retry isn't falsely deduped; NOT released on
             # success — it expires, and the DB unique key is the permanent durable guard.
-            if bonus_idem:
-                _lock_key = f"walletbonus:{bonus_idem}"
-                if not cache.add(_lock_key, "1", 60):
-                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+            _lock_key = f"walletbonus:{bonus_idem}"
+            if not cache.add(_lock_key, "1", 60):
+                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
             # Idempotency: a repeated submit with the same key (double-click, retry) must
             # not credit real money twice. Per-customer keys are derived from the batch key.
-            if bonus_idem and WalletTransaction.objects.filter(
+            if WalletTransaction.objects.filter(
                 idempotency_key__startswith=f"{bonus_idem}:"
             ).exists():
                 return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
@@ -2651,7 +2666,9 @@ class AdminWalletBonusView(APIView):
                     amount=amount,
                     balance_after=new_balances.get(cid),
                     note=note,
-                    idempotency_key=(f"{bonus_idem}:{cid}" if bonus_idem else None),
+                    # bonus_idem is always set now (client key or server fingerprint),
+                    # so every ledger row is durably deduped on this per-customer key.
+                    idempotency_key=f"{bonus_idem}:{cid}",
                 )
                 for cid in ids
             ])
@@ -4871,8 +4888,14 @@ class MarketplacePlaceOrderView(APIView):
                                     use_count__lt=_best_promo.max_uses,
                                 ).update(use_count=_F("use_count") + 1)
                                 if not _mkt_promo_rows:
-                                    # Cap reached concurrently — strip discount, place at full price
-                                    total = max(Decimal("0"), food_subtotal + _delivery_fee)
+                                    # Cap reached concurrently — strip ONLY the now-invalid promo,
+                                    # place at full price. The loyalty redemption is still valid
+                                    # (points were already debited), so it MUST stay in the total —
+                                    # dropping it would both burn the customer's points AND overcharge
+                                    # them. Mirrors the direct-checkout add-back-only-the-promo path
+                                    # (menu/views.py ~L3230). The wallet re-check/deduction below then
+                                    # operates on the correct loyalty-adjusted total.
+                                    total = max(Decimal("0"), food_subtotal + _delivery_fee - _loyalty_discount)
                                     _promo_discount = Decimal("0")
                                     _best_promo = None
                                     _applied_promo_name = ""
@@ -8377,7 +8400,13 @@ class AdminCreateDeliveryJobView(APIView):
         try:
             delivery_fee = Decimal(str(_explicit_fee or "0"))
             driver_payout = Decimal(str(_explicit_payout or "0"))
-        except (InvalidOperation, TypeError):
+            # Money fields can never be negative — a negative fee/payout is a data-entry
+            # or malicious input that would mis-record the ledger. Reject with a 400,
+            # mirroring the negative-decimal rejection in AdminTenantDeliveryView
+            # (sales/views.py — raise InvalidOperation, caught by the same handler).
+            if delivery_fee < 0 or driver_payout < 0:
+                raise InvalidOperation
+        except (InvalidOperation, ValueError, TypeError):
             return Response({"detail": "Invalid delivery_fee or driver_payout."}, status=400)
 
         try:

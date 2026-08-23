@@ -201,9 +201,13 @@ class TestWalletBonusMutex(SimpleTestCase):
     @patch("accounts.views.cache")
     @patch("accounts.models.WalletTransaction.objects")
     @patch("accounts.models.Customer.objects")
-    def test_no_key_skips_mutex(self, mock_cust, mock_tx, mock_cache):
-        """Without an idempotency_key the mutex is never engaged (cache.add not called)."""
+    def test_no_key_still_engages_mutex(self, mock_cust, mock_tx, mock_cache):
+        """Bug 2 (self-defending): even WITHOUT a client idempotency_key the mutex is
+        now engaged on a server-derived fingerprint, so a retry can't double-credit.
+        cache.add must be called and the first credit still succeeds."""
         from accounts.views import AdminWalletBonusView
+
+        mock_cache.add.return_value = True  # mutex acquired
 
         def _vl_side(*args, **kwargs):
             if kwargs.get("flat"):
@@ -226,7 +230,11 @@ class TestWalletBonusMutex(SimpleTestCase):
             resp = AdminWalletBonusView.as_view()(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_cache.add.assert_not_called()
+        self.assertEqual(resp.data["issued_to"], 1)
+        # Mutex is engaged on the server fingerprint (no client key supplied).
+        mock_cache.add.assert_called_once()
+        _lock_key = mock_cache.add.call_args[0][0]
+        self.assertTrue(_lock_key.startswith("walletbonus:adminbonus:fp:"))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
