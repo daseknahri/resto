@@ -563,7 +563,7 @@
             <div class="flex items-center gap-2">
               <button
                 v-if="cart.length > 1"
-                class="ui-press rounded-lg px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-rose-400 focus-visible:outline-none"
+                class="ui-press rounded-lg px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
                 :aria-label="t('mktMenu.clearCart')"
                 @click="clearMktCart"
               >
@@ -1231,21 +1231,41 @@ const closedNeedsSchedule = computed(
 const customer = computed(() => customerStore.customer);
 
 // ── Cart helpers ──────────────────────────────────────────────────────────────
-const cartQty = (dishSlug) => {
-  const item = cart.value.find((i) => i.slug === dishSlug);
-  return item ? item.qty : 0;
-};
+// Composite line key: slug + a signature of the selected option ids (sorted, deduped,
+// positive integers). Mirrors the cart-store pattern used by CategoryPage/DishPage
+// (`${slug}::${optionSig}`) so two DIFFERENT configurations of the same dish are
+// distinct cart lines instead of silently overwriting each other.
+const mktOptionSig = (options) =>
+  (Array.isArray(options) ? options : [])
+    .map((o) => Number(o?.id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b)
+    .join(',');
+const mktLineKey = (dishSlug, options) => `${dishSlug}::${mktOptionSig(options)}`;
+// Resolve a cart line's key, falling back to a computed key for lines persisted to
+// localStorage before this field existed (no migration needed).
+const cartLineKey = (line) => line?.key ?? mktLineKey(line?.slug, line?.options);
+
+// Total quantity of a dish across ALL its configurations (the menu tile aggregates
+// every configured line of that dish into one stepper count).
+const cartQty = (dishSlug) =>
+  cart.value.reduce((sum, i) => (i.slug === dishSlug ? sum + i.qty : sum), 0);
 
 const addToCart = (dish) => {
-  // Dishes with option groups open the selection panel on the first add
-  if (dish.option_groups?.length && !cartQty(dish.slug)) {
+  // Dishes with option groups are always configured through the selection panel — the
+  // tile's quick +/- can't know WHICH configuration to add, and each distinct
+  // configuration is its own cart line (see confirmOptionSelection).
+  if (dish.option_groups?.length) {
     openOptionPanel(dish);
     return;
   }
   const effectivePrice = (dish.happy_hour && Number(dish.effective_price) < Number(dish.price))
     ? Number(dish.effective_price)
     : Number(dish.price);
-  const existing = cart.value.find((i) => i.slug === dish.slug);
+  // No options → key is `${slug}::` (optionSig empty), so the slug and the line key
+  // are 1:1 for option-less dishes.
+  const lineKey = mktLineKey(dish.slug, []);
+  const existing = cart.value.find((i) => cartLineKey(i) === lineKey);
   if (existing) {
     if (existing.qty < 99) existing.qty++;
     // refresh happy_hour_ends_at / happy_hour_starts_at in case window changed
@@ -1253,6 +1273,7 @@ const addToCart = (dish) => {
     existing.happy_hour_starts_at = dish.happy_hour?.starts_at ?? null;
   } else {
     cart.value.push({
+      key: lineKey,
       slug: dish.slug,
       name: dish.name,
       price: dish.price,
@@ -1500,7 +1521,12 @@ const confirmOptionSelection = () => {
     ? Number(dish.effective_price)
     : Number(dish.price);
   const unitPrice = dish.option_groups?.length ? optionPanelUnitPrice.value : dishEffectiveBase;
-  const existing = cart.value.find((i) => i.slug === dish.slug);
+  // Match the line by its slug + selected-option signature, NOT slug alone. Re-confirming
+  // the SAME configuration merges (qty++); a DIFFERENT configuration of the same dish is a
+  // distinct line. (Previously this matched by slug only, so reconfiguring an in-cart dish
+  // silently overwrote the first unit's price/options for the entire line.)
+  const lineKey = mktLineKey(dish.slug, selectedOptions);
+  const existing = cart.value.find((i) => cartLineKey(i) === lineKey);
   if (existing) {
     if (existing.qty < 99) existing.qty++;
     existing.unitPrice = unitPrice;
@@ -1509,6 +1535,7 @@ const confirmOptionSelection = () => {
     existing.happy_hour_starts_at = dish.happy_hour?.starts_at ?? null;
   } else {
     cart.value.push({
+      key: lineKey,
       slug: dish.slug,
       name: dish.name,
       price: dish.price,
