@@ -775,6 +775,16 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _patcher.start()
         self.addCleanup(_patcher.stop)
+        # The comp mark is now an atomic compare-and-set:
+        #   OrderItem.objects.filter(pk=item_id, is_comped=False, is_voided=False).update(...)
+        # (replacing item.save) so a concurrent double-tap can't double-refund /
+        # double-decrement wallet_amount_paid. Default its rowcount to 1 ("this call won
+        # the mark → proceed"); the fast-path double-comp test short-circuits before it,
+        # and the concurrent-loss test overrides it to 0.
+        _oi_patcher = patch("menu.views.OrderItem")
+        self._orderitem_mock = _oi_patcher.start()
+        self.addCleanup(_oi_patcher.stop)
+        self._orderitem_mock.objects.filter.return_value.update.return_value = 1
 
     def _post(self, order_id=10, item_id=901, body=None, user=None):
         body = body if body is not None else {"reason": "Manager goodwill"}
@@ -914,10 +924,18 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
         resp = self._post(body={"reason": "Sent out wrong dish, comped"}, user=staff)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # item.save called with the exact update_fields, recording who/reason/when
-        item.save.assert_called_once_with(
-            update_fields=["is_comped", "comped_at", "comp_reason", "comped_by_user_id"]
+        # The comp mark is now an atomic compare-and-set on OrderItem (not item.save):
+        # OrderItem.objects.filter(pk=item_id, is_comped=False, is_voided=False).update(...)
+        self._orderitem_mock.objects.filter.assert_any_call(
+            pk=901, is_comped=False, is_voided=False
         )
+        _upd_kwargs = self._orderitem_mock.objects.filter.return_value.update.call_args.kwargs
+        self.assertTrue(_upd_kwargs.get("is_comped"))
+        self.assertEqual(_upd_kwargs.get("comp_reason"), "Sent out wrong dish, comped")
+        self.assertEqual(_upd_kwargs.get("comped_by_user_id"), 77)
+        self.assertIn("comped_at", _upd_kwargs)
+        item.save.assert_not_called()
+        # In-memory reflection of the win (used by later refund/subtotal reads)
         self.assertTrue(item.is_comped)
         self.assertEqual(item.comp_reason, "Sent out wrong dish, comped")
         self.assertEqual(item.comped_by_user_id, 77)
@@ -980,7 +998,8 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
     def test_double_comp_409(self, order_om, tx_mock, broadcast_mock):
-        """A second comp of the same item must return 409 already_comped."""
+        """A second comp of the same item must return 409 already_comped (fast-path:
+        the item is already comped before the request even enters the atomic block)."""
         item = _make_item(is_comped=True)  # already comped
         order = _make_order(items=[item])
         order.items.filter.return_value.first.return_value = item
@@ -990,6 +1009,47 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "already_comped")
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_concurrent_comp_loses_race_409_no_wallet_decrement(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        """Bug 2 regression: a double-tapped comp passes the UNLOCKED fast-path
+        (is_comped=False) but the atomic compare-and-set UPDATE affects 0 rows because a
+        concurrent comp already won under the row lock. The loser must bail with 409
+        already_comped BEFORE the refund / wallet_amount_paid decrement — otherwise the
+        decrement runs twice and books phantom cash in the Z-report / drawer."""
+        line_total = Decimal("20.00")
+        wallet_paid = Decimal("35.00")
+        item = _make_item(item_id=901, subtotal=line_total, is_comped=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=wallet_paid,
+            customer_id=42,
+            items=[item],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+
+        # The compare-and-set loses the race → 0 rows updated.
+        self._orderitem_mock.objects.filter.return_value.update.return_value = 0
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post(item_id=901)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_comped")
+        # The refund path must be short-circuited: no wallet credit, no decrement.
+        mock_cw.assert_not_called()
+        self.assertEqual(first_order.wallet_amount_paid, wallet_paid)  # unchanged
+        # The order-row reload / recompute must not have happened either.
+        order_om.select_for_update.assert_not_called()
+        broadcast_mock.assert_not_called()
 
     # ── is_comped in staff payload ─────────────────────────────────────────────
 

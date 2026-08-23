@@ -3399,6 +3399,17 @@ class PlaceOrderView(APIView):
                     if _loyalty_cfg and _linked_customer is not None:
                         from decimal import Decimal as _Dloy
                         from accounts.models import Customer as _CustLoy
+                        # Serialize milestone grants for this customer. The first-order and
+                        # birthday bonuses are check-then-act; two concurrent orders could
+                        # otherwise both read the pre-grant state off the STALE request-time
+                        # _linked_customer snapshot and both grant. Take the Customer row lock
+                        # for the rest of this atomic block (re-entrant if the wallet debit
+                        # above already locked it) so the losing racer blocks until the winner
+                        # commits, then reads the winner's committed state. Mirrors the
+                        # already-correct MarketplacePlaceOrderView loyalty block.
+                        _CustLoy.objects.select_for_update().filter(
+                            pk=_linked_customer.pk
+                        ).first()
                         # C3: tier multiplier based on customer's lifetime points
                         _lifetime = int(getattr(_linked_customer, "lifetime_loyalty_points", 0) or 0)
                         if getattr(_loyalty_cfg, "tier_enabled", False):
@@ -3419,14 +3430,20 @@ class PlaceOrderView(APIView):
                                 lifetime_loyalty_points=F("lifetime_loyalty_points") + _pts,
                             )
                             Order.objects.filter(pk=order.pk).update(points_earned=_pts)
-                        # C3: first-order bonus (tenant-scoped)
+                        # C3: first-order bonus (tenant-scoped). Count ALL prior non-cancelled
+                        # orders (not just PAID): a cash-on-handover (COD) order never reaches
+                        # PAID, so a PAID-only count reads 0 for two concurrent COD first-orders
+                        # and both grant. Counted under the row lock acquired above, so the
+                        # losing racer sees the winner's committed order and skips. Mirrors
+                        # MarketplacePlaceOrderView.
                         _first_bonus = int(getattr(_loyalty_cfg, "first_order_bonus_points", 0) or 0)
                         if _first_bonus > 0:
-                            _prior_paid = Order.objects.filter(
+                            _prior_orders = Order.objects.filter(
                                 customer_id=_linked_customer.pk,
-                                payment_status=Order.PaymentStatus.PAID,
-                            ).exclude(pk=order.pk).count()
-                            if _prior_paid == 0:
+                            ).exclude(pk=order.pk).exclude(
+                                status=Order.Status.CANCELLED
+                            ).count()
+                            if _prior_orders == 0:
                                 _CustLoy.objects.filter(pk=_linked_customer.pk).update(
                                     loyalty_points=F("loyalty_points") + _first_bonus,
                                     lifetime_loyalty_points=F("lifetime_loyalty_points") + _first_bonus,
@@ -3437,14 +3454,26 @@ class PlaceOrderView(APIView):
                             from django.utils import timezone as _tzloy
                             _today = _tzloy.localtime(_tzloy.now()).date()
                             _bday = getattr(_linked_customer, "birthday", None)
-                            _rewarded_yr = getattr(_linked_customer, "loyalty_birthday_rewarded_year", None)
+                            # Fresh-read the rewarded-year from the DB under the row lock
+                            # acquired above (NOT the stale _linked_customer snapshot, which
+                            # was hydrated before this atomic block) so a concurrent birthday
+                            # order that already granted this year is seen.
+                            _rewarded_yr = _CustLoy.objects.filter(
+                                pk=_linked_customer.pk
+                            ).values_list("loyalty_birthday_rewarded_year", flat=True).first()
                             if (
                                 _bday is not None
                                 and _bday.month == _today.month
                                 and _bday.day == _today.day
                                 and _rewarded_yr != _today.year
                             ):
-                                _CustLoy.objects.filter(pk=_linked_customer.pk).update(
+                                # Conditional grant: exclude any row already stamped with this
+                                # year so a racer that slipped past the Python check (or a
+                                # replay) makes the UPDATE a no-op instead of a second grant —
+                                # belt-and-suspenders on top of the row lock.
+                                _CustLoy.objects.filter(pk=_linked_customer.pk).exclude(
+                                    loyalty_birthday_rewarded_year=_today.year
+                                ).update(
                                     loyalty_points=F("loyalty_points") + _bday_bonus,
                                     lifetime_loyalty_points=F("lifetime_loyalty_points") + _bday_bonus,
                                     loyalty_birthday_rewarded_year=_today.year,
@@ -5547,11 +5576,35 @@ class StaffCompOrderItemView(APIView):
         # ── Atomic: comp + recompute totals ────────────────────────────────────
         with transaction.atomic():
             now = timezone.now()
+            _comp_by = getattr(request.user, "id", None)
+            # Compare-and-set the comp flag ATOMICALLY and gate ALL side effects on its
+            # rowcount — same hardening as StaffVoidOrderItemView. Two concurrent comps on
+            # the same line both pass the unlocked `if item.is_comped` fast-path above; the
+            # loser's UPDATE blocks on the row lock, and when it unblocks after the winner
+            # commits, Postgres re-evaluates the is_comped=False predicate (EvalPlanQual)
+            # against the now-True row → 0 rows affected → the loser bails with 409 BEFORE
+            # the refund / wallet_amount_paid decrement below, so a double-tap can't
+            # double-decrement wallet_amount_paid (phantom cash in the Z-report / drawer).
+            _marked = OrderItem.objects.filter(
+                pk=item_id, is_comped=False, is_voided=False
+            ).update(
+                is_comped=True,
+                comped_at=now,
+                comp_reason=reason,
+                comped_by_user_id=_comp_by,
+            )
+            if not _marked:
+                return Response(
+                    {"detail": "Item is already comped.", "code": "already_comped"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            # Reflect the win in-memory so later reads (subtotal capture, refund inputs)
+            # see the comped item; the order.items re-fetched under lock below already
+            # reads is_comped=True from the committed-in-transaction row.
             item.is_comped = True
             item.comped_at = now
             item.comp_reason = reason
-            item.comped_by_user_id = getattr(request.user, "id", None)
-            item.save(update_fields=["is_comped", "comped_at", "comp_reason", "comped_by_user_id"])
+            item.comped_by_user_id = _comp_by
 
             # Recompute order totals from non-voided, non-comped items.
             # select_for_update() locks the order row so concurrent comp/void calls
@@ -6862,6 +6915,18 @@ class OwnerDeliveryJobActionView(APIView):
                     return Response({"detail": "Only a no-show failure can be paid.", "code": "not_noshow"}, status=status.HTTP_409_CONFLICT)
                 if not job.driver_id or (job.driver_payout or 0) <= 0:
                     return Response({"detail": "Nothing to pay this driver.", "code": "no_payout"}, status=status.HTTP_400_BAD_REQUEST)
+                # OPS-5f: re-check driver approval at this money-emitting transition, exactly
+                # as the two DELIVERED credit paths do (accounts/delivery_service.py and the
+                # driver's own DELIVERED tap in accounts/views.py). A driver approved when the
+                # job was created but since revoked (fraud / expired docs) must NOT bank a
+                # no-show payout either.
+                from accounts.models import Customer as _CustNS
+                if not _CustNS.objects.filter(pk=job.driver_id, driver_approved=True).exists():
+                    return Response(
+                        {"detail": "This driver's account is no longer approved.",
+                         "code": "driver_not_approved"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
                 from accounts.wallet_service import credit_wallet
                 from accounts.models import WalletTransaction as _WT
                 from accounts.verticals import DRIVER as _DRIVER

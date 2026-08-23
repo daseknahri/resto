@@ -217,3 +217,59 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
         resp = self._redispatch(job_resolution="redispatched", ledger_exists=True)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data.get("code"), "already_paid")
+
+    # ── confirm_noshow must re-check driver approval before paying (OPS-5f) ───────
+
+    def _confirm_noshow(self, *, driver_approved, driver_id=7, driver_payout=20):
+        """Drive a `confirm_noshow` action on a FAILED + CUSTOMER_NO_SHOW job with the DB
+        collaborators mocked. `driver_approved` drives the Customer.exists() re-check."""
+        import contextlib
+        order = SimpleNamespace(order_number="ORD-1", status="failed", pk=1)
+        job = MagicMock()
+        job.id = 55
+        job.status = "failed"
+        job.failure_reason = "customer_no_show"
+        job.driver_id = driver_id
+        job.driver_payout = driver_payout
+        req = self.factory.post(
+            "/api/owner/orders/1/delivery-action/", {"action": "confirm_noshow"}, format="json"
+        )
+        force_authenticate(req, user=MagicMock(is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1, name="R")
+        with patch("menu.views._can_edit_tenant_order", return_value=True), \
+             patch("menu.views.Order.objects") as om, \
+             patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
+             patch("accounts.models.DeliveryJob") as DJ, \
+             patch("accounts.models.WalletTransaction"), \
+             patch("accounts.models.Customer") as Cust, \
+             patch("accounts.wallet_service.credit_wallet") as cw:
+            om.filter.return_value.first.return_value = order
+            DJ.Status.FAILED = "failed"
+            DJ.FailureReason.CUSTOMER_NO_SHOW = "customer_no_show"
+            DJ.Resolution.NOSHOW_PAID = "noshow_paid"
+            DJ.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+            Cust.objects.filter.return_value.exists.return_value = driver_approved
+            resp = self.view(req, order_id=1)
+            return resp, cw, Cust, job
+
+    def test_confirm_noshow_revoked_driver_rejected_and_not_credited(self):
+        """Bug 3 regression: a driver approved when the job was created but SINCE revoked
+        must not bank a no-show payout. The credit path re-checks driver_approved (like the
+        two DELIVERED paths) and returns 409 driver_not_approved without crediting."""
+        resp, cw, Cust, job = self._confirm_noshow(driver_approved=False)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "driver_not_approved")
+        # The approval re-check is scoped to this driver AND driver_approved=True.
+        Cust.objects.filter.assert_called_once_with(pk=7, driver_approved=True)
+        # No money moved and the job was NOT stamped paid.
+        cw.assert_not_called()
+        job.save.assert_not_called()
+
+    def test_confirm_noshow_approved_driver_is_paid(self):
+        """Control: an approved driver IS credited and the job is stamped NOSHOW_PAID."""
+        resp, cw, Cust, job = self._confirm_noshow(driver_approved=True)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data.get("resolution"), "noshow_paid")
+        cw.assert_called_once()
+        self.assertEqual(job.resolution, "noshow_paid")
+        job.save.assert_called_once_with(update_fields=["resolution"])
