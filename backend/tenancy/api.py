@@ -393,6 +393,16 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         profile, _ = Profile.objects.get_or_create(tenant=tenant)
         return profile
 
+    def update(self, request, *args, **kwargs):
+        # Defense-in-depth: gate the write path with the same explicit tenant/role check the
+        # sibling settings-write endpoints (ImageUploadView, ImageDeleteView) use, instead of
+        # relying on the middleware backstop alone. Covers PUT and PATCH (partial_update()
+        # dispatches through update()). Read (GET/retrieve) stays available to any authenticated
+        # user, so same-tenant behaviour is unchanged.
+        if not _can_edit_tenant(request):
+            return Response({"detail": "Menu editor access required."}, status=403)
+        return super().update(request, *args, **kwargs)
+
     def perform_update(self, serializer):
         super().perform_update(serializer)
         # Evict every cached locale variant so the next /api/meta/ read is fresh.

@@ -595,13 +595,16 @@ class RideSettleCashFallbackTests(SimpleTestCase):
         self.assertTrue(ride.cash_fallback_note)  # rider-visible reason string
         self.assertFalse(ride.paid_with_wallet)
 
+    @patch("accounts.ride_service.Customer")
     @patch("accounts.ride_service.credit_wallet")
     @patch("accounts.ride_service.debit_wallet")
     @patch("accounts.ride_service.PlatformConfig")
-    def test_successful_wallet_settle_clears_fallback_flag(self, mock_cfg, mock_debit, mock_credit):
+    def test_successful_wallet_settle_clears_fallback_flag(self, mock_cfg, mock_debit, mock_credit, mock_customer):
         from accounts.ride_service import _do_settle
 
         mock_cfg.get_solo.return_value = MagicMock(ride_commission_pct=Decimal("0"))
+        # OPS-5f: driver still approved at the money-emitting step → credit proceeds.
+        mock_customer.objects.filter.return_value.exists.return_value = True
         ride = SimpleNamespace(
             id=44, payment_method="wallet", fare=Decimal("20.00"),
             rider_id=10, driver_id=5, paid_with_wallet=False, kind="ride",

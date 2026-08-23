@@ -457,15 +457,18 @@ class DriverRideStatusViewTests(SimpleTestCase):
 class SettleRideTests(SimpleTestCase):
     """Test settle_ride uses correct idempotency keys and handles InsufficientFunds."""
 
+    @patch("accounts.ride_service.Customer")
     @patch("accounts.ride_service.credit_wallet")
     @patch("accounts.ride_service.debit_wallet")
     @patch("accounts.ride_service.PlatformConfig")
-    def test_wallet_ride_uses_correct_idempotency_keys(self, mock_cfg, mock_debit, mock_credit):
+    def test_wallet_ride_uses_correct_idempotency_keys(self, mock_cfg, mock_debit, mock_credit, mock_customer):
         from accounts.ride_service import _do_settle
 
         cfg = MagicMock()
         cfg.ride_commission_pct = Decimal("0")
         mock_cfg.get_solo.return_value = cfg
+        # OPS-5f: driver still approved at the money-emitting step → credit proceeds.
+        mock_customer.objects.filter.return_value.exists.return_value = True
 
         ride = MagicMock()
         ride.id = 42
@@ -484,6 +487,40 @@ class SettleRideTests(SimpleTestCase):
         mock_credit.assert_called_once()
         credit_kwargs = mock_credit.call_args
         self.assertEqual(credit_kwargs[1]["idempotency_key"], "ridepay:42")
+        # The approval re-check was scoped to this driver.
+        mock_customer.objects.filter.assert_called_with(pk=5, driver_approved=True)
+
+    @patch("accounts.ride_service.Customer")
+    @patch("accounts.ride_service.credit_wallet")
+    @patch("accounts.ride_service.debit_wallet")
+    @patch("accounts.ride_service.PlatformConfig")
+    def test_revoked_driver_not_credited(self, mock_cfg, mock_debit, mock_credit, mock_customer):
+        """OPS-5f (rides): a driver whose approval was revoked between accepting and completion
+        is NOT credited on ride settlement — mirrors the delivery owner-completion re-check.
+        The rider is still debited (the trip happened); only the driver credit is skipped."""
+        from accounts.ride_service import _do_settle
+
+        cfg = MagicMock()
+        cfg.ride_commission_pct = Decimal("0")
+        mock_cfg.get_solo.return_value = cfg
+        # Driver approval revoked → re-check under the completion lock returns False.
+        mock_customer.objects.filter.return_value.exists.return_value = False
+
+        ride = MagicMock()
+        ride.id = 44
+        ride.payment_method = "wallet"
+        ride.fare = Decimal("20.00")
+        ride.rider_id = 10
+        ride.driver_id = 5
+        ride.save = MagicMock()
+
+        _do_settle(ride)
+
+        # Rider debit still happened (the ride was delivered).
+        mock_debit.assert_called_once()
+        # But the revoked driver is NOT paid.
+        mock_credit.assert_not_called()
+        mock_customer.objects.filter.assert_called_with(pk=5, driver_approved=True)
 
     @patch("accounts.ride_service.debit_wallet")
     @patch("accounts.ride_service.PlatformConfig")
@@ -1783,16 +1820,19 @@ class AdminRideListViewTests(SimpleTestCase):
 class SettleRideEarningTypeTests(SimpleTestCase):
     """After the fix, driver credit must use EARNING (not TOPUP) and set reference."""
 
+    @patch("accounts.ride_service.Customer")
     @patch("accounts.ride_service.credit_wallet")
     @patch("accounts.ride_service.debit_wallet")
     @patch("accounts.ride_service.PlatformConfig")
-    def test_credit_uses_earning_type(self, mock_cfg, mock_debit, mock_credit):
+    def test_credit_uses_earning_type(self, mock_cfg, mock_debit, mock_credit, mock_customer):
         from accounts.ride_service import _do_settle
         from accounts.models import WalletTransaction
 
         cfg = MagicMock()
         cfg.ride_commission_pct = Decimal("0")
         mock_cfg.get_solo.return_value = cfg
+        # OPS-5f: driver still approved → credit proceeds.
+        mock_customer.objects.filter.return_value.exists.return_value = True
 
         ride = MagicMock()
         ride.id = 77

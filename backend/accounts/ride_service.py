@@ -21,7 +21,7 @@ from django.db import connection
 
 from tenancy.delivery_pricing import valid_coord, MAX_PLAUSIBLE_KM
 from tenancy.routing import road_distance_km
-from .models import PlatformConfig, WalletTransaction
+from .models import PlatformConfig, WalletTransaction, Customer
 from .verticals import vertical_for_ride_kind
 from .wallet_service import debit_wallet, credit_wallet, InsufficientFunds
 
@@ -185,6 +185,16 @@ def _do_settle(ride) -> None:
 
     # Credit driver (minus commission)
     if not getattr(ride, "driver_id", None):
+        return
+
+    # OPS-5f: re-check the driver is still approved at the money-emitting step, mirroring the
+    # delivery owner-completion path (accounts/delivery_service.py). The ride row is already
+    # locked by the caller's completion transaction, so this re-reads driver_approved under
+    # that lock. A driver who accepted the trip and then had approval revoked (fraud / expired
+    # docs) must NOT bank ride earnings. On revocation this is a no-op — skip the credit and
+    # return (the rider debit already stands; the platform holds the fare rather than paying a
+    # revoked driver), exactly as the delivery path returns without crediting.
+    if not Customer.objects.filter(pk=ride.driver_id, driver_approved=True).exists():
         return
 
     cfg = PlatformConfig.get_solo()

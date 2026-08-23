@@ -96,8 +96,12 @@ class RideSettlePaymentsLoggingTests(SimpleTestCase):
 
         ride = self._ride()
         cfg = SimpleNamespace(ride_commission_pct=Decimal("0"))
+        # OPS-5f: driver still approved at the money-emitting step → credit proceeds.
+        mock_customer = MagicMock()
+        mock_customer.objects.filter.return_value.exists.return_value = True
         with patch.object(rs, "debit_wallet", return_value=SimpleNamespace(id=1)), \
              patch.object(rs, "credit_wallet", return_value=SimpleNamespace(id=2)), \
+             patch.object(rs, "Customer", mock_customer), \
              patch.object(rs.PlatformConfig, "get_solo", return_value=cfg):
             logger = __import__("logging").getLogger("payments")
             with patch.object(logger, "handle") as mock_handle:
