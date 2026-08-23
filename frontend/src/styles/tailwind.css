@@ -2677,6 +2677,8 @@ html[data-owner-theme="light"] .text-sky-300,
 html[data-owner-theme="light"] .text-sky-400 { color: #0369a1; }
 html[data-owner-theme="light"] .text-rose-300,
 html[data-owner-theme="light"] .text-rose-400 { color: #e11d48; }
+html[data-owner-theme="light"] .text-orange-300,
+html[data-owner-theme="light"] .text-orange-400 { color: #c2410c; }
 
 /* Light accent shades (100/200) used on translucent tints or bordered chips in
    the menu-builder forms wash out on white — darken them like the 300/400 set. */
@@ -2695,6 +2697,9 @@ html[data-owner-theme="light"] .text-sky-100,
 html[data-owner-theme="light"] .text-sky-200 { color: #0369a1; }
 html[data-owner-theme="light"] .text-rose-100,
 html[data-owner-theme="light"] .text-rose-200 { color: #e11d48; }
+html[data-owner-theme="light"] .text-orange-100,
+html[data-owner-theme="light"] .text-orange-200 { color: #c2410c; }
+html[data-owner-theme="light"] .text-violet-200 { color: #5b21b6; }
 html[data-owner-theme="light"] .text-violet-300,
 html[data-owner-theme="light"] .text-violet-400 { color: #6d28d9; }
 /* Hover variants land on lighter shades — keep them readable (slightly darker). */
