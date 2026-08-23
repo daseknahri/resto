@@ -616,7 +616,7 @@
                 role="switch"
                 :aria-checked="useWallet"
                 :aria-label="t('cartPage.payWithCredits')"
-                class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none"
+                class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
                 :class="useWallet ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30' : 'border-slate-600 bg-slate-800'"
                 @click="useWallet = !useWallet"
               >
@@ -1279,7 +1279,14 @@ const deliveryMinOrder = computed(() => {
 });
 
 // How much more is needed to reach the delivery minimum (0 = already met).
-const deliveryMinGap = computed(() => Math.max(0, deliveryMinOrder.value - (Number(cart.total) || 0)));
+// Delivery-only: the minimum-order threshold never gates pickup or dine-in, so it
+// must not disable the Place Order CTA for those fulfillment types. Mirrors
+// validateForm() and MarketplaceMenuPage.vue, which both gate on delivery only.
+const deliveryMinGap = computed(() =>
+  fulfillmentType.value === 'delivery'
+    ? Math.max(0, deliveryMinOrder.value - (Number(cart.total) || 0))
+    : 0,
+);
 
 // Short zone description shown to customers (empty = not set)
 const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
