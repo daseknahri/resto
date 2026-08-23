@@ -92,6 +92,9 @@ class AdminWalletBonusViewTests(SimpleTestCase):
             return [(1, "10.00"), (2, "10.00")]
         mock_cust_objs.filter.return_value.values_list.side_effect = _vl_se
         mock_cust_objs.filter.return_value.update.return_value = 2
+        # Bug 2: the server-fingerprint dedup query now runs unconditionally
+        # (even with no client idempotency_key), so a clean run needs no prior rows.
+        mock_tx_objs.filter.return_value.exists.return_value = False
         mock_tx_objs.bulk_create.return_value = []
 
         with patch("django.db.transaction.atomic"):
@@ -113,6 +116,8 @@ class AdminWalletBonusViewTests(SimpleTestCase):
             return [(1, "5.00"), (2, "5.00"), (3, "5.00")]
         mock_cust_objs.filter.return_value.values_list.side_effect = _vl_se
         mock_cust_objs.filter.return_value.update.return_value = 3
+        # Bug 2: the server-fingerprint dedup query now runs unconditionally.
+        mock_tx_objs.filter.return_value.exists.return_value = False
         mock_tx_objs.bulk_create.return_value = []
 
         with patch("django.db.transaction.atomic"):
