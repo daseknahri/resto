@@ -269,6 +269,24 @@
   </div>
 </template>
 
+<script>
+// SECURITY (open-redirect guard): the `next` query param feeds BOTH an in-app
+// router.push AND a cross-host full-URL redirect (window.location.assign in
+// redirectOwnerToTenantHost). An attacker-crafted `next` must never steer the
+// just-authenticated user to an external origin (phishing / token-leak vector).
+// sanitizeNext accepts ONLY a same-origin relative path — a single leading "/",
+// not a scheme-relative "//" and not "/\" (browsers normalize "\" to "/", so
+// "/\evil.com" resolves like "//evil.com"), and no "@" (userinfo in an
+// authority). Anything else — including an empty/absent value — falls back to
+// the safe default so both call sites always emit a first-party path.
+const SAFE_NEXT = "/owner";
+export function sanitizeNext(raw) {
+  return typeof raw === "string" && /^\/(?![/\\])[^\s\\@]*$/.test(raw)
+    ? raw
+    : SAFE_NEXT;
+}
+</script>
+
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -328,7 +346,8 @@ const redirectOwnerToTenantHost = (user) => {
   const tenantSlug = String(user?.tenant?.slug || "").trim().toLowerCase();
   if (!tenantSlug || !isPlatformPublicHost(host)) return false;
   const targetHost = `${tenantSlug}.${host}`;
-  const next = typeof route.query.next === "string" && route.query.next ? route.query.next : "/owner";
+  // Validate `next` before it feeds a cross-host full URL — see sanitizeNext.
+  const next = sanitizeNext(typeof route.query.next === "string" ? route.query.next : "");
   window.location.assign(`${window.location.protocol}//${targetHost}${next}`);
   return true;
 };
@@ -337,9 +356,11 @@ const doPostLoginRedirect = (user) => {
   if (session.canEditTenantMenu && redirectOwnerToTenantHost(user)) {
     return;
   }
-  const next = typeof route.query.next === "string" ? route.query.next : "";
-  if (next) {
-    router.push(next);
+  const rawNext = typeof route.query.next === "string" ? route.query.next : "";
+  if (rawNext) {
+    // Defense-in-depth: sanitize before router.push so a hostile `next` can
+    // never drive an off-origin navigation here either.
+    router.push(sanitizeNext(rawNext));
   } else {
     router.push(fallbackRoute());
   }
