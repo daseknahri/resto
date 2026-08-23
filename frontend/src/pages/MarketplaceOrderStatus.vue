@@ -233,7 +233,7 @@
                 <!-- Bubble + pulse ring -->
                 <div class="relative flex items-center justify-center">
                   <div
-                    v-if="isCurrentStep(step.key) && order.status !== 'cancelled'"
+                    v-if="isCurrentStep(step.key) && order.status !== 'cancelled' && !stepFailed(step.key)"
                     class="absolute -inset-1.5 motion-safe:animate-ping rounded-full border border-[var(--color-secondary)]/30"
                     aria-hidden="true"
                   />
@@ -241,9 +241,10 @@
                     class="relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500"
                     :class="stepClass(step.key)"
                     :aria-current="isCurrentStep(step.key) ? 'step' : undefined"
-                    :aria-label="stepLabel(step.key) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
+                    :aria-label="stepLabel(step.key) + (stepFailed(step.key) ? ' — ' + t('orderStatus.statusDeliveryIssue') : isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
                   >
-                    <span v-if="isStepDone(step.key)" aria-hidden="true">✓</span>
+                    <span v-if="stepFailed(step.key)" aria-hidden="true">!</span>
+                    <span v-else-if="isStepDone(step.key)" aria-hidden="true">✓</span>
                     <span v-else-if="isCurrentStep(step.key)" aria-hidden="true">
                       <span class="block h-2.5 w-2.5 rounded-full bg-current" />
                     </span>
@@ -252,7 +253,7 @@
                 </div>
                 <span
                   class="text-center text-[10px] leading-tight transition-colors duration-300"
-                  :class="isCurrentStep(step.key) ? 'font-semibold text-[var(--color-secondary)]' : isStepDone(step.key) ? 'text-emerald-500/70' : 'text-slate-500'"
+                  :class="stepFailed(step.key) ? 'font-semibold text-amber-300' : isCurrentStep(step.key) ? 'font-semibold text-[var(--color-secondary)]' : isStepDone(step.key) ? 'text-emerald-500/70' : 'text-slate-500'"
                 >
                   {{ stepLabel(step.key) }}
                 </span>
@@ -365,6 +366,20 @@
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M2.3 2.3c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1L4.2 6.6A9.5 9.5 0 0 0 9.4 11.8l1.2-1.2c.3-.3.8-.3 1.1 0l2 2c.3.3.3.8 0 1.1l-1 1c-1.2 1.2-6-1.2-8.4-3.6C2 8.7-.5 3.8.7 2.5l1-.3.6.1Z"/></svg>
             {{ t('mktOrderStatus.contactRestaurant') }}
           </a>
+        </div>
+
+        <!-- Delivery-problem banner — a driver marked the delivery failed, but the backend
+             keeps order.status at out_for_delivery (owner decides re-dispatch vs refund).
+             Reassures the customer instead of the pill/stepper silently contradicting the
+             red "Failed" in the tracker below. Shares the tenant OrderStatus.vue #233 copy. -->
+        <div
+          v-if="deliveryFailed"
+          class="ui-reveal rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3"
+          :style="{ '--ui-delay': '104ms' }"
+          role="status"
+        >
+          <p class="text-sm font-semibold text-amber-200">{{ t('orderStatus.deliveryProblemTitle') }}</p>
+          <p class="mt-1 text-sm leading-relaxed text-amber-100/80">{{ t('orderStatus.deliveryProblemBody') }}</p>
         </div>
 
         <!-- Driver tracking panel (shared component) -->
@@ -666,6 +681,17 @@ const fetchDelivery = async () => {
   }
 };
 
+// A driver marked the delivery FAILED, but the backend deliberately leaves order.status at
+// out_for_delivery (the owner decides re-dispatch vs refund). Without this, the stepper keeps
+// highlighting "Out for delivery" as the active step while the driver card below shows a red
+// "Failed" — a direct on-screen contradiction with no clear problem state for the customer.
+// When true we surface a reassuring banner and stop the stepper asserting the step is in
+// progress. Mirrors the tenant OrderStatus.vue #233 fix (reuses the shared orderStatus.* copy).
+const deliveryFailed = computed(() =>
+  delivery.value?.status === 'failed'
+  && order.value?.status === 'out_for_delivery'
+);
+
 // Driver rating now lives in <DeliveryTracker> (shared by both order pages).
 
 const printReceipt = () => window.print();
@@ -766,11 +792,15 @@ const isStepDone = (key) => {
   const idx = statusSteps.value.findIndex((s) => s.key === key);
   return idx >= 0 && idx < currentStatusIdx.value;
 };
+// The out-for-delivery node when the driver marked the delivery failed: it must read as a
+// problem, not an in-progress step (no pulse ring, no "current" styling/label).
+const stepFailed = (key) => deliveryFailed.value && key === 'out_for_delivery';
 
 const stepClass = (key) => {
   if (order.value?.status === 'cancelled') {
     return 'border-slate-700 bg-slate-900 text-slate-600';
   }
+  if (stepFailed(key)) return 'border-amber-500/60 bg-amber-500/20 text-amber-300';
   if (isCurrentStep(key)) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]';
   if (isStepDone(key)) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)] text-slate-950';
   return 'border-slate-700 bg-slate-900 text-slate-600';
