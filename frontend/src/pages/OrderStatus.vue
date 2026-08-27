@@ -296,12 +296,12 @@
 
       <!-- Restaurant message -->
       <div
-        v-if="orderData.owner_note || orderData.estimated_ready_minutes"
+        v-if="orderData.owner_note || showEta"
         class="ui-panel ui-reveal border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5 space-y-2"
         :style="{ '--ui-delay': '84ms' }"
       >
-        <!-- ETA countdown ring + text -->
-        <div v-if="orderData.estimated_ready_minutes" class="flex items-center gap-3">
+        <!-- ETA countdown ring + text — only before the order is ready (see showEta) -->
+        <div v-if="showEta" class="flex items-center gap-3">
           <!-- SVG ring: stroke-dashoffset encodes time-left visually -->
           <svg
             v-if="countdownSeconds !== null"
@@ -596,7 +596,9 @@
             class="ui-touch-target ui-press flex items-center justify-center text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 focus-visible:rounded-lg"
             :aria-label="t('orderStatus.ratingLabel', { score: star })"
             :aria-checked="star <= ratingScore"
+            :tabindex="star === (ratingScore || 1) ? 0 : -1"
             @click="ratingScore = star"
+            @keydown="onStarKey($event, star)"
           >
             <span :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
           </button>
@@ -836,6 +838,34 @@ const {
   },
 });
 
+// Roving-tabindex keyboard support for the star radiogroup: only the selected star (or the
+// first, when none is chosen) is tabbable, and Arrow/Home/End move both selection and focus —
+// the ARIA radiogroup contract. Click behaviour is unchanged.
+const onStarKey = (e, star) => {
+  let next;
+  switch (e.key) {
+    case "ArrowRight":
+    case "ArrowUp":
+      next = Math.min(5, star + 1);
+      break;
+    case "ArrowLeft":
+    case "ArrowDown":
+      next = Math.max(1, star - 1);
+      break;
+    case "Home":
+      next = 1;
+      break;
+    case "End":
+      next = 5;
+      break;
+    default:
+      return;
+  }
+  e.preventDefault();
+  ratingScore.value = next;
+  e.currentTarget?.parentElement?.querySelectorAll('[role="radio"]')?.[next - 1]?.focus();
+};
+
 const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)
 );
@@ -993,6 +1023,16 @@ const etaRingOffset = computed(() => {
   const remaining = Math.max(0, countdownSeconds.value);
   return Math.round((1 - remaining / totalSecs) * 100.53 * 100) / 100;
 });
+
+// The "estimated ready in X min" ETA/countdown is only meaningful *before* the order is ready.
+// The backend keeps returning estimated_ready_minutes after that, so without a status gate a
+// completed / out-for-delivery order shows a stale ETA (the live countdown nulls out on those
+// statuses and the static fallback then renders the raw backend minutes). Gate the ETA sub-block
+// to the pre-ready lifecycle, mirroring MarketplaceOrderStatus.vue. owner_note stays independent.
+const showEta = computed(() =>
+  !!orderData.value?.estimated_ready_minutes
+  && ["pending", "confirmed", "preparing"].includes(orderData.value?.status)
+);
 
 const isStepDone = (stepValue) => {
   const idx = statusSteps.value.findIndex((st) => st.value === stepValue);
