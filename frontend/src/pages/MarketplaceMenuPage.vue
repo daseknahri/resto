@@ -595,8 +595,8 @@
             :cart="cart"
             :unavailable-slugs="unavailableSlugs"
             :fmt-price="fmtPrice"
-            @decrement="removeFromCart"
-            @increment="addToCartBySlug"
+            @decrement="decrementCartLine"
+            @increment="incrementCartLine"
           />
 
           <!-- Fulfillment type (RISK FE-2) -->
@@ -1287,9 +1287,26 @@ const addToCart = (dish) => {
   }
 };
 
-const addToCartBySlug = (dishSlug) => {
-  const existing = cart.value.find((i) => i.slug === dishSlug);
-  if (existing && existing.qty < 99) existing.qty++;
+// The checkout-drawer per-line steppers target the EXACT tapped line by its composite
+// key (slug + option signature), so two configurations of one dish are stepped
+// independently. (The menu-tile steppers instead aggregate a dish across all its
+// configs and use removeFromCart(slug) / addToCart(dish).)
+const incrementCartLine = (key) => {
+  const line = cart.value.find((i) => cartLineKey(i) === key);
+  if (line && line.qty < 99) line.qty++;
+};
+
+const decrementCartLine = (key) => {
+  const idx = cart.value.findIndex((i) => cartLineKey(i) === key);
+  if (idx < 0) return;
+  if (cart.value[idx].qty > 1) {
+    cart.value[idx].qty--;
+  } else {
+    cart.value.splice(idx, 1);
+  }
+  // Removing the last line empties the cart — close the checkout drawer so the
+  // customer isn't stranded on a 0-total drawer (mirrors clearMktCart).
+  if (!cart.value.length) checkoutOpen.value = false;
 };
 
 const removeFromCart = (dishSlug) => {
