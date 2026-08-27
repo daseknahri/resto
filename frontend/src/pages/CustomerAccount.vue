@@ -291,7 +291,7 @@
           <div class="grid grid-cols-2 gap-2">
             <!-- Orders tile -->
             <button
-              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-sky-500/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-sky-500/30"
               style="--ui-delay: 0ms"
               @click="activeTab = 'orders'"
             >
@@ -307,7 +307,7 @@
 
             <!-- Wallet tile -->
             <button
-              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-[var(--color-secondary)]/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-[var(--color-secondary)]/30"
               style="--ui-delay: 40ms"
               @click="activeTab = 'wallet'"
             >
@@ -325,7 +325,7 @@
 
             <!-- Rewards tile -->
             <button
-              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-indigo-500/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-indigo-500/30"
               style="--ui-delay: 80ms"
               @click="activeTab = 'wallet'"
             >
@@ -349,7 +349,7 @@
 
             <!-- Profile tile -->
             <button
-              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-slate-600/60"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-slate-600/60"
               style="--ui-delay: 120ms"
               @click="activeTab = 'profile'"
             >
@@ -366,7 +366,7 @@
 
           <!-- Reviews tile (full-width) -->
           <button
-            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-amber-500/30"
+            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-amber-500/30"
             style="--ui-delay: 160ms"
             @click="activeTab = 'reviews'"
           >
@@ -390,7 +390,7 @@
           <!-- Book a ride CTA (full-width) -->
           <RouterLink
             :to="{ name: 'ride' }"
-            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-indigo-500/30"
+            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-start hover:border-indigo-500/30"
             style="--ui-delay: 200ms"
           >
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/25 bg-indigo-500/8 transition group-hover:bg-indigo-500/15">
@@ -534,6 +534,7 @@
                   maxlength="20"
                   class="ui-input flex-1 text-xs uppercase tracking-widest"
                   :placeholder="t('customerAccount.referralEnterPlaceholder')"
+                  :aria-label="t('customerAccount.referralEnterTitle')"
                   :disabled="linkingReferral"
                   @keyup.enter="linkReferralCodeSubmit"
                 />
@@ -814,6 +815,7 @@
               autocomplete="off"
               class="ui-input w-full text-sm"
               :placeholder="t('customerAccount.sendPhonePlaceholder')"
+              :aria-label="t('customerAccount.sendPhonePlaceholder')"
               :disabled="sending"
             />
             <div class="flex gap-2">
@@ -824,6 +826,7 @@
                 min="0.01"
                 class="ui-input flex-1 text-sm"
                 :placeholder="t('customerAccount.sendAmountPlaceholder')"
+                :aria-label="t('customerAccount.sendAmountPlaceholder')"
                 :disabled="sending"
               />
               <button
@@ -842,6 +845,7 @@
               maxlength="200"
               class="ui-input w-full text-sm"
               :placeholder="t('customerAccount.sendNotePlaceholder')"
+              :aria-label="t('customerAccount.sendNotePlaceholder')"
               :disabled="sending"
             />
             <div v-if="sendError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -1418,15 +1422,29 @@ const benefits = computed(() => [
 const showAuthModal = ref(false);
 const showAddPhone = ref(false);
 
-// Surgical 401 handling for authenticated customer-write calls: the global axios
+// Surgical auth-expiry handling for customer-write calls: the global axios
 // instance (src/lib/api.js) intentionally excludes /customer/ (and other
 // customer-auth) endpoints from its automatic sign-out redirect, so a stale
 // session on a write call would otherwise fail silently / show a generic error.
+// Two shapes mean "your session lapsed, sign in again":
+//   • a 401 from an authenticated (IsCustomer) endpoint, or
+//   • a coded 403 from an AllowAny order endpoint — cancel/rate return
+//     `not_owner` / `not_order_owner` when the backend can no longer identify the
+//     caller (the session cookie expired server-side, so it now reads as
+//     anonymous). We only treat that 403 as expiry while the SPA still believes
+//     it is authenticated, so a genuine cross-account non-owner attempt keeps its
+//     normal (sensible) error instead of a misleading sign-in prompt.
 // Call this from a write site's catch block — it re-opens the sign-in modal and
-// returns true when the error was a 401, so the caller can `return` early instead
-// of also rendering its normal generic-failure message.
+// returns true when the error was an auth-expiry, so the caller can `return`
+// early instead of also rendering its normal generic-failure message.
 const handleAuthExpired = (err) => {
-  if (err?.response?.status !== 401) return false;
+  const status = err?.response?.status;
+  const code = err?.response?.data?.code;
+  const ownershipExpired =
+    status === 403 &&
+    (code === 'not_owner' || code === 'not_order_owner') &&
+    customerStore.isAuthenticated;
+  if (status !== 401 && !ownershipExpired) return false;
   toast.show(t('customerAccount.sessionExpired'), 'error');
   showAuthModal.value = true;
   return true;
@@ -1676,7 +1694,10 @@ const saveBirthday = async () => {
   savingBirthday.value = true;
   try {
     const res = await api.patch('/customer/profile/', { birthday: editableBirthday.value || '' });
-    customerStore.setCustomer({ ...customerStore.customer, birthday: res.data.birthday });
+    // PATCH /customer/profile/ returns { customer: {...} } (no top-level birthday),
+    // so reading res.data.birthday wiped the field back to empty. Match the sibling
+    // saves (saveEmail/saveName/savePref/setLocale) and take the full customer object.
+    customerStore.setCustomer(res.data.customer);
     toast.show(t('customerAccount.birthdaySaved'), 'success');
   } catch (err) {
     if (handleAuthExpired(err)) return;
@@ -2226,6 +2247,7 @@ const cancelOrder = async (order) => {
     const target = apiOrders.value.find((o) => o.order_number === order.order_number);
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
   } catch (err) {
+    if (handleAuthExpired(err)) return;
     const code = err?.response?.data?.code;
     if (code === 'cannot_cancel') {
       toast.show(t('customerAccount.orderCannotCancel'), 'error');
@@ -2252,7 +2274,8 @@ const cancelMarketplaceOrder = async (order) => {
     toast.show(t('customerAccount.orderCancelled'), 'success');
     const target = marketplaceOrders.value.find((o) => o.order_number === order.order_number);
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
-  } catch {
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
     toast.show(t('customerAccount.orderCancelFailed'), 'error');
   } finally {
     cancellingOrderNumber.value = null;
