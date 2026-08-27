@@ -251,12 +251,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
 import adminApi from '../lib/adminApi';
 import AppIcon from '../components/AppIcon.vue';
 import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const STATUSES = ['all', 'scheduled', 'searching', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
@@ -382,6 +384,13 @@ const saveFares = async () => {
     toast.show(t('adminRides.faresNoChanges'), 'info');
     return;
   }
+  const okFares = await confirm({
+    title: t('adminRides.faresConfirmTitle'),
+    body: t('adminRides.faresConfirmBody', { count: Object.keys(changed).length }),
+    confirmLabel: t('adminRides.faresSave'),
+    danger: true,
+  });
+  if (!okFares) return;
   faresSaving.value = true;
   try {
     const res = await adminApi.patch('/admin/settings/', changed);

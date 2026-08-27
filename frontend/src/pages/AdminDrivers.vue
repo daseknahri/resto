@@ -123,7 +123,7 @@
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
               tabindex="0"
               @click="openDriver(d)"
-              @keydown.enter.space="openDriver(d)"
+              @keydown.enter.space.prevent="openDriver(d)"
             >
               <td class="px-4 py-3 text-slate-200 font-medium">
                 <span class="truncate block">{{ d.name || t('adminDrivers.unnamed') }}</span>
@@ -183,7 +183,7 @@
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
           tabindex="0"
           @click="openDriver(d)"
-          @keydown.enter.space="openDriver(d)"
+          @keydown.enter.space.prevent="openDriver(d)"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -537,6 +537,15 @@ const setApproval = async (approve) => {
 
 const setCarApproval = async (approve) => {
   if (!selected.value || vettingCar.value) return;
+  if (!approve) {
+    const okCarReject = await confirm({
+      title: t('adminConsole.carRejectConfirmTitle'),
+      body: t('adminConsole.carRejectConfirmBody', { name: selected.value?.name || t('adminDrivers.thisDriver') }),
+      confirmLabel: t('adminConsole.carReject'),
+      danger: true,
+    });
+    if (!okCarReject) return;
+  }
   vettingCar.value = true;
   try {
     await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'car-approve' : 'car-reject'}/`, {});
