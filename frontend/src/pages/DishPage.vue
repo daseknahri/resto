@@ -55,7 +55,7 @@
         <button
           class="ui-touch-target absolute start-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/50 text-white backdrop-blur-md transition hover:bg-black/70 active:scale-95"
           :aria-label="t('common.goBack')"
-          @click="router.back()"
+          @click="goBack"
         >
           <AppIcon name="arrowLeft" class="h-4 w-4 rtl:scale-x-[-1]" />
         </button>
@@ -549,6 +549,15 @@ const addToCart = () => {
     happy_hour_starts_at: dish.value.happy_hour?.starts_at ?? null,
   });
   toast.show(t('dishPage.addedToCart'), 'success');
+};
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+// Guard the back button (mirrors NotFound.vue): only pop history when there is
+// somewhere to pop to, otherwise land on the menu instead of dead-ending or
+// exiting the app on a deep-linked / first-visit dish page.
+const goBack = () => {
+  if (window.history.length > 2) router.back();
+  else router.push({ name: 'menu' });
 };
 
 // ── Share ─────────────────────────────────────────────────────────────────────

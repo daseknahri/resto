@@ -28,7 +28,7 @@
           :aria-label="t('driver.enterDeliveryCode')"
           autocomplete="one-time-code"
           maxlength="6"
-          @keydown.enter="emit('submit')"
+          @keydown.enter="onSubmit"
         />
         <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
           <p class="text-sm text-red-300">{{ codeError }}</p>
@@ -78,7 +78,7 @@
             style="min-height: 48px"
             :disabled="(!codeInput.trim() && !proofPhotoFile) || submitting"
             :aria-busy="submitting"
-            @click="emit('submit')"
+            @click="onSubmit"
           >
             <svg v-if="submitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
             {{ submitting ? t('common.loading') : t('common.confirm') }}
@@ -127,6 +127,17 @@ const codeError = defineModel('codeError', { type: String, default: '' });
 const proofPhotoFile = defineModel('proofPhotoFile', { type: Object, default: null });
 
 const emit = defineEmits(['close', 'submit']);
+
+// Single guarded submit path for both the confirm button and the code field's
+// Enter key. The button's :disabled already blocks a click while submitting or
+// with no proof, but @keydown.enter bypassed that guard — letting a fast double
+// Enter re-fire the parent's (unguarded) submit and double-submit the delivery.
+// Mirror the button's disabled condition here so every entry point is gated.
+const onSubmit = () => {
+  if (props.submitting) return;
+  if (!codeInput.value.trim() && !proofPhotoFile.value) return;
+  emit('submit');
+};
 
 // ── Proof-photo UI (self-contained: input ref + object-URL thumbnail) ──
 const proofPhotoInputRef = ref(null);

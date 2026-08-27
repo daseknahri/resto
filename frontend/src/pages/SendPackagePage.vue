@@ -97,16 +97,19 @@
               <AppIcon name="package" class="h-4 w-4" aria-hidden="true" />
             </span>
             <div class="min-w-0 flex-1">
-              <p
-                class="text-sm font-semibold"
-                :class="{
-                  'text-amber-300': activePackage.status === 'searching',
-                  'text-sky-300': activePackage.status === 'accepted' || activePackage.status === 'arrived',
-                  'text-violet-300': activePackage.status === 'in_progress',
-                }"
-              >
-                {{ packageStatusLabel }}
-              </p>
+              <div class="flex items-center gap-2">
+                <p
+                  class="text-sm font-semibold"
+                  :class="{
+                    'text-amber-300': activePackage.status === 'searching',
+                    'text-sky-300': activePackage.status === 'accepted' || activePackage.status === 'arrived',
+                    'text-violet-300': activePackage.status === 'in_progress',
+                  }"
+                >
+                  {{ packageStatusLabel }}
+                </p>
+                <ConnectionDot :state="connectionState" />
+              </div>
               <p v-if="activePackage.driver" class="mt-0.5 text-xs text-slate-400">
                 {{ activePackage.driver.name }}
                 <span v-if="activePackage.driver.driver_vehicle" class="ms-1 text-slate-500">· {{ activePackage.driver.driver_vehicle }}</span>
@@ -743,6 +746,7 @@ import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
 import { recentRecipients, recentDropoffs } from '../lib/recentRecipients';
 import AppIcon from '../components/AppIcon.vue';
+import ConnectionDot from '../components/ConnectionDot.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import PushPrimingSheet from '../components/PushPrimingSheet.vue';
 import SendPackageHistory from '../components/SendPackageHistory.vue';
@@ -810,6 +814,16 @@ const savedAddresses = ref([]);
 // ── Active package polling ────────────────────────────────────────────────────
 // Holds the active trip only if kind === 'package'; ride trips are ignored here.
 const activePackage = ref(null);
+// Poll health → ConnectionDot. 'live' while the active-trip poll is succeeding;
+// 'connecting' after a failed poll or when the browser reports offline. Mirrors
+// RidePage so parcel senders get the same live-connection feedback.
+const pollHealthy = ref(true);
+const connectionState = computed(() =>
+  pollHealthy.value &&
+  (typeof navigator === 'undefined' || navigator.onLine !== false)
+    ? 'live'
+    : 'connecting',
+);
 const ratingScore = ref(0);
 const submittingRating = ref(false);
 const ratingDone = ref(false);
@@ -1331,6 +1345,7 @@ const pollActiveTripOnce = async () => {
   const prevStatus = activePackage.value.status;
   try {
     const res = await api.get('/rides/active/');
+    pollHealthy.value = true;
     const data = res.data;
     // Handle both { ride, scheduled } and legacy flat shape
     const rideData = (data && typeof data === 'object' && 'ride' in data)
@@ -1361,12 +1376,14 @@ const pollActiveTripOnce = async () => {
       stopPolling();
     }
   } catch {
-    // ignore transient errors
+    // ignore transient errors, but surface them on the connection dot
+    pollHealthy.value = false;
   }
 };
 
 const startPolling = () => {
   stopPolling();
+  pollHealthy.value = true;
   pollTimer = setInterval(pollActiveTripOnce, 5000);
 };
 

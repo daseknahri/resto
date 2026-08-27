@@ -19,6 +19,10 @@ export const useOrderStore = defineStore("order", {
     ordersStatusFilter: "",
     ordersTotal: 0,      // retained for backward compat (active path doesn't return count)
     ordersHasMore: false, // always false on active path
+    // Re-entrancy guard for fetchOrders. Distinct from ordersLoading because
+    // background polls call fetchOrders({ silent: true }), which never sets
+    // ordersLoading — so ordersLoading alone can't gate overlapping silent polls.
+    _ordersInFlight: false,
 
     // Owner order list — HISTORY (terminal orders, paginated)
     historyOrders: [],
@@ -82,6 +86,13 @@ export const useOrderStore = defineStore("order", {
     // Pass { silent: true } for background polls so the loading flag is not set
     // and the orders list never flickers while already displaying data.
     async fetchOrders(statusFilter = "", { silent = false } = {}) {
+      // Re-entrancy guard (mirrors fetchHistory's historyLoading check): skip a
+      // call while one is already in flight, so a slow earlier response can't
+      // overwrite fresher state with stale data when polls overlap. Callers that
+      // read the return value already fall back to store state when it isn't an
+      // array, so returning the current orders here is safe.
+      if (this._ordersInFlight) return this.orders;
+      this._ordersInFlight = true;
       if (!silent) this.ordersLoading = true;
       this.ordersError = null;
       this.ordersStatusFilter = statusFilter;
@@ -99,6 +110,7 @@ export const useOrderStore = defineStore("order", {
       } catch (err) {
         this.ordersError = err?.response?.data?.detail || "Failed to load orders.";
       } finally {
+        this._ordersInFlight = false;
         if (!silent) this.ordersLoading = false;
       }
     },
