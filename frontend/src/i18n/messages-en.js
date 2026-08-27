@@ -4600,6 +4600,8 @@ ownerNotifications: {
   statusFailed: "Failed",
   statusSkipped: "Skipped",
   recipient: "To",
+  summaryAllTime: "All time",
+  latestCapNote: "Showing the latest {count} results.",
 },
 ownerOrders: {
   kicker: "Order management",
