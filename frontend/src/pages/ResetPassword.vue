@@ -58,11 +58,29 @@
                 class="ui-input mt-1 font-normal"
                 :class="fieldErrors.password ? 'border-red-400' : ''"
                 :aria-invalid="fieldErrors.password ? 'true' : undefined"
-                :aria-describedby="fieldErrors.password ? 'reset-password-error' : undefined"
+                :aria-describedby="fieldErrors.password ? 'reset-password-hint reset-password-error' : 'reset-password-hint'"
                 aria-required="true"
                 @input="fieldErrors.password = ''"
               />
+              <p id="reset-password-hint" class="text-xs font-normal text-slate-400">{{ t("resetPassword.passwordHint") }}</p>
               <p v-if="fieldErrors.password" id="reset-password-error" class="text-xs font-normal text-red-300" role="alert">{{ fieldErrors.password }}</p>
+            </label>
+
+            <label class="block space-y-1.5 text-sm font-medium text-slate-200">
+              {{ t("resetPassword.confirmPassword") }}
+              <input
+                id="reset-confirm-input"
+                v-model="confirmPassword"
+                type="password"
+                autocomplete="new-password"
+                class="ui-input mt-1 font-normal"
+                :class="fieldErrors.confirm ? 'border-red-400' : ''"
+                :aria-invalid="fieldErrors.confirm ? 'true' : undefined"
+                :aria-describedby="fieldErrors.confirm ? 'reset-confirm-error' : undefined"
+                aria-required="true"
+                @input="fieldErrors.confirm = ''"
+              />
+              <p v-if="fieldErrors.confirm" id="reset-confirm-error" class="text-xs font-normal text-red-300" role="alert">{{ fieldErrors.confirm }}</p>
             </label>
 
             <div class="space-y-3 pt-1">
@@ -111,10 +129,11 @@ const route = useRoute();
 const { t } = useI18n();
 const token = ref("");
 const password = ref("");
+const confirmPassword = ref("");
 const submitting = ref(false);
 const message = ref("");
 const error = ref("");
-const fieldErrors = reactive({ token: "", password: "" });
+const fieldErrors = reactive({ token: "", password: "", confirm: "" });
 
 const signinLink = computed(() => {
   const next = typeof route.query.next === "string" ? route.query.next : "";
@@ -130,12 +149,17 @@ onMounted(() => {
 const submit = async () => {
   fieldErrors.token = "";
   fieldErrors.password = "";
+  fieldErrors.confirm = "";
   if (!token.value.trim()) {
     fieldErrors.token = t("resetPassword.tokenRequired");
     return;
   }
   if (password.value.length < 8) {
     fieldErrors.password = t("resetPassword.passwordTooShort");
+    return;
+  }
+  if (password.value !== confirmPassword.value) {
+    fieldErrors.confirm = t("resetPassword.confirmMismatch");
     return;
   }
   submitting.value = true;

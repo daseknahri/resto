@@ -62,11 +62,31 @@
                 class="ui-input"
                 :class="fieldErrors.password ? 'border-red-400' : ''"
                 :aria-invalid="fieldErrors.password ? 'true' : undefined"
-                :aria-describedby="fieldErrors.password ? 'activate-password-error' : undefined"
+                :aria-describedby="fieldErrors.password ? 'activate-password-hint activate-password-error' : 'activate-password-hint'"
                 aria-required="true"
                 @input="fieldErrors.password = ''"
               />
+              <p id="activate-password-hint" class="text-xs text-slate-400">{{ t("activateAccount.passwordHint") }}</p>
               <p v-if="fieldErrors.password" id="activate-password-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.password }}</p>
+            </div>
+
+            <div class="space-y-1">
+              <label class="block text-sm text-slate-200" for="activate-confirm-input">
+                {{ t("activateAccount.confirmPassword") }}
+              </label>
+              <input
+                id="activate-confirm-input"
+                v-model="confirmPassword"
+                type="password"
+                autocomplete="new-password"
+                class="ui-input"
+                :class="fieldErrors.confirm ? 'border-red-400' : ''"
+                :aria-invalid="fieldErrors.confirm ? 'true' : undefined"
+                :aria-describedby="fieldErrors.confirm ? 'activate-confirm-error' : undefined"
+                aria-required="true"
+                @input="fieldErrors.confirm = ''"
+              />
+              <p v-if="fieldErrors.confirm" id="activate-confirm-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.confirm }}</p>
             </div>
 
             <button
@@ -150,7 +170,8 @@ const { t } = useI18n();
 
 const token = ref("");
 const password = ref("");
-const fieldErrors = reactive({ token: "", password: "" });
+const confirmPassword = ref("");
+const fieldErrors = reactive({ token: "", password: "", confirm: "" });
 
 const resendEmail = ref("");
 const resendSubmitting = ref(false);
@@ -164,12 +185,17 @@ onMounted(() => {
 const submit = async () => {
   fieldErrors.token = "";
   fieldErrors.password = "";
+  fieldErrors.confirm = "";
   if (!token.value.trim()) {
     fieldErrors.token = t("activateAccount.tokenRequired");
     return;
   }
   if (password.value.length < 8) {
     fieldErrors.password = t("activateAccount.passwordTooShort");
+    return;
+  }
+  if (password.value !== confirmPassword.value) {
+    fieldErrors.confirm = t("activateAccount.confirmMismatch");
     return;
   }
   resendSent.value = false;
