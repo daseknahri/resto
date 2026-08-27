@@ -32,12 +32,12 @@
         <div class="mt-1 flex items-center justify-end gap-1.5">
           <button
             v-if="editable"
-            class="px-2 py-1 text-[11px] text-slate-500 hover:text-[var(--color-secondary)] transition-colors focus-visible:text-[var(--color-secondary)] focus:outline-none rounded-md"
+            class="ui-tap-expand px-2 py-1 text-[11px] text-slate-500 hover:text-[var(--color-secondary)] transition-colors focus-visible:text-[var(--color-secondary)] focus:outline-none rounded-md"
             :aria-label="`${t('cartPage.editItem')} ${item.name}`"
             @click="emit('edit')"
           >{{ t('cartPage.editItem') }}</button>
           <button
-            class="px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
+            class="ui-tap-expand px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
             :aria-label="`${t('cartPage.remove')} ${item.name}`"
             @click="emit('remove')"
           >{{ t('cartPage.remove') }}</button>

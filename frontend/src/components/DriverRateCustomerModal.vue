@@ -16,7 +16,7 @@
         <div class="flex items-center gap-2" role="group" :aria-label="t('driver.rateCustomerTitle')">
           <button
             v-for="n in 5" :key="n" type="button"
-            class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+            class="ui-tap-expand ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
             :class="n <= score ? 'text-amber-400' : 'text-slate-600'"
             :aria-label="t('common.rateNStars', { n })"
             @click="score = n"

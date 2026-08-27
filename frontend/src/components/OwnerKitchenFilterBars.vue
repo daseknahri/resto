@@ -4,7 +4,7 @@
     <button
       v-for="f in stationFilters"
       :key="f.value"
-      class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+      class="kitchen-filter-btn ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
       :class="activeStationFilter === f.value ? 'kitchen-filter-btn--active' : ''"
       :aria-pressed="activeStationFilter === f.value"
       @click="emit('set-station-filter', f.value)"
@@ -19,7 +19,7 @@
     <button
       v-for="f in prepStationFilters"
       :key="f.value"
-      class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+      class="kitchen-filter-btn ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
       :class="activePrepStation === f.value ? 'kitchen-filter-btn--active' : ''"
       :aria-pressed="activePrepStation === f.value"
       @click="emit('set-prep-station', f.value)"
