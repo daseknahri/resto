@@ -1296,6 +1296,8 @@ const arabicMessages = {
     "carApproved": "السيارة معتمدة",
     "carPending": "وثائق قيد المراجعة",
     "carMissing": "لا توجد وثائق",
+    "carRejectConfirmTitle": "سحب اعتماد السيارة؟",
+    "carRejectConfirmBody": "لن يتمكن {name} بعد الآن من تنفيذ توصيلات بالسيارة. يمكنه إعادة تقديم الوثائق لإعادة الاعتماد.",
     "licenceLink": "الرخصة",
     "insuranceLink": "التأمين"
   },
@@ -4050,6 +4052,8 @@ Object.assign(arabicMessages, {
     faresSaved: "تم تحديث التعريفات.",
     faresSaveFailed: "تعذّر حفظ التعريفات.",
     faresSave: "حفظ التعريفات",
+    faresConfirmTitle: "تحديث تسعير الرحلات؟",
+    faresConfirmBody: "سيتغير {count} من حقول التسعير على مستوى المنصة وسيُطبَّق فوراً على جميع تقديرات الرحلات الجديدة.",
     kindRide: "رحلة",
     kindPackage: "طرد",
     statusScheduled: "مجدول",
