@@ -72,9 +72,32 @@ describe("CartOrderSummary", () => {
       .not.toContain("cartPage.etaDelivery");
   });
 
-  it("hides the subtotal + delivery-fee rows for a non-delivery order", () => {
-    const w = mountIt({ fulfillmentType: "pickup", deliveryFeeAmount: 0 });
+  it("hides the subtotal + delivery-fee rows for a non-delivery order with no adjustments", () => {
+    const w = mountIt({ fulfillmentType: "pickup", deliveryFeeAmount: 0, tipAmount: 0, loyaltyDiscount: 0 });
     expect(w.text()).not.toContain("cartPage.subtotal");
     expect(w.text()).not.toContain("cartPage.deliveryFee");
+  });
+
+  // Regression: the subtotal must appear whenever it differs from the grand total
+  // so the total reconciles — even for pickup/dine-in where there is no delivery fee.
+  it("shows the subtotal for a pickup order when a tip applies", () => {
+    const w = mountIt({ fulfillmentType: "pickup", deliveryFeeAmount: 0, tipAmount: 8, subtotal: 100 });
+    expect(w.text()).toContain("cartPage.subtotal");
+    expect(w.text()).toContain("$100");
+    // still no delivery-fee row on a pickup order
+    expect(w.text()).not.toContain("cartPage.deliveryFee");
+  });
+
+  it("shows the subtotal for a pickup order when a loyalty discount applies", () => {
+    const w = mountIt({ fulfillmentType: "pickup", deliveryFeeAmount: 0, loyaltyDiscount: 15, subtotal: 100 });
+    expect(w.text()).toContain("cartPage.subtotal");
+    expect(w.text()).toContain("cartPage.loyaltyDiscount");
+  });
+
+  it("does not show the subtotal for a pickup order with a configured flat fee it never charges", () => {
+    // deliveryFeeAmount can be non-zero (flat fee configured) even on pickup, but
+    // grandTotal ignores it for non-delivery, so subtotal == total → stay hidden.
+    const w = mountIt({ fulfillmentType: "pickup", deliveryFeeAmount: 10, tipAmount: 0, loyaltyDiscount: 0 });
+    expect(w.text()).not.toContain("cartPage.subtotal");
   });
 });

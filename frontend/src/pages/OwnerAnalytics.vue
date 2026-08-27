@@ -85,15 +85,33 @@
           <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" :label="t('ownerAnalytics.sparklineAvgTicket')" />
         </div>
 
+        <!-- Pending — clickable to Orders when there's a queue (parity with OwnerHome) -->
+        <RouterLink
+          v-if="todayStats.pending > 0"
+          :to="{ name: 'owner-orders' }"
+          class="ui-admin-subcard ui-reveal ui-surface-lift space-y-2 border-amber-500/30 p-3"
+          :style="{ '--ui-delay': '84ms' }"
+          :aria-label="`${t('ownerOrders.todayPending')}: ${todayStats.pending}`"
+        >
+          <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem] text-amber-400">{{ todayStats.pending }}</p>
+            <AppIcon name="info" class="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+          </div>
+          <p class="flex items-center gap-1 text-[10px] font-medium tracking-wide text-slate-500">
+            <span>{{ t("ownerHome.viewAllOrders") }}</span>
+            <span class="ltr:inline rtl:hidden" aria-hidden="true">→</span>
+            <span class="ltr:hidden rtl:inline" aria-hidden="true">←</span>
+          </p>
+        </RouterLink>
         <div
+          v-else
           class="ui-admin-subcard ui-reveal space-y-2 p-3"
-          :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
           :style="{ '--ui-delay': '84ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
           <div class="flex items-center gap-1.5">
-            <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem]" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
-            <AppIcon v-if="todayStats.pending > 0" name="info" class="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+            <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem] text-slate-100">{{ todayStats.pending }}</p>
           </div>
           <div class="h-7" />
         </div>

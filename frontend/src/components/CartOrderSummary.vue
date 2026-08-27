@@ -1,7 +1,14 @@
 <template>
   <!-- ── Order summary breakdown ── -->
   <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
-    <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
+    <!-- Show the subtotal whenever it differs from the grand total (a delivery
+         fee, tip, or loyalty discount is applied) so the total always reconciles.
+         Mirrors orderGrandTotal in Cart.vue, which only adds the delivery fee for
+         delivery orders. Hidden only when subtotal == total. -->
+    <div
+      v-if="(fulfillmentType === 'delivery' && deliveryFeeAmount > 0) || tipAmount > 0 || loyaltyDiscount > 0"
+      class="flex items-center justify-between text-slate-400"
+    >
       <span>{{ t('cartPage.subtotal') }}</span>
       <span class="tabular-nums font-medium">{{ formatPrice(subtotal) }}</span>
     </div>

@@ -2675,7 +2675,9 @@ const arabicMessages = {
     "statusSent": "أُرسل",
     "statusFailed": "فشل",
     "statusSkipped": "متخطّى",
-    "recipient": "إلى"
+    "recipient": "إلى",
+    "summaryAllTime": "الإجمالي الكلي",
+    "latestCapNote": "عرض أحدث {count} نتيجة."
   },
   "ownerOrders": {
     "kicker": "إدارة الطلبات",

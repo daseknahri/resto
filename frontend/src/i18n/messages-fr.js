@@ -4602,6 +4602,8 @@ ownerNotifications: {
   statusFailed: "Echec",
   statusSkipped: "Ignore",
   recipient: "A",
+  summaryAllTime: "Tout l'historique",
+  latestCapNote: "Affichage des {count} derniers resultats.",
 },
 ownerOrders: {
   statusOverdue: "En retard",

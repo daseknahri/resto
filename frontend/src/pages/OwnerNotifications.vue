@@ -23,19 +23,23 @@
         </div>
       </div>
 
-      <!-- Summary stat bar -->
-      <div class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold tabular-nums text-emerald-400">{{ summary.sent || 0 }}</p>
-          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSent') }}</p>
-        </div>
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold tabular-nums text-red-400">{{ summary.failed || 0 }}</p>
-          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusFailed') }}</p>
-        </div>
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold tabular-nums text-slate-400">{{ summary.skipped || 0 }}</p>
-          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSkipped') }}</p>
+      <!-- Summary stat bar — all-time totals from the full log, NOT the active
+           filter or the capped results list below (make that explicit). -->
+      <div class="space-y-1.5">
+        <p class="ui-stat-label text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerNotifications.summaryAllTime') }}</p>
+        <div class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+          <div class="bg-slate-950/70 px-3 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-emerald-400">{{ summary.sent || 0 }}</p>
+            <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSent') }}</p>
+          </div>
+          <div class="bg-slate-950/70 px-3 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-red-400">{{ summary.failed || 0 }}</p>
+            <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusFailed') }}</p>
+          </div>
+          <div class="bg-slate-950/70 px-3 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-slate-400">{{ summary.skipped || 0 }}</p>
+            <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSkipped') }}</p>
+          </div>
         </div>
       </div>
     </header>
@@ -98,7 +102,13 @@
     </div>
 
     <!-- List -->
-    <ul v-else class="space-y-2">
+    <div v-else class="space-y-2">
+      <!-- The API returns only the latest N rows (uncounted); say so when capped
+           so the list isn't mistaken for the complete log. -->
+      <p v-if="rows.length >= RESULT_CAP" class="px-1 text-[11px] text-slate-500">
+        {{ t('ownerNotifications.latestCapNote', { count: RESULT_CAP }) }}
+      </p>
+      <ul class="space-y-2">
       <li
         v-for="(n, index) in rows"
         :key="n.id"
@@ -137,7 +147,8 @@
           <span v-if="n.error" class="min-w-0 truncate text-red-400/80" :title="n.error">{{ n.error }}</span>
         </div>
       </li>
-    </ul>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -147,6 +158,9 @@ import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
 const { t, currentLocale } = useI18n();
+
+// The API returns at most this many rows (latest-first, no total count).
+const RESULT_CAP = 100;
 
 const rows = ref([]);
 const summary = ref({});
