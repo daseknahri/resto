@@ -1478,6 +1478,16 @@ const orders86ResetAll = async () => {
 
 const orders86MarkAllUnavailable = async () => {
   if (orders86MarkingUnavailable.value) return;
+  // 86-ing the whole menu is a bulk, customer-visible action — gate it behind a confirm
+  // like the sibling bulk actions (bulkMarkPreparingReady, deliveryAction no-show).
+  const affected = orders86Dishes.value.filter((d) => d.is_published && d.is_available).length;
+  const ok = await confirm({
+    title: t("kitchen.markAllUnavailableConfirmTitle", { count: affected }),
+    body: t("kitchen.markAllUnavailableConfirmBody"),
+    confirmLabel: t("kitchen.markAllUnavailable"),
+    danger: true,
+  });
+  if (!ok) return;
   orders86MarkingUnavailable.value = true;
   try {
     const { data } = await api.post("/owner/dishes/mark-all-unavailable/");

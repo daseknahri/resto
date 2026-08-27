@@ -1309,6 +1309,14 @@ const savePlanFeatureFlag = async (plan, flag) => {
   const key = String(flag?.key || "").trim();
   if (!planCode || !key) return;
   const stateKey = planFlagStateKey(planCode, key);
+  // A plan-wide flag change affects every tenant on the plan — confirm before saving
+  // (collected before the loading state, so the Save button doesn't spin during the dialog).
+  const ok = await confirm({
+    title: t("adminConsole.savePlanFeatureFlagConfirmTitle", { plan: planCode.toUpperCase() }),
+    body: t("adminConsole.savePlanFeatureFlagConfirmBody", { plan: planCode.toUpperCase(), key }),
+    confirmLabel: t("adminConsole.saveFlag"),
+  });
+  if (!ok) return;
   // Clear any previous validation error for this flag before re-attempting.
   if (planFlagErrors.value[stateKey]) {
     const nextErrors = { ...planFlagErrors.value };
@@ -1803,6 +1811,15 @@ const applyTenantLifecycle = async (tenant, action) => {
     });
     if (value === null) return;
     reason = value;
+  } else if (action === "reactivate") {
+    // Reactivate has no reason prompt, but it's still a lifecycle change — confirm it
+    // (mirrors the suspend/cancel gates) instead of firing on a single click.
+    const ok = await confirm({
+      title: t("adminConsole.tenantReactivateConfirmTitle", { name: tenant.name || tenant.slug }),
+      body: t("adminConsole.tenantReactivateConfirmBody", { name: tenant.name || tenant.slug }),
+      confirmLabel: t("adminConsole.reactivate"),
+    });
+    if (!ok) return;
   }
 
   tenantLifecycleLoading.value = { ...tenantLifecycleLoading.value, [tenant.id]: true };
