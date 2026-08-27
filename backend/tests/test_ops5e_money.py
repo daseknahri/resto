@@ -3,7 +3,8 @@
 Covers the OPS-5e money-path cluster:
 
   A. Driver cash-out brute-force lockout (accounts/driver_service.py):
-       1. After N failed confirms (not_found / expired) the actor is locked out.
+       1. After N failed confirms (wrong code / not_found) the actor is locked out.
+          A well-formed but EXPIRED code is NOT a wrong-code guess and must NOT count.
        2. A legit first-try confirm never increments the counter and resets it.
        3. Both owner cash-out endpoints wire DriverCashoutConfirmThrottle.
 

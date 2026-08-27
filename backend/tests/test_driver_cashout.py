@@ -10,6 +10,7 @@ from django.test import SimpleTestCase
 
 from accounts.driver_service import (
     create_cashout_request, confirm_cashout, CashoutError, CASHOUT_MIN,
+    _cashout_fail_cache_key,
 )
 
 
@@ -117,3 +118,107 @@ class ConfirmCashoutTests(SimpleTestCase):
         self.assertEqual(req.status, self.m["dcr"].Status.PAID)  # marked paid
         self.assertEqual(req.tenant_id, 3)
         req.save.assert_called_once()
+
+
+class _RollbackAtomic:
+    """A ``transaction.atomic()`` test double that models rollback-on-exception.
+
+    ``db`` is a mutable dict the ``req.save()`` side-effect writes into. On enter we
+    snapshot it; if the block exits via an exception we RESTORE the snapshot (rollback),
+    and if it exits cleanly we KEEP the writes (commit). This lets a no-DB unit test
+    observe whether the EXPIRED status write actually survives (the fix) or is discarded
+    by a raise-inside-atomic (the bug)."""
+
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        self._snapshot = dict(self.db)
+        return None
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            self.db.clear()
+            self.db.update(self._snapshot)
+        return False  # never suppress the exception
+
+
+class ConfirmCashoutExpiryTests(SimpleTestCase):
+    """Bug: an EXPIRED cash-out code marked its status inside the atomic block that then
+    raised, so the EXPIRED write was ROLLED BACK (row stayed PENDING), and it was counted
+    as a brute-force failure — which can lock out an honest driver/restaurant whose valid
+    code merely lapsed. Fix: persist EXPIRED durably (own transaction, after the block) and
+    do NOT record a failure for a well-formed-but-expired code."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)
+        # `db` is the simulated persisted row state; req.save() writes req.status into it.
+        self.db = {"status": "pending"}
+        self._p = {
+            "dcr": patch("accounts.models.DriverCashoutRequest"),
+            "debit": patch("accounts.wallet_service.debit_wallet"),
+            "credit": patch("accounts.wallet_service.credit_tenant_float"),
+            # atomic returns a fresh rollback-modelling CM per call, all sharing self.db.
+            "atomic": patch(
+                "django.db.transaction.atomic",
+                side_effect=lambda *a, **k: _RollbackAtomic(self.db),
+            ),
+        }
+        self.m = {k: v.start() for k, v in self._p.items()}
+
+    def tearDown(self):
+        for v in self._p.values():
+            v.stop()
+
+    def _expired_req(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        req = SimpleNamespace(
+            id=7, driver_id=5, amount=Decimal("120.00"), code="123456",
+            status="pending", expires_at=timezone.now() - timedelta(minutes=5),
+            currency="MAD",
+        )
+
+        def _save(update_fields=None):
+            # Model a real save: commit the current in-memory status to the "row".
+            self.db["status"] = req.status
+
+        req.save = MagicMock(side_effect=_save)
+        return req
+
+    def test_expired_code_persists_expired_and_does_not_record_failure(self):
+        req = self._expired_req()
+        (self.m["dcr"].objects.select_for_update
+            .return_value.filter.return_value.first.return_value) = req
+
+        with self.assertRaises(CashoutError) as ctx:
+            confirm_cashout("123456", tenant_id=3, actor_user_id=8)
+
+        # Caller still sees the expired signal.
+        self.assertEqual(ctx.exception.code, "expired")
+        # The EXPIRED transition is DURABLE — it survived the block instead of rolling back.
+        self.assertIs(self.db["status"], self.m["dcr"].Status.EXPIRED)
+        self.assertIs(req.status, self.m["dcr"].Status.EXPIRED)
+        req.save.assert_called_once()
+        # No money moved on an expired code.
+        self.m["debit"].assert_not_called()
+        self.m["credit"].assert_not_called()
+        # A well-formed-but-expired code is NOT a wrong-code guess: no brute-force failure.
+        fail_key = _cashout_fail_cache_key(actor_user_id=8, tenant_id=3)
+        from django.core.cache import cache
+        self.assertFalse(cache.get(fail_key))
+
+    def test_wrong_code_still_records_failure(self):
+        """Control: a genuinely wrong code (no pending match) DOES count as a failure."""
+        (self.m["dcr"].objects.select_for_update
+            .return_value.filter.return_value.first.return_value) = None
+
+        with self.assertRaises(CashoutError) as ctx:
+            confirm_cashout("000000", tenant_id=3, actor_user_id=8)
+
+        self.assertEqual(ctx.exception.code, "not_found")
+        fail_key = _cashout_fail_cache_key(actor_user_id=8, tenant_id=3)
+        from django.core.cache import cache
+        self.assertEqual(cache.get(fail_key), 1)

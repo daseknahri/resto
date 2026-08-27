@@ -741,6 +741,16 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push",
+            event="package.offer" if is_package else "ride.offer",
+            status="sent" if sent else "failed",
+            recipient=f"{sent}/{len(subs)} drivers",
+        )
+    except Exception:
+        pass
     return sent
 
 
@@ -789,6 +799,15 @@ def notify_rider_sync(rider_id, event) -> int:
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event=f"ride.{event}",
+            status="sent" if sent else "failed",
+            recipient=f"rider:{rider_id}",
+        )
+    except Exception:
+        pass
     return sent
 
 
