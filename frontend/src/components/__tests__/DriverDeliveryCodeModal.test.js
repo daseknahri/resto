@@ -61,6 +61,18 @@ describe("DriverDeliveryCodeModal", () => {
     expect(w.emitted("submit")).toHaveLength(2);
   });
 
+  it("does not emit submit on Enter while a submit is already in flight (double-submit guard)", async () => {
+    const w = mountIt({ codeInput: "123456", submitting: true });
+    await w.find('input[inputmode="numeric"]').trigger("keydown.enter");
+    expect(w.emitted("submit")).toBeFalsy();
+  });
+
+  it("does not emit submit on Enter with neither a code nor a photo", async () => {
+    const w = mountIt({ codeInput: "", submitting: false });
+    await w.find('input[inputmode="numeric"]').trigger("keydown.enter");
+    expect(w.emitted("submit")).toBeFalsy();
+  });
+
   it("shows the error alert when codeError is set", () => {
     expect(mountIt({ codeError: "bad code" }).find('[role="alert"]').text()).toContain("bad code");
     expect(mountIt({ codeError: "" }).find('[role="alert"]').exists()).toBe(false);
