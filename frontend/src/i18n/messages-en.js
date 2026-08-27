@@ -5272,6 +5272,7 @@ zReport: {
   closeDrawerSuccess: "End of Day — drawer closed.",
   closeDrawerNoSession: "No open drawer session.",
   exportFailed: "CSV export failed.",
+  drawerLoadFailed: "Couldn't load cash-drawer status — retry to see the close-shift prompt.",
   retry: "Retry",
   serviceDay: "Service day",
   cutoverHour: "Cutover at {h}:00",

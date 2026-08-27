@@ -5278,6 +5278,7 @@ zReport: {
   closeDrawerSuccess: "Fin de journée — caisse clôturée.",
   closeDrawerNoSession: "Aucune session de caisse ouverte.",
   exportFailed: "Echec de l'export CSV.",
+  drawerLoadFailed: "Impossible de charger l'etat de la caisse - reessayez pour afficher la cloture de service.",
   retry: "Reessayer",
   serviceDay: "Journee de service",
   cutoverHour: "Bascule a {h}:00",
