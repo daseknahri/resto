@@ -107,6 +107,19 @@
       />
     </div>
 
+    <!-- Error — distinct from the empty state so a failed load isn't mistaken for "no ratings" -->
+    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t("ownerRatings.fetchError") }}</p>
+      <button
+        type="button"
+        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+        @click="fetchRatings(true)"
+      >{{ t("common.retry") }}</button>
+    </div>
+
     <!-- Empty -->
     <div v-else-if="!ratings.length" class="ui-empty-state ui-reveal py-12 text-center">
       <AppIcon name="star" class="mx-auto mb-3 h-10 w-10 text-slate-700" aria-hidden="true" />
@@ -258,6 +271,7 @@ const RATINGS_TTL_MS = 5 * 60 * 1000; // 5 min
 const ratings = ref([]);
 const loading = ref(false);
 const updating = ref(false); // silently revalidating stale cache
+const fetchError = ref(false); // first-load failure (no data to show)
 const exporting = ref(false);
 const activeScore = ref("all");
 
@@ -393,13 +407,23 @@ const fetchRatings = async (force = false) => {
   } else {
     loading.value = true;
   }
+  fetchError.value = false;
   try {
     const res = await api.get("/owner/ratings/");
     const data = res.data?.ratings ?? res.data ?? [];
     ratings.value = data;
     writeCache(RATINGS_CACHE_KEY, data);
   } catch {
-    if (!cached) toast.show(t("ownerRatings.fetchError"), "error");
+    // First-load failure (nothing on screen) shows a dedicated error state with
+    // Retry — otherwise it's indistinguishable from a genuine zero-ratings
+    // restaurant. When ratings are already displayed (a failed manual/stale
+    // refresh) keep them and only toast on an explicit refresh, so we don't wipe
+    // good data off the screen.
+    if (!ratings.value.length) {
+      fetchError.value = true;
+    } else if (force) {
+      toast.show(t("ownerRatings.fetchError"), "error");
+    }
   } finally {
     loading.value = false;
     updating.value = false;

@@ -198,7 +198,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, computed } from 'vue';
+import { onMounted, reactive, ref, computed, watch } from 'vue';
 import OwnerFlashSaleOptInCard from '../components/OwnerFlashSaleOptInCard.vue';
 import OwnerHappyHourFormDrawer from '../components/OwnerHappyHourFormDrawer.vue';
 import OwnerPromotionFormDrawer from '../components/OwnerPromotionFormDrawer.vue';
@@ -573,6 +573,31 @@ const referralForm = reactive({
 });
 const referralSaving = ref(false);
 const referralSaveError = ref('');
+
+// Re-hydrate the win-back + referral forms once tenant.meta finishes loading.
+// This page is excluded from <KeepAlive> and the `owner-promotions` route carries
+// no capability/order-features meta, so its router guard never awaits fetchMeta():
+// setup() can run before App.vue's un-awaited tenant.fetchMeta() populates
+// tenant.meta. In that window the synchronous seeds above fall back to defaults,
+// and a save would overwrite live win-back/referral config with those defaults.
+// Hydrate from the profile the first time it becomes available (immediate covers a
+// warm cache); the one-shot guard means a later background revalidation can't
+// clobber the owner's unsaved edits.
+let promoFormsHydrated = false;
+watch(
+  () => tenant.meta,
+  (m) => {
+    const profile = m?.profile;
+    if (!profile || promoFormsHydrated) return;
+    promoFormsHydrated = true;
+    winbackForm.enabled = profile.winback_enabled ?? false;
+    winbackForm.inactive_weeks = profile.winback_inactive_weeks ?? 4;
+    winbackForm.message = profile.winback_message ?? '';
+    referralForm.enabled = profile.referral_enabled ?? false;
+    referralForm.reward_points = profile.referral_reward_points ?? 100;
+  },
+  { immediate: true },
+);
 
 const saveReferral = async () => {
   referralSaveError.value = '';
