@@ -40,7 +40,7 @@
         <span v-if="promo.active_from || promo.active_until">
           {{ promo.active_from || '∞' }} → {{ promo.active_until || '∞' }}
         </span>
-        <span>{{ t('ownerPromotions.useCount_other', { count: promo.use_count }) }}</span>
+        <span>{{ t(promo.use_count === 1 ? 'ownerPromotions.useCount_one' : 'ownerPromotions.useCount_other', { count: promo.use_count }) }}</span>
       </div>
     </div>
     <!-- Actions -->

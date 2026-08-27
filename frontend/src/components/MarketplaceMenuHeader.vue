@@ -31,7 +31,7 @@
             <!-- Rating chip -->
             <span v-if="restaurant.rating_average" class="ui-chip flex items-center gap-0.5 text-amber-400">
               <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current shrink-0" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
-              <span class="tabular-nums">{{ restaurant.rating_average }}</span>
+              <span class="tabular-nums">{{ Number(restaurant.rating_average).toFixed(1) }}</span>
               <span class="text-slate-500 tabular-nums">({{ restaurant.rating_count }})</span>
             </span>
             <!-- Pre-order prep ETA chip ('Ready in ~X–Y min') -->
