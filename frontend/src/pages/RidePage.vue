@@ -265,7 +265,7 @@
           <p class="flex-1 text-sm text-amber-200">{{ t('ridePage.noDriverFound') }}</p>
           <button
             type="button"
-            class="shrink-0 text-amber-400 hover:text-amber-300"
+            class="ui-tap-expand inline-flex shrink-0 items-center justify-center text-amber-400 hover:text-amber-300"
             :aria-label="t('common.close')"
             @click="noDriverFound = false"
           >
@@ -283,7 +283,7 @@
           <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
           <button
             type="button"
-            class="shrink-0 text-red-400 hover:text-red-300"
+            class="ui-tap-expand inline-flex shrink-0 items-center justify-center text-red-400 hover:text-red-300"
             :aria-label="t('common.close')"
             @click="errorMsg = ''"
           >
@@ -323,7 +323,7 @@
             @click="useMyLocation"
           >
             <AppIcon name="location" class="h-4 w-4 shrink-0 text-[var(--color-secondary)]" aria-hidden="true" />
-            <span class="flex-1 text-left text-sm">{{ locating ? t('common.loading') : t('ridePage.useMyLocation') }}</span>
+            <span class="flex-1 text-start text-sm">{{ locating ? t('common.loading') : t('ridePage.useMyLocation') }}</span>
           </button>
           <input
             v-model="pickupAddress"
@@ -444,7 +444,7 @@
             </div>
 
             <p
-              v-if="walletInsufficient && paymentMethod === 'wallet'"
+              v-if="walletInsufficient"
               role="alert"
               class="flex items-center gap-1.5 text-xs text-amber-300"
             >
