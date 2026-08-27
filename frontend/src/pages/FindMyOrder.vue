@@ -163,6 +163,7 @@ const STATUS_LABEL = {
   out_for_delivery: () => t("orderStatus.stepOutForDelivery"),
   completed: () => t("orderStatus.statusCompleted"),
   cancelled: () => t("orderStatus.statusCancelled"),
+  scheduled: () => t("orderStatus.statusScheduled"),
 };
 const statusLabel = (s) => STATUS_LABEL[s]?.() ?? s;
 
@@ -174,6 +175,7 @@ const STATUS_CLASS = {
   out_for_delivery: "bg-indigo-500/20 text-indigo-300",
   completed: "bg-slate-700 text-slate-400",
   cancelled: "bg-red-500/20 text-red-300",
+  scheduled: "bg-violet-500/20 text-violet-300",
 };
 const statusClass = (s) => STATUS_CLASS[s] ?? "bg-slate-700 text-slate-400";
 
