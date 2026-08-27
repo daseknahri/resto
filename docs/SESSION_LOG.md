@@ -12,6 +12,48 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-27 — super-app hardening sweep (118-agent audit → ~29 CI-gated fix PRs)
+
+**Result:** `main` @ `9685363`, green. A full read-only audit (`superapp-hardening-sweep`, 118 agents:
+22 finders × every lens across all four surfaces, each finding adversarially verified against the real
+code) produced **94 verified findings** (backlog: [`HARDENING_SWEEP_2026-08-23.md`](HARDENING_SWEEP_2026-08-23.md),
+PR #242). The **autonomous-safe** findings were then fixed in six delegate-and-gate waves — worktree-isolated
+agents partitioned by disjoint files, each PR individually CI-gated + merged (money/security diffs reviewed
+by hand). Only the LOW `MAD`-currency display cluster (7 files, single-MAD-correct today, overlaps the
+owner-gated mixed-currency work) was deliberately deferred; the 12 owner-decision findings are left for the
+owner.
+
+**What shipped (by theme):**
+- **Money / concurrency (backend):** loyalty birthday/first-order double-grant on direct checkout (#246),
+  comp double-tap double-decrement (#246), no-show pay to a since-revoked driver (#246), marketplace
+  promo-cap+loyalty overcharge race (#245), admin wallet-bonus double-credit on no-key retry (#245),
+  negative delivery-fee/payout guard (#245), ride-payout approval re-check (#243), durable EXPIRED cash-out
+  that no longer counts as a brute-force failure (#273).
+- **Security / authz:** owner post-login open-redirect via `next` (#244), ProfileView write guard (#243).
+- **Correctness:** marketplace dish-option composite cart key + checkout-drawer line targeting (#248, #256),
+  rides-sweep re-pool dispatch-clock reset + deferred package tracking SMS (#255), Cart delivery-min no
+  longer blocking pickup/dine-in (#249), order-poll in-flight guard (#269), driver code-submit
+  double-submit guards (#269, #271), OwnerPromotions late-meta form hydration (#259), CustomerAccount
+  birthday-save wrong-field wipe (#257), completed-order stale ETA gate (#261), service-worker per-push
+  notification tags (#262).
+- **UX / error-handling:** marketplace failed-delivery banner parity (#247), waiter-store retry false
+  "all caught up" (#251), driver offer-modal error visibility (#252), Z-report drawer + kitchen offline
+  silent failures (#258), ratings fetch-error state (#259), recipient-track poll banner (#264), auth
+  OTP-length + confirm-password (#260), stale-customer-session redirect fix (#257), destructive-action
+  confirmations for 86-all / tenant-reactivate / plan-flag / car-doc-reject / ride-fare (#263, #270),
+  owner analytics clickable KPI + notif "all-time"/cap labels + cart subtotal reconciliation (#272),
+  ride/rider push NotificationLog (#273).
+- **a11y / i18n:** owner light-theme badge contrast (#250), 44px touch targets across review/driver-rating
+  stars, kitchen pills, cart/waiter/ride controls (#266, #267, #268), modal close-button names, valid
+  interactive nesting, form `aria-describedby`, recipient-track live region (#264, #268), RTL logical
+  properties (#257, #266), untranslated "scheduled" + promo pluralization + rating format (#265).
+- **Launch-prep (earlier same session):** HSTS emitted from nginx on static/SPA responses (#241).
+
+**Remaining from the sweep:** the deferred LOW `MAD`-currency display cluster, plus 12 owner-decision
+findings (product/policy calls) catalogued in the backlog doc. Not started autonomously.
+
+---
+
 ## 2026-08-17 — §4.F hardening-decisions closure (8 of 9 owner-flagged items shipped)
 
 **Result:** `main` @ `42f37f9`, green (all CI jobs pass). The 9 owner-decision items the 2026-08-16 gap
