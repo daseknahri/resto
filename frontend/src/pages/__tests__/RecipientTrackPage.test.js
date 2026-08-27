@@ -110,4 +110,52 @@ describe("RecipientTrackPage", () => {
     await flushPromises();
     expect(w.text()).toContain("recipientTrack.notFound");
   });
+
+  it("surfaces the 'updates paused' banner after 2+ consecutive background poll failures", async () => {
+    vi.useFakeTimers();
+    try {
+      getMock.mockResolvedValue({ data: payload({ status: "searching" }) });
+      const w = mount(RecipientTrackPage);
+      await flushPromises(); // initial load ok → polling started, keeps last good state
+      expect(w.text()).not.toContain("orderStatus.pollFailed");
+
+      // Background polls now fail transiently (5xx) — the last good state is retained.
+      getMock.mockRejectedValue({ response: { status: 500 } });
+      await vi.advanceTimersByTimeAsync(8000); // poll #1 fails → pollFailures = 1 (no banner)
+      expect(w.text()).not.toContain("orderStatus.pollFailed");
+      await vi.advanceTimersByTimeAsync(8000); // poll #2 fails → pollFailures = 2 (banner)
+      await flushPromises();
+
+      expect(w.text()).toContain("orderStatus.pollFailed");
+      expect(w.text()).toContain("common.retry");
+
+      // A successful manual/background refresh clears the counter and hides the banner.
+      getMock.mockResolvedValue({ data: payload({ status: "searching" }) });
+      await vi.advanceTimersByTimeAsync(8000);
+      await flushPromises();
+      expect(w.text()).not.toContain("orderStatus.pollFailed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("announces status changes in an sr-only live region", async () => {
+    vi.useFakeTimers();
+    try {
+      getMock.mockResolvedValue({ data: payload({ status: "searching" }) });
+      const w = mount(RecipientTrackPage);
+      await flushPromises();
+
+      const live = w.find('[role="status"][aria-live="polite"]');
+      expect(live.exists()).toBe(true);
+
+      // Status transitions to accepted on the next poll → the live region updates.
+      getMock.mockResolvedValue({ data: payload({ status: "accepted" }) });
+      await vi.advanceTimersByTimeAsync(8000);
+      await flushPromises();
+      expect(live.text()).toContain("recipientTrack.statusAccepted");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
