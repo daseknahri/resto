@@ -57,6 +57,7 @@
               required
               autocomplete="name"
               :aria-invalid="errors.name ? 'true' : undefined"
+              :aria-describedby="errors.name ? 'lead-capture-name-error' : undefined"
               @input="clearError('name')"
             />
             <p v-if="errors.name" id="lead-capture-name-error" class="text-xs text-red-300" role="alert">{{ errors.name }}</p>
@@ -72,6 +73,7 @@
               inputmode="email"
               spellcheck="false"
               :aria-invalid="errors.email ? 'true' : undefined"
+              :aria-describedby="errors.email ? 'lead-capture-email-error' : undefined"
               @input="clearError('email')"
             />
             <p v-if="errors.email" id="lead-capture-email-error" class="text-xs text-red-300" role="alert">{{ errors.email }}</p>
@@ -87,6 +89,7 @@
               autocomplete="tel"
               inputmode="tel"
               :aria-invalid="errors.phone ? 'true' : undefined"
+              :aria-describedby="errors.phone ? 'lead-capture-phone-error' : undefined"
               @input="clearError('phone')"
             />
             <p v-if="errors.phone" id="lead-capture-phone-error" class="text-xs text-red-300" role="alert">{{ errors.phone }}</p>
@@ -99,6 +102,7 @@
               :class="errors.plan_code ? 'border-red-400' : 'border-slate-700'"
               required
               :aria-invalid="errors.plan_code ? 'true' : undefined"
+              :aria-describedby="errors.plan_code ? 'lead-capture-plan-error' : undefined"
               aria-required="true"
               @change="clearError('plan_code')"
             >
@@ -119,6 +123,7 @@
             :class="errors.notes ? 'border-red-400' : 'border-slate-700'"
             :placeholder="t('leadCapture.notesPlaceholder')"
             :aria-invalid="errors.notes ? 'true' : undefined"
+            :aria-describedby="errors.notes ? 'lead-capture-notes-error' : undefined"
             @input="clearError('notes')"
           ></textarea>
           <p v-if="errors.notes" id="lead-capture-notes-error" class="text-xs text-red-300" role="alert">{{ errors.notes }}</p>

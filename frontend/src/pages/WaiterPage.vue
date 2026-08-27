@@ -753,7 +753,7 @@
         >
           <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
             <h2 class="text-sm font-bold text-white">{{ t('waiterPage.transferTitle') }}</h2>
-            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" @click="closeTransfer">✕</button>
+            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" :aria-label="t('common.close')" @click="closeTransfer">✕</button>
           </div>
           <div class="px-4 py-3 space-y-3 max-h-[60vh] overflow-y-auto">
             <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.transferSelectItems') }}</p>
@@ -822,7 +822,7 @@
         >
           <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
             <h2 class="text-sm font-bold text-white">{{ t('waiterPage.mergeTitle') }}</h2>
-            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" @click="closeMerge">✕</button>
+            <button class="text-slate-400 hover:text-slate-200 transition-colors focus-visible:outline-none" :aria-label="t('common.close')" @click="closeMerge">✕</button>
           </div>
           <div class="px-4 py-4 space-y-3">
             <div class="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-400">
@@ -935,7 +935,7 @@
             <button
               v-for="key in VOID_PRESETS"
               :key="key"
-              class="ui-press rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+              class="ui-press ui-tap-expand rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
               :class="voidPickedPreset === key
                 ? 'border-red-500/60 bg-red-500/15 text-red-300'
                 : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
@@ -1000,7 +1000,7 @@
             <button
               v-for="key in COMP_PRESETS"
               :key="key"
-              class="ui-press rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
+              class="ui-press ui-tap-expand rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60"
               :class="compPickedPreset === key
                 ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
                 : 'border-slate-600/70 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100'"
