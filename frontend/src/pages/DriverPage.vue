@@ -1528,6 +1528,9 @@ const _afterDelivered = async (data, job) => {
 };
 
 const submitDeliveryCode = async () => {
+  // Defense-in-depth: block re-entry (e.g. an Enter keypress) while a submit is in flight,
+  // mirroring the `:submitting="codeSubmitting"` state that disables the modal's submit button.
+  if (codeSubmitting.value) return;
   const code = codeInput.value.trim();
   // Must have either a code or a proof photo.
   if (!code && !proofPhotoFile.value) {
@@ -1943,6 +1946,10 @@ const advanceRide = async (rideId, status) => {
 const submitPackageCode = async (rideId) => {
   const code = packageCodeInput.value.trim();
   if (!code) return;
+  // Guard against a double-submit: the `@keydown.enter` handler can re-fire this while the
+  // click-path submit is still in flight (the button is disabled, but Enter bypasses that),
+  // so gate on the same `busy` ref that disables the submit button.
+  if (busy.value) return;
   packageCodeError.value = '';
   busy.value = true;
   try {
