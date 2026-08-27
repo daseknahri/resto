@@ -74,7 +74,7 @@
                 v-for="s in 5"
                 :key="s"
                 type="button"
-                class="select-none text-[26px] leading-none transition-all active:scale-90"
+                class="ui-tap-expand select-none text-[26px] leading-none transition-all active:scale-90"
                 :class="s <= (reviewHover[order.order_number] || getDraft(order.order_number).score)
                   ? 'text-amber-400'
                   : 'text-slate-700 hover:text-slate-500'"
