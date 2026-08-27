@@ -781,6 +781,26 @@ const stopClock = () => {
 // pause while the page is parked behind another. onActivated fires right after
 // onMounted on first mount, so the live loop still starts on initial load.
 onMounted(async () => {
+  // Register toast callbacks so the (shared) waiter store surfaces permanently
+  // dropped offline status updates here too — kitchen staff advance orders
+  // offline via the same queue, and without this wiring a permanently-dropped
+  // op (400/403/404/409/422) would vanish with no feedback. Mirrors WaiterPage.
+  waiter.setFlushCallbacks({
+    onPermError: (_entry, err) => {
+      const status = err?.response?.status;
+      if (status === 409) {
+        // 409 = conflict (another device already advanced this order).
+        // The store already refetches. Show the conflict notice, not a generic error.
+        toast.show(t('waiterPage.queueConflictRefetched'), 'info', 3500);
+      } else {
+        toast.show(t('waiterPage.queueOpDropped'), 'error', 4000);
+      }
+    },
+    onConflict: () => {
+      // Already handled in onPermError for 409; no extra action needed here.
+    },
+  });
+
   waiter.setupConnectivityListeners();
   document.addEventListener("fullscreenchange", onFullscreenChange);
   document.addEventListener("visibilitychange", onKitchenPageVisible);

@@ -92,6 +92,25 @@
       </div>
     </section>
 
+    <!-- Drawer fetch failed — surfaced distinctly so a failed fetch is never
+         mistaken for "no open shift" (which would silently hide close-shift). -->
+    <div
+      v-if="drawerError"
+      role="alert"
+      class="mx-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 print:hidden"
+    >
+      <span>{{ t("zReport.drawerLoadFailed") }}</span>
+      <button
+        type="button"
+        class="ui-btn-outline ui-press inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+        :aria-label="t('zReport.retry')"
+        @click="fetchDrawerSessions"
+      >
+        <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
+        {{ t("zReport.retry") }}
+      </button>
+    </div>
+
     <!-- Error -->
     <div v-if="error" role="alert" class="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
       {{ error }}
@@ -466,6 +485,9 @@ const laborExpanded = ref(true);
 
 // Drawer sessions for the selected service day (additive — empty = no card shown)
 const drawerSessions = ref([]);
+// True only when the drawer fetch itself failed (distinct from a legitimately
+// empty result), so a failed fetch never silently hides the close-shift prompt.
+const drawerError = ref(false);
 
 // Close-shift inline state
 const closingDrawer = ref(false);
@@ -542,15 +564,21 @@ const fmtWindowTime = (iso) => {
   }
 };
 
-// Fetch drawer sessions for the selected service day (default-preserving: empty = hidden)
+// Fetch drawer sessions for the selected service day. A network/API failure must
+// be tracked separately from a genuinely empty result: defaulting silently to []
+// would make `openDrawerSession` null and hide the amber close-shift prompt, so a
+// live shift could never be closed. On failure we surface a distinct inline error
+// + Retry instead (drawerError) rather than pretending there are no sessions.
 const fetchDrawerSessions = async () => {
+  drawerError.value = false;
   try {
     const params = {};
     if (selectedDate.value) params.date = selectedDate.value;
-    const { data } = await api.get("/owner/drawer/history/", { params, timeout: 5000 }).catch(() => null);
+    const { data } = await api.get("/owner/drawer/history/", { params, timeout: 5000 });
     drawerSessions.value = data?.sessions ?? [];
   } catch {
     drawerSessions.value = [];
+    drawerError.value = true;
   }
 };
 
