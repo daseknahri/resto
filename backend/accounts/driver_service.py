@@ -282,6 +282,7 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
         except Exception:
             pass
 
+    expired_req = None
     with transaction.atomic():
         req = (
             DriverCashoutRequest.objects.select_for_update()
@@ -292,50 +293,62 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             _record_failure()
             raise CashoutError("No pending cash-out for that code", code="not_found")
         if req.expires_at <= now:
-            _record_failure()
+            # A well-formed but EXPIRED code is NOT a wrong-code guess — do NOT count it
+            # against the per-actor brute-force lockout (that could lock out an honest
+            # driver/restaurant whose valid code simply lapsed). Mark the transition here
+            # under the row lock, but DON'T raise inside this atomic block: raising would
+            # roll the EXPIRED write back and leave the row PENDING. Flag it and persist
+            # the transition DURABLY in its own transaction after the block exits.
             req.status = DriverCashoutRequest.Status.EXPIRED
             req.resolved_at = now
-            req.save(update_fields=["status", "resolved_at"])
-            raise CashoutError("That cash-out code has expired", code="expired")
-
-        wtx = debit_wallet(
-            req.driver_id, req.amount,
-            tx_type=WalletTransaction.Type.CASHOUT,
-            idempotency_key=f"cashout:{req.id}",
-            reference=f"cashout:{req.id}",
-            tenant_id=tenant_id,
-            note="Driver cash-out",
-            # Cash-out is a driver wallet op, not spend at this tenant's vertical —
-            # tag DRIVER explicitly so auto-derive (tenant_id) doesn't mislabel it.
-            vertical=DRIVER,
-        )
-        try:
-            credit_tenant_float(
-                tenant_id, req.amount,
-                actor_user_id=actor_user_id,
-                idempotency_key=f"cashout:{req.id}:f",
+            expired_req = req
+        else:
+            wtx = debit_wallet(
+                req.driver_id, req.amount,
+                tx_type=WalletTransaction.Type.CASHOUT,
+                idempotency_key=f"cashout:{req.id}",
                 reference=f"cashout:{req.id}",
-                note="Driver cash-out reimbursement",
+                tenant_id=tenant_id,
+                note="Driver cash-out",
+                # Cash-out is a driver wallet op, not spend at this tenant's vertical —
+                # tag DRIVER explicitly so auto-derive (tenant_id) doesn't mislabel it.
+                vertical=DRIVER,
             )
-        except Exception:
-            # R15b: the driver wallet was already debited (wallet_service logged that leg);
-            # a failure crediting the tenant float here (e.g. InactiveTenant/WalletError)
-            # rolls back the whole atomic block but emitted NOTHING on the payments channel.
-            # Log the float-credit-leg failure with attributable ids — reuse _ref_kind so
-            # only the "cashout" namespace is recorded, NEVER the raw cash-out code — then
-            # re-raise so control flow / rollback is unchanged.
-            payments_logger.exception(
-                "cashout float-credit leg failed schema=%s driver_id=%s tenant_id=%s "
-                "request_id=%s ref_kind=%s",
-                _schema(), req.driver_id, tenant_id, req.id, _ref_kind(f"cashout:{code}"),
-            )
-            raise
-        req.status = DriverCashoutRequest.Status.PAID
-        req.tenant_id = tenant_id
-        req.actor_user_id = actor_user_id
-        req.wallet_tx_id = getattr(wtx, "id", None)
-        req.resolved_at = now
-        req.save(update_fields=["status", "tenant_id", "actor_user_id", "wallet_tx_id", "resolved_at"])
+            try:
+                credit_tenant_float(
+                    tenant_id, req.amount,
+                    actor_user_id=actor_user_id,
+                    idempotency_key=f"cashout:{req.id}:f",
+                    reference=f"cashout:{req.id}",
+                    note="Driver cash-out reimbursement",
+                )
+            except Exception:
+                # R15b: the driver wallet was already debited (wallet_service logged that leg);
+                # a failure crediting the tenant float here (e.g. InactiveTenant/WalletError)
+                # rolls back the whole atomic block but emitted NOTHING on the payments channel.
+                # Log the float-credit-leg failure with attributable ids — reuse _ref_kind so
+                # only the "cashout" namespace is recorded, NEVER the raw cash-out code — then
+                # re-raise so control flow / rollback is unchanged.
+                payments_logger.exception(
+                    "cashout float-credit leg failed schema=%s driver_id=%s tenant_id=%s "
+                    "request_id=%s ref_kind=%s",
+                    _schema(), req.driver_id, tenant_id, req.id, _ref_kind(f"cashout:{code}"),
+                )
+                raise
+            req.status = DriverCashoutRequest.Status.PAID
+            req.tenant_id = tenant_id
+            req.actor_user_id = actor_user_id
+            req.wallet_tx_id = getattr(wtx, "id", None)
+            req.resolved_at = now
+            req.save(update_fields=["status", "tenant_id", "actor_user_id", "wallet_tx_id", "resolved_at"])
+
+    if expired_req is not None:
+        # Commit the EXPIRED transition OUTSIDE the now-closed atomic block so it is durable
+        # (the block above raises nothing on this path, so it committed clean — but no status
+        # write happened inside it). Its own transaction guarantees the row leaves PENDING.
+        with transaction.atomic():
+            expired_req.save(update_fields=["status", "resolved_at"])
+        raise CashoutError("That cash-out code has expired", code="expired")
     # A successful confirm clears the actor's failed-attempt counter.
     try:
         cache.delete(fail_key)
