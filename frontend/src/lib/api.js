@@ -60,6 +60,28 @@ const api = axios.create({
 
 const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
 
+// Endpoints whose 401s must NOT trigger the global staff-login redirect. These are
+// either the auth flow itself or *customer*-authenticated (IsCustomer) endpoints —
+// a stale customer session there must be surfaced by the page (re-open the customer
+// sign-in modal), never by bouncing the whole SPA to the STAFF `/signin`.
+// `/rides/` is here because CustomerAccount's ride-history fetch (GET /rides/history/)
+// is IsCustomer and 401s on expiry like the other `/customer/` reads.
+export const AUTH_REDIRECT_EXEMPT_PATHS = [
+  "/session/",
+  "/signin/",
+  "/signout/",
+  "/forgot-password/",
+  "/reset-password/",
+  "/activate/",
+  "/customer/",
+  "/rides/",
+];
+
+export const isAuthRedirectExempt = (url) => {
+  const u = String(url || "");
+  return AUTH_REDIRECT_EXEMPT_PATHS.some((p) => u.includes(p));
+};
+
 const readCookie = (name) => {
   if (typeof document === "undefined") return "";
   const prefix = `${name}=`;
@@ -160,9 +182,7 @@ api.interceptors.response.use(
       }
     }
     if (error?.response?.status === 401 && typeof window !== "undefined") {
-      const url = String(error?.config?.url || "");
-      const authPaths = ["/session/", "/signin/", "/signout/", "/forgot-password/", "/reset-password/", "/activate/", "/customer/"];
-      const isAuthEndpoint = authPaths.some((p) => url.includes(p));
+      const isAuthEndpoint = isAuthRedirectExempt(error?.config?.url);
       if (!isAuthEndpoint) {
         const next = encodeURIComponent(window.location.pathname + window.location.search);
         // `expired=1` lets SignIn.vue show "session expired" instead of the generic description
