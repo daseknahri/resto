@@ -16,24 +16,40 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')));
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let payload = { title: 'New notification', body: '', url: '/owner/orders' };
+  // Default URL is the neutral app root, not an owner-only page: the same
+  // /sw.js serves owner, customer, and driver, so a url-less push must never
+  // mis-route a customer/driver to /owner/orders.
+  let payload = { title: 'New notification', body: '', url: '/' };
   try {
     payload = { ...payload, ...event.data.json() };
   } catch {
     payload.body = event.data.text();
   }
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: 'new-order',
-      renotify: true,
-      requireInteraction: false,
-      data: { url: payload.url || '/owner/orders' },
-    }),
-  );
+  const targetUrl = payload.url || '/';
+
+  const options = {
+    body: payload.body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    requireInteraction: false,
+    data: { url: targetUrl },
+  };
+
+  // Notifications that share a `tag` REPLACE each other, so a static tag made
+  // every distinct push overwrite the previous one — during a rush the owner
+  // saw only the latest order. Group ONLY when the backend explicitly opts in
+  // via `payload.tag`; otherwise OMIT the tag so each push stacks. We do not
+  // derive a tag from `payload.url`, because the backend sends the same url
+  // for genuinely distinct events (e.g. every new order → /owner/orders), so a
+  // url-derived tag would recreate the exact collapse this fixes. `renotify`
+  // is only valid alongside a `tag`.
+  if (typeof payload.tag === 'string' && payload.tag) {
+    options.tag = payload.tag;
+    options.renotify = true;
+  }
+
+  event.waitUntil(self.registration.showNotification(payload.title, options));
 });
 
 // ── Notification click ────────────────────────────────────────────────────────
