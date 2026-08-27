@@ -107,7 +107,7 @@
             </p>
             <button
               class="ui-btn-primary ui-touch-target w-full"
-              :disabled="verifying || otpCode.length < 4"
+              :disabled="verifying || otpCode.length !== 6"
               @click="verifyOtp"
             >
               {{ verifying ? t("customerAuth.verifying") : t("customerAuth.verify") }}
