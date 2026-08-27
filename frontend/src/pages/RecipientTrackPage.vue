@@ -1,6 +1,16 @@
 <template>
   <main class="min-h-screen bg-slate-950 px-4 py-6">
     <div class="mx-auto max-w-md">
+      <!-- Screen-reader live region: announces the status label only when it changes,
+           not on every poll tick that re-assigns the same track object. -->
+      <div
+        v-if="track"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        class="sr-only"
+      >{{ liveStatus }}</div>
+
       <h1 class="text-xl font-bold text-slate-100">{{ t('recipientTrack.title') }}</h1>
 
       <!-- Loading -->
@@ -27,6 +37,21 @@
       </div>
 
       <template v-else-if="track">
+        <!-- Poll-failure warning — shown after 2+ consecutive background refresh failures -->
+        <div
+          v-if="pollFailures > 1 && isLive"
+          role="alert"
+          class="mt-4 flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-amber-400"><path fill-rule="evenodd" d="M8.485 2.495c-.673-1.167-2.357-1.167-3.03 0L1.166 8.741C.473 9.938 1.324 11.5 2.712 11.5h10.576c1.388 0 2.239-1.562 1.546-2.759L8.485 2.495ZM8 5a.75.75 0 0 1 .75.75V8a.75.75 0 1 1-1.5 0V5.75A.75.75 0 0 1 8 5Zm0 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
+          <p class="flex-1 text-xs text-amber-300">{{ t('orderStatus.pollFailed') }}</p>
+          <button
+            type="button"
+            class="shrink-0 text-xs font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 focus-visible:outline-none"
+            @click="fetchTrack"
+          >{{ t('common.retry') }}</button>
+        </div>
+
         <p class="mt-1 text-sm text-slate-400">
           {{ introText }}
         </p>
@@ -114,6 +139,8 @@ const notFound = ref(false);
 // Non-404 first-load failure (5xx / network) — polling is gated on track.value so it
 // never starts here; surface a retryable error card instead of a permanently blank page.
 const loadError = ref(false);
+// Consecutive background-poll failures → surface the "updates paused" banner after 2+.
+const pollFailures = ref(0);
 let pollTimer = null;
 
 const TERMINAL = ['completed', 'cancelled'];
@@ -141,6 +168,13 @@ const statusLabel = computed(() => {
   return t(map[s] || 'recipientTrack.statusSearching');
 });
 
+// Only announce when the status label genuinely changes — not on every poll cycle that
+// re-assigns the same track object (which would otherwise re-trigger screen readers).
+const liveStatus = ref('');
+watch(statusLabel, (label) => {
+  if (label && label !== liveStatus.value) liveStatus.value = label;
+});
+
 const bannerClass = computed(() => {
   const s = track.value?.status;
   if (s === 'completed') return 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
@@ -164,16 +198,19 @@ const fetchTrack = async () => {
     track.value = res.data;
     notFound.value = false;
     loadError.value = false;
+    pollFailures.value = 0; // reset the consecutive-failure counter on success
   } catch (e) {
     if (e?.response?.status === 404) {
       notFound.value = true;
       track.value = null;
       stopPolling();
-    } else if (!track.value) {
-      // First load failed with nothing to show — Retry re-runs fetchTrack.
-      loadError.value = true;
+    } else {
+      // First load with nothing to show → retryable error card. With existing data this
+      // is a background-poll blip: keep the last good state and count it so we can warn
+      // the recipient (the "updates paused" banner) after 2+ consecutive failures.
+      if (!track.value) loadError.value = true;
+      pollFailures.value++;
     }
-    // transient (5xx/network) with existing data: keep the last good state, let polling retry
   } finally {
     loading.value = false;
   }
@@ -221,6 +258,10 @@ const renderTrackingMap = async () => {
   if (!hasDriverPos.value || !trackingMapEl.value) return;
   const L = await ensureLeaflet();
   const pos = [Number(track.value.driver_lat), Number(track.value.driver_lng)];
+  // A GPS gap flips hasDriverPos off (v-if tears the div down) then on (a fresh div is
+  // mounted). The cached map is still bound to the detached node, so updating it would
+  // paint nothing — rebuild it on the live element instead.
+  if (_trackMap && _trackMap.getContainer() !== trackingMapEl.value) destroyTrackingMap();
   if (!_trackMap) {
     _trackMap = L.map(trackingMapEl.value, { zoomControl: false, attributionControl: false }).setView(pos, 14);
     addTileLayer(L, _trackMap);
