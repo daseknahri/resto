@@ -7,7 +7,9 @@ stay live between driver polls:
 
 Rules (policy: re-dispatch, auto-cancel only on timeout, never touch in_progress):
   (d) SCHEDULED with scheduled_for <= now+10min: atomic select_for_update re-check,
-      flip to SEARCHING, set dispatched_at=now(), then kind-aware driver push.
+      flip to SEARCHING, set dispatched_at=now(), then kind-aware driver push. For
+      PACKAGE trips it also sends the recipient tracking-link SMS here (deferred from
+      create, which skips it for scheduled trips), mirroring the immediate-create path.
       This is evaluated FIRST so a just-released trip never hits rules (a)/(b).
   (a) SEARCHING > 3 min  → re-push (throttled, ~110s cache key so re-push fires at most
       once per sweep cycle).  push_new_ride_to_drivers branches on kind internally:
@@ -22,6 +24,9 @@ Rules (policy: re-dispatch, auto-cancel only on timeout, never touch in_progress
   (c) ACCEPTED or ARRIVED (pre-passenger; NEVER touch in_progress) whose driver
       is_driver_online=False OR driver_position_updated_at stale > 10 min →
       clear driver/accepted_at/arrived_at, back to SEARCHING + re-push pool.
+      Also resets dispatched_at=now() (like rule (d)) so the re-pooled trip gets a
+      fresh 3-min re-push / 15-min auto-cancel window instead of measuring from its
+      original dispatch time and being cancelled on the very next sweep.
       select_for_update + re-check inside atomic.
       Re-push in rule (c) also uses push_new_ride_to_drivers (kind-aware).
 """
@@ -34,7 +39,11 @@ from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import RideRequest
-from accounts.push import push_new_ride_to_drivers, push_ride_event_to_rider
+from accounts.push import (
+    push_new_ride_to_drivers,
+    push_recipient_track_sms,
+    push_ride_event_to_rider,
+)
 
 RELEASE_BEFORE = timedelta(minutes=10)   # release scheduled trips this far ahead
 REDISPATCH_AFTER = timedelta(minutes=3)
@@ -87,6 +96,15 @@ class Command(BaseCommand):
                 push_new_ride_to_drivers(r.id)
             except Exception:
                 pass
+            # Recipient tracking SMS for scheduled PACKAGE trips. Immediate packages get
+            # this at create; scheduled ones are deferred to here (their release moment)
+            # so the recipient's link goes out exactly when the trip enters the search
+            # pool. Best-effort, mirroring the immediate-create path.
+            if r.kind == RideRequest.Kind.PACKAGE:
+                try:
+                    push_recipient_track_sms(r.id, "dispatched")
+                except Exception:
+                    pass
             released_scheduled += 1
 
         # ── (a) Re-push unclaimed SEARCHING rides older than 3 min ────────────────
@@ -178,7 +196,13 @@ class Command(BaseCommand):
                 r.status = RideRequest.Status.SEARCHING
                 r.accepted_at = None
                 r.arrived_at = None
-                r.save(update_fields=["driver", "status", "accepted_at", "arrived_at"])
+                # Reset the dispatch clock so the re-pooled trip gets a fresh search
+                # window (rules a/b measure from dispatched_at) instead of being
+                # auto-cancelled on the next sweep against its original dispatch time.
+                r.dispatched_at = now
+                r.save(update_fields=[
+                    "driver", "status", "accepted_at", "arrived_at", "dispatched_at",
+                ])
 
             # Re-push to pool — best-effort, after commit (locked row's pk)
             try:
