@@ -451,6 +451,44 @@ class DriverRideStatusViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "bad_transition")
 
+    @patch("accounts.ride_views._serialize_ride",
+           return_value={"id": 1, "status": "searching"})
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_driver_abandon_resets_dispatch_clock(self, mock_cust_objs, mock_ride_objs,
+                                                   mock_tx, mock_tz, _throttle, _serial):
+        """Bug 1: a driver returning an accepted ride to the pool resets dispatched_at
+        (added to update_fields) so the sweep gives it a fresh 15-min search window
+        instead of auto-cancelling it against its original dispatch time."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        mock_cust_objs.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        ride = _make_ride(pk=1, status_val="accepted", driver=driver)
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        req = self._post(ride_id=1, data={"status": "searching"},
+                         session=_session(customer_id=2))
+        resp = self.view(req, ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ride.save.assert_called_once()
+        ufs = ride.save.call_args[1].get("update_fields", [])
+        self.assertIn("driver", ufs)
+        self.assertIn("status", ufs)
+        self.assertIn("accepted_at", ufs)
+        self.assertIn("arrived_at", ufs)
+        self.assertIn("dispatched_at", ufs)
+        self.assertEqual(ride.dispatched_at, now)
+        self.assertIsNone(ride.driver)
+
 
 # ── settle_ride idempotency key tests ─────────────────────────────────────────────
 
@@ -1556,6 +1594,10 @@ class SweepRideRequestsTests(SimpleTestCase):
         self.assertIn("status", ufs)
         self.assertIn("accepted_at", ufs)
         self.assertIn("arrived_at", ufs)
+        # Bug 1 regression: the dispatch clock is reset so the re-pooled trip gets a
+        # fresh search window instead of being auto-cancelled on the next sweep.
+        self.assertIn("dispatched_at", ufs)
+        self.assertEqual(ride_accepted.dispatched_at, now)
         self.assertEqual(ride_accepted.status, "searching")
         self.assertIsNone(ride_accepted.driver)
         mock_push_drivers.assert_called_once_with(ride_accepted.id)
@@ -1609,6 +1651,104 @@ class SweepRideRequestsTests(SimpleTestCase):
 
         mock_push_drivers.assert_not_called()
         mock_push_rider.assert_not_called()
+
+    # ── Rule (d): scheduled-trip release also sends recipient SMS for packages ────
+
+    def _run_release_scheduled(self, mock_tz, mock_tx, mock_rr, ride_kind):
+        """Drive one scheduled trip of the given kind through rule (d) release.
+
+        Only rule (d) yields a trip; rules (a)/(b)/(c) are empty. Returns the
+        released ride mock so the caller can assert on the push behaviour.
+        """
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        released = _make_ride(pk=7, status_val="scheduled", kind=ride_kind)
+
+        # (d) yields our scheduled trip; (a)/(b)/(c) empty
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([released]))
+        qs_a = MagicMock()
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        qs_b = MagicMock()
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_d   # rule (d): scheduled release
+            elif call_count[0] == 2:
+                return qs_a   # rule (a)
+            elif call_count[0] == 3:
+                return qs_b   # rule (b)
+            else:
+                return qs_c   # rule (c)
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        # select_for_update re-check inside atomic returns the locked scheduled trip
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = released
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+        mock_rr.Kind.PACKAGE = "package"
+
+        self._run_command()
+        return released, now
+
+    @override_settings(VERTICALS_ENABLED=frozenset({"courier"}))
+    @patch("accounts.verticals.vertical_for_ride_kind", return_value="courier")
+    @patch("accounts.management.commands.sweep_ride_requests.push_recipient_track_sms")
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_scheduled_package_release_sends_recipient_sms(
+        self, mock_tz, mock_tx, mock_rr, mock_push_drivers, mock_push_rider,
+        mock_track_sms, _vert,
+    ):
+        """Bug 2: releasing a scheduled PACKAGE trip sends the deferred recipient SMS."""
+        released, _now = self._run_release_scheduled(mock_tz, mock_tx, mock_rr, "package")
+
+        # Trip flipped to SEARCHING with a fresh dispatch clock, then both pushes fire.
+        released.save.assert_called_once()
+        ufs = released.save.call_args[1].get("update_fields", [])
+        self.assertIn("status", ufs)
+        self.assertIn("dispatched_at", ufs)
+        mock_push_drivers.assert_called_once_with(released.id)
+        mock_track_sms.assert_called_once_with(released.id, "dispatched")
+
+    @override_settings(VERTICALS_ENABLED=frozenset({"rides"}))
+    @patch("accounts.verticals.vertical_for_ride_kind", return_value="rides")
+    @patch("accounts.management.commands.sweep_ride_requests.push_recipient_track_sms")
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_scheduled_ride_release_sends_no_recipient_sms(
+        self, mock_tz, mock_tx, mock_rr, mock_push_drivers, mock_push_rider,
+        mock_track_sms, _vert,
+    ):
+        """A scheduled non-package RIDE gets the driver push but NO recipient SMS."""
+        released, _now = self._run_release_scheduled(mock_tz, mock_tx, mock_rr, "ride")
+
+        mock_push_drivers.assert_called_once_with(released.id)
+        mock_track_sms.assert_not_called()
 
 
 # ── GET /api/rides/history/ ───────────────────────────────────────────────────────

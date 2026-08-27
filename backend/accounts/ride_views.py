@@ -1033,7 +1033,13 @@ class DriverRideStatusView(APIView):
                 ride.status = RideRequest.Status.SEARCHING
                 ride.accepted_at = None
                 ride.arrived_at = None
-                ride.save(update_fields=["driver", "status", "accepted_at", "arrived_at"])
+                # Reset the dispatch clock (mirrors sweep rule (c)/(d)) so the re-pooled
+                # trip gets a fresh 3-min re-push / 15-min auto-cancel window instead of
+                # the sweep measuring from its original dispatch time and cancelling it.
+                ride.dispatched_at = now
+                ride.save(update_fields=[
+                    "driver", "status", "accepted_at", "arrived_at", "dispatched_at",
+                ])
                 return Response(_serialize_ride(ride))
 
             allowed = set(RideRequest.VALID_TRANSITIONS.get(ride.status, set()))
