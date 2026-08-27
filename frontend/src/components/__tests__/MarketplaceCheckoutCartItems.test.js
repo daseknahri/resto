@@ -1,8 +1,9 @@
 /**
  * Unit tests for MarketplaceCheckoutCartItems — the cart line-item list of the
  * Marketplace checkout drawer, a PRESENTATIONAL child (RISK FE-2). It renders each
- * cart line + a qty stepper and emits decrement/increment (by slug); the parent
- * keeps the cart + its mutation handlers.
+ * cart line + a qty stepper and emits decrement/increment carrying the tapped line's
+ * COMPOSITE KEY (`${slug}::${optionSig}`); the parent keeps the cart + its key-based
+ * mutation handlers.
  */
 import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
@@ -43,16 +44,36 @@ describe("MarketplaceCheckoutCartItems", () => {
     expect(w.find(".line-through").exists()).toBe(true);
   });
 
-  it("emits decrement with the slug from the − button", async () => {
+  it("emits decrement with the line's composite key from the − button", async () => {
     const w = mountIt();
-    // First article's first stepper button is the decrement.
+    // First article's first stepper button is the decrement. The burger line has no
+    // valid option ids, so its key resolves to `burger::`.
     await w.findAll("article")[0].findAll("button")[0].trigger("click");
-    expect(w.emitted("decrement")[0]).toEqual(["burger"]);
+    expect(w.emitted("decrement")[0]).toEqual(["burger::"]);
   });
 
-  it("emits increment with the slug from the ＋ button", async () => {
+  it("emits increment with the line's composite key from the ＋ button", async () => {
     const w = mountIt();
     await w.findAll("article")[0].findAll("button")[1].trigger("click");
-    expect(w.emitted("increment")[0]).toEqual(["burger"]);
+    expect(w.emitted("increment")[0]).toEqual(["burger::"]);
+  });
+
+  it("prefers an explicit line `key` field and steps the EXACT tapped line (two configs of one dish)", async () => {
+    // Two configurations of one dish coexist as separate lines, keyed by their
+    // composite key (PR #248). The stepper must target the row the user tapped, not
+    // the first line of that slug.
+    const twoConfigs = [
+      { key: "pizza::1", slug: "pizza", name: "Pizza", qty: 1, price: 80, unitPrice: 80, options: [{ id: 1, name: "Cheese" }] },
+      { key: "pizza::2", slug: "pizza", name: "Pizza", qty: 3, price: 80, unitPrice: 90, options: [{ id: 2, name: "Pepperoni" }] },
+    ];
+    const w = mountIt({ cart: twoConfigs });
+    const rows = w.findAll("article");
+    expect(rows).toHaveLength(2);
+    // Tap the SECOND row's increment → its composite key, not the first line's.
+    await rows[1].findAll("button")[1].trigger("click");
+    expect(w.emitted("increment")[0]).toEqual(["pizza::2"]);
+    // Tap the SECOND row's decrement → same line's key.
+    await rows[1].findAll("button")[0].trigger("click");
+    expect(w.emitted("decrement")[0]).toEqual(["pizza::2"]);
   });
 });
