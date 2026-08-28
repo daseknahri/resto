@@ -2618,6 +2618,52 @@ def _validate_option_group_selections(dish, option_ids):
     return None
 
 
+def _award_referral_reward(profile, linked_customer) -> None:
+    """Grant the referral reward on a referee's first order — to BOTH the referee and
+    the referrer — exactly once.
+
+    Concurrency (MED money bug): the caller's request-time ``linked_customer`` snapshot
+    carries a STALE ``referral_reward_given``. Two concurrent first orders (or a replay)
+    could both read it as False and each double-credit referee AND referrer — real money,
+    since loyalty points redeem to wallet credit. Sibling loyalty grants take a Customer
+    row lock, but that lock is held only inside the loyalty block (and NOT at all when
+    LoyaltyConfig is disabled), so it does not cover this hook.
+
+    Fix: gate BOTH credits on an atomic compare-and-set. The referee credit filters on
+    ``referral_reward_given=False`` and flips it True in a single UPDATE, so exactly one
+    caller gets rowcount 1 ("claimed"); a loser matches 0 rows. The referrer is credited
+    ONLY on that claim, so neither side can be granted twice. Correct even without a row
+    lock. Best-effort — a referral error must never fail the order.
+    """
+    try:
+        if not (
+            getattr(profile, "referral_enabled", False)
+            and linked_customer is not None
+            and linked_customer.referred_by_id is not None
+            and not linked_customer.referral_reward_given
+        ):
+            return
+        from accounts.models import Customer as _CustRef
+        _ref_pts = int(getattr(profile, "referral_reward_points", 100) or 100)
+        if _ref_pts <= 0:
+            return
+        # Compare-and-set: claim the reward by flipping referral_reward_given False→True.
+        claimed = _CustRef.objects.filter(
+            pk=linked_customer.pk,
+            referral_reward_given=False,
+        ).update(
+            loyalty_points=F("loyalty_points") + _ref_pts,
+            referral_reward_given=True,
+        )
+        # Credit the referrer ONLY if we won the claim (rowcount == 1).
+        if claimed:
+            _CustRef.objects.filter(pk=linked_customer.referred_by_id).update(
+                loyalty_points=F("loyalty_points") + _ref_pts,
+            )
+    except Exception:
+        pass  # Never fail the order due to referral errors
+
+
 class PlaceOrderView(APIView):
     """POST /api/place-order/ — customer submits an in-app order.
 
@@ -3481,28 +3527,9 @@ class PlaceOrderView(APIView):
                 except Exception:
                     pass  # Never fail the order due to loyalty errors
 
-                # Award referral reward on referee's first paid order
-                try:
-                    if (
-                        getattr(profile, "referral_enabled", False)
-                        and _linked_customer is not None
-                        and _linked_customer.referred_by_id is not None
-                        and not _linked_customer.referral_reward_given
-                    ):
-                        from accounts.models import Customer as _CustRef
-                        _ref_pts = int(getattr(profile, "referral_reward_points", 100) or 100)
-                        if _ref_pts > 0:
-                            # Credit the referee (this customer)
-                            _CustRef.objects.filter(pk=_linked_customer.pk).update(
-                                loyalty_points=F("loyalty_points") + _ref_pts,
-                                referral_reward_given=True,
-                            )
-                            # Credit the referrer
-                            _CustRef.objects.filter(pk=_linked_customer.referred_by_id).update(
-                                loyalty_points=F("loyalty_points") + _ref_pts,
-                            )
-                except Exception:
-                    pass  # Never fail the order due to referral errors
+                # Award referral reward on referee's first paid order — atomic CAS,
+                # see _award_referral_reward for the concurrency contract.
+                _award_referral_reward(profile, _linked_customer)
 
         except _OutOfStock as _e:
             return Response(
@@ -5418,21 +5445,30 @@ class StaffVoidOrderItemView(APIView):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order: check if the ledger-plus-wallet now covers the
-                # reduced total and / or if wallet overpays the new total.
-                ledger_paid = sum(
-                    (Decimal(str(p.amount)) for p in order.payments.all()), Decimal("0")
-                )
-                total_collected = ledger_paid  # wallet debits are in WalletTransaction, not OrderPayment
+                # Case B — UNPAID order: check if the money already collected now covers
+                # the reduced total and / or if wallet overpays the new total.
+                #
+                # BUGFIX (silent write-off): the old predicate was
+                #   sum(order.payments) + wallet_amount_paid >= new_total.
+                # A split-bill wallet payment lands in BOTH signals — StaffOrderPaymentView
+                # / OwnerWalletChargeView write a WALLET OrderPayment row AND bump
+                # wallet_amount_paid — so that wallet money was counted twice. An order
+                # 60-wallet-paid of 100, after voiding a 10 item (new_total 90), computed
+                # 60+60=120 >= 90 and flipped to PAID, collecting only 60 for a 90 order and
+                # writing off 30 (bypassing the S1 reconciliation guard). Use the reconciling
+                # _order_collected() helper, which counts each wallet payment ONCE. Capture it
+                # BEFORE the overpay refund decrements wallet_amount_paid, then subtract what
+                # we refund (the WALLET ledger row is NOT decremented by the refund, so the
+                # helper would otherwise still count it).
+                collected = _order_collected(order)
                 # Overpayment = how much wallet_amount_paid exceeds the new total after void
                 overpay = max(Decimal("0"), wallet_paid - new_total)
                 if overpay > Decimal("0"):
                     _refunded = overpay
                     order.wallet_amount_paid = wallet_paid - _refunded
-                # Flip to PAID if total collected via ledger (cash+wallet OrderPayment rows)
-                # plus remaining wallet_amount_paid now covers the new total.
-                remaining_wallet = wallet_paid - _refunded
-                if ledger_paid + remaining_wallet >= new_total:
+                # Flip to PAID only if the money actually collected (each wallet payment
+                # counted once), minus what we just refunded, now covers the new total.
+                if collected - _refunded >= new_total:
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
 
@@ -5643,16 +5679,18 @@ class StaffCompOrderItemView(APIView):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order overpay reconciliation
-                ledger_paid = sum(
-                    (Decimal(str(p.amount)) for p in order.payments.all()), Decimal("0")
-                )
+                # Case B — UNPAID order overpay reconciliation. Identical settle predicate
+                # to StaffVoidOrderItemView, and it carried the same silent-write-off bug:
+                # summing the OrderPayment ledger AND wallet_amount_paid double-counts a
+                # split-bill WALLET row (written to BOTH by StaffOrderPaymentView /
+                # OwnerWalletChargeView). Use _order_collected() (each wallet payment counted
+                # once), captured BEFORE the overpay refund, minus what we refund.
+                collected = _order_collected(order)
                 overpay = max(Decimal("0"), wallet_paid - new_total)
                 if overpay > Decimal("0"):
                     _refunded = overpay
                     order.wallet_amount_paid = wallet_paid - _refunded
-                remaining_wallet = wallet_paid - _refunded
-                if ledger_paid + remaining_wallet >= new_total:
+                if collected - _refunded >= new_total:
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
 
@@ -8022,6 +8060,14 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
             newly_cancelled = True
         else:
             order.status = Order.Status.CANCELLED  # already cancelled by a peer — reflect it for the caller
+        # Refund the wallet_amount_paid from the freshly-LOCKED row, not the pre-lock
+        # `order` snapshot the caller passed in. A concurrent void/comp (which decrements
+        # wallet_amount_paid under its own lock) could have landed in the window between
+        # that snapshot and our lock; refunding the stale, higher amount would over-refund.
+        # The cancelrefund:{schema}:{order.id} idempotency key guards against a DOUBLE
+        # refund but not against a wrong AMOUNT, so read the post-lock value here.
+        if locked is not None:
+            order.wallet_amount_paid = locked.wallet_amount_paid
         # Wallet credit is idempotent (schema-namespaced key) regardless of caller/retries.
         _refund_wallet_for_cancelled_order(order, tenant_id=tenant_id)
         if newly_cancelled:
