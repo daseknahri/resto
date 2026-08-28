@@ -41,6 +41,40 @@ const brokenArabic = Object.entries(rawArabic).filter(
     (value.includes("????") || /[ØÙÂ][^\s]*/.test(value)),
 );
 
+// FR ASCII-only convention (OWNER-DECISION #12): French text is de-accented by
+// convention to avoid mojibake. Flag any accented Latin letter (e-acute, a-grave,
+// c-cedilla, o-circumflex, oe-ligature ...) or de-accenting typographic
+// punctuation (guillemets, curly quotes, ellipsis) that slips into a FR string
+// VALUE. Scoped to FR ONLY -- Arabic (messages-ar.js) is legitimately non-ASCII
+// and is untouched here -- and deliberately narrow: emoji, em-/en-dashes, arrows,
+// bullets, middle dot, degree and math signs are NOT flagged.
+const FR_DEACCENT_PUNCT = new Set([
+  "«", "»", "‹", "›", // guillemets  << >> < >
+  "‘", "’", "“", "”", "‚", "„", // curly quotes
+  "…", // ellipsis
+]);
+const FR_LIGATURES = new Set([
+  "œ", "Œ", "æ", "Æ", // oe OE ae AE
+  "ø", "Ø", "ß", // o-slash O-slash sharp-s
+]);
+const isAccentedLatin = (ch) => {
+  if (FR_LIGATURES.has(ch)) return true;
+  // A precomposed accented Latin letter NFD-decomposes to an ASCII base letter
+  // plus one or more combining marks (e-acute -> "e" + U+0301), so the decomposed
+  // form is longer than one code unit and starts with [A-Za-z]. Plain ASCII and
+  // non-Latin (Arabic, emoji, dashes, symbols) do not match.
+  const decomposed = ch.normalize("NFD");
+  return decomposed.length > 1 && /^[A-Za-z]/.test(decomposed);
+};
+const isDeAccentingChar = (ch) => isAccentedLatin(ch) || FR_DEACCENT_PUNCT.has(ch);
+const frNonAscii = Object.entries(rawFrench)
+  .map(([key, value]) => {
+    if (typeof value !== "string") return null;
+    const offenders = [...new Set([...value].filter(isDeAccentingChar))];
+    return offenders.length ? { key, chars: offenders.join(" "), value } : null;
+  })
+  .filter(Boolean);
+
 const sourceFiles = [
   resolve(projectRoot, "src/i18n/messages-en.js"),
   resolve(projectRoot, "src/i18n/messages-fr.js"),
@@ -65,6 +99,15 @@ if (missingFrench.length) {
   console.log("Missing French keys:");
   missingFrench.slice(0, 50).forEach((key) => console.log(`- ${key}`));
 }
+console.log(`French non-ASCII (accented) values: ${frNonAscii.length}`);
+if (frNonAscii.length) {
+  console.log(
+    "French must be ASCII-only (de-accented) by convention. De-accent these value(s):",
+  );
+  frNonAscii
+    .slice(0, 50)
+    .forEach(({ key, chars, value }) => console.log(`- ${key}  [${chars}]  "${value}"`));
+}
 console.log(`Arabic missing keys: ${missingArabic.length}`);
 console.log(`Arabic broken strings: ${brokenArabic.length}`);
 console.log(`Arabic source issues: ${sourceIssues.length}`);
@@ -84,8 +127,14 @@ if (sourceIssues.length) {
   sourceIssues.slice(0, 50).forEach((issue) => console.log(`- ${issue}`));
 }
 
-if (missingArabic.length || missingFrench.length || brokenArabic.length || sourceIssues.length) {
+if (
+  missingArabic.length ||
+  missingFrench.length ||
+  brokenArabic.length ||
+  sourceIssues.length ||
+  frNonAscii.length
+) {
   process.exitCode = 1;
 } else {
-  console.log("Locale verification passed (FR complete, AR complete).");
+  console.log("Locale verification passed (FR complete + ASCII-only, AR complete).");
 }
