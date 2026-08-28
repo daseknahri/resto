@@ -5522,9 +5522,12 @@ class StaffCompOrderItemView(APIView):
     Comp (mark free) a single line item on an open order without removing it from
     the ticket — the kitchen still sees/fires it, but it contributes 0 to the
     order total. Mirrors StaffVoidOrderItemView's guards and money handling
-    exactly, with two differences: comping never restocks the dish (the item was
-    still made/served — comping is a billing decision, not an inventory one) and
-    a reason is REQUIRED (void's reason is optional).
+    with three differences: (1) comping never restocks the dish (the item was
+    still made/served — comping is a billing decision, not an inventory one);
+    (2) a reason is REQUIRED (void's reason is optional); and (3) comping
+    intentionally does NOT claw back the loyalty points the item earned —
+    a comp is a goodwill gesture, so the guest keeps the points — whereas void
+    proportionally reverses them. (Owner policy, 2026-08: OWNER_DECISIONS.md #6.)
 
     Auth: same _can_void_order_item gate as void — comping is financially
     equivalent to voiding (it erases revenue), so it is gated by the same
@@ -5539,7 +5542,8 @@ class StaffCompOrderItemView(APIView):
 
     Body (required): { "reason": str }
 
-    Money rule (identical to StaffVoidOrderItemView):
+    Money rule (same as StaffVoidOrderItemView EXCEPT the loyalty clawback —
+    see difference (3) above):
       PAID orders whose money can't auto-reconcile (paid in cash, i.e.
       wallet_amount_paid == 0) are rejected with cannot_comp_paid — same as void.
       PAID wallet orders: refund = min(item.subtotal, order.wallet_amount_paid),
