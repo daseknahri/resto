@@ -12,6 +12,53 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-28 — post-sweep DEEP money/concurrency audit (7 defects the breadth sweep missed → 3 fix PRs)
+
+**Result:** `main` @ `f30fbc6`, green. After the 2026-08-27 breadth-first sweep drained its autonomous
+backlog, a focused *deeper* pass — 3 read-only finders (money/ledger end-to-end trace, concurrency +
+a regression re-check of the 30 just-shipped PRs, data-integrity/tenancy), each adversarially
+self-verified — found **7 real, currently-present defects the breadth-first sweep missed**, including a
+**HIGH silent revenue leak** and a **regression introduced by #273**. Shipped as 3 individually
+CI-gated PRs (#275–#277), each with mock-based regression tests. Lesson recorded: a depth-first pass
+on the highest-stakes surface (money/concurrency) catches what a breadth-first lens does not.
+
+**What shipped:**
+- **HIGH — silent revenue loss (#277):** the void/comp "Case B" auto-settle predicate double-counted a
+  wallet payment (a split-bill wallet pay writes BOTH a `method=WALLET` `OrderPayment` row AND bumps
+  `order.wallet_amount_paid`), so an UNPAID order with a partial wallet payment could be flipped to PAID
+  for **less than it collected** (e.g. 60-of-100, void a 10 item → `60+60≥90` → PAID, writing off 30).
+  Both `StaffVoidOrderItemView` and `StaffCompOrderItemView` now use the reconciling `_order_collected()`
+  helper (each wallet payment counted once).
+- **MED — referral double-grant (#277):** the direct-checkout referral reward was the one loyalty sibling
+  never given the concurrency guard (stale-snapshot check + unconditional credits). Now a compare-and-set
+  on `referral_reward_given` (referrer credited only when the CAS claims the row).
+- **LOW — cancel over-refund (#277):** `refund_and_cancel_delivery_order` read `wallet_amount_paid` from
+  a pre-lock snapshot; now reads it from the locked row.
+- **LOW-MED — cash-out cancel clobber (#275):** `DriverCashoutCancelView` was an unguarded check-then-act
+  that could write CANCELLED over a just-committed PAID row; now a `status=PENDING`-guarded compare-and-set
+  (409 on already-resolved).
+- **LOW — cash-out EXPIRED regression from #273 (#275):** #273 moved the EXPIRED write to a deferred
+  *unlocked* save, opening a concurrent-expiry clobber window; moved back INSIDE the lock as a guarded
+  update (kept #273's raise-after-block + no-brute-force-count properties).
+- **MED (latent) — revoked driver stranded their own `in_progress` trip (#276):** `_get_driver`'s
+  `driver_approved=True` gate made a held trip un-completable after revocation (rider can't cancel, sweep
+  never touched `in_progress`) → pinned forever, fare unsettled, rider locked out. `DriverRideStatusView`
+  now lets ONLY the assigned driver complete/abandon a held trip even after revocation (accept still gated;
+  money still safe via `_do_settle`'s revoked-skip); + sweep rule (e) backstop. Inert until rides go live.
+- **minor sec — handover-code lockout (#276):** the ride package-code lockout reset the attempt counter
+  (weaker than the delivery path, which deliberately doesn't); matched to the delivery path.
+
+**Verified clean** (no findings): wallet debit/credit idempotency + lock re-checks, transfers, tenant-float
+credit, `record_driver_payout`, `settle_ride`, drawer, voucher, and — from the concurrency + data-integrity
+finders — the 30-PR campaign's own changes (loyalty lock, comp CAS, no-show gate, overcharge recompute,
+order-store guard), shared-schema tenant isolation, migrations (rolling-safe), and serializer contracts.
+
+**Note:** the deferred LOW `MAD`-currency display cluster is confirmed **owner-gated, not autonomous** — the
+admin/platform pages render cross-tenant public-schema records that carry no per-record currency field, so
+hardcoding `MAD` is correct today and changing it is part of the owner's mixed-currency aggregation decision.
+
+---
+
 ## 2026-08-27 — super-app hardening sweep (118-agent audit → ~29 CI-gated fix PRs)
 
 **Result:** `main` @ `9685363`, green. A full read-only audit (`superapp-hardening-sweep`, 118 agents:
