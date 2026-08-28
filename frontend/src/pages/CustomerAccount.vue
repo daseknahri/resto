@@ -2122,13 +2122,25 @@ const sendCredit = async () => {
   sendError.value = '';
   sendSuccess.value = '';
   const amount = parseFloat(sendAmount.value);
-  if (!sendPhone.value.trim()) { sendError.value = t('customerAccount.sendPhoneRequired'); return; }
+  const recipientPhone = sendPhone.value.trim();
+  if (!recipientPhone) { sendError.value = t('customerAccount.sendPhoneRequired'); return; }
   if (!amount || amount <= 0) { sendError.value = t('customerAccount.sendAmountRequired'); return; }
+  // A wallet transfer is irreversible and the recipient is resolved by exact
+  // verified-phone match, so a single mistyped digit pays a stranger. Confirm the
+  // amount + the number the user typed BEFORE the money moves (same confirm() the
+  // cancel-order / reorder flows use on this page).
+  const ok = await confirm({
+    title: t('customerAccount.sendConfirmTitle'),
+    body: t('customerAccount.sendConfirmBody', { amount: formatPrice(amount), phone: recipientPhone }),
+    confirmLabel: t('customerAccount.sendBtn'),
+    danger: false,
+  });
+  if (!ok) return;
   sending.value = true;
   if (!sendKey) sendKey = newIdempotencyKey();
   try {
     const res = await api.post('/customer/wallet/transfer/', {
-      recipient_phone: sendPhone.value.trim(),
+      recipient_phone: recipientPhone,
       amount: amount.toFixed(2),
       note: sendNote.value.trim(),
       idempotency_key: sendKey,
@@ -2137,7 +2149,12 @@ const sendCredit = async () => {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.new_balance });
     }
     sendKey = null; // confirmed — next transfer gets a fresh key
-    sendSuccess.value = t('customerAccount.sendSuccess', { amount: res.data.amount });
+    // Reassure the sender WHO received it, from the transfer response. The backend
+    // resolves the recipient by exact verified-phone match and echoes back the
+    // normalized number (prefer recipient_name if a future response adds one); fall
+    // back to the typed phone so the toast always names a recipient.
+    const recipient = res.data.recipient_name || res.data.recipient_phone || recipientPhone;
+    sendSuccess.value = t('customerAccount.sendSuccess', { amount: res.data.amount, recipient });
     sendPhone.value = '';
     sendAmount.value = '';
     sendNote.value = '';
