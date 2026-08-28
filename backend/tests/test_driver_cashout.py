@@ -144,17 +144,22 @@ class _RollbackAtomic:
 
 
 class ConfirmCashoutExpiryTests(SimpleTestCase):
-    """Bug: an EXPIRED cash-out code marked its status inside the atomic block that then
-    raised, so the EXPIRED write was ROLLED BACK (row stayed PENDING), and it was counted
-    as a brute-force failure — which can lock out an honest driver/restaurant whose valid
-    code merely lapsed. Fix: persist EXPIRED durably (own transaction, after the block) and
-    do NOT record a failure for a well-formed-but-expired code."""
+    """An EXPIRED cash-out code must (a) leave the row EXPIRED durably and (b) NOT count
+    as a brute-force failure (that could lock out an honest driver/restaurant whose valid
+    code merely lapsed).
+
+    The EXPIRED write happens INSIDE the row lock via a guarded compare-and-set
+    (``filter(pk=..., status=PENDING).update(status=EXPIRED, ...)``), then the ``expired``
+    signal is raised AFTER the block so the commit isn't rolled back. It must NOT be a
+    deferred, unlocked ``req.save()`` after the block — that blind save was a clobber
+    window where a concurrent confirm could commit PAID in the gap and get overwritten
+    with EXPIRED (see ConcurrentExpiryClobberTests)."""
 
     def setUp(self):
         from django.core.cache import cache
         cache.clear()
         self.addCleanup(cache.clear)
-        # `db` is the simulated persisted row state; req.save() writes req.status into it.
+        # `db` is the simulated persisted row state; the guarded UPDATE writes into it.
         self.db = {"status": "pending"}
         self._p = {
             "dcr": patch("accounts.models.DriverCashoutRequest"),
@@ -167,6 +172,13 @@ class ConfirmCashoutExpiryTests(SimpleTestCase):
             ),
         }
         self.m = {k: v.start() for k, v in self._p.items()}
+        # Model the guarded queryset UPDATE: it commits the EXPIRED status into the row
+        # and reports one row changed. Runs INSIDE the atomic block, so _RollbackAtomic
+        # keeps the write (the block exits cleanly; the "expired" raise is after it).
+        def _guarded_update(status=None, resolved_at=None):
+            self.db["status"] = status
+            return 1
+        self.m["dcr"].objects.filter.return_value.update.side_effect = _guarded_update
 
     def tearDown(self):
         for v in self._p.values():
@@ -175,18 +187,12 @@ class ConfirmCashoutExpiryTests(SimpleTestCase):
     def _expired_req(self):
         from django.utils import timezone
         from datetime import timedelta
-        req = SimpleNamespace(
+        # save is a MagicMock so we can prove the expired path never blind-saves it.
+        return SimpleNamespace(
             id=7, driver_id=5, amount=Decimal("120.00"), code="123456",
             status="pending", expires_at=timezone.now() - timedelta(minutes=5),
-            currency="MAD",
+            currency="MAD", save=MagicMock(),
         )
-
-        def _save(update_fields=None):
-            # Model a real save: commit the current in-memory status to the "row".
-            self.db["status"] = req.status
-
-        req.save = MagicMock(side_effect=_save)
-        return req
 
     def test_expired_code_persists_expired_and_does_not_record_failure(self):
         req = self._expired_req()
@@ -198,10 +204,17 @@ class ConfirmCashoutExpiryTests(SimpleTestCase):
 
         # Caller still sees the expired signal.
         self.assertEqual(ctx.exception.code, "expired")
-        # The EXPIRED transition is DURABLE — it survived the block instead of rolling back.
+        # The EXPIRED transition is DURABLE — it committed inside the block, not rolled back.
         self.assertIs(self.db["status"], self.m["dcr"].Status.EXPIRED)
-        self.assertIs(req.status, self.m["dcr"].Status.EXPIRED)
-        req.save.assert_called_once()
+        # ...and it was written by the GUARDED update (status=PENDING guard, sets EXPIRED),
+        # NOT a deferred blind save() that could clobber a concurrently-committed PAID row.
+        req.save.assert_not_called()
+        self.m["dcr"].objects.filter.assert_called_once_with(
+            pk=req.id, status=self.m["dcr"].Status.PENDING
+        )
+        upd = self.m["dcr"].objects.filter.return_value.update
+        upd.assert_called_once()
+        self.assertIs(upd.call_args.kwargs["status"], self.m["dcr"].Status.EXPIRED)
         # No money moved on an expired code.
         self.m["debit"].assert_not_called()
         self.m["credit"].assert_not_called()

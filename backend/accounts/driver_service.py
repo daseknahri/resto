@@ -282,7 +282,7 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
         except Exception:
             pass
 
-    expired_req = None
+    expired = False
     with transaction.atomic():
         req = (
             DriverCashoutRequest.objects.select_for_update()
@@ -295,13 +295,20 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
         if req.expires_at <= now:
             # A well-formed but EXPIRED code is NOT a wrong-code guess — do NOT count it
             # against the per-actor brute-force lockout (that could lock out an honest
-            # driver/restaurant whose valid code simply lapsed). Mark the transition here
-            # under the row lock, but DON'T raise inside this atomic block: raising would
-            # roll the EXPIRED write back and leave the row PENDING. Flag it and persist
-            # the transition DURABLY in its own transaction after the block exits.
-            req.status = DriverCashoutRequest.Status.EXPIRED
-            req.resolved_at = now
-            expired_req = req
+            # driver/restaurant whose valid code simply lapsed). Persist the EXPIRED
+            # transition HERE, INSIDE the row lock, via a guarded compare-and-set. The
+            # row is PENDING under this lock, so the update commits durably with the
+            # block. A previous fix deferred an UNLOCKED blind save() to after the block
+            # — that opened a clobber window: a concurrent confirm racing the expiry
+            # boundary could lock, pay, and commit PAID in the gap after this lock
+            # released, and the deferred blind save would then overwrite PAID with
+            # EXPIRED. The status=PENDING guard makes that write a no-op instead. Don't
+            # raise inside the block (that would roll the transition back) — flag it and
+            # raise after the block exits cleanly.
+            DriverCashoutRequest.objects.filter(
+                pk=req.id, status=DriverCashoutRequest.Status.PENDING
+            ).update(status=DriverCashoutRequest.Status.EXPIRED, resolved_at=now)
+            expired = True
         else:
             wtx = debit_wallet(
                 req.driver_id, req.amount,
@@ -342,12 +349,9 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             req.resolved_at = now
             req.save(update_fields=["status", "tenant_id", "actor_user_id", "wallet_tx_id", "resolved_at"])
 
-    if expired_req is not None:
-        # Commit the EXPIRED transition OUTSIDE the now-closed atomic block so it is durable
-        # (the block above raises nothing on this path, so it committed clean — but no status
-        # write happened inside it). Its own transaction guarantees the row leaves PENDING.
-        with transaction.atomic():
-            expired_req.save(update_fields=["status", "resolved_at"])
+    if expired:
+        # The EXPIRED transition already committed inside the locked block above. Raise
+        # here, AFTER the block, so signalling the caller doesn't roll that write back.
         raise CashoutError("That cash-out code has expired", code="expired")
     # A successful confirm clears the actor's failed-attempt counter.
     try:

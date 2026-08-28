@@ -7781,14 +7781,27 @@ class DriverCashoutCancelView(APIView):
         customer_id = request.user.id
         from django.utils import timezone as _tz
         from .models import DriverCashoutRequest
+        # Compare-and-set under a status guard, NOT read-then-blind-write. A driver's
+        # Cancel can race a restaurant's confirm: reading the row as PENDING and then
+        # blindly saving CANCELLED could overwrite a row the confirm committed as PAID
+        # in the gap (money already moved) — leaving a corrupt CANCELLED record with a
+        # dangling wallet_tx_id. The guarded UPDATE only transitions a still-PENDING row,
+        # so the loser of the race no-ops instead of clobbering.
+        cancelled = (
+            DriverCashoutRequest.objects
+            .filter(pk=request_id, driver_id=customer_id,
+                    status=DriverCashoutRequest.Status.PENDING)
+            .update(status=DriverCashoutRequest.Status.CANCELLED, resolved_at=_tz.now())
+        )
+        if cancelled:
+            return Response({"status": DriverCashoutRequest.Status.CANCELLED})
+        # Nothing transitioned: the request either doesn't exist / isn't this driver's
+        # (404), or it was already resolved (paid / cancelled / expired) — report the
+        # real current status as a 409 conflict rather than a false "cancelled".
         req = DriverCashoutRequest.objects.filter(pk=request_id, driver_id=customer_id).first()
         if req is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if req.status == DriverCashoutRequest.Status.PENDING:
-            req.status = DriverCashoutRequest.Status.CANCELLED
-            req.resolved_at = _tz.now()
-            req.save(update_fields=["status", "resolved_at"])
-        return Response({"status": req.status})
+        return Response({"status": req.status}, status=status.HTTP_409_CONFLICT)
 
 
 class DriverCashoutHistoryView(APIView):
