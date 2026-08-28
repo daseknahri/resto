@@ -64,6 +64,11 @@ def schedule_open_now(schedule, now_local):
 
     The day lookup, the blank/closed handling, and the half-open ``[open, close)``
     comparison mirror the semantics of the original menu.views._schedule_open exactly.
+
+    An overnight window (``close`` earlier than ``open`` on the clock, e.g. a bar open
+    ``18:00``–``02:00``) is treated as spanning midnight: it is open from ``open`` to
+    end-of-day AND from start-of-day up to (but not including) ``close``. This mirrors
+    what the business-hours editor now allows the owner to save.
     """
     if not schedule or not isinstance(schedule, dict):
         return None
@@ -90,4 +95,18 @@ def schedule_open_now(schedule, now_local):
         return False
 
     current_hhmm = now_local.strftime("%H:%M")
-    return open_str <= current_hhmm < close_str
+
+    if open_str == close_str:
+        # Zero-length / ambiguous window (is it "closed all day" or "open 24h"?).
+        # The editor rejects this on save, so a persisted equal open==close is
+        # malformed data → treat as closed rather than silently "always open".
+        return False
+
+    if open_str < close_str:
+        # Normal same-day window: half-open [open, close) — close is exclusive.
+        return open_str <= current_hhmm < close_str
+
+    # close_str < open_str → the window wraps past midnight (e.g. 18:00–02:00):
+    # open from `open` to end-of-day, and again from start-of-day up to (but not
+    # including) `close`. Keeps the same half-open [open, close) close semantics.
+    return current_hhmm >= open_str or current_hhmm < close_str

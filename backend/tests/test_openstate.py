@@ -90,6 +90,68 @@ class ScheduleOpenNowTests(SimpleTestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# schedule_open_now — OVERNIGHT (wraparound) windows: close earlier than open
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ScheduleOpenNowOvernightTests(SimpleTestCase):
+    """A late-night venue open 18:00–02:00 spans midnight: open from `open` to
+    end-of-day AND from start-of-day up to (but not incl.) `close`. Regression guard
+    for the old non-wraparound `open <= current < close` rule, which reported such a
+    window as closed all evening (because '18:00' <= '20:00' < '02:00' is false)."""
+
+    # 2024-06-03 is a Monday; each instant below stays on Monday (only the hour
+    # changes) so it hits the same Monday overnight entry.
+    _OPEN = "18:00"
+    _CLOSE = "02:00"
+
+    def _sched(self):
+        return {"mon": {"enabled": True, "open": self._OPEN, "close": self._CLOSE}}
+
+    def _at(self, hour, minute=0):
+        return dt_module.datetime(2024, 6, 3, hour, minute, tzinfo=timezone.utc)
+
+    def test_evening_before_midnight_is_open(self):
+        # 20:00 is inside the evening leg [18:00, 24:00).
+        self.assertTrue(schedule_open_now(self._sched(), self._at(20)))
+
+    def test_after_midnight_before_close_is_open(self):
+        # 01:00 is inside the early-morning leg [00:00, 02:00).
+        self.assertTrue(schedule_open_now(self._sched(), self._at(1)))
+
+    def test_just_after_close_is_closed(self):
+        # 03:00 is past the 02:00 close and before the 18:00 re-open → closed.
+        self.assertFalse(schedule_open_now(self._sched(), self._at(3)))
+
+    def test_midday_gap_is_closed(self):
+        # 12:00 is in the daytime gap between close (02:00) and open (18:00) → closed.
+        self.assertFalse(schedule_open_now(self._sched(), self._at(12)))
+
+    def test_at_close_boundary_is_exclusive(self):
+        # 02:00 exactly is the close → excluded, matching same-day [open, close).
+        self.assertFalse(schedule_open_now(self._sched(), self._at(2)))
+
+    def test_at_open_boundary_is_inclusive(self):
+        # 18:00 exactly is the open → included, matching same-day [open, close).
+        self.assertTrue(schedule_open_now(self._sched(), self._at(18)))
+
+    def test_normal_same_day_window_still_open(self):
+        # Sanity: the same-day branch is untouched — 12:00 inside 09:00–18:00 is open.
+        sched = {"mon": {"enabled": True, "open": "09:00", "close": "18:00"}}
+        self.assertTrue(schedule_open_now(sched, self._at(12)))
+
+    def test_normal_same_day_window_still_closed_after_close(self):
+        sched = {"mon": {"enabled": True, "open": "09:00", "close": "18:00"}}
+        self.assertFalse(schedule_open_now(sched, self._at(20)))
+
+    def test_equal_open_and_close_is_closed(self):
+        # Zero-length / ambiguous window. The editor rejects saving this; if it is
+        # ever persisted anyway, treat it as closed rather than silently "always open".
+        sched = {"mon": {"enabled": True, "open": "09:00", "close": "09:00"}}
+        self.assertFalse(schedule_open_now(sched, self._at(9)))
+        self.assertFalse(schedule_open_now(sched, self._at(12)))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # tenant_local_now — timezone resolution / fallback chain
 # ══════════════════════════════════════════════════════════════════════════════
 
