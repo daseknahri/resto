@@ -12,6 +12,38 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-28 — owner-decision implementation (6 of 12 resolved + a flaky-test fix)
+
+**Result:** `main` @ `5b226e0`, green. The 12 owner-gated findings from the sweeps were packaged into a
+decision doc ([`OWNER_DECISIONS.md`](OWNER_DECISIONS.md), PR #279) — each a yes/no (or A/B) call with an
+engineering recommendation. The **6 that were clear correctness/safety calls** (not genuine
+business/policy questions) were then shipped on the recommendation, each a CI-gated PR with tests:
+
+- **#4 — overnight business hours** (PR #281): the editor + `tenancy/openstate.py` rejected/miscomputed a
+  window whose close is earlier than open (e.g. 18:00–02:00). Now a real wraparound representation on both
+  ends (`current >= open OR current < close`).
+- **#6 — comp keeps loyalty points** (PR #280): documented the intentional policy (comp = goodwill, guest
+  keeps points, unlike void's clawback) and corrected the docstring that falsely claimed void-parity.
+- **#8 — driver revocation cascades to in-flight DELIVERY jobs** (PR #282): the revoke branch now clears
+  the driver and redispatches active jobs (SEARCHING + offer reset), the delivery analog of the ride fix
+  in #276.
+- **#9 — durable voucher-batch idempotency** (PR #282): new `VoucherBatch` model with a unique
+  `idempotency_key` claimed inside the create transaction (cache stays a fast-path; DB is the authority),
+  so an evicted cache can't let a retried batch double-mint.
+- **#10 — P2P transfer recipient confirmation** (PR #283): a confirm step showing amount + typed number
+  before sending, and the resolved recipient surfaced in the success message.
+- **#12 — FR ASCII-only enforced** (PR #284): de-accented ~405 `messages-fr.js` value lines and added an
+  FR-only accented-char check to `verify:i18n` so it stays enforced (Arabic untouched).
+
+Plus **#285** de-flaked the MFA backup-code test: two "a code fragment must not be a substring of the
+pbkdf2 hash" assertions collided by chance with the fixed `$1000000$` iteration count (and random base64)
+in every hash — replaced with a deterministic `check_password` proof.
+
+**Left for the owner (6):** #1/#3/#5 (rides go-live), #2 (`driver_owed` reporting semantics), #7
+(floor-section ops policy — rec is leave-as-is), #11 (clock-in labor policy).
+
+---
+
 ## 2026-08-28 — post-sweep DEEP money/concurrency audit (7 defects the breadth sweep missed → 3 fix PRs)
 
 **Result:** `main` @ `f30fbc6`, green. After the 2026-08-27 breadth-first sweep drained its autonomous
