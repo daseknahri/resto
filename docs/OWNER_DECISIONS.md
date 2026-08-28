@@ -1,5 +1,13 @@
 # Owner-decision backlog — the 12 hardening-sweep items that need your call
 
+> **Progress (2026-08-28):** **6 of 12 shipped** on the engineering-recommendation where the call was a
+> clear correctness/safety fix (not a genuine business/policy question): **#4** overnight hours (PR #281),
+> **#6** comp-keeps-loyalty-points (PR #280), **#8** driver-revoke→delivery-cascade (PR #282), **#9**
+> durable voucher idempotency (PR #282), **#10** P2P recipient confirmation (PR #283), **#12** FR
+> ASCII-only enforced + CI check (PR #284). **6 still await your call** — the genuinely
+> business/policy/rides-go-live ones: **#1, #3, #5** (rides go-live), **#2** (`driver_owed` reporting
+> semantics), **#7** (floor-section ops policy — rec is leave-as-is), **#11** (clock-in labor policy).
+
 The two 2026-08 hardening audits fixed everything that was safe to fix autonomously. What's left is
 **12 items that hinge on a product / policy / accounting decision only you can make.** This doc turns
 each into a **yes/no (or A/B) decision** with the tradeoffs and my engineering recommendation, so you can
