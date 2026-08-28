@@ -5,6 +5,7 @@ Tests for admin wallet views:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
+from contextlib import contextmanager
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,13 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
 from accounts.views import AdminWalletBonusView, AdminWalletVoucherView
+
+
+@contextmanager
+def _noop_atomic(*args, **kwargs):
+    """Stand-in for transaction.atomic() so mock-based tests don't open a real DB
+    connection (the durable voucher-idempotency mint runs inside atomic())."""
+    yield
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -143,6 +151,11 @@ class AdminWalletVoucherViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = AdminWalletVoucherView.as_view()
+        # The POST mint runs inside transaction.atomic(); with no local DB that would try
+        # to open a real connection, so neutralize it for these mock-based tests.
+        _p = patch("django.db.transaction.atomic", _noop_atomic)
+        _p.start()
+        self.addCleanup(_p.stop)
 
     def _get(self, user=None):
         req = self.factory.get("/api/admin/wallet/vouchers/")
@@ -247,9 +260,10 @@ class AdminWalletVoucherViewTests(SimpleTestCase):
 
     # ── POST idempotency (platform-money guard) ───────────────────────────────
 
+    @patch("accounts.models.VoucherBatch.objects")
     @patch("accounts.models.WalletVoucher.objects")
     @patch("accounts.models.WalletVoucher.generate_code", return_value="CODE123")
-    def test_post_idempotency_key_dedupes_batch(self, mock_gen, mock_voucher_objs):
+    def test_post_idempotency_key_dedupes_batch(self, mock_gen, mock_voucher_objs, mock_batch_objs):
         """A repeated POST with the same idempotency_key must NOT mint a second voucher
         batch — it replays the first result. Closes the platform-money hole where a
         network retry / double-submit duplicates a voucher batch."""
@@ -259,12 +273,17 @@ class AdminWalletVoucherViewTests(SimpleTestCase):
             v1, v2 = MagicMock(), MagicMock()
             v1.code, v2.code = "CODE1", "CODE2"
             mock_voucher_objs.bulk_create.return_value = [v1, v2]
+            # OWNER-9: durable guard. No prior batch on the first mint; the second POST
+            # replays via the warm cache before the durable layer is consulted.
+            mock_batch_objs.filter.return_value.first.return_value = None
 
             body = {"amount": "20.00", "count": 2, "note": "Promo", "idempotency_key": "abc-123"}
             first = self._post(body)
             self.assertEqual(first.status_code, status.HTTP_201_CREATED)
             self.assertEqual(first.data["created"], 2)
             self.assertEqual(mock_voucher_objs.bulk_create.call_count, 1)
+            # The durable record was claimed exactly once, under the create transaction.
+            self.assertEqual(mock_batch_objs.create.call_count, 1)
 
             # Replay with the same key → no second bulk_create, same codes replayed.
             second = self._post(body)
@@ -272,6 +291,60 @@ class AdminWalletVoucherViewTests(SimpleTestCase):
             self.assertTrue(second.data.get("idempotent_replay"))
             self.assertEqual(second.data["codes"], first.data["codes"])
             self.assertEqual(mock_voucher_objs.bulk_create.call_count, 1)  # still 1
+            self.assertEqual(mock_batch_objs.create.call_count, 1)  # still 1
+        finally:
+            cache.clear()
+
+    @patch("accounts.models.VoucherBatch.objects")
+    @patch("accounts.models.WalletVoucher.objects")
+    @patch("accounts.models.WalletVoucher.generate_code", return_value="CODE123")
+    def test_post_durable_idempotency_survives_cache_eviction(self, mock_gen, mock_voucher_objs, mock_batch_objs):
+        """OWNER-9: the DB — not the cache — is the authority. If the idempotency cache
+        entry is EVICTED between a client's retries, the durable VoucherBatch record must
+        still prevent a second mint and replay the original codes. Without the durable
+        layer this retry would mint (and hand out) a second, duplicate voucher batch."""
+        from django.core.cache import cache
+        cache.clear()
+        try:
+            v1, v2 = MagicMock(), MagicMock()
+            v1.code, v2.code = "CODE1", "CODE2"
+            mock_voucher_objs.bulk_create.return_value = [v1, v2]
+
+            body = {"amount": "20.00", "count": 2, "note": "Promo", "idempotency_key": "evict-1"}
+
+            # ── First POST: no prior batch → mint + record the durable row. ──
+            captured = {}
+
+            def _capture_create(**kwargs):
+                captured["result"] = kwargs.get("result")
+                m = MagicMock()
+                m.idempotency_key = kwargs.get("idempotency_key")
+                m.result = kwargs.get("result")
+                return m
+
+            mock_batch_objs.filter.return_value.first.return_value = None
+            mock_batch_objs.create.side_effect = _capture_create
+
+            first = self._post(body)
+            self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+            self.assertEqual(mock_voucher_objs.bulk_create.call_count, 1)
+            self.assertEqual(mock_batch_objs.create.call_count, 1)
+
+            # ── Simulate the cache being evicted between retries. ──
+            cache.clear()
+
+            # ── Second POST: cache MISSES, but the durable row now EXISTS → replay. ──
+            prior = MagicMock()
+            prior.result = captured["result"]
+            mock_batch_objs.filter.return_value.first.return_value = prior
+
+            second = self._post(body)
+            self.assertEqual(second.status_code, status.HTTP_200_OK)
+            self.assertTrue(second.data.get("idempotent_replay"))
+            self.assertEqual(second.data["codes"], first.data["codes"])
+            # No second mint despite the cold cache — the durable check stopped it.
+            self.assertEqual(mock_voucher_objs.bulk_create.call_count, 1)
+            self.assertEqual(mock_batch_objs.create.call_count, 1)
         finally:
             cache.clear()
 

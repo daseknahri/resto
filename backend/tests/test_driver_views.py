@@ -16,11 +16,19 @@ rather than by making Customer.objects.get raise DoesNotExist.
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
+
+
+@contextmanager
+def _noop_atomic(*args, **kwargs):
+    """Stand-in for transaction.atomic() so mock-based tests don't open a real DB
+    connection (the OWNER-8 revoke cascade re-opens jobs inside atomic())."""
+    yield
 
 from accounts.models import Customer
 from accounts.views import (
@@ -50,6 +58,21 @@ def _make_customer(pk=1, is_driver=True, is_driver_online=True, driver_approved=
     )
     c.save = MagicMock()
     return c
+
+
+def _mk_job(pk, status, driver_id):
+    """A stand-in for an in-flight DeliveryJob row (OWNER-8 revoke-cascade tests).
+
+    A bare MagicMock so the view can freely set/reset attributes; the fields the reset
+    reads (redispatch_count, id) start at sensible values.
+    """
+    job = MagicMock()
+    job.id = pk
+    job.status = status
+    job.driver_id = driver_id
+    job.redispatch_count = 0
+    job.save = MagicMock()
+    return job
 
 
 def _authed(req, customer):
@@ -423,6 +446,11 @@ class AdminDriverApprovalViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = AdminDriverApprovalView.as_view()
+        # The revoke branch re-opens active jobs inside transaction.atomic(); with no
+        # local DB that would open a real connection, so neutralize it here.
+        _p = patch("django.db.transaction.atomic", _noop_atomic)
+        _p.start()
+        self.addCleanup(_p.stop)
 
     def _admin_req(self, path):
         from accounts.models import User
@@ -442,14 +470,65 @@ class AdminDriverApprovalViewTests(SimpleTestCase):
         self.assertTrue(customer.driver_approved)
         self.assertTrue(resp.data["approved"])
 
+    @patch("accounts.models.DeliveryJob.objects")
     @patch("accounts.models.Customer.objects")
-    def test_reject_revokes_application(self, mock_objs):
+    def test_reject_revokes_application(self, mock_objs, mock_dj):
         customer = _make_customer(driver_approved=False)
         mock_objs.get.return_value = customer
+        # OWNER-8: the revoke branch now cascades to active DeliveryJobs. No jobs held.
+        mock_dj.select_for_update.return_value.filter.return_value = []
         resp = self.view(self._admin_req("/api/admin/drivers/1/reject/"), driver_id=1)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.is_driver)
         self.assertFalse(resp.data["is_driver"])
+        self.assertEqual(resp.data["reopened_deliveries"], 0)
+
+    @patch("accounts.dispatch.offer_to_next_driver")
+    @patch("accounts.models.DeliveryJob.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_reject_reopens_active_delivery_jobs(self, mock_cust, mock_dj, mock_offer):
+        """OWNER-8: revoking a driver holding in-flight DeliveryJobs re-opens each to
+        dispatch — driver cleared, status→SEARCHING, offer fields reset — instead of
+        stranding the customer's order. Terminal jobs are never selected (the query
+        scopes to ACTIVE_STATUSES), and each re-opened job re-enters the dispatch cascade
+        (which notifies drivers)."""
+        from accounts.models import DeliveryJob
+        customer = _make_customer(driver_approved=True)
+        mock_cust.get.return_value = customer
+
+        # Two in-flight jobs held by the revoked driver (assigned + picked_up).
+        active1 = _mk_job(pk=101, status=DeliveryJob.Status.ASSIGNED, driver_id=customer.id)
+        active2 = _mk_job(pk=102, status=DeliveryJob.Status.PICKED_UP, driver_id=customer.id)
+        mock_dj.select_for_update.return_value.filter.return_value = [active1, active2]
+
+        resp = self.view(self._admin_req("/api/admin/drivers/1/reject/"), driver_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["reopened_deliveries"], 2)
+
+        # The query only ever touches ACTIVE_STATUSES — DELIVERED/failed/cancelled jobs
+        # are structurally excluded, so terminal jobs are never re-opened.
+        mock_dj.select_for_update.return_value.filter.assert_called_once_with(
+            driver_id=customer.id, status__in=DeliveryJob.ACTIVE_STATUSES
+        )
+
+        for job in (active1, active2):
+            self.assertIsNone(job.driver)
+            self.assertEqual(job.status, DeliveryJob.Status.SEARCHING)
+            self.assertIsNone(job.assigned_at)
+            self.assertIsNone(job.picked_up_at)
+            self.assertIsNone(job.offered_to)
+            self.assertIsNone(job.offer_expires_at)
+            self.assertEqual(job.declined_by, [])
+            self.assertEqual(job.offer_round, 0)
+            self.assertFalse(job.is_open_pool)
+            self.assertEqual(job.resolution, DeliveryJob.Resolution.REDISPATCHED)
+            job.save.assert_called_once()
+
+        # Each re-opened job re-enters the ranked-offer cascade (this is what notifies).
+        self.assertEqual(mock_offer.call_count, 2)
+        mock_offer.assert_any_call(101)
+        mock_offer.assert_any_call(102)
 
     def test_non_admin_forbidden(self):
         req = self.factory.post("/api/admin/drivers/1/approve/")
