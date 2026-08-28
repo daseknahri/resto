@@ -1750,6 +1750,118 @@ class SweepRideRequestsTests(SimpleTestCase):
         mock_push_drivers.assert_called_once_with(released.id)
         mock_track_sms.assert_not_called()
 
+    # ── Rule (e): auto-cancel in_progress trips whose driver is gone/revoked ──────
+
+    def _run_in_progress_sweep(self, mock_tz, mock_tx, mock_rr, ride_ip):
+        """Drive one in_progress trip through rule (e). Rules (d)/(a)/(b)/(c) empty."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
+        qs_a = MagicMock()
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        qs_b = MagicMock()
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+        qs_e = MagicMock()
+        qs_e.select_related.return_value.__iter__ = MagicMock(return_value=iter([ride_ip]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_d   # rule (d)
+            elif call_count[0] == 2:
+                return qs_a   # rule (a)
+            elif call_count[0] == 3:
+                return qs_b   # rule (b)
+            elif call_count[0] == 4:
+                return qs_c   # rule (c)
+            else:
+                return qs_e   # rule (e): in_progress scan
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = ride_ip
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+        mock_rr.Status.IN_PROGRESS = "in_progress"
+
+        self._run_command()
+        return now
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_revoked_driver_auto_cancelled(self, mock_tz, mock_tx, mock_rr,
+                                                        mock_push_drivers, mock_push_rider):
+        """Bug 1 backstop: an in_progress trip whose driver was REVOKED is auto-cancelled
+        and the rider is notified."""
+        revoked = _make_customer(pk=5, is_driver=True, driver_approved=False)
+        ride_ip = _make_ride(pk=95, status_val="in_progress", driver=revoked)
+        ride_ip.rider_id = 10
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_called_once()
+        ufs = ride_ip.save.call_args[1].get("update_fields", [])
+        self.assertIn("status", ufs)
+        self.assertIn("cancelled_at", ufs)
+        self.assertEqual(ride_ip.status, "cancelled")
+        mock_push_rider.assert_called_once_with(10, "no_driver_found")
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_null_driver_auto_cancelled(self, mock_tz, mock_tx, mock_rr,
+                                                     mock_push_drivers, mock_push_rider):
+        """An in_progress trip with no driver (driver=None) is also auto-cancelled."""
+        ride_ip = _make_ride(pk=96, status_val="in_progress", driver=None)
+        ride_ip.rider_id = 11
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_called_once()
+        self.assertEqual(ride_ip.status, "cancelled")
+        mock_push_rider.assert_called_once_with(11, "no_driver_found")
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_approved_driver_not_touched(self, mock_tz, mock_tx, mock_rr,
+                                                      mock_push_drivers, mock_push_rider):
+        """A legitimate in_progress trip whose driver is still APPROVED is never touched
+        by rule (e) — even if that driver is offline (they're mid-trip and will return)."""
+        approved = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                  is_driver_online=False)
+        ride_ip = _make_ride(pk=97, status_val="in_progress", driver=approved)
+        ride_ip.rider_id = 12
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_not_called()
+        mock_push_rider.assert_not_called()
+
 
 # ── GET /api/rides/history/ ───────────────────────────────────────────────────────
 
@@ -3382,7 +3494,12 @@ class PackageCompletionCodeTests(SimpleTestCase):
     @patch("accounts.ride_views.RideRequest.objects")
     @patch("accounts.models.Customer.objects")
     def test_fifth_wrong_code_locks(self, mock_cust, mock_ride_objs, mock_tx, _throttle):
-        """5th wrong code must set code_locked_until and reset attempts to 0."""
+        """5th wrong code sets code_locked_until but must NOT reset code_attempts.
+
+        Bug 2 regression: resetting the counter to 0 on lockout would let an attacker
+        cycle 4-guesses-per-lock indefinitely. The ride package path must mirror the
+        delivery-code path (accounts/views.py), which keeps the counter and clears it
+        ONLY on a correct code."""
         driver, ride = self._make_package_in_progress(code="999888", attempts=4)
         mock_cust.get.return_value = driver
         mock_tx.atomic.return_value = _noop_atomic()
@@ -3397,8 +3514,9 @@ class PackageCompletionCodeTests(SimpleTestCase):
                 resp = self.view(req, ride_id=80)
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
-        # After 5th attempt: attempts reset to 0, locked_until set
-        self.assertEqual(ride.code_attempts, 0)
+        # After the 5th attempt: locked_until set AND the counter is NOT reset (stays 5),
+        # so an attacker cannot cycle 4 fresh guesses after every lock window.
+        self.assertEqual(ride.code_attempts, 5)
         self.assertIsNotNone(ride.code_locked_until)
 
     @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
@@ -3481,6 +3599,127 @@ class PackageCompletionCodeTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(ride.status, "completed")
+
+
+class RevokedDriverInProgressStatusTests(SimpleTestCase):
+    """Bug 1: a driver whose approval is revoked while HOLDING an in_progress trip
+    must still be able to advance/complete it (so it settles and the rider is freed),
+    but a revoked driver must NOT be able to touch a trip they are not assigned to.
+
+    DriverRideStatusView resolves the driver WITHOUT the driver_approved gate and
+    scopes the ride lookup to driver=driver; the money guard lives in
+    ride_service._do_settle (a revoked driver is never credited)."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideStatusView.as_view()
+
+    def _post(self, ride_id, data, customer_id=2):
+        req = self.factory.post(f"/api/driver/rides/{ride_id}/status/", data, format="json")
+        req.session = _session(customer_id=customer_id)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views._serialize_ride", return_value={"id": 90, "status": "completed"})
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_revoked_assigned_driver_can_complete_own_in_progress_trip(
+        self, mock_cust, mock_ride_objs, mock_tx, mock_tz, _throttle, _serial
+    ):
+        """A REVOKED driver (driver_approved=False) who is the assigned driver of an
+        in_progress ride can still complete it."""
+        import datetime as _dt
+        mock_tz.now.return_value = _dt.datetime(2026, 6, 10, tzinfo=_dt.timezone.utc)
+
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=False)
+
+        def _resolve(*args, **kwargs):
+            # The status path MUST resolve the driver WITHOUT the driver_approved gate.
+            # If the view still passed driver_approved=True, this revoked driver would
+            # raise DoesNotExist — so a 200 completion proves the gate was dropped.
+            if kwargs.get("driver_approved"):
+                raise Customer.DoesNotExist()
+            return driver
+        mock_cust.get.side_effect = _resolve
+
+        ride = _make_ride(pk=90, status_val="in_progress", driver=driver, kind="ride")
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            with patch("accounts.ride_service.settle_ride") as mock_settle:
+                resp = self.view(self._post(90, {"status": "completed"}), ride_id=90)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "completed")
+        mock_settle.assert_called_once_with(ride)
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_revoked_driver_not_assigned_is_rejected(
+        self, mock_cust, mock_ride_objs, mock_tx, _throttle
+    ):
+        """A revoked driver who is NOT the assigned driver of the trip is rejected:
+        the ride lookup is scoped to driver=driver, so it raises DoesNotExist → 404."""
+        from accounts.models import RideRequest as _RR
+        driver = _make_customer(pk=7, is_driver=True, driver_approved=False)
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        # driver=driver filter doesn't match this trip's assigned driver → DoesNotExist
+        mock_ride_objs.select_for_update.return_value.get.side_effect = _RR.DoesNotExist
+
+        resp = self.view(self._post(90, {"status": "completed"}, customer_id=7), ride_id=90)
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data.get("detail"), "Ride not found.")
+
+    @patch("accounts.ride_views._serialize_ride", return_value={"id": 91, "status": "completed"})
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.PlatformConfig")
+    @patch("accounts.ride_service.debit_wallet")
+    @patch("accounts.ride_service.credit_wallet")
+    @patch("accounts.ride_service.Customer")
+    def test_revoked_assigned_driver_completion_does_not_credit(
+        self, mock_svc_cust, mock_credit, mock_debit, mock_cfg,
+        mock_cust, mock_ride_objs, mock_tx, mock_tz, _throttle, _serial
+    ):
+        """End-to-end: when a revoked assigned driver completes their in_progress trip,
+        settlement debits the rider but the _do_settle revoked-skip prevents crediting
+        the revoked driver (the fare is held, not paid out)."""
+        import datetime as _dt
+        mock_tz.now.return_value = _dt.datetime(2026, 6, 10, tzinfo=_dt.timezone.utc)
+
+        cfg = MagicMock()
+        cfg.ride_commission_pct = Decimal("0")
+        mock_cfg.get_solo.return_value = cfg
+        # Revoked driver: the money-emitting re-check under the completion lock is False.
+        mock_svc_cust.objects.filter.return_value.exists.return_value = False
+
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=False)
+        mock_cust.get.return_value = driver
+
+        ride = _make_ride(pk=91, status_val="in_progress", driver=driver, kind="ride",
+                          payment_method="wallet", fare=Decimal("20.00"))
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            resp = self.view(self._post(91, {"status": "completed"}), ride_id=91)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "completed")
+        # Rider was debited (the trip happened) but the revoked driver got no credit.
+        mock_debit.assert_called_once()
+        mock_credit.assert_not_called()
 
 
 # ── Wave 4: Courier sender-side pickup handover ('collected' milestone) ───────────

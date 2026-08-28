@@ -1010,8 +1010,18 @@ class DriverRideStatusView(APIView):
                 {"detail": "Customer session required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        # Deliberately resolve the driver WITHOUT the driver_approved gate here (unlike
+        # _get_driver / the accept path). A driver whose approval is revoked (fraud /
+        # expired docs) while HOLDING a trip must still be able to advance / complete /
+        # abandon THAT trip, or it is pinned forever: the rider can't cancel from
+        # in_progress and can never book again (RideCreate active-trip guard). This does
+        # NOT let a revoked driver do anything else — the ride lookup below is scoped to
+        # driver=driver, so only the trip's ALREADY-assigned driver can move it, and
+        # accepting NEW trips still goes through _get_driver (driver_approved required).
+        # The money is safe: ride_service._do_settle re-checks driver_approved under the
+        # completion row-lock and skips crediting a revoked driver (fare held, not paid).
         try:
-            driver = Customer.objects.get(pk=customer_id, is_driver=True, driver_approved=True)
+            driver = Customer.objects.get(pk=customer_id, is_driver=True)
         except Customer.DoesNotExist:
             return Response(
                 {"detail": "Driver account not found."},
@@ -1086,8 +1096,11 @@ class DriverRideStatusView(APIView):
                             ride.code_attempts = (ride.code_attempts or 0) + 1
                             _f = ["code_attempts"]
                             if ride.code_attempts >= 5:
+                                # Lock for 5 min but DON'T reset the counter — mirrors the
+                                # delivery-code path (accounts/views.py): resetting lets an
+                                # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
+                                # only on a correct code (the reset just below).
                                 ride.code_locked_until = now + _td(minutes=5)
-                                ride.code_attempts = 0
                                 _f.append("code_locked_until")
                             ride.save(update_fields=_f)
                             return Response(

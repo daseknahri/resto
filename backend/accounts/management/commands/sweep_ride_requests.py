@@ -5,7 +5,8 @@ stay live between driver polls:
 
     python manage.py sweep_ride_requests
 
-Rules (policy: re-dispatch, auto-cancel only on timeout, never touch in_progress):
+Rules (policy: re-dispatch, auto-cancel only on timeout, never touch a *legitimate*
+in_progress trip — see rule (e) for the one narrow exception):
   (d) SCHEDULED with scheduled_for <= now+10min: atomic select_for_update re-check,
       flip to SEARCHING, set dispatched_at=now(), then kind-aware driver push. For
       PACKAGE trips it also sends the recipient tracking-link SMS here (deferred from
@@ -29,6 +30,16 @@ Rules (policy: re-dispatch, auto-cancel only on timeout, never touch in_progress
       original dispatch time and being cancelled on the very next sweep.
       select_for_update + re-check inside atomic.
       Re-push in rule (c) also uses push_new_ride_to_drivers (kind-aware).
+  (e) IN_PROGRESS whose driver is None OR driver_approved=False (revoked for
+      fraud / expired docs) → auto-cancel (status CANCELLED + cancelled_at) +
+      notify rider. Backstop for a trip whose driver was revoked mid-flight: the
+      assigned driver can still complete it themselves (DriverRideStatusView is
+      not gated on driver_approved), but if they never do the trip is stranded
+      forever (the rider can't cancel from in_progress and can't book again) and
+      it can never settle for pay (ride_service._do_settle skips crediting a
+      revoked driver). We deliberately do NOT touch in_progress trips whose driver
+      is merely offline/stale but still APPROVED — that driver is legitimately
+      mid-trip and will return. select_for_update + re-check inside atomic.
 """
 from datetime import timedelta
 
@@ -59,6 +70,7 @@ class Command(BaseCommand):
 
         now = timezone.now()
         repushed = cancelled = released = released_scheduled = 0
+        cancelled_stranded = 0
 
         # ── (d) Release SCHEDULED trips whose time is approaching ─────────────────
         # A scheduled trip is released when scheduled_for <= now+10min.
@@ -211,7 +223,47 @@ class Command(BaseCommand):
                 pass
             released += 1
 
+        # ── (e) Auto-cancel in_progress trips whose driver is gone/revoked ────────
+        # Backstop for the stranded-trip bug: an in_progress trip whose driver is
+        # None or was REVOKED (driver_approved=False) can never settle for pay and
+        # the rider can't cancel it. The assigned driver may still complete it
+        # themselves; if they don't, this frees the rider (auto-cancel, not charged).
+        # A merely-offline but still-APPROVED driver is left alone — they're
+        # legitimately mid-trip.
+        candidates = RideRequest.objects.filter(
+            status=RideRequest.Status.IN_PROGRESS,
+        ).select_related("driver")
+        for ride in candidates:
+            drv = ride.driver
+            if drv is not None and drv.driver_approved:
+                continue  # legitimate in-flight trip — never touch it
+            with transaction.atomic():
+                r = (
+                    RideRequest.objects.select_for_update()
+                    .filter(pk=ride.id, status=RideRequest.Status.IN_PROGRESS)
+                    .first()
+                )
+                if r is None:
+                    continue  # completed / advanced between scan and lock
+                # Re-read approval under the ride lock (approval could have been
+                # restored, or the driver completed, between the scan and the lock).
+                # We deliberately do NOT lock the driver row.
+                rdrv = r.driver
+                if rdrv is not None and rdrv.driver_approved:
+                    continue
+                r.status = RideRequest.Status.CANCELLED
+                r.cancelled_at = now
+                r.save(update_fields=["status", "cancelled_at"])
+
+            # Notify rider — best-effort, after commit (mirrors rule (b)'s auto-cancel)
+            try:
+                push_ride_event_to_rider(r.rider_id, "no_driver_found")
+            except Exception:
+                pass
+            cancelled_stranded += 1
+
         self.stdout.write(self.style.SUCCESS(
             f"sweep_ride_requests: repushed={repushed} cancelled={cancelled} "
-            f"released={released} released_scheduled={released_scheduled}"
+            f"released={released} released_scheduled={released_scheduled} "
+            f"cancelled_stranded={cancelled_stranded}"
         ))
