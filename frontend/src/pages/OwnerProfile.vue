@@ -375,9 +375,17 @@ watch(
   () => { scheduleLocal.value = _buildScheduleLocal(); },
 );
 
+// A day's business-hours window is genuinely invalid ONLY when it has both an
+// open and a close time and they are identical — a zero-length / ambiguous range
+// (is it "closed all day" or "open 24h"?), so we make the owner pick a real one.
+// close < open is NOT invalid: it means the window closes after midnight (e.g. a
+// bar open 18:00–02:00). The backend (tenancy/openstate.schedule_open_now) now
+// evaluates that as a wraparound window, so the editor must allow saving it.
+const _isInvalidHoursWindow = (open, close) => Boolean(open) && Boolean(close) && open === close;
+
 const saveSchedule = async () => {
   const invalidDay = scheduleLocal.value.find(
-    (d) => d.enabled && d.open && d.close && d.close <= d.open,
+    (d) => d.enabled && _isInvalidHoursWindow(d.open, d.close),
   );
   if (invalidDay) {
     toast.show(t('orderHandling.hoursInvalidRange', { day: invalidDay.label }), 'error');

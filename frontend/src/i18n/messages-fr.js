@@ -4873,7 +4873,7 @@ orderHandling: {
   hoursClose: "Heure de fermeture ({day})",
   hoursClosed: "Ferme",
   hoursSaved: "Horaires d'ouverture enregistres.",
-  hoursInvalidRange: "{day} : l heure de fermeture doit etre posterieure a l heure d ouverture.",
+  hoursInvalidRange: "{day} : l heure d ouverture et de fermeture ne peuvent pas etre identiques. Pour fermer apres minuit, indiquez simplement une heure de fermeture plus tot.",
   dayMon: "Lun",
   dayTue: "Mar",
   dayWed: "Mer",
