@@ -3160,13 +3160,20 @@ class AdminWalletVoucherView(APIView):
             except (ValueError, TypeError):
                 pass
 
-        # OPS: voucher batches are real platform money. A flaky network retry or a
-        # double-submit must not mint duplicate batches. Dedupe on the client-supplied
-        # idempotency_key via the shared cache (the same backend the voucher-redeem
-        # lockout uses); cache.add is an atomic set-if-absent so concurrent duplicates
-        # race safely. All validation above runs first, so a rejected request never
-        # consumes the key.
+        # OPS / OWNER-9: voucher batches are real platform money. A flaky network retry
+        # or a double-submit must not mint duplicate batches. Dedup has two layers:
+        #  1. Cache fast-path (the same backend the voucher-redeem lockout uses): an
+        #     atomic cache.add lock races concurrent duplicates, and a cached result
+        #     replays a just-completed batch cheaply.
+        #  2. DURABLE authority (VoucherBatch, unique idempotency_key): the cache can be
+        #     evicted between a client's retries, so the DB — not the cache — is the
+        #     authority, mirroring the unique idempotency_key on WalletTransaction /
+        #     TenantFloatTransaction. The uniqueness is enforced INSIDE the create
+        #     transaction, so even a racing insert replays instead of minting twice.
+        # All validation above runs first, so a rejected request never consumes the key.
         from django.core.cache import cache as _idem_cache
+        from django.db import IntegrityError, transaction as _idem_tx
+        from .models import VoucherBatch
         raw_idem = str(request.data.get("idempotency_key") or "").strip()[:128] or None
         idem_result_key = f"adminvoucher:result:{raw_idem}" if raw_idem else None
         idem_lock_key = f"adminvoucher:lock:{raw_idem}" if raw_idem else None
@@ -3176,6 +3183,12 @@ class AdminWalletVoucherView(APIView):
                 # Exact replay of an already-completed batch — return the same codes
                 # without minting a second batch.
                 return Response({**cached, "idempotent_replay": True}, status=status.HTTP_200_OK)
+            # Cache miss can mean "never seen" OR "seen but evicted". Consult the durable
+            # record before minting: a committed batch replays even with a cold cache.
+            prior = VoucherBatch.objects.filter(idempotency_key=raw_idem).first()
+            if prior is not None:
+                _idem_cache.set(idem_result_key, prior.result, ADMIN_VOUCHER_IDEM_TTL)
+                return Response({**prior.result, "idempotent_replay": True}, status=status.HTTP_200_OK)
             if not _idem_cache.add(idem_lock_key, "1", ADMIN_VOUCHER_IDEM_TTL):
                 # This key is already in flight (a true concurrent double-submit) and its
                 # result isn't cached yet — refuse rather than duplicate.
@@ -3185,15 +3198,35 @@ class AdminWalletVoucherView(APIView):
                 )
 
         try:
-            vouchers = WalletVoucher.objects.bulk_create([
-                WalletVoucher(
-                    code=WalletVoucher.generate_code(),
-                    amount=amount,
-                    note=note,
-                    expires_at=expires_at,
-                )
-                for _ in range(count)
-            ])
+            with _idem_tx.atomic():
+                vouchers = WalletVoucher.objects.bulk_create([
+                    WalletVoucher(
+                        code=WalletVoucher.generate_code(),
+                        amount=amount,
+                        note=note,
+                        expires_at=expires_at,
+                    )
+                    for _ in range(count)
+                ])
+                payload = {
+                    "created": len(vouchers),
+                    "codes": [v.code for v in vouchers],
+                    "amount": str(amount),
+                    "expires_at": expires_at.isoformat() if expires_at else None,
+                }
+                if raw_idem:
+                    # Claim the key durably. A prior COMMITTED batch with this key (or a
+                    # racing insert) violates the unique constraint → IntegrityError rolls
+                    # back these just-minted vouchers and we replay the original below.
+                    VoucherBatch.objects.create(idempotency_key=raw_idem, result=payload)
+        except IntegrityError:
+            if idem_lock_key:
+                _idem_cache.delete(idem_lock_key)
+            prior = VoucherBatch.objects.filter(idempotency_key=raw_idem).first()
+            if prior is not None:
+                _idem_cache.set(idem_result_key, prior.result, ADMIN_VOUCHER_IDEM_TTL)
+                return Response({**prior.result, "idempotent_replay": True}, status=status.HTTP_200_OK)
+            raise
         except Exception:
             # Free the key so a genuine retry after a server-side failure isn't blocked.
             if idem_lock_key:
@@ -3207,14 +3240,8 @@ class AdminWalletVoucherView(APIView):
             metadata={"amount": str(amount), "count": len(vouchers),
                       "expires_at": expires_at.isoformat() if expires_at else None},
         )
-        payload = {
-            "created": len(vouchers),
-            "codes": [v.code for v in vouchers],
-            "amount": str(amount),
-            "expires_at": expires_at.isoformat() if expires_at else None,
-        }
         if raw_idem:
-            # Store the batch result so an exact replay returns the same codes.
+            # Warm the cache so an exact replay returns the same codes without a DB hit.
             _idem_cache.set(idem_result_key, payload, ADMIN_VOUCHER_IDEM_TTL)
         return Response(payload, status=status.HTTP_201_CREATED)
 
@@ -7527,6 +7554,7 @@ class AdminDriverApprovalView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
 
+        reopened_ids = []  # OWNER-8: DeliveryJobs re-opened by a revoke (see else branch)
         if approve:
             driver.driver_approved = True
             # A re-approval supersedes any earlier rejection — clear its trace.
@@ -7547,6 +7575,62 @@ class AdminDriverApprovalView(APIView):
                 "driver_rejection_reason", "driver_rejected_at", "updated_at",
             ])
 
+            # OWNER-8: cascade the revocation to the driver's in-flight DELIVERY jobs.
+            # A revoked driver can no longer advance a job — the DELIVERED and no-show
+            # credit paths re-check driver_approved and the driver views gate on it — so
+            # any job they were actively holding (assigned/at_restaurant/picked_up) would
+            # be STRANDED: the customer's order pinned to a driver who can't move it, with
+            # no sweep or owner action to recover it. Re-open each active job to dispatch,
+            # MIRRORING OwnerDeliveryJobActionView's redispatch reset, so a fresh driver
+            # picks it up. Terminal jobs (delivered/failed/cancelled) are never touched.
+            # (Delivery analog of the revoked-driver ride unstick shipped in #276.)
+            from django.db import transaction as _tx
+            from .models import DeliveryJob as _DJob
+            with _tx.atomic():
+                active_jobs = list(
+                    _DJob.objects.select_for_update().filter(
+                        driver_id=driver.id, status__in=_DJob.ACTIVE_STATUSES
+                    )
+                )
+                for job in active_jobs:
+                    job.driver = None
+                    job.status = _DJob.Status.SEARCHING
+                    job.assigned_at = None
+                    job.picked_up_at = None
+                    job.failed_at = None
+                    job.failure_reason = ""
+                    job.failure_note = ""
+                    job.owner_alerted_at = None
+                    job.code_attempts = 0
+                    job.code_locked_until = None
+                    job.redispatch_count = (job.redispatch_count or 0) + 1
+                    job.resolution = _DJob.Resolution.REDISPATCHED
+                    # Fresh ranked-offer cascade (any driver eligible again).
+                    job.offered_to = None
+                    job.offer_expires_at = None
+                    job.declined_by = []
+                    job.offer_round = 0
+                    job.is_open_pool = False
+                    job.save(update_fields=[
+                        "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                        "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                        "code_locked_until", "redispatch_count", "resolution",
+                        "offered_to", "offer_expires_at", "declined_by", "offer_round",
+                        "is_open_pool",
+                    ])
+                    reopened_ids.append(job.id)
+
+            # Re-enter the ranked-offer cascade for each re-opened job (nearest free
+            # driver first, then the open pool) — this is what notifies drivers, exactly
+            # as the owner's redispatch action does. Best-effort: a dispatch hiccup must
+            # not fail the revoke itself.
+            for _jid in reopened_ids:
+                try:
+                    from accounts.dispatch import offer_to_next_driver
+                    offer_to_next_driver(_jid)
+                except Exception:
+                    pass
+
         log_admin_action(
             action=(AdminAuditLog.Actions.DRIVER_APPROVED if approve
                     else AdminAuditLog.Actions.DRIVER_REJECTED),
@@ -7558,6 +7642,7 @@ class AdminDriverApprovalView(APIView):
             "id": driver.id,
             "is_driver": bool(driver.is_driver),
             "approved": bool(driver.driver_approved),
+            "reopened_deliveries": len(reopened_ids),
         })
 
 

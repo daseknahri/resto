@@ -559,6 +559,33 @@ class WalletVoucher(models.Model):
                 return code
 
 
+class VoucherBatch(models.Model):
+    """Durable idempotency record for an admin voucher-batch mint (OWNER-9).
+
+    Voucher batches are real platform money. AdminWalletVoucherView dedupes retries via
+    the shared cache, but a cache eviction between a client's retries could let a second
+    identical batch mint — every other admin money endpoint has a DURABLE (DB) guard.
+    This row is that authority: the unique `idempotency_key` (mirroring the unique
+    idempotency_key on WalletTransaction / TenantFloatTransaction) makes a duplicate mint
+    fail inside the create transaction, and the stored `result` lets the retry replay the
+    ORIGINAL batch's response instead of minting again.
+
+    `result` holds the same payload the endpoint returns (created count, codes, amount,
+    expiry). The voucher codes are bearer credentials — they already live in the DB as
+    WalletVoucher rows; like those, this row is never logged. Lives in the public schema.
+    """
+
+    idempotency_key = models.CharField(max_length=160, unique=True)
+    result = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"VoucherBatch {self.idempotency_key}"
+
+
 class User(AbstractUser):
     class Roles(models.TextChoices):
         PLATFORM_SUPERADMIN = "platform_superadmin", "Platform Superadmin"
