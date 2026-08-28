@@ -489,12 +489,17 @@ class B1_EnrollmentFlowTests(TestCase):
         device.refresh_from_db()
         stored_hashes = device.backup_codes
 
-        # Stored hashes must not equal plaintext codes.
+        # Stored values must be proper make_password (PBKDF2) hashes that verify the
+        # plaintext — deterministic proof the code is hashed, not stored in plaintext.
+        # (The old "each dash-segment must not be a substring of the hash" check was
+        # flaky: a short hex segment like "0000" can appear in the base64 hash by
+        # chance, failing the test ~randomly for any PR.)
+        from django.contrib.auth.hashers import check_password
+
         for plaintext, stored in zip(plaintext_codes, stored_hashes):
             self.assertNotEqual(plaintext, stored)
-            # Hash must not contain the raw dash-separated segments.
-            for segment in plaintext.split("-"):
-                self.assertNotIn(segment, stored)
+            self.assertTrue(stored.startswith("pbkdf2_"))
+            self.assertTrue(check_password(plaintext, stored))
 
     def test_setup_confirmed_returns_409(self):
         """Setup on an already-confirmed device returns 409."""
