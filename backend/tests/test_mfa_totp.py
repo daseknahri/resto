@@ -75,9 +75,14 @@ class A1_BackupCodeTests(SimpleTestCase):
         plaintext = "abcd-1234-efgh-5678"
         h = UserTOTPDevice._hash_backup_code(plaintext)
         self.assertNotEqual(h, plaintext)
-        # Must be a recognisable make_password hash (PBKDF2 starts with pbkdf2_ or similar)
-        # Just ensure it contains no fragment of the plaintext.
-        self.assertNotIn("abcd", h)
+        # Deterministic proof it's hashed, not stored raw: it's a make_password
+        # (PBKDF2) hash that verifies the plaintext. (A "fragment not a substring
+        # of the hash" check is flaky — every pbkdf2 hash carries a fixed
+        # "$1000000$" iteration count containing "0000", and the random base64
+        # salt/digest can contain any short fragment by chance.)
+        from django.contrib.auth.hashers import check_password
+        self.assertTrue(h.startswith("pbkdf2_"))
+        self.assertTrue(check_password(plaintext, h))
 
     def test_verify_correct_code_returns_true(self):
         plaintext = "test-code-0001-abcd"
