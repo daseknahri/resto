@@ -332,10 +332,18 @@
             :placeholder="t('ridePage.addressPlaceholder')"
             :aria-label="t('ridePage.pickupLabel')"
           />
+          <!-- Leaflet map — tap to place pickup pin -->
+          <div
+            ref="pickupMapEl"
+            class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"
+            role="application"
+            :aria-label="t('ridePage.pickupMapAria')"
+          />
           <p v-if="pickupLatLng" class="text-[11px] text-emerald-400 flex items-center gap-1">
             <AppIcon name="check" class="h-3 w-3" aria-hidden="true" />
             {{ pickupLatLng.lat.toFixed(5) }}, {{ pickupLatLng.lng.toFixed(5) }}
           </p>
+          <p v-else class="text-[11px] text-slate-500">{{ t('ridePage.pickupMapHint') }}</p>
         </section>
 
         <!-- ── Drop-off + map ── -->
@@ -373,8 +381,8 @@
           <div
             ref="pickMapEl"
             class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"
-            role="img"
-            :aria-label="t('ridePage.dropoffLabel')"
+            role="application"
+            :aria-label="t('ridePage.dropoffMapAria')"
           />
           <p v-if="dropoffLatLng" class="text-[11px] text-indigo-300 flex items-center gap-1">
             <AppIcon name="check" class="h-3 w-3" aria-hidden="true" />
@@ -417,7 +425,11 @@
               </div>
             </template>
             <template v-else>
-              <p class="text-xs text-slate-500">{{ canEstimate ? t('ridePage.estimatingHint') : t('ridePage.pickBothHint') }}</p>
+              <p v-if="estimateBlocked" role="status" class="flex items-start gap-1.5 text-xs text-amber-300">
+                <AppIcon name="info" class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{{ estimateBlockedMsg }}</span>
+              </p>
+              <p v-else class="text-xs text-slate-500">{{ canEstimate ? t('ridePage.estimatingHint') : t('ridePage.pickBothHint') }}</p>
             </template>
           </div>
 
@@ -506,7 +518,7 @@
           >
             <span v-if="requesting">{{ t('common.loading') }}</span>
             <span v-else-if="estimating">{{ t('ridePage.estimatingHint') }}</span>
-            <span v-else-if="!estimate">{{ canEstimate ? t('ridePage.estimatingHint') : t('ridePage.requestCta') }}</span>
+            <span v-else-if="!estimate">{{ (canEstimate && !estimateBlocked) ? t('ridePage.estimatingHint') : t('ridePage.requestCta') }}</span>
             <span v-else>{{ scheduleEnabled ? t('tripSchedule.scheduledBadge') : t('ridePage.requestCta') }}</span>
           </button>
         </div>
@@ -617,7 +629,7 @@ const applySavedAddress = (addr, target) => {
     pickupAddress.value = addr.address || '';
     if (hasPos) {
       pickupLatLng.value = { lat, lng };
-      if (_pickMap) ensurePickupMarker(lat, lng);
+      if (_pickupMap) ensurePickupMarker(lat, lng);
     }
   } else {
     dropoffAddress.value = addr.address || '';
@@ -708,6 +720,28 @@ const canEstimate = computed(
     (dropoffLatLng.value || dropoffAddress.value.trim()),
 );
 
+// The estimate is *stuck* when the user has entered enough to want a fare
+// (canEstimate) but a required coordinate is still missing. Typing an address
+// never geocodes, so the auto-estimate watcher — which needs BOTH lat/lng — can
+// never fire, leaving the CTA disabled behind a permanent "Calculating…". Detect
+// that dead-end so the UI can prompt for a pin instead of spinning forever.
+const estimateBlocked = computed(
+  () =>
+    !estimate.value &&
+    !estimating.value &&
+    Boolean(canEstimate.value) &&
+    (!pickupLatLng.value || !dropoffLatLng.value),
+);
+
+// Actionable prompt naming exactly which point still needs a pin.
+const estimateBlockedMsg = computed(() => {
+  const noPickup  = !pickupLatLng.value;
+  const noDropoff = !dropoffLatLng.value;
+  if (noPickup && noDropoff) return t('ridePage.needBothPins');
+  if (noPickup) return t('ridePage.needPickupPin');
+  return t('ridePage.needDropoffPin');
+});
+
 const rideStatusLabel = computed(() => {
   switch (activeRide.value?.status) {
     case 'searching':   return t('ridePage.searching');
@@ -735,9 +769,9 @@ const useMyLocation = () => {
     (pos) => {
       pickupLatLng.value = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       locating.value = false;
-      // Centre pick-map on user position
-      if (_pickMap) {
-        _pickMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
+      // Centre the pickup map on the user position and drop the pickup pin
+      if (_pickupMap) {
+        _pickupMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
         ensurePickupMarker(pos.coords.latitude, pos.coords.longitude);
       }
     },
@@ -934,6 +968,9 @@ const rebookRide = (ride) => {
   const pLng = Number(ride.pickup_lng);
   if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
     pickupLatLng.value = { lat: pLat, lng: pLng };
+    nextTick(() => {
+      if (_pickupMap) ensurePickupMarker(pLat, pLng);
+    });
   } else {
     pickupLatLng.value = null;
   }
@@ -1045,11 +1082,13 @@ const handleVisibilityChange = () => {
   }
 };
 
-// ── Leaflet: pick-map (drop-off pin) ─────────────────────────────────────────
-const pickMapEl      = ref(null);
+// ── Leaflet: booking maps (pickup pin + drop-off pin) ────────────────────────
+const pickMapEl      = ref(null);   // drop-off map element
+const pickupMapEl    = ref(null);   // pickup map element
 const trackingMapEl  = ref(null);
 let _leaflet         = null;
-let _pickMap         = null;
+let _pickMap         = null;         // drop-off map (holds _dropoffMarker)
+let _pickupMap       = null;         // pickup map   (holds _pickupMarker)
 let _pickupMarker    = null;
 let _dropoffMarker   = null;
 let _trackMap        = null;
@@ -1074,14 +1113,17 @@ const ensureLeaflet = async () => {
   return L;
 };
 
+// Place/move the pickup pin on the pickup map and recenter (used by "Use my
+// location", saved-address chips, and rebook).
 const ensurePickupMarker = (lat, lng) => {
-  if (!_pickMap || !_leaflet) return;
+  if (!_pickupMap || !_leaflet) return;
   const pos = [lat, lng];
   if (!_pickupMarker) {
-    _pickupMarker = _leaflet.marker(pos, { opacity: 0.85 }).addTo(_pickMap);
+    _pickupMarker = _leaflet.marker(pos).addTo(_pickupMap);
   } else {
     _pickupMarker.setLatLng(pos);
   }
+  _pickupMap.setView(pos, 14);
 };
 
 // Place/move the drop-off pin on the pick-map and recenter (used by saved-address chips).
@@ -1118,8 +1160,39 @@ const initPickMap = async () => {
 };
 
 const destroyPickMap = () => {
-  if (_pickMap) { _pickMap.remove(); _pickMap = null; _pickupMarker = null; _dropoffMarker = null; }
+  if (_pickMap) { _pickMap.remove(); _pickMap = null; _dropoffMarker = null; }
 };
+
+// Pickup map — mirrors the drop-off map exactly (own instance, marker, click
+// handler, teardown). Tap-to-pin sets the pickup coordinate so a typed pickup is
+// no longer a dead end for the fare estimate.
+const initPickupMap = async () => {
+  if (!pickupMapEl.value) return;
+  const L = await ensureLeaflet();
+  const defaultCenter = [33.5731, -7.5898]; // Casablanca fallback
+  _pickupMap = L.map(pickupMapEl.value, { zoomControl: false, attributionControl: false }).setView(defaultCenter, 12);
+  addTileLayer(L, _pickupMap);
+
+  // Tap to set pickup
+  _pickupMap.on('click', (e) => {
+    const { lat, lng } = e.latlng;
+    pickupLatLng.value = { lat, lng };
+    if (!_pickupMarker) {
+      _pickupMarker = L.marker([lat, lng]).addTo(_pickupMap);
+    } else {
+      _pickupMarker.setLatLng([lat, lng]);
+    }
+  });
+
+  setTimeout(() => _pickupMap && _pickupMap.invalidateSize(), 0);
+};
+
+const destroyPickupMap = () => {
+  if (_pickupMap) { _pickupMap.remove(); _pickupMap = null; _pickupMarker = null; }
+};
+
+// Init both booking maps when the form section becomes visible.
+const initBookingMaps = () => { initPickMap(); initPickupMap(); };
 
 // ── Leaflet: tracking map ─────────────────────────────────────────────────────
 const renderTrackingMap = async () => {
@@ -1151,10 +1224,10 @@ watch(
   { immediate: true },
 );
 
-// Re-init pick-map when the form section becomes visible
+// Re-init booking maps when the form section becomes visible
 watch(
   () => customerStore.isAuthenticated,
-  (auth) => { if (auth) nextTick(initPickMap); },
+  (auth) => { if (auth) nextTick(initBookingMaps); },
 );
 
 // ── Auto-estimate: fire in background when both coordinates are available ──────
@@ -1177,7 +1250,7 @@ onMounted(async () => {
       startPolling();
     }
     if (!activeRide.value) {
-      nextTick(initPickMap);
+      nextTick(initBookingMaps);
     }
     fetchHistory();
     fetchSavedAddresses();
@@ -1189,6 +1262,7 @@ onBeforeUnmount(() => {
   stopPolling();
   clearCancelGuard();
   destroyPickMap();
+  destroyPickupMap();
   destroyTrackingMap();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
