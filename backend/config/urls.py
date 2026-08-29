@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework import routers
 
+from accounts.ride_views import AdminRideForceResolveView
 from accounts.views import (
     OwnerDeliveryRadiusUpdateView,
     OwnerDeliveryZoneView,
@@ -282,6 +283,15 @@ urlpatterns = [
     path("api/customer/loyalty/redeem/", CustomerLoyaltyRedeemView.as_view(), name="customer-loyalty-redeem"),
     path("api/customer/loyalty/history/", CustomerLoyaltyHistoryView.as_view(), name="customer-loyalty-history"),
     path("api/currency-rates/", CurrencyRateListView.as_view(), name="currency-rates"),
+    # Admin force-resolve for a stuck ride/package trip (owner-decision #3). The sibling
+    # admin ride routes (AdminRideListView / AdminCarApprovalView) live in
+    # config/shared_api_urls.py; this one is registered here alongside them functionally
+    # (urlpatterns spreads shared_api_urlpatterns and the /api/v1/ alias is derived below).
+    path(
+        "api/admin/rides/<int:ride_id>/force-resolve/",
+        AdminRideForceResolveView.as_view(),
+        name="admin-ride-force-resolve",
+    ),
     path("api/", include(tenant_router.urls)),
     path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]

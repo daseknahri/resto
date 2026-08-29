@@ -35,6 +35,7 @@ from accounts.ride_views import (
     DriverRateRideView,
     AdminRideListView,
     AdminCarApprovalView,
+    AdminRideForceResolveView,
 )
 
 
@@ -1136,6 +1137,182 @@ class AdminCarApprovalViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
+# ── Owner-decision #3: Admin force-resolve a stuck trip ──────────────────────────
+
+class AdminRideForceResolveViewTests(SimpleTestCase):
+    """POST /api/admin/rides/<id>/force-resolve/ — IsPlatformAdmin support override."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminRideForceResolveView.as_view()
+
+    def _post(self, ride_id=1, data=None, is_admin=True):
+        req = self.factory.post(f"/api/admin/rides/{ride_id}/force-resolve/",
+                                data or {}, format="json")
+        req.session = _session()
+        req.user = MagicMock(is_authenticated=True, is_platform_admin=is_admin)
+        return req
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=False)
+    def test_non_admin_returns_403(self, _perm, _throttle):
+        resp = self.view(self._post(ride_id=1, data={"action": "cancel"}, is_admin=False),
+                         ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_views.push_ride_event_to_rider")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_force_cancel_in_progress(self, mock_ride_objs, mock_tx, mock_push,
+                                      mock_audit, _perm, _throttle):
+        """Admin force-cancels a stuck in_progress trip → CANCELLED, rider notified,
+        audited. No settlement runs (a wallet rider is not charged)."""
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="in_progress",
+                          driver=_make_customer(pk=2, is_driver=True))
+        ride.rider_id = 10
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(ride_id=1, data={"action": "cancel", "reason": "stuck"}),
+                         ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["resolved"], "cancelled")
+        self.assertEqual(ride.status, "cancelled")
+        ride.save.assert_called_once()
+        ufs = ride.save.call_args[1].get("update_fields", [])
+        self.assertIn("status", ufs)
+        self.assertIn("cancelled_at", ufs)
+        mock_push.assert_called_once_with(10, "no_driver_found")
+        mock_audit.assert_called_once()
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_service.settle_ride")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_force_complete_routes_through_settlement(self, mock_ride_objs, mock_tx,
+                                                      mock_settle, mock_audit, _perm, _throttle):
+        """Admin force-complete of an in_progress trip routes through settle_ride (the same
+        money path a driver completion uses) and marks the trip COMPLETED."""
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="in_progress",
+                          driver=_make_customer(pk=2, is_driver=True))
+        ride.rider_id = 10
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(ride_id=1, data={"action": "complete"}), ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["resolved"], "completed")
+        self.assertEqual(ride.status, "completed")
+        mock_settle.assert_called_once_with(ride)
+        ride.save.assert_called_once()
+        ufs = ride.save.call_args[1].get("update_fields", [])
+        self.assertIn("completed_at", ufs)
+        self.assertIn("paid_with_wallet", ufs)
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_service.credit_wallet")
+    @patch("accounts.ride_service.debit_wallet")
+    @patch("accounts.ride_service.PlatformConfig")
+    @patch("accounts.ride_service.Customer")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_force_complete_does_not_pay_revoked_driver(
+        self, mock_ride_objs, mock_tx, mock_svc_customer, mock_cfg, mock_debit,
+        mock_credit, mock_audit, _perm, _throttle,
+    ):
+        """Force-complete runs the REAL settlement, which skips crediting a revoked driver
+        (_do_settle re-checks driver_approved): the rider is debited, the driver is not."""
+        mock_tx.atomic.return_value = _noop_atomic()
+        cfg = MagicMock()
+        cfg.ride_commission_pct = Decimal("0")
+        mock_cfg.get_solo.return_value = cfg
+        # Driver approval revoked → the settlement re-check returns False.
+        mock_svc_customer.objects.filter.return_value.exists.return_value = False
+
+        ride = _make_ride(pk=1, status_val="in_progress",
+                          driver=_make_customer(pk=2, is_driver=True))
+        ride.rider_id = 10
+        ride.payment_method = "wallet"
+        ride.fare = Decimal("15.00")
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(ride_id=1, data={"action": "complete"}), ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "completed")
+        # Rider debited (the trip is being settled) but the revoked driver is NOT credited.
+        mock_debit.assert_called_once()
+        mock_credit.assert_not_called()
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_service.settle_ride")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_force_complete_rejected_before_in_progress(self, mock_ride_objs, mock_tx,
+                                                        mock_settle, mock_audit, _perm, _throttle):
+        """Force-complete is refused (409) for a trip that never reached in_progress —
+        there is no service rendered to settle."""
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="searching")
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(ride_id=1, data={"action": "complete"}), ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_in_progress")
+        mock_settle.assert_not_called()
+        ride.save.assert_not_called()
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_already_terminal_returns_409(self, mock_ride_objs, mock_tx, mock_audit,
+                                          _perm, _throttle):
+        """A trip that is already terminal cannot be force-resolved."""
+        mock_tx.atomic.return_value = _noop_atomic()
+        ride = _make_ride(pk=1, status_val="completed")
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        resp = self.view(self._post(ride_id=1, data={"action": "cancel"}), ride_id=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_terminal")
+        ride.save.assert_not_called()
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_bad_action_returns_400(self, mock_ride_objs, mock_tx, _perm, _throttle):
+        resp = self.view(self._post(ride_id=1, data={"action": "explode"}), ride_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "bad_action")
+
+    @patch("accounts.ride_views.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_ride_not_found_returns_404(self, mock_ride_objs, mock_tx, _perm, _throttle):
+        from accounts.models import RideRequest
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.side_effect = RideRequest.DoesNotExist
+        resp = self.view(self._post(ride_id=999, data={"action": "cancel"}), ride_id=999)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
 # ── Phase 2: Per-minute fare math ────────────────────────────────────────────────
 
 class PerMinuteFareTests(SimpleTestCase):
@@ -1797,6 +1974,9 @@ class SweepRideRequestsTests(SimpleTestCase):
         mock_rr.Status.ACCEPTED = "accepted"
         mock_rr.Status.ARRIVED = "arrived"
         mock_rr.Status.IN_PROGRESS = "in_progress"
+        # Rule (e2) reads ride.kind against RideRequest.Kind.* for the per-kind window.
+        mock_rr.Kind.RIDE = "ride"
+        mock_rr.Kind.PACKAGE = "package"
 
         self._run_command()
         return now
@@ -1848,19 +2028,135 @@ class SweepRideRequestsTests(SimpleTestCase):
     @patch("accounts.management.commands.sweep_ride_requests.transaction")
     @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
     @patch("accounts.management.commands.sweep_ride_requests.timezone")
-    def test_in_progress_approved_driver_not_touched(self, mock_tz, mock_tx, mock_rr,
-                                                      mock_push_drivers, mock_push_rider):
-        """A legitimate in_progress trip whose driver is still APPROVED is never touched
-        by rule (e) — even if that driver is offline (they're mid-trip and will return)."""
+    def test_in_progress_online_fresh_driver_not_touched(self, mock_tz, mock_tx, mock_rr,
+                                                         mock_push_drivers, mock_push_rider):
+        """Rule (e2) NEVER touches an approved driver who is still online AND freshly
+        pinging — even on a long-running trip (they're legitimately mid-trip)."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+
         approved = _make_customer(pk=5, is_driver=True, driver_approved=True,
-                                  is_driver_online=False)
-        ride_ip = _make_ride(pk=97, status_val="in_progress", driver=approved)
+                                  is_driver_online=True)
+        approved.driver_position_updated_at = now  # fresh GPS ping
+        ride_ip = _make_ride(pk=97, status_val="in_progress", driver=approved, kind="ride")
+        # Trip has been running a long time, but the driver is actively pinging.
+        ride_ip.started_at = now - timedelta(hours=5)
         ride_ip.rider_id = 12
 
         self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
 
         ride_ip.save.assert_not_called()
         mock_push_rider.assert_not_called()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_absentee_approved_driver_auto_cancelled(self, mock_tz, mock_tx, mock_rr,
+                                                                 mock_push_drivers, mock_push_rider):
+        """Owner-decision #3 (e2): an in_progress ride whose still-APPROVED driver has gone
+        offline AND GPS-stale past the generous window is auto-cancelled + rider notified."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+
+        absent = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                is_driver_online=False)
+        absent.driver_position_updated_at = now - timedelta(hours=3)  # last ping 3h ago
+        ride_ip = _make_ride(pk=98, status_val="in_progress", driver=absent, kind="ride")
+        ride_ip.started_at = now - timedelta(hours=3)  # past the 2h RIDE window
+        ride_ip.rider_id = 13
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_called_once()
+        ufs = ride_ip.save.call_args[1].get("update_fields", [])
+        self.assertIn("status", ufs)
+        self.assertIn("cancelled_at", ufs)
+        self.assertEqual(ride_ip.status, "cancelled")
+        mock_push_rider.assert_called_once_with(13, "no_driver_found")
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_offline_driver_within_window_not_touched(self, mock_tz, mock_tx, mock_rr,
+                                                                  mock_push_drivers, mock_push_rider):
+        """An approved driver who just went offline (trip NOT yet past the generous window)
+        is left alone — they are expected to return and complete the trip."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+
+        offline = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                 is_driver_online=False)
+        offline.driver_position_updated_at = now - timedelta(minutes=5)  # pinged recently
+        ride_ip = _make_ride(pk=99, status_val="in_progress", driver=offline, kind="ride")
+        ride_ip.started_at = now - timedelta(minutes=20)  # well within the 2h RIDE window
+        ride_ip.rider_id = 14
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_not_called()
+        mock_push_rider.assert_not_called()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_package_gets_longer_window(self, mock_tz, mock_tx, mock_rr,
+                                                    mock_push_drivers, mock_push_rider):
+        """Per-kind window: a PACKAGE trip whose absent driver has been gone 3h is NOT yet
+        cancelled (courier packages get the longer 8h window; a ride would be cancelled)."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+
+        absent = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                is_driver_online=False)
+        absent.driver_position_updated_at = now - timedelta(hours=3)
+        ride_ip = _make_ride(pk=100, status_val="in_progress", driver=absent, kind="package")
+        ride_ip.started_at = now - timedelta(hours=3)  # past 2h RIDE window, under 8h PACKAGE
+        ride_ip.rider_id = 15
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_not_called()
+        mock_push_rider.assert_not_called()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_package_cancelled_past_long_window(self, mock_tz, mock_tx, mock_rr,
+                                                           mock_push_drivers, mock_push_rider):
+        """A PACKAGE trip whose absent driver has been gone past the generous 8h window IS
+        auto-cancelled — the longer window still has a ceiling."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+
+        absent = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                is_driver_online=False)
+        absent.driver_position_updated_at = now - timedelta(hours=9)
+        ride_ip = _make_ride(pk=101, status_val="in_progress", driver=absent, kind="package")
+        ride_ip.started_at = now - timedelta(hours=9)  # past the 8h PACKAGE window
+        ride_ip.rider_id = 16
+
+        self._run_in_progress_sweep(mock_tz, mock_tx, mock_rr, ride_ip)
+
+        ride_ip.save.assert_called_once()
+        self.assertEqual(ride_ip.status, "cancelled")
+        mock_push_rider.assert_called_once_with(16, "no_driver_found")
 
 
 # ── GET /api/rides/history/ ───────────────────────────────────────────────────────

@@ -30,16 +30,24 @@ in_progress trip — see rule (e) for the one narrow exception):
       original dispatch time and being cancelled on the very next sweep.
       select_for_update + re-check inside atomic.
       Re-push in rule (c) also uses push_new_ride_to_drivers (kind-aware).
-  (e) IN_PROGRESS whose driver is None OR driver_approved=False (revoked for
-      fraud / expired docs) → auto-cancel (status CANCELLED + cancelled_at) +
-      notify rider. Backstop for a trip whose driver was revoked mid-flight: the
-      assigned driver can still complete it themselves (DriverRideStatusView is
-      not gated on driver_approved), but if they never do the trip is stranded
-      forever (the rider can't cancel from in_progress and can't book again) and
-      it can never settle for pay (ride_service._do_settle skips crediting a
-      revoked driver). We deliberately do NOT touch in_progress trips whose driver
-      is merely offline/stale but still APPROVED — that driver is legitimately
-      mid-trip and will return. select_for_update + re-check inside atomic.
+  (e) IN_PROGRESS recovery — two independent rescue conditions, both applied under
+      the ride row-lock, so a stuck trip is never stranded forever (the rider can't
+      cancel from in_progress and can't book again while one is open):
+        (e1) driver is None OR driver_approved=False (revoked for fraud / expired
+             docs) → auto-cancel immediately. Backstop for a trip whose driver was
+             revoked mid-flight: the assigned driver can still complete it themselves
+             (DriverRideStatusView is not gated on driver_approved), but if they never
+             do it can never settle for pay (ride_service._do_settle skips crediting a
+             revoked driver). Shipped in #276.
+        (e2) driver is still APPROVED but has gone ABSENT mid-trip — offline
+             (is_driver_online=False) or GPS-stale (driver_position_updated_at older
+             than the generous window) — AND the trip has been in_progress past a
+             GENEROUS, kind-aware timeout (a courier package may legitimately run much
+             longer than a passenger ride). Owner-decision #3: an approved driver who
+             simply vanishes past a generous window would otherwise strand the trip.
+      In BOTH cases the rider is auto-cancelled (NOT charged) and notified. A driver
+      who is still online AND freshly-pinging is NEVER touched — they are legitimately
+      in-flight and will complete the trip. select_for_update + re-check inside atomic.
 """
 from datetime import timedelta
 
@@ -61,6 +69,47 @@ REDISPATCH_AFTER = timedelta(minutes=3)
 AUTO_CANCEL_AFTER = timedelta(minutes=15)
 STALE_DRIVER_AFTER = timedelta(minutes=10)
 _PUSH_THROTTLE_SECONDS = 110  # ~ one sweep interval, so re-push fires at most once per run
+
+# Rule (e2): GENEROUS, kind-aware "the assigned driver has vanished mid-trip" timeout
+# for an IN_PROGRESS trip whose driver is still APPROVED. Deliberately far larger than
+# STALE_DRIVER_AFTER (rule c, 10 min): a driver who is genuinely mid-fare pings GPS
+# continuously (that is what powers the live tracking), so we only reclaim a
+# fare-bearing trip once BOTH the trip has been running longer than any legitimate trip
+# of that kind AND the driver currently looks gone (offline or GPS-stale). A courier
+# package delivery may legitimately run much longer than a passenger ride, so it gets a
+# longer window. The admin force-resolve endpoint covers the impatient/urgent case, so
+# the automatic net can afford to be this generous.
+IN_PROGRESS_ABSENT_AFTER_RIDE = timedelta(hours=2)
+IN_PROGRESS_ABSENT_AFTER_PACKAGE = timedelta(hours=8)
+
+
+def _approved_driver_absent(ride, drv, now) -> bool:
+    """True iff an IN_PROGRESS trip's still-APPROVED driver has vanished mid-trip (e2).
+
+    Two conjuncts, both required so we never disrupt a legitimate in-flight trip:
+      * the trip has been in_progress past the GENEROUS, kind-aware window
+        (measured from started_at, falling back to created_at for any anomalous row
+        with no start stamp), AND
+      * the driver currently looks GONE — toggled offline, never pinged, or whose GPS
+        has not updated within that same generous window.
+    A driver who is still online AND freshly-pinging fails the second conjunct, so an
+    actively-driving driver on a long trip is left alone. Caller has already confirmed
+    drv is not None and drv.driver_approved.
+    """
+    absent_after = (
+        IN_PROGRESS_ABSENT_AFTER_PACKAGE
+        if ride.kind == RideRequest.Kind.PACKAGE
+        else IN_PROGRESS_ABSENT_AFTER_RIDE
+    )
+    ref = ride.started_at or ride.created_at
+    trip_running_long = ref is None or ref <= now - absent_after
+    pos = drv.driver_position_updated_at
+    driver_gone = (
+        not drv.is_driver_online
+        or pos is None
+        or pos <= now - absent_after
+    )
+    return bool(trip_running_long and driver_gone)
 
 
 class Command(BaseCommand):
@@ -223,20 +272,22 @@ class Command(BaseCommand):
                 pass
             released += 1
 
-        # ── (e) Auto-cancel in_progress trips whose driver is gone/revoked ────────
-        # Backstop for the stranded-trip bug: an in_progress trip whose driver is
-        # None or was REVOKED (driver_approved=False) can never settle for pay and
-        # the rider can't cancel it. The assigned driver may still complete it
-        # themselves; if they don't, this frees the rider (auto-cancel, not charged).
-        # A merely-offline but still-APPROVED driver is left alone — they're
-        # legitimately mid-trip.
+        # ── (e) Recover stuck in_progress trips ──────────────────────────────────
+        # Two rescue conditions (see the module docstring):
+        #   (e1) driver None / REVOKED  → cancel immediately.
+        #   (e2) driver APPROVED but ABSENT past the generous kind-aware window → cancel.
+        # In both cases the rider is auto-cancelled (not charged) and notified. A trip
+        # whose approved driver is still online and freshly-pinging is left untouched.
         candidates = RideRequest.objects.filter(
             status=RideRequest.Status.IN_PROGRESS,
         ).select_related("driver")
         for ride in candidates:
             drv = ride.driver
-            if drv is not None and drv.driver_approved:
-                continue  # legitimate in-flight trip — never touch it
+            # Skip ONLY a legitimate in-flight trip: an approved driver who has NOT yet
+            # gone absent past the generous window. A None / revoked driver (e1) or an
+            # approved-but-vanished driver (e2) both fall through to the lock+cancel.
+            if drv is not None and drv.driver_approved and not _approved_driver_absent(ride, drv, now):
+                continue
             with transaction.atomic():
                 r = (
                     RideRequest.objects.select_for_update()
@@ -245,11 +296,11 @@ class Command(BaseCommand):
                 )
                 if r is None:
                     continue  # completed / advanced between scan and lock
-                # Re-read approval under the ride lock (approval could have been
-                # restored, or the driver completed, between the scan and the lock).
-                # We deliberately do NOT lock the driver row.
+                # Re-check under the ride lock: approval could have been restored, or an
+                # approved driver could have resumed pinging / completed, between the scan
+                # and the lock. We deliberately do NOT lock the driver row.
                 rdrv = r.driver
-                if rdrv is not None and rdrv.driver_approved:
+                if rdrv is not None and rdrv.driver_approved and not _approved_driver_absent(r, rdrv, now):
                     continue
                 r.status = RideRequest.Status.CANCELLED
                 r.cancelled_at = now
