@@ -139,6 +139,16 @@ def _make_item(pk=1, subtotal=Decimal("10.00"), is_voided=False, order_id=1):
     return item
 
 
+def _find_audit_call(logger_mock, event_token):
+    """Return the logger.info(...) call whose message (positional arg 0) contains
+    event_token, or None. Used to assert the OWNER-DECISION #7 transfer/merge audit
+    line was emitted (mirrors the actor capture on void/comp/payment)."""
+    for c in logger_mock.info.call_args_list:
+        if c.args and event_token in str(c.args[0]):
+            return c
+    return None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Contract 1 — StaffTableStatusView
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -455,6 +465,58 @@ class StaffTransferItemsViewTests(SimpleTestCase):
 
         self.assertNotIn(resp.status_code, [400, 403, 409])
 
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 1, "order_number": "ORD-001"})
+    @patch("menu.views._recompute_order_totals")
+    def test_happy_path_logs_actor_audit(self, recompute_mock, payload_mock, broadcast_mock):
+        """OWNER-DECISION #7: a successful transfer stays section-agnostic (no floor-section
+        gate) but MUST record WHO moved WHAT for audit — the acting user id, both order ids,
+        and the item count — mirroring the actor capture on void/comp/payment."""
+        item1 = _make_item(pk=10, order_id=1)
+        item2 = _make_item(pk=11, order_id=1)
+        src = _make_order(pk=1, items=[item1, item2])
+        dest = _make_order(pk=2, order_number="ORD-002")
+        actor = _user()
+        actor.id = 42
+
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model, \
+             patch("logging.getLogger") as gl:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            audit_logger = MagicMock()
+            gl.return_value = audit_logger
+
+            resp = self._post(1, {"item_ids": [10, 11], "dest_order_id": 2}, user=actor)
+
+        self.assertNotIn(resp.status_code, [400, 403, 409])
+        call = _find_audit_call(audit_logger, "transfer_items")
+        self.assertIsNotNone(call, "a successful transfer must emit an audit log line")
+        # Actor id, both order ids, and item count are all recorded (no PII / no secrets).
+        self.assertIn(42, call.args)           # acting user id
+        self.assertIn(1, call.args)            # source order id
+        self.assertIn(2, call.args)            # destination order id
+        self.assertIn(2, call.args)            # item count (2 items moved)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 1, "order_number": "ORD-001"})
+    @patch("menu.views._recompute_order_totals")
+    def test_no_section_gate_on_transfer(self, recompute_mock, payload_mock, broadcast_mock):
+        """OWNER-DECISION #7 guardrail: the audit trail must NOT come with a floor-section
+        ownership gate — managers legitimately consolidate across sections. Assert the view
+        source never calls _can_access_order (only _can_edit_tenant_order)."""
+        import inspect
+        src = inspect.getsource(StaffTransferItemsView.post)
+        # Match the call form (trailing "(") so an explanatory comment that merely
+        # names the helper does not trip this guardrail.
+        self.assertNotIn("_can_access_order(", src)
+        self.assertIn("_can_edit_tenant_order(", src)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Contract 3 — StaffMergeOrdersView
@@ -501,6 +563,57 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "source_has_payment")
         oi_model.objects.filter.return_value.update.assert_not_called()
         self.assertNotEqual(src.status, Order.Status.CANCELLED)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 2})
+    @patch("menu.views._recompute_order_totals")
+    def test_happy_path_logs_actor_audit(self, recompute_mock, payload_mock, broadcast_mock):
+        """OWNER-DECISION #7: a successful merge stays section-agnostic (no floor-section
+        gate) but MUST record WHO merged WHICH orders for audit — the acting user id, both
+        order ids, and the item count — mirroring the actor capture on void/comp/payment."""
+        item1 = _make_item(pk=10, order_id=1)
+        item2 = _make_item(pk=11, order_id=1)
+        src = _make_order(pk=1, items=[item1, item2])
+        dest = _make_order(pk=2, order_number="ORD-002")
+        actor = _user()
+        actor.id = 42
+
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model, \
+             patch("logging.getLogger") as gl:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            audit_logger = MagicMock()
+            gl.return_value = audit_logger
+
+            resp = self._post(2, {"src_order_id": 1}, user=actor)
+
+        self.assertNotIn(resp.status_code, [400, 403, 409])
+        # Items moved and the source cancelled — a genuine merge occurred.
+        oi_model.objects.filter.return_value.update.assert_called_once()
+        self.assertEqual(src.status, Order.Status.CANCELLED)
+        call = _find_audit_call(audit_logger, "merge_orders")
+        self.assertIsNotNone(call, "a successful merge must emit an audit log line")
+        self.assertIn(42, call.args)           # acting user id
+        self.assertIn(1, call.args)            # source order id
+        self.assertIn(2, call.args)            # destination order id
+        self.assertIn(2, call.args)            # item count (2 items merged)
+
+    def test_no_section_gate_on_merge(self):
+        """OWNER-DECISION #7 guardrail: no floor-section ownership gate on merge — managers
+        legitimately consolidate across sections. Assert the view never calls
+        _can_access_order (only _can_edit_tenant_order)."""
+        import inspect
+        src = inspect.getsource(StaffMergeOrdersView.post)
+        # Match the call form (trailing "(") so an explanatory comment that merely
+        # names the helper does not trip this guardrail.
+        self.assertNotIn("_can_access_order(", src)
+        self.assertIn("_can_edit_tenant_order(", src)
 
     def test_missing_src_order_id_is_400(self):
         resp = self._post(1, {})
