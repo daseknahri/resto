@@ -2424,6 +2424,13 @@ const _resolvedSplitAmount = (order) => {
 
 // Cash: POST to payments endpoint; partial stays open, full settles.
 const payCash = async (order) => {
+  // Same clock-in guard as the new-order entry points (onNewOrderClick /
+  // openNewOrderForTable): a not-clocked-in waiter must not take payments
+  // either (owner decision). A clocked-in waiter is unaffected.
+  if (!currentShift.value) {
+    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+    return;
+  }
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);
@@ -2447,6 +2454,13 @@ const payCash = async (order) => {
 
 // Wallet: charge the customer's wallet via their pay-code, then close out.
 const payWallet = async (order) => {
+  // Same clock-in guard as the new-order entry points (onNewOrderClick /
+  // openNewOrderForTable): a not-clocked-in waiter must not take payments
+  // either (owner decision). A clocked-in waiter is unaffected.
+  if (!currentShift.value) {
+    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+    return;
+  }
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);
