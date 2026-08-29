@@ -357,8 +357,10 @@ class AdminPlatformAnalyticsViewTests(SimpleTestCase):
 
             with patch("accounts.models.Customer") as mock_cust:
                 mock_cust.objects.count.return_value = 100
+                # .filter(is_driver=True).aggregate(...) serves both the driver-count stats
+                # (total/online) and driver_owed (Sum wallet_balance -> "s").
                 mock_cust.objects.filter.return_value.aggregate.return_value = {
-                    "total": 10, "online": 2, "total_balance": None
+                    "total": 10, "online": 2, "total_balance": None, "s": None,
                 }
                 mock_cust.objects.aggregate.return_value = {"total_balance": None}
 
@@ -376,6 +378,8 @@ class AdminPlatformAnalyticsViewTests(SimpleTestCase):
                                  patch("accounts.models.DriverPayout") as mock_dp, \
                                  patch("accounts.models.RideRequest") as mock_rr:
                                 mock_wt.objects.aggregate.return_value = _zero_txn
+                                # driver_paid reads CASHOUT rows (Sum amount -> "s").
+                                mock_wt.objects.filter.return_value.aggregate.return_value = {"s": None}
                                 mock_dp.objects.aggregate.return_value = {"s": None}
                                 _zero_ride = {"total": 0, "completed": 0, "cancelled": 0,
                                               "wallet_paid": 0, "fare_gmv": None}
@@ -387,6 +391,147 @@ class AdminPlatformAnalyticsViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for section in ("tenants", "customers", "deliveries", "zones", "flash_sales", "wallet", "rides"):
             self.assertIn(section, resp.data, f"Missing section: {section}")
+
+
+class AdminPlatformAnalyticsDriverOwedTests(SimpleTestCase):
+    """OWNER-DECISION #2 (reporting accuracy): the financials block's driver-money figures.
+
+    driver_owed is the platform's ACTUAL liability = the direct Sum of driver wallet balances
+    (Customer.filter(is_driver=True).aggregate(Sum("wallet_balance"))), NOT `earned - paid`
+    derived from DriverPayout. driver_paid is the total of all CASHOUT wallet transactions
+    (both direct payouts and self-service cash-outs), not just DriverPayout rows.
+    """
+
+    def _run(self, *, driver_wallet_sum, cashout_sum, delivered_earned):
+        from decimal import Decimal
+
+        Tenant = MagicMock()
+        Tenant.objects.all.return_value.count.return_value = 1
+        Tenant.objects.all.return_value.filter.return_value.count.return_value = 1
+        Tenant.objects.aggregate.return_value = {"s": Decimal("0")}
+
+        Cust = MagicMock()
+        Cust.objects.count.return_value = 5
+        # Shared by the driver-count stats (total/online) and driver_owed (Sum wallet_balance -> "s").
+        Cust.objects.filter.return_value.aggregate.return_value = {
+            "total": 4, "online": 2, "s": driver_wallet_sum,
+        }
+        Cust.objects.aggregate.return_value = {"total_balance": Decimal("0")}
+
+        DJ = MagicMock()
+        DJ.objects.aggregate.return_value = {
+            "total": 10, "delivered": 6, "failed": 1, "searching": 1,
+            "avg_rating": None, "total_fees": Decimal("0"), "total_payouts": Decimal("0"),
+        }
+        DJ.objects.exclude.return_value.count.return_value = 2
+        # driver_earned: DeliveryJob.filter(status="delivered").aggregate(Sum(driver_payout) -> "s").
+        DJ.objects.filter.return_value.aggregate.return_value = {"s": delivered_earned}
+
+        DZone = MagicMock()
+        DZone.objects.aggregate.return_value = {"total": 0, "active": 0}
+
+        FS = MagicMock()
+        FS.objects.aggregate.return_value = {"total": 0, "active": 0, "total_redemptions": 0}
+
+        Ride = MagicMock()
+        Ride.objects.aggregate.return_value = {
+            "total": 0, "completed": 0, "cancelled": 0, "wallet_paid": 0, "fare_gmv": Decimal("0"),
+        }
+        Ride.objects.exclude.return_value.count.return_value = 0
+
+        WT = MagicMock()
+        WT.Type.CASHOUT = "cashout"
+        WT.objects.aggregate.return_value = {
+            "total": 0, "total_bonus": Decimal("0"), "total_payments": Decimal("0"),
+        }
+        WT.objects.filter.return_value.values.return_value.annotate.return_value = []
+        # driver_paid: WalletTransaction.filter(type=CASHOUT).aggregate(Sum(amount) -> "s").
+        WT.objects.filter.return_value.aggregate.return_value = {"s": cashout_sum}
+
+        DP = MagicMock()  # DriverPayout must NOT be consulted for driver_owed/driver_paid.
+
+        with patch("tenancy.models.Tenant", Tenant), \
+             patch("accounts.models.Customer", Cust), \
+             patch("accounts.models.DeliveryJob", DJ), \
+             patch("accounts.models.DeliveryZone", DZone), \
+             patch("accounts.models.PlatformFlashSale", FS), \
+             patch("accounts.models.RideRequest", Ride), \
+             patch("accounts.models.WalletTransaction", WT), \
+             patch("accounts.models.DriverPayout", DP):
+            resp = AdminPlatformAnalyticsView().get(MagicMock())
+        return resp, Cust, WT, DP
+
+    def test_driver_owed_is_direct_wallet_balance_sum(self):
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        resp, Cust, WT, DP = self._run(
+            driver_wallet_sum=Decimal("123.45"),
+            cashout_sum=Decimal("77.77"),
+            delivered_earned=Decimal("500.00"),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        fin = resp.data["financials"]
+
+        # driver_owed comes straight from the driver wallet-balance Sum, NOT earned - paid
+        # (which would be 500.00 - 77.77 = 422.23).
+        self.assertEqual(fin["driver_owed"], 123.45)
+        self.assertNotEqual(fin["driver_owed"], 422.23)
+
+        # It must be the Sum over wallet_balance on the is_driver filter.
+        owed_calls = [
+            c for c in Cust.objects.filter.return_value.aggregate.call_args_list
+            if "s" in c.kwargs
+        ]
+        self.assertTrue(owed_calls, "driver_owed did not aggregate over the is_driver queryset")
+        expr = owed_calls[0].kwargs["s"]
+        self.assertIsInstance(expr, Sum)
+        self.assertEqual(expr.source_expressions[0].name, "wallet_balance")
+
+        # is_driver=True is the filter used for driver accounts.
+        self.assertTrue(
+            any(c.kwargs.get("is_driver") is True for c in Cust.objects.filter.call_args_list),
+            "driver_owed must filter Customer by is_driver=True",
+        )
+
+    def test_driver_paid_is_cashout_sum_not_driver_payout(self):
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        resp, Cust, WT, DP = self._run(
+            driver_wallet_sum=Decimal("123.45"),
+            cashout_sum=Decimal("77.77"),
+            delivered_earned=Decimal("500.00"),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        fin = resp.data["financials"]
+        self.assertEqual(fin["driver_paid"], 77.77)
+        self.assertEqual(fin["driver_earned"], 500.00)
+
+        # driver_paid filters WalletTransaction on the CASHOUT type and sums the amount.
+        self.assertTrue(
+            any(c.kwargs.get("type") == "cashout" for c in WT.objects.filter.call_args_list),
+            "driver_paid must filter WalletTransaction by type=CASHOUT",
+        )
+        paid_expr = WT.objects.filter.return_value.aggregate.call_args.kwargs["s"]
+        self.assertIsInstance(paid_expr, Sum)
+        self.assertEqual(paid_expr.source_expressions[0].name, "amount")
+
+        # Regression: the view no longer derives any driver-money figure from DriverPayout.
+        DP.objects.aggregate.assert_not_called()
+
+    def test_driver_owed_never_negative_when_wallets_empty(self):
+        from decimal import Decimal
+
+        # No driver wallet balances and no cash-outs -> owed clamps to 0.0 (can't go negative),
+        # even though delivered earnings are large. This is the whole point of Option A.
+        resp, Cust, WT, DP = self._run(
+            driver_wallet_sum=None,
+            cashout_sum=None,
+            delivered_earned=Decimal("999.00"),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["financials"]["driver_owed"], 0.0)
 
 
 # ── AdminDeliveryJobListView ──────────────────────────────────────────────────
