@@ -262,7 +262,12 @@ class PlatformAnalyticsRealizedBasisTests(SimpleTestCase):
 
         Cust = MagicMock()
         Cust.objects.count.return_value = 5
-        Cust.objects.filter.return_value.aggregate.return_value = {"total": 3, "online": 1}
+        # .filter(is_driver=True).aggregate(...) is called twice on the same mock: once for the
+        # driver-count stats (total/online) and once for driver_owed (Sum wallet_balance -> "s").
+        # One dict carries the keys for both reads.
+        Cust.objects.filter.return_value.aggregate.return_value = {
+            "total": 3, "online": 1, "s": Decimal("0"),
+        }
         Cust.objects.aggregate.return_value = {"total_balance": Decimal("0")}
 
         DJ = MagicMock()
@@ -290,6 +295,8 @@ class PlatformAnalyticsRealizedBasisTests(SimpleTestCase):
             "total": 0, "total_bonus": Decimal("0"), "total_payments": Decimal("0"),
         }
         WT.objects.filter.return_value.values.return_value.annotate.return_value = []
+        # driver_paid now reads WalletTransaction CASHOUT rows (Sum amount -> "s").
+        WT.objects.filter.return_value.aggregate.return_value = {"s": Decimal("0")}
 
         DP = MagicMock()
         DP.objects.aggregate.return_value = {"s": Decimal("0")}

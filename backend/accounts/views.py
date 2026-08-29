@@ -8069,15 +8069,35 @@ class AdminPlatformAnalyticsView(APIView):
 
         # ── Money model: outstanding liabilities ──────────────────────────────
         from decimal import Decimal as _Dec
-        from .models import DriverPayout, TenantFloatTransaction  # noqa: F401
+        from .models import TenantFloatTransaction  # noqa: F401
         from tenancy.models import Tenant as _Tenant
 
         total_float = _Tenant.objects.aggregate(s=Sum("float_balance"))["s"] or _Dec("0")
+
+        # The three driver-money figures below are now INDEPENDENTLY-accurate metrics, each
+        # a direct read of its own source. They intentionally need NOT satisfy
+        # earned == owed + paid:
+        #   • earned — gross driver earnings on DELIVERED jobs (informational lifetime total).
+        #   • owed   — the platform's ACTUAL current liability: money sitting unspent in driver
+        #              wallets. A direct Sum of driver wallet balances; it cannot go negative.
+        #   • paid   — every cash-out ever made: BOTH direct payouts (record_driver_payout, which
+        #              since #227 also debits the wallet as a CASHOUT txn) AND self-service
+        #              cash-outs. CASHOUT is stored as a positive magnitude and is used in exactly
+        #              those two payout paths, so summing CASHOUT rows is the single,
+        #              non-double-counting measure of total cash paid out. (The old driver_paid
+        #              summed only DriverPayout — missing self-service cash-outs; and
+        #              DriverPayout.sum + CASHOUT.sum would instead double-count every direct payout.)
         driver_earned = (
             DeliveryJob.objects.filter(status="delivered").aggregate(s=Sum("driver_payout"))["s"] or _Dec("0")
         )
-        driver_paid = DriverPayout.objects.aggregate(s=Sum("amount"))["s"] or _Dec("0")
-        driver_owed = driver_earned - driver_paid
+        driver_owed = (
+            Customer.objects.filter(is_driver=True).aggregate(s=Sum("wallet_balance"))["s"] or _Dec("0")
+        )
+        driver_paid = (
+            WalletTransaction.objects.filter(type=WalletTransaction.Type.CASHOUT)
+            .aggregate(s=Sum("amount"))["s"]
+            or _Dec("0")
+        )
 
         def _f(val, decimals=2):
             """Safely convert decimal/float/None to rounded float."""
@@ -8150,7 +8170,12 @@ class AdminPlatformAnalyticsView(APIView):
             "financials": {
                 "customer_wallet_liability": _f(wallet_agg["total_balance"]) or 0.0,
                 "restaurant_float_outstanding": _f(total_float) or 0.0,
+                # Independently-accurate driver-money metrics (see the money-model comment
+                # above): earned counts only delivered jobs; owed is the direct wallet-balance
+                # liability; paid is all cash-outs. earned != owed + paid by design.
+                "driver_earned": _f(driver_earned) or 0.0,
                 "driver_owed": _f(driver_owed) or 0.0,
+                "driver_paid": _f(driver_paid) or 0.0,
             },
             "rides": {
                 "total": ride_agg["total"] or 0,
