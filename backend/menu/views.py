@@ -6148,6 +6148,17 @@ class StaffTransferItemsView(APIView):
                 src.save(update_fields=["total", "updated_at"])
             dest.save(update_fields=["total", "updated_at"])
 
+        # OWNER-DECISION #7: transfer stays section-agnostic (managers legitimately
+        # consolidate items across floor sections — no _can_access_order gate), but the
+        # commit is recorded for audit so WHO moved WHAT is reconstructable after the
+        # fact — mirroring the actor capture on void/comp/payment. Logged post-commit so
+        # only genuinely-applied transfers are recorded. No PII / no bearer secrets.
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "staff.transfer_items actor_user_id=%s src_order_id=%s dest_order_id=%s item_count=%s",
+            getattr(request.user, "id", None), src.pk, dest.pk, len(requested),
+        )
+
         try:
             _broadcast_order_change(src)
         except Exception:
@@ -6250,6 +6261,17 @@ class StaffMergeOrdersView(APIView):
             dest.refresh_from_db()
             _recompute_order_totals(dest)
             dest.save(update_fields=["total", "updated_at"])
+
+        # OWNER-DECISION #7: merge stays section-agnostic (managers legitimately
+        # consolidate tabs across floor sections — no _can_access_order gate), but the
+        # commit is recorded for audit so WHO merged WHICH orders is reconstructable
+        # after the fact — mirroring the actor capture on void/comp/payment. Logged
+        # post-commit so only genuinely-applied merges are recorded. No PII / no secrets.
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "staff.merge_orders actor_user_id=%s src_order_id=%s dest_order_id=%s item_count=%s",
+            getattr(request.user, "id", None), src.pk, dest.pk, len(active_src_item_ids),
+        )
 
         try:
             _broadcast_order_change(src)
