@@ -12,6 +12,36 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-29 — owner-decisions closed out (final 6 of 12 → all 12 shipped)
+
+**Result:** `main` @ `3868224`, green. On the owner's "go with your recommendations," the remaining **6
+owner-decision items** were implemented on the engineering recommendation, each a CI-gated PR with tests —
+so **all 12 owner-decisions from the hardening sweep are now resolved**:
+
+- **#2 — platform `driver_owed`** (PR #290): fixed to the direct liability `Sum(wallet_balance) over
+  is_driver` (Option A), and `driver_paid = Sum(CASHOUT)`. (Corrected from the doc's original "add CASHOUT
+  to DriverPayout", which would double-count since #227 makes every payout also a CASHOUT tx.)
+- **#7 — transfer/merge audit** (PR #289): kept section-agnostic (managers legitimately consolidate across
+  floor sections — no `_can_access_order` gate) but now emit a post-commit audit log of the actor + order
+  ids + item count, mirroring void/comp's actor capture.
+- **#11 — clock-in for payments** (PR #288): the clock-in guard now gates all four payment paths
+  (`payCash`, `payWallet`, and the independent `payCashForSeat`/`payWalletForSeat` seat-split variants — the
+  latter two caught in review as they bypass the first two).
+- **#1 — ride typed-address dead-end** (PR #292): added a dedicated pickup Leaflet map (tap-to-pin) and an
+  explicit stuck-estimate prompt naming the missing pin, replacing the permanent "Calculating…".
+- **#5 — ride map a11y** (PR #292): both pin-setting maps changed from `role="img"` to `role="application"`
+  with descriptive labels; non-map paths (use-my-location, saved-address chips) confirmed keyboard-reachable.
+- **#3 — stuck `in_progress` recovery** (PR #291): sweep rule broadened to auto-cancel a trip whose
+  APPROVED driver went absent past a generous, kind-aware window (ride 2h / package 8h; online+fresh drivers
+  never touched), plus an `IsPlatformAdmin` `POST /api/admin/rides/<id>/force-resolve/` (cancel, or complete
+  via the existing `settle_ride` path that skips paying a revoked driver).
+
+Rides items #1/#3/#5 are the concrete pre-go-live blockers, now cleared (rides remain `VERTICALS_ENABLED`-
+gated). **Follow-ups noted (not blocking):** an `AdminRides.vue` button for the #3 endpoint, and a keyboard/
+geocoding path to set a ride drop-off pin without a saved address (#5 residual — geocoding was scoped out).
+
+---
+
 ## 2026-08-28 — owner-decision implementation (6 of 12 resolved + a flaky-test fix)
 
 **Result:** `main` @ `5b226e0`, green. The 12 owner-gated findings from the sweeps were packaged into a
