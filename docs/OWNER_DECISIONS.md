@@ -1,12 +1,20 @@
 # Owner-decision backlog — the 12 hardening-sweep items that need your call
 
-> **Progress (2026-08-28):** **6 of 12 shipped** on the engineering-recommendation where the call was a
-> clear correctness/safety fix (not a genuine business/policy question): **#4** overnight hours (PR #281),
-> **#6** comp-keeps-loyalty-points (PR #280), **#8** driver-revoke→delivery-cascade (PR #282), **#9**
-> durable voucher idempotency (PR #282), **#10** P2P recipient confirmation (PR #283), **#12** FR
-> ASCII-only enforced + CI check (PR #284). **6 still await your call** — the genuinely
-> business/policy/rides-go-live ones: **#1, #3, #5** (rides go-live), **#2** (`driver_owed` reporting
-> semantics), **#7** (floor-section ops policy — rec is leave-as-is), **#11** (clock-in labor policy).
+> **✅ COMPLETE (2026-08-29): all 12 owner-decisions shipped.** First wave (clear correctness/safety
+> calls): **#4** overnight hours (PR #281), **#6** comp-keeps-loyalty-points (PR #280), **#8**
+> driver-revoke→delivery-cascade (PR #282), **#9** durable voucher idempotency (PR #282), **#10** P2P
+> recipient confirmation (PR #283), **#12** FR ASCII-only enforced + CI check (PR #284). Second wave (the
+> owner said "go with your recommendations," so the remaining calls were implemented on my recommendation):
+> **#2** `driver_owed` = direct `Sum(driver wallet balances)` — Option A (PR #290), **#7** transfer/merge
+> stay section-agnostic + record the actor (PR #289), **#11** clock-in required for all four payment paths
+> (PR #288), **#1** ride pickup map + explicit stuck-estimate error (PR #292), **#5** pin-maps
+> `role=img`→`application` + keyboard alternatives (PR #292), **#3** stuck-`in_progress` recovery: sweep
+> absentee-timeout + admin force-resolve (PR #291). This doc is kept as the decision record; the sections
+> below preserve each item's rationale.
+>
+> **Follow-ups noted (not blocking):** an `AdminRides.vue` button for the #3 force-resolve endpoint; a
+> keyboard/geocoding path to set a ride **drop-off** pin without a saved address (#5 residual — geocoding
+> was scoped out). Both are pre-go-live rides polish.
 
 The two 2026-08 hardening audits fixed everything that was safe to fix autonomously. What's left is
 **12 items that hinge on a product / policy / accounting decision only you can make.** This doc turns
