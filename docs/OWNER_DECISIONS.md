@@ -26,7 +26,7 @@ or once a vertical goes live.
 | # | Item | Severity | The decision | My recommendation |
 |---|---|---|---|---|
 | 1 | Ride fare estimate never resolves for typed addresses | HIGH (rides) | How to get coordinates from a typed address | **Add pickup map + stuck-state error now; geocoding later** |
-| 2 | Platform-analytics `driver_owed` overstates liability | MED (money/reporting) | What `driver_owed` should mean | **Option B — subtract CASHOUT tx too** |
+| 2 | Platform-analytics `driver_owed` overstates liability | MED (money/reporting) | What `driver_owed` should mean | **Option A — `Sum(driver wallet balances)`** (corrected: naive add-CASHOUT double-counts) |
 | 3 | `in_progress` rides can't be force-resolved | MED (rides) | Admin force-resolve + absentee policy | **Add admin force-resolve; per-vertical timeout** (absentee case already backstopped by #276) |
 | 4 | Business-hours editor rejects overnight close times | MED (product) | Support overnight hours (close < open) | **Yes — implement wraparound** |
 | 5 | Ride drop-off map has no keyboard/SR path | MED (a11y) | Provide a non-map way to set a pin | **Yes — pairs with #1's geocode/search** |
@@ -43,11 +43,39 @@ or once a vertical goes live.
 ## Money / accounting
 
 ### 2 — Platform-analytics `driver_owed` overstates platform liability *(MED)*
-`backend/accounts/views.py:7959`. `AdminPlatformAnalyticsView` computes `driver_owed = driver_earned − driver_paid`, where `driver_paid` counts only `DriverPayout` rows. But drivers are paid **primarily via the wallet** (a cash-out debits the driver's wallet), so cash-outs aren't subtracted → the dashboard **overstates** what the platform still owes drivers.
-- **Decision:** what should `driver_owed` represent, and how to compute it without double-counting against `customer_wallet_liability`?
-- **Options:** (A) derive driver liability from actual unspent driver wallet balances; (B) subtract `CASHOUT` `WalletTransaction`s in addition to `DriverPayout`.
-- **My recommendation: Option B.** It's the minimal, correct alignment with the actual payout model and matches how the per-driver truth is computed elsewhere. (A) risks double-counting against the customer-wallet figure. Reporting-only — no money is mis-moved, just mis-displayed to you.
-- **Effort once decided:** small, backend-only, with a unit test.
+`backend/accounts/views.py` (financials block, ~L8076). `AdminPlatformAnalyticsView` computes
+`driver_earned = Sum(driver_payout on DELIVERED jobs)`, `driver_paid = Sum(DriverPayout.amount)`,
+`driver_owed = driver_earned − driver_paid`.
+
+> **⚠️ Corrected analysis (2026-08-28) — my original one-liner rec below was WRONG; here's the verified
+> ledger truth.** On investigation: `debit_wallet` stores CASHOUT amounts as **positive magnitudes**, and
+> `WalletTransaction.Type.CASHOUT` is used in **exactly two places, both driver payouts** — the #227
+> direct-settlement debit inside `record_driver_payout` **and** the self-service `confirm_cashout` debit. Two
+> consequences:
+> 1. **`driver_paid` currently undercounts** — it counts only `DriverPayout` rows, missing self-service
+>    cash-outs → `driver_owed` is overstated (the finding is real).
+> 2. **Naively "add CASHOUT to DriverPayout" (my old Option B) DOUBLE-COUNTS** — since #227, every
+>    `DriverPayout` *is already* a CASHOUT tx, so `DriverPayout.sum + CASHOUT.sum` counts each direct payout
+>    twice.
+>
+> The mechanically-correct `driver_paid` is therefore **`Sum(all CASHOUT WalletTransactions)`** (which already
+> includes both direct payouts and self-service cash-outs, all positive). **BUT** shipping only that can make
+> `driver_owed` go **negative**, because `driver_earned` counts only DELIVERED jobs and misses **no-show
+> payouts** (FAILED jobs credited via `noshow:{job.id}`) that *are* cashed out. So a correct fix is **two-part**:
+> `driver_paid = Sum(CASHOUT)` **and** `driver_earned` extended to include no-show/other driver credits (or,
+> equivalently, define `driver_owed` directly as `Sum(driver wallet balances)` — the direct measure of
+> "unspent driver earnings," which sidesteps the earned/paid reconstruction entirely).
+
+- **Decision (yours):** what should `driver_owed` represent — (A) the **direct** measure `Sum(driver wallet
+  balances)` (simplest, unambiguous, "money sitting in driver wallets"), or (B) the **flow** measure
+  `driver_earned − Sum(CASHOUT)` with `driver_earned` fixed to include no-show credits? Both are defensible;
+  (A) is less brittle.
+- **My (revised) recommendation: Option A** — `driver_owed = Sum(wallet_balance) over driver Customers`. It's
+  the actual liability, needs no earned/paid consistency juggling, and can't go negative. Reporting-only — no
+  money is mis-moved, just mis-displayed.
+- **Effort once decided:** small, backend-only, with a unit test — but it MUST be the correct computation
+  above, not the naive add-CASHOUT one. Held (not auto-shipped) precisely because a wrong financial figure is
+  worse than the current known-overstatement.
 
 ### 6 — Comp doesn't claw back loyalty points (void does) *(LOW)*
 `backend/menu/views.py:5565`. Voiding an item proportionally claws back the loyalty points that item earned; comping does not, despite the comp docstring claiming "identical money rule."
