@@ -1744,3 +1744,111 @@ class AdminCarApprovalView(APIView):
                 if driver.driver_insurance_expiry else None
             ),
         })
+
+
+# ── Admin: force-resolve a stuck trip ─────────────────────────────────────────────
+
+
+class AdminRideForceResolveView(APIView):
+    """POST /api/admin/rides/<id>/force-resolve/ — IsPlatformAdmin support override.
+
+    Owner-decision #3: manually resolve a STUCK non-terminal trip that the normal
+    lifecycle cannot move. The rider cannot cancel from in_progress (they would dodge a
+    live fare) and the sweep's absentee-driver timeout is deliberately generous, so
+    support needs a manual override for the occasional stranded trip.
+
+    Body:
+        action  — "cancel" (default) | "complete"
+        reason  — optional free-text note, recorded in the audit metadata (<=300 chars).
+
+    "cancel"  : ANY non-terminal trip → CANCELLED (+ cancelled_at). No settlement runs,
+                so a wallet rider is NOT charged — the trip is written off. Rider
+                notified (best-effort), mirroring the sweep's auto-cancel.
+    "complete": ONLY an in_progress trip (a real in-flight trip whose completion got
+                stuck — e.g. a lost package handover code) → COMPLETED (+ completed_at),
+                routed through the SAME settle_ride money path a driver completion uses.
+                settle_ride already skips paying a revoked driver (ride_service._do_settle
+                re-checks driver_approved under this row-lock) and records an explicit
+                cash fallback on an insufficient wallet, so no bad payout is possible.
+                Refused (409) for a trip that never reached in_progress — there is no
+                service rendered to settle.
+
+    select_for_update row-lock + status re-check inside the atomic block. A trip that is
+    already terminal is refused (409). Audit-logged (mirrors AdminRideListView).
+    """
+
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
+
+    def post(self, request, ride_id, *args, **kwargs):
+        from sales.audit import log_admin_action
+        from sales.models import AdminAuditLog
+
+        action = (request.data.get("action") or "cancel").strip().lower()
+        if action not in ("cancel", "complete"):
+            return Response(
+                {"detail": "action must be 'cancel' or 'complete'.", "code": "bad_action"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = str(request.data.get("reason") or "").strip()[:300]
+
+        now = _tz.now()
+        with _tx.atomic():
+            try:
+                ride = RideRequest.objects.select_for_update().get(pk=ride_id)
+            except RideRequest.DoesNotExist:
+                return Response(
+                    {"detail": "Ride not found.", "code": "not_found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if ride.status in RideRequest.TERMINAL_STATUSES:
+                return Response(
+                    {"detail": f"Trip is already {ride.status}.", "code": "already_terminal"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if action == "complete":
+                # Only a real in-flight trip can be force-completed — anything earlier
+                # has no service rendered to settle.
+                if ride.status != RideRequest.Status.IN_PROGRESS:
+                    return Response(
+                        {"detail": "Only an in_progress trip can be force-completed.",
+                         "code": "not_in_progress"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                ride.status = RideRequest.Status.COMPLETED
+                ride.completed_at = now
+                update_fields = ["status", "completed_at"]
+                # Same settlement path as a driver completion (runs inside this txn).
+                from .ride_service import settle_ride
+                settle_ride(ride)
+                # settle may have flipped payment_method / set paid_with_wallet in memory.
+                update_fields += ["payment_method", "paid_with_wallet"]
+                ride.save(update_fields=update_fields)
+                resolved = "completed"
+            else:
+                ride.status = RideRequest.Status.CANCELLED
+                ride.cancelled_at = now
+                ride.save(update_fields=["status", "cancelled_at"])
+                resolved = "cancelled"
+
+        # Notify the rider (best-effort, after commit). Only for a cancel — a force
+        # completion surfaces via the rider's own-trip poll and there is no completed
+        # push event; sending the cancel event would be misleading.
+        if resolved == "cancelled":
+            try:
+                push_ride_event_to_rider(ride.rider_id, "no_driver_found")
+            except Exception:
+                pass
+
+        # Audit the override — a money-affecting admin action. Reuses the ride audit
+        # action (the only ride-scoped one); the target_repr + metadata carry the specifics.
+        log_admin_action(
+            action=AdminAuditLog.Actions.RIDE_PII_VIEWED,
+            request=request,
+            target_repr=f"ride:{ride.id}:force_{resolved}",
+            metadata={"action": action, "resolved": resolved, "reason": reason},
+        )
+
+        return Response({"id": ride.id, "status": ride.status, "resolved": resolved})
