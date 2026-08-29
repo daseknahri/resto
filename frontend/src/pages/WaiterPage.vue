@@ -1869,6 +1869,13 @@ const seatGroupLabel = (seat) => {
 
 // Pay cash for a specific seat's subtotal (uses the existing split-bill path).
 const payCashForSeat = async (order, seat) => {
+  // Same clock-in guard as payCash/payWallet: a not-clocked-in waiter must not
+  // take payments (owner decision #11). This is an independent payment path, so
+  // it needs the guard too. Stop before the confirm() dialog.
+  if (!currentShift.value) {
+    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+    return;
+  }
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
   const ok = await confirm({
@@ -1901,6 +1908,13 @@ const payCashForSeat = async (order, seat) => {
 // Pay via wallet for a specific seat's subtotal — mirrors payCashForSeat.
 // Fixes split-by-seat under the wallet-only model where cash is not accepted.
 const payWalletForSeat = async (order, seat) => {
+  // Same clock-in guard as payCash/payWallet: a not-clocked-in waiter must not
+  // take payments (owner decision #11). This is an independent payment path, so
+  // it needs the guard too. Stop before the confirm() dialog.
+  if (!currentShift.value) {
+    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+    return;
+  }
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
   const ok = await confirm({
