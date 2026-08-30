@@ -16,21 +16,68 @@
 
 <script setup>
 // Flash-sale banner of MarketplaceMenuPage.vue (customer menu-browsing page),
-// extracted as a standalone presentational child (RISK FE-2). Display only: it
-// shows the active flash-sale discount percentage and, when a countdown string
-// is supplied, the time remaining. The `restaurant.flash_sale` render gate stays
-// in the parent (which conditionally renders this component, so `flashSale` is
-// always present here), and the parent keeps ownership of the countdown timer
-// (`flashSaleCountdown` / updateFlashSaleCountdown) — this component only renders
-// the current value it's handed. No API calls, no emits, mutates nothing.
+// extracted as a standalone presentational child (RISK FE-2).
+//
+// PERF (H-2): this component OWNS the 1-second countdown timer. It used to live in
+// the parent page as a `flashSaleCountdown` ref read in the parent template, so the
+// whole menu page (~150 dishes, each re-running its price formatter) re-ran its
+// render function once a second while a flash sale was live — i.e. during peak
+// traffic, often on slow devices. Ticking the countdown ref *here* confines the
+// per-second re-render to this tiny banner. When the sale reaches 0 we emit `ended`
+// so the parent can drop `restaurant.flash_sale` — that reverts the per-dish price
+// badges and the checkout discount exactly as the old inline countdown did — and the
+// parent no longer holds any per-second ref.
+import { ref, watch, onBeforeUnmount } from 'vue';
 import { useI18n } from '../composables/useI18n';
 
 const { t } = useI18n();
 
-defineProps({
-  /** The active flash sale ({ discount_pct, ... }); non-null (parent gates on it). */
+const props = defineProps({
+  /** The active flash sale ({ discount_pct, active_until, ... }); non-null (parent gates on it). */
   flashSale: { type: Object, required: true },
-  /** Pre-formatted countdown string ("mm:ss"); empty until the timer produces one. */
-  countdown: { type: String, default: '' },
+});
+
+// `ended` fires once the countdown crosses 0 so the parent can clear the sale.
+const emit = defineEmits(['ended']);
+
+// Pre-formatted countdown string ("Hh MMm" or "MM:SS"); '' until the timer produces one.
+const countdown = ref('');
+let _timer = null;
+
+const tick = () => {
+  const activeUntil = props.flashSale?.active_until;
+  if (!activeUntil) { countdown.value = ''; return; }
+  const diff = new Date(activeUntil) - Date.now();
+  if (diff <= 0) {
+    countdown.value = '';
+    emit('ended');   // parent drops flash_sale → this banner unmounts (onBeforeUnmount clears the timer)
+    return;
+  }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h >= 24) { countdown.value = ''; return; } // keep ticking; show nothing until < 24h out
+  countdown.value = h > 0
+    ? `${h}h ${String(m).padStart(2, '0')}m`
+    : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+// Restart the 1s ticker whenever the sale's end timestamp changes (and on mount).
+watch(
+  () => props.flashSale?.active_until,
+  (activeUntil) => {
+    clearInterval(_timer);
+    _timer = null;
+    if (activeUntil) {
+      tick();
+      _timer = setInterval(tick, 1000);
+    }
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  clearInterval(_timer);
+  _timer = null;
 });
 </script>

@@ -733,7 +733,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
@@ -777,6 +777,18 @@ const fetching = ref(false);
 const savingId = ref(null);
 const savingReset = ref(false);
 const search = ref("");
+// Debounced mirror of `search` (M-3 perf): the `filtered` computed below filters AND
+// sorts every published dish, so it reads `searchDebounced` and only recomputes ~180ms
+// after typing stops instead of on every keystroke. The input stays bound to the
+// immediate `search` (v-model.trim) for responsive typing; clearing applies at once.
+const searchDebounced = ref("");
+let _searchDebounce = null;
+watch(search, (q) => {
+  clearTimeout(_searchDebounce);
+  if (!q) { searchDebounced.value = ""; return; }
+  _searchDebounce = setTimeout(() => { searchDebounced.value = q; }, 180);
+});
+onBeforeUnmount(() => { clearTimeout(_searchDebounce); });
 const filterLowOnly = ref(false);
 
 const autoReset = computed(() => tenant.meta?.profile?.auto_reset_availability === true);
@@ -791,7 +803,7 @@ const isLow = (dish) =>
 const filtered = computed(() => {
   let list = dishes.value.filter((d) => d.is_published);
   if (filterLowOnly.value) list = list.filter((d) => isLow(d));
-  const q = search.value.toLowerCase();
+  const q = searchDebounced.value.toLowerCase();
   if (q) {
     list = list.filter(
       (d) =>
