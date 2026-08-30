@@ -12,7 +12,7 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
-## 2026-08-30 — full-app performance pass (fresh audit → 8 fixes shipped)
+## 2026-08-30 — full-app performance pass (fresh audit → 11 fixes shipped)
 
 **Result:** `main` @ `6f572b4`, green. A fresh **31-agent read-only speed + hosting audit**
 (12 expert lenses across backend ORM/query/index/cache/async, frontend bundle/runtime, infra;
@@ -71,11 +71,38 @@ real Dockerfile).
    `browser.sentry-cdn.com` under the strict `script-src 'self'` CSP. The always-shipped-recorder waste is
    fixed unconditionally regardless.
 
+**Coverage-gap follow-up (same session, → 3 more fixes #306–#308).** The 31-agent pass was honest that
+three categories weren't covered that round; a focused 3-finder read-only follow-up closed them:
+- **Frontend runtime** (render/reactivity): confirmed the hard parts already exemplary (Leaflet lifecycle,
+  visibility-aware bounded polling, 30s tickers, server-paginated admin tables), and found **two systemic
+  wins shipped** — **#306** caches `Intl.*Format` instances in the shared formatters (they were constructing
+  a new CLDR-resolving formatter on *every* call from `v-for` bindings — ~300/render on a 150-dish menu;
+  util placed in `src/lib/` per convention), and **#308** stops the marketplace menu re-rendering the whole
+  catalog every second during a flash sale (the 1s countdown ref lived in the parent template — moved the
+  ticker into its banner child, preserving the exact `flash_sale=null` sale-end side effect via an `@ended`
+  emit) + debounced the two un-debounced menu searches (~180ms).
+- **Backend serializer/hot-path depth**: a near-clean bill of health (menu catalog, order/driver/ride lists,
+  marketplace, WebSocket consumers, sweeps all already batched/cached); **two misses shipped as #307** — a
+  `(status, delivered_at)` composite index on `DeliveryJob` (the `reconcile_driver_earnings` cron was
+  scanning *every delivered job ever* + sorting in memory every ~15 min on a terminal, ever-growing bucket)
+  and a one-line `HappyHourSerializer.get_category_ids` fix (`.values_list()` bypassed its own prefetch).
+  The new index is the same safer `SHARED_APPS` ×1 concurrent-index case → same staging-rehearsal caveat.
+- **Docker/image + dependency weight**: **re-verified clean** — every prior hosting optimization intact
+  (build-tools purged from the backend image, `CONN_HEALTH_CHECKS`, uvicorn worker tuning, per-service
+  memory limits, gzip/immutable-cache nginx, dynamic-import leaflet/qrcode/Sentry, correct dev/prod dep
+  split). No autonomous fix; the findings are **owner/ops judgment calls**, recorded for the owner:
+  dormant `boto3`/`django-storages` (~90 MB image weight; S3 off by default — slimming changes the
+  S3-enable deploy contract, a roadmap call), a uvicorn `--preload`/COW **RAM lead** that needs staging
+  testing (preload can break Channels/DB-at-import forks), a Redis `maxmemory`/eviction-policy gap
+  (shared cache+broker+channels, so no naive LRU), and a non-perf **test-parity flag**: prod runs Python
+  3.14 while local/CI run 3.12.
+
 **Verification:** every PR green on all CI jobs (backend, frontend, docker, e2e, Trivy) before merge; the
-async-notification and reservation-count diffs were hand-reviewed for content/scope parity. Backend suite
-**5042 passed, 0 new failures** across the campaign (the 1 local `test_pinned_against_django_5_2` failure
-+ ~82 DB-connection errors are the known local baseline). **Not yet deployed** — deploy is manual (Coolify);
-the two caveats above apply at deploy time.
+async-notification, reservation-count, and flash-sale-refactor diffs were hand-reviewed for content/scope
+parity. Backend suite **5042 passed, 0 new failures** across the campaign (the 1 local
+`test_pinned_against_django_5_2` failure + ~82 DB-connection errors are the known local baseline). **Not
+yet deployed** — deploy is manual (Coolify); the concurrent-index staging rehearsal + Sentry-Replay CSP
+caveats apply at deploy time.
 
 ---
 
