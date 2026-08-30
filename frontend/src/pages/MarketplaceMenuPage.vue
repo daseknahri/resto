@@ -99,11 +99,12 @@
         </button>
       </div>
 
-      <!-- Flash sale banner (presentational; RISK FE-2) -->
+      <!-- Flash sale banner (presentational; RISK FE-2). Owns its 1s countdown timer
+           (H-2 perf) and emits `ended` when the sale hits 0 so we clear it here. -->
       <MarketplaceMenuFlashSaleBanner
         v-if="restaurant.flash_sale"
         :flash-sale="restaurant.flash_sale"
-        :countdown="flashSaleCountdown"
+        @ended="onFlashSaleEnded"
       />
 
       <!-- Loyalty points teaser — shown when signed in + loyalty enabled (presentational; RISK FE-2) -->
@@ -878,37 +879,17 @@ const hhMinutesLeft = (endsAt) => {
   if (diff < 0) diff += 1440; // next-day wrap
   return diff <= 120 ? diff : null; // only show when ≤ 2 h left
 };
-// ── Flash sale countdown ───────────────────────────────────────────────────────
-const flashSaleCountdown = ref('');
-let _flashSaleTimer = null;
-const updateFlashSaleCountdown = () => {
-  if (!restaurant.value?.flash_sale?.active_until) { flashSaleCountdown.value = ''; return; }
-  const until = new Date(restaurant.value.flash_sale.active_until);
-  const diff = until - Date.now();
-  if (diff <= 0) {
-    flashSaleCountdown.value = '';
+// ── Flash sale end handler ─────────────────────────────────────────────────────
+// The banner child (MarketplaceMenuFlashSaleBanner) now owns the 1-second countdown
+// timer — H-2 perf fix: a per-second ref in this page re-rendered the whole ~150-dish
+// catalog every second during a live sale. When the sale reaches 0 the child emits
+// `ended`; dropping `flash_sale` here reverts the per-dish price badges (flashSalePct)
+// and the checkout discount (flashSaleDiscount) exactly as the old inline countdown did.
+const onFlashSaleEnded = () => {
+  if (restaurant.value?.flash_sale) {
     restaurant.value = { ...restaurant.value, flash_sale: null };
-    return;
   }
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  if (h >= 24) { flashSaleCountdown.value = ''; return; }
-  flashSaleCountdown.value = h > 0
-    ? `${h}h ${String(m).padStart(2, '0')}m`
-    : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
-watch(
-  () => restaurant.value?.flash_sale,
-  (sale) => {
-    clearInterval(_flashSaleTimer);
-    if (sale?.active_until) {
-      updateFlashSaleCountdown();
-      _flashSaleTimer = setInterval(updateFlashSaleCountdown, 1000);
-    }
-  },
-  { immediate: true },
-);
 
 const checkoutOpen = ref(false);
 const checkoutDialogRef = ref(null);
@@ -950,8 +931,8 @@ watch(checkoutOpen, async (open) => {
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', trapCheckoutFocus);
   if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
-  clearInterval(_flashSaleTimer);
   clearInterval(_hhTick);
+  clearTimeout(_mktSearchDebounce);
   window.removeEventListener('scroll', _onPageScroll);
 });
 // ── Share restaurant link ─────────────────────────────────────────────────────
@@ -2013,11 +1994,23 @@ const scrollToCategory = (catId) => {
 
 // ── Menu text search ──────────────────────────────────────────────────────────
 const mktSearchQuery = ref('');
-const isMktSearchActive = computed(() => mktSearchQuery.value.trim().length > 0);
+// Debounced mirror of mktSearchQuery (M-3 perf): the search-mode gate and the
+// per-dish filter below read *this*, so the heavy filter over every dish only
+// recomputes ~180ms after typing stops instead of on every keystroke. The input
+// stays bound to the immediate mktSearchQuery for responsive typing; clearing
+// (empty) applies at once so exiting search mode stays instant.
+const mktSearchQueryDebounced = ref('');
+let _mktSearchDebounce = null;
+watch(mktSearchQuery, (q) => {
+  clearTimeout(_mktSearchDebounce);
+  if (!q) { mktSearchQueryDebounced.value = ''; return; }
+  _mktSearchDebounce = setTimeout(() => { mktSearchQueryDebounced.value = q; }, 180);
+});
+const isMktSearchActive = computed(() => mktSearchQueryDebounced.value.trim().length > 0);
 
 /** Search results grouped by category across all super-categories (also respects allergen filter). */
 const mktSearchResults = computed(() => {
-  const q = mktSearchQuery.value.trim().toLowerCase();
+  const q = mktSearchQueryDebounced.value.trim().toLowerCase();
   if (!q) return [];
   const groups = [];
   for (const sc of restaurant.value?.super_categories || []) {
