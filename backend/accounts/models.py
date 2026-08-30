@@ -1006,6 +1006,12 @@ class DeliveryJob(models.Model):
         indexes = [
             models.Index(fields=["status", "owner_alerted_at"]),
             models.Index(fields=["driver", "status"], name="deliveryjob_driver_status_idx"),
+            # Backs the reconcile_driver_earnings cron (runs ~every 15 min), which
+            # filters status=DELIVERED + delivered_at >= cutoff and orders by
+            # -delivered_at. DELIVERED is a terminal bucket that only grows on this
+            # public-schema table, so without (status, delivered_at) the query scans
+            # every delivered job ever, then filters the window and sorts in memory.
+            models.Index(fields=["status", "delivered_at"], name="deliveryjob_status_deliv_idx"),
             # GIN index backs the `declined_by__contains=[driver_id]` JSONB lookup on the
             # driver-poll hot path (accounts/dispatch.py + the driver offers endpoint),
             # which every online driver polls every 5-15s. Without it the containment
