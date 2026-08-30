@@ -12,6 +12,73 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-08-30 — full-app performance pass (fresh audit → 8 fixes shipped)
+
+**Result:** `main` @ `6f572b4`, green. A fresh **31-agent read-only speed + hosting audit**
+(12 expert lenses across backend ORM/query/index/cache/async, frontend bundle/runtime, infra;
+high/critical findings adversarially re-verified) produced [`PERF_HOSTING_AUDIT.md`](PERF_HOSTING_AUDIT.md)
+(PR #296) — 43 findings (1 critical, 16 high, 16 medium, 10 low), superseding the fully-implemented
+2026-06-07 edition. The verified, autonomous-safe items shipped as **8 CI-gated PRs (#297–#304)** via
+delegate-and-gate (disjoint-file worktree agents, per-PR CI gate, money/notif/query diffs hand-reviewed):
+
+- **#302 — async-notification migration (CRITICAL).** The last synchronous email/SMS sends now go
+  through the existing `enqueue()`/Celery infra. The critical case: **bulk order-confirm fired up to 50
+  sequential blocking SMTP sends inside one request** (owner-facing hang / false-500 during peak). New
+  tasks `order_status_email` (re-fetches the order under `schema_context` and reuses the unchanged
+  `_send_order_status_email` builder — content/recipients/opt-out byte-identical), `customer_otp_sms`
+  (OTP code never logged / never in a dedupe key — bearer-credential safe), and a general
+  `send_transactional_email`. **9 call sites** moved off the request thread; already-async SMS/push
+  untouched.
+- **#297 — GIN index on `DeliveryJob.declined_by`.** The `declined_by__contains=[driver_id]` JSONB scan
+  (polled every 5–15s by every online driver) is now index-backed.
+- **#298 — `AdminAuditLog` indexes** (`-created_at`, `tenant,-created_at`) on the unbounded append-only
+  audit table (was zero indexes → full-scan list/count/prune).
+- **#300 — reservation count-query fix.** `.count()`-only reservation/alert queries no longer carry the
+  reminder-metrics annotation (JOIN + GROUP BY + 3 subqueries) — a lean base queryset re-adds only the one
+  annotation an active `reminder_filter` needs, so counts stay byte-identical (~9–10× less DB work). Also
+  fixed the tenant-settings-export prefetch self-defeat (baked option `id`-order into the `Prefetch`).
+- **#303 — cache `AdminPlatformAnalyticsView`** (~15 uncached shared-schema aggregates) via the existing
+  `get_or_build_single_flight` helper, TTL 45s. Verified the view reads **zero request inputs** (all
+  `SHARED_APPS` models, one physical table each), so a single global key is provably collision-free.
+- **#301 — frontend cold-load.** A build-time Vite `modulepreload` for the hashed EN i18n chunk (fetches
+  in parallel with the whole static graph instead of gating `app.mount()`), and Sentry Replay now
+  lazy-loads via `lazyLoadIntegration` only when replay sampling is on (recorder no longer ships on 100%
+  of loads).
+- **#299 — `enforce_subscriptions` cron** batched from up to 2N `Subscription` queries to 2 (set-membership
+  against the exact same `valid_filter(today)` predicate).
+- **#304 — `bulk_create` order lines** at both placement paths (storefront + dine-in append), shortening
+  the `select_for_update` lock-hold. Safety re-verified: no `OrderItem` `save()`/signals, flat item dicts
+  (options/combo are inline JSON, not child rows), instances discarded downstream; bound by `order_id` to
+  keep mock-based tests green.
+
+**Two findings correctly NOT shipped as-is** (downgraded during implementation, not blindly applied):
+the password-reset session scan (#299 investigation) is **already a no-op in prod** — sessions live in
+Redis (`SESSION_ENGINE=cache`), not the DB table it scans — and removing it would drop a documented DB-
+fallback security backstop for zero prod gain, so it was left as-is; and one audit false-positive (a
+"Node-26 build unvalidated by CI" claim) was refuted in the audit itself (the `docker` CI job builds the
+real Dockerfile).
+
+**Two owner/ops caveats to fold into deploy** (documented here, not blockers):
+1. **Concurrent-index migrations (#297, #298) + the staging rehearsal.** Both use
+   `AddIndexConcurrently` + `atomic=False` per [`backend/MIGRATIONS.md`](../backend/MIGRATIONS.md). Both
+   tables are `SHARED_APPS` (public schema, built **once** via `migrate_schemas --shared`) — the safer
+   ×1 case, **not** the tenant-provisioning/`auto_create_schema` path the doc's gate warns about. Still,
+   include them in the owner's next **staging-migration rehearsal** (confirm the shared migrate step is
+   transaction-free on a real Postgres) before prod deploy, alongside the existing concurrent migrations
+   already on `main`.
+2. **Sentry Replay CSP (#301).** `lazyLoadIntegration` pulls the recorder from the Sentry CDN. Replay is
+   dormant today (sample rate 0); if an operator later **enables** it, they must allow-list
+   `browser.sentry-cdn.com` under the strict `script-src 'self'` CSP. The always-shipped-recorder waste is
+   fixed unconditionally regardless.
+
+**Verification:** every PR green on all CI jobs (backend, frontend, docker, e2e, Trivy) before merge; the
+async-notification and reservation-count diffs were hand-reviewed for content/scope parity. Backend suite
+**5042 passed, 0 new failures** across the campaign (the 1 local `test_pinned_against_django_5_2` failure
++ ~82 DB-connection errors are the known local baseline). **Not yet deployed** — deploy is manual (Coolify);
+the two caveats above apply at deploy time.
+
+---
+
 ## 2026-08-29 — owner-decisions closed out (final 6 of 12 → all 12 shipped)
 
 **Result:** `main` @ `3868224`, green. On the owner's "go with your recommendations," the remaining **6
