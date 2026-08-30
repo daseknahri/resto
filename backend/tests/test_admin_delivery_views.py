@@ -331,6 +331,11 @@ class AdminDriverListViewTests(SimpleTestCase):
 
 class AdminPlatformAnalyticsViewTests(SimpleTestCase):
     def setUp(self):
+        # The view now caches its aggregate payload under a single global key. Clear it before
+        # each test so a payload built from another test's mocks can't be served here (the known
+        # "DB tests on cached endpoints must cache.clear() in setUp" pattern).
+        from django.core.cache import cache
+        cache.clear()
         self.factory = APIRequestFactory()
         self.view = AdminPlatformAnalyticsView.as_view()
 
@@ -401,6 +406,14 @@ class AdminPlatformAnalyticsDriverOwedTests(SimpleTestCase):
     derived from DriverPayout. driver_paid is the total of all CASHOUT wallet transactions
     (both direct payouts and self-service cash-outs), not just DriverPayout rows.
     """
+
+    def setUp(self):
+        # The view caches its payload under a single global key; each method here runs the real
+        # build with distinct mocks and asserts on the resulting numbers AND on the ORM call_args.
+        # Clear the cache so no method is served a prior method's cached build (which would also
+        # skip the ORM calls these assertions inspect).
+        from django.core.cache import cache
+        cache.clear()
 
     def _run(self, *, driver_wallet_sum, cashout_sum, delivered_earned):
         from decimal import Decimal
@@ -532,6 +545,113 @@ class AdminPlatformAnalyticsDriverOwedTests(SimpleTestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["financials"]["driver_owed"], 0.0)
+
+
+class AdminPlatformAnalyticsCacheTests(SimpleTestCase):
+    """PERF: the ~15 aggregates are cached under a single global key.
+
+    The view takes NO request inputs — no query params, no date range, no tenant scoping (every
+    queried model is a SHARED_APPS single public-schema table, so the result is identical for
+    every admin and every subdomain). So the key is intentionally singular and collision-free:
+      - a repeated call within the TTL is served from cache (the DB aggregates run once), and
+      - once the entry lapses (simulated via cache.clear), the rebuild reflects fresh data —
+        i.e. the single key is not permanently stale and never serves a wrong scope.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def _mocks(self, *, total_tenants):
+        """Build a full set of ORM mocks (same shape the other analytics tests use) with a
+        controllable tenant count so a rebuild can be observed to pick up new data."""
+        from decimal import Decimal
+
+        Tenant = MagicMock()
+        Tenant.objects.all.return_value.count.return_value = total_tenants
+        Tenant.objects.all.return_value.filter.return_value.count.return_value = 0
+        Tenant.objects.aggregate.return_value = {"s": Decimal("0")}
+
+        Cust = MagicMock()
+        Cust.objects.count.return_value = 0
+        Cust.objects.filter.return_value.aggregate.return_value = {"total": 0, "online": 0, "s": None}
+        Cust.objects.aggregate.return_value = {"total_balance": None}
+
+        DJ = MagicMock()
+        DJ.objects.aggregate.return_value = {
+            "total": 0, "delivered": 0, "failed": 0, "searching": 0,
+            "avg_rating": None, "total_fees": None, "total_payouts": None,
+        }
+        DJ.objects.exclude.return_value.count.return_value = 0
+        DJ.objects.filter.return_value.aggregate.return_value = {"s": None}
+
+        DZone = MagicMock()
+        DZone.objects.aggregate.return_value = {"total": 0, "active": 0}
+
+        FS = MagicMock()
+        FS.objects.aggregate.return_value = {"total": 0, "active": 0, "total_redemptions": 0}
+
+        Ride = MagicMock()
+        Ride.objects.aggregate.return_value = {
+            "total": 0, "completed": 0, "cancelled": 0, "wallet_paid": 0, "fare_gmv": Decimal("0"),
+        }
+        Ride.objects.exclude.return_value.count.return_value = 0
+
+        WT = MagicMock()
+        WT.Type.CASHOUT = "cashout"
+        WT.objects.aggregate.return_value = {"total": 0, "total_bonus": None, "total_payments": None}
+        WT.objects.filter.return_value.values.return_value.annotate.return_value = []
+        WT.objects.filter.return_value.aggregate.return_value = {"s": None}
+
+        DP = MagicMock()
+        return Tenant, Cust, DJ, DZone, FS, Ride, WT, DP
+
+    def _call(self, mocks):
+        Tenant, Cust, DJ, DZone, FS, Ride, WT, DP = mocks
+        with patch("tenancy.models.Tenant", Tenant), \
+             patch("accounts.models.Customer", Cust), \
+             patch("accounts.models.DeliveryJob", DJ), \
+             patch("accounts.models.DeliveryZone", DZone), \
+             patch("accounts.models.PlatformFlashSale", FS), \
+             patch("accounts.models.RideRequest", Ride), \
+             patch("accounts.models.WalletTransaction", WT), \
+             patch("accounts.models.DriverPayout", DP):
+            return AdminPlatformAnalyticsView().get(MagicMock())
+
+    def test_second_call_hits_cache_and_runs_aggregates_once(self):
+        mocks = self._mocks(total_tenants=5)
+        tenant_mock = mocks[0]
+
+        r1 = self._call(mocks)
+        r2 = self._call(mocks)
+
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        # Same key both times → the second call is a cache HIT, so the whole aggregate build ran
+        # exactly once across the two requests (the tenant-count aggregate fired a single time).
+        self.assertEqual(tenant_mock.objects.all.return_value.count.call_count, 1)
+        # And both responses carry the identical cached payload.
+        self.assertEqual(r1.data, r2.data)
+        self.assertEqual(r1.data["tenants"]["total"], 5)
+
+    def test_rebuild_after_ttl_lapse_reflects_fresh_data(self):
+        from django.core.cache import cache
+
+        r1 = self._call(self._mocks(total_tenants=5))
+        self.assertEqual(r1.data["tenants"]["total"], 5)
+
+        # New underlying data, but the same key is still cached within the TTL → the stale (5)
+        # value is served. This proves the single global key is what governs the response.
+        fresh = self._mocks(total_tenants=9)
+        r2 = self._call(fresh)
+        self.assertEqual(r2.data["tenants"]["total"], 5)
+
+        # Simulate the TTL lapsing: the rebuild now sees the fresh count. So the single key is
+        # never permanently stale, and it never collides across differing scopes (there is only
+        # one scope — the platform).
+        cache.clear()
+        r3 = self._call(fresh)
+        self.assertEqual(r3.data["tenants"]["total"], 9)
 
 
 # ── AdminDeliveryJobListView ──────────────────────────────────────────────────
