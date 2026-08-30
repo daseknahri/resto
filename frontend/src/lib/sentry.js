@@ -77,18 +77,14 @@ export function initSentry(app) {
         (import.meta.env.VITE_APP_VERSION || '').trim() ||
         undefined
 
+      // Only the eager essentials go in the initial vendor-sentry chunk. The
+      // Replay recorder (~tens of KB of rrweb) is NOT statically referenced here
+      // — see the lazy-load below — so tree-shaking keeps it out of every page
+      // load. Sampling defaults to 0 (off), so the recorder never shipped for
+      // anyone but was still bundled on 100% of loads.
       const integrations = [
         Sentry.browserTracingIntegration({ router }),
       ]
-
-      if (replaysSessionSampleRate > 0) {
-        integrations.push(
-          Sentry.replayIntegration({
-            maskAllText: true,
-            blockAllMedia: true,
-          })
-        )
-      }
 
       Sentry.init({
         app,
@@ -119,6 +115,36 @@ export function initSentry(app) {
       })
 
       _initialized = true
+
+      // Lazy-load the Replay recorder ONLY when session replay sampling is on
+      // (default off). Referencing the integration by string name — rather than
+      // a static `Sentry.replayIntegration` property access — is what lets the
+      // recorder be tree-shaken out of the eager vendor-sentry chunk entirely.
+      // It's added after init via addIntegration (Sentry's documented lazy
+      // pattern); the sample rates set on init above still govern it.
+      //
+      // NOTE: lazyLoadIntegration fetches the integration from the Sentry CDN
+      // (browser.sentry-cdn.com). @sentry/vue exposes no separately importable
+      // replay module, so this CDN hop is the only supported lazy path. Under
+      // our strict CSP (script-src 'self'), turning replay on in prod therefore
+      // ALSO requires allow-listing that host in the CSP. Wrapped so a load
+      // failure (CSP block, offline, CDN 404) never breaks error/trace reporting.
+      if (replaysSessionSampleRate > 0) {
+        Promise.resolve(Sentry.lazyLoadIntegration('replayIntegration'))
+          .then((replayIntegration) => {
+            Sentry.addIntegration(
+              replayIntegration({
+                maskAllText: true,
+                blockAllMedia: true,
+              })
+            )
+          })
+          .catch((err) => {
+            if (import.meta.env.DEV) {
+              console.warn('[Sentry] replay lazy-load failed:', err)
+            }
+          })
+      }
     })
     .catch((err) => {
       // Sentry init failure must never crash the app
