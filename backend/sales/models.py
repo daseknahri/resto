@@ -332,6 +332,15 @@ class AdminAuditLog(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        indexes = [
+            # Default admin audit-log list is sorted by -created_at and paginated
+            # (COUNT + slice); the prune job filters created_at__lt=cutoff. This
+            # append-only, unbounded public-schema table had zero indexes, so both
+            # paths did a full sequential scan + unindexed sort.
+            models.Index(fields=["-created_at"], name="adminauditlog_created_idx"),
+            # Per-tenant admin timeline: filter(tenant_id=...).order_by("-created_at").
+            models.Index(fields=["tenant", "-created_at"], name="adminaudit_tenant_created_idx"),
+        ]
 
     def __str__(self):
         actor = self.actor.username if self.actor else "system"
