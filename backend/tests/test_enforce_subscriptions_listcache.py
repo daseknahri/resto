@@ -73,16 +73,30 @@ def _run_command(*, active=None, billing_suspended=None, sub_valid_map=None,
         GRACE_PERIOD_DAYS=GRACE,
     )
 
+    # The command now batches the per-tenant lookups into two set queries:
+    #   Subscription.objects.filter(valid_filter(today)).values_list("tenant_id", flat=True)
+    #     → the ids of tenants with a currently-valid subscription
+    #   Subscription.objects.values_list("tenant_id", flat=True)
+    #     → the ids of tenants that have ANY subscription row
+    valid_ids = [tid for tid, ok in sub_valid_map.items() if ok]
+    all_tenant_ids = {t.id for t in (active or [])} | {t.id for t in (billing_suspended or [])}
+    any_ids = list(all_tenant_ids) if has_any_sub else []
+
     def _sub_filter(*args, tenant_id=None, **kwargs):
+        # valid_filter(...) call (has a positional Q) → the "currently valid" set query.
+        # _send_renewal_reminder also filters by tenant_id then .order_by(...).values_list();
+        # the flag path in these tests never reaches it (SimpleNamespace tenants have no
+        # owner), so returning valid_ids here is harmless.
         qs = MagicMock()
-        # valid_filter(...) call (has positional Q) → "currently valid?" check.
-        if args:
-            qs.exists.return_value = sub_valid_map.get(tenant_id, False)
-        else:
-            qs.exists.return_value = has_any_sub
+        qs.values_list.return_value = list(valid_ids)
         return qs
 
-    fake_sub_cls = SimpleNamespace(objects=SimpleNamespace(filter=_sub_filter))
+    fake_sub_cls = SimpleNamespace(
+        objects=SimpleNamespace(
+            filter=_sub_filter,
+            values_list=lambda *a, **k: list(any_ids),
+        )
+    )
     fake_audit_cls = SimpleNamespace(
         Actions=SimpleNamespace(TENANT_DEACTIVATED="tenant_deactivated",
                                 TENANT_REACTIVATED="tenant_reactivated"),

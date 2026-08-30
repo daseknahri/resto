@@ -89,15 +89,26 @@ class Command(BaseCommand):
         Active = Tenant.LifecycleStatus.ACTIVE
         Suspended = Tenant.LifecycleStatus.SUSPENDED
 
-        def has_valid_subscription(tenant_id):
-            return Subscription.objects.filter(valid_filter(today), tenant_id=tenant_id).exists()
+        # Batch the subscription lookups into two set queries instead of issuing up to
+        # 2 Subscription queries PER tenant (once in each loop below). These sets answer
+        # the exact same predicates the old per-tenant .exists() calls did:
+        #   valid_tenant_ids   — tenants with a currently-valid subscription (valid_filter)
+        #   any_sub_tenant_ids — tenants that have ANY subscription row at all
+        # Membership (`tenant.id in <set>`) is equivalent to the old per-tenant existence
+        # checks and reuses the same `today` snapshot across every tenant.
+        valid_tenant_ids = set(
+            Subscription.objects.filter(valid_filter(today)).values_list("tenant_id", flat=True)
+        )
+        any_sub_tenant_ids = set(
+            Subscription.objects.values_list("tenant_id", flat=True)
+        )
 
         recovered, flagged, suspended = [], [], []
 
         # Consider only active tenants — suspended/canceled ones are out of this loop.
         active_tenants = Tenant.objects.filter(lifecycle_status=Active)
         for tenant in active_tenants:
-            valid = has_valid_subscription(tenant.id)
+            valid = tenant.id in valid_tenant_ids
             overdue = tenant.payment_overdue_since is not None
 
             if valid and overdue:
@@ -111,7 +122,7 @@ class Command(BaseCommand):
                 continue  # healthy, nothing to do
 
             # No valid subscription from here on.
-            has_any_sub = Subscription.objects.filter(tenant_id=tenant.id).exists()
+            has_any_sub = tenant.id in any_sub_tenant_ids
             if not has_any_sub:
                 continue  # never subscribed (e.g. mid-provisioning) — don't touch
 
@@ -152,7 +163,7 @@ class Command(BaseCommand):
             lifecycle_status=Suspended, is_active=True, payment_overdue_since__isnull=False
         )
         for tenant in billing_suspended:
-            if not has_valid_subscription(tenant.id):
+            if tenant.id not in valid_tenant_ids:
                 continue
             reactivated.append(tenant)
             if apply:
