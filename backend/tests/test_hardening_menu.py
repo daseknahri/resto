@@ -300,7 +300,8 @@ class CustomerSelfCancelRaceTests(SimpleTestCase):
             "loyalty": patch("menu.views._reverse_loyalty_for_cancelled_order"),
             "restock": patch("menu.views._restock_cancelled_order"),
             "broadcast": patch("menu.views._broadcast_order_change"),
-            "email": patch("menu.views._send_order_status_email"),
+            # PERF: the cancel email now goes through the async queue, not an inline send.
+            "enqueue": patch("accounts.tasks.enqueue"),
             "atomic": patch("django.db.transaction.atomic", return_value=_noop_atomic()),
         }
         self.m = {k: p.start() for k, p in self._patchers.items()}

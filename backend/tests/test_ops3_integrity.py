@@ -529,9 +529,9 @@ class StatusAdvanceIdempotencyTests(SimpleTestCase):
 
     @patch("menu.views.timezone")
     @patch("menu.views._broadcast_order_change", return_value=None)
-    @patch("menu.views._send_order_status_email", return_value=None)
+    @patch("accounts.tasks.enqueue", return_value=None)
     @patch("menu.views.Order.objects")
-    def test_select_for_update_is_called(self, mock_order_qs, mock_email, mock_broadcast, mock_tz):
+    def test_select_for_update_is_called(self, mock_order_qs, mock_enqueue, mock_broadcast, mock_tz):
         """select_for_update() must be called on the Order queryset."""
         order = _make_order(status_val=Order.Status.PENDING)
 

@@ -1370,8 +1370,8 @@ def _notify_admins_car_docs(driver):
     """Best-effort notify platform admins that a driver has uploaded both car docs."""
     try:
         from django.db.models import Q
-        from django.core.mail import send_mail as _send_mail
         from django.conf import settings as _cfg
+        from accounts.tasks import enqueue, send_transactional_email
         from .models import User
         from .notifications import record_notification
 
@@ -1385,15 +1385,19 @@ def _notify_admins_car_docs(driver):
         )
         name = driver.name or driver.phone or driver.email or f"Customer #{driver.id}"
         if admins:
-            _send_mail(
-                subject="Driver car documents ready for review — Kepoli",
-                message=(
+            # PERF: off the request thread — this fan-out sent one blocking SMTP
+            # message to every admin inside the doc-upload request. Content/
+            # recipients unchanged (a platform-level mail, so no tenant scoping).
+            enqueue(
+                send_transactional_email,
+                "Driver car documents ready for review — Kepoli",
+                (
                     f"Driver {name} has uploaded both licence and insurance documents.\n\n"
                     "Please review and approve or reject their car verification in the admin console."
                 ),
-                from_email=_cfg.DEFAULT_FROM_EMAIL,
-                recipient_list=admins,
-                fail_silently=True,
+                _cfg.DEFAULT_FROM_EMAIL,
+                admins,
+                tenant_id=None,
             )
         record_notification(
             channel="email",

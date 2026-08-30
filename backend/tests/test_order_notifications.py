@@ -29,26 +29,32 @@ def _make_lead(name="Sara", phone="0600000000", email="sara@example.com", notes=
 # ── _send_owner_new_reservation_email ────────────────────────────────────────
 
 class SendOwnerNewReservationEmailTests(SimpleTestCase):
+    # PERF: the owner notification is now dispatched off the request thread via
+    # accounts.tasks.enqueue(send_transactional_email, subject, message, from, [owner]).
+    # enqueue positional args: (task, subject, message, from_email, recipient_list).
 
-    @patch("menu.views.send_mail")
-    def test_sends_email_to_owner(self, send_mail_mock):
+    @patch("accounts.tasks.enqueue")
+    def test_enqueues_email_to_owner(self, enqueue_mock):
+        from accounts.tasks import send_transactional_email
         with patch("accounts.models.User.objects") as user_mock:
             user_mock.filter.return_value.values_list.return_value.first.return_value = "owner@demo.com"
             _send_owner_new_reservation_email(_tenant(), _make_lead())
 
-        send_mail_mock.assert_called_once()
+        enqueue_mock.assert_called_once()
+        self.assertIs(enqueue_mock.call_args[0][0], send_transactional_email)
+        self.assertIn("owner@demo.com", enqueue_mock.call_args[0][4])
 
-    @patch("menu.views.send_mail")
-    def test_subject_includes_tenant_name(self, send_mail_mock):
+    @patch("accounts.tasks.enqueue")
+    def test_subject_includes_tenant_name(self, enqueue_mock):
         with patch("accounts.models.User.objects") as user_mock:
             user_mock.filter.return_value.values_list.return_value.first.return_value = "owner@demo.com"
             _send_owner_new_reservation_email(_tenant(name="Le Petit Bistro"), _make_lead())
 
-        subject = send_mail_mock.call_args[1].get("subject") or send_mail_mock.call_args[0][0]
+        subject = enqueue_mock.call_args[0][1]
         self.assertIn("Le Petit Bistro", subject)
 
-    @patch("menu.views.send_mail")
-    def test_body_includes_customer_details(self, send_mail_mock):
+    @patch("accounts.tasks.enqueue")
+    def test_body_includes_customer_details(self, enqueue_mock):
         with patch("accounts.models.User.objects") as user_mock:
             user_mock.filter.return_value.values_list.return_value.first.return_value = "owner@demo.com"
             _send_owner_new_reservation_email(
@@ -56,22 +62,22 @@ class SendOwnerNewReservationEmailTests(SimpleTestCase):
                 _make_lead(name="Sara", phone="0600000000", notes="Party of 4 at 8pm")
             )
 
-        message = send_mail_mock.call_args[1].get("message") or send_mail_mock.call_args[0][1]
+        message = enqueue_mock.call_args[0][2]
         self.assertIn("Sara", message)
         self.assertIn("0600000000", message)
         self.assertIn("Party of 4", message)
 
-    @patch("menu.views.send_mail")
-    def test_skips_when_no_owner_email(self, send_mail_mock):
+    @patch("accounts.tasks.enqueue")
+    def test_skips_when_no_owner_email(self, enqueue_mock):
         with patch("accounts.models.User.objects") as user_mock:
             user_mock.filter.return_value.values_list.return_value.first.return_value = None
             _send_owner_new_reservation_email(_tenant(), _make_lead())
 
-        send_mail_mock.assert_not_called()
+        enqueue_mock.assert_not_called()
 
-    @patch("menu.views.send_mail", side_effect=Exception("network error"))
-    def test_swallows_exceptions(self, _send_mail_mock):
+    @patch("accounts.tasks.enqueue", side_effect=Exception("dispatch error"))
+    def test_swallows_exceptions(self, _enqueue_mock):
         with patch("accounts.models.User.objects") as user_mock:
             user_mock.filter.return_value.values_list.return_value.first.return_value = "owner@demo.com"
-            # Must not raise
+            # Must not raise even if dispatch blows up
             _send_owner_new_reservation_email(_tenant(), _make_lead())

@@ -155,6 +155,98 @@ class TaskWrapperTests(SimpleTestCase):
         enforce_subscriptions.run()
         call_command.assert_called_once_with("enforce_subscriptions", apply=True)
 
+    @patch("accounts.views._send_otp_sms", return_value=True)
+    def test_customer_otp_sms_calls_twilio_helper(self, send_otp_sms):
+        # PERF: the OTP Twilio send now runs off the request thread; the task wraps the
+        # exact _send_otp_sms helper the synchronous path used.
+        from accounts.tasks import customer_otp_sms
+        customer_otp_sms.run("+212600000000", "123456")
+        send_otp_sms.assert_called_once_with("+212600000000", "123456")
+
+    @patch("django.core.mail.send_mail")
+    def test_send_transactional_email_calls_send_mail(self, send_mail):
+        # PERF: the miscellaneous synchronous send_mail() sites now dispatch through this
+        # task. It reuses Django's send_mail with the caller-built content, best-effort.
+        from accounts.tasks import send_transactional_email
+        send_transactional_email.run("Subj", "Body", "from@x.com", ["a@x.com", "b@x.com"], tenant_id=3)
+        send_mail.assert_called_once()
+        kwargs = send_mail.call_args.kwargs
+        self.assertEqual(kwargs["subject"], "Subj")
+        self.assertEqual(kwargs["message"], "Body")
+        self.assertEqual(kwargs["from_email"], "from@x.com")
+        self.assertEqual(kwargs["recipient_list"], ["a@x.com", "b@x.com"])
+        self.assertTrue(kwargs["fail_silently"])  # best-effort, swallows transient SMTP errors
+
+
+class OrderStatusEmailTaskTests(SimpleTestCase):
+    """PERF: order_status_email moves the customer status email off the request thread.
+    Like customer_order_milestone it re-fetches under the tenant schema and reuses the
+    EXISTING menu.views._send_order_status_email builder (no duplicated email body)."""
+
+    def setUp(self):
+        # The task deduplicates via a cache key; identical args across tests would
+        # otherwise be skipped as an already-claimed send. Reset per test.
+        from django.core.cache import cache
+        cache.clear()
+
+    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.schema_context")
+    @patch("menu.models.Order")
+    @patch("tenancy.models.Tenant")
+    def test_refetches_under_tenant_schema_and_reuses_builder(
+        self, mock_tenant, mock_order, mock_schema_ctx, mock_builder
+    ):
+        from accounts.tasks import order_status_email
+        # Tenant resolved by id (public schema) → carries the schema to re-enter.
+        tenant = MagicMock()
+        tenant.schema_name = "acme"
+        mock_tenant.objects.filter.return_value.first.return_value = tenant
+        # Order re-fetched by order_number INSIDE the tenant schema.
+        order = MagicMock()
+        mock_order.objects.select_related.return_value.filter.return_value.first.return_value = order
+        mock_schema_ctx.return_value.__enter__ = MagicMock(return_value=None)
+        mock_schema_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        order_status_email.run("ORD-9", 7, "confirmed")
+
+        # Resolved the tenant by the id we were given, and re-entered ITS schema.
+        mock_tenant.objects.filter.assert_called_once_with(id=7)
+        mock_schema_ctx.assert_called_once_with("acme")
+        # Re-fetched the order by order_number, joining the customer (opt-out check).
+        mock_order.objects.select_related.assert_called_once_with("customer")
+        mock_order.objects.select_related.return_value.filter.assert_called_once_with(
+            order_number="ORD-9"
+        )
+        # Reused the SAME builder with the re-fetched order → identical email content.
+        mock_builder.assert_called_once_with(order, tenant, "confirmed")
+
+    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.schema_context")
+    @patch("tenancy.models.Tenant")
+    def test_missing_tenant_drops_gracefully(self, mock_tenant, mock_schema_ctx, mock_builder):
+        from accounts.tasks import order_status_email
+        mock_tenant.objects.filter.return_value.first.return_value = None
+        order_status_email.run("ORD-9", 7, "confirmed")  # must not raise
+        mock_schema_ctx.assert_not_called()
+        mock_builder.assert_not_called()
+
+    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.schema_context")
+    @patch("menu.models.Order")
+    @patch("tenancy.models.Tenant")
+    def test_missing_order_drops_gracefully(
+        self, mock_tenant, mock_order, mock_schema_ctx, mock_builder
+    ):
+        from accounts.tasks import order_status_email
+        tenant = MagicMock()
+        tenant.schema_name = "acme"
+        mock_tenant.objects.filter.return_value.first.return_value = tenant
+        mock_order.objects.select_related.return_value.filter.return_value.first.return_value = None
+        mock_schema_ctx.return_value.__enter__ = MagicMock(return_value=None)
+        mock_schema_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        order_status_email.run("ORD-X", 7, "confirmed")  # must not raise
+        mock_builder.assert_not_called()
+
 
 class CronTaskRetryTests(SimpleTestCase):
     """RISK ASYNC-2: the sweep/reconcile tasks must retry a TRANSIENT DB error with

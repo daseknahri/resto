@@ -557,3 +557,97 @@ def campaign_email(customer_id, tenant_name, title, message, tenant_id=None):
     """
     from accounts.push import send_campaign_email_sync
     send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id)
+
+
+# ── Transactional email / OTP tasks (perf: get the blocking send off the request) ──
+# These move notification sends that were still running SYNCHRONOUSLY in the request
+# thread onto the worker. The blocking part — SMTP (up to EMAIL_TIMEOUT) or a Twilio
+# HTTP POST (up to 10s) — used to stall the response; enqueue() now hands it off. WHO
+# is notified, WHEN, and the exact body/subject/recipients are unchanged: each task
+# reuses the SAME synchronous builder the request path used.
+
+@shared_task(name="accounts.tasks.order_status_email", base=_NotificationTask, **_RETRY)
+def order_status_email(order_number, tenant_id, new_status):
+    """Send a customer order-status email off the request thread.
+
+    Mirrors customer_order_milestone: resolve the tenant by id (public/shared
+    schema), re-enter the tenant schema, re-fetch the Order by order_number, then
+    reuse the EXISTING ``menu.views._send_order_status_email`` builder — so the
+    subject/body, the ``notify_order_updates`` opt-out and the guest-order (no
+    customer/email) skip are byte-for-byte identical to the old synchronous send.
+    A vanished tenant/order fails gracefully (log + return), like the sibling
+    re-fetch tasks. Deduped per (tenant, order, status) so a redelivered/retried
+    message replays as a no-op instead of double-sending.
+    """
+    key = _dedupe_key("email:order_status", tenant_id, order_number, new_status)
+    if not _claim_send(key):
+        logger.info("order_status_email deduped (already sent): %s", key)
+        return
+    from menu.models import Order
+    from menu.views import _send_order_status_email
+    from tenancy.models import Tenant
+    try:
+        tenant = Tenant.objects.filter(id=tenant_id).first()
+        if tenant is None:
+            logger.warning("order_status_email: tenant %s not found; dropping send", tenant_id)
+            return
+        with schema_context(tenant.schema_name):
+            order = (
+                Order.objects.select_related("customer")
+                .filter(order_number=order_number)
+                .first()
+            )
+            if order is None:
+                logger.warning(
+                    "order_status_email: order %s not found in schema %s; dropping send",
+                    order_number, tenant.schema_name,
+                )
+                return
+            _send_order_status_email(order, tenant, new_status)
+    except Exception:
+        _release_send(key)  # transient failure → let autoretry re-send
+        raise
+
+
+@shared_task(name="accounts.tasks.customer_otp_sms", base=_NotificationTask, **_RETRY)
+def customer_otp_sms(phone, code):
+    """Send a customer login OTP via Twilio SMS off the request thread.
+
+    Wraps ``accounts.views._send_otp_sms`` (the exact Twilio helper the synchronous
+    path used) and preserves its "not configured / send failed" warning. The
+    DEBUG-mode console fast-path stays INLINE at the call site (no network, no
+    queue); only the real Twilio send is dispatched here. Deliberately NOT deduped:
+    every OTP request mints a fresh code, and the code must never appear in a logged
+    dedupe key (it is a live bearer credential).
+    """
+    from accounts.views import _send_otp_sms
+    sent = _send_otp_sms(phone, code)
+    if not sent:
+        logger.warning(
+            "OTP delivery failed: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / "
+            "TWILIO_FROM_NUMBER not configured. Phone ...%s did not receive a code.",
+            phone[-4:] if len(phone) >= 4 else "****",
+        )
+
+
+@shared_task(name="accounts.tasks.send_transactional_email", **_RETRY)
+def send_transactional_email(subject, message, from_email, recipient_list, tenant_id=None):
+    """Send one plain-text transactional email off the request thread.
+
+    A thin wrapper around Django's ``send_mail`` for the miscellaneous synchronous
+    ``send_mail()`` sites (reservation / menu-unpublished / staff-invite / new-driver
+    / car-docs notifications). The content is fully built by the caller and passed in,
+    so no tenant-schema re-entry is needed (``tenant_id`` is accepted for
+    symmetry/observability only — these are plain mails). Best-effort like every site
+    it replaces: ``fail_silently=True`` swallows a transient SMTP error rather than
+    surfacing it, matching the old behaviour (each caller wrapped the send in
+    try/except and/or passed fail_silently).
+    """
+    from django.core.mail import send_mail as _send_mail
+    _send_mail(
+        subject=subject,
+        message=message,
+        from_email=from_email,
+        recipient_list=list(recipient_list or []),
+        fail_silently=True,
+    )

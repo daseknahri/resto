@@ -538,21 +538,19 @@ def _send_otp_sms(phone: str, code: str) -> bool:
 def _send_otp(phone: str, code: str) -> None:
     """Deliver OTP to the customer's phone via Twilio SMS.
 
-    In DEBUG mode the code is logged to the console so developers can test
-    without real credentials. In production a warning is logged if Twilio
-    is not yet configured.
+    In DEBUG mode the code is logged to the console (no network, no queue) so
+    developers can test without real credentials — that fast-path stays inline. In
+    production the real Twilio send is a blocking HTTP POST (up to 10s), so it is
+    dispatched to the async queue via ``accounts.tasks.customer_otp_sms`` instead of
+    blocking the OTP-request response. The "not configured / failed" warning moves
+    with it into the task.
     """
     if getattr(settings, "DEBUG", False):
         logger.info("Customer OTP for %s: %s", phone, code)
         return
 
-    sent = _send_otp_sms(phone, code)
-    if not sent:
-        logger.warning(
-            "OTP delivery failed: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / "
-            "TWILIO_FROM_NUMBER not configured. Phone ...%s did not receive a code.",
-            phone[-4:] if len(phone) >= 4 else "****",
-        )
+    from accounts.tasks import enqueue, customer_otp_sms
+    enqueue(customer_otp_sms, phone, code)
 
 
 _OTP_CACHE_KEY = "customer_otp:{phone}"
@@ -1997,8 +1995,8 @@ class OwnerStaffListCreateView(APIView):
 
         # Email invite
         try:
-            from django.core.mail import send_mail as _send_mail
             from django.conf import settings as _cfg
+            from accounts.tasks import enqueue, send_transactional_email
 
             # Best-effort: find the primary domain for the tenant sign-in URL
             primary_domain = tenant.domains.filter(is_primary=True).values_list("domain", flat=True).first() if tenant else None
@@ -2011,9 +2009,12 @@ class OwnerStaffListCreateView(APIView):
                 base_url = primary_domain or ""
             join_url = f"{base_url}/waiter/join" if base_url else "/waiter/join"
 
-            _send_mail(
-                subject=f"You're invited to the {tenant.name} waiter app",
-                message=(
+            # PERF: off the request thread — SMTP (up to EMAIL_TIMEOUT) blocked the
+            # staff-create response. Content/recipient are unchanged.
+            enqueue(
+                send_transactional_email,
+                f"You're invited to the {tenant.name} waiter app",
+                (
                     f"Hi {first_name},\n\n"
                     f"You've been added as a waiter at {tenant.name}.\n\n"
                     f"Open the link below on your phone to install the app and sign in:\n"
@@ -2024,9 +2025,9 @@ class OwnerStaffListCreateView(APIView):
                     f"Tip: tap the link in Safari (iOS) or Chrome (Android) for the best install experience.\n\n"
                     f"— {tenant.name}"
                 ),
-                from_email=_cfg.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=True,
+                _cfg.DEFAULT_FROM_EMAIL,
+                [email],
+                tenant_id=getattr(tenant, "id", None),
             )
         except Exception:
             pass
@@ -6179,8 +6180,8 @@ def _notify_admins_new_driver(customer):
     """
     try:
         from django.db.models import Q
-        from django.core.mail import send_mail as _send_mail
         from django.conf import settings as _cfg
+        from accounts.tasks import enqueue, send_transactional_email
         from .models import User
         from .notifications import record_notification
 
@@ -6195,18 +6196,22 @@ def _notify_admins_new_driver(customer):
         name = (customer.name or customer.phone or customer.email or f"Customer #{customer.id}")
         vehicle = customer.driver_vehicle or "—"
         if admins:
-            _send_mail(
-                subject="New rider application on Kepoli",
-                message=(
+            # PERF: off the request thread — this fan-out sent one blocking SMTP
+            # message to every admin inside the driver-register request. Content/
+            # recipients unchanged (a platform-level mail, so no tenant scoping).
+            enqueue(
+                send_transactional_email,
+                "New rider application on Kepoli",
+                (
                     "A new rider has applied to join the Kepoli delivery network.\n\n"
                     f"Name: {name}\n"
                     f"Vehicle: {vehicle}\n\n"
                     "Review and approve them in the admin console under Drivers "
                     "(/admin-drivers).\n"
                 ),
-                from_email=_cfg.DEFAULT_FROM_EMAIL,
-                recipient_list=admins,
-                fail_silently=True,
+                _cfg.DEFAULT_FROM_EMAIL,
+                admins,
+                tenant_id=None,
             )
         record_notification(
             channel="email",

@@ -544,17 +544,21 @@ class PublishAccessMixin:
             if not owner_email:
                 return
             tenant_name = getattr(tenant, "name", "") or getattr(tenant, "slug", "")
-            send_mail(
-                subject=f"Your menu was unpublished — {tenant_name}",
-                message=(
+            # PERF: off the request thread — SMTP blocked the dish delete/unpublish
+            # response. Content/recipient are unchanged.
+            from accounts.tasks import enqueue, send_transactional_email
+            enqueue(
+                send_transactional_email,
+                f"Your menu was unpublished — {tenant_name}",
+                (
                     f"Hi,\n\nYour storefront menu for {tenant_name} was automatically "
                     "unpublished because it no longer has any published categories or "
                     "dishes. Add at least one published category and dish, then "
                     "republish from your dashboard.\n\n— Kepoli"
                 ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[owner_email],
-                fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+                settings.DEFAULT_FROM_EMAIL,
+                [owner_email],
+                tenant_id=getattr(tenant, "id", None),
             )
             record_notification(
                 channel="email", event="menu.auto_unpublished", status="sent",
@@ -4026,7 +4030,11 @@ class CustomerOrderCancelView(APIView):
         _broadcast_order_change(order)  # live-update the tracking page
         if tenant:
             try:
-                _send_order_status_email(order, tenant, Order.Status.CANCELLED)
+                # PERF: off the request thread (mirrors the owner cancel path). The task
+                # re-fetches the order under the tenant schema and reuses the SAME
+                # _send_order_status_email builder, so the customer-facing email is identical.
+                from accounts.tasks import enqueue, order_status_email
+                enqueue(order_status_email, order.order_number, tenant.id, Order.Status.CANCELLED)
             except Exception:
                 pass
         return Response({"status": order.status, "payment_status": order.payment_status})
@@ -4121,12 +4129,16 @@ def _send_owner_new_reservation_email(tenant, lead) -> None:
         if notes:
             body += f"Notes: {notes}\n"
 
-        send_mail(
-            subject=f"New reservation request — {tenant.name}",
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[owner_email],
-            fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+        # PERF: off the request thread — SMTP (up to EMAIL_TIMEOUT) blocked the
+        # reservation-submit response. Content/recipient are unchanged.
+        from accounts.tasks import enqueue, send_transactional_email
+        enqueue(
+            send_transactional_email,
+            f"New reservation request — {tenant.name}",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [owner_email],
+            tenant_id=getattr(tenant, "id", None),
         )
     except Exception:  # noqa: BLE001
         pass
@@ -8406,7 +8418,12 @@ class OwnerOrderStatusUpdateView(APIView):
         tenant = getattr(request, "tenant", None)
         if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}:
             if tenant:
-                _send_order_status_email(order, tenant, new_status)
+                # PERF: off the request thread — the SMTP send (up to EMAIL_TIMEOUT)
+                # blocked the response. The task re-fetches the order under the tenant
+                # schema and reuses the SAME _send_order_status_email builder (mirrors
+                # the already-async SMS branch a few lines below).
+                from accounts.tasks import enqueue, order_status_email
+                enqueue(order_status_email, order.order_number, tenant.id, new_status)
 
         # SMS notification — only when a PICKUP order becomes "ready". The copy says
         # "come pick it up", which would mislead a delivery customer (for delivery the
@@ -8555,6 +8572,13 @@ class OwnerOrderBulkStatusView(APIView):
 
         # Fire realtime + email for each confirmed order (best-effort, outside
         # the lock so slow broadcast never holds the row locks).
+        #
+        # PERF: the status email goes through the async queue. A bulk confirm can touch
+        # up to _MAX (50) orders, and a synchronous _send_order_status_email per order
+        # blocked the request on up to 50 SEQUENTIAL SMTP sends (EMAIL_TIMEOUT each). The
+        # order_status_email task re-fetches the order under the tenant schema and reuses
+        # the SAME _send_order_status_email builder, so content/recipients are unchanged.
+        from accounts.tasks import enqueue, order_status_email
         for order in orders:
             try:
                 _broadcast_order_change(order)
@@ -8562,7 +8586,7 @@ class OwnerOrderBulkStatusView(APIView):
                 pass
             try:
                 if tenant:
-                    _send_order_status_email(order, tenant, Order.Status.CONFIRMED)
+                    enqueue(order_status_email, order.order_number, tenant.id, Order.Status.CONFIRMED)
             except Exception:
                 pass
 

@@ -143,9 +143,9 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     # ── 200 success ───────────────────────────────────────────────────────────
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_updates_pending_orders_to_confirmed(self, mock_qs, mock_mail, mock_bcast):
+    def test_updates_pending_orders_to_confirmed(self, mock_qs, mock_enqueue, mock_bcast):
         o1 = _make_order(pk=1, status_val="pending")
         o2 = _make_order(pk=2, status_val="pending")
         self._wire_qs(mock_qs, [o1, o2])
@@ -155,27 +155,27 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
         self.assertEqual(resp.data["skipped"], 0)
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_sets_status_confirmed_on_each_order(self, mock_qs, mock_mail, mock_bcast):
+    def test_sets_status_confirmed_on_each_order(self, mock_qs, mock_enqueue, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
         self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         self.assertEqual(o.status, "confirmed")
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_calls_bulk_update(self, mock_qs, mock_mail, mock_bcast):
+    def test_calls_bulk_update(self, mock_qs, mock_enqueue, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
         self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         mock_qs.bulk_update.assert_called_once()
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_fires_broadcast_for_each_order(self, mock_qs, mock_mail, mock_bcast):
+    def test_fires_broadcast_for_each_order(self, mock_qs, mock_enqueue, mock_bcast):
         o1 = _make_order(pk=1, status_val="pending")
         o2 = _make_order(pk=2, status_val="pending")
         self._wire_qs(mock_qs, [o1, o2])
@@ -183,9 +183,9 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
         self.assertEqual(mock_bcast.call_count, 2)
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_sets_handler_id_when_unset(self, mock_qs, mock_mail, mock_bcast):
+    def test_sets_handler_id_when_unset(self, mock_qs, mock_enqueue, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
         o.handled_by_user_id = None
         self._wire_qs(mock_qs, [o])
@@ -193,14 +193,34 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
         self.assertEqual(o.handled_by_user_id, 10)  # _owner().id == 10
 
     @patch("menu.views._broadcast_order_change")
-    @patch("menu.views._send_order_status_email")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.Order.objects")
-    def test_select_for_update_called(self, mock_qs, mock_mail, mock_bcast):
+    def test_select_for_update_called(self, mock_qs, mock_enqueue, mock_bcast):
         """OPS-3: the view must call select_for_update() before filter()."""
         o = _make_order(pk=1, status_val="pending")
         self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         mock_qs.select_for_update.assert_called_once()
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("accounts.tasks.enqueue")
+    @patch("menu.views.Order.objects")
+    def test_enqueues_one_status_email_task_per_order(self, mock_qs, mock_enqueue, mock_bcast):
+        """PERF regression: a bulk confirm must ENQUEUE one order_status_email task per
+        confirmed order (off the request thread) — NOT send N emails inline. This is the
+        fix for up-to-50 sequential blocking SMTP sends inside one request."""
+        from menu.models import Order
+        from accounts.tasks import order_status_email
+        o1 = _make_order(pk=1, order_number="ORD-001", status_val="pending")
+        o2 = _make_order(pk=2, order_number="ORD-002", status_val="pending")
+        self._wire_qs(mock_qs, [o1, o2])
+        self._post(body={"order_ids": [1, 2], "status": "confirmed"})
+        # One enqueue per order, each dispatching order_status_email with
+        # (order_number, tenant_id, CONFIRMED). tenant.id == 1 from _tenant().
+        self.assertEqual(mock_enqueue.call_count, 2)
+        enqueued = [c.args for c in mock_enqueue.call_args_list]
+        self.assertIn((order_status_email, "ORD-001", 1, Order.Status.CONFIRMED), enqueued)
+        self.assertIn((order_status_email, "ORD-002", 1, Order.Status.CONFIRMED), enqueued)
 
     # ── Empty / all-skipped ───────────────────────────────────────────────────
 
