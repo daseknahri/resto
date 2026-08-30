@@ -12,7 +12,7 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
-## 2026-08-30 — full-app performance pass (fresh audit → 8 fixes shipped)
+## 2026-08-30 — full-app performance pass (fresh audit → 11 fixes shipped)
 
 **Result:** `main` @ `6f572b4`, green. A fresh **31-agent read-only speed + hosting audit**
 (12 expert lenses across backend ORM/query/index/cache/async, frontend bundle/runtime, infra;
