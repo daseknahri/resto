@@ -508,17 +508,17 @@ class StaffAppendOrderItemsComboTests(SimpleTestCase):
 
         dish_om.select_for_update.return_value.filter.return_value = [combo_locked, fries_locked, drink_locked]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "combo-meal", "qty": 1}]})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        # OrderItem.create must have been called with combo_components snapshot
-        item_om.create.assert_called_once()
-        call_kwargs = item_om.create.call_args[1]
-        self.assertIn("combo_components", call_kwargs)
-        self.assertEqual(len(call_kwargs["combo_components"]), 2)
-        component_ids = {c["dish_id"] for c in call_kwargs["combo_components"]}
+        # OrderItem.bulk_create must have received an item with the combo_components snapshot
+        item_om.bulk_create.assert_called_once()
+        created = item_om.bulk_create.call_args[0][0]
+        combo_components = created[0].combo_components
+        self.assertEqual(len(combo_components), 2)
+        component_ids = {c["dish_id"] for c in combo_components}
         self.assertEqual(component_ids, {10, 11})
 
     @patch("menu.views._broadcast_order_change")
@@ -562,13 +562,13 @@ class StaffAppendOrderItemsComboTests(SimpleTestCase):
 
         dish_om.select_for_update.return_value.filter.return_value = [combo_locked, fries_locked]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "combo-meal", "qty": 1}]})
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "out_of_stock")
-        item_om.create.assert_not_called()
+        item_om.bulk_create.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -773,25 +773,23 @@ class PlaceOrderViewComboTests(SimpleTestCase):
         tx_mock.atomic.return_value = _FakeAtomic()
 
         dish_om.select_for_update.return_value.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         req = self._post()
         # We expect the view to attempt to build and create order items.
         # This test validates the snapshot-writing code path exists by checking
-        # that OrderItem.objects.create is called with combo_components when
-        # the dish has combo_components.
+        # that OrderItem.objects.bulk_create receives items carrying combo_components
+        # when the dish has combo_components.
         # Due to the complexity of the full view, we just verify the snapshot
         # building logic in isolation via DishSerializer tests above, and
         # verify the code path is wired by checking no AttributeError occurs.
         try:
             resp = self.view(req)
             # If the response is successful, check item creation contained snapshot
-            if item_om.create.called:
-                for c in item_om.create.call_args_list:
-                    kwargs = c[1] if c[1] else {}
-                    if "combo_components" in kwargs:
-                        # Snapshot present
-                        self.assertIsInstance(kwargs["combo_components"], list)
+            if item_om.bulk_create.called:
+                for oi in item_om.bulk_create.call_args[0][0]:
+                    # Snapshot present as a list on each constructed OrderItem
+                    self.assertIsInstance(oi.combo_components, list)
         except Exception:
             # View may fail due to mock setup complexity — that's OK for this
             # integration-level unit test. The key unit tests are above.

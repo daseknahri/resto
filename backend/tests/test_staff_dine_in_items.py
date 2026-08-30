@@ -236,7 +236,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         cache_mock.get.return_value = True  # marker set by the original committed request
         resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 1}], "idempotency_key": "abc"})
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        item_om.create.assert_not_called()  # no second insert
+        item_om.bulk_create.assert_not_called()  # no second insert
 
     # ── Happy path: append + recompute totals + stock decremented ─────────────
 
@@ -273,17 +273,17 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         # All dishes are now locked via select_for_update().filter(pk__in=...)
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 2}]})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         # Item was created
-        item_om.create.assert_called_once()
-        call_kwargs = item_om.create.call_args[1]
-        self.assertEqual(call_kwargs["dish_slug"], "burger")
-        self.assertEqual(call_kwargs["qty"], 2)
-        self.assertFalse(call_kwargs["is_ready"])
+        item_om.bulk_create.assert_called_once()
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].dish_slug, "burger")
+        self.assertEqual(created[0].qty, 2)
+        self.assertFalse(created[0].is_ready)
         # Total save used update_fields
         second_order.save.assert_called_once_with(update_fields=["total", "updated_at"])
         # Broadcast fired
@@ -328,13 +328,13 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         # so the mock chain is: dish_om.select_for_update().filter() -> [locked_dish]
         dish_om.select_for_update.return_value.filter.return_value = [locked_dish]
 
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 2}]})
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "out_of_stock")
-        item_om.create.assert_not_called()
+        item_om.bulk_create.assert_not_called()
         broadcast_mock.assert_not_called()
 
     @patch("menu.views._broadcast_order_change")
@@ -369,13 +369,13 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         option_om.filter.return_value = []
         dish_om.select_for_update.return_value.filter.return_value = [locked_dish]
 
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "pasta", "qty": 1}]})
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "out_of_stock")
-        item_om.create.assert_not_called()
+        item_om.bulk_create.assert_not_called()
         broadcast_mock.assert_not_called()
 
     # ── is_voided present in response payload ─────────────────────────────────
@@ -404,7 +404,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         # All dishes are now locked via select_for_update().filter(pk__in=...)
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 1}]})
 
