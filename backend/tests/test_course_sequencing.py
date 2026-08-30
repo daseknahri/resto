@@ -10,7 +10,7 @@ Covers:
     - 409 bad_status for terminal orders (completed / cancelled)
     - section-gate enforced (mirrors existing section-bypass tests)
   Placement snapshot (PlaceOrderView path):
-    - course flows dish.category.course → item dict (verified via item_om.create call_kwargs)
+    - course flows dish.category.course → item dict (verified via item_om.bulk_create instances)
   Append snapshot (StaffAppendOrderItemsView):
     - course flows dish.category.course → item dict
   Payload shape:
@@ -492,7 +492,7 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
         # Only finite-stock dishes hit select_for_update — steak has no stock
         mock_dish_om.select_for_update.return_value.filter.return_value = []
 
-        mock_item_om.create = MagicMock()
+        mock_item_om.bulk_create = MagicMock()
 
         # Build a tenant with a plan that permits checkout so the plan-gate passes
         tenant = _tenant()
@@ -521,16 +521,16 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
             tl_om.filter.return_value.first.return_value = tl
             resp = self.view(req, order_id=None)
 
-        # The view must have reached OrderItem.create — assert unconditionally
+        # The view must have reached OrderItem.bulk_create — assert unconditionally
         self.assertTrue(
-            mock_item_om.create.called,
-            f"OrderItem.create was never called (status={resp.status_code}, "
+            mock_item_om.bulk_create.called,
+            f"OrderItem.bulk_create was never called (status={resp.status_code}, "
             f"data={getattr(resp, 'data', None)}). "
             "The mock setup must allow the view to reach item creation.",
         )
-        kwargs = mock_item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("course"), 2,
-                         "OrderItem.create must receive course=2 (from category)")
+        created = mock_item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].course, 2,
+                         "OrderItem must carry course=2 (from category)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -584,15 +584,15 @@ class AppendCourseSnapshotTests(SimpleTestCase):
         dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "steak", "qty": 1}]})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(item_om.create.called, "OrderItem.create should have been called")
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("course"), 3,
-                         "OrderItem.create must receive course=3 (from category)")
+        self.assertTrue(item_om.bulk_create.called, "OrderItem.bulk_create should have been called")
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].course, 3,
+                         "OrderItem must carry course=3 (from category)")
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.OrderItem.objects")
@@ -623,13 +623,13 @@ class AppendCourseSnapshotTests(SimpleTestCase):
         dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
-        item_om.create = MagicMock()
+        item_om.bulk_create = MagicMock()
 
         resp = self._post(body={"items": [{"dish_slug": "salad", "qty": 1}]})
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("course"), 0)
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].course, 0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -685,7 +685,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
         self.view = PlaceOrderView.as_view()
 
     def _run_place(self, items, extra_body=None, category_course=2):
-        """Drive PlaceOrderView to OrderItem.create with fully-mocked deps.
+        """Drive PlaceOrderView to OrderItem.bulk_create with fully-mocked deps.
         Returns (resp, item_create_mock, order_create_mock).
         """
         dish = _make_dish(slug="steak", name="Steak", price=Decimal("50.00"),
@@ -744,7 +744,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
 
             created_order = _make_order()
             order_om.create.return_value = created_order
-            item_om.create = MagicMock()
+            item_om.bulk_create = MagicMock()
 
             tl = MagicMock()
             tl.label = "T1"
@@ -758,7 +758,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
             req.session = {}
             resp = self.view(req, order_id=None)
 
-        return resp, item_om.create, order_om.create
+        return resp, item_om.bulk_create, order_om.create
 
     # ── Per-line override wins over the category snapshot ──────────────────────
 
@@ -768,7 +768,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
             [{"slug": "steak", "qty": 1, "course": 3}], category_course=2,
         )
         self.assertTrue(item_create.called, getattr(resp, "data", None))
-        self.assertEqual(item_create.call_args[1].get("course"), 3)
+        self.assertEqual(item_create.call_args[0][0][0].course, 3)
 
     def test_per_line_course_zero_override(self):
         """course=0 explicitly forces 'fire immediately' even when category is 2."""
@@ -776,7 +776,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
             [{"slug": "steak", "qty": 1, "course": 0}], category_course=2,
         )
         self.assertTrue(item_create.called, getattr(resp, "data", None))
-        self.assertEqual(item_create.call_args[1].get("course"), 0)
+        self.assertEqual(item_create.call_args[0][0][0].course, 0)
 
     # ── DEFAULT-PRESERVING: no override → category snapshot (today's behavior) ─
 
@@ -786,7 +786,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
             [{"slug": "steak", "qty": 1}], category_course=2,
         )
         self.assertTrue(item_create.called, getattr(resp, "data", None))
-        self.assertEqual(item_create.call_args[1].get("course"), 2)
+        self.assertEqual(item_create.call_args[0][0][0].course, 2)
 
     # ── Initial fired_course (Send-now / Hold at entry) ────────────────────────
 
@@ -843,7 +843,7 @@ class AppendCourseOverrideTests(SimpleTestCase):
         self.addCleanup(_patcher.stop)
 
     def _run_append(self, body, first_order=None):
-        """Drive the append view to OrderItem.create. Returns (resp, item_create, order)."""
+        """Drive the append view to OrderItem.bulk_create. Returns (resp, item_bulk_create, order)."""
         dish = _make_dish(slug="steak", name="Steak", price=Decimal("50.00"),
                           category_course=2, pk=5)
         order = first_order if first_order is not None else _make_order(fired_course=1)
@@ -868,14 +868,14 @@ class AppendCourseOverrideTests(SimpleTestCase):
             dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
             dish_om.select_for_update.return_value.filter.return_value = [dish]
             option_om.filter.return_value = []
-            item_om.create = MagicMock()
+            item_om.bulk_create = MagicMock()
 
             req = self.factory.post("/api/staff/orders/10/items/", body, format="json")
             force_authenticate(req, user=_user())
             req.tenant = _tenant()
             resp = self.view(req, order_id=10)
 
-        return resp, item_om.create, order
+        return resp, item_om.bulk_create, order
 
     def test_append_per_line_course_override_wins(self):
         """Per-line course=3 overrides the category snapshot (2) on append."""
@@ -883,7 +883,7 @@ class AppendCourseOverrideTests(SimpleTestCase):
             {"items": [{"dish_slug": "steak", "qty": 1, "course": 3}]},
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(item_create.call_args[1].get("course"), 3)
+        self.assertEqual(item_create.call_args[0][0][0].course, 3)
 
     def test_append_default_uses_category_snapshot(self):
         """DEFAULT-PRESERVING: omitting course → category snapshot (2)."""
@@ -891,7 +891,7 @@ class AppendCourseOverrideTests(SimpleTestCase):
             {"items": [{"dish_slug": "steak", "qty": 1}]},
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(item_create.call_args[1].get("course"), 2)
+        self.assertEqual(item_create.call_args[0][0][0].course, 2)
 
     def test_append_send_now_bumps_fired_course(self):
         """send_now=True with an appended course-2 item bumps fired_course 1 → 2."""

@@ -180,7 +180,7 @@ class PlacementStationSnapshotTests(SimpleTestCase):
             lc_om.filter.return_value.first.return_value = None
             tx.atomic.return_value = _FakeAtomic()
             order_om.create.return_value = _make_order()
-            item_om.create = MagicMock()
+            item_om.bulk_create = MagicMock()
             tl = MagicMock()
             tl.label = "T1"
             tl_om.filter.return_value.first.return_value = tl
@@ -206,22 +206,22 @@ class PlacementStationSnapshotTests(SimpleTestCase):
                           category_station="bar", category_course=0, pk=10)
         item_om, resp = self._run(dish)
         self.assertTrue(
-            item_om.create.called,
-            f"OrderItem.create was never called (status={resp.status_code}). "
+            item_om.bulk_create.called,
+            f"OrderItem.bulk_create was never called (status={resp.status_code}). "
             "Mock setup must allow view to reach item creation.",
         )
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("station"), "bar",
-                         "OrderItem.create must receive station='bar' from category")
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].station, "bar",
+                         "OrderItem must carry station='bar' from category")
 
     def test_empty_station_snapshotted_as_empty_string(self):
         dish = _make_dish(slug="steak", name="Steak",
                           category_station="", category_course=0, pk=11)
         item_om, resp = self._run(dish)
-        self.assertTrue(item_om.create.called,
-                        f"OrderItem.create was never called (status={resp.status_code})")
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("station"), "",
+        self.assertTrue(item_om.bulk_create.called,
+                        f"OrderItem.bulk_create was never called (status={resp.status_code})")
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].station, "",
                          "Empty category.station should produce station='' on OrderItem")
 
 
@@ -262,7 +262,7 @@ class AppendStationSnapshotTests(SimpleTestCase):
             dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
             dish_om.select_for_update.return_value.filter.return_value = [dish]
             opt_om.filter.return_value = []
-            item_om.create = MagicMock()
+            item_om.bulk_create = MagicMock()
 
             req = self.factory.post(
                 f"/api/staff/orders/{order_id}/items/",
@@ -280,19 +280,19 @@ class AppendStationSnapshotTests(SimpleTestCase):
                           category_station="grill", category_course=0, pk=20)
         item_om, resp = self._post(dish)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(item_om.create.called,
-                        "OrderItem.create should have been called")
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("station"), "grill",
-                         "OrderItem.create must receive station='grill' from category")
+        self.assertTrue(item_om.bulk_create.called,
+                        "OrderItem.bulk_create should have been called")
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].station, "grill",
+                         "OrderItem must carry station='grill' from category")
 
     def test_empty_station_snapshotted_as_empty_string(self):
         dish = _make_dish(slug="salad", name="Salad",
                           category_station="", category_course=0, pk=21)
         item_om, resp = self._post(dish)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(item_om.create.called,
-                        "OrderItem.create should have been called")
-        kwargs = item_om.create.call_args[1]
-        self.assertEqual(kwargs.get("station"), "",
+        self.assertTrue(item_om.bulk_create.called,
+                        "OrderItem.bulk_create should have been called")
+        created = item_om.bulk_create.call_args[0][0]
+        self.assertEqual(created[0].station, "",
                          "Empty category.station should produce station='' on OrderItem")

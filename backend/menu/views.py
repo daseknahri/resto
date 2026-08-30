@@ -3393,8 +3393,14 @@ class PlaceOrderView(APIView):
                     ).update(loyalty_points=F("loyalty_points") - _loyalty_points_spent)
                     if not _ok:
                         raise _LoyaltyShort()
-                for item_data in order_items_data:
-                    OrderItem.objects.create(order=order, **item_data)
+                # Insert all order lines in a single round-trip. bulk_create is safe here:
+                # OrderItem has no custom save() and no pre_save/post_save signals, item_data
+                # is a flat dict of model fields (no per-item child rows), and the created
+                # instances aren't used downstream. Bind by order_id (not order=order) — the
+                # INSERT only needs the FK column, and it keeps the row-lock hold short.
+                OrderItem.objects.bulk_create(
+                    [OrderItem(order_id=order.pk, **item_data) for item_data in order_items_data]
+                )
 
                 # (Promo use_count increment was performed before Order.create() — see OPS-4 F.)
 
@@ -5122,8 +5128,12 @@ class StaffAppendOrderItemsView(APIView):
                             else:
                                 Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
-                for item_data in new_items_data:
-                    OrderItem.objects.create(order=order, **item_data)
+                # Insert appended lines in one round-trip (see bulk_create rationale on the
+                # placement path). Safe: no OrderItem save()/signals, flat item dicts, and the
+                # rows are re-read from the DB below (prefetch_related) rather than reused here.
+                OrderItem.objects.bulk_create(
+                    [OrderItem(order_id=order.pk, **item_data) for item_data in new_items_data]
+                )
 
                 # WAITER-COURSING: "Send now" fires the appended items immediately by
                 # advancing fired_course to the highest appended course (monotonic —

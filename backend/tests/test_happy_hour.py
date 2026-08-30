@@ -588,9 +588,9 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
     """View-level integration: PlaceOrderView must write discounted unit_price to OrderItem.
 
     These tests invoke the actual view through APIRequestFactory and assert that
-    OrderItem.objects.create() is called with the happy-hour-discounted unit_price.
-    A developer who removes the effective_unit_price() call from the view will
-    cause unit_price to revert to dish.price — these tests will catch that.
+    OrderItem.objects.bulk_create() receives an OrderItem carrying the happy-hour-
+    discounted unit_price. A developer who removes the effective_unit_price() call
+    from the view will cause unit_price to revert to dish.price — these tests catch that.
     """
 
     def setUp(self):
@@ -619,7 +619,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
         self, mock_hh, profile_mock, dish_mock, opt_mock,
         order_mock, orderitem_mock, promo_mock, mock_rl,
     ):
-        """OrderItem.create must receive the happy-hour-discounted unit_price, not dish.price."""
+        """A bulk_create'd OrderItem must carry the happy-hour-discounted unit_price, not dish.price."""
         # Profile
         prof = _profile()
         profile_mock.filter.return_value.first.return_value = prof
@@ -641,7 +641,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
         # Order creation
         mock_order = _make_order_mock(total="80.00")
         order_mock.create.return_value = mock_order
-        orderitem_mock.create.return_value = MagicMock()
+        orderitem_mock.bulk_create.return_value = []
 
         with patch("menu.views.transaction") as tx_mock:
             tx_mock.atomic.return_value = _make_transaction_ctx()
@@ -655,11 +655,11 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
         # The view should not error out before reaching OrderItem creation.
         self.assertNotIn(resp.status_code, [400, 403, 503], msg=f"Unexpected early exit: {resp.data}")
         # Assert OrderItem was created with unit_price == 80.00 (not 100.00)
-        self.assertTrue(orderitem_mock.create.called, "OrderItem.objects.create was never called")
-        call_kwargs = orderitem_mock.create.call_args[1]
+        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
+        created_items = orderitem_mock.bulk_create.call_args[0][0]
         self.assertEqual(
-            call_kwargs["unit_price"], Decimal("80.00"),
-            f"Expected discounted unit_price 80.00, got {call_kwargs['unit_price']}"
+            created_items[0].unit_price, Decimal("80.00"),
+            f"Expected discounted unit_price 80.00, got {created_items[0].unit_price}"
         )
 
     @patch("menu.models.RecipeLine")
@@ -689,7 +689,7 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
 
         mock_order = _make_order_mock(total="50.00")
         order_mock.create.return_value = mock_order
-        orderitem_mock.create.return_value = MagicMock()
+        orderitem_mock.bulk_create.return_value = []
 
         with patch("menu.views.transaction") as tx_mock:
             tx_mock.atomic.return_value = _make_transaction_ctx()
@@ -701,9 +701,9 @@ class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
                     resp = self.view(req)
 
         self.assertNotIn(resp.status_code, [400, 403, 503], msg=f"Unexpected early exit: {resp.data}")
-        self.assertTrue(orderitem_mock.create.called, "OrderItem.objects.create was never called")
-        call_kwargs = orderitem_mock.create.call_args[1]
-        self.assertEqual(call_kwargs["unit_price"], Decimal("50.00"))
+        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
+        created_items = orderitem_mock.bulk_create.call_args[0][0]
+        self.assertEqual(created_items[0].unit_price, Decimal("50.00"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -764,7 +764,7 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
         order_mock.prefetch_related.return_value.filter.return_value.first.return_value = open_order
         # Second call after create: Order.objects.prefetch_related("items").get(pk=10)
         order_mock.prefetch_related.return_value.get.return_value = open_order
-        orderitem_mock.create.return_value = MagicMock()
+        orderitem_mock.bulk_create.return_value = []
 
         payload = {"items": [{"dish_slug": "dish-1", "qty": 1}]}
         req = self.factory.post("/api/staff/orders/10/items/", payload, format="json")
@@ -780,11 +780,11 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
             resp = self.view(req, order_id=10)
 
         self.assertNotIn(resp.status_code, [400, 403, 409], msg=f"Unexpected error: {getattr(resp, 'data', resp)}")
-        self.assertTrue(orderitem_mock.create.called, "OrderItem.objects.create was never called")
-        call_kwargs = orderitem_mock.create.call_args[1]
+        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
+        created_items = orderitem_mock.bulk_create.call_args[0][0]
         self.assertEqual(
-            call_kwargs["unit_price"], Decimal("72.00"),
-            f"Expected 72.00 (10% off 80.00), got {call_kwargs['unit_price']}"
+            created_items[0].unit_price, Decimal("72.00"),
+            f"Expected 72.00 (10% off 80.00), got {created_items[0].unit_price}"
         )
 
     @patch("menu.views.OrderItem.objects")
@@ -810,7 +810,7 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
         open_order = self._make_open_table_order()
         order_mock.prefetch_related.return_value.filter.return_value.first.return_value = open_order
         order_mock.prefetch_related.return_value.get.return_value = open_order
-        orderitem_mock.create.return_value = MagicMock()
+        orderitem_mock.bulk_create.return_value = []
 
         payload = {"items": [{"dish_slug": "dish-1", "qty": 1}]}
         req = self.factory.post("/api/staff/orders/10/items/", payload, format="json")
@@ -826,9 +826,9 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
             resp = self.view(req, order_id=10)
 
         self.assertNotIn(resp.status_code, [400, 403, 409], msg=f"Unexpected error: {getattr(resp, 'data', resp)}")
-        self.assertTrue(orderitem_mock.create.called, "OrderItem.objects.create was never called")
-        call_kwargs = orderitem_mock.create.call_args[1]
-        self.assertEqual(call_kwargs["unit_price"], Decimal("80.00"))
+        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
+        created_items = orderitem_mock.bulk_create.call_args[0][0]
+        self.assertEqual(created_items[0].unit_price, Decimal("80.00"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
