@@ -9,6 +9,7 @@
  */
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
+import { getNumberFormat } from "../utils/intlFormatters";
 
 const STORAGE_KEY = "pref_currency";
 const BASE_CODE = "MAD";
@@ -75,7 +76,7 @@ export const useCurrencyStore = defineStore("currency", () => {
       // formatCurrency(..., 2). Rounding the browse/cart display to whole dirhams made
       // line items not reconcile with the total (two "MAD 13" lines summing to "MAD 25")
       // and diverge from the amount actually charged (a 12.50 dish showed "MAD 13").
-      return new Intl.NumberFormat(locale, {
+      return getNumberFormat(locale, {
         style: "currency",
         currency: code,
         minimumFractionDigits: 2,
