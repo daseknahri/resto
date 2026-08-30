@@ -7989,8 +7989,30 @@ class AdminPlatformAnalyticsView(APIView):
 
     permission_classes = [IsPlatformAdmin]
 
+    # PERF: the dashboard runs ~15 full-table aggregates on the shared/public-schema tables on
+    # EVERY load, degrading as the core tables grow. The build takes NO request inputs — no query
+    # params, no date range, and no tenant scoping (every model it queries is a SHARED_APPS model,
+    # i.e. a single physical table in the public schema, so the aggregate is identical for every
+    # platform admin and every subdomain). A single global cache key is therefore collision-free;
+    # a short TTL bounds staleness, and single-flight collapses the rebuild under concurrency.
+    # Time-relative figures (the flash-sale "live" count) stay correct because `now` is captured
+    # INSIDE the build, so each rebuild re-evaluates them.
+    _CACHE_KEY = "admin_platform_analytics:v1"
+    _CACHE_TTL = 45  # seconds — an admin dashboard tolerates a few seconds of staleness
+
     def get(self, request, *args, **kwargs):
         # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
+        payload = get_or_build_single_flight(
+            self._CACHE_KEY, self._build_analytics, ttl=self._CACHE_TTL,
+        )
+        return Response(payload)
+
+    @staticmethod
+    def _build_analytics():
+        """Compute the platform-analytics payload (the ~15 aggregates). Pure of request inputs
+        (see the cache-key note above), so its output depends only on current DB state — safe to
+        cache under one global key. Returns the plain response dict (byte-identical to the former
+        inline computation); the caller wraps it in a Response."""
         from django.db.models import Avg, Count, Q, Sum
         from django.utils import timezone
         from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, RideRequest, WalletTransaction
@@ -8134,7 +8156,7 @@ class AdminPlatformAnalyticsView(APIView):
             for v in ALL_VERTICALS
         ]
 
-        return Response({
+        return {
             "tenants": {
                 "total": total_tenants,
                 "active": active_tenants,
@@ -8193,7 +8215,7 @@ class AdminPlatformAnalyticsView(APIView):
                 # data, but an admin data correction must not show a negative.
                 "cash_paid": max(0, (ride_agg["completed"] or 0) - (ride_agg["wallet_paid"] or 0)),
             },
-        })
+        }
 
 
 class AdminDeliveryZoneListCreateView(APIView):

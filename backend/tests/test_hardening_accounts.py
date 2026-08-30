@@ -254,6 +254,13 @@ class PlatformAnalyticsRealizedBasisTests(SimpleTestCase):
     """Cancelled jobs are excluded from 'active', and the fee/payout money cards sum only
     DELIVERED jobs so they reconcile with the financials block."""
 
+    def setUp(self):
+        # AdminPlatformAnalyticsView now caches its payload under a single global key. Both test
+        # methods here run the real build and assert on the ORM call_args; clear the cache so the
+        # second method isn't served the first's cached payload (which would skip the ORM calls).
+        from django.core.cache import cache
+        cache.clear()
+
     def _run(self):
         Tenant = MagicMock()
         Tenant.objects.all.return_value.count.return_value = 2
