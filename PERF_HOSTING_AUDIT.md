@@ -1,174 +1,149 @@
 # Performance & Hosting Efficiency Backlog
-_Generated: 2026-06-07 — based on verified source-code audit of `accounts/views.py`, `menu/views.py`, `menu/models.py`, `tenancy/models.py`, `config/settings.py`, `backend/Dockerfile`, `docker-compose.coolify.yml`_
+
+_Generated: 2026-08-30 — 22-lens read-only audit fan-out (43 raw findings), 8 high/critical findings adversarially re-verified against source; medium/low findings recorded but not individually re-verified. Supersedes the 2026-06-07 edition of this file, whose backlog is fully implemented (see `CLAUDE.md` "Current state")._
 
 ---
 
 ## 1. Executive Summary
 
-**The five biggest wins — do these first:**
+**Speed — the 3 biggest wins:**
 
-1. **Cache `MarketplaceView` and `DirectoryView` responses in Redis (60–120 s TTL).** Both views execute O(N_tenants) synchronous Postgres schema-context switches per request, fully uncached, on public/unauthenticated endpoints. At 50 tenants a single marketplace page load fires 150–300+ SQL statements. At mealtimes with 10 concurrent visitors this saturates the 3-worker uvicorn pool. A `cache.get/set` wrapper keyed on query-param hash costs ~10 lines of code and drops median response time from seconds to milliseconds. This is the single highest ROI change in the codebase.
+1. **Route the last synchronous email/SMS call sites through the async notification infra that already exists.** Three separate findings are the same bug in three places: bulk order-confirm (up to **50 sequential blocking SMTP sends inside one request — critical**), the single owner order-status-update endpoint, and customer phone-OTP send. All three should call the existing `enqueue()` helper (`accounts/tasks.py`) the way the SMS/WhatsApp/push paths already do a few lines away in the same functions. This is not new infrastructure — it's finishing a migration that's already 90% done. Effort S each, ship together.
+2. **Two missing indexes, one migration file each.** `DeliveryJob.declined_by` (JSONB `__contains`, polled every 5–15s by every online driver) and `AdminAuditLog` (paginated/sorted/pruned with zero indexes) are both full-table-scan patterns on tables that only grow. Cheapest possible fix, compounding payoff as data volume grows.
+3. **Stop annotating reservation `.count()`-only queries with reminder-metrics joins.** Every reservations list/alert poll pays for a JOIN + GROUP BY + 3 subqueries to produce an integer a plain indexed `COUNT(*)` would give for free. S effort, no schema change.
 
-2. **Denormalize `rating_avg` + `rating_count` into `tenancy.Profile` (public schema).** The per-tenant `schema_context` loop in both marketplace views exists almost entirely to compute `Rating.aggregate()` per restaurant. Move that aggregation to a Django signal (or cheap Celery task) that writes `rating_avg`/`rating_count` onto the public-schema `Profile` record on every new `Rating` save. The inner loop then needs zero schema hops for rating data, collapsing hundreds of round-trips to one bulk `Profile` query.
+**Hosting — the 3 biggest wins:**
 
-3. **Batch `PlatformFlashSaleOptIn` and `PlatformFlashSale` lookups before the marketplace loop.** Currently these are two separate public-schema queries fired inside the per-tenant `for` loop (lines ~2261-2269 in `accounts/views.py`). One `filter(is_active=True).values(...)` call before the loop eliminates up to 2×N_tenants queries at zero schema-switch cost.
+1. **Same three query/index fixes above double as hosting-cost fixes.** The audit's own impact language is explicit: the AdminAuditLog scan and prune job burn "DB CPU/IO on a resource-constrained Coolify host," and the `declined_by` scan "becomes a real bottleneck as ... concurrent online drivers grow." Fixing these for speed also lowers DB load per request on the box the app is actually deployed on.
+2. **Cache `AdminPlatformAnalyticsView`'s ~15 uncached aggregate queries** the same way another view in the same file already does (`_public_list_get_or_build`). Turns N admin dashboard loads/minute into ~one round of DB aggregation.
+3. **This pass did not surface verified Docker/image, dependency, or ops-cost findings** — the prior audit's Dockerfile/compose/runtime backlog is already shipped (per `CLAUDE.md`). Treat hosting-efficiency-specific categories (image layers, dependency weight, worker tuning) as **not re-audited this round**, not as "clean" — a dedicated pass is the honest way to confirm that, not an inference from absence here.
 
-4. **Replace `AdminCustomerOrdersView`'s brute-force cross-schema scan with `CustomerOrderRef`.** The view already has a `MAX_TENANTS = 500` guard — but 500 schema switches per admin page load is unacceptable. `CustomerMarketplaceOrdersView` already does this right via the denormalized `CustomerOrderRef` table. Wire `AdminCustomerOrdersView` to the same path. Effort: S.
-
-5. **Multi-stage Docker build for the backend image (drop `build-essential` from the final layer).** The `backend/Dockerfile` installs `build-essential` into the running image, adding ~180–220 MB. Switching to a two-stage build (or purging the toolchain in the same `RUN` layer) reduces image size, speeds up Coolify redeploys, and shrinks the attack surface. Effort: M.
+**Frontend, worth doing but lower urgency:** cold-load is gated behind a network round-trip for the EN i18n chunk before `app.mount()`, and Sentry ships its Replay recorder in every page's vendor chunk even though replay sampling defaults to off. Both are self-contained frontend-only fixes (M effort).
 
 ---
 
 ## 2. Speed Backlog
 
+Items marked **[VERIFIED]** were individually re-checked against the source in this audit; **[reported]** items were surfaced by the finder pass but not individually re-verified — treat as likely-correct, confirm before relying on the line numbers.
+
 ### 2A. Backend — Queries & Indexes
 
-Items marked **[VERIFIED]** were confirmed by direct source inspection. Remaining items were reported by the audit tool and are likely correct but not individually line-traced.
+| Pri | Issue | Files | Fix | Impact | Effort |
+|-----|-------|-------|-----|--------|--------|
+| **H** [VERIFIED] | `DeliveryJob.declined_by` JSONB `__contains` full-table scan, hit by a driver endpoint polled every 5–15s by every online driver | `accounts/views.py:7778`, `accounts/models.py:985`, `accounts/dispatch.py:179-226` | Quick (S): add `GinIndex(fields=["declined_by"], name="deliveryjob_declined_gin")` to `DeliveryJob.Meta.indexes` + migration. Structural (M): replace the JSON-array scan with a small indexed `DeliveryJobDecline(job_id, driver_id)` table or a `Customer.declined_deliveries_count` counter bumped alongside the existing `declined_by` writes; keep `declined_by` itself for dispatch-exclusion, which it already serves well | Background cost today; becomes a real bottleneck as `DeliveryJob` rows and concurrent online drivers grow — every driver's earnings poll degrades together on the same unindexable predicate | S (quick) / M (structural) |
+| **H** [VERIFIED] | Reservation `count()`/alert endpoints run on a reminder-metrics-annotated queryset — JOIN + GROUP BY + 3 subqueries just to produce an integer | `sales/views.py` (`OwnerReservationListView`, `_owner_reservation_counts()`, `AdminReservationAlertsView`, `OwnerReservationExportView`) | Add a lean `_owner_reservations_base_queryset(...)` (same filters, no `_with_reservation_reminder_metrics`) and use it for every `.count()`-only call site and the CSV export row source. Reserve the annotated version for the one place that actually serializes reminder fields | 9-10x more DB work than needed on every reservations-list page load and every admin alerts poll; cost scales with both Lead volume and per-lead reminder history, so it gets slower over time, not just under bigger tenants | S |
+| **H** [VERIFIED] | `AdminAuditLog` has zero indexes despite being paginated/sorted/filtered and pruned by date on an unbounded, append-only public-schema table | `sales/models.py`, `sales/views.py`, `commands/prune_admin_audit_logs.py` | Add `Index(fields=["-created_at"], name="adminauditlog_created_idx")` + `Index(fields=["tenant","-created_at"], name="adminauditlog_tenant_created_idx")` to `Meta.indexes`. Build with `AddIndexConcurrently` + `atomic = False` (repo convention, see `backend/MIGRATIONS.md`) so the migration doesn't take an ACCESS EXCLUSIVE lock on deploy. Optionally index `action` if the exact-match filter is used often | Every admin audit-log page view does an unindexed sort + full-table count; the prune job does a full sequential scan+delete over the same growing table. Both worsen linearly as the platform accrues admin/money actions | S |
+| **M** [reported] | Password-reset confirm scans and decodes every active Django session platform-wide to find one user's sessions | `accounts/serializers.py:197-216` | Either drop the loop and rely on `SessionAuthenticationMiddleware` invalidation (matches the existing comment's own reasoning), or maintain a lightweight indexed `UserSession(user_id, session_key)` mapping written at login | Rare today (password resets are infrequent) but cost scales with total platform session count, not reset volume — slows over time purely from user-base growth | S |
+| **M** [reported] | Order-line creation loops per-row `.create()` instead of `bulk_create()` on every order placement | `menu/views.py`, `accounts/views.py`, `tests/test_happy_hour.py` | Replace per-item `.create()` loops with `OrderItem.objects.bulk_create([...])` (Postgres returns populated pks, nothing downstream breaks). Update the 4 `test_happy_hour.py` assertions from `.create.called` to `.bulk_create.called` | Cuts N sequential round-trips to 1 per order placed/appended; shortens the lock-hold window on the `select_for_update()` transaction that already guards the ordered dishes, reducing contention under concurrent checkouts on popular dishes | M |
+| **L** [reported] | `enforce_subscriptions` cron issues up to 2 `Subscription` queries per active tenant instead of 2 total | `commands/enforce_subscriptions.py` | Batch into two set lookups before the loop (`valid_tenant_ids`, `any_sub_tenant_ids`); replace per-tenant `has_valid_subscription()` calls with `in` checks against the sets; reuse for the billing-suspended reactivation loop | O(N) query count today is cheap; will start costing measurable Celery-worker time and DB connection churn at hundreds of tenants — cheap to fix now, harder to unwind later | S |
+| **L** [reported] | Tenant settings export defeats its own `prefetch_related` with a chained `.order_by()`, turning 3 queries into ~1+N+M | `sales/views.py`, `menu/models.py` | Drop the redundant `.order_by("position","name")` on `category.dishes.all()` (prefetch cache is already ordered via `Dish.Meta.ordering`); bake the desired order into the options prefetch itself (`Prefetch("dishes__options", queryset=DishOption.objects.order_by("id"))`) instead of re-querying after | 20 categories × 20 dishes = ~421 queries instead of 3. Admin-only, not a hot path, but a plausible source of request-timeout tickets on any tenant with a non-trivial menu | S |
+
+### 2B. Backend — Caching & Async
 
 | Pri | Issue | Files | Fix | Impact | Effort |
 |-----|-------|-------|-----|--------|--------|
-| **C** [VERIFIED] | `MarketplaceView`: 2–3 DB round-trips per tenant in Python loop (up to 200 tenants); `PlatformFlashSaleOptIn` queried inside loop per tenant | `accounts/views.py` L2239–2271 | Pre-build `opted_map` and `live_flash_sales` set once before the loop with a single `filter(is_active=True).values(...)` bulk query; no schema-context needed | At 50 tenants: 100+ extra public-schema queries per request eliminated | S |
-| **C** [VERIFIED] | `MarketplaceView` + `DirectoryView`: per-tenant `schema_context()` + `Rating.aggregate()` inside Python loop — fully uncached public endpoints | `accounts/views.py` L2107–2116, L2239–2257 | Cache full response in Redis with 60–120 s TTL, key = hash of query params (excluding lat/lng); invalidate on `Profile.save()` via post_save signal | At 50 tenants: 150–300+ SQL statements per request, 800–2000 ms response time; concurrent mealtime traffic saturates DB and uvicorn pool | M |
-| **C** [VERIFIED] | `DirectoryView`: 2 additional full-table `Profile` scans after main loop to extract `cities` / `cuisines` | `accounts/views.py` L2131–2133 | Accumulate cities/cuisines from already-fetched `qs` rows in memory (or call `.values_list('city','cuisine_type')` once on the pre-sliced queryset before the loop) | Eliminates 2 full-table scans per directory request | S |
-| **C** [VERIFIED] | `MarketplaceView`: same redundant `all_opted` full-table scan × 3 (cities, cuisines, tags) | `accounts/views.py` L2308–2314 | Same fix — iterate `results` already in memory or do a single `values_list('city','cuisine_type','tags')` pre-slice | Eliminates 3 full-table scans per marketplace request | S |
-| **H** [VERIFIED] | `AdminCustomerOrdersView`: iterates up to 500 tenant schemas per admin customer detail page | `accounts/views.py` L1777–1800 | Use `CustomerOrderRef.objects.filter(customer_id=customer_id).order_by('-order_created_at')[:50]` — same pattern as `CustomerMarketplaceOrdersView` | At 50+ tenants: 50+ schema switches per admin load; blocks a uvicorn worker for seconds | S |
-| **H** [VERIFIED] | `DriverJobListView`: `_job_order_summary()` does 1 `Tenant` lookup + 1 `schema_context` switch per job in loop | `accounts/views.py` L3826–3836 | Pre-fetch all unique `tenant_id`s in one query; for each schema switch once and batch-fetch all `order_number`s for that schema in a single `Order.objects.filter(order_number__in=[...])` call | Driver job list polled by every online driver; each poll can fire 20+ schema switches | M |
-| **M** [VERIFIED] | `tenancy.Profile.directory_opt_in` and `is_menu_published` are unindexed despite being the primary marketplace filter predicates | `tenancy/models.py` L273–325 | Add partial composite index: `Index(fields=['directory_opt_in','is_menu_published'], condition=Q(directory_opt_in=True, is_menu_published=True), name='profile_marketplace_idx')` in a new migration | Full Profile seq-scan on every marketplace request; degrades linearly with tenant count | S |
-| **M** [VERIFIED] | `MarketplaceView`: `?open=1` filter and `?q=` full-text search applied in Python after fetching 200 rows | `accounts/views.py` L2217–2228 | Push `q` filter into SQL: `qs.filter(Q(tenant__name__icontains=q) | Q(tagline__icontains=q) | Q(cuisine_type__icontains=q))`; for `open_only`, materialize `is_open` as a periodically-updated boolean on Profile | A `?q=steak&open=1` request fetches 200 profiles to return 5 results | M |
-| **M** [VERIFIED] | `AdminPlatformAnalyticsView`: 4 separate `Tenant.count()` calls that can be folded into one aggregate | `accounts/views.py` L4834–4838 | `Tenant.objects.aggregate(total=Count('id'), active=Count('id', filter=Q(lifecycle_status='active')), suspended=..., canceled=...)` — then same for `Customer`; cache response 60 s | Admin-only but wastes DB cycles; reduces ~11 queries to ~6 | S |
-| **M** [VERIFIED] | `OwnerOrderListView`: separate `count()` + slice fires two queries every owner poll cycle | `menu/views.py` L3410–3411 | Fetch `all_orders = list(qs[:201])`; `has_more = len(all_orders) > 200`; `all_orders = all_orders[:200]` — one query instead of two | Saves one `COUNT(*)` per owner poll on potentially thousands of orders | S |
-| **M** [VERIFIED] | `StaffShiftSummaryView`: average prep time computed in Python via full row fetch instead of DB aggregate | `menu/views.py` L3115–3125 | `qs.aggregate(avg_prep=Avg(ExpressionWrapper(F('status_updated_at') - F('created_at'), output_field=DurationField())))` | Reduces 3 queries to 1–2; avoids transferring full row set over the wire | S |
-| **M** [VERIFIED] | `Order.updated_at` has no index; `StaffOrderListView` `?since=` delta-poll filters on it at 300 req/min from staff tablets | `menu/models.py` L433 | Add `Index(fields=('status','updated_at'))` to `Order.Meta.indexes` (composite covers the active-order delta-poll pattern) | Without index: full active-row scan on every staff poll tick | S |
-
-### 2B. Backend — Caching & Async (Structural)
-
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **C** [VERIFIED] | No response cache on the two highest-traffic public endpoints; marketplace data is static for 60–120 s between restaurant updates | `accounts/views.py` | At top of `MarketplaceView.get()` and `DirectoryView.get()`: compute `cache_key = f'marketplace:v1:{hashlib.md5(param_str.encode()).hexdigest()}'`; `hit = cache.get(cache_key)`; if hit return `Response(hit)`; after computation `cache.set(cache_key, data, 90)`; bust via `post_save` signal on `tenancy.Profile` | Transforms O(N_tenants) DB work into a single Redis GET for all but the first requester in any 90-second window | M |
-| **C** [VERIFIED] | Rating aggregates computed live in the hot path — should be denormalized | `tenancy/models.py`, `menu/models.py` | Add `rating_avg` (FloatField, null) and `rating_count` (IntegerField, default=0) to `tenancy.Profile`; write a `post_save` signal on `menu.Rating` that calls `schema_context` once and updates the profile fields; the marketplace loop then reads them from the already-fetched queryset with zero extra queries | The inner loop does zero schema switches for rating data; whole-view speedup is multiplicative with the caching fix | M |
-| **H** | Per-tenant `schema_context` loop in driver job enrichment should be batched | `accounts/views.py` | Group jobs by `tenant_id`; for each unique tenant: switch context once, `Order.objects.filter(order_number__in=[...])` — eliminates N schema switches for N jobs | Polled by every active driver; scales with fleet size | M |
+| **C** [VERIFIED] | Bulk order-confirm endpoint fires up to 50 sequential blocking SMTP sends inside the request | `menu/views.py:8556-8567`, `menu/views.py:4135-4218`, `accounts/tasks.py` | Add a Celery task `order_status_email(order_number, tenant_id, new_status)` mirroring the existing `campaign_email`/`customer_order_milestone` pattern — re-fetch the order under `schema_context`, reuse the existing email-building logic. Replace every direct `_send_order_status_email(...)` call with `enqueue(order_status_email_task, ...)`, exactly like the SMS branch 6 lines below already does (`menu/views.py:8424-8428`) | Owner-facing bulk-confirm can hang for minutes or hard-fail with a false 500 under any SMTP slowness; ties up a worker thread per concurrent bulk-confirm request during exactly the busy periods owners batch-confirm the most | S |
+| **H** [VERIFIED] | Owner order-status-update endpoint sends the customer email synchronously while the SMS 6 lines below correctly goes through the async queue | `menu/views.py:8406-8409` | Reuse the task added above; replace the direct call at `menu/views.py:8409` with `enqueue(order_status_email_task, order.order_number, tenant.id, new_status)` | The busiest write endpoint in the app blocks its request/worker thread up to `EMAIL_TIMEOUT` (10s) whenever the customer has an email on file and SMTP is slow — slows the kitchen/owner UI ("mark ready", "mark out for delivery") during peak service and holds a worker slot the whole time | S |
+| **H** [VERIFIED] | Customer phone-OTP send is a synchronous, un-queued Twilio call — inconsistent with every other SMS in the app | `accounts/views.py:995-1025`, `accounts/views.py:511-550`, `accounts/tasks.py` | Add `accounts.tasks.customer_otp_sms` (same shape as `sms_order_ready`); call via `enqueue()` from `CustomerPhoneRequestView` instead of calling `_send_otp` inline. Keep the DEBUG-mode console-log fast path unqueued (no network call) | Every OTP request (signup/login — conversion-critical, latency-sensitive) blocks the request thread on a live Twilio round-trip, up to 10s of dead time if Twilio is slow, unlike the rest of the app's notification paths | S |
+| **M** [reported] | Five more ad hoc synchronous `send_mail()` calls bypass the async notification system | `accounts/views.py:1998-2030`, `accounts/views.py:6174-6210`, `accounts/ride_views.py:1369-1398`, `menu/views.py:530-559`, `menu/views.py:4100-4132` | Generalize the task above into `accounts.tasks.send_transactional_email(subject, message, from_email, recipient_list, tenant_id=None)`; replace each direct `send_mail(...)` call with `enqueue(send_transactional_email, ...)` | Individually lower-traffic than order-status, but each still ties up a request thread up to 10s on SMTP hiccups; the admin-fanout case (`_notify_admins_new_driver`) scales with admin count. Systemic pattern gap, not one-off — the async stack (dedupe, outbox durability, retry) already exists for this | S |
 
 ### 2C. Frontend — Bundle
 
 | Pri | Issue | Files | Fix | Impact | Effort |
 |-----|-------|-------|-----|--------|--------|
-| **M** | `leaflet` (~150 kB gzip) bundled into every page including non-map pages (used only on delivery tracker / driver map) | `frontend/package.json`, map-using Vue files | Dynamic `import('leaflet')` inside the component that needs it; mark as a separate Rollup chunk in `vite.config.js` | Removes ~150 kB from the initial JS payload for all non-map pages | S |
-| **M** | `qrcode` (~60 kB) bundled globally; used only on the QR export feature | `frontend/package.json` | Dynamic import on the QR-generation code path only | Removes ~60 kB from initial bundle | S |
-| **L** | `chunkSizeWarningLimit` raised to 600 kB masks oversized chunks rather than fixing them | `frontend/vite.config.js` | Address the two above dynamic imports first; then restore the limit to 500 or 400 kB to keep early warning | No runtime impact, but keeps chunk discipline | S |
-| **L** | Sentry SDK (`@sentry/vue`) loaded synchronously in main bundle; replays and profiling add significant weight | `frontend/package.json` | Enable lazy initialization: `Sentry.lazyLoadIntegration(...)` for replay/profiling; tree-shake unused integrations | Reduces first-load parse time | M |
+| **H** [VERIFIED] | `app.mount()` is gated behind a network round-trip for the EN locale chunk on every cold load | `src/main.js`, `i18n/localeLoader.js` | Keep the code-split chunk (don't re-inline EN into the entry bundle), but stop relying on runtime discovery: add a Vite `transformIndexHtml` build step reading the manifest to inject `<link rel="modulepreload" href="/assets/messages-en-<hash>.js">` into `index.html` so it fetches in parallel with `main.js`. Alternative: mount immediately with a minimal inline critical-path EN subset (nav/error strings) and hydrate the rest reactively — `catalog` is already `reactive({})`, so this needs no store rewrite, just accepting a brief raw-key flash | ~1 extra network RTT + parse time for a ~200KB chunk before first paint on every cold visit, across all four personas — pure added latency on already-slow mobile networks in the target market, compounding with the extra non-EN fetch for FR/AR visitors (`localeLoader.js:99-107` awaits EN first even for AR) | M |
+| **H** [VERIFIED] | Sentry's Replay recorder ships in every page load's vendor-sentry chunk even though replay sampling defaults to 0 (off) | `lib/sentry.js`, `src/main.js` | Use Sentry's documented lazy-loading pattern: import only `init`/`browserTracingIntegration` eagerly; load Replay via `Sentry.lazyLoadIntegration('replayIntegration')` (or a separate dynamic `import()` of just the replay entry point), gated on the same condition that decides sampling is actually on | Ships recorder code (and its bundle weight) to 100% of page loads for a feature that's off by default for essentially all of them — dead weight on every cold load, worst on the same slow mobile connections the EN-chunk finding above already flags | M |
 
 ### 2D. Frontend — Runtime
 
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **M** | `MarketplaceOrderStatus.vue` (and similar) polls at 15-second intervals over HTTP — confirmed in `MarketplaceOrderStatusThrottle`; meanwhile WebSocket infrastructure already exists | Frontend polling pages | Subscribe to the existing Django Channels `order_{order_number}` group for live status instead of polling; fall back to polling only if WS unavailable | Eliminates background HTTP load from all active order-status pages; reduces server load at mealtimes | M |
-| **L** | No HTTP caching headers on API responses (ETag / `Cache-Control: max-age`) for stable public data (menu, directory) | Django response layer | Add `@condition` decorator or manually set `ETag`/`Last-Modified` on `MarketplaceMenuView`, `DirectoryView`; browsers and CDN skip requests on cache hit | Reduces API calls from returning visitors; enables future CDN layer | M |
+No verified or reported findings in this category this pass — not confirmed clean, just not covered by this round of finders. If frontend runtime perf (re-renders, watcher cost, list virtualization) matters for the next planning cycle, run a dedicated pass rather than assuming absence-of-finding means absence-of-issue.
 
 ---
 
 ## 3. Hosting Efficiency Backlog
 
+**Coverage note up front:** this fan-out surfaced exactly one finding explicitly tagged `hosting` (3E below). The Docker/image, dependency-weight, and ops-cost categories below are carried over from the 2026-06-07 audit for continuity — per `CLAUDE.md` that backlog already shipped (multi-stage Dockerfile, `CONN_HEALTH_CHECKS`, etc.) — and are **not re-verified in this pass**. Don't treat their absence here as "already optimal"; it means this round didn't look. Section 3D cross-lists the 2A/2B items above whose own impact language explicitly names DB-host resource cost, since those genuinely are hosting-efficiency findings, not just speed ones.
+
 ### 3A. Docker / Image
 
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **M** [VERIFIED] | `backend/Dockerfile` installs `build-essential` in the final image — adds ~180–220 MB to the deployed layer | `backend/Dockerfile` L9–11 | Two-stage build: `builder` stage installs `build-essential` + compiles wheels via `pip wheel --no-deps -r requirements.txt -w /wheels`; `runner` stage copies wheels and installs without build tools. Alternatively: purge in the same `RUN` layer (`&& apt-get purge -y build-essential && apt-get autoremove -y`) | Faster Coolify redeploy pulls; less disk on VPS; smaller attack surface | M |
-| **L** | `frontend` and `admin` services in `docker-compose.coolify.yml` build the same Dockerfile and produce identical images — doubling build time and storage | `docker-compose.coolify.yml` L1–68 | Build the image once and reference it by name in both services (`image: resto-frontend:latest`); use a single `build:` block and reference via `image:` in the second service; or collapse into one service if routing allows | Halves frontend build time per deploy; halves image storage | S |
-| **L** | `tests/` directory is not excluded by `.dockerignore` — ends up in the production image via `COPY . .` | `backend/.dockerignore` (if it exists) or `backend/Dockerfile` | Add `tests/` and `*.md` and `*.txt` (except `requirements.txt`) to `.dockerignore` | Slightly smaller context; no test code in prod image | S |
+No new findings this pass. Prior backlog item (multi-stage backend build removing `build-essential` from the final layer) shipped per `CLAUDE.md`. If image size/build-time needs re-checking (e.g. after dependency additions since), that's a fresh, scoped pass — not inferable from this audit.
 
 ### 3B. Server Runtime & Static / Media
 
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **M** [VERIFIED] | `CONN_HEALTH_CHECKS` not set — stale pooled connections silently 500 after any Postgres restart or network event; with `conn_max_age=600` and 3 workers this can affect users for up to 10 minutes | `config/settings.py` L186–191 | In `DATABASES['default']` add `'CONN_HEALTH_CHECKS': True` (Django 4.1+); one lightweight ping per reused connection | Transparent recovery from Postgres restarts; eliminates unexplained 500s on stale connections | S |
-| **M** | `REDIS_URL` is not set by default in Coolify .env template — site runs on `LocMemCache` in "production" if the operator forgets, making the cache a per-worker in-process silo that does nothing for concurrent requests | `config/settings.py` L202, `docker-compose.coolify.yml` | Document `REDIS_URL` as required in Coolify deploy checklist; add a startup `check_settings` that warns (or refuses to start in non-DEBUG) if Redis is absent | Without Redis, all cache calls are per-process no-ops; marketplace caching fix has zero effect | S |
-| **L** | `uvicorn` worker count is controlled by `GUNICORN_WORKERS` env var but the entrypoint.sh default is likely 3 — on a 4-core VPS this leaves one core idle during peak; memory usage per worker (~80–120 MB) limits horizontal scale | `docker/entrypoint.sh` | Tune workers to `2 × CPU_cores + 1` via the env var in Coolify; document the formula; consider `--worker-class uvicorn.workers.UvicornWorker` under gunicorn for signal-safe restarts | Better CPU utilization; zero-downtime hot reload | S |
+No new findings this pass. Prior items (`CONN_HEALTH_CHECKS`, worker-count tuning, Redis presence check) shipped per `CLAUDE.md`.
 
 ### 3C. Dependencies
 
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **L** | `reportlab` (PDF generation) and `qrcode` are runtime dependencies pulled into every API container start, adding ~30 MB and increasing import time | `backend/requirements.txt` | These are used only for receipt/QR export paths; they cannot be fully lazy-loaded in Python but confirm they are not imported at module level (currently they are imported inside view methods — good); no action needed unless image size becomes critical | Low | N/A |
-| **L** | `leaflet` is a production dependency (`dependencies`, not `devDependencies`) — it is bundled even if the dynamic-import fix above is applied, because Vite still resolves it at build time | `frontend/package.json` | Move to `dependencies` but ensure it is only imported dynamically; Rollup will code-split it correctly | Correct — no change needed if dynamic import is done properly | N/A |
+No new findings this pass.
 
-### 3D. Multi-Tenant Scale
+### 3D. Multi-Tenant Scale (cross-listed from Speed — these genuinely are hosting-cost findings)
 
-| Pri | Issue | Files | Fix | Impact | Effort |
-|-----|-------|-------|-----|--------|--------|
-| **C** [VERIFIED] | `MarketplaceView` response time grows O(N_tenants): at 200 tenants = ~800 DB queries/request; Postgres connection pool saturates under concurrent load | `accounts/views.py` | Cache (see 2B) + denormalize ratings (see 2B) — these together collapse the loop to zero schema hops; add partial index on `Profile` (see 2A) | Platform growth currently makes the homepage linearly slower | M |
-| **H** [VERIFIED] | `DirectoryView` same O(N) problem; also fires 2 extra full-table scans for filter lists | `accounts/views.py` | Same cache + deduplicate filter extraction from in-memory results | Every unauthenticated directory visitor causes N synchronous Postgres round-trips | M |
-| **M** | No rate limiting on `MarketplaceView` / `DirectoryView` (both `AllowAny`, no throttle class) — open to cheap amplification | `accounts/views.py` L2077, L2153 | Add `throttle_classes = [AnonRateThrottle]` (e.g. `100/min` per IP); the Redis cache means throttled users still get fast responses on cache hits | With Redis cache, the real risk is cache-busting attacks via unique param combos — add `throttle_classes` now | S |
+| Pri | Issue | Files | Fix | Hosting-cost angle | Effort |
+|-----|-------|-------|-----|---------------------|--------|
+| **H** [VERIFIED] | `AdminAuditLog` unindexed sort/count + unindexed prune scan | `sales/models.py`, `sales/views.py`, `commands/prune_admin_audit_logs.py` | See 2A | Explicitly named in the audit as increasing "DB CPU/IO on a resource-constrained Coolify host" on every admin page view and every prune run, worsening linearly as admin/money-action volume grows | S |
+| **H** [VERIFIED] | `DeliveryJob.declined_by` unindexed JSONB scan on a 5-15s driver poll | `accounts/models.py:985`, `accounts/dispatch.py` | See 2A | Every online driver hits the same growing table with the same unindexable predicate — DB load scales with fleet size × poll frequency, not just data volume | S |
+| **H** [VERIFIED] | Reservation `.count()`-only queries paying for a JOIN+GROUP BY+3-subquery annotation | `sales/views.py` | See 2A | 9-10x DB work on a query pattern hit by every reservations page load and every admin alerts poll — direct DB-host CPU cost, independent of the speed win | S |
 
 ### 3E. Ops Cost
 
 | Pri | Issue | Files | Fix | Impact | Effort |
 |-----|-------|-------|-----|--------|--------|
-| **M** | Two separate `frontend` + `admin` Docker builds on every Coolify redeploy (identical Dockerfile, ~2–3 min each) doubles CI cost with no benefit | `docker-compose.coolify.yml` | Build once, reuse image (see 3A) | ~50% reduction in build minutes per deploy | S |
-| **L** | Redis runs with `appendonly yes` (AOF persistence) which is correct for durability, but cache data does not need AOF — separate cache Redis from session/channel-layer Redis, or use `--save ""` for the cache instance if durability is not needed | `docker-compose.coolify.yml` L244 | If splitting is not practical: AOF is cheap on the data volumes involved; accept current config | Minor disk I/O reduction | L |
+| **M** [reported] | `AdminPlatformAnalyticsView` runs ~15 uncached full-table aggregate queries on every dashboard load, despite an existing caching pattern in the same file | `accounts/views.py:7982-8191`, `accounts/views.py:3684` | Wrap the aggregation in the existing `_public_list_get_or_build(cache_key, build_fn)` helper (or `cache.get_or_set` with a 30-60s TTL) — an admin dashboard tolerates that staleness easily | Turns N admin page-loads/minute into effectively one DB round of aggregation; keeps the page fast as core tables grow instead of degrading with data volume | S |
 
 ---
 
 ## 4. Recommended Sequencing
 
-### Phase 1 — Quick Wins (high impact, low effort; 1–3 days each)
+### Phase 1 — Quick wins (high impact, low effort; ship together as one batch)
 
-1. **Enable `CONN_HEALTH_CHECKS`** (`config/settings.py`) — one line, prevents silent 500s. Deploy immediately.
-2. **Batch `PlatformFlashSale` / `PlatformFlashSaleOptIn` before the marketplace loop** (`accounts/views.py`) — ~10 lines, eliminates 2×N public-schema queries per request with no structural change.
-3. **Deduplicate `cities`/`cuisines`/`tags` extraction** in both `MarketplaceView` and `DirectoryView` — eliminates 3–5 extra full-table scans; iterate in-memory results already computed.
-4. **Replace `AdminCustomerOrdersView` with `CustomerOrderRef` lookup** — same pattern as `CustomerMarketplaceOrdersView` already in the codebase; ~15 lines; eliminates 500 schema switches per admin load.
-5. **Add composite partial index on `Profile(directory_opt_in, is_menu_published)`** — one migration file, covers every marketplace/directory query.
-6. **Add `Index(fields=('status','updated_at'))` to `Order.Meta.indexes`** — one migration file; fixes the 300 req/min staff delta-poll.
-7. **Fix `OwnerOrderListView` double-query** (count + slice) — 3-line change in `menu/views.py`.
-8. **Add `throttle_classes` to `MarketplaceView` / `DirectoryView`** — 1-line change per view; apply `AnonRateThrottle` at 100/min.
+1. **Wire the three sync-email/SMS call sites through `enqueue()`** — bulk order-confirm (critical), owner order-status-update, customer OTP SMS. Same task pattern, same fix, three call sites (`menu/views.py:8409`, `menu/views.py:8556-8567`, `accounts/views.py:995-1025`).
+2. **Add the two missing indexes** — `deliveryjob_declined_gin` (GIN on `declined_by`) and the two `AdminAuditLog` indexes — each a single migration file, use `AddIndexConcurrently` for `AdminAuditLog` per repo convention.
+3. **Split the reservation queryset** — lean `_owner_reservations_base_queryset()` for every `.count()`-only call site in `sales/views.py`.
+4. **Cache `AdminPlatformAnalyticsView`** with the existing `_public_list_get_or_build` helper — same file, same pattern already used elsewhere.
 
-### Phase 2 — Structural (high impact, medium effort; 2–5 days each)
+### Phase 2 — Needs-confirmation items (medium/low, verify line numbers before scheduling)
 
-9. **Redis response cache for `MarketplaceView` + `DirectoryView`** — implement `cache.get/set` wrapper, post_save invalidation signal on `tenancy.Profile`. Requires Redis in production (verify `REDIS_URL` is set in Coolify).
-10. **Denormalize `rating_avg` + `rating_count` into `tenancy.Profile`** — migration + `post_save` signal on `menu.Rating` via `schema_context`. After this, the inner loop is zero schema hops for rating data.
-11. **Batch driver job enrichment in `DriverJobListView`** — group by `tenant_id`, one schema switch per tenant.
-12. **Multi-stage backend Dockerfile** — eliminates `build-essential` from the production image.
-13. **`StaffShiftSummaryView` aggregate in DB** — replace Python-iteration with `Avg(ExpressionWrapper(...))`.
+5. Batch `enforce_subscriptions` cron queries; fix the tenant-export `prefetch_related` self-defeat; drop or replace the password-reset session scan; `bulk_create()` for order-line creation (also update the 4 `test_happy_hour.py` mock assertions); the remaining 5 synchronous `send_mail()` call sites via a generalized `send_transactional_email` task.
 
-### Phase 3 — Architecture (lower urgency; revisit at 100+ tenants)
+### Phase 3 — Frontend bundle (self-contained, do independently of backend work)
 
-14. **Replace HTTP polling with WebSocket subscriptions** in `MarketplaceOrderStatus.vue` and similar order-tracking pages.
-15. **Dynamic import for `leaflet` and `qrcode`** in frontend bundle.
-16. **Collapse duplicate frontend Docker builds** into a single image reused by both `frontend` and `admin` services.
-17. **HTTP caching headers** (`ETag`, `Cache-Control`) on stable public API responses.
-18. **`AdminPlatformAnalyticsView` query consolidation** + 60 s cache.
+6. Modulepreload (or critical-subset-inline) the EN i18n chunk so `app.mount()` isn't gated behind it.
+7. Lazy-load Sentry Replay via `lazyLoadIntegration('replayIntegration')` instead of bundling it unconditionally.
+
+### Phase 4 — Structural (larger effort, real payoff at scale)
+
+8. Replace the `declined_by` JSON-array-scan pattern with an indexed `DeliveryJobDecline` table or counter, once the GIN-index quick fix (step 2) is no longer enough.
+
+### Not scheduled — needs a dedicated pass, not inferable from this audit
+
+9. Docker/image size, dependency weight, frontend runtime perf, and general ops-cost review — this fan-out did not produce verified findings here; the coverage note in Section 3 explains why. Re-audit these specifically before assuming they're clean, especially since dependencies have moved since the 2026-06-07 baseline.
 
 ---
 
 ## 5. Verification Status
 
-### Verified (confirmed by direct source inspection in this audit session)
+### Verified [8 findings — individually re-checked against source in this audit session]
 
-- `MarketplaceView` O(N) schema-context loop with inline `Rating.aggregate()` per tenant — confirmed at `accounts/views.py` L2239–2257
-- `DirectoryView` same pattern — confirmed at `accounts/views.py` L2107–2116
-- `PlatformFlashSaleOptIn` queried inside loop per tenant — confirmed at `accounts/views.py` L2261–2269
-- Redundant `all_opted` full-table scans after main loop in both views — confirmed at `accounts/views.py` L2308–2314, L2131–2133
-- `AdminCustomerOrdersView` brute-force cross-schema scan (MAX_TENANTS=500) — confirmed at `accounts/views.py` L1777–1800
-- `DriverJobListView` per-job schema switch in `_job_order_summary` — confirmed at `accounts/views.py` L3826–3836
-- `OwnerOrderListView` separate `count()` + slice — confirmed at `menu/views.py` L3410–3411
-- `StaffShiftSummaryView` Python-iteration for avg prep time — confirmed at `menu/views.py` L3115–3125
-- `Order.updated_at` has no index; `Order.Meta.indexes` only covers `(status, created_at)` — confirmed at `menu/models.py` L441–443
-- `tenancy.Profile.directory_opt_in` and `is_menu_published` have no `db_index` — confirmed at `tenancy/models.py` L273–325
-- `CONN_HEALTH_CHECKS` absent from `DATABASES` config — confirmed at `config/settings.py` L186–191
-- `backend/Dockerfile` has `build-essential` in the final image with no purge — confirmed at `backend/Dockerfile` L9–11
-- `AdminPlatformAnalyticsView` 4 separate Tenant count queries — confirmed at `accounts/views.py` L4834–4838
-- Frontend `leaflet` and `qrcode` are eagerly bundled production dependencies — confirmed at `frontend/package.json`
-- Frontend `vite.config.js` has raised `chunkSizeWarningLimit: 600` — confirmed at `frontend/vite.config.js` L27
+- Bulk order-confirm: up to 50 sequential blocking SMTP sends inside the request — `menu/views.py:8556-8567`, `menu/views.py:4135-4218`
+- Owner order-status-update: synchronous customer email while SMS 6 lines below is async — `menu/views.py:8406-8409`
+- Customer phone-OTP: synchronous, un-queued Twilio call — `accounts/views.py:995-1025`, `accounts/views.py:511-550`
+- `DeliveryJob.declined_by`: unindexed JSONB `__contains` scan on a driver-polled endpoint — `accounts/views.py:7778`, `accounts/models.py:985`, `accounts/dispatch.py:179-226`
+- Reservation `.count()`/alert endpoints: reminder-metrics-annotated queryset used for count-only calls — `sales/views.py`
+- `AdminAuditLog`: zero indexes on a paginated/sorted/pruned unbounded table — `sales/models.py`, `sales/views.py`, `commands/prune_admin_audit_logs.py`
+- `app.mount()` gated behind EN locale chunk network round-trip — `src/main.js`, `i18n/localeLoader.js`
+- Sentry Replay recorder bundled unconditionally despite default-off sampling — `lib/sentry.js`, `src/main.js`
 
-### Not individually verified (reported by audit tool; likely correct)
+### Reported, not individually re-verified [13 medium/low findings — treat as likely-correct, confirm line numbers before scheduling]
 
-- Full-text search / open-filter applied in Python post-fetch (medium finding)
-- Frontend Sentry lazy-loading opportunity (low finding)
-- Duplicate frontend Docker build cost (low finding)
+- `AdminPlatformAnalyticsView` ~15 uncached aggregate queries — `accounts/views.py:7982-8191`
+- Password-reset confirm scans every active session platform-wide — `accounts/serializers.py:197-216`
+- Order-line creation loops `.create()` instead of `bulk_create()` — `menu/views.py`, `accounts/views.py`, `tests/test_happy_hour.py`
+- `enforce_subscriptions` cron issues up to 2N queries instead of 2 — `commands/enforce_subscriptions.py`
+- Tenant settings export defeats `prefetch_related` with a chained `.order_by()` — `sales/views.py`, `menu/models.py`
+- Five more ad hoc synchronous `send_mail()` call sites — `accounts/views.py:1998-2030`, `accounts/views.py:6174-6210`, `accounts/ride_views.py:1369-1398`, `menu/views.py:530-559`, `menu/views.py:4100-4132`
+
+**Raw totals from the fan-out, for context:** 43 findings before verification (1 critical, 16 high, 16 medium, 10 low). This document carries full detail for the 8 verified high/critical findings plus the ~13 medium/low findings surfaced with enough detail to act on. The remaining ~22 findings (mostly the rest of the 16 high + 16 medium + 10 low buckets) were not surfaced with actionable detail in this audit's output and are not included here rather than guessed at — re-run the finder pass with full output capture if the complete list is needed.
 
 ### Dismissed False Positives
 
-Two findings from the original audit were investigated and refuted:
-
-1. **"migrate_schemas --tenant runs on EVERY container start, creating a multi-process migration race"** — Refuted. The `entrypoint.sh` runs exactly once per container. `exec uvicorn --workers 3` replaces the shell; the forked uvicorn worker subprocesses never re-execute the entrypoint. No race exists. The startup latency concern is real but intentional (fast when no migrations are pending; `SKIP_SCHEMA_HEALTHCHECK=1` escape hatch exists).
-
-2. **"worker and beat containers run the full entrypoint.sh (migrate + collectstatic + seed_plans) on every restart"** — Refuted. When `docker-compose.coolify.yml` specifies `command:`, it replaces `CMD`; the `entrypoint.sh` is never invoked in `worker` or `beat` containers. They start directly with the `celery` command. The sub-claim that `tests/` lands in the image is accurate (`.dockerignore` should exclude it) but is low severity.
+1. **"Frontend production image is built with a Node major (26) that CI never tests — the exact `npm ci`/`vite build` that ships to prod is unvalidated."** — Refuted. `ci.yml` has a `docker` job (lines 388-447) on every push/PR to `main`, unrestricted by the frontend job's Node-22 setup, that runs `docker build -t kepoli-frontend:ci ./frontend` (line 413) against the real `frontend/Dockerfile`, which pins `FROM node:26-alpine AS build` and runs the identical `npm ci` + `npm run build` (Dockerfile lines 31-35) — the actual artifact-producing path that ships to prod. The job then boots the built nginx image and polls `/health` (lines 430-444), so the Node-26 build is both executed and verified to boot. The proposed remedy ("add a CI leg that builds via `docker build` on the real Dockerfile") already exists verbatim as this job — the finding only inspected the `frontend` job's Node-22 `setup-node@v4` step and the `e2e` job's Node-20 step, missing the separate `docker` job. A narrow residual point survives: lint/test run under Node 22 while the prod artifact builds under Node 26, so a Node-major-specific lint/test *behavior* difference (not build-breakage) could theoretically diverge — materially weaker than the finding's actual headline claim and not worth actioning as stated.
