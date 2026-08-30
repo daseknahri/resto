@@ -869,7 +869,9 @@ class HappyHourSerializer(serializers.ModelSerializer):
         ]
 
     def get_category_ids(self, instance) -> list:
-        return list(instance.categories.values_list("id", flat=True))
+        # Iterate the prefetched .all() cache (the viewset prefetch_related("categories"))
+        # instead of .values_list(), which bypasses the prefetch and fires a query per row.
+        return [c.id for c in instance.categories.all()]
 
     def to_internal_value(self, data):
         # Extract category_ids before DRF processes the rest (it is not a model field).
