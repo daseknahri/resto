@@ -67,18 +67,21 @@ class AdminReservationAlertsViewTests(SimpleTestCase):
         overdue_cutoff_mock.return_value = "overdue_cutoff"
         due_soon_cutoff_mock.return_value = "due_soon_cutoff"
 
-        scope = Mock(name="scope")
-        lead_objects.filter.return_value = scope
-        scope.select_related.return_value = scope
-        scope.annotate.return_value = scope
+        # Counts run on the lean base scope; only the serialized rows use the annotation.
+        base_scope = Mock(name="base_scope")
+        lead_objects.filter.return_value = base_scope
 
         overdue_queryset = Mock(name="overdue_queryset")
         due_soon_queryset = Mock(name="due_soon_queryset")
-        alert_queryset = Mock(name="alert_queryset")
-        scope.filter.side_effect = [overdue_queryset, due_soon_queryset, alert_queryset]
-
+        base_scope.filter.side_effect = [overdue_queryset, due_soon_queryset]
         overdue_queryset.count.return_value = 2
         due_soon_queryset.count.return_value = 1
+
+        annotated_scope = Mock(name="annotated_scope")
+        base_scope.select_related.return_value = annotated_scope
+        annotated_scope.annotate.return_value = annotated_scope
+        alert_queryset = Mock(name="alert_queryset")
+        annotated_scope.filter.return_value = alert_queryset
         alert_queryset.order_by.return_value = [
             _lead_row(lead_id=10, tenant_slug="demo"),
             _lead_row(lead_id=9, tenant_slug="demo"),
@@ -120,19 +123,25 @@ class AdminReservationAlertsViewTests(SimpleTestCase):
         overdue_cutoff_mock.return_value = "overdue_cutoff"
         due_soon_cutoff_mock.return_value = "due_soon_cutoff"
 
-        root_scope = Mock(name="root_scope")
-        tenant_scope = Mock(name="tenant_scope")
-        lead_objects.filter.return_value = root_scope
-        root_scope.select_related.return_value = root_scope
-        root_scope.annotate.return_value = root_scope
-        root_scope.filter.return_value = tenant_scope
+        # Base scope is tenant-filtered first; counts stay on the lean scope, rows on the
+        # annotated one derived from the same tenant-filtered base.
+        root_base = Mock(name="root_base")
+        tenant_base = Mock(name="tenant_base")
+        lead_objects.filter.return_value = root_base
+        root_base.filter.return_value = tenant_base
 
         overdue_queryset = Mock(name="overdue_queryset")
         due_soon_queryset = Mock(name="due_soon_queryset")
-        tenant_scope.filter.side_effect = [overdue_queryset, due_soon_queryset]
+        tenant_base.filter.side_effect = [overdue_queryset, due_soon_queryset]
         overdue_queryset.count.return_value = 0
         due_soon_queryset.count.return_value = 2
-        due_soon_queryset.order_by.return_value = [
+
+        annotated_scope = Mock(name="annotated_scope")
+        tenant_base.select_related.return_value = annotated_scope
+        annotated_scope.annotate.return_value = annotated_scope
+        rows_queryset = Mock(name="rows_queryset")
+        annotated_scope.filter.return_value = rows_queryset
+        rows_queryset.order_by.return_value = [
             _lead_row(lead_id=5, tenant_slug="demo"),
             _lead_row(lead_id=4, tenant_slug="demo"),
         ]
@@ -147,7 +156,7 @@ class AdminReservationAlertsViewTests(SimpleTestCase):
         self.assertEqual(response.data["counts"]["overdue"], 0)
         self.assertEqual(response.data["counts"]["due_soon"], 2)
         self.assertEqual(len(response.data["results"]), 2)
-        root_scope.filter.assert_called_once_with(tenant__slug="demo")
+        root_base.filter.assert_called_once_with(tenant__slug="demo")
 
     def test_rejects_invalid_state(self):
         request = self.factory.get("/api/admin-reservation-alerts/?state=wrong")

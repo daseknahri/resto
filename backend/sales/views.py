@@ -9,7 +9,7 @@ from math import ceil
 from urllib.parse import quote_plus
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Count, F, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import TruncDate, ExtractHour, ExtractWeekDay
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
@@ -170,6 +170,49 @@ def _with_reservation_reminder_metrics(queryset):
     )
 
 
+def _owner_reservations_base_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None):
+    """Lean twin of ``_owner_reservations_queryset`` with the SAME tenant scoping and
+    filters but WITHOUT the heavy reminder-metrics annotation (a JOIN + GROUP BY + 3
+    subqueries). Use it for ``.count()``-only call sites and the CSV export, where the
+    reminder fields are never serialized.
+
+    The ``reminder_filter`` still filters on annotation-derived values, so we add ONLY the
+    single annotation that the active filter needs instead of the full six-annotation set —
+    keeping results identical to the annotated queryset while doing far less DB work.
+    """
+    queryset = Lead.objects.filter(
+        tenant_id=tenant_id,
+        source__in=RESERVATION_SOURCES,
+        archived_at__isnull=True,
+    )
+
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+    if reminder_filter:
+        if reminder_filter == "none":
+            queryset = queryset.annotate(reminder_count=Count("reminders")).filter(reminder_count=0)
+        else:
+            latest_reminder_rows = ReservationReminder.objects.filter(lead_id=OuterRef("pk")).order_by("-created_at")
+            queryset = queryset.annotate(
+                last_reminder_status=Subquery(latest_reminder_rows.values("status")[:1])
+            ).filter(last_reminder_status=reminder_filter)
+    if search:
+        term = search[:120]
+        queryset = queryset.filter(
+            Q(name__icontains=term)
+            | Q(email__icontains=term)
+            | Q(phone__icontains=term)
+            | Q(notes__icontains=term)
+        )
+    if from_date:
+        queryset = queryset.filter(created_at__date__gte=from_date)
+    if to_date:
+        queryset = queryset.filter(created_at__date__lte=to_date)
+    if booked_for_date:
+        queryset = queryset.filter(booked_for__date=booked_for_date)
+    return queryset
+
+
 def _parse_positive_int(value: str, *, default: int, min_value: int = 1, max_value: int | None = None) -> int:
     raw = str(value or "").strip()
     if not raw:
@@ -209,13 +252,19 @@ def _build_tenant_settings_export_payload(tenant):
         profile, _ = Profile.objects.get_or_create(tenant_id=tenant.id)
         profile_payload = dict(ProfileSerializer(instance=profile).data)
 
+        # Bake the option ordering into the prefetch so we never re-query per dish.
+        # Dishes come back in Dish.Meta.ordering = ("position", "name") — the exact order
+        # the old explicit .order_by() applied — so iterating the prefetch cache directly
+        # preserves output order while collapsing 1+N+M queries into ~3.
         categories = (
             Category.objects.order_by("position", "name")
-            .prefetch_related("dishes__options")
+            .prefetch_related(
+                Prefetch("dishes__options", queryset=DishOption.objects.order_by("id"))
+            )
         )
         for category in categories:
             dishes_payload = []
-            for dish in category.dishes.all().order_by("position", "name"):
+            for dish in category.dishes.all():
                 options_payload = [
                     {
                         "name": option.name,
@@ -224,7 +273,7 @@ def _build_tenant_settings_export_payload(tenant):
                         "is_required": bool(option.is_required),
                         "max_select": int(option.max_select),
                     }
-                    for option in dish.options.all().order_by("id")
+                    for option in dish.options.all()
                 ]
                 dishes_payload.append(
                     {
@@ -489,7 +538,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
         Lead.Status.NO_SHOW: 0,
         "overdue_new": 0,
     }
-    counts["total"] = _owner_reservations_queryset(
+    counts["total"] = _owner_reservations_base_queryset(
         tenant_id,
         reminder_filter=reminder_filter,
         search=search,
@@ -498,7 +547,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
         booked_for_date=booked_for_date,
     ).count()
     for status_code in (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON, Lead.Status.LOST, Lead.Status.NO_SHOW):
-        counts[status_code] = _owner_reservations_queryset(
+        counts[status_code] = _owner_reservations_base_queryset(
             tenant_id,
             status_filter=status_code,
             reminder_filter=reminder_filter,
@@ -508,7 +557,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
             booked_for_date=booked_for_date,
         ).count()
     counts["overdue_new"] = (
-        _owner_reservations_queryset(
+        _owner_reservations_base_queryset(
             tenant_id,
             status_filter=Lead.Status.NEW,
             reminder_filter=reminder_filter,
@@ -1665,26 +1714,33 @@ class AdminReservationAlertsView(APIView):
             overdue_cutoff = reservation_overdue_cutoff(now=now)
             due_soon_cutoff = reservation_due_soon_cutoff(now=now)
 
-            scope = Lead.objects.filter(
+            base_scope = Lead.objects.filter(
                 source__in=RESERVATION_SOURCES,
                 status=Lead.Status.NEW,
                 archived_at__isnull=True,
-            ).select_related("tenant", "plan")
-            scope = _with_reservation_reminder_metrics(scope)
+            )
             if tenant_slug:
-                scope = scope.filter(tenant__slug=tenant_slug)
+                base_scope = base_scope.filter(tenant__slug=tenant_slug)
 
-            overdue_queryset = scope.filter(created_at__lte=overdue_cutoff)
-            due_soon_queryset = scope.filter(created_at__gt=overdue_cutoff, created_at__lte=due_soon_cutoff)
+            # The overdue/due-soon counts are plain counts — run them on the lean scope
+            # (no reminder-metrics annotation). Only the serialized rows need the annotation.
+            overdue_count = base_scope.filter(created_at__lte=overdue_cutoff).count()
+            due_soon_count = base_scope.filter(
+                created_at__gt=overdue_cutoff, created_at__lte=due_soon_cutoff
+            ).count()
+
+            annotated_scope = _with_reservation_reminder_metrics(
+                base_scope.select_related("tenant", "plan")
+            )
             if state_filter == "overdue":
-                rows = overdue_queryset.order_by("created_at")
+                rows = annotated_scope.filter(created_at__lte=overdue_cutoff).order_by("created_at")
             elif state_filter == "due_soon":
-                rows = due_soon_queryset.order_by("created_at")
+                rows = annotated_scope.filter(
+                    created_at__gt=overdue_cutoff, created_at__lte=due_soon_cutoff
+                ).order_by("created_at")
             else:
-                rows = scope.filter(created_at__lte=due_soon_cutoff).order_by("created_at")
+                rows = annotated_scope.filter(created_at__lte=due_soon_cutoff).order_by("created_at")
 
-            overdue_count = overdue_queryset.count()
-            due_soon_count = due_soon_queryset.count()
             results = LeadSerializer(rows[:limit], many=True, context={"_reservation_sla_now": now}).data
 
         return Response(
@@ -1760,6 +1816,9 @@ class OwnerReservationListView(APIView):
         )
 
         with schema_context(get_public_schema_name()):
+            # Annotated queryset only feeds the serialized page rows (which render the
+            # reminder metrics); the pagination total is a plain count, so run it on the
+            # lean queryset (identical filters, no reminder-metrics annotation).
             queryset = _owner_reservations_queryset(
                 tenant.id,
                 status_filter=status_filter,
@@ -1769,7 +1828,15 @@ class OwnerReservationListView(APIView):
                 to_date=to_date,
                 booked_for_date=booked_for_date,
             )
-            total = queryset.count()
+            total = _owner_reservations_base_queryset(
+                tenant.id,
+                status_filter=status_filter,
+                reminder_filter=reminder_filter,
+                search=search,
+                from_date=from_date,
+                to_date=to_date,
+                booked_for_date=booked_for_date,
+            ).count()
             pages = max(1, ceil(total / page_size)) if total else 1
             page = min(page, pages)
             start = (page - 1) * page_size
@@ -2290,8 +2357,10 @@ class OwnerReservationExportView(APIView):
             return Response({"detail": "'from' date cannot be after 'to' date."}, status=status.HTTP_400_BAD_REQUEST)
 
         with schema_context(get_public_schema_name()):
+            # The CSV never emits reminder-metric columns, so use the lean queryset
+            # (same filters, no reminder-metrics annotation).
             rows = (
-                _owner_reservations_queryset(
+                _owner_reservations_base_queryset(
                     tenant.id,
                     status_filter=status_filter,
                     reminder_filter=reminder_filter,
