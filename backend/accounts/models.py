@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import AbstractUser
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.utils import timezone
 
@@ -1005,6 +1006,11 @@ class DeliveryJob(models.Model):
         indexes = [
             models.Index(fields=["status", "owner_alerted_at"]),
             models.Index(fields=["driver", "status"], name="deliveryjob_driver_status_idx"),
+            # GIN index backs the `declined_by__contains=[driver_id]` JSONB lookup on the
+            # driver-poll hot path (accounts/dispatch.py + the driver offers endpoint),
+            # which every online driver polls every 5-15s. Without it the containment
+            # predicate is a full-table scan on this growing public-schema table.
+            GinIndex(fields=["declined_by"], name="deliveryjob_declined_gin"),
         ]
 
     def __str__(self) -> str:
