@@ -713,12 +713,18 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    # ── Order status email notifications ──────────────────────────────────────
+    # ── Order status email notifications (now async) ──────────────────────────
+    # PERF: the status email no longer sends inline in the request thread — the view
+    # ENQUEUES accounts.tasks.order_status_email, which re-fetches the order under the
+    # tenant schema and reuses the SAME _send_order_status_email builder. So these
+    # assert the enqueue (task + args); the body/subject/recipient/guest-skip parity is
+    # covered by test_order_status_email.py + test_celery_tasks.py.
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_email_sent_on_confirmed(self, objects_mock, tz_mock, send_mail_mock):
+    def test_enqueues_status_email_on_confirmed(self, objects_mock, tz_mock, enqueue_mock):
+        from accounts.tasks import order_status_email
         customer = MagicMock()
         customer.email = "customer@example.com"
         order = _make_order(order_status="pending", customer=customer)
@@ -726,15 +732,15 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
         self._patch(data={"status": "confirmed"})
 
-        send_mail_mock.assert_called_once()
-        call_kwargs = send_mail_mock.call_args
-        self.assertIn("customer@example.com", call_kwargs[1]["recipient_list"])
-        self.assertIn("ORD001", call_kwargs[1]["subject"])
+        enqueue_mock.assert_called_once_with(
+            order_status_email, "ORD001", 1, Order.Status.CONFIRMED
+        )
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_email_sent_on_ready(self, objects_mock, tz_mock, send_mail_mock):
+    def test_enqueues_status_email_on_ready(self, objects_mock, tz_mock, enqueue_mock):
+        from accounts.tasks import order_status_email
         customer = MagicMock()
         customer.email = "customer@example.com"
         order = _make_order(order_status="preparing", customer=customer)
@@ -742,12 +748,15 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
         self._patch(data={"status": "ready"})
 
-        send_mail_mock.assert_called_once()
+        enqueue_mock.assert_called_once_with(
+            order_status_email, "ORD001", 1, Order.Status.READY
+        )
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_email_sent_on_cancelled(self, objects_mock, tz_mock, send_mail_mock):
+    def test_enqueues_status_email_on_cancelled(self, objects_mock, tz_mock, enqueue_mock):
+        from accounts.tasks import order_status_email
         customer = MagicMock()
         customer.email = "customer@example.com"
         order = _make_order(order_status="pending", customer=customer)
@@ -755,13 +764,18 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
         self._patch(data={"status": "cancelled"})
 
-        send_mail_mock.assert_called_once()
+        enqueue_mock.assert_called_once_with(
+            order_status_email, "ORD001", 1, Order.Status.CANCELLED
+        )
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_email_includes_cancel_reason_phrase(self, objects_mock, tz_mock, send_mail_mock):
-        """K-8: a cancellation with a stored reason includes a plain-language line."""
+    def test_cancel_reason_is_stamped_before_enqueue(self, objects_mock, tz_mock, enqueue_mock):
+        """K-8: a cancellation with a stored reason stamps order.cancel_reason (under the
+        lock) BEFORE enqueueing, so the worker re-fetch reads it and the plain-language
+        line renders. The reason-phrase-in-body itself is asserted in test_order_status_email."""
+        from accounts.tasks import order_status_email
         customer = MagicMock()
         customer.email = "customer@example.com"
         order = _make_order(order_status="pending", customer=customer)
@@ -769,26 +783,34 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
         self._patch(data={"status": "cancelled", "cancel_reason": "out_of_stock"})
 
-        send_mail_mock.assert_called_once()
-        body = send_mail_mock.call_args[1]["message"]
-        self.assertIn("out of stock", body)
+        self.assertEqual(order.cancel_reason, "out_of_stock")
+        enqueue_mock.assert_called_once_with(
+            order_status_email, "ORD001", 1, Order.Status.CANCELLED
+        )
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_no_email_when_no_customer_account(self, objects_mock, tz_mock, send_mail_mock):
+    def test_still_enqueues_without_customer_account(self, objects_mock, tz_mock, enqueue_mock):
+        """The view enqueues for a trigger status REGARDLESS of customer presence — the
+        guest-order 'no email' skip is decided inside _send_order_status_email (now in the
+        worker), exactly as before. This preserves the who-gets-notified conditions: the
+        net result for a guest order is still no email (see test_order_status_email)."""
+        from accounts.tasks import order_status_email
         order = _make_order(order_status="pending", customer=None)
         objects_mock.select_for_update.return_value.select_related.return_value.filter.return_value.first.return_value = order
 
         self._patch(data={"status": "confirmed"})
 
-        send_mail_mock.assert_not_called()
+        enqueue_mock.assert_called_once_with(
+            order_status_email, "ORD001", 1, Order.Status.CONFIRMED
+        )
 
-    @patch("menu.views.send_mail")
+    @patch("accounts.tasks.enqueue")
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
-    def test_no_email_on_completed(self, objects_mock, tz_mock, send_mail_mock):
-        """'completed' status does not trigger a customer email."""
+    def test_no_email_on_completed(self, objects_mock, tz_mock, enqueue_mock):
+        """'completed' status is not in the trigger set → no status-email task enqueued."""
         customer = MagicMock()
         customer.email = "customer@example.com"
         order = _make_order(order_status="ready", customer=customer)
@@ -796,4 +818,4 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
         self._patch(data={"status": "completed"})
 
-        send_mail_mock.assert_not_called()
+        enqueue_mock.assert_not_called()

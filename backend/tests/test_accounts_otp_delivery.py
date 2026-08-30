@@ -108,41 +108,67 @@ class SendOtpTests(SimpleTestCase):
         call_args = mock_logger.info.call_args
         self.assertIn("999888", str(call_args))
 
-    # ── production mode ───────────────────────────────────────────────────────
+    # ── production mode (now async) ────────────────────────────────────────────
+    # PERF: in production _send_otp no longer calls Twilio inline — it enqueues the
+    # accounts.tasks.customer_otp_sms task (the blocking HTTP POST runs on the worker).
+    # The "not configured / failed" warning moved into the task (see the task tests below).
     @override_settings(DEBUG=False)
-    def test_production_calls_send_otp_sms(self):
-        with patch("accounts.views._send_otp_sms", return_value=True) as mock_sms:
+    def test_production_enqueues_otp_sms_task(self):
+        from accounts.tasks import customer_otp_sms
+        with patch("accounts.tasks.enqueue") as mock_enqueue:
             _send_otp("+212600000000", "123456")
+        mock_enqueue.assert_called_once_with(customer_otp_sms, "+212600000000", "123456")
+
+    @override_settings(DEBUG=False)
+    def test_production_does_not_send_twilio_inline(self):
+        """The Twilio send must NOT happen on the request thread anymore."""
+        with patch("accounts.tasks.enqueue"):
+            with patch("accounts.views._send_otp_sms") as mock_sms:
+                _send_otp("+212600000000", "123456")
+        mock_sms.assert_not_called()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# customer_otp_sms task — the real Twilio send + its warning now live here
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CustomerOtpSmsTaskTests(SimpleTestCase):
+    """The OTP SMS task wraps _send_otp_sms and preserves its not-configured/failed
+    warning. Runs the task body directly via .run() (no broker needed)."""
+
+    def _run(self, phone="+212600000000", code="123456"):
+        from accounts.tasks import customer_otp_sms
+        customer_otp_sms.run(phone, code)
+
+    def test_task_calls_send_otp_sms(self):
+        with patch("accounts.views._send_otp_sms", return_value=True) as mock_sms:
+            self._run("+212600000000", "123456")
         mock_sms.assert_called_once_with("+212600000000", "123456")
 
-    @override_settings(DEBUG=False)
-    def test_production_logs_warning_when_sms_fails(self):
+    def test_task_logs_warning_when_sms_fails(self):
         with patch("accounts.views._send_otp_sms", return_value=False):
-            with patch("accounts.views.logger") as mock_logger:
-                _send_otp("+212600000000", "123456")
+            with patch("accounts.tasks.logger") as mock_logger:
+                self._run("+212600000000", "123456")
         mock_logger.warning.assert_called_once()
 
-    @override_settings(DEBUG=False)
-    def test_production_no_warning_when_sms_succeeds(self):
+    def test_task_no_warning_when_sms_succeeds(self):
         with patch("accounts.views._send_otp_sms", return_value=True):
-            with patch("accounts.views.logger") as mock_logger:
-                _send_otp("+212600000000", "123456")
+            with patch("accounts.tasks.logger") as mock_logger:
+                self._run("+212600000000", "123456")
         mock_logger.warning.assert_not_called()
 
-    @override_settings(DEBUG=False)
     def test_short_phone_uses_asterisks_in_warning(self):
         """Phone shorter than 4 chars → '****' in warning, no IndexError."""
         with patch("accounts.views._send_otp_sms", return_value=False):
-            with patch("accounts.views.logger") as mock_logger:
-                _send_otp("+1", "123456")   # len < 4
+            with patch("accounts.tasks.logger") as mock_logger:
+                self._run("+1", "123456")   # len < 4
         warning_args = str(mock_logger.warning.call_args)
         self.assertIn("****", warning_args)
 
-    @override_settings(DEBUG=False)
     def test_long_phone_shows_last_four_digits_in_warning(self):
         """Phone >= 4 chars → last 4 chars shown in warning."""
         with patch("accounts.views._send_otp_sms", return_value=False):
-            with patch("accounts.views.logger") as mock_logger:
-                _send_otp("+212600001234", "999")
+            with patch("accounts.tasks.logger") as mock_logger:
+                self._run("+212600001234", "999")
         warning_args = str(mock_logger.warning.call_args)
         self.assertIn("1234", warning_args)

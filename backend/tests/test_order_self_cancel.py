@@ -43,7 +43,8 @@ class CancelOrderTests(SimpleTestCase):
             "refund": patch("menu.views._refund_wallet_for_cancelled_order"),
             "restock": patch("menu.views._restock_cancelled_order"),
             "broadcast": patch("menu.views._broadcast_order_change"),
-            "email": patch("menu.views._send_order_status_email"),
+            # PERF: the cancel email now goes through the async queue, not an inline send.
+            "enqueue": patch("accounts.tasks.enqueue"),
             "atomic": patch("django.db.transaction.atomic", return_value=_noop_atomic()),
         }
         self.m = {k: p.start() for k, p in self._patchers.items()}
@@ -120,7 +121,11 @@ class CancelOrderTests(SimpleTestCase):
         self.m["refund"].assert_called_once_with(order, tenant_id=7)
         self.m["restock"].assert_called_once_with(order)
         self.m["broadcast"].assert_called_once_with(order)
-        self.m["email"].assert_called_once()
+        # PERF: the cancel email is enqueued (off the request thread), not sent inline.
+        from accounts.tasks import order_status_email
+        self.m["enqueue"].assert_called_once_with(
+            order_status_email, "ORD-1", 7, Order.Status.CANCELLED
+        )
 
     def test_confirmed_delivery_can_cancel(self):
         order = _order(status="confirmed", fulfillment_type="delivery")
