@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, LOCALE_OPTIONS, getLocaleDirection, normalizeLocale } f
 import { catalog, ensureLocale, getMessages } from "../i18n/localeLoader";
 import { useLocaleStore } from "../stores/locale";
 import { useCurrencyStore } from "../stores/currency";
-import { getNumberFormat, getDateTimeFormat } from "../utils/intlFormatters";
+import { getNumberFormat, getDateTimeFormat } from "../lib/intlFormatters";
 
 const getByPath = (target, path) =>
   String(path || "")

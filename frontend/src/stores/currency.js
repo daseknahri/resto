@@ -9,7 +9,7 @@
  */
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import { getNumberFormat } from "../utils/intlFormatters";
+import { getNumberFormat } from "../lib/intlFormatters";
 
 const STORAGE_KEY = "pref_currency";
 const BASE_CODE = "MAD";
