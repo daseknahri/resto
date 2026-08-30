@@ -61,17 +61,22 @@ class OwnerReservationListViewTests(SimpleTestCase):
 
     @patch("sales.views.schema_context")
     @patch("sales.views._owner_reservations_queryset")
-    def test_returns_paginated_reservations_with_counts(self, queryset_builder_mock, schema_context_mock):
+    @patch("sales.views._owner_reservations_base_queryset")
+    def test_returns_paginated_reservations_with_counts(self, base_queryset_mock, queryset_builder_mock, schema_context_mock):
         schema_context_mock.return_value = _passthrough_cm()
 
+        # Annotated queryset now feeds only the serialized page rows.
         main_queryset = Mock()
-        main_queryset.count.return_value = 3
         main_queryset.order_by.return_value = [
             _lead_row(lead_id=9, status_value="new"),
             _lead_row(lead_id=8, status_value="new"),
             _lead_row(lead_id=7, status_value="new"),
         ]
+        queryset_builder_mock.return_value = main_queryset
 
+        # Lean queryset now feeds the pagination total + every status count.
+        pagination_queryset = Mock()
+        pagination_queryset.count.return_value = 3
         total_queryset = Mock()
         total_queryset.count.return_value = 12
         new_queryset = Mock()
@@ -88,8 +93,8 @@ class OwnerReservationListViewTests(SimpleTestCase):
         overdue_queryset.filter.return_value = overdue_queryset
         overdue_queryset.count.return_value = 4
 
-        queryset_builder_mock.side_effect = [
-            main_queryset,
+        base_queryset_mock.side_effect = [
+            pagination_queryset,
             total_queryset,
             new_queryset,
             contacted_queryset,
@@ -129,7 +134,18 @@ class OwnerReservationListViewTests(SimpleTestCase):
         self.assertIn("reminder_opened_count", first_row)
         self.assertIn("reminder_failed_count", first_row)
 
-        queryset_builder_mock.assert_any_call(
+        # Rows come from the annotated queryset...
+        queryset_builder_mock.assert_called_once_with(
+            10,
+            status_filter="new",
+            reminder_filter="",
+            search="demo",
+            from_date=date(2026, 3, 1),
+            to_date=date(2026, 3, 7),
+            booked_for_date=None,
+        )
+        # ...while the pagination total is counted on the lean queryset (same filters).
+        base_queryset_mock.assert_any_call(
             10,
             status_filter="new",
             reminder_filter="",
@@ -168,23 +184,40 @@ class OwnerReservationListViewTests(SimpleTestCase):
 
     @patch("sales.views.schema_context")
     @patch("sales.views._owner_reservations_queryset")
-    def test_applies_reminder_filter(self, queryset_builder_mock, schema_context_mock):
+    @patch("sales.views._owner_reservations_base_queryset")
+    def test_applies_reminder_filter(self, base_queryset_mock, queryset_builder_mock, schema_context_mock):
         schema_context_mock.return_value = _passthrough_cm()
-        querysets = []
-        for _ in range(8):  # main + total + 5 status counts (incl. no_show) + overdue
+
+        # Annotated queryset feeds the rows only.
+        main_queryset = Mock()
+        main_queryset.order_by.return_value = []
+        queryset_builder_mock.return_value = main_queryset
+
+        # Lean queryset feeds the pagination total + 5 status counts (incl. no_show) + overdue.
+        base_querysets = []
+        for _ in range(8):
             queryset = Mock()
             queryset.count.return_value = 0
-            queryset.order_by.return_value = []
             queryset.filter.return_value = queryset
-            querysets.append(queryset)
-        queryset_builder_mock.side_effect = querysets
+            base_querysets.append(queryset)
+        base_queryset_mock.side_effect = base_querysets
 
         request = self.factory.get("/api/owner/reservations/?reminder_status=failed")
         request.tenant = Mock(id=10)
         force_authenticate(request, user=_owner_user(tenant_id=10))
         response = self.view(request)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Both the annotated (rows) and lean (counts) helpers must carry the reminder filter.
         queryset_builder_mock.assert_any_call(
+            10,
+            status_filter="",
+            reminder_filter="failed",
+            search="",
+            from_date=None,
+            to_date=None,
+            booked_for_date=None,
+        )
+        base_queryset_mock.assert_any_call(
             10,
             status_filter="",
             reminder_filter="failed",
@@ -456,13 +489,14 @@ class OwnerReservationExportViewTests(SimpleTestCase):
         self.view = OwnerReservationExportView.as_view()
 
     @patch("sales.views.schema_context")
-    @patch("sales.views._owner_reservations_queryset")
-    def test_exports_csv(self, queryset_builder_mock, schema_context_mock):
+    @patch("sales.views._owner_reservations_base_queryset")
+    def test_exports_csv(self, base_queryset_mock, schema_context_mock):
         schema_context_mock.return_value = _passthrough_cm()
 
+        # The CSV export never emits reminder columns, so it uses the lean queryset.
         queryset = Mock()
         queryset.order_by.return_value = [_lead_row(status_value="contacted")]
-        queryset_builder_mock.return_value = queryset
+        base_queryset_mock.return_value = queryset
 
         request = self.factory.get("/api/owner/reservations/export/?status=contacted&q=demo&from=2026-03-01&to=2026-03-07")
         request.tenant = Mock(id=10, slug="demo")
@@ -475,7 +509,7 @@ class OwnerReservationExportViewTests(SimpleTestCase):
         body = response.content.decode("utf-8")
         self.assertIn("id,created_at,status,name,phone,email,source,notes", body)
         self.assertIn("Demo", body)
-        queryset_builder_mock.assert_called_once_with(
+        base_queryset_mock.assert_called_once_with(
             10,
             status_filter="contacted",
             reminder_filter="",
