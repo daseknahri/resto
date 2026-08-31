@@ -19,7 +19,7 @@ gunicorn==23.0.0
 whitenoise==6.12.0
 sentry-sdk==2.68.1
 django-storages==1.14.6
-boto3==1.43.80
+boto3==1.43.82
 django-redis==5.4.0
 redis==8.1.0
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
