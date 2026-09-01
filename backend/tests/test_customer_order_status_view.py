@@ -5,6 +5,13 @@ Covers: anonymous access (no auth required), not-found, full payload shape,
 terminal statuses (completed/cancelled), null status_updated_at, items detail.
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
+
+Perf fix note: the view's query is now
+  Order.objects.filter(...).prefetch_related("items").select_related("rating")
+      .defer("customer_note", "delivery_location_url", "delivery_proof_photo_url")
+      .first()
+— every mocked chain below therefore ends
+  ...select_related.return_value.defer.return_value.first.return_value
 """
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -116,7 +123,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_unknown_order_number_returns_404(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = None
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = None
         resp = self._get(order_number="NOPE")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
@@ -125,7 +132,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_found_order_returns_200_with_full_shape(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order()
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for field in (
@@ -150,7 +157,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         order.promotion_discount = Decimal("5.00")
         order.delivery_fee = Decimal("15.00")
         order.loyalty_discount = Decimal("0.00")
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["tip_amount"], "10.00")
@@ -161,14 +168,14 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_items_count_matches_qty_sum(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order()
         resp = self._get()
         self.assertEqual(resp.data["items_count"], 2)  # qty=2 in the fixture
         self.assertEqual(len(resp.data["items"]), 1)
 
     @patch("menu.views.Order.objects")
     def test_item_shape_includes_prices(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order()
         resp = self._get()
         item = resp.data["items"][0]
         for field in ("dish_slug", "dish_name", "qty", "unit_price", "subtotal", "currency", "options", "note"):
@@ -179,7 +186,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_status_updated_at_is_none_when_not_set(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order(
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order(
             status_updated_at_iso=None
         )
         resp = self._get()
@@ -187,7 +194,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_status_updated_at_populated_when_set(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order(
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order(
             status_updated_at_iso="2026-05-15T12:10:00+00:00"
         )
         resp = self._get()
@@ -197,7 +204,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_completed_order_is_visible(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order(
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order(
             order_status="completed"
         )
         resp = self._get()
@@ -206,7 +213,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_cancelled_order_is_visible(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order(
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order(
             order_status="cancelled"
         )
         resp = self._get()
@@ -217,7 +224,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_order_number_uppercased_before_lookup(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = None
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = None
         self._get(order_number="ord123")
         # The view should have queried with the uppercased version
         filter_kwargs = objects_mock.filter.call_args[1]
@@ -229,13 +236,13 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
     def test_customer_phone_not_in_response(self, objects_mock):
         order = _make_order()
         order.customer_phone = "0612345678"
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         resp = self._get()
         self.assertNotIn("customer_phone", resp.data)
 
     @patch("menu.views.Order.objects")
     def test_customer_email_not_in_response(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order()
         resp = self._get()
         self.assertNotIn("customer_email", resp.data)
 
@@ -250,7 +257,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_restaurant_feedback_field_always_present(self, objects_mock):
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = _make_order()
         resp = self._get()
         self.assertIn("restaurant_feedback", resp.data)
 
@@ -259,7 +266,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         """No session → even if a rating exists, it must not be exposed."""
         order = _make_order(order_status="completed")
         order.customer_id = 42
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         resp = self._get()  # no session on the request
         # Identified order + anonymous viewer → minimal payload: the feedback (and the
         # rest of the body) is not present at all, so it can't leak.
@@ -271,7 +278,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
     def test_restaurant_feedback_hidden_for_non_owning_customer(self, objects_mock, cr_mock):
         order = _make_order(order_status="completed")
         order.customer_id = 42
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr()
         req = self.factory.get("/api/order-status/ORD123/")
         force_authenticate(req, user=_customer(99))  # a different customer
@@ -286,7 +293,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
     def test_restaurant_feedback_shown_to_owning_customer(self, objects_mock, cr_mock):
         order = _make_order(order_status="completed")
         order.customer_id = 42
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr(score=5, note="Great")
         req = self.factory.get("/api/order-status/ORD123/")
         force_authenticate(req, user=_customer(42))  # the order's owner
@@ -306,7 +313,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         who merely guessed the order number — only status/timing/contact come back."""
         order = _make_order(customer_name="Sara", delivery_address="12 Rue X", total="99.00")
         order.customer_id = 42
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         resp = self._get()  # no session
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for field in ("order_number", "status", "fulfillment_type"):
@@ -319,7 +326,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
     def test_identified_order_full_for_owning_customer(self, objects_mock):
         order = _make_order(customer_name="Sara", total="99.00")
         order.customer_id = 42
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         req = self.factory.get("/api/order-status/ORD123/")
         force_authenticate(req, user=_customer(42))  # the owner
         req.tenant = MagicMock(id=7)
@@ -334,7 +341,7 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         and the table-QR viewer needs their bill — so the full body is returned."""
         order = _make_order(fulfillment_type="dine_in", total="45.00")
         order.customer_id = None
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         resp = self._get()
         self.assertIn("items", resp.data)
         self.assertEqual(resp.data["total"], "45.00")

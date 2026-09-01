@@ -82,6 +82,10 @@ class _CommissionStatementHarness(SimpleTestCase):
 
         qs = MagicMock()
         qs.order_by.return_value = qs
+        # Perf fix: the view now appends .only(...) after .order_by(...) — keep the
+        # chain self-referential through it too, or the mocked qs stops being what
+        # gets iterated.
+        qs.only.return_value = qs
         qs.__iter__ = lambda s: iter(orders)
 
         def _first_filter(**kwargs):
@@ -111,6 +115,10 @@ class _CommissionStatementHarness(SimpleTestCase):
         qs = MagicMock()
         qs.filter.return_value = qs
         qs.order_by.return_value = qs
+        # Perf fix: the view now appends .only(...) after .order_by(...) — keep the
+        # chain self-referential through it too, or the mocked qs stops being what
+        # gets iterated.
+        qs.only.return_value = qs
         qs.__iter__ = lambda s: iter(orders)
 
         with patch("menu.views._is_tenant_owner", return_value=True), \

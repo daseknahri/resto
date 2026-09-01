@@ -285,6 +285,10 @@ class CommissionStatementBucketTests(SimpleTestCase):
         # .filter() keeps only commissionable statuses. Chain every step back to qs.
         qs.filter.return_value = qs
         qs.order_by.return_value = qs
+        # Perf fix: the view now appends .only(...) after .order_by(...) — keep the
+        # chain self-referential through it too, or the mocked qs stops being what
+        # gets iterated.
+        qs.only.return_value = qs
         qs.aggregate.return_value = {"order_count": 0, "total_revenue": None, "total_commission": None}
         qs.__iter__ = lambda s: iter([])
 
@@ -373,6 +377,10 @@ class CommissionStatementBucketTests(SimpleTestCase):
         qs = MagicMock()
         qs.filter.return_value = qs
         qs.order_by.return_value = qs
+        # Perf fix: the view now appends .only(...) after .order_by(...) — keep the
+        # chain self-referential through it too, or the mocked qs stops being what
+        # gets iterated.
+        qs.only.return_value = qs
         qs.aggregate.return_value = {
             "order_count": 1,
             "total_revenue": Decimal("20.00"),
@@ -432,6 +440,10 @@ class CommissionStatementPdfLabelTests(SimpleTestCase):
         qs = MagicMock()
         qs.filter.return_value = qs
         qs.order_by.return_value = qs
+        # Perf fix: the view now appends .only(...) after .order_by(...) — keep the
+        # chain self-referential through it too, or the mocked qs stops being what
+        # gets iterated.
+        qs.only.return_value = qs
         qs.aggregate.return_value = {
             "order_count": len(orders),
             "total_revenue": total_rev,

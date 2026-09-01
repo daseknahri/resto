@@ -168,6 +168,13 @@ class StaffBulkReadyViewTests(SimpleTestCase):
         self.addCleanup(_tx_patcher.stop)
         self._tx_mock.atomic.return_value = _Atomic()
 
+        # Perf fix: the bulk-ready persist step is now ONE OrderItem.objects.bulk_update(...)
+        # call instead of a per-item .save() loop. Patch it so SimpleTestCase never touches
+        # a real DB connection, mirroring the Order.objects mocking pattern above.
+        _bulk_patcher = patch("menu.views.OrderItem.objects.bulk_update")
+        self._bulk_update_mock = _bulk_patcher.start()
+        self.addCleanup(_bulk_patcher.stop)
+
     def _post(self, order_id=10, user=None):
         req = self.factory.post(
             f"/api/staff/orders/{order_id}/items/ready-all/",
@@ -273,12 +280,14 @@ class StaffBulkReadyViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-        # Only item_pending should have been saved.
-        item_pending.save.assert_called_once_with(update_fields=["is_ready", "ready_at"])
+        # Only item_pending should have been included in the single bulk_update call
+        # (perf fix: one UPDATE for the whole batch instead of a per-item .save() loop).
+        self._bulk_update_mock.assert_called_once_with([item_pending], ["is_ready", "ready_at"])
         self.assertTrue(item_pending.is_ready)
         self.assertIsNotNone(item_pending.ready_at)
 
-        # Already-ready and voided must NOT be touched.
+        # No item is ever saved individually anymore — persistence is bulk-only.
+        item_pending.save.assert_not_called()
         item_already_ready.save.assert_not_called()
         item_voided.save.assert_not_called()
 
@@ -335,6 +344,8 @@ class StaffBulkReadyViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         voided.save.assert_not_called()
         already_ready.save.assert_not_called()
+        # Nothing to update → bulk_update must not even be called (perf fix guard).
+        self._bulk_update_mock.assert_not_called()
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.Order.objects")

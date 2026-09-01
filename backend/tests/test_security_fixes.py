@@ -120,7 +120,7 @@ class OrderStatusPiiTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_customer_phone_not_in_status_response(self, mock_objects):
         """customer_phone must never appear in the public order-status endpoint."""
-        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = (
+        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = (
             self._make_order()
         )
         req = self.factory.get("/api/order-status/ORD-ABCDEF/")
@@ -133,7 +133,7 @@ class OrderStatusPiiTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_customer_name_still_present(self, mock_objects):
         """customer_name should remain — it confirms the customer placed the order."""
-        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = (
+        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = (
             self._make_order()
         )
         req = self.factory.get("/api/order-status/ORD-ABCDEF/")
@@ -146,7 +146,7 @@ class OrderStatusPiiTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_delivery_address_still_present(self, mock_objects):
         """delivery_address should remain so the customer can verify their drop-off."""
-        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = (
+        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = (
             self._make_order()
         )
         req = self.factory.get("/api/order-status/ORD-ABCDEF/")
@@ -158,7 +158,7 @@ class OrderStatusPiiTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_delivery_location_url_not_in_status_response(self, mock_objects):
         """delivery_location_url is never needed by the status page UI."""
-        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = (
+        mock_objects.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = (
             self._make_order()
         )
         req = self.factory.get("/api/order-status/ORD-ABCDEF/")
