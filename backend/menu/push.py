@@ -35,8 +35,19 @@ print(base64.urlsafe_b64encode(pub_bytes).rstrip(b'=').decode())
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger("app.push")
+
+# Per-send HTTP timeout (seconds). pywebpush forwards this to requests; without it a slow
+# or hung push endpoint would block the calling Celery task (hard time limit 120s, worker
+# --concurrency 2) with no ceiling. Mirrors the app's other outbound-HTTP timeouts
+# (Twilio timeout=10 in menu/sms.py, OSRM timeout=4 in tenancy/routing.py).
+_PUSH_TIMEOUT = 5
+
+# Max concurrent sends per fan-out (see _fan_out). Small + bounded so a large audience is
+# delivered in parallel without spawning an unbounded number of HTTP-bound threads.
+_PUSH_FANOUT_WORKERS = 8
 
 # ─── low-level single-subscription sender ────────────────────────────────────
 
@@ -72,6 +83,7 @@ def _send_one(endpoint: str, p256dh: str, auth: str, title: str, body: str, url:
             vapid_private_key=private_key,
             vapid_claims={"sub": f"mailto:{admin_email}"},
             ttl=120,
+            timeout=_PUSH_TIMEOUT,
         )
         return "ok"
     except Exception as exc:
@@ -85,6 +97,49 @@ def _send_one(endpoint: str, p256dh: str, auth: str, title: str, body: str, url:
             return "gone"
         logger.warning("Web Push failed for %.60s: %s", endpoint, exc)
         return "error"
+
+
+# ─── bounded-concurrency fan-out ─────────────────────────────────────────────
+# A push fan-out to many subscriptions is one blocking HTTP call per recipient. Done
+# strictly sequentially, even with the per-send timeout above, a large audience (e.g.
+# every online driver on a new job) still costs the SUM of the sends. _fan_out spreads
+# the sends across a SMALL bounded thread pool: wall-clock cost drops toward a single
+# send, while the worker cap keeps a mealtime burst from fanning out unboundedly
+# (mirrors accounts.tasks._inline_executor).
+#
+# Thread-safety contract: send_fn(sub) does HTTP ONLY (via _send_one) and MUST NOT touch
+# the ORM — Django opens a fresh DB connection per thread, and concurrent cursors on one
+# connection are unsafe. All DB work stays on the CALLER's thread: it materialises `subs`
+# before calling _fan_out and bulk-deletes the returned expired ("gone") ids AFTER
+# _fan_out returns, so no ORM ever runs off the main thread.
+
+
+def _fan_out(subs, send_fn):
+    """Deliver a push to every subscription in ``subs`` concurrently, preserving the
+    sequential loop's exact semantics.
+
+    ``send_fn(sub)`` performs the send and returns ``_send_one``'s status string
+    ("ok" | "gone" | "error"); it may compute per-subscription title/body but must do
+    NO database access (see the thread-safety contract above).
+
+    Returns ``(sent, gone_ids)`` — the count delivered ("ok") and the ids of expired
+    ("gone") subscriptions for the caller to bulk-delete. Tallying happens on the calling
+    thread from the collected results, so the counts are deterministic regardless of send
+    order.
+    """
+    if not subs:
+        return 0, []
+    workers = min(_PUSH_FANOUT_WORKERS, len(subs))
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="push-fanout") as ex:
+        results = list(ex.map(send_fn, subs))
+    sent = 0
+    gone_ids = []
+    for sub, result in zip(subs, results):
+        if result == "gone":
+            gone_ids.append(sub.id)
+        elif result == "ok":
+            sent += 1
+    return sent, gone_ids
 
 
 # ─── tenant-level batch sender ────────────────────────────────────────────────
