@@ -301,6 +301,7 @@ import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
+import { getDateTimeFormat } from "../lib/intlFormatters";
 
 // Under KeepAlive the kitchen page stays alive across navigation — poll timer,
 // wake lock and WS handlers start on activated, stop on deactivated.
@@ -603,7 +604,7 @@ const clockDisplay = ref("");
 let clockTimer = null;
 const updateClock = () => {
   const now = new Date();
-  clockDisplay.value = new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(now);
+  clockDisplay.value = getDateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(now);
 };
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────

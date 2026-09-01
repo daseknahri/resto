@@ -63,14 +63,14 @@
 
     <!-- Items header: ready progress pill -->
     <p class="sr-only">{{ t('kitchen.tapItemReady') }}</p>
-    <div v-if="orderReadyCount(order).total > 0" class="mt-4 flex items-center justify-between px-4 mb-1">
+    <div v-if="readyCount.total > 0" class="mt-4 flex items-center justify-between px-4 mb-1">
       <span class="text-[11px] font-medium text-slate-500">{{ t('kitchen.tapItemReady') }}</span>
       <span
         class="rounded-full border px-2 py-0.5 text-[11px] tabular-nums font-semibold transition-colors"
-        :class="orderReadyCount(order).done === orderReadyCount(order).total
+        :class="readyCount.done === readyCount.total
           ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
           : 'text-slate-400 bg-slate-800/60 border-slate-700/40'"
-      >{{ orderReadyCount(order).done }}/{{ orderReadyCount(order).total }}</span>
+      >{{ readyCount.done }}/{{ readyCount.total }}</span>
     </div>
     <ul class="mt-2 flex-1 divide-y divide-slate-700/30 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
       <li
@@ -224,11 +224,12 @@
 // reactive deps (e.g. the elapsed-time now-ticker read inside elapsedLabel is
 // tracked by THIS card's render, so the timer badge still ticks live). `index`
 // drives the same staggered reveal the inline v-for used.
+import { computed } from 'vue';
 import { useI18n } from '../composables/useI18n';
 
 const { t } = useI18n();
 
-defineProps({
+const props = defineProps({
   /** The order to render. */
   order: { type: Object, required: true },
   /** Row index within the grid — drives the staggered --ui-delay reveal. */
@@ -263,6 +264,12 @@ defineProps({
   actionBtnClass: { type: Function, required: true },
   actionLabel: { type: Function, required: true },
 });
+
+// Memoized per-render: `orderReadyCount` runs two `order.items.filter()` passes,
+// and the template reads it 5x (progress-pill visibility + done/total x2). A
+// computed re-evaluates only when its reactive deps (order / order.items entries)
+// actually change, instead of on every read.
+const readyCount = computed(() => props.orderReadyCount(props.order));
 
 const emit = defineEmits(['toggleItem', 'fireCourse', 'markAllReady', 'advance', 'printTicket']);
 </script>
