@@ -95,7 +95,7 @@ def notify_online_drivers_new_job_sync(restaurant_name=None) -> int:
     don't ping drivers mid-delivery. SYNCHRONOUS; returns the number of pushes delivered.
     """
     from django_tenants.utils import schema_context
-    from menu.push import _send_one
+    from menu.push import _fan_out, _send_one
     from .models import Customer, CustomerPushSubscription, DeliveryJob
 
     with schema_context("public"):
@@ -122,19 +122,15 @@ def notify_online_drivers_new_job_sync(restaurant_name=None) -> int:
     if not subs:
         return 0
 
-    gone, sent = [], 0
-    for s in subs:
+    def _send(s):
         loc = locales.get(s.customer_id, "en")
         if loc not in _NEW_JOB_MESSAGES:
             loc = "en"
         msg = _NEW_JOB_MESSAGES[loc]
-        title = msg["title"]
         body = msg["body"].format(r=restaurant_name or "a restaurant")
-        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/driver")
-        if result == "gone":
-            gone.append(s.id)
-        elif result == "ok":
-            sent += 1
+        return _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], body, "/driver")
+
+    sent, gone = _fan_out(subs, _send)
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
@@ -660,6 +656,10 @@ _RIDE_ACCEPTED_MESSAGES = {
     "ar": {"title": "السائق في الطريق", "body": "قبل السائق طلب الركوب الخاص بك."},
 }
 
+# Max drivers pinged per new-trip dispatch (ride AND package). Caps the push fan-out so a
+# large online driver pool can't turn one trip into an unbounded burst of blocking sends.
+_RIDE_DISPATCH_CAP = 10
+
 
 def notify_car_drivers_new_ride_sync(ride_id) -> int:
     """Push a trip offer to eligible online approved drivers. SYNCHRONOUS.
@@ -669,7 +669,7 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
         package — ALL online approved drivers (any vehicle type, no car-doc requirement).
     """
     from django_tenants.utils import schema_context
-    from menu.push import _send_one
+    from menu.push import _fan_out, _send_one
     from tenancy.delivery_pricing import haversine_km, valid_coord
     from .models import Customer, CustomerPushSubscription, RideRequest
 
@@ -703,7 +703,12 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
                 )
             )
 
-    # Pick up to 10 nearest by haversine (using last known GPS when available).
+    # Pick up to _RIDE_DISPATCH_CAP nearest by haversine (using last known GPS when
+    # available), then HARD-CAP the audience. The cap now applies even when pickup GPS is
+    # missing (no distance sort) — otherwise the package branch ("all online approved
+    # drivers, any vehicle type") would fan out to the ENTIRE online driver pool, and the
+    # ride branch to every online car driver. Bounding it keeps dispatch (and the push
+    # fan-out) sane; drivers outside the cap still see the job in their dashboard.
     pickup_lat = ride.pickup_lat
     pickup_lng = ride.pickup_lng
     if valid_coord(pickup_lat, pickup_lng):
@@ -713,7 +718,7 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
             return 1e9  # no GPS — sort to end
 
         candidates.sort(key=_dist)
-        candidates = candidates[:10]
+    candidates = candidates[:_RIDE_DISPATCH_CAP]
 
     if not candidates:
         return 0
@@ -727,17 +732,15 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
         return 0
 
     offer_copy = _PACKAGE_OFFER_MESSAGES if is_package else _RIDE_OFFER_MESSAGES
-    gone, sent = [], 0
-    for s in subs:
+
+    def _send(s):
         loc = locales.get(s.customer_id, "en")
         if loc not in offer_copy:
             loc = "en"
         msg = offer_copy[loc]
-        result = _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/driver")
-        if result == "gone":
-            gone.append(s.id)
-        elif result == "ok":
-            sent += 1
+        return _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/driver")
+
+    sent, gone = _fan_out(subs, _send)
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
