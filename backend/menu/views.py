@@ -112,6 +112,14 @@ def _bust_menu_cache(tenant_slug: str) -> None:
     except ValueError:
         # Key missing (LocMemCache raises ValueError; Redis raises ResponseError)
         cache.set(ver_key, 2, timeout=None)
+    # Also drop the PUBLIC marketplace-menu body (accounts.views.MarketplaceMenuView), which
+    # caches the SAME tenant's published dish tree + prices under mkt_menu:v1:{slug}. Lazy
+    # import avoids a menu->accounts import cycle; best-effort so a menu write never fails.
+    try:
+        from accounts.views import _bust_marketplace_menu_cache
+        _bust_marketplace_menu_cache(tenant_slug)
+    except Exception:
+        pass
 
 
 # ── Business hours helpers ────────────────────────────────────────────────────

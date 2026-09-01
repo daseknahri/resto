@@ -57,6 +57,11 @@ def recompute_tenant_rating(tenant) -> None:
         # a bust failure must never break the rating save.
         from accounts.views import _bust_public_list_cache
         _bust_public_list_cache()
+        # The PUBLIC marketplace-menu body (MarketplaceMenuView) caches this tenant's
+        # rating_avg / rating_count + recent reviews; drop it so a new rating shows on the
+        # menu page immediately instead of waiting out the 60s TTL.
+        from accounts.views import _bust_marketplace_menu_cache
+        _bust_marketplace_menu_cache(getattr(tenant, "slug", ""))
     except Exception:
         # Denormalization is best-effort — never break a rating save/delete over it.
         logger.exception(

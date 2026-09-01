@@ -830,6 +830,9 @@ class MarketplaceMenuViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = MarketplaceMenuView.as_view()
+        # MarketplaceMenuView now caches its anonymous body under mkt_menu:v1:{slug}. Clear
+        # the process-global cache so each test builds fresh (all use slug "bistro").
+        cache.clear()
 
     def _get(self, slug="bistro"):
         req = self.factory.get(f"/api/marketplace/menu/{slug}/")
@@ -903,6 +906,7 @@ class MarketplaceMenuViewTests(SimpleTestCase):
 
         tenant = MagicMock()
         tenant.schema_name = "bistro"
+        tenant.slug = "bistro"  # concrete slug → clean mkt_menu:v1:{slug} cache key
 
         # Build mock Dish ORM chain; .filter() records kwargs, .order_by() returns [].
         mock_dish_qs = MagicMock()
@@ -916,6 +920,35 @@ class MarketplaceMenuViewTests(SimpleTestCase):
 
         mock_profile = MagicMock()
         mock_profile.is_menu_published = True
+        # The response body is now cached (LocMemCache pickles on set), so the fields the
+        # payload serializes must be concrete PICKLABLE values — not auto-created MagicMocks.
+        mock_profile.business_type = "restaurant"
+        mock_profile.tagline = ""
+        mock_profile.logo_url = ""
+        mock_profile.cuisine_type = ""
+        mock_profile.city = ""
+        mock_profile.address = ""
+        mock_profile.phone = ""
+        mock_profile.currency = "MAD"
+        mock_profile.delivery_enabled = False
+        mock_profile.delivery_fee = "0"
+        mock_profile.delivery_base_fee = "0"
+        mock_profile.delivery_per_km = "0"
+        mock_profile.delivery_free_over = "0"
+        mock_profile.delivery_radius_km = None
+        mock_profile.delivery_minimum_order = "0"
+        mock_profile.lat = None
+        mock_profile.lng = None
+        mock_profile.price_tier = 1
+        mock_profile.tags = []
+        mock_profile.business_hours_schedule = {}
+        mock_profile.is_menu_temporarily_disabled = False
+        mock_profile.cod_enabled = False
+        mock_profile.rating_avg = None
+        mock_profile.rating_count = 0
+        mock_profile.is_open = True
+        mock_profile.closure_dates = []
+        mock_profile.timezone = "UTC"
         mock_profile_cls = MagicMock()
         mock_profile_cls.objects.filter.return_value.first.return_value = mock_profile
 

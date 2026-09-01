@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -311,6 +312,9 @@ class MarketplaceMenuCodExposureTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = MarketplaceMenuView.as_view()
+        # MarketplaceMenuView now caches its anonymous body under mkt_menu:v1:{slug}. Clear
+        # the process-global cache so each test builds fresh (both tests use slug "bistro").
+        cache.clear()
 
     def _get(self, slug="bistro", customer_id=None):
         from accounts.models import Customer
@@ -353,6 +357,15 @@ class MarketplaceMenuCodExposureTests(SimpleTestCase):
         profile.lng = None
         profile.price_tier = 1
         profile.tags = []
+        # The response body is now cached (LocMemCache pickles on set), so every attribute
+        # the payload serializes must be a concrete PICKLABLE value — not an auto-created
+        # MagicMock. Set the remaining fields the cache would otherwise choke on.
+        profile.business_type = "restaurant"
+        profile.currency = "MAD"
+        profile.business_hours_schedule = {}
+        profile.is_menu_temporarily_disabled = False
+        profile.rating_avg = None
+        profile.rating_count = 0
 
         dish_cls = MagicMock()
         dish_qs = MagicMock()
