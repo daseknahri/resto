@@ -2257,10 +2257,17 @@ onMounted(async () => {
   offerCountdownTimer = setInterval(() => {
     offerNow.value = Date.now();
     // Auto-remove offers whose countdown has elapsed so stale cards don't linger.
+    // Only reassign when an offer actually expired: filter() never reorders or
+    // mutates survivors, so an unchanged length means an unchanged array — this
+    // skips the needless new-array-ref reassignment (and the re-render it forces)
+    // on every no-op tick.
     if (pendingJobs.value.length) {
-      pendingJobs.value = pendingJobs.value.filter(
+      const stillActive = pendingJobs.value.filter(
         (j) => !j.offer_expires_at || Date.parse(j.offer_expires_at) > Date.now(),
       );
+      if (stillActive.length !== pendingJobs.value.length) {
+        pendingJobs.value = stillActive;
+      }
     }
     // D-6: once the displayed cash-out code's expiry passes, drop it client-side
     // (instead of showing a stale/unusable code) — the next fetchCashout poll then
