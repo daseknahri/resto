@@ -116,7 +116,7 @@ class MarketplaceOrderStatusIDORTests(SimpleTestCase):
              patch("menu.views._customer_can_cancel", return_value=True):
             MockTenant.objects.get.return_value = tenant
             (MockOrder.objects.filter.return_value
-                .prefetch_related.return_value.first.return_value) = order
+                .prefetch_related.return_value.select_related.return_value.first.return_value) = order
             resp = self.view(req, order_number="ORD-ABC123")
         return resp
 

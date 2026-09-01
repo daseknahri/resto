@@ -1104,7 +1104,7 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
-                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = None
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = None
                     resp = self._get(params={"restaurant": "bistro"})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
@@ -1132,7 +1132,7 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
-                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
                     # Session customer matches order.customer_id → owner.
                     resp = self._get(params={"restaurant": "bistro"}, session_cid=7)
 
@@ -1172,7 +1172,7 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
-                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
                     resp = self._get(params={"restaurant": "bistro"}, session_cid=7)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -1198,7 +1198,7 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
-                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
                     # No session (anonymous) → non-owner.
                     resp = self._get(params={"restaurant": "bistro"})
 
@@ -1222,7 +1222,7 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
-                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
                     # No session (anonymous) → non-owner.
                     resp = self._get(params={"restaurant": "bistro"})
 

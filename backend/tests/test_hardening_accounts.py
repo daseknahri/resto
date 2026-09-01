@@ -373,7 +373,7 @@ class MarketplaceOrderStatusEtaTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
                     (mock_order.objects.filter.return_value
-                        .prefetch_related.return_value.first.return_value) = order
+                        .prefetch_related.return_value.select_related.return_value.first.return_value) = order
                     resp = self.view(req, order_number="ORD-001")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
