@@ -415,6 +415,21 @@ class WalletChargeRequest(models.Model):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["customer", "status"], name="charge_req_customer_status_idx"),
+            # Partial index for the bill-sync poll — _sync_charged_request_bills()
+            # (menu/views.py), called by OwnerOrderListView on EVERY ~15s owner/staff
+            # order poll:
+            #   filter(tenant_id=, status=CHARGED, bill_synced=False, order_number__in=...)
+            # Only tenant_id was indexed, so the poll scanned a tenant's whole
+            # charge-request history (grows unbounded, almost all bill_synced=True) and
+            # filtered in memory — nearly always to return nothing. The partial predicate
+            # matches the query's constants (status='charged', bill_synced=False) so the
+            # common "nothing to sync" case is near-O(1) and the index only holds the tiny
+            # set of charged-but-not-yet-synced rows.
+            models.Index(
+                fields=["tenant_id", "order_number"],
+                name="wcr_tid_ordernum_unsynced_idx",
+                condition=models.Q(status="charged", bill_synced=False),
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1017,6 +1032,10 @@ class DeliveryJob(models.Model):
             # which every online driver polls every 5-15s. Without it the containment
             # predicate is a full-table scan on this growing public-schema table.
             GinIndex(fields=["declined_by"], name="deliveryjob_declined_gin"),
+            # Backs AdminDeliveryJobListView (accounts/views.py), which default-sorts
+            # order_by("-created_at")[:100] on this growing public-schema table. Without a
+            # created_at index that admin list is a full scan + top-N sort on every load.
+            models.Index(fields=["-created_at"], name="deliveryjob_created_idx"),
         ]
 
     def __str__(self) -> str:
