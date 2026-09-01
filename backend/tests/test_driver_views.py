@@ -868,6 +868,55 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
         self.assertIn(42, called_tenant_ids)
         self.assertIn(99, called_tenant_ids)
 
+    def test_driver_job_list_batches_restaurant_phone(self):
+        """Fix#1 (N+1): the poll path must resolve merchant phones with ONE batch
+        query (_batch_restaurant_phones) for the whole page — NOT a per-job Profile
+        lookup inside _serialize_delivery_job — and thread each job's phone in."""
+        customer = _make_customer()
+
+        job_active = _make_job(pk=1, status_val="assigned", driver=customer, tenant_id=42)
+        job_pending = _make_job(pk=2, status_val="searching", driver=None, tenant_id=99)
+
+        with patch("accounts.models.DeliveryJob") as mock_dj, \
+             patch("accounts.views._batch_business_types", return_value={}), \
+             patch("accounts.views._batch_restaurant_phones",
+                   return_value={42: "0611111111", 99: "0622222222"}) as mock_phones, \
+             patch("accounts.views._serialize_delivery_job",
+                   side_effect=lambda j, **kw: {"id": j.id, "restaurant_phone": kw.get("restaurant_phone")}):
+
+            active_qs = MagicMock()
+            active_qs.select_related.return_value = [job_active]
+            pending_qs = MagicMock()
+            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
+                lambda s, sl: [job_pending]
+            )
+
+            def _filter(**kwargs):
+                if not kwargs.get("driver__isnull"):
+                    return active_qs
+                return pending_qs
+
+            mock_dj.objects.filter.side_effect = _filter
+            mock_dj.Status.ASSIGNED = "assigned"
+            mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+            mock_dj.Status.PICKED_UP = "picked_up"
+            mock_dj.Status.SEARCHING = "searching"
+
+            with patch("accounts.views._job_order_summaries", return_value={}):
+                req = _authed(self.factory.get("/api/driver/jobs/"), customer)
+                from accounts.views import DriverJobListView
+                resp = DriverJobListView.as_view()(req)
+
+        self.assertEqual(resp.status_code, 200)
+        # ONE batch phone query for the whole page (no per-row N+1).
+        mock_phones.assert_called_once()
+        called_tenant_ids = mock_phones.call_args[0][0]
+        self.assertIn(42, called_tenant_ids)
+        self.assertIn(99, called_tenant_ids)
+        # Each job's batched phone is threaded into the serializer.
+        self.assertEqual(resp.data["active"][0]["restaurant_phone"], "0611111111")
+        self.assertEqual(resp.data["pending"][0]["restaurant_phone"], "0622222222")
+
     def test_batch_business_types_single_db_query(self):
         """_batch_business_types must call Profile.objects.filter exactly once."""
         from accounts.views import _batch_business_types
@@ -913,6 +962,105 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
         # tenant 2 missing → not in result; caller defaults to "restaurant"
         self.assertEqual(result.get(1), "grocery")
         self.assertNotIn(2, result)
+
+    def test_batch_restaurant_phones_single_db_query(self):
+        """Fix#1: _batch_restaurant_phones resolves every tenant's phone in ONE query."""
+        from accounts.views import _batch_restaurant_phones
+        from unittest.mock import patch, MagicMock
+
+        mock_qs = MagicMock()
+        mock_qs.values_list.return_value = [(1, "0611111111"), (2, "")]
+
+        with patch("tenancy.models.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value = mock_qs
+            result = _batch_restaurant_phones({1, 2, 3})
+
+        mock_profile.objects.filter.assert_called_once()
+        filter_kwargs = mock_profile.objects.filter.call_args[1]
+        self.assertIn("tenant_id__in", filter_kwargs)
+        # Blank phone normalises to "" (never None); missing tenant 3 is absent.
+        self.assertEqual(result, {1: "0611111111", 2: ""})
+
+    def test_batch_restaurant_phones_empty_set(self):
+        """Empty tenant set returns {} without touching the DB."""
+        from accounts.views import _batch_restaurant_phones
+        from unittest.mock import patch
+
+        with patch("tenancy.models.Profile") as mock_profile:
+            result = _batch_restaurant_phones(set())
+
+        mock_profile.objects.filter.assert_not_called()
+        self.assertEqual(result, {})
+
+    def test_serialize_delivery_job_uses_supplied_phone_without_query(self):
+        """Fix#1: when restaurant_phone is supplied (LIST path), the serializer uses it
+        verbatim and does NOT run the per-job Profile lookup."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=21, status_val="assigned", tenant_id=30)
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("tenancy.models.Profile") as mock_profile:
+            data = _serialize_delivery_job(job, restaurant_phone="0655555555")
+
+        self.assertEqual(data["restaurant_phone"], "0655555555")
+        mock_profile.objects.filter.assert_not_called()
+
+    def test_serialize_delivery_job_falls_back_to_profile_phone(self):
+        """Fix#1: single-job callers (no restaurant_phone kwarg) still self-query the
+        merchant phone from the Profile — behaviour preserved."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=22, status_val="assigned", tenant_id=31)
+        mock_qs = MagicMock()
+        mock_qs.values.return_value.first.return_value = {"phone": "0644444444"}
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("tenancy.models.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value = mock_qs
+            data = _serialize_delivery_job(job)
+
+        mock_profile.objects.filter.assert_called_once()
+        self.assertEqual(data["restaurant_phone"], "0644444444")
+
+    def test_serialize_delivery_job_uses_supplied_rating_map(self):
+        """Fix#2: with driver_rating_map supplied (admin LIST path) the serializer reads
+        the driver's lifetime rating from the map and does NOT run the per-row aggregate."""
+        from accounts.views import _serialize_delivery_job
+
+        driver = _make_customer(pk=77)
+        job = _make_job(pk=31, status_val="assigned", driver=driver, tenant_id=40)
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("accounts.models.DeliveryJob") as mock_dj:
+            data = _serialize_delivery_job(
+                job, include_driver_position=True,
+                restaurant_phone="", driver_rating_map={77: (4.5, 12)},
+            )
+
+        self.assertEqual(data["driver"]["rating"], 4.5)
+        self.assertEqual(data["driver"]["rating_count"], 12)
+        # Map supplied → no per-row aggregate query.
+        mock_dj.objects.filter.assert_not_called()
+
+    def test_serialize_delivery_job_rating_map_unrated_driver(self):
+        """Fix#2: a driver absent from the map (no rated jobs) → rating None / count 0,
+        identical to the self-query result, still with no aggregate query."""
+        from accounts.views import _serialize_delivery_job
+
+        driver = _make_customer(pk=88)
+        job = _make_job(pk=32, status_val="assigned", driver=driver, tenant_id=41)
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("accounts.models.DeliveryJob") as mock_dj:
+            data = _serialize_delivery_job(
+                job, include_driver_position=True,
+                restaurant_phone="", driver_rating_map={},
+            )
+
+        self.assertIsNone(data["driver"]["rating"])
+        self.assertEqual(data["driver"]["rating_count"], 0)
+        mock_dj.objects.filter.assert_not_called()
 
     def test_serialize_delivery_job_includes_business_type_field(self):
         """_serialize_delivery_job must include business_type in its output."""

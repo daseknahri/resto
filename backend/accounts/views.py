@@ -433,6 +433,8 @@ def _customer_owns_tenant(customer: Customer) -> bool:
 
 
 def _serialize_customer(customer: Customer) -> dict:
+    # Single tenant-ownership lookup, reused by both role-hint keys below (see there).
+    _owns_tenant = _customer_owns_tenant(customer)
     return {
         "id": customer.pk,
         "name": customer.name,
@@ -453,8 +455,10 @@ def _serialize_customer(customer: Customer) -> dict:
         "is_driver_online": bool(customer.is_driver_online),
         # Cross-identity role hints (additive, read-only) for the super-app role
         # switcher: does the same identity own/work a tenant? See _customer_owns_tenant.
-        "has_tenant": _customer_owns_tenant(customer),
-        "is_staff": _customer_owns_tenant(customer),
+        # Computed once — this runs on every app-load/login and the helper issues a
+        # User.objects...exists() query, so both keys reuse the single result.
+        "has_tenant": _owns_tenant,
+        "is_staff": _owns_tenant,
         "notify_order_updates": bool(customer.notify_order_updates),
         "notify_review_prompts": bool(customer.notify_review_prompts),
         "notify_promotions": bool(customer.notify_promotions),
@@ -5015,8 +5019,16 @@ class MarketplacePlaceOrderView(APIView):
                             estimated_ready_minutes=_mkt_est_ready,
                             idempotency_key=_mkt_idem_key,
                         )
-                        for item_data in order_items_data:
-                            _OI.objects.create(order=order, **item_data)
+                        # Insert all order lines in a single round-trip (mirrors the
+                        # storefront path, menu/views.py #304). bulk_create is safe here:
+                        # OrderItem has no custom save() and no pre_save/post_save signals,
+                        # item_data is a flat dict of model fields, and the created instances
+                        # aren't used downstream. Bind by order_id (not order=order) — the
+                        # INSERT only needs the FK column, and it keeps the dish row-lock
+                        # hold (select_for_update, above) short.
+                        _OI.objects.bulk_create(
+                            [_OI(order_id=order.pk, **item_data) for item_data in order_items_data]
+                        )
 
                         # Debit redeemed loyalty points atomically (guarded UPDATE; rolls
                         # back if the balance changed under us).
@@ -5348,6 +5360,10 @@ class MarketplaceOrderStatusView(APIView):
                     _Order.objects
                     .filter(order_number=order_number)
                     .prefetch_related("items")
+                    # select_related the OneToOne rating (read below for the owner body) —
+                    # saves a query per owner poll; parity with CustomerOrderStatusView
+                    # (menu/views.py).
+                    .select_related("rating")
                     .first()
                 )
                 if order is None:
@@ -5977,6 +5993,30 @@ def _batch_business_types(tenant_ids) -> dict:
         return {}
 
 
+def _batch_restaurant_phones(tenant_ids) -> dict:
+    """Return {tenant_id: phone} for the given tenant ids — the merchant contact
+    phone the driver job card shows.
+
+    Single DB query. Callers must pre-collect tenant_ids from the page of jobs and
+    pass them here so the LIST paths (DriverJobListView poll, AdminDeliveryJobListView)
+    don't run the per-row phone lookup ``_serialize_delivery_job`` does otherwise
+    (that per-call query is the 1+N the batch folds into one). Kept as a parallel map
+    to ``_batch_business_types`` (rather than reshaping that helper's flat return,
+    which several tests patch by name) — both read the same public Profile rows.
+    A tenant whose Profile row is missing simply doesn't appear in the map.
+    """
+    if not tenant_ids:
+        return {}
+    try:
+        from tenancy.models import Profile as _Profile
+        rows = _Profile.objects.filter(
+            tenant_id__in=tenant_ids
+        ).values_list("tenant_id", "phone")
+        return {tid: (phone or "") for tid, phone in rows}
+    except Exception:
+        return {}
+
+
 def _pickup_distance_km(driver_lat, driver_lng, job):
     """Straight-line km from the driver's current GPS fix → the pickup (restaurant),
     or None when either coordinate is missing. Mirrors how ride offers surface
@@ -6001,18 +6041,28 @@ def _serialize_delivery_job(
     business_type: str = "restaurant",
     driver_lat=None,
     driver_lng=None,
+    restaurant_phone=None,
+    driver_rating_map=None,
 ) -> dict:
     _slug, _name = _tenant_slug_name(job.tenant_id)
     # Merchant contact phone — lets the driver reach the restaurant when the
     # food isn't ready. Looked up from the tenant's public Profile; falls back
     # to "" when the profile is missing or the phone field is blank.
-    _restaurant_phone = ""
-    try:
-        from tenancy.models import Profile as _Profile
-        _prof = _Profile.objects.filter(tenant_id=job.tenant_id).values("phone").first()
-        _restaurant_phone = (_prof["phone"] or "") if _prof else ""
-    except Exception:
+    if restaurant_phone is not None:
+        # LIST path: the caller batch-fetched phones for the whole page in one
+        # query (_batch_restaurant_phones) and passed this job's phone in — use it
+        # directly instead of the per-job Profile lookup (that lookup was the 1+N).
+        _restaurant_phone = restaurant_phone
+    else:
+        # Single-job callers (accept / status / create / tracking) don't batch —
+        # fall back to the per-call Profile lookup so their payload is unchanged.
         _restaurant_phone = ""
+        try:
+            from tenancy.models import Profile as _Profile
+            _prof = _Profile.objects.filter(tenant_id=job.tenant_id).values("phone").first()
+            _restaurant_phone = (_prof["phone"] or "") if _prof else ""
+        except Exception:
+            _restaurant_phone = ""
     data = {
         "id": job.id,
         "order_number": job.order_number,
@@ -6086,18 +6136,34 @@ def _serialize_delivery_job(
                 if job.driver.driver_position_updated_at else None
             )
             # Driver's average customer rating (best-effort; customer-facing tracking only).
-            try:
-                from django.db.models import Avg as _Avg, Count as _Count
-                from .models import DeliveryJob as _DJ
+            if driver_rating_map is not None:
+                # LIST path (admin): the caller ran ONE grouped aggregate for the whole
+                # page's drivers and passed {driver_id: (avg, n)} — read it instead of
+                # the per-row aggregate below (that per-row query was the ×100 N+1). A
+                # driver absent from the map has no rated jobs → rating None / count 0,
+                # identical to what the self-query would have returned.
+                _rr = driver_rating_map.get(job.driver.id)
+                if _rr:
+                    _avg, _n = _rr
+                    driver_data["rating"] = round(_avg, 1) if _avg is not None else None
+                    driver_data["rating_count"] = _n or 0
+                else:
+                    driver_data["rating"] = None
+                    driver_data["rating_count"] = 0
+            else:
+                # Single-job / tracking-poll callers don't batch — keep self-querying.
+                try:
+                    from django.db.models import Avg as _Avg, Count as _Count
+                    from .models import DeliveryJob as _DJ
 
-                _agg = _DJ.objects.filter(
-                    driver=job.driver, customer_driver_rating__isnull=False
-                ).aggregate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
-                driver_data["rating"] = round(_agg["avg"], 1) if _agg["avg"] is not None else None
-                driver_data["rating_count"] = _agg["n"] or 0
-            except Exception:
-                driver_data["rating"] = None
-                driver_data["rating_count"] = 0
+                    _agg = _DJ.objects.filter(
+                        driver=job.driver, customer_driver_rating__isnull=False
+                    ).aggregate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
+                    driver_data["rating"] = round(_agg["avg"], 1) if _agg["avg"] is not None else None
+                    driver_data["rating_count"] = _agg["n"] or 0
+                except Exception:
+                    driver_data["rating"] = None
+                    driver_data["rating_count"] = 0
         data["driver"] = driver_data
 
     # Live route line + ETA for the tracking map (customer + owner): from the driver's
@@ -6502,16 +6568,20 @@ class DriverJobListView(APIView):
                     merged[(_tid, _onum)] = _summ
             return merged
 
-        # Batch-fetch business_type for all jobs in one query (no N+1).
+        # Batch-fetch business_type + merchant phone for all jobs — one query each
+        # for the whole page (no per-row N+1; this poll runs every 5-15s per driver).
         all_tenant_ids = {j.tenant_id for j in active_jobs + pending_jobs}
         _biz_types = _batch_business_types(all_tenant_ids)
+        _phones = _batch_restaurant_phones(all_tenant_ids)
 
         # Active job(s): include customer contact (the driver's own job).
         _active_sum = _summaries_by_tenant(active_jobs, True)
         active_serialized = []
         for j in active_jobs:
             _bt = _biz_types.get(j.tenant_id, "restaurant")
-            d = _serialize_delivery_job(j, business_type=_bt)
+            d = _serialize_delivery_job(
+                j, business_type=_bt, restaurant_phone=_phones.get(j.tenant_id, ""),
+            )
             d.update(_active_sum.get((j.tenant_id, j.order_number), {}))
             active_serialized.append(d)
 
@@ -6534,6 +6604,7 @@ class DriverJobListView(APIView):
             _bt = _biz_types.get(j.tenant_id, "restaurant")
             d = _serialize_delivery_job(
                 j, business_type=_bt, driver_lat=_drv_lat, driver_lng=_drv_lng,
+                restaurant_phone=_phones.get(j.tenant_id, ""),
             )
             d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
             # Is this job exclusively offered to *this* driver right now? (drives the
@@ -7052,11 +7123,7 @@ class OrderTrackingView(APIView):
     """GET /api/marketplace/track/<order_number>/?restaurant=<slug>
 
     Returns current delivery job status + driver position (JSON, single shot).
-    Clients can poll this every 5–10 seconds for driver tracking.
-
-    For true real-time, call with ?stream=1 to get an SSE stream that pushes
-    updates every 3 seconds until the job reaches a terminal state or 90 seconds
-    have elapsed (to avoid holding Gunicorn workers indefinitely).
+    The SPA polls this every 5–10 seconds (setInterval + GET) for driver tracking.
     """
 
     # IDENTITY-1 sweep: optional-auth. Stays AllowAny — a non-owner still gets the basic
@@ -7072,7 +7139,6 @@ class OrderTrackingView(APIView):
 
         slug = (request.query_params.get("restaurant") or "").strip().lower()
         order_number = (order_number or "").strip().upper()
-        use_sse = request.query_params.get("stream") == "1"
 
         if not slug:
             return Response({"detail": "restaurant query param required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -7097,37 +7163,9 @@ class OrderTrackingView(APIView):
 
         _tracking_bt = job.business_type or "restaurant"
 
-        if not use_sse:
-            return Response(_serialize_delivery_job(
-                job, include_driver_position=True, business_type=_tracking_bt
-            ))
-
-        # ── SSE stream ────────────────────────────────────────────────────────
-        import time
-        import json as _json
-        from django.http import StreamingHttpResponse
-
-        def event_stream():
-            deadline = time.monotonic() + 90  # max 90 seconds
-            while time.monotonic() < deadline:
-                try:
-                    fresh_job = DeliveryJob.objects.select_related("driver").get(pk=job.pk)
-                except DeliveryJob.DoesNotExist:
-                    break
-                data = _json.dumps(_serialize_delivery_job(
-                    fresh_job, include_driver_position=True, business_type=_tracking_bt
-                ))
-                yield f"data: {data}\n\n"
-                if fresh_job.is_terminal:
-                    # Send terminal event then close
-                    yield "event: terminal\ndata: {}\n\n"
-                    break
-                time.sleep(3)
-
-        response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
-        response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"
-        return response
+        return Response(_serialize_delivery_job(
+            job, include_driver_position=True, business_type=_tracking_bt
+        ))
 
 
 # ── Three-way delivery ratings ─────────────────────────────────────────────────
@@ -8452,7 +8490,9 @@ class AdminDeliveryJobListView(APIView):
         )
 
         from .models import DeliveryJob
-        qs = DeliveryJob.objects.select_related("driver", "zone").order_by("-created_at")
+        # select_related("driver") only — the serializer never reads job.zone, so
+        # joining DeliveryZone (incl. its JSONB polygon/fee_tiers) ×100 was dead weight.
+        qs = DeliveryJob.objects.select_related("driver").order_by("-created_at")
         status_filter = request.query_params.get("status")
         tenant_filter = request.query_params.get("tenant_id")
         if status_filter:
@@ -8464,12 +8504,33 @@ class AdminDeliveryJobListView(APIView):
                 return Response({"detail": "Invalid tenant_id."}, status=status.HTTP_400_BAD_REQUEST)
 
         jobs = list(qs[:100])
-        # Batch-fetch business_type for all jobs (one query — no N+1).
+        # Batch-fetch business_type + merchant phone for all jobs (one query each —
+        # no per-row N+1 across the ×100 page).
         all_tenant_ids = {j.tenant_id for j in jobs}
         _biz_types = _batch_business_types(all_tenant_ids)
+        _phones = _batch_restaurant_phones(all_tenant_ids)
+        # Batch the drivers' lifetime customer-rating aggregate: ONE grouped query for
+        # the page's distinct drivers instead of a per-row aggregate inside the
+        # serializer (the ×100, driver-undeduped N+1). {driver_id: (avg, n)}.
+        _rating_map = {}
+        _driver_ids = {j.driver_id for j in jobs if j.driver_id}
+        if _driver_ids:
+            try:
+                from django.db.models import Avg as _Avg, Count as _Count
+                _rating_rows = (
+                    DeliveryJob.objects
+                    .filter(driver_id__in=_driver_ids, customer_driver_rating__isnull=False)
+                    .values("driver_id")
+                    .annotate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
+                )
+                _rating_map = {r["driver_id"]: (r["avg"], r["n"]) for r in _rating_rows}
+            except Exception:
+                _rating_map = {}
         data = [
             _serialize_delivery_job(j, include_driver_position=True,
-                                    business_type=_biz_types.get(j.tenant_id, "restaurant"))
+                                    business_type=_biz_types.get(j.tenant_id, "restaurant"),
+                                    restaurant_phone=_phones.get(j.tenant_id, ""),
+                                    driver_rating_map=_rating_map)
             for j in jobs
         ]
         # Enrich with the restaurant name so the admin console can show it (the shared
