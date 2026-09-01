@@ -66,7 +66,13 @@ def pick_nearest_driver(job, exclude_ids):
             driver_position_updated_at__gte=fresh_since,
             driver_lat__isnull=False,
             driver_lng__isnull=False,
-        ).exclude(id__in=list(exclude_ids or []))
+        )
+        .exclude(id__in=list(exclude_ids or []))
+        # Only id/driver_lat/driver_lng are read below (and by every caller of this
+        # function — they all discard the returned driver or use only .id), but this
+        # queryset hydrates every online-approved driver platform-wide on every
+        # dispatch/cascade/sweep. Defer the other ~50 Customer columns.
+        .only("id", "driver_lat", "driver_lng")
     )
     if not candidates:
         return None

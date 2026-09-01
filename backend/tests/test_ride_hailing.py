@@ -2418,8 +2418,11 @@ class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
         # this stays a no-DB SimpleTestCase.
         mock_cust.objects.filter.return_value.values_list.return_value.first.return_value = Decimal("70.00")
 
-        # Delivery side: 100 earned, 40 paid
-        mock_job.objects.filter.return_value.aggregate.return_value = {"s": Decimal("100.00")}
+        # Delivery side: 100 earned, 40 paid. This same mocked return also backs the
+        # folded today-stats aggregate (driver_service._owed-adjacent code shares the
+        # DeliveryJob.objects.filter(...).aggregate(...) mock path regardless of the
+        # actual call site), so it must carry both keys: "s" (Sum) and "n" (Count).
+        mock_job.objects.filter.return_value.aggregate.return_value = {"s": Decimal("100.00"), "n": 4}
         mock_job.Status.DELIVERED = "delivered"
         mock_payout.objects.filter.return_value.aggregate.return_value = {"s": Decimal("40.00")}
 
@@ -2453,7 +2456,9 @@ class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
         # wallet_balance query (driver-payout single-ledger fix) — mock it (None → 0.00).
         mock_cust.objects.filter.return_value.values_list.return_value.first.return_value = None
 
-        mock_job.objects.filter.return_value.aggregate.return_value = {"s": None}
+        # Same shared-mock-path note as above: this backs both the earned Sum and the
+        # folded today-stats Sum+Count aggregate, so it needs "n" alongside "s".
+        mock_job.objects.filter.return_value.aggregate.return_value = {"s": None, "n": 0}
         mock_job.Status.DELIVERED = "delivered"
         mock_payout.objects.filter.return_value.aggregate.return_value = {"s": None}
         mock_wtx.objects.filter.return_value.aggregate.return_value = {"s": None}
@@ -2719,9 +2724,10 @@ class PackageOfferVisibilityTests(SimpleTestCase):
         package_ride.package_note = "Fragile"
         package_ride.driver_id = None
         open_qs = MagicMock()
-        # The view now chains .filter(status=SEARCHING).filter(kind_filter) before
-        # .select_related(); wire accordingly.
-        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+        # The view chains .filter(status=SEARCHING).filter(kind_filter)[:40] — no
+        # select_related on this open-offers path (perf fix: the loop never reads
+        # r.rider, only own_ride's serialization does).
+        open_qs.filter.return_value.__getitem__ = (
             lambda self, sl: [package_ride]
         )
 
@@ -2911,9 +2917,11 @@ class PackagePIIGatingTests(SimpleTestCase):
         package_ride.kind = "package"
         package_ride.driver_id = None
         open_qs = MagicMock()
-        # The view now calls .filter(status=SEARCHING).filter(kind_filter) before
-        # .select_related(); wire the chained filter so the slice returns our ride.
-        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+        # The view calls .filter(status=SEARCHING).filter(kind_filter)[:40] — no
+        # select_related on this open-offers path (perf fix: the loop never reads
+        # r.rider, only own_ride's serialization does); wire the chained filter so
+        # the slice returns our ride.
+        open_qs.filter.return_value.__getitem__ = (
             lambda self, sl: [package_ride]
         )
 

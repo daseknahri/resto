@@ -860,10 +860,12 @@ class DriverRideListView(APIView):
             kind_filter = Q(kind=RideRequest.Kind.PACKAGE)
 
         open_rides = []
+        # No select_related("rider") here: the loop below builds each offer dict from
+        # plain RideRequest fields only (never r.rider) — recipient_phone/PII comes
+        # from _serialize_ride on own_ride, not from these open-offer items.
         qs = list(
             RideRequest.objects.filter(status=RideRequest.Status.SEARCHING)
-            .filter(kind_filter)
-            .select_related("rider")[:40]
+            .filter(kind_filter)[:40]
         )
         for r in qs:
             # Per-kind visibility gate (redundant after DB filter, kept as safety assertion)

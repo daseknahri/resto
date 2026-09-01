@@ -8,7 +8,7 @@ import logging
 from decimal import Decimal
 
 from django.db import connection, transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 
 from .wallet_service import _money, WalletError, _ref_kind  # reuse quantize + error semantics + safe ref kind
 
@@ -53,15 +53,17 @@ def driver_earnings_summary(driver_id) -> dict:
         driver_id=driver_id, status=RideRequest.Status.COMPLETED
     ).count()
 
-    # Today stats — delivery jobs delivered since midnight (server date).
+    # Today stats — delivery jobs delivered since midnight (server date). One aggregate
+    # (was a Sum then a separate .count() over the identical queryset — two round trips
+    # for numbers the DB can return together).
     today_start = _tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_qs = DeliveryJob.objects.filter(
+    today_agg = DeliveryJob.objects.filter(
         driver_id=driver_id,
         status=DeliveryJob.Status.DELIVERED,
         delivered_at__gte=today_start,
-    )
-    earned_today_raw = today_qs.aggregate(s=Sum("driver_payout"))["s"] or Decimal("0")
-    deliveries_today = today_qs.count()
+    ).aggregate(s=Sum("driver_payout"), n=Count("id"))
+    earned_today_raw = today_agg["s"] or Decimal("0")
+    deliveries_today = today_agg["n"] or 0
 
     earned = _money(earned)
     paid = _money(paid)
@@ -82,6 +84,29 @@ def driver_earnings_summary(driver_id) -> dict:
         "earned_today": _money(earned_today_raw),
         "deliveries_today": deliveries_today,
     }
+
+
+def _owed(driver_id) -> Decimal:
+    """Lean replica of ``driver_earnings_summary(driver_id)["owed"]`` — only the two Sums
+    the `owed` figure needs (earned, paid), skipping the other 5 aggregates (ride earnings,
+    rides-completed count, wallet balance, today's earned/deliveries). record_driver_payout
+    calls this instead of the full summary while the driver row is locked, so the lock is
+    held only as long as it takes to read the one number the caller actually uses.
+
+    Must stay byte-identical to summary["owed"] — same filters, same `_money` quantization
+    order (money(earned) - money(paid), then money() again). Keep both definitions in sync.
+    """
+    from .models import DeliveryJob, DriverPayout
+
+    earned = (
+        DeliveryJob.objects
+        .filter(driver_id=driver_id, status=DeliveryJob.Status.DELIVERED)
+        .aggregate(s=Sum("driver_payout"))["s"]
+    ) or Decimal("0")
+    paid = (
+        DriverPayout.objects.filter(driver_id=driver_id).aggregate(s=Sum("amount"))["s"]
+    ) or Decimal("0")
+    return _money(_money(earned) - _money(paid))
 
 
 @transaction.atomic
@@ -133,7 +158,7 @@ def record_driver_payout(driver_id, amount, *, method="cash", reference="", note
         if existing is not None:
             return _replay_or_reject(existing)
 
-    owed = driver_earnings_summary(driver_id)["owed"]
+    owed = _owed(driver_id)
     if amount > owed:
         raise WalletError("payout exceeds the amount owed to this driver")
 
