@@ -74,7 +74,7 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
         return o
 
     def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders):
-        mock_t.objects.filter.return_value.exclude.return_value = [tenant]
+        mock_t.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
         mock_ctx.return_value.__enter__ = lambda s: s
         mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         mock_order_cls.Status.PENDING = "pending"
@@ -199,7 +199,7 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
 
     def test_no_tenants_exits_cleanly(self):
         with patch(f"{CMD}.Tenant") as mock_t:
-            mock_t.objects.filter.return_value.exclude.return_value = []
+            mock_t.objects.filter.return_value.exclude.return_value.select_related.return_value = []
             output = self._run_command()
         self.assertIn("Done", output)
         self.assertIn("0 order(s)", output)
