@@ -4106,6 +4106,52 @@ class MarketplaceView(APIView):
         ))
 
 
+# ── Marketplace menu cache ────────────────────────────────────────────────────
+# GET /api/marketplace/menu/<slug>/ is the heaviest UNCACHED public read: every
+# storefront open / QR scan rebuilds the full published-dish tree (+ per-dish happy-hour
+# effective_price), a recent-reviews query, a rolling prep-ETA aggregate and the loyalty
+# config — all inside schema_context. Its tenant-subdomain twin (menu.views.DishViewSet.
+# list) is already single-flight cached for 60s; this mirrors that.
+#
+# ONE key per tenant: mkt_menu:v1:{slug}. Locale is deliberately NOT in the key — this
+# endpoint emits RAW name + full name_i18n dicts and resolves locale CLIENT-side (no
+# server-side locale resolution of the payload), unlike /api/meta/.
+#
+# THREE fields must NOT be cached under {slug}; they are recomputed per-request on a COPY
+# of the cached body (mirrors tenancy.api._refresh_meta_is_open_now and
+# accounts.views._refresh_marketplace_live_fields):
+#   • cod_eligible — PER-CUSTOMER (trusted-repeat-customer status, derived from the
+#     signed-in customer's paid-order history at THIS restaurant). Caching it under {slug}
+#     would serve one customer's cash-on-handover trust status to every other shopper.
+#   • is_open      — TIME-SENSITIVE open/closed verdict; recomputed live so it never
+#     freezes for the TTL.
+#   • flash_sale   — TIME-SENSITIVE sale window; recomputed live from the opted-in ids.
+# The publish gate (profile.is_menu_published) is ALSO checked live per request (parity
+# with the twin, which enforces its public-menu policy BEFORE its cache), so an
+# unpublished menu 404s immediately, never served from a warm body.
+_MKT_MENU_CACHE_TTL = 60  # seconds — parity with menu.views._MENU_CACHE_TTL
+
+
+def _mkt_menu_cache_key(slug: str) -> str:
+    return f"mkt_menu:v1:{slug}"
+
+
+def _bust_marketplace_menu_cache(slug: str) -> None:
+    """Delete the cached anonymous marketplace-menu body for one tenant slug.
+
+    Wired into the EXISTING menu/meta/rating bust seams (menu.views._bust_menu_cache,
+    tenancy.api._bust_tenant_meta_cache, menu.ratings.recompute_tenant_rating). Best-effort:
+    a bust failure must never break the write that triggered it. The 60s TTL is the backstop
+    for any write path not wired to a bust.
+    """
+    if not slug:
+        return
+    try:
+        cache.delete(_mkt_menu_cache_key(slug))
+    except Exception:
+        pass
+
+
 class MarketplaceMenuView(APIView):
     """GET /api/marketplace/menu/<slug>/ — fetch a restaurant's public menu from the platform.
 
@@ -4119,6 +4165,8 @@ class MarketplaceMenuView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug, *args, **kwargs):
+        import copy
+
         from tenancy.models import Tenant
         from django_tenants.utils import schema_context as _sc
 
@@ -4131,168 +4179,243 @@ class MarketplaceMenuView(APIView):
         if tenant.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
             return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
+        # ONE key per tenant — see the cache notes above _mkt_menu_cache_key. Locale is
+        # deliberately NOT part of the key (raw name + name_i18n emitted; resolved FE-side).
+        cache_key = _mkt_menu_cache_key(tenant.slug)
+
         try:
             with _sc(tenant.schema_name):
-                from menu.models import (
-                    Dish as _Dish,
-                )
-                # Profile lives in tenancy.models, NOT menu.models — importing it from
-                # menu.models raised ImportError that the outer try/except swallowed into
-                # a 500 on every request hitting this path.
+                # Profile lives in tenancy.models (SHARED/public schema), NOT menu.models —
+                # importing it from menu.models raised ImportError that the outer try/except
+                # swallowed into a 500 on every request hitting this path.
                 from tenancy.models import Profile as _Profile
 
                 profile = _Profile.objects.filter(tenant=tenant).first()
+                # Publish gate is checked LIVE on EVERY request (parity with the twin
+                # menu.views.DishViewSet.list, which enforces its public-menu policy BEFORE its
+                # cache) — an unpublished menu 404s immediately, never served from a warm body.
                 if not profile or not profile.is_menu_published:
                     return Response({"detail": "Restaurant menu is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
-                # Loyalty config (so the marketplace checkout can offer points redemption).
-                from menu.models import LoyaltyConfig as _LCfgM
-                _lc = _LCfgM.objects.filter(enabled=True).first()
-                loyalty_cfg_data = {
-                    "enabled": True,
-                    "points_value": str(_lc.points_value),
-                    "redeem_threshold": _lc.redeem_threshold,
-                    "points_per_unit": _lc.points_per_unit,
-                } if _lc else None
+                def _build():
+                    # ==== ANONYMOUS, non-per-customer, cacheable body (the heavy work) ====
+                    # Every field here is identical to the pre-cache inline payload EXCEPT the
+                    # three per-request fields (cod_eligible / is_open / flash_sale), which get
+                    # SAFE defaults here and are overwritten with LIVE values per request below.
+                    from menu.models import Dish as _Dish
 
-                dishes_qs = (
-                    _Dish.objects.filter(
-                        is_published=True,
-                        category__is_published=True,
-                        category__is_temporarily_disabled=False,
-                        category__super_category__is_temporarily_disabled=False,
+                    # Loyalty config (so the marketplace checkout can offer points redemption).
+                    from menu.models import LoyaltyConfig as _LCfgM
+                    _lc = _LCfgM.objects.filter(enabled=True).first()
+                    loyalty_cfg_data = {
+                        "enabled": True,
+                        "points_value": str(_lc.points_value),
+                        "redeem_threshold": _lc.redeem_threshold,
+                        "points_per_unit": _lc.points_per_unit,
+                    } if _lc else None
+
+                    dishes_qs = (
+                        _Dish.objects.filter(
+                            is_published=True,
+                            category__is_published=True,
+                            category__is_temporarily_disabled=False,
+                            category__super_category__is_temporarily_disabled=False,
+                        )
+                        .select_related("category__super_category")
+                        .prefetch_related("option_groups__options")
+                        .order_by("position", "name")
                     )
-                    .select_related("category__super_category")
-                    .prefetch_related("option_groups__options")
-                    .order_by("position", "name")
-                )
 
-                # Happy-hour pricing — compute active rules ONCE per menu request.
-                from menu.pricing import (
-                    get_active_happy_hours as _mkt_get_hh,
-                    effective_unit_price as _mkt_eff_price,
-                    happy_hour_payload as _mkt_hh_payload,
-                )
-                from menu.views import _profile_now as _mkt_profile_now
-                _mkt_menu_now = _mkt_profile_now(profile)
-                _mkt_menu_active_hh = _mkt_get_hh(_mkt_menu_now)
+                    # Happy-hour pricing — compute active rules ONCE per menu build. Cached for
+                    # the 60s TTL exactly like the twin menu cache (DishViewSet.list caches the
+                    # serializer's effective prices for 60s too), so happy-hour boundaries are at
+                    # most TTL-stale — the accepted parity behavior; order placement re-prices.
+                    from menu.pricing import (
+                        get_active_happy_hours as _mkt_get_hh,
+                        effective_unit_price as _mkt_eff_price,
+                        happy_hour_payload as _mkt_hh_payload,
+                    )
+                    from menu.views import _profile_now as _mkt_profile_now
+                    _mkt_menu_now = _mkt_profile_now(profile)
+                    _mkt_menu_active_hh = _mkt_get_hh(_mkt_menu_now)
 
-                sc_map: dict = {}
-                for dish in dishes_qs:
-                    cat = dish.category
-                    sc = cat.super_category
-                    if sc.id not in sc_map:
-                        sc_map[sc.id] = {
-                            "id": sc.id,
-                            "name": sc.name,
-                            "name_i18n": sc.name_i18n or {},
-                            "position": sc.position,
-                            "categories": {},
-                        }
-                    if cat.id not in sc_map[sc.id]["categories"]:
-                        sc_map[sc.id]["categories"][cat.id] = {
-                            "id": cat.id,
-                            "name": cat.name,
-                            "name_i18n": cat.name_i18n or {},
-                            "slug": cat.slug,
-                            "image_url": cat.image_url or "",
-                            "position": cat.position,
-                            "dishes": [],
-                        }
+                    sc_map: dict = {}
+                    for dish in dishes_qs:
+                        cat = dish.category
+                        sc = cat.super_category
+                        if sc.id not in sc_map:
+                            sc_map[sc.id] = {
+                                "id": sc.id,
+                                "name": sc.name,
+                                "name_i18n": sc.name_i18n or {},
+                                "position": sc.position,
+                                "categories": {},
+                            }
+                        if cat.id not in sc_map[sc.id]["categories"]:
+                            sc_map[sc.id]["categories"][cat.id] = {
+                                "id": cat.id,
+                                "name": cat.name,
+                                "name_i18n": cat.name_i18n or {},
+                                "slug": cat.slug,
+                                "image_url": cat.image_url or "",
+                                "position": cat.position,
+                                "dishes": [],
+                            }
 
-                    option_groups = []
-                    for og in dish.option_groups.all():
-                        option_groups.append({
-                            "id": og.id,
-                            "name": og.name,
-                            "name_i18n": getattr(og, "name_i18n", None) or {},
-                            # OptionGroup fields are min_select/max_select — there is no
-                            # required/multi_select/max_selections. The marketplace menu
-                            # frontend (MarketplaceOptionGroupSheet) reads min_select/
-                            # max_select directly, matching the OptionGroupSerializer.
-                            "min_select": og.min_select,
-                            "max_select": og.max_select,
-                            "options": [
-                                {
-                                    "id": opt.id,
-                                    "name": opt.name,
-                                    "name_i18n": opt.name_i18n or {},
-                                    "price_delta": str(opt.price_delta),
-                                }
-                                # DishOption has no is_available field — every option
-                                # is selectable, so list them all.
-                                for opt in og.options.all()
-                            ],
+                        option_groups = []
+                        for og in dish.option_groups.all():
+                            option_groups.append({
+                                "id": og.id,
+                                "name": og.name,
+                                "name_i18n": getattr(og, "name_i18n", None) or {},
+                                # OptionGroup fields are min_select/max_select — there is no
+                                # required/multi_select/max_selections. The marketplace menu
+                                # frontend (MarketplaceOptionGroupSheet) reads min_select/
+                                # max_select directly, matching the OptionGroupSerializer.
+                                "min_select": og.min_select,
+                                "max_select": og.max_select,
+                                "options": [
+                                    {
+                                        "id": opt.id,
+                                        "name": opt.name,
+                                        "name_i18n": opt.name_i18n or {},
+                                        "price_delta": str(opt.price_delta),
+                                    }
+                                    # DishOption has no is_available field — every option
+                                    # is selectable, so list them all.
+                                    for opt in og.options.all()
+                                ],
+                            })
+
+                        _mkt_eff, _mkt_rule = _mkt_eff_price(dish, _mkt_menu_active_hh)
+                        sc_map[sc.id]["categories"][cat.id]["dishes"].append({
+                            "id": dish.id,
+                            "slug": dish.slug,
+                            "name": dish.name,
+                            "name_i18n": dish.name_i18n or {},
+                            "description": dish.description or "",
+                            "description_i18n": dish.description_i18n or {},
+                            "price": str(dish.price),
+                            "effective_price": str(_mkt_eff),
+                            "happy_hour": _mkt_hh_payload(_mkt_rule),
+                            "currency": dish.currency or "USD",
+                            "image_url": dish.image_url or "",
+                            "tags": dish.tags or [],
+                            "allergens": dish.allergens or [],
+                            "is_available": dish.is_available,
+                            "option_groups": option_groups,
                         })
 
-                    _mkt_eff, _mkt_rule = _mkt_eff_price(dish, _mkt_menu_active_hh)
-                    sc_map[sc.id]["categories"][cat.id]["dishes"].append({
-                        "id": dish.id,
-                        "slug": dish.slug,
-                        "name": dish.name,
-                        "name_i18n": dish.name_i18n or {},
-                        "description": dish.description or "",
-                        "description_i18n": dish.description_i18n or {},
-                        "price": str(dish.price),
-                        "effective_price": str(_mkt_eff),
-                        "happy_hour": _mkt_hh_payload(_mkt_rule),
-                        "currency": dish.currency or "USD",
-                        "image_url": dish.image_url or "",
-                        "tags": dish.tags or [],
-                        "allergens": dish.allergens or [],
-                        "is_available": dish.is_available,
-                        "option_groups": option_groups,
-                    })
+                    super_categories = sorted(sc_map.values(), key=lambda s: (s["position"], s["name"]))
+                    for sc_entry in super_categories:
+                        sc_entry["categories"] = sorted(
+                            sc_entry["categories"].values(),
+                            key=lambda c: (c["position"], c["name"]),
+                        )
 
-                super_categories = sorted(sc_map.values(), key=lambda s: (s["position"], s["name"]))
-                for sc_entry in super_categories:
-                    sc_entry["categories"] = sorted(
-                        sc_entry["categories"].values(),
-                        key=lambda c: (c["position"], c["name"]),
-                    )
+                    # Rating summary + recent reviews for social proof on the menu page.
+                    # PERF-QW5: Read from denormalized Profile.rating_avg / rating_count
+                    # (kept in sync by menu.Rating post_save/post_delete signals) instead of
+                    # issuing a per-request cross-schema aggregate query.
+                    rating_average = round(float(profile.rating_avg), 1) if profile.rating_avg is not None else None
+                    rating_count = profile.rating_count or 0
+                    from menu.models import Rating as _Rating
+                    recent_reviews = [
+                        {
+                            "score": r.score,
+                            "comment": r.comment[:200],
+                            "created_at": r.created_at.isoformat(),
+                        }
+                        for r in _Rating.objects.filter(comment__gt="").order_by("-created_at")[:6]
+                    ]
 
-                # Rating summary + recent reviews for social proof on the menu page.
-                # PERF-QW5: Read from denormalized Profile.rating_avg / rating_count
-                # (kept in sync by menu.Rating post_save/post_delete signals) instead of
-                # issuing a per-request cross-schema aggregate query.
-                rating_average = round(float(profile.rating_avg), 1) if profile.rating_avg is not None else None
-                rating_count = profile.rating_count or 0
-                from menu.models import Rating as _Rating
-                recent_reviews = [
-                    {
-                        "score": r.score,
-                        "comment": r.comment[:200],
-                        "created_at": r.created_at.isoformat(),
+                    # Pre-order prep ETA range ("Ready in ~X–Y min") for the menu
+                    # header + checkout. Computed inside the tenant schema so the
+                    # rolling-average-of-recent-orders source can run. Falls back to
+                    # the configured default / platform default when there's no
+                    # history. Travel time for delivery is added on the FE.
+                    from menu.prep_eta import prep_eta_range as _mkt_prep_eta_range
+                    _mkt_prep_min, _mkt_prep_max = _mkt_prep_eta_range(profile)
+
+                    # cod_enabled is the OWNER's toggle (same for every shopper) → cacheable.
+                    # cod_eligible is PER-CUSTOMER → defaulted False here, set live per request.
+                    cod_enabled = bool(getattr(profile, "cod_enabled", False))
+
+                    return {
+                        "slug": tenant.slug,
+                        "name": tenant.name,
+                        # Vertical type so the marketplace menu page can use shop/pharmacy
+                        # vocabulary (Catalog/Product) instead of restaurant nouns.
+                        "business_type": getattr(profile, "business_type", "restaurant") or "restaurant",
+                        "tagline": profile.tagline or "",
+                        "logo_url": profile.logo_url or "",
+                        "cuisine_type": profile.cuisine_type or "",
+                        "city": profile.city or "",
+                        "address": profile.address or "",
+                        "phone": profile.phone or "",
+                        "currency": getattr(profile, "currency", "USD") or "USD",
+                        "delivery_enabled": bool(profile.delivery_enabled),
+                        "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
+                        "delivery_base_fee": str(profile.delivery_base_fee or "0"),
+                        "delivery_per_km": str(profile.delivery_per_km or "0"),
+                        "delivery_free_over": str(profile.delivery_free_over or "0"),
+                        "delivery_radius_km": profile.delivery_radius_km,
+                        "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
+                        # Restaurant coordinates so the cart can preview a distance-based fee.
+                        "lat": profile.lat,
+                        "lng": profile.lng,
+                        "price_tier": profile.price_tier,
+                        "tags": profile.tags or [],
+                        # ── Per-request fields — SAFE defaults; OVERWRITTEN live below. ──
+                        # is_open: build-time snapshot, overwritten with the live verdict.
+                        "is_open": _compute_is_open_now(profile),
+                        "business_hours_schedule": profile.business_hours_schedule or {},
+                        "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+                        "cod_enabled": cod_enabled,
+                        # cod_eligible: anonymous default (never a per-customer value in the
+                        # {slug}-keyed cache) — set per request below.
+                        "cod_eligible": False,
+                        # Pre-order prep ETA range (kitchen prep only; FE adds travel for delivery).
+                        "prep_eta_min": _mkt_prep_min,
+                        "prep_eta_max": _mkt_prep_max,
+                        "loyalty": loyalty_cfg_data,
+                        # flash_sale: recomputed live per request below.
+                        "flash_sale": None,
+                        "rating_average": rating_average,
+                        "rating_count": rating_count,
+                        "recent_reviews": recent_reviews,
+                        "super_categories": super_categories,
                     }
-                    for r in _Rating.objects.filter(comment__gt="").order_by("-created_at")[:6]
-                ]
 
-                # Trusted-customer cash-on-handover eligibility for the marketplace cart —
-                # mirrors menu.views.OrderEligibilityView. The Order count lives in this
-                # tenant schema, so compute it inside schema_context. customer_or_none reads
-                # request.user (hydrated by CustomerSessionAuthentication in initial(), before
-                # this schema_context) — no query here, so the public/tenant split is a non-issue.
+                # Single-flight cache (60s TTL, parity with the twin menu cache). A HIT skips
+                # the whole _build() above; a MISS builds it at most once under concurrency.
+                body = get_or_build_single_flight(cache_key, _build, ttl=_MKT_MENU_CACHE_TTL)
+
+                # ── PER-CUSTOMER: cash-on-handover eligibility (THE TRAP) ─────────────────
+                # cod_eligible derives from the SIGNED-IN customer's paid-order history at this
+                # restaurant, so it must NOT be baked into the {slug}-keyed body — caching it
+                # would serve one customer's trust status to every other shopper (and to
+                # anonymous ones), mis-enabling "pay cash on handover". Recompute it on a COPY
+                # of the cached body EVERY request. Mirrors menu.views.OrderEligibilityView:
+                # customer_or_none reads request.user (no query); _cod_eligible's Order count
+                # runs in THIS tenant schema. Deepcopy is required so the per-request write
+                # never mutates the shared cached object (LocMemCache returns it by reference).
+                out = copy.deepcopy(body)
                 from menu.views import _cod_eligible as _mkt_menu_cod_eligible
                 _mkt_menu_customer = customer_or_none(request)
                 _mkt_menu_cust_id = _mkt_menu_customer.id if _mkt_menu_customer else None
-                cod_enabled = bool(getattr(profile, "cod_enabled", False))
-                cod_eligible = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
-
-                # Pre-order prep ETA range ("Ready in ~X–Y min") for the menu
-                # header + checkout. Computed inside the tenant schema so the
-                # rolling-average-of-recent-orders source can run. Falls back to
-                # the configured default / platform default when there's no
-                # history. Travel time for delivery is added on the FE.
-                from menu.prep_eta import prep_eta_range as _mkt_prep_eta_range
-                _mkt_prep_min, _mkt_prep_max = _mkt_prep_eta_range(profile)
+                out["cod_eligible"] = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
 
         except Exception as exc:
             logger.exception("MarketplaceMenuView error for slug=%s: %s", slug, exc)
             return Response({"detail": "Could not load menu.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        is_open = _compute_is_open_now(profile)
+        # ── LIVE open/closed verdict — recomputed every request off the live profile so a
+        # warm body never freezes the verdict for the TTL (public schema; no query). ────────
+        out["is_open"] = _compute_is_open_now(profile)
 
-        # ── Flash sale (public schema — no schema_context needed) ─────────────
+        # ── LIVE flash sale (public schema — no schema_context needed). Recomputed every
+        # request so a sale's start/end is never frozen for the TTL. ─────────────────────────
         flash_sale_info = None
         try:
             from .models import PlatformFlashSale as _PFS, PlatformFlashSaleOptIn as _PFSOI
@@ -4312,47 +4435,9 @@ class MarketplaceMenuView(APIView):
                             }
         except Exception:
             flash_sale_info = None
+        out["flash_sale"] = flash_sale_info
 
-        return Response({
-            "slug": tenant.slug,
-            "name": tenant.name,
-            # Vertical type so the marketplace menu page can use shop/pharmacy
-            # vocabulary (Catalog/Product) instead of restaurant nouns.
-            "business_type": getattr(profile, "business_type", "restaurant") or "restaurant",
-            "tagline": profile.tagline or "",
-            "logo_url": profile.logo_url or "",
-            "cuisine_type": profile.cuisine_type or "",
-            "city": profile.city or "",
-            "address": profile.address or "",
-            "phone": profile.phone or "",
-            "currency": getattr(profile, "currency", "USD") or "USD",
-            "delivery_enabled": bool(profile.delivery_enabled),
-            "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
-            "delivery_base_fee": str(profile.delivery_base_fee or "0"),
-            "delivery_per_km": str(profile.delivery_per_km or "0"),
-            "delivery_free_over": str(profile.delivery_free_over or "0"),
-            "delivery_radius_km": profile.delivery_radius_km,
-            "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
-            # Restaurant coordinates so the cart can preview a distance-based fee.
-            "lat": profile.lat,
-            "lng": profile.lng,
-            "price_tier": profile.price_tier,
-            "tags": profile.tags or [],
-            "is_open": is_open,
-            "business_hours_schedule": profile.business_hours_schedule or {},
-            "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
-            "cod_enabled": cod_enabled,
-            "cod_eligible": cod_eligible,
-            # Pre-order prep ETA range (kitchen prep only; FE adds travel for delivery).
-            "prep_eta_min": _mkt_prep_min,
-            "prep_eta_max": _mkt_prep_max,
-            "loyalty": loyalty_cfg_data,
-            "flash_sale": flash_sale_info,
-            "rating_average": rating_average,
-            "rating_count": rating_count,
-            "recent_reviews": recent_reviews,
-            "super_categories": super_categories,
-        })
+        return Response(out)
 
 
 class MarketplacePlaceOrderView(APIView):

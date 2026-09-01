@@ -202,6 +202,15 @@ def _bust_tenant_meta_cache(tenant_slug: str) -> None:
         return
     keys = [_meta_cache_key(tenant_slug, loc) for loc in _META_CACHE_LOCALE_VARIANTS]
     cache.delete_many(keys)
+    # Also drop the PUBLIC marketplace-menu body (accounts.views.MarketplaceMenuView) — it
+    # caches profile-derived fields (hours, delivery, tagline, cod_enabled, publish state)
+    # that a Profile save / publish / closure changes. Lazy import avoids a tenancy->accounts
+    # cycle; best-effort so a profile save never fails over a cache bust.
+    try:
+        from accounts.views import _bust_marketplace_menu_cache
+        _bust_marketplace_menu_cache(tenant_slug)
+    except Exception:
+        pass
 
 
 # ── Live (time-sensitive) is_open_now recompute for the cached meta payload ──────
