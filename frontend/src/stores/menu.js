@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
-import { buildDemoDishesByCategory, DEMO_CATEGORIES } from "../lib/demoMenu";
 import { translate } from "../i18n/translate";
 import { hasPublicDemoTenant, isPublicDemoHost } from "../lib/runtimeHost";
 import { readCache, isFresh, writeCache } from "../lib/staleCache";
@@ -39,21 +38,34 @@ const normalizeSuperCategories = (value) => {
   }));
 };
 
-const demoSuperCategories = () => [
-  {
-    id: 1,
-    slug: "menu",
-    name: "Menu",
-    position: 0,
-    is_published: true,
-    is_temporarily_disabled: false,
-    disabled_note: "",
-    category_count: DEMO_CATEGORIES.length,
-  },
-];
+// Demo fixture data is a fallback for the "public demo host with no configured
+// demo tenant" case only — dynamic-imported so it doesn't ship in the eager
+// bundle (stores/menu.js sits on the App.vue → useSeoMeta → useMenuStore graph
+// that every page load pulls in).
+const demoSuperCategories = async () => {
+  const { DEMO_CATEGORIES } = await import("../lib/demoMenu");
+  return [
+    {
+      id: 1,
+      slug: "menu",
+      name: "Menu",
+      position: 0,
+      is_published: true,
+      is_temporarily_disabled: false,
+      disabled_note: "",
+      category_count: DEMO_CATEGORIES.length,
+    },
+  ];
+};
 
-const demoCategories = () => normalizeCategories(DEMO_CATEGORIES);
-const demoDishesByCategory = () => buildDemoDishesByCategory();
+const demoCategories = async () => {
+  const { DEMO_CATEGORIES } = await import("../lib/demoMenu");
+  return normalizeCategories(DEMO_CATEGORIES);
+};
+const demoDishesByCategory = async () => {
+  const { buildDemoDishesByCategory } = await import("../lib/demoMenu");
+  return buildDemoDishesByCategory();
+};
 
 const extractErrorMessage = (err, fallback) => {
   const data = err?.response?.data;
@@ -85,16 +97,16 @@ export const useMenuStore = defineStore("menu", {
     error: null,
   }),
   actions: {
-    applyDemoMenuData() {
-      this.superCategories = demoSuperCategories();
-      this.categories = demoCategories();
+    async applyDemoMenuData() {
+      this.superCategories = await demoSuperCategories();
+      this.categories = await demoCategories();
       this.categories = this.categories.map((category) => ({
         ...category,
         super_category: 1,
         super_category_slug: "menu",
         super_category_name: "Menu",
       }));
-      this.dishes = demoDishesByCategory();
+      this.dishes = await demoDishesByCategory();
       this.error = null;
     },
     async fetchSuperCategories(force = false) {
@@ -105,11 +117,11 @@ export const useMenuStore = defineStore("menu", {
         if (normalized.length || !isPublicDemoHost() || hasPublicDemoTenant()) {
           this.superCategories = normalized;
         } else {
-          this.superCategories = demoSuperCategories();
+          this.superCategories = await demoSuperCategories();
         }
       } catch (err) {
         if (isPublicDemoHost() && !hasPublicDemoTenant()) {
-          this.superCategories = demoSuperCategories();
+          this.superCategories = await demoSuperCategories();
         } else {
           this.superCategories = [];
           if (!isExpectedPublicStateError(err)) console.error(err);
@@ -164,11 +176,11 @@ export const useMenuStore = defineStore("menu", {
             });
           }
         } else {
-          this.applyDemoMenuData();
+          await this.applyDemoMenuData();
         }
       } catch (err) {
         if (isPublicDemoHost() && !hasPublicDemoTenant()) {
-          this.applyDemoMenuData();
+          await this.applyDemoMenuData();
         } else if (!this.categories.length) {
           // Only surface an error when there is nothing to show the user.
           // If we already painted stale data, a background failure is silent.
@@ -190,7 +202,7 @@ export const useMenuStore = defineStore("menu", {
         this.dishes[slug] = normalizeDishes(res.data);
       } catch (err) {
         if (isPublicDemoHost() && !hasPublicDemoTenant()) {
-          this.dishes[slug] = demoDishesByCategory()[slug] || [];
+          this.dishes[slug] = (await demoDishesByCategory())[slug] || [];
         } else {
           this.dishes[slug] = [];
           this.error = extractErrorMessage(err, translate("menuStore.loadDishesFailed"));
