@@ -242,10 +242,11 @@ class OwnerCommissionStatementViewTests(SimpleTestCase):
         ]
         with patch("menu.views.Order") as mock_order:
             qs = MagicMock()
-            # Query is now filter(...).filter(status__in=...).order_by(...); chain both
-            # filters + order_by back to the same qs that iterates the fed rows.
+            # Query is now filter(...).filter(status__in=...).order_by(...).only(...);
+            # chain filters + order_by + only back to the same qs that iterates the fed rows.
             qs.filter.return_value = qs
             qs.order_by.return_value = qs
+            qs.only.return_value = qs
             mock_order.objects.filter.return_value = qs
             qs.__iter__ = lambda s: iter(rows)
             mock_order.Source = MagicMock()

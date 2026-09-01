@@ -245,7 +245,7 @@ class OrderStatusPayloadTests(SimpleTestCase):
     def test_tenant_phone_read_from_profile(self, objects_mock, _vat):
         """Finding 4: phone lives on Profile, not the Tenant — the payload must surface it."""
         order = _status_order([_status_item()])
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         tenant = SimpleNamespace(
             id=7,
             profile=SimpleNamespace(phone="0612345678", receipt_message="Thanks",
@@ -260,7 +260,7 @@ class OrderStatusPayloadTests(SimpleTestCase):
     def test_item_payload_exposes_is_comped(self, objects_mock, _vat):
         """Finding 5: a comped line must carry is_comped so the receipt can reconcile."""
         order = _status_order([_status_item(is_comped=True)])
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         tenant = SimpleNamespace(id=7, profile=SimpleNamespace(
             phone="", receipt_message="", vat_rate=0, vat_label=""))
         resp = self._get(order, tenant)
@@ -277,7 +277,7 @@ class OrderStatusPayloadTests(SimpleTestCase):
             _status_item(dish_slug="voided", qty=1, is_voided=True),
         ]
         order = _status_order(items)
-        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
         tenant = SimpleNamespace(id=7, profile=SimpleNamespace(
             phone="", receipt_message="", vat_rate=0, vat_label=""))
         resp = self._get(order, tenant)

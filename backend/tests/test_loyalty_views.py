@@ -103,16 +103,23 @@ class OwnerLoyaltyViewTests(SimpleTestCase):
     def test_get_returns_config(self, mock_cfg_objs, mock_order_objs):
         cfg = _make_loyalty_config(enabled=False)
         mock_cfg_objs.get_or_create.return_value = (cfg, False)
-        # Mock the stats queryset chain: Order.objects.filter().values().distinct().count()
+        # Perf fix: stats are now ONE Order.objects.filter(...).aggregate(...) call
+        # (was: a separate .values().distinct().count() PLUS a second .aggregate()
+        # over the identical filtered queryset).
         mock_qs = MagicMock()
-        mock_qs.values.return_value.distinct.return_value.count.return_value = 0
-        mock_qs.aggregate.return_value = {"t": 0}
+        mock_qs.aggregate.return_value = {"enrolled_customers": 7, "total_points_issued": 350}
         mock_order_objs.filter.return_value = mock_qs
 
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for field in ("enabled", "points_per_unit", "redeem_threshold", "points_value", "updated_at"):
             self.assertIn(field, resp.data, f"Missing field: {field}")
+
+        # Stats come from the single merged aggregate call — not the old two-query shape.
+        mock_qs.aggregate.assert_called_once()
+        mock_qs.values.assert_not_called()
+        self.assertEqual(resp.data["stats"]["enrolled_customers"], 7)
+        self.assertEqual(resp.data["stats"]["total_points_issued"], 350)
 
     # ── PATCH ─────────────────────────────────────────────────────────────────
 

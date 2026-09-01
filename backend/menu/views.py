@@ -3722,6 +3722,10 @@ class CustomerOrderStatusView(APIView):
             .filter(order_number=order_number)
             .prefetch_related("items")
             .select_related("rating")
+            # Deferred: read nowhere in this view (verified against every order.<field>
+            # access below, incl. helpers _customer_can_cancel/order_vat_fields/IsOrderOwner) —
+            # customer_note is a TextField, the two *_url fields are 500-char URLFields.
+            .defer("customer_note", "delivery_location_url", "delivery_proof_photo_url")
             .first()
         )
         if order is None:
@@ -5941,7 +5945,12 @@ class StaffBulkReadyView(APIView):
             for item in to_update:
                 item.is_ready = True
                 item.ready_at = now
-                item.save(update_fields=["is_ready", "ready_at"])
+            if to_update:
+                # Single UPDATE for the whole batch instead of one per item — still
+                # inside the same select_for_update() lock/transaction above.
+                # OrderItem has no signals and no save() override, so bulk_update
+                # is behavior-identical to the per-item .save() loop it replaces.
+                OrderItem.objects.bulk_update(to_update, ["is_ready", "ready_at"])
 
         # Reload for fresh payload regardless of whether anything changed.
         order = Order.objects.prefetch_related("items", "payments").get(pk=order_id)
@@ -9205,6 +9214,10 @@ class OwnerZReportView(APIView):
         if food_cost_total is not None and collected_total > 0:
             food_cost_pct = str((food_cost_total / collected_total * 100).quantize(_CENT))
 
+        # Computed once and reused below (collected.count + top-level collected_count) —
+        # was two identical COUNT(*) queries against the same unmodified collected_qs.
+        collected_count = collected_qs.count()
+
         return {
             "window": {
                 "service_day": service_day_date.isoformat(),
@@ -9216,12 +9229,12 @@ class OwnerZReportView(APIView):
                 "cash": str(collected_cash),
                 "wallet": str(collected_wallet),
                 "total": str(collected_total),
-                "count": collected_qs.count(),
+                "count": collected_count,
             },
             # B7: OwnerShiftClose.vue's "Orders" stat reads report.collected_count
             # (top-level, sibling of "collected") — expose it there so the count
             # renders instead of the '—' placeholder. Mirrors collected.count above.
-            "collected_count": collected_qs.count(),
+            "collected_count": collected_count,
             "refunds": {
                 "count": refund_count,
                 "total": str(refund_total),
@@ -10378,6 +10391,15 @@ class OwnerCommissionStatementView(APIView):
             )
             .filter(status__in=COMMISSIONABLE_STATUSES)
             .order_by("created_at")
+            # Only the columns actually read below (orders_data comprehension) —
+            # this queryset can span a full month of marketplace orders, and Order
+            # has ~50 columns. Verified against every `o.<field>` access in this
+            # view, including ones used only in computation (net_payout math).
+            .only(
+                "order_number", "created_at", "customer_name", "total",
+                "delivery_fee", "commission_amount", "commission_rate_applied",
+                "currency", "status",
+            )
         )
 
         # ── Commission BASIS note ─────────────────────────────────────────────
@@ -11559,9 +11581,15 @@ class OwnerLoyaltyView(APIView):
         }
         if include_stats:
             qs = Order.objects.filter(points_earned__gt=0)
+            # Single aggregate query instead of two full scans of the same
+            # filtered queryset (was: .values().distinct().count() + .aggregate()).
+            agg = qs.aggregate(
+                enrolled_customers=Count("customer_id", distinct=True),
+                total_points_issued=Sum("points_earned"),
+            )
             data["stats"] = {
-                "enrolled_customers": qs.values("customer_id").distinct().count(),
-                "total_points_issued": qs.aggregate(t=Sum("points_earned"))["t"] or 0,
+                "enrolled_customers": agg["enrolled_customers"],
+                "total_points_issued": agg["total_points_issued"] or 0,
             }
         return data
 
