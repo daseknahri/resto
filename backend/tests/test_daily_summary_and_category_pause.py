@@ -169,7 +169,7 @@ class SendDailySummaryZeroOrdersTests(SimpleTestCase):
             patch("menu.management.commands.send_daily_summary._send_owner_push"),
             patch("menu.management.commands.send_daily_summary._send_owner_email"),
         ):
-            MockTenant.objects.filter.return_value.exclude.return_value = [tenant_obj]
+            MockTenant.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant_obj]
             mock_cache.add.return_value = cache_add_return
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -227,7 +227,7 @@ class SendDailySummaryIdempotencyTests(SimpleTestCase):
             patch("menu.management.commands.send_daily_summary._send_owner_push") as mock_push,
             patch("menu.management.commands.send_daily_summary._send_owner_email") as mock_email,
         ):
-            MockTenant.objects.filter.return_value.exclude.return_value = [tenant]
+            MockTenant.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
             mock_cache.add.return_value = False  # already sent
 
             from django.core.management import call_command
@@ -274,7 +274,7 @@ class SendDailySummaryCashWalletMathTests(SimpleTestCase):
             patch("menu.management.commands.send_daily_summary._send_owner_push"),
             patch("menu.management.commands.send_daily_summary._send_owner_email"),
         ):
-            MockTenant.objects.filter.return_value.exclude.return_value = [tenant]
+            MockTenant.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
             mock_cache.add.return_value = True
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)

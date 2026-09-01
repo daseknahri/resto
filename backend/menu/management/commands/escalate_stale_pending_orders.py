@@ -73,7 +73,7 @@ class Command(BaseCommand):
         tenants = Tenant.objects.filter(
             is_active=True,
             lifecycle_status=Tenant.LifecycleStatus.ACTIVE,
-        ).exclude(schema_name="public")
+        ).exclude(schema_name="public").select_related("profile")
 
         total_escalated = 0
 
