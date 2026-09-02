@@ -12,6 +12,75 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-09-01 — deep speed-optimization campaign (8-lens hunt → 9 fixes shipped)
+
+**Result:** `main` @ `d8d149f`, green. A second, **deeper** performance hunt on the owner's request
+("continue hunting for speed gaps… big work… always vary agents per task"). Fanned out **8 distinct
+read-only deep-dive agents** (varied per task — fresh agent + rotated model per lens), each on a surface
+the 2026-08-30 pass couldn't reach at depth: DB query/over-fetch, DRF serializer/payload, frontend bundle,
+frontend runtime #2, caching opportunities, Python hot-spots + sweep crons, async/WebSocket/broadcast, and
+multi-tenant/cross-schema cost. Each was adversarial about real-vs-marginal (several lenses came back
+**clean**, cross-validating the prior optimization — WS consumers, wallet_service, order indexing, existing
+caches all re-verified correct). Multiple finds **converged** across independent agents (driver-poll phone
+N+1 **3×**, driver-rating aggregate **2×**, cron `select_related` **2×**), raising confidence. Verified
+autonomous-safe wins shipped as **9 CI-gated PRs (#316–#324)** via delegate-and-gate (fresh agent per
+file-group, disjoint files; every money/concurrency/cache diff hand-reviewed):
+
+**Three HIGHs:**
+- **#323 — driver-poll N+1s (accounts/views.py).** `_serialize_delivery_job` ran a per-job `Profile`
+  phone lookup **and** a per-row lifetime-rating aggregate — on the delivery-jobs list **every online
+  driver polls every 5–15s** (~21 jobs) and the admin list (×100). Both folded into one batched query
+  each (`_batch_restaurant_phones` + a grouped rating map), passed via optional serializer kwargs with the
+  per-call query preserved as the single-job/tracking fallback (byte-identical output). Also: marketplace
+  `bulk_create` (the order-line gap #304 left on the marketplace checkout path), `_customer_owns_tenant`
+  dedup, dropped a dead `select_related("zone")`, added a missing `select_related("rating")`, and deleted
+  a **dead SSE `?stream=1` branch** (blocking `time.sleep` + per-tick DB for 90s/conn — verified zero FE
+  callers).
+- **#322 — Web Push reliability (menu/push.py, accounts/push.py).** `webpush()` had **no request
+  timeout** → a slow endpoint could hang a Celery worker (concurrency 2) to the 120s limit and silently
+  drop already-dedupe-stamped sends; added `timeout=5` (caught by the existing broad `except` → "error",
+  fails fast). Plus a bounded `ThreadPoolExecutor` fan-out (collect-then-bulk-delete expired subs on the
+  caller thread — **no ORM off the main thread**) and a cap on the previously-uncapped package-driver
+  audience.
+- **#324 — MarketplaceMenuView cache (accounts/views.py + bust seams).** The heaviest uncached public GET
+  (nested dish tree + per-dish happy-hour price + reviews + 30-order prep-ETA aggregate + loyalty +
+  flash-sale, on every storefront open) now 60s single-flight cached under `mkt_menu:v1:{slug}`, mirroring
+  the tenant-subdomain twin. **The trap, handled:** `cod_eligible` (per-customer trust), `is_open`, and
+  `flash_sale` are computed per-request on a `copy.deepcopy(body)` **outside** the cache — `LocMemCache`
+  returns by reference, so writing them onto the shared cached object would leak one customer's COD trust
+  to the next. `build_fn` caches `cod_eligible=False` as the anonymous default; the publish gate stays
+  live (404s unpublished immediately). Bust wired into `_bust_menu_cache` + `_bust_tenant_meta_cache` +
+  the rating-recompute path. Regression tests prove two customers get different `cod_eligible` from one
+  shared body.
+
+**The rest (mediums/lows, all behavior-preserving):** partial index for the `WalletChargeRequest`
+bill-sync poll (scanned every ~15s owner poll) + `DeliveryJob.created_at` index (#317, concurrent, ×1
+shared — rides the staging rehearsal); `.only()` on the platform-wide driver pool + a lean
+`_owed()`-under-money-lock that drops 5 of 7 aggregates (byte-identical to `summary["owed"]`) + earnings
+aggregate fold (#320); `bulk_update` for bulk-ready-items under the order lock + loyalty/z-report aggregate
+folds + `.only`/`.defer` over-fetch trims (#321); `select_related("profile")` in the 3-min
+`escalate_stale_pending_orders` + two sibling crons (#319, matching two crons that already do it); and four
+frontend render wins (#316 cached kitchen clock + per-card memo, #318 driver-timer guard + `demoMenu`
+dynamic-import).
+
+**Deferred — owner/judgment-gated (documented, deliberately NOT forced):** SW-precache scope (HIGH —
+Workbox precaches the whole app for every persona; needs a real build + offline/device test);
+`OwnerOrders`→`OwnerOrderCard` extraction (needs visual QA of a live operational page); driver-rating
+denormalization onto `Customer`; proof-photo upload hoisted out of the `select_for_update` (security-
+adjacent); admin count/`LIKE` (`reltuples`/`pg_trgm`); OSRM-per-row on the admin list (feature trim);
+non-sargable `created_at__date` (timezone); the `Accept-Language`-not-in-cache-key edge (SPA-safe); two
+HTTP `Cache-Control` header items; `AdminConsole` modal `defineAsyncComponent`. Each has a file:line in
+the audit agents' output.
+
+**Verification:** every PR green on all CI jobs before merge; the N+1-batch, `_owed`-under-lock, push-
+concurrency, and marketplace-cache diffs were hand-reviewed (the last line-by-line for the cross-customer
+trap). Full backend suite **5051–5067 passed, 0 new failures** across the campaign (local baseline: 1
+Django-pin + ~82 DB-conn errors). Also recorded a memory: the user wants a **fresh, varied agent per task**
+for heavy campaigns (`vary-agents-per-task`). **Not yet deployed** — deploy is manual (Coolify); the one
+new concurrent-index migration (#317) joins the staging-rehearsal set.
+
+---
+
 ## 2026-08-30 — full-app performance pass (fresh audit → 11 fixes shipped)
 
 **Result:** `main` @ `6f572b4`, green. A fresh **31-agent read-only speed + hosting audit**
