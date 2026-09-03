@@ -6236,16 +6236,32 @@ def _serialize_delivery_job(
                     driver_data["rating"] = None
                     driver_data["rating_count"] = 0
             else:
-                # Single-job / tracking-poll callers don't batch — keep self-querying.
+                # Single-job / tracking-poll callers don't batch. This is the branch
+                # OrderTrackingView hits on every ~3s customer poll, re-deriving the
+                # driver's LIFETIME rating each tick even though it only changes ~once
+                # per delivery — so cache the raw aggregate per driver for a short TTL.
+                # The aggregate is filtered only by driver= (nothing viewer-specific),
+                # so the rating is identical for every customer watching that driver —
+                # a per-driver key is collision-free. round()/`or 0` are applied AFTER
+                # the cache read so the output stays byte-identical to the uncached
+                # aggregate, cached or not.
                 try:
                     from django.db.models import Avg as _Avg, Count as _Count
                     from .models import DeliveryJob as _DJ
 
-                    _agg = _DJ.objects.filter(
-                        driver=job.driver, customer_driver_rating__isnull=False
-                    ).aggregate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
-                    driver_data["rating"] = round(_agg["avg"], 1) if _agg["avg"] is not None else None
-                    driver_data["rating_count"] = _agg["n"] or 0
+                    _driver_id = job.driver.id
+
+                    def _build_driver_rating():
+                        _agg = _DJ.objects.filter(
+                            driver_id=_driver_id, customer_driver_rating__isnull=False
+                        ).aggregate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
+                        return (_agg["avg"], _agg["n"])
+
+                    _avg, _n = cache.get_or_set(
+                        f"driver_rating:v1:{_driver_id}", _build_driver_rating, 60
+                    )
+                    driver_data["rating"] = round(_avg, 1) if _avg is not None else None
+                    driver_data["rating_count"] = _n or 0
                 except Exception:
                     driver_data["rating"] = None
                     driver_data["rating_count"] = 0
