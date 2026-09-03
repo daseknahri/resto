@@ -79,6 +79,33 @@ Django-pin + ~82 DB-conn errors). Also recorded a memory: the user wants a **fre
 for heavy campaigns (`vary-agents-per-task`). **Not yet deployed** — deploy is manual (Coolify); the one
 new concurrent-index migration (#317) joins the staging-rehearsal set.
 
+**Continuation sub-wave (same session, → 4 more PRs #326–#328, #330).** On further "continue," I
+re-evaluated the deferred backlog and shipped the items that were genuinely autonomous with careful
+review (not the ones needing owner input):
+- **#327 — proof-photo upload hoisted out of the DELIVERED `select_for_update`** (the connection-pool
+  item; the app had a prior connection-exhaustion outage). Moved ONLY the pure `(file)→url` Pillow
+  transcode + storage write to *before* the lock; the `_has_photo` anti-fraud gate, delivery-code check,
+  and settlement stay under the lock **byte-unchanged**, the bad-image `ValueError` is deferred and
+  re-surfaced at its exact original response position (`404→409→403→400→429→400→200` identical), and the
+  photo is still FILE-only (the client-URL bypass stays closed). Reviewed line-by-line.
+- **#330 — 60s per-driver cache for the tracking-poll lifetime-rating aggregate** (the `M2` item, done
+  *proportionately*: a short-TTL per-driver cache — collision-free, output byte-identical — rather than a
+  full `Customer` denormalization, which would be over-engineering for a single-row display-only
+  aggregate; the admin ×100 case was already batched in #323).
+- **#326 — HTTP `Cache-Control` on `/api/currency-rates/` + `/api/public/plans/`** (input-free public
+  GETs; the agent correctly caught that `CurrencyRate` is per-tenant and verified host-keying keeps
+  `public` safe).
+- **#328 — npm-audit CVE-gate fix.** Newly-disclosed advisories (`fast-uri` SSRF ≤3.1.5 — the exact
+  pinned override; `postcss-selector-parser` DoS 6.1.0-6.1.2) flipped the frontend `audit-gate.mjs` red
+  on **every** PR + `main`; bumped the `fast-uri` override to 3.1.7 + added a `postcss-selector-parser`
+  6.1.4 override (both build-tooling-only transitives, not in the shipped bundle), regenerated the lock
+  (`--package-lock-only --legacy-peer-deps`; zero runtime-dep churn) → gate clean.
+
+With that, the **autonomous speed backlog is complete** — two deep audit passes plus this campaign have
+covered the surface, and what remains is genuinely owner/judgment-gated (SW-precache device test,
+`OwnerOrders` visual-QA extraction, admin count/`LIKE` UX or `pg_trgm`, OSRM-per-row feature trim, the
+non-sargable-`created_at__date` timezone rewrite) — each with a file:line above. Not forced.
+
 ---
 
 ## 2026-08-30 — full-app performance pass (fresh audit → 11 fixes shipped)
