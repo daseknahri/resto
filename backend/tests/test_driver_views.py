@@ -993,6 +993,8 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
     """business_type must appear in driver job payloads via a batch Profile query (no N+1)."""
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate the tracking-path driver-rating cache between tests
         self.factory = APIRequestFactory()
 
     def test_driver_job_list_includes_business_type(self):
@@ -1231,6 +1233,60 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
         self.assertIsNone(data["driver"]["rating"])
         self.assertEqual(data["driver"]["rating_count"], 0)
         mock_dj.objects.filter.assert_not_called()
+
+    def test_serialize_delivery_job_tracking_path_caches_rating_aggregate(self):
+        """perf: the tracking-poll path (no driver_rating_map) now caches the
+        per-driver lifetime-rating aggregate for 60s. OrderTrackingView hits this
+        branch on every ~3s customer poll, so two successive serializations of the
+        same driver must hit the DB aggregate ONCE (the 2nd is a cache hit), and the
+        returned rating/count must be byte-identical to the un-cached
+        round(avg, 1)/`n or 0` output."""
+        from accounts.views import _serialize_delivery_job
+
+        driver = _make_customer(pk=31415)
+        job = _make_job(pk=61, status_val="assigned", driver=driver, tenant_id=50)
+        _raw_avg = 14 / 3  # 4.666... — deliberately not a round number
+
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("accounts.models.DeliveryJob") as mock_dj:
+            mock_dj.objects.filter.return_value.aggregate.return_value = {"avg": _raw_avg, "n": 3}
+
+            data_1 = _serialize_delivery_job(job, include_driver_position=True, restaurant_phone="")
+            data_2 = _serialize_delivery_job(job, include_driver_position=True, restaurant_phone="")
+
+        expected_rating = round(_raw_avg, 1)
+        self.assertEqual(data_1["driver"]["rating"], expected_rating)
+        self.assertEqual(data_1["driver"]["rating_count"], 3)
+        self.assertEqual(data_2["driver"]["rating"], expected_rating)
+        self.assertEqual(data_2["driver"]["rating_count"], 3)
+        # Second call is a cache hit — the DB aggregate ran exactly once.
+        mock_dj.objects.filter.assert_called_once_with(
+            driver_id=31415, customer_driver_rating__isnull=False
+        )
+
+    def test_serialize_delivery_job_tracking_path_rating_cache_key_is_per_driver(self):
+        """The cache key must vary ONLY by driver id, never by job/tenant/viewer — the
+        aggregate is filtered solely by driver= (see the code), so its result is
+        identical for every customer tracking that driver. Two different jobs for the
+        SAME driver must share one cache entry (one DB hit total, not one per job)."""
+        from accounts.views import _serialize_delivery_job
+
+        driver = _make_customer(pk=31416)
+        job_1 = _make_job(pk=62, status_val="assigned", driver=driver, tenant_id=51)
+        job_2 = _make_job(pk=63, status_val="assigned", driver=driver, tenant_id=52)
+
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")), \
+             patch("accounts.views._job_distance_km", return_value=None), \
+             patch("accounts.models.DeliveryJob") as mock_dj:
+            mock_dj.objects.filter.return_value.aggregate.return_value = {"avg": 3.6, "n": 2}
+
+            data_1 = _serialize_delivery_job(job_1, include_driver_position=True, restaurant_phone="")
+            data_2 = _serialize_delivery_job(job_2, include_driver_position=True, restaurant_phone="")
+
+        self.assertEqual(data_1["driver"]["rating"], 3.6)
+        self.assertEqual(data_2["driver"]["rating"], 3.6)
+        mock_dj.objects.filter.assert_called_once()
 
     def test_serialize_delivery_job_includes_business_type_field(self):
         """_serialize_delivery_job must include business_type in its output."""
