@@ -159,6 +159,19 @@ class CurrencyRateListViewTests(SimpleTestCase):
         self.assertIsInstance(rate["mad_per_unit"], float)
 
     @patch("menu.views.CurrencyRate.objects")
+    def test_cache_control_header_present(self, mock_cr_objs):
+        """Small, input-free AllowAny GET — safe to cache publicly for a few minutes
+        (rates refresh ~daily via the fetch_currency_rates cron)."""
+        mock_cr_objs.filter.return_value.values.return_value = [
+            {"code": "EUR", "name": "Euro", "symbol": "€", "mad_per_unit": Decimal("10.80")},
+        ]
+
+        resp = self._get()
+        self.assertEqual(
+            resp["Cache-Control"], "public, max-age=300, stale-while-revalidate=600"
+        )
+
+    @patch("menu.views.CurrencyRate.objects")
     def test_no_rates_returns_empty_list(self, mock_cr_objs):
         mock_cr_objs.filter.return_value.values.return_value = []
         resp = self._get()

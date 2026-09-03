@@ -3390,7 +3390,7 @@ class PublicPlanPricingView(APIView):
         plans = Plan.objects.filter(is_active=True).order_by("id").values(
             "code", "price_monthly", "currency", "billing_period"
         )
-        return Response([
+        response = Response([
             {
                 "code": p["code"],
                 "price_monthly": str(p["price_monthly"]) if p["price_monthly"] is not None else None,
@@ -3399,3 +3399,8 @@ class PublicPlanPricingView(APIView):
             }
             for p in plans
         ])
+        # AllowAny, no query params / auth-varying body — plan pricing only changes
+        # when the owner edits it in the Django admin, so a short public cache is
+        # safe for this marketing-page endpoint.
+        response["Cache-Control"] = "public, max-age=300, stale-while-revalidate=600"
+        return response

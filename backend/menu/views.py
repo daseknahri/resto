@@ -12280,7 +12280,12 @@ class CurrencyRateListView(APIView):
             }
             for r in rates
         ]
-        return Response(data)
+        response = Response(data)
+        # AllowAny, no query params / auth-varying body — rates are refreshed ~daily
+        # by the fetch_currency_rates cron, so a short public cache is safe and saves
+        # a DB round-trip on every app cold-load across all tenants.
+        response["Cache-Control"] = "public, max-age=300, stale-while-revalidate=600"
+        return response
 
 
 # ── Owner wallet top-up ────────────────────────────────────────────────────────
