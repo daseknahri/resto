@@ -816,6 +816,176 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         mock_failed.assert_called_once()
 
 
+class DriverProofPhotoOutsideLockTests(SimpleTestCase):
+    """perf/proof-photo-upload-outside-lock.
+
+    The proof-photo transcode + storage write (_save_driver_doc_image — Pillow decode of
+    up to 8 MB + a possibly-S3 default_storage.save) is hoisted to BEFORE the DeliveryJob
+    select_for_update lock, so the pinned DB connection is NOT held for that 200 ms-2 s of
+    I/O (connection-pool-exhaustion risk under load). These tests pin the invariants the
+    hoist must preserve byte-for-byte:
+      (a) DELIVERED-with-photo still stores the photo url + still settles, and the photo
+          still bypasses the delivery-code anti-fraud gate;
+      (b) the code-based completion path is unchanged (and does NO upload);
+      (c) the upload runs OUTSIDE / BEFORE the lock (call ordering: upload before .get);
+      (d) a bad-photo ValueError is DEFERRED — an earlier 409/403 still wins, so response
+          ordering (and thus the client response for every input) is unchanged.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # isolate DriverStatusUpdateThrottle history between tests
+        self.factory = APIRequestFactory()
+        self.view = DriverJobStatusUpdateView.as_view()
+        # Mutation happens under transaction.atomic(); neutralise it (no DB here).
+        self._atomic = patch("django.db.transaction.atomic", return_value=_noop_atomic())
+        self._atomic.start()
+
+    def tearDown(self):
+        self._atomic.stop()
+
+    @staticmethod
+    def _wire_status(mock_dj):
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.FAILED = "failed"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+
+    def _photo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile("proof.jpg", b"\xff\xd8\xff\xe0fake-jpeg-bytes",
+                                  content_type="image/jpeg")
+
+    def _patch_multipart(self, job_id, data, customer):
+        req = self.factory.patch(f"/api/driver/jobs/{job_id}/status/", data, format="multipart")
+        return self.view(_authed(req, customer), job_id=job_id)
+
+    @patch("accounts.ride_views._save_driver_doc_image")
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_with_photo_uploads_before_lock_and_settles(
+        self, mock_dj, mock_cust_objs, mock_complete, mock_save
+    ):
+        """(a)+(c): the photo is transcoded/saved BEFORE the row lock, its url is threaded
+        into settlement, and its presence bypasses the code gate even when a real delivery
+        code exists and none is supplied."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+
+        order = []  # records call ordering to prove the upload is outside the lock
+
+        def _record_get(*a, **k):
+            order.append("lock_get")
+            return job
+        mock_dj.objects.select_for_update.return_value.get.side_effect = _record_get
+
+        def _record_upload(*a, **k):
+            order.append("upload")
+            return "https://cdn.example/uploads/driver-docs/2026/05/abc.jpg"
+        mock_save.side_effect = _record_upload
+
+        mock_cust_objs.filter.return_value.exists.return_value = True  # still approved
+
+        # A REAL delivery code is issued but the driver supplies NONE — only the photo can
+        # let this through, proving the anti-fraud photo-bypasses-code gate is intact.
+        with patch("accounts.views._order_delivery_code", return_value="SECRET7"), \
+             patch("accounts.views._serialize_delivery_job",
+                   return_value={"id": 1, "status": "delivered"}), \
+             patch("accounts.views._batch_business_types", return_value={}), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(
+                1, {"status": "delivered", "proof_photo": self._photo()}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # (c) upload happened, and it happened BEFORE the select_for_update().get lock read.
+        mock_save.assert_called_once()
+        self.assertEqual(order[:2], ["upload", "lock_get"])
+        # (a) settlement still runs, and the pre-computed photo url is threaded into it.
+        mock_complete.assert_called_once()
+        self.assertEqual(
+            mock_complete.call_args.kwargs.get("proof_photo_url"),
+            "https://cdn.example/uploads/driver-docs/2026/05/abc.jpg",
+        )
+
+    @patch("accounts.ride_views._save_driver_doc_image")
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_code_path_unchanged_and_makes_no_upload(
+        self, mock_dj, mock_cust_objs, mock_complete, mock_save
+    ):
+        """(b): a correct-code, no-photo completion still settles, and NO upload is
+        attempted (the pre-lock hoist is skipped when no file is supplied)."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust_objs.filter.return_value.exists.return_value = True
+
+        with patch("accounts.views._order_delivery_code", return_value="CODE99"), \
+             patch("accounts.views._serialize_delivery_job",
+                   return_value={"id": 1, "status": "delivered"}), \
+             patch("accounts.views._batch_business_types", return_value={}), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(
+                1, {"status": "delivered", "code": "CODE99"}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_save.assert_not_called()  # no file -> no transcode/upload
+        mock_complete.assert_called_once()
+        self.assertEqual(mock_complete.call_args.kwargs.get("proof_photo_url"), "")
+
+    @patch("accounts.ride_views._save_driver_doc_image")
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_wrong_code_no_photo_still_400_and_no_settle(
+        self, mock_dj, mock_cust_objs, mock_complete, mock_save
+    ):
+        """The anti-fraud code gate must still fire identically when no photo is present:
+        a wrong code returns 400 bad_delivery_code and NEVER settles."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust_objs.filter.return_value.exists.return_value = True
+
+        with patch("accounts.views._order_delivery_code", return_value="RIGHT1"), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(
+                1, {"status": "delivered", "code": "WRONG9"}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "bad_delivery_code")
+        mock_save.assert_not_called()
+        mock_complete.assert_not_called()
+
+    @patch("accounts.ride_views._save_driver_doc_image")
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.DeliveryJob")
+    def test_bad_photo_error_is_deferred_behind_the_transition_check(
+        self, mock_dj, mock_complete, mock_save
+    ):
+        """(d): with a bad transition AND an invalid photo, today's 409 fires before the
+        upload's 400. The hoist runs the upload pre-lock but DEFERS its ValueError, so the
+        client still gets 409 (not 400) — response ordering is byte-identical."""
+        customer = _make_customer()
+        job = _make_job(status_val="assigned", driver=customer)  # delivered NOT allowed
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_save.side_effect = ValueError("Could not decode image.")
+
+        resp = self._patch_multipart(
+            1, {"status": "delivered", "proof_photo": self._photo()}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "bad_transition")
+        mock_save.assert_called_once()     # upload was attempted pre-lock (outside the lock)
+        mock_complete.assert_not_called()  # nothing settled on a rejected transition
+
+
 # ── Part A: business_type in delivery job payloads ────────────────────────────
 
 

@@ -7015,6 +7015,39 @@ class DriverJobStatusUpdateView(APIView):
         new_status = request.data.get("status", "").strip()
         now = _tz.now()
         _proof_photo_url = ""
+        _proof_photo_error = None
+
+        # PERF (connection-pool): a proof photo is a Pillow transcode of up to 8 MB + a
+        # (possibly S3) storage write — 200 ms-2 s of pure I/O. Do it BEFORE taking the
+        # DeliveryJob row lock so the pinned DB connection is not held for the upload
+        # (holding it under load is a real connection-pool-exhaustion risk). This is safe
+        # because _save_driver_doc_image is a pure (file, request) -> url function: it reads
+        # NO job/lock state, so the URL is identical to computing it under the lock. The
+        # anti-fraud code/photo decision (_has_photo) and ALL settlement stay UNDER the lock,
+        # unchanged. A ValueError is DEFERRED (captured here, surfaced at the exact position
+        # the upload occupied today — after the transition + approval checks, before the code
+        # check) so every client response is byte-identical (404/409/403 still precede a
+        # bad-photo 400). The only difference is a wasted/orphaned upload when an otherwise-
+        # rejected request carried a valid photo — acceptable; it never changes the response.
+        #
+        # SECURITY: the proof photo MUST be a real, server-saved, Pillow-validated FILE
+        # upload — NEVER a client-supplied URL. Trusting a proof_photo_url let a driver PATCH
+        # {status:delivered, proof_photo_url:"https://..."} with no code and no real photo,
+        # fully bypassing the delivery-code anti-fraud gate: _complete_delivered_order then
+        # flips the order to COMPLETED+PAID and _credit_driver_earnings banks the payout while
+        # the customer never got the food. _proof_photo_url is therefore set SOLELY from a
+        # saved FILE here, never from request.data.
+        if new_status == DeliveryJob.Status.DELIVERED:
+            _upload = request.FILES.get("proof_photo")
+            if _upload:
+                try:
+                    from .ride_views import _save_driver_doc_image
+                    _proof_photo_url = _save_driver_doc_image(_upload, request)
+                except ValueError as _ve:
+                    _proof_photo_error = str(_ve)
+                except Exception:
+                    logger.exception("proof_photo upload failed job_id=%s", job_id)
+                    # Non-fatal: proceed without a photo URL rather than blocking the delivery.
 
         # All state checks + the mutate happen UNDER a row lock so a concurrent cancel /
         # accept / re-dispatch can't be raced (TOCTOU). Side effects run after commit.
@@ -7047,31 +7080,17 @@ class DriverJobStatusUpdateView(APIView):
                          "code": "driver_not_approved"},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-                # Photo proof: a driver who can't get the customer code can take a
-                # photo (leave-at-door). Handle the photo FIRST so its presence can
-                # bypass the code requirement. Pillow-validated, same rules as driver-docs.
-                #
-                # SECURITY: the proof photo MUST be a real, server-saved, Pillow-validated
-                # FILE upload — NEVER a client-supplied URL. Trusting a proof_photo_url let a
-                # driver PATCH {status:delivered, proof_photo_url:"https://…"} with no code
-                # and no real photo, fully bypassing the delivery-code anti-fraud gate:
-                # _complete_delivered_order then flips the order to COMPLETED+PAID and
-                # _credit_driver_earnings banks the payout while the customer never got the
-                # food. The frontend only ever uploads a FILE, so accepting a URL was pure
-                # attack surface. _has_photo is therefore set solely from a saved FILE.
-                _upload = request.FILES.get("proof_photo")
-                if _upload:
-                    try:
-                        from .ride_views import _save_driver_doc_image
-                        _proof_photo_url = _save_driver_doc_image(_upload, request)
-                    except ValueError as _ve:
-                        return Response(
-                            {"detail": str(_ve), "code": "bad_proof_photo"},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    except Exception:
-                        logger.exception("proof_photo upload failed job_id=%s", job_id)
-                        # Non-fatal: proceed without a photo URL rather than blocking the delivery.
+                # Photo proof (Pillow-validated + saved BEFORE the lock — see the pre-lock
+                # block): a driver who can't get the customer code can leave-at-door with a
+                # photo, and its presence bypasses the code requirement. Surface a bad-photo
+                # 400 at exactly the position the upload occupied today (after the transition
+                # + approval checks, before the code check) so response ordering is unchanged.
+                # _has_photo is set SOLELY from a saved FILE (never a client-supplied URL).
+                if _proof_photo_error is not None:
+                    return Response(
+                        {"detail": _proof_photo_error, "code": "bad_proof_photo"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 _has_photo = bool(_proof_photo_url)
 
                 # Proof-of-delivery code, with a brute-force lockout.
