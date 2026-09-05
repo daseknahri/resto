@@ -97,6 +97,11 @@ describe("OwnerHome — mount smoke", () => {
   let wrapper;
 
   beforeEach(() => {
+    // tenant.fetchMeta() uses the REAL staleCache (localStorage-backed). Without
+    // this clear, test 1's empty-meta write ({}) is served from cache to test 2
+    // (still "fresh" within the 5-min TTL), so test 2 never sees its /meta/ mock
+    // payload and its profile-driven computeds read the stale empty meta.
+    localStorage.clear();
     setActivePinia(createPinia());
     _routes = {};
     vi.clearAllMocks();
