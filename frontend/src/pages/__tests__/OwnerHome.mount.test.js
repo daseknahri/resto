@@ -56,7 +56,11 @@ vi.mock("../../lib/api", () => ({
 }));
 
 // OwnerHome imports { RouterLink, useRouter } from 'vue-router'.
-const RouterLinkStub = { name: "RouterLink", props: ["to"], template: "<a><slot /></a>" };
+// vi.hoisted: the vi.mock('vue-router') factory below is hoisted above the imports
+// and runs during import evaluation — before a plain `const` in the file body would
+// initialize — so referencing a plain const there hits the TDZ ("0 test" collection
+// error). vi.hoisted makes the stub available to the hoisted factory.
+const RouterLinkStub = vi.hoisted(() => ({ name: "RouterLink", props: ["to"], template: "<a><slot /></a>" }));
 vi.mock("vue-router", () => ({
   RouterLink: RouterLinkStub,
   useRoute: () => ({ params: {}, query: {} }),
