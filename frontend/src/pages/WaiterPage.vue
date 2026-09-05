@@ -1420,6 +1420,13 @@ const expandedFloorTable = ref(null);
 // Section filter for the floor tiles
 const floorSectionFilter = ref('');
 
+// Active list/tab selection. Declared HERE (not with the other tab state ~800 lines
+// below) because the reset watch on the next line reads it eagerly at setup — a
+// later `const` would be in the temporal dead zone and throw
+// "Cannot access 'activeTab' before initialization", white-screening the page.
+// Regression guard: __tests__/WaiterPage.mount.test.js.
+const activeTab = ref("needs_action");
+
 // Reset expanded tile and section filter when leaving floor view or changing tabs
 watch([floorView, activeTab], () => {
   expandedFloorTable.value = null;
@@ -2232,7 +2239,8 @@ const submitPasswordChange = async () => {
 };
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
-const activeTab = ref("needs_action");
+// `activeTab` is declared earlier (with the floor-view reset watch that reads it
+// eagerly at setup); declaring it here would put it in the temporal dead zone.
 const searchQuery = ref("");
 
 const needsActionOrders = computed(() =>
