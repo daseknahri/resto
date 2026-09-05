@@ -125,6 +125,9 @@ vi.mock("../../lib/mapTiles", () => ({ addTileLayer: vi.fn() }));
 
 import { useCustomerStore } from "../../stores/customer";
 import RidePage from "../RidePage.vue";
+// The mocked leaflet default export (vi.mock('leaflet') above), so a test can wait
+// until the fake L.map() has actually run — see settle() below.
+import leafletMock from "leaflet";
 
 const mountPage = () =>
   shallowMount(RidePage, {
@@ -137,6 +140,23 @@ const mountPage = () =>
       },
     },
   });
+
+// RidePage initializes Leaflet AT MOUNT via a FIRE-AND-FORGET chain:
+// onMounted → nextTick(initBookingMaps) → async ensureLeaflet() (a Promise.all of
+// dynamic imports) → L.map(). That chain must be drained to completion HERE, while
+// vi.mock('leaflet') is still active. If it's left pending, it resolves during the
+// file's teardown when the mock is gone — its late `await import('leaflet')` then
+// gets the REAL leaflet, and L.map() on a bare jsdom div throws "Map container not
+// found" as an UNHANDLED error that fails the whole run (even though every assertion
+// passed). Waiting for the mocked L.map to have been called proves the init reached
+// the map step under the mock; the trailing flushes drain the rest (a second booking
+// map, addTileLayer, setView).
+const settle = async () => {
+  await flushPromises();
+  await vi.waitFor(() => expect(leafletMock.map).toHaveBeenCalled());
+  await flushPromises();
+  await flushPromises();
+};
 
 // A minimal active ride with an assigned driver + a live driver position. status
 // 'accepted' → not terminal → the active-ride tracking block renders, startPolling()
@@ -169,7 +189,10 @@ describe("RidePage — mount smoke", () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Drain any still-pending fire-and-forget map init before unmount/teardown, so it
+    // resolves under the leaflet mock rather than after it (see settle()).
+    await flushPromises();
     // onBeforeUnmount stops the 5s active-ride poll, clears the cancel-guard timer,
     // removes the three Leaflet maps, and removes the visibilitychange listener —
     // unmount so no timer/listener/map leaks between tests.
@@ -198,11 +221,9 @@ describe("RidePage — mount smoke", () => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    // Drain onMounted's awaited fetch + its fire-and-forget chains (nextTick →
-    // initBookingMaps → ensureLeaflet's Promise.all of dynamic imports, fetchHistory,
-    // fetchSavedAddresses). Two flushes cover the chained leaflet-import microtasks.
-    await flushPromises();
-    await flushPromises();
+    // Drain onMounted's awaited fetch + its fire-and-forget map init to completion
+    // under the leaflet mock (see settle()).
+    await settle();
 
     expect(wrapper.exists()).toBe(true);
     // Header (rendered in every signed-in state) — the crash-guard anchor.
@@ -229,8 +250,7 @@ describe("RidePage — mount smoke", () => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    await flushPromises();
-    await flushPromises();
+    await settle();
 
     expect(wrapper.exists()).toBe(true);
     // Header anchor.
