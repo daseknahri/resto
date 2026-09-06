@@ -143,28 +143,22 @@ const mountPage = () =>
     },
   });
 
-// SendPackagePage inits Leaflet AT MOUNT via a FIRE-AND-FORGET chain (onMounted →
-// nextTick(initPickMap | renderTrackingMap) → async ensureLeaflet's Promise.all of
-// dynamic imports → L.map). Drain it to completion HERE, while vi.mock('leaflet') is
-// still active. If it's left pending it resolves during the file's teardown when the
-// mock is gone — its late `await import('leaflet')` then gets the REAL leaflet, and
-// L.map() on a bare jsdom div throws "Map container not found" as an UNHANDLED error
-// that fails the whole run (even though every assertion passed). Waiting for the
-// mocked L.map to have been called proves the init reached the map step under the
-// mock; the trailing flushes drain the rest.
-const settle = async () => {
-  await flushPromises();
-  await vi.waitFor(() => expect(L.map).toHaveBeenCalled());
-  await flushPromises();
-  await flushPromises();
-};
+// Leaflet-init avoidance (why these cases mount an ACTIVE package, not the idle
+// booking form): SendPackagePage inits a pickup Leaflet map AT MOUNT only when there
+// is NO active package (the booking-form branch → nextTick(initPickMap)), and a
+// tracking Leaflet map only when the active package has a driver GPS position
+// (hasDriverPos → nextTick(renderTrackingMap)). Both map inits are FIRE-AND-FORGET
+// dynamic-import chains that can resolve after the test's vi.mock('leaflet') is torn
+// down (→ real leaflet → "Map container not found" as an unhandled error that fails
+// the run). Mounting an active package WITHOUT a driver position sidesteps BOTH: no
+// booking form, no tracking map → zero Leaflet init — while still running the page's
+// real setup() + onMounted + active-trip template (the setup()-crash guard this test
+// is for). The leaflet mock below stays as defensive insurance.
 
-// An active "accepted" package with an assigned courier that has a live
-// position — drives the active-tracking template AND the { immediate:true }
-// tracking-map watch (hasDriverPos true → nextTick(renderTrackingMap) →
-// ensureLeaflet + L.map at mount). Shape mirrors GET /rides/active/'s
-// { ride, scheduled } contract; kind must be 'package' or the page ignores it.
-const activePackagePayload = {
+// Active package with an assigned courier but NO GPS position → the tracking map is
+// never initialized. { ride, scheduled } mirrors GET /rides/active/; kind must be
+// 'package' or the page ignores it.
+const activePackagePayload = (rideOverrides = {}) => ({
   data: {
     ride: {
       id: 42,
@@ -176,17 +170,12 @@ const activePackagePayload = {
       delivery_code: "482913",
       recipient_track_token: "trk_abc123",
       tip_amount: "0.00",
-      driver: {
-        name: "Youssef",
-        phone: "0600000000",
-        driver_vehicle: "Motorbike",
-        driver_lat: 33.5921,
-        driver_lng: -7.6187,
-      },
+      driver: { name: "Youssef", phone: "0600000000", driver_vehicle: "Motorbike" },
+      ...rideOverrides,
     },
     scheduled: [],
   },
-};
+});
 
 describe("SendPackagePage — mount smoke", () => {
   let wrapper;
@@ -198,79 +187,63 @@ describe("SendPackagePage — mount smoke", () => {
     vi.clearAllMocks();
   });
 
-  afterEach(async () => {
-    // Drain any still-pending fire-and-forget map init before unmount/teardown, so it
-    // resolves under the leaflet mock rather than after it (see settle()).
-    await flushPromises();
+  afterEach(() => {
     // onBeforeUnmount clears the 5s poll interval, the cancel-guard / share-toast
-    // timers, both Leaflet maps, and the visibilitychange listener — unmount so
-    // none leak between tests.
+    // timers, any Leaflet maps, and the visibilitychange listener — unmount so none
+    // leak between tests.
     if (wrapper) wrapper.unmount();
     wrapper = undefined;
     _routes = {};
   });
 
-  // ── (1) authenticated, idle (no active package) — the high-value guard ──────
-  // The core case: an authenticated visitor with nothing in flight renders the
-  // booking form, whose onMounted schedules initPickMap() → ensureLeaflet() →
-  // L.map() AT MOUNT. This is the exact "lazy Leaflet import + map init at
-  // setup()" path that white-screens in prod if any import/API is undefined.
-  it("mounts an authenticated, idle sender (booking form + pick-map init) without a setup() crash", async () => {
-    // setCustomer marks the store loaded + authenticated, so onMounted's auth
-    // gate passes and the fetchActiveTrip/history/addresses + initPickMap path
-    // runs (mirrors SuperAppHub / DriverPage).
-    useCustomerStore().setCustomer({ id: 1, name: "Sara", phone: "0600000000" });
-    // _routes empty → /rides/active/ resolves { data: {} } → no active package →
-    // booking-form branch → nextTick(initPickMap).
+  // ── (1) authenticated sender with an active tracked package (accepted, no GPS) ─
+  // The core guard: mounts the page's real setup() + onMounted (fetchActiveTrip →
+  // active package → startPolling) + the active-tracking template. An active package
+  // means no booking form (so no pickup-map init); no driver GPS means hasDriverPos
+  // is false (so no tracking-map init) — zero Leaflet, no fire-and-forget leak.
+  it("mounts an authenticated sender with an active tracked package (accepted) without a setup() crash", async () => {
+    // setCustomer marks the store loaded + authenticated, so onMounted's auth gate
+    // passes and the fetchActiveTrip/history/addresses path runs.
+    useCustomerStore().setCustomer({ id: 2, name: "Omar", phone: "0611111111" });
+    _routes = { "/rides/active/": activePackagePayload() };
 
     expect(() => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    // Drain the async onMounted + the fire-and-forget initPickMap → ensureLeaflet →
-    // L.map chain to completion under the leaflet mock (see settle()).
-    await settle();
+    // onMounted awaits fetchActiveTrip; a second flush drains history/addresses.
+    await flushPromises();
+    await flushPromises();
 
     expect(wrapper.exists()).toBe(true);
     // Signed-in header (own template) — the crash-guard anchor.
     expect(wrapper.text()).toContain("sendPackage.title");
-    // Booking-form-only sections → confirms the signed-in idle form rendered
-    // (not the loading / not-signed-in branches).
-    expect(wrapper.text()).toContain("ridePage.pickupLabel");
-    expect(wrapper.text()).toContain("sendPackage.recipientLabel");
+    // packageStatusLabel for 'accepted' → courierAssigned, and the fetched pickup
+    // address both render in the active-tracking banner (own template).
+    expect(wrapper.text()).toContain("sendPackage.courierAssigned");
+    expect(wrapper.text()).toContain("1 Pickup St");
     // Past the auth gate → the not-signed-in prompt is absent.
     expect(wrapper.text()).not.toContain("sendPackage.signInFirst");
-    // initPickMap actually reached L.map() — the mount-time Leaflet init ran.
-    expect(L.map).toHaveBeenCalled();
   });
 
-  // ── (2) authenticated with an ACTIVE package (accepted + courier w/ GPS) ────
-  // Drives the active-tracking template (packageStatusLabel, handover code,
-  // share link, cancel guard) AND the { immediate:true } driver-position watch,
-  // which — once fetchActiveTrip lands a package with driver_lat/lng — fires
-  // nextTick(renderTrackingMap) → ensureLeaflet + L.map for the tracking map at
-  // mount. startPolling() also engages (5s interval, cleared on unmount).
-  it("mounts an authenticated sender with an active tracked package (tracking-map init) without a crash", async () => {
-    useCustomerStore().setCustomer({ id: 2, name: "Omar", phone: "0611111111" });
-    _routes = { "/rides/active/": activePackagePayload };
+  // ── (2) authenticated sender with a searching package (no courier yet) ───────
+  // A different active-trip sub-state (status 'searching', no driver) — still no
+  // booking form and no GPS, so still no Leaflet — exercising the searching branch
+  // of the active-trip template + its computeds.
+  it("mounts an authenticated sender with a searching package without a crash", async () => {
+    useCustomerStore().setCustomer({ id: 3, name: "Sara", phone: "0600000000" });
+    _routes = {
+      "/rides/active/": activePackagePayload({ status: "searching", driver: null, delivery_code: null }),
+    };
 
     expect(() => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    // Drain onMounted's fetchActiveTrip → activePackage set → tracking-map watch →
-    // nextTick(renderTrackingMap) → ensureLeaflet → L.map, to completion under the
-    // leaflet mock (see settle()).
-    await settle();
+    await flushPromises();
+    await flushPromises();
 
     expect(wrapper.exists()).toBe(true);
     expect(wrapper.text()).toContain("sendPackage.title");
-    // Loaded assertion: packageStatusLabel for 'accepted' → courierAssigned key,
-    // and the fetched pickup address both render in the active-tracking banner.
-    expect(wrapper.text()).toContain("sendPackage.courierAssigned");
-    expect(wrapper.text()).toContain("1 Pickup St");
-    // The tracking map's mount-time Leaflet init actually ran (renderTrackingMap
-    // reached L.map without throwing on the way).
-    expect(L.map).toHaveBeenCalled();
   });
 });
