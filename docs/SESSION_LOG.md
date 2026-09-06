@@ -12,6 +12,63 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-09-05 — mount-smoke test-coverage campaign (15 pages + 2 stores + 1 real prod bug)
+
+**Result:** `main` @ `18332c8`, green. On the owner's "continue" directive (heavy continuous
+autonomous agent work, **fresh varied agent per task**), added the **first mount smoke tests** for the
+big untested Vue pages + the two untested Pinia stores — closing the **"untested page white-screens at
+setup()"** bug class (the live shake-out crashes #94–#96) that had already shipped real prod crashes
+(Home #94, MarketplaceMenuPage TDZ #95). Method: a fresh agent per page (`vary-agents-per-task`), each mounting the
+page's real `setup()`/`onMounted` via `shallowMount` + real pinia + a URL-routed `lib/api` mock + a
+per-page-verified `useI18n` mock; every file **hand-reviewed against source** before shipping; disjoint
+files collected into gated PRs. **6 CI-gated PRs (#332–#337):**
+
+- **#332** — SuperAppHub, OwnerInventory, OwnerHome mount tests.
+- **#333** — currency + tenant store unit tests (the entitlements plan→ordering-mode matrix, the billing
+  grace-period date math, `convert`/`formatPrice`/`fetchRates`).
+- **#334** — CustomerAccount, WaiterPage, DriverPage mount tests **+ a real WaiterPage TDZ fix** (below).
+- **#335** — OwnerOrders, OrderStatus, Cart mount tests.
+- **#336** — AdminConsole, OwnerKitchen, RidePage mount tests.
+- **#337** — SendPackagePage, OwnerReservations, Menu mount tests.
+
+**Real bug caught + fixed (#334):** `WaiterPage.vue` white-screened on **every** load — `watch([floorView,
+activeTab], …)` evaluated its source array eagerly at registration, but `const activeTab = ref(...)` was
+declared **~800 lines later**, so building `[floorView, activeTab]` read `activeTab` in its **temporal
+dead zone** → `ReferenceError: Cannot access 'activeTab' before initialization` → `setup()` aborted. Same
+class as MarketplaceMenuPage (#95). Fix: relocate the `activeTab` declaration to sit before the watch that
+reads it (verified no second TDZ — all 7 eager watches now reference already-declared refs). The new
+`WaiterPage.mount.test.js` is the regression guard (it went red on this exact `ReferenceError`).
+
+**Four runtime testing traps** (each cost a CI round-trip; all recorded in the `vue-mount-test-recipe`
+memory — vitest runs **only in CI** here, so none are catchable by local `node --check`/`verify:i18n`):
+1. **`vi.hoisted` for any stub referenced in a `vi.mock` factory** — `vi.mock` is hoisted above the imports
+   and its factory runs during import evaluation, before a plain module-scope `const` initializes → TDZ →
+   the whole file collects **"0 test"**. (SuperAppHub/OwnerHome first hit this.)
+2. **`localStorage.clear()` in `beforeEach` for staleCache-backed pages** — `tenant.fetchMeta()` writes the
+   meta cache; test 1's payload is served to test 2 as still-"fresh" (5-min TTL) so test 2 never sees its
+   own `/meta/` mock. (OwnerHome hit this.)
+3. **Leaflet-at-mount fire-and-forget leaks the real leaflet post-teardown** — RidePage/SendPackagePage init
+   Leaflet AT MOUNT via `nextTick → async import('leaflet') → L.map()`; the un-awaited chain resolves during
+   file teardown after `vi.mock('leaflet')` is gone → the real library runs `L.map()` on a detached jsdom div
+   → **"Map container not found"** as an *unhandled error* (all assertions pass, `Errors: 1` fails the job).
+   Draining (`flushPromises`, `vi.waitFor`) did **not** reliably catch the concurrent second map init.
+   **Real fix: mount a state that never inits a map** — an authenticated + ACTIVE trip WITHOUT a driver GPS
+   position (booking maps init only when there's *no* active trip; the tracking map only on `hasDriverPos`) →
+   zero `import('leaflet')`.
+4. **jsdom lacks `Element.prototype.scrollIntoView` / `IntersectionObserver` / `ResizeObserver` /
+   `matchMedia`** — Menu (`pill.scrollIntoView`), RidePage/SendPackagePage (`formTopEl?.scrollIntoView`)
+   auto-scroll on mount (the `?.` guards a null ref, not the missing method); Menu `new`s up the observers.
+   Stub them in `beforeEach`.
+
+**Coverage now:** the 15 biggest pages + currency/tenant stores. Per-page facts the agents verified from
+source (differ per page): each page's `useI18n` destructure; the api boundary (AdminConsole uses
+`lib/adminApi`, a separate axios instance, not `lib/api`); the WebSocket realtime composable to mock
+(`useOwnerRealtime`/`useOrderRealtime`); whether Leaflet inits lazily (Cart — only on the delivery-map modal)
+or at mount (RidePage/SendPackagePage). AdminConsole/OwnerKitchen/OwnerReservations/Menu/Cart mounted clean
+(no bug) — the tests are green regression guards.
+
+---
+
 ## 2026-09-01 — deep speed-optimization campaign (8-lens hunt → 9 fixes shipped)
 
 **Result:** `main` @ `d8d149f`, green. A second, **deeper** performance hunt on the owner's request
