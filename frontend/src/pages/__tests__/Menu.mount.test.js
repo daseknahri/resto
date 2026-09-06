@@ -154,6 +154,10 @@ describe("Menu — mount smoke", () => {
     setActivePinia(createPinia());
     _routes = {};
     vi.clearAllMocks();
+    // jsdom has no Element.prototype.scrollIntoView; Menu smooth-scrolls the active
+    // category pill into view on mount/selection (Menu.vue:909), which would throw an
+    // unhandled TypeError. Stub it as a no-op.
+    Element.prototype.scrollIntoView = vi.fn();
     vi.stubGlobal("IntersectionObserver", NoopObserver);
     vi.stubGlobal("ResizeObserver", NoopObserver);
     vi.stubGlobal("matchMedia", (query) => ({
