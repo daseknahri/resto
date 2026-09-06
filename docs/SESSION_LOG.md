@@ -12,9 +12,15 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
-## 2026-09-05 — mount-smoke test-coverage campaign (15 pages + 2 stores + 1 real prod bug)
+## 2026-09-05→06 — mount-smoke test-coverage campaign (COMPLETE: every route component — ~59 pages + 2 stores + Wizard + 6 layouts; 2 real prod bugs)
 
-**Result:** `main` @ `18332c8`, green. On the owner's "continue" directive (heavy continuous
+**Result:** `main` @ `b76b657`, green. **The campaign is complete** — every route component in the app now has a
+`setup()` mount smoke test (all pages in `src/pages/`, the two Pinia stores, the onboarding Wizard, and all six
+layouts), shipped as **~22 CI-gated PRs (#332–#354)** (incl. #333 stores, #338 docs). The first six PRs are detailed
+below; the completion (waves for the remaining pages + the Wizard + the layouts, plus a **second** real bug) is
+recorded in the **"Campaign completion"** sub-section at the end of this entry.
+
+**Result (initial wave):** `main` @ `18332c8`, green. On the owner's "continue" directive (heavy continuous
 autonomous agent work, **fresh varied agent per task**), added the **first mount smoke tests** for the
 big untested Vue pages + the two untested Pinia stores — closing the **"untested page white-screens at
 setup()"** bug class (the live shake-out crashes #94–#96) that had already shipped real prod crashes
@@ -66,6 +72,62 @@ source (differ per page): each page's `useI18n` destructure; the api boundary (A
 (`useOwnerRealtime`/`useOrderRealtime`); whether Leaflet inits lazily (Cart — only on the delivery-map modal)
 or at mount (RidePage/SendPackagePage). AdminConsole/OwnerKitchen/OwnerReservations/Menu/Cart mounted clean
 (no bug) — the tests are green regression guards.
+
+### Campaign completion (2026-09-06 — waves #339–#354)
+
+Continuing the same delegate-and-gate method (fresh varied agent per page/component, every file hand-reviewed vs
+source, disjoint files collected into gated PRs), the campaign was carried to **exhaustive route-component coverage**:
+
+- **Remaining `src/pages/` (waves #339–#352):** every other page got a mount test — owner surfaces (Tables, Billing,
+  Promotions, StaffPage, Customers, Loyalty, ZReport, Ratings, ShiftClose, Analytics, MenuBuilder, Profile,
+  Notifications, LaunchSuccess…), admin surfaces (Wallet, Drivers, DeliveryZones, Customers, Rides, PlatformAnalytics,
+  FlashSales, DeliveryJobs), consumer/auth surfaces (Home, DishPage, CategoryPage, MenuSelect, ReservationPage,
+  ReservationManage, CustomerLeadPage, LeadCapture, FindMyOrder, Activate, SignIn, ResetPassword, ForgotPassword,
+  WaiterJoin, OwnerWallet), and the near-static pages (NotFound, Unauthorized, DemoLanding, ContactPage,
+  TermsOfService, PrivacyPolicy). **SignIn** had only a helper-function test (`sanitizeNext`) — its component
+  `setup()` had never been mounted until #352.
+- **Route components outside `src/pages/` (wave #21, #353–#354):** the **onboarding Wizard** (`src/onboarding/Wizard.vue`
+  — the owner activation funnel; async `onMounted → tenant.fetchMeta`, `is_menu_published` redirect branch,
+  `onBeforeRouteLeave` guard) and all **6 layouts** (Plain was already tested; **Admin/Landing** in #353,
+  **Waiter/Customer/Owner** in #354). A layout `setup()` crash white-screens an *entire section*, so these guard more
+  than a page test.
+
+**Second real prod bug caught + fixed (#347):** `AdminPlatformAnalytics.vue`'s `refresh()` built
+`new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short', timeZoneName: 'short' })` — an
+**invalid `Intl` option combination that throws `TypeError`** (the ECMA-402 spec forbids `dateStyle`/`timeStyle`
+together with `timeZoneName`). Because the call sat *inside* `refresh()`'s `try` (right after `data.value = res.data`),
+the throw was swallowed into the `catch` → `fetchError.value = true` → the platform-analytics dashboard **always**
+rendered its error state and never showed data. Fix: drop `timeZoneName`, keeping `{ dateStyle:'short',
+timeStyle:'short' }` (verified this was the only such invalid combo in the codebase). The `AdminPlatformAnalytics`
+mount test is the regression guard (it went red on the rendered error state).
+
+**Layout-specific traps** (surfaced during #353–#354, added to the `vue-mount-test-recipe` memory — none catchable by
+local `node --check`/`verify:i18n`; vitest is CI-only here):
+5. **`$route`/`$router` as template globals.** Layouts read `$route.path` (and `.query`) DIRECTLY in their nav
+   RouterLink bindings (`:data-active`, `:aria-current`), evaluated in the layout's OWN render scope BEFORE the
+   RouterLink stub resolves. `shallowMount` injects no `$route`, so an undefined `$route` throws `TypeError: Cannot
+   read properties of undefined` at first render. Fix: `global.mocks: { $route: {...}, $router: { push: vi.fn() } }`.
+   (AdminLayout + LandingLayout + OwnerLayout hit this; WaiterLayout + CustomerLayout did **not** — grep the template.)
+6. **`requestIdleCallback` fire-and-forget import leak** — OwnerLayout's `prefetchOwnerChunks()` falls back to
+   `setTimeout(run, 1500)` (jsdom lacks `requestIdleCallback`), firing real dynamic page `import()`s AFTER teardown
+   (same class as the Leaflet-at-mount leak). Fix: stub `window.requestIdleCallback = vi.fn()` (no-op, never invokes
+   the callback) in `beforeEach`.
+7. **Mock WS/realtime/push composables at their boundary.** `useOwnerRealtime` opens a real `WebSocket` + reconnect
+   `setTimeout`; `useWaiterCalls`/`useStaffChat` are module-level singletons owning a socket; `usePushNotifications`/
+   `useCustomerPush` touch the service worker. Mock the composable (not the socket): `useOwnerRealtime → { connect,
+   disconnect }`; return the exact destructured surface. Nuances that bite: `checkEnabled` MUST return a Promise
+   (`onMounted` does `checkEnabled().then(...)`); `usePushNotifications.supported` is a **plain boolean**, not a ref;
+   `useStaffChat.error` is `ref(false)`; `useVocabulary.catalog`/`useOwnerTheme.theme` ARE `.value`'d so must be refs.
+8. **Seed the customer store via `setCustomer`, not `$patch`.** `setCustomer` sets `loaded = true`, so `onMounted`'s
+   `fetchCustomer()` short-circuits and doesn't overwrite the seeded customer with the empty api mock; a bare
+   `$patch({ customer })` leaves `loaded = false` and the mount fetch nulls the seed back out.
+9. **`useI18n` destructure varies.** Most surfaces take `{ t }`, but CustomerLayout takes `{ currentLocale, t }` (a
+   `watch(() => currentLocale.value, …)` reads it) and map/price pages take `{ t, formatPrice, currentLocale }` — a
+   `t`-only mock throws `undefined.value` at setup. Read the destructure per component.
+
+**Final coverage:** every route component in the app has a `setup()` mount smoke test. The Wizard + all 6 layouts
+mounted clean (no new bug beyond #334 + #347). This closes the *"untested surface white-screens at setup()"* bug
+class at the route-component level — do **not** re-audit page/layout mount coverage without new components to justify it.
 
 ---
 
