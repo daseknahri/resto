@@ -244,7 +244,13 @@ const refresh = async () => {
   try {
     const res = await api.get('/admin/platform-analytics/');
     data.value = res.data;
-    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short', timeZoneName: 'short' }).format(new Date());
+    // NOTE: dateStyle/timeStyle cannot be combined with timeZoneName — the Intl spec
+    // mandates a TypeError for that combination (in every compliant engine, browsers
+    // included). It previously threw here on EVERY refresh, right after data was set,
+    // so the catch below flipped fetchError=true and the dashboard always showed its
+    // error state instead of the fetched data. Keep the short date+time; drop the
+    // (invalid) timeZoneName. Regression guard: __tests__/AdminPlatformAnalytics.mount.test.js.
+    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
   } catch {
     fetchError.value = true;
   } finally {
