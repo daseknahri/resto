@@ -181,6 +181,10 @@ describe("SendPackagePage — mount smoke", () => {
   let wrapper;
 
   beforeEach(() => {
+    // jsdom has no Element.prototype.scrollIntoView; the page smooth-scrolls its
+    // form-top element into view on some state changes (SendPackagePage.vue formTopEl),
+    // which would otherwise throw an unhandled TypeError. Stub it as a no-op.
+    Element.prototype.scrollIntoView = vi.fn();
     localStorage.clear();
     setActivePinia(createPinia());
     _routes = {};
