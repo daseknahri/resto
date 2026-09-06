@@ -166,6 +166,10 @@ describe("RidePage — mount smoke", () => {
   let wrapper;
 
   beforeEach(() => {
+    // jsdom has no Element.prototype.scrollIntoView; the page smooth-scrolls the form
+    // top element into view on some state changes (RidePage.vue formTopEl), which
+    // would otherwise throw an unhandled TypeError. Stub it as a no-op.
+    Element.prototype.scrollIntoView = vi.fn();
     // Clear localStorage first so nothing leaks between tests (parity with the
     // sibling mount tests; keeps store hydration deterministic).
     localStorage.clear();
