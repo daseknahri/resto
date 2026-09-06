@@ -125,9 +125,6 @@ vi.mock("../../lib/mapTiles", () => ({ addTileLayer: vi.fn() }));
 
 import { useCustomerStore } from "../../stores/customer";
 import RidePage from "../RidePage.vue";
-// The mocked leaflet default export (vi.mock('leaflet') above), so a test can wait
-// until the fake L.map() has actually run — see settle() below.
-import leafletMock from "leaflet";
 
 const mountPage = () =>
   shallowMount(RidePage, {
@@ -141,39 +138,27 @@ const mountPage = () =>
     },
   });
 
-// RidePage initializes Leaflet AT MOUNT via a FIRE-AND-FORGET chain:
-// onMounted → nextTick(initBookingMaps) → async ensureLeaflet() (a Promise.all of
-// dynamic imports) → L.map(). That chain must be drained to completion HERE, while
-// vi.mock('leaflet') is still active. If it's left pending, it resolves during the
-// file's teardown when the mock is gone — its late `await import('leaflet')` then
-// gets the REAL leaflet, and L.map() on a bare jsdom div throws "Map container not
-// found" as an UNHANDLED error that fails the whole run (even though every assertion
-// passed). Waiting for the mocked L.map to have been called proves the init reached
-// the map step under the mock; the trailing flushes drain the rest (a second booking
-// map, addTileLayer, setView).
-const settle = async () => {
-  await flushPromises();
-  await vi.waitFor(() => expect(leafletMock.map).toHaveBeenCalled());
-  await flushPromises();
-  await flushPromises();
-};
+// Leaflet-init avoidance (why these cases mount an ACTIVE ride, not the idle booking
+// form): RidePage inits its booking Leaflet maps AT MOUNT only when there is NO active
+// ride (onMounted → nextTick(initBookingMaps)), and a tracking Leaflet map only when
+// the active ride has a driver GPS position (hasDriverPos → nextTick(renderTrackingMap)).
+// Both map inits are FIRE-AND-FORGET dynamic-import chains that can resolve after the
+// test's vi.mock('leaflet') is torn down (→ real leaflet → "Map container not found"
+// as an unhandled error that fails the run). Mounting an active ride WITHOUT a driver
+// position sidesteps BOTH: no booking form, no tracking map → zero Leaflet init — while
+// still running the page's real setup() + onMounted + active-ride template (the
+// setup()-crash guard this test is for). The leaflet mock above stays as defensive
+// insurance.
 
-// A minimal active ride with an assigned driver + a live driver position. status
-// 'accepted' → not terminal → the active-ride tracking block renders, startPolling()
-// engages, and the { immediate:true } driver-position watch drives renderTrackingMap()
-// (a third Leaflet map) — the highest-value active-ride crash path.
+// Active ride with an assigned driver but NO GPS position (no driver_lat/lng →
+// hasDriverPos false) so the tracking map is never initialized. status 'accepted' is
+// non-terminal → the active-ride tracking block renders + startPolling() engages.
 const acceptedRide = (overrides = {}) => ({
   id: 42,
   status: "accepted",
   pickup_address: "1 Pickup St",
   dropoff_address: "9 Dropoff Ave",
-  driver: {
-    name: "Sami",
-    driver_vehicle: "Dacia Logan",
-    phone: "0600000000",
-    driver_lat: 33.5731,
-    driver_lng: -7.5898,
-  },
+  driver: { name: "Sami", driver_vehicle: "Dacia Logan", phone: "0600000000" },
   ...overrides,
 });
 
@@ -189,74 +174,58 @@ describe("RidePage — mount smoke", () => {
     vi.clearAllMocks();
   });
 
-  afterEach(async () => {
-    // Drain any still-pending fire-and-forget map init before unmount/teardown, so it
-    // resolves under the leaflet mock rather than after it (see settle()).
-    await flushPromises();
+  afterEach(() => {
     // onBeforeUnmount stops the 5s active-ride poll, clears the cancel-guard timer,
-    // removes the three Leaflet maps, and removes the visibilitychange listener —
-    // unmount so no timer/listener/map leaks between tests.
+    // removes any Leaflet maps, and removes the visibilitychange listener — unmount
+    // so no timer/listener/map leaks between tests.
     if (wrapper) wrapper.unmount();
     wrapper = undefined;
     _routes = {};
   });
 
-  // ── (1) idle mount: authenticated, NO active ride → booking form + maps ──────
-  // The core, high-value guard. RidePage renders a loading skeleton until the
-  // customer store is `loaded`, so setCustomer() both authenticates AND marks it
-  // loaded — pushing past the skeleton into the signed-in booking form. That drives
-  // the full onMounted async body (fetchActiveRide → no ride → nextTick(initBooking-
-  // Maps) → ensureLeaflet + L.map for BOTH booking maps, fetchHistory,
-  // fetchSavedAddresses) plus every fare/estimate/status computed. A setup-time
-  // crash in any of it — the "map/geo/poll setup at mount" class this guard exists
-  // for — fails here instead of white-screening in production.
-  it("mounts an authenticated customer with no active ride (booking form + Leaflet init) without a setup() crash", async () => {
-    // setCustomer marks the store loaded + authenticated, so the template renders
-    // the signed-in booking form rather than the loading skeleton / sign-in wall.
+  // ── (1) active accepted ride (driver assigned, NO GPS) → no map init ─────────
+  // The core guard. setCustomer marks the customer store loaded + authenticated, so
+  // the page renders past the loading skeleton; an ACTIVE ride means onMounted starts
+  // the 5s poll and renders the active-ride tracking view (rideStatusLabel,
+  // hasDriverPos, connectionState computeds) rather than the booking form. No booking
+  // form → no booking-map init; no driver GPS → no tracking-map init. Zero Leaflet.
+  it("mounts an authenticated customer with an active accepted ride (no GPS) without a setup() crash", async () => {
     useCustomerStore().setCustomer({ id: 1, name: "Rider", phone: "0600000000" });
-    // _routes empty → /rides/active/ resolves { data: {} } → no active ride → the
-    // booking-form v-else branch, and initBookingMaps() runs at mount.
+    _routes = { "/rides/active/": { data: { ride: acceptedRide(), scheduled: [] } } };
 
     expect(() => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    // Drain onMounted's awaited fetch + its fire-and-forget map init to completion
-    // under the leaflet mock (see settle()).
-    await settle();
+    // onMounted awaits fetchActiveRide; a second flush drains history/addresses.
+    await flushPromises();
+    await flushPromises();
 
     expect(wrapper.exists()).toBe(true);
     // Header (rendered in every signed-in state) — the crash-guard anchor.
     expect(wrapper.text()).toContain("ridePage.title");
-    // Booking-form-only CTA (the pickup "Use my location" button) — proves the
-    // v-else booking-form branch rendered, i.e. the map/estimate setup path ran.
-    expect(wrapper.text()).toContain("ridePage.useMyLocation");
+    // rideStatusLabel for status 'accepted' → the active-ride tracking branch rendered.
+    expect(wrapper.text()).toContain("ridePage.driverAssigned");
   });
 
-  // ── (2) active ride (accepted + driver position) → tracking map ──────────────
-  // Routes an in-progress ride via /rides/active/ so onMounted starts the 5s poll
-  // and the { immediate:true } driver-position watch drives renderTrackingMap() (a
-  // third Leaflet map). Even with the status banner's children stubbed, the page-own
-  // computeds bound here — rideStatusLabel, hasDriverPos, connectionState — evaluate,
-  // so a crash in any of them fails here. Asserting the 'accepted' status label
-  // proves the active-ride tracking branch rendered.
-  it("mounts an authenticated customer with an active accepted ride (tracking map) without a crash", async () => {
+  // ── (2) active searching ride (no driver yet) ────────────────────────────────
+  // A different active-ride sub-state (status 'searching', no driver) — still an
+  // active ride (no booking form) and no GPS (no tracking map), so still no Leaflet —
+  // exercising the searching branch of the active-ride template + its computeds.
+  it("mounts an authenticated customer with a searching ride (no driver) without a crash", async () => {
     useCustomerStore().setCustomer({ id: 2, name: "Rider", phone: "0611111111" });
     _routes = {
-      "/rides/active/": { data: { ride: acceptedRide(), scheduled: [] } },
+      "/rides/active/": { data: { ride: acceptedRide({ status: "searching", driver: null }), scheduled: [] } },
     };
 
     expect(() => {
       wrapper = mountPage();
     }).not.toThrow();
 
-    await settle();
+    await flushPromises();
+    await flushPromises();
 
     expect(wrapper.exists()).toBe(true);
-    // Header anchor.
     expect(wrapper.text()).toContain("ridePage.title");
-    // rideStatusLabel for status 'accepted' → the active-ride tracking branch
-    // rendered (and its driver-position watch → renderTrackingMap ran, mocked).
-    expect(wrapper.text()).toContain("ridePage.driverAssigned");
   });
 });
