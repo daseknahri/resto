@@ -64,5 +64,6 @@ defineEmits(["close", "applied"]);
 
 const { t } = useI18n();
 
-const titleId = `template-picker-modal-title-${++instanceCounter}`;
+instanceCounter += 1;
+const titleId = `template-picker-modal-title-${instanceCounter}`;
 </script>

@@ -481,7 +481,7 @@ export const useCartStore = defineStore("cart", {
       }
 
       let resolvedMap = {};
-      let anyOptionsDropped = false;
+      let anyOptionsDropped;
       try {
         const payload = {
           items: normalizedLines.map((l) => ({ slug: l.slug, option_ids: l.option_ids })),

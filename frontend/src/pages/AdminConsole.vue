@@ -2029,7 +2029,7 @@ const removeLead = async (lead) => {
 const decideUpgradeRequest = async (requestItem, decision) => {
   // Collect user input BEFORE activating the loading state so the button
   // doesn't appear busy while the admin is filling in the dialog.
-  let adminNote = "";
+  let adminNote;
   let paymentReference = requestItem.payment_reference || "";
   if (decision === "approve") {
     const ref = await prompt({

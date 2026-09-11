@@ -553,7 +553,7 @@ const validate = () => {
     valid = false;
   }
   if (form.date && form.time) {
-    let combined = null;
+    let combined;
     try {
       combined = new Date(`${form.date}T${form.time}`);
     } catch {
