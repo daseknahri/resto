@@ -97,7 +97,7 @@ export function useReorder() {
    * @returns {Promise<number>} number of server orders merged in.
    */
   async function hydrateServerHistory() {
-    let orders = [];
+    let orders;
     try {
       const { data } = await api.get("/customer/orders/");
       orders = Array.isArray(data?.orders) ? data.orders : [];

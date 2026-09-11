@@ -803,7 +803,7 @@ const todayStats = computed(() => {
   const todayOrders = order.orders.filter((o) => _tenantDayStr(o.created_at) === today);
   const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
-  let revenueLabel = "";
+  let revenueLabel;
   try {
     revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
   } catch {

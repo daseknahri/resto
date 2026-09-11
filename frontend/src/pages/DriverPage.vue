@@ -1328,7 +1328,7 @@ const activeReadyEta = computed(() => {
   if (!iso) return null;
   const ts = new Date(iso).getTime();
   if (Number.isNaN(ts)) return null;
-  let clock = '';
+  let clock;
   try {
     clock = new Date(ts).toLocaleTimeString(currentLocale.value || undefined, { hour: '2-digit', minute: '2-digit' });
   } catch {

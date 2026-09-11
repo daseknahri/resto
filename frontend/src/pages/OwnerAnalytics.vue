@@ -259,7 +259,7 @@ const todayStats = computed(() => {
   const revenue = Number(today?.revenue) || 0;
   const count = Number(today?.orders) || 0;
   const currency = revenueSummary.value?.currency || "MAD";
-  let revenueLabel = "";
+  let revenueLabel;
   try {
     revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
   } catch {
