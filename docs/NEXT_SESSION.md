@@ -132,10 +132,19 @@ now superseded — close it.)* **One follow-up, flagged not fixed:** the *dorman
 
 Each remaining Dependabot major has a real blocker — don't merge blind:
 - **`#154` tailwind 4** — a CSS-layer / config rewrite; high-risk, defer until deliberately scheduled.
-- **`#148` eslint 10** — tractable: `eslint-plugin-vue` caps eslint ≤9, so bump the companion plugin
-  (`eslint-plugin-vue` 9→10) on the same branch, then eslint. CI-gate it.
-- **`#147` stripe 15** — dormant seam; `stripe.error` removed → runtime break. Migrate when wiring the
-  PSP (item A.1).
+- ✅ **RESOLVED — `#148` eslint 10** (shipped **#295**, eslint 9→10 + `eslint-plugin-vue` 9→10;
+  the old Dependabot PRs `#148`/`#210`/`#238` are closed/superseded). `eslint-plugin-vue` 10's peer
+  range is `^8.57.0 || ^9.0.0 || ^10.0.0`, so it does support eslint 10.
+- **`#315` (was `#147`) stripe 15** — dormant seam; `stripe.error` removed → runtime break. Migrate when
+  wiring the PSP (item A.1). Still owner-gated.
+
+**Routine dep-queue pass (2026-09-12):** the low-risk Dependabot queue was cleared — **#356** (pip
+patch/minor: boto3, pywebpush), **#358** (`@eslint/js` 10.0.1 + fixing the 8 `no-useless-assignment`
+dead stores it newly flagged), and **#360** (npm patch/minor: `@sentry/vue`, `vue`, `vue-router`,
+`@vue/test-utils`, `postcss`) all merged CI-green; the grouped Dependabot **#357** auto-closed once its
+contents landed. Still open and deliberately **not** merged autonomously: **#313** (`globals` 16→17 —
+dev-only, low value), **#314** (`gunicorn` 23→26 — server-runtime major, wants a staging nod), plus the
+owner-gated **#315** (stripe) and deferred **#154** (tailwind 4).
 
 ### D. Pre-existing owner items (from `CLAUDE.md`)
 
