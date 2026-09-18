@@ -16,6 +16,12 @@ cleanly; the blockers are backend/infra, and they prevent testing the whole tran
 Because of F1 + F2, the real customer journey (browse a menu → cart → checkout → order status)
 and all authenticated surfaces (owner/waiter/driver/admin) could **not** be exercised this pass.
 
+> **⛔ NEEDED FROM OWNER to run the full E2E:** a **staging URL with valid TLS + a live API**, and
+> **test credentials** for each role (customer, owner, waiter, driver, platform admin). Prod can't be
+> used for the transactional/authenticated flows — it's real data, and right now the API is down (F1)
+> and tenant TLS is broken (F2). Once staging + creds exist, the customer transactional path and every
+> authenticated surface can be tested safely.
+
 ---
 
 ## F1 — 🔴 CRITICAL — the backend API is down (every `/api/*` request 500s)
