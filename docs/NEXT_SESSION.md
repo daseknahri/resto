@@ -132,6 +132,10 @@ now superseded — close it.)* **One follow-up, flagged not fixed:** the *dorman
 
 Each remaining Dependabot major has a real blocker — don't merge blind:
 - **`#154` tailwind 4** — a CSS-layer / config rewrite; high-risk, defer until deliberately scheduled.
+  **Assessed 2026-09-12** → [`frontend/TAILWIND_V4_MIGRATION_ASSESSMENT.md`](../frontend/TAILWIND_V4_MIGRATION_ASSESSMENT.md):
+  code-effort is low (codemod-automated; codebase well-prepared), but v4 hard-drops pre-2023
+  browsers (Safari 16.4+/Chrome 111+) with no feature benefit today — **recommend deferring** until
+  consumer browser-analytics (Sentry) confirm a modern user base.
 - ✅ **RESOLVED — `#148` eslint 10** (shipped **#295**, eslint 9→10 + `eslint-plugin-vue` 9→10;
   the old Dependabot PRs `#148`/`#210`/`#238` are closed/superseded). `eslint-plugin-vue` 10's peer
   range is `^8.57.0 || ^9.0.0 || ^10.0.0`, so it does support eslint 10.
