@@ -114,3 +114,39 @@ These are the exact surfaces the recent mount-smoke campaign guarded — they re
 List your business" marketing, the `doro` demo tenant, no real catalog on the hub). The findings above are
 real regardless, but F1 in particular may reflect an **idle/broken deployment state** — confirm whether the
 DB/container simply needs a restart vs. a deeper config issue.
+
+---
+
+## Update — post-fix E2E round (same day)
+
+**F1 is RESOLVED.** Root-caused live in Coolify and fixed: the API was down because Postgres hit
+`max_connections=50` — caused by **8 orphaned `admin` containers from ~4-month-old deploys** still holding
+connections. Removed them (`docker rm -f`) + restarted Postgres → all endpoints back to 200
+(`/api/health/` green). Full write-up + durable fixes in
+[`INCIDENT_2026-09-18_db_connection_exhaustion.md`](INCIDENT_2026-09-18_db_connection_exhaustion.md).
+
+With the API back, the **marketplace consumer path** (previously blocked by F1) was tested on the platform
+host and **works**: `/order` lists businesses with full filters; `/order/<slug>` loads the menu (categories,
+items, allergen filters, reviews); add-to-cart works (per-tenant `mkt:cart:<slug>` localStorage). Renders
+correctly in Arabic/RTL. Note this path lives on the **platform host**, so F2 (tenant-subdomain TLS) does
+**not** block it. Two new flaws surfaced:
+
+### F3 — [MED] marketplace shows prices in **US$** for a Moroccan (tanger) restaurant
+- On `/order/daseknahri` (business "matsco", city tanger, cuisine moroccan) every price + the delivery fee
+  renders as **`US$`** — DOM scan: **43× `US$`, 0× `MAD`**.
+- The app is single-**MAD** in prod (per `CLAUDE.md`), so a customer in Morocco seeing USD is wrong. Confirm
+  whether it's a **tenant currency misconfiguration** (owner set USD) or the **marketplace defaulting to USD**
+  instead of reading the tenant currency. Either way it's a trust/clarity problem on the whole ordering surface.
+- (Prices are obvious test data — bread 400, tacos 100 — so this is the demo tenant, but the currency *label*
+  is the concern.)
+
+### F4 — [MED] contradictory open/closed status on the storefront header
+- The `/order/<slug>` header shows **"مفتوح" (Open, green dot)** and **"مغلق اليوم" (Closed today)**
+  simultaneously (both confirmed present in the DOM). Confusing to customers — verify the business-hours
+  display logic (is it "open now but closed later today", or a genuine state contradiction?).
+
+### Not exercised (deliberate / still blocked)
+- **Place-order / checkout submit** — that's a real order mutation on prod; stopped at the cart. Needs a
+  controlled test on staging (or an owner-run test order).
+- **Authenticated surfaces** (owner/waiter/driver/admin) — need test credentials / staging.
+- **Tenant-subdomain storefronts** (`<slug>.menu.…`) — still blocked by **F2** (expired/mismatched TLS).
