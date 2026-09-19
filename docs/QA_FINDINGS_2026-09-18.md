@@ -150,3 +150,37 @@ correctly in Arabic/RTL. Note this path lives on the **platform host**, so F2 (t
   controlled test on staging (or an owner-run test order).
 - **Authenticated surfaces** (owner/waiter/driver/admin) — need test credentials / staging.
 - **Tenant-subdomain storefronts** (`<slug>.menu.…`) — still blocked by **F2** (expired/mismatched TLS).
+
+---
+
+## F2 — confirmed root cause + fix runbook (2026-09-19)
+
+Confirmed live in Coolify + Hostinger DNS:
+- **DNS is fine** — a `*.menu` A record → the Coolify box (85.31.239.111) exists, so every
+  `<slug>.menu.ibnbatoutaweb.com` **resolves**. An `_acme-challenge.menu` TXT is present too.
+- **The Coolify app has only 2 domains configured:** `menu.ibnbatoutaweb.com` (frontend) and
+  `admin.menu.ibnbatoutaweb.com` (admin). **No wildcard `*.menu.…` and no per-tenant `<slug>.menu.…`
+  domain.** So Traefik holds certs only for those two, and every tenant storefront falls through to
+  Traefik's **fallback = the expired apex cert**. That is F2.
+- The `_acme-challenge.menu` TXT is a **static** value — Let's Encrypt DNS-01 rotates the token each
+  renewal, so a hand-set static record issues **once** then can't auto-renew (why it expired).
+
+### Fix path ① — interim, unblocks the live tenant(s) now (HTTP-01, no secrets)
+1. Coolify → app → **Domains → Add**: `https://daseknahri.menu.ibnbatoutaweb.com` (+ any other live
+   `<slug>.menu.ibnbatoutaweb.com`) → route to the **frontend** service (internal port 3000).
+2. **Save → Redeploy** the app. Traefik requests an HTTP-01 cert per subdomain.
+3. Verify: `curl -I https://daseknahri.menu.ibnbatoutaweb.com` → no cert error.
+- Caveat: the redeploy also applies the existing **"Changes pending"** and pulls current `main` — review
+  the pending changes first. Manual per tenant → fine for the handful live today, not for self-serve.
+
+### Fix path ② — durable, right for a multi-tenant SaaS (wildcard via DNS-01)
+1. Create a **Hostinger DNS API token**.
+2. Configure the Coolify **proxy** (Server → Proxy → dynamic Traefik config) with a
+   `certificatesResolvers` using **`dnsChallenge`** (lego provider `hostinger`; verify support, else move
+   DNS to a Traefik-supported provider e.g. Cloudflare) + the API token as env.
+3. Add **`*.menu.ibnbatoutaweb.com`** as a frontend domain.
+4. Traefik issues + **auto-renews** the wildcard, rotating `_acme-challenge.menu`. Delete the stale static
+   `_acme-challenge.menu` TXT.
+5. Verify: `curl -I https://<anyslug>.menu.ibnbatoutaweb.com` → valid `CN=*.menu.ibnbatoutaweb.com` cert.
+
+> These require a redeploy and/or a DNS API secret, so they're operator-run.
