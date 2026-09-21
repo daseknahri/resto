@@ -427,7 +427,7 @@
                   :checked="form.tags.includes(tag)"
                   @change="toggleTag(tag)"
                 />
-                {{ tag }}
+                {{ tagLabel(tag) }}
               </label>
             </div>
           </div>
@@ -453,7 +453,7 @@
                   v-model.number="form.lat"
                   type="number"
                   step="0.0001"
-                  placeholder="e.g. 48.8566"
+                  :placeholder="t('stepPublish.latPlaceholder')"
                   class="w-full ui-input tabular-nums"
                 />
               </div>
@@ -464,7 +464,7 @@
                   v-model.number="form.lng"
                   type="number"
                   step="0.0001"
-                  placeholder="e.g. 2.3522"
+                  :placeholder="t('stepPublish.lngPlaceholder')"
                   class="w-full ui-input tabular-nums"
                 />
               </div>
@@ -676,6 +676,11 @@ const MARKETPLACE_TAGS = [
   "Vegetarian", "Vegan", "Halal", "Kosher",
   "Gluten-Free", "Seafood", "BBQ", "Pizza", "Burgers", "Sushi",
 ];
+
+// The tag VALUE stored on form.tags stays the canonical English string (the backend
+// directory matches on it); only the chip LABEL is localized. Normalise to a key so
+// "Gluten-Free" -> stepPublish.tag_gluten_free, "BBQ" -> stepPublish.tag_bbq.
+const tagLabel = (tag) => t(`stepPublish.tag_${String(tag).toLowerCase().replace(/[^a-z0-9]+/g, "_")}`);
 
 const gettingLocation = ref(false);
 

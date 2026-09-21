@@ -131,8 +131,10 @@
                   class="cursor-pointer rounded border border-transparent px-1 font-semibold tabular-nums text-slate-300 transition hover:border-slate-600 hover:bg-slate-800"
                   :title="t('stepDishes.tapToEditPrice')"
                   role="button"
+                  tabindex="0"
                   :aria-label="t('stepDishes.tapToEditPrice')"
                   @click.stop="startInlinePriceEdit(dish)"
+                  @keydown.enter.space.prevent="startInlinePriceEdit(dish)"
                 >{{ Number(dish.price || 0).toFixed(2) }}</span>
                 <input
                   v-else
@@ -854,7 +856,7 @@
                   <ul class="space-y-2">
                     <li
                       v-for="(comp, compIdx) in editingDish.combo_components"
-                      :key="compIdx"
+                      :key="comp.component_id"
                       class="flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm"
                     >
                       <span class="min-w-0 flex-1 text-slate-200">{{ comp.name || comp.component_id }}</span>
