@@ -1,6 +1,6 @@
 Django==5.2.17
-psycopg2==2.9.12
-djangorestframework==3.18.0
+psycopg2==2.9.13
+djangorestframework==3.18.1
 # OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
 # generateschema` with drf-spectacular, used by the CI "Export OpenAPI schema"
 # step (`manage.py spectacular --validate`) and by tests/test_openapi_schema.py.
@@ -17,9 +17,9 @@ qrcode==7.4.2
 reportlab==5.0.1
 gunicorn==23.0.0
 whitenoise==6.12.0
-sentry-sdk==2.68.1
+sentry-sdk==2.69.2
 django-storages==1.14.6
-boto3==1.43.88
+boto3==1.43.97
 django-redis==5.4.0
 redis==8.1.0
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
@@ -32,7 +32,7 @@ pywebpush==2.5.0
 channels==4.3.2
 channels-redis==4.3.0
 daphne==4.2.3
-uvicorn[standard]==0.52.4
+uvicorn[standard]==0.53.0
 pyotp==2.10.0
 # PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
 stripe>=10.0.0,<13.0.0
