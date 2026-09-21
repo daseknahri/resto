@@ -3908,6 +3908,7 @@ ownerHome: {
   orderUrgentTitle: "En attente depuis {min} min — a traiter",
   viewAllRatings: "Voir tous les avis",
   noRatingsYet: "Aucun avis",
+  tileError: "Echec du chargement - reessayer",
   allClear: "Rien a signaler",
   soldOutLabel: "Rupture de stock",
   alertsRegion: "Alertes tableau de bord",

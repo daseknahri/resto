@@ -182,6 +182,16 @@
             </button>
           </li>
         </ul>
+        <div v-else-if="searchError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p id="wallet-search-error" class="flex-1 text-sm text-red-300">{{ t('ownerWallet.floatError') }}</p>
+          <button
+            type="button"
+            class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+            aria-describedby="wallet-search-error"
+            @click="runSearch(searchQuery)"
+          >{{ t('common.retry') }}</button>
+        </div>
         <div v-else-if="searchQuery.length >= 2 && !searching" class="ui-empty-state space-y-1 p-6 text-center">
           <AppIcon name="search" class="mx-auto mb-2 h-8 w-8 text-slate-600" aria-hidden="true" />
           <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.noResults') }}</p>
@@ -281,6 +291,16 @@
               <div class="h-3.5 w-16 rounded bg-slate-700/50" />
             </div>
           </div>
+          <div v-else-if="historyError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 p-4">
+            <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+            <p id="wallet-history-error" class="flex-1 text-sm text-red-300">{{ t('ownerWallet.floatError') }}</p>
+            <button
+              type="button"
+              class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+              aria-describedby="wallet-history-error"
+              @click="selected && fetchHistory(selected.id)"
+            >{{ t('common.retry') }}</button>
+          </div>
           <div v-else-if="!walletHistory.length" class="ui-empty-state rounded-xl border border-slate-700/30 p-5 text-center">
             <AppIcon name="wallet" class="mx-auto mb-2 h-7 w-7 text-slate-600" aria-hidden="true" />
             <p class="text-sm text-slate-400">{{ t('ownerWallet.historyEmpty') }}</p>
@@ -329,6 +349,10 @@ const route = useRoute();
 const searchQuery = ref('');
 const searchResults = ref([]);
 const searching = ref(false);
+// Distinguish a failed lookup from a genuine no-match: without this, a network/server
+// error rendered the "No customers found" empty state, telling the owner the customer
+// doesn't exist when the search actually errored.
+const searchError = ref(false);
 const selected = ref(null);
 const topupAmount = ref('');
 const topupNote = ref('');
@@ -413,6 +437,9 @@ const confirmCashout = async () => {
 // ── Wallet history ────────────────────────────────────────────────────────────
 const walletHistory = ref([]);
 const loadingHistory = ref(false);
+// A failed history fetch previously showed the "no transactions" empty state instead of
+// signalling the error.
+const historyError = ref(false);
 
 let searchTimer = null;
 
@@ -453,6 +480,7 @@ const onSearchInput = () => {
 
 const runSearch = async (q) => {
   searching.value = true;
+  searchError.value = false;
   try {
     const res = await api.get('/owner/customers/', { params: { search: q } });
     // The owner/customers/ API returns { summary: {...}, customers: [...] }
@@ -469,6 +497,7 @@ const runSearch = async (q) => {
       }));
   } catch {
     searchResults.value = [];
+    searchError.value = true;
   } finally {
     searching.value = false;
   }
@@ -554,11 +583,13 @@ onBeforeUnmount(stopScan);
 const fetchHistory = async (customerId) => {
   walletHistory.value = [];
   loadingHistory.value = true;
+  historyError.value = false;
   try {
     const res = await api.get(`/owner/wallet/history/${customerId}/`);
     walletHistory.value = res.data.transactions || [];
   } catch {
     walletHistory.value = [];
+    historyError.value = true;
   } finally {
     loadingHistory.value = false;
   }
