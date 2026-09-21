@@ -780,6 +780,7 @@
                 autocomplete="off"
                 class="ui-input flex-1 text-sm uppercase tracking-wider"
                 :placeholder="t('customerAccount.voucherPlaceholder')"
+                :aria-label="t('customerAccount.voucherTitle')"
                 :disabled="voucherLoading"
                 @keyup.enter="redeemVoucher"
               />
@@ -1277,6 +1278,7 @@
           v-if="receiptOrder"
           class="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center print:bg-white print:backdrop-blur-none"
           role="dialog"
+          aria-modal="true"
           :aria-label="t('customerAccount.viewReceipt')"
           @click.self="receiptOrder = null"
         >
