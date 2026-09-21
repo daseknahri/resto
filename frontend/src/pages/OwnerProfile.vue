@@ -131,7 +131,7 @@
                 role="switch"
                 :aria-checked="day.enabled"
                 :aria-label="day.label"
-                class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-left text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+                class="ui-touch-target w-20 shrink-0 rounded-full border px-2 text-start text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
                 :class="day.enabled
                   ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
                   : 'border-slate-700 bg-slate-900 text-slate-400'"

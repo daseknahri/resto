@@ -85,6 +85,7 @@
                   min="0"
                   step="0.01"
                   class="ui-input w-full text-sm"
+                  :aria-label="t('cashDrawer.countedTotal')"
                   :placeholder="`0.00`"
                   :disabled="closing"
                 />
@@ -117,7 +118,7 @@
             <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
               <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.amount") }}</th>
               <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.reason") }}</th>
-              <th class="py-1.5 font-medium text-end">{{ t("zReport.voidAt") }}</th>
+              <th class="py-1.5 font-medium text-end">{{ t("cashDrawer.time") }}</th>
             </tr>
           </thead>
           <tbody>

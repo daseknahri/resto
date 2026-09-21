@@ -288,6 +288,7 @@
             v-model.number="goalInput"
             type="number"
             min="0"
+            :aria-label="t('ownerHome.goalTitle')"
             step="100"
             :placeholder="t('ownerHome.goalPlaceholder')"
             class="ui-input flex-1 text-sm"
