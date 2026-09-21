@@ -184,3 +184,26 @@ Confirmed live in Coolify + Hostinger DNS:
 5. Verify: `curl -I https://<anyslug>.menu.ibnbatoutaweb.com` → valid `CN=*.menu.ibnbatoutaweb.com` cert.
 
 > These require a redeploy and/or a DNS API secret, so they're operator-run.
+
+---
+
+## Post-recovery re-verification — 2026-09-21 (live prod, in-app browser)
+
+After F1 was resolved (orphan containers removed + Postgres restarted) the platform host is back to
+**200** and healthy. Read-only E2E re-pass against `menu.ibnbatoutaweb.com` (no orders placed, no auth):
+
+- **Landing** (`/`) — renders clean, RTL Arabic, **no console errors**.
+- **Marketplace browse** (`/order`) — `GET /api/customer/session/` and `GET /api/marketplace/` both **200**;
+  storefront list renders (`matsco`, tenant `daseknahri`).
+- **Storefront** (`/order/daseknahri`) — full menu, categories, reviews all render; **no console errors**.
+- **Cart math ✓** — bread (400) + Espresso (18) → checkout bar shows **418.00 US$**, exact. No money defect.
+
+**Still-open (unchanged) owner items, re-confirmed as data/config, not code bugs:**
+- **F3** — prices show `US$` because the demo tenant's `Dish.currency = "USD"` (a Tangier/`moroccan`
+  restaurant). The code faithfully renders the configured currency; fix is the **owner** correcting the
+  demo data to `MAD`.
+- **F4** — the header shows `مفتوح` (open, accepting orders now) alongside `مغلق اليوم` (no scheduled hours
+  today). Two independent signals by design; the demo tenant just has incomplete hours. Not a code bug.
+
+**Net:** recovery held; the customer-facing path is healthy. The remaining outage hardening lives in the
+three PRs (#378 merged; #379 headroom + #380 orphan-cleanup/DB-role awaiting the owner's staging pass).
