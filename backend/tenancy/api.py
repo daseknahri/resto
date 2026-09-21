@@ -711,21 +711,10 @@ class AppManifestView(APIView):
     def get(self, request, *args, **kwargs):
         from django.http import JsonResponse
 
-        tenant = getattr(request, "tenant", None)
-        if tenant is None:
-            return JsonResponse({"error": "tenant not found"}, status=400)
-
-        # Pull profile fields
-        profile = getattr(tenant, "profile", None)
-        restaurant_name = getattr(tenant, "name", "Restaurant") or "Restaurant"
-        short_name = restaurant_name[:12]  # manifest short_name limit
-        logo_url = (getattr(profile, "logo_url", "") or "").strip()
-        primary_color = (getattr(profile, "primary_color", "") or "#0b1c1a").strip() or "#0b1c1a"
-        secondary_color = (getattr(profile, "secondary_color", "") or "#F59E0B").strip() or "#F59E0B"
-
         # "any" and "maskable" are kept as separate entries: reusing one edge-to-edge
         # icon for the maskable purpose lets the launcher crop the artwork.  The
         # /icon-maskable-* assets carry safe-zone padding so they survive any mask.
+        # Shared by both the per-tenant and the default platform manifest.
         icons = [
             {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
             {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
@@ -733,22 +722,53 @@ class AppManifestView(APIView):
             {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
             {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
         ]
-        if logo_url:
-            icons.insert(0, {"src": logo_url, "sizes": "any", "type": "image/png", "purpose": "any"})
 
-        manifest = {
-            "name": restaurant_name,
-            "short_name": short_name,
-            "description": f"Order online from {restaurant_name}",
-            "start_url": "/browse",
-            "scope": "/",
-            "display": "standalone",
-            "orientation": "portrait-primary",
-            "background_color": primary_color,
-            "theme_color": secondary_color,
-            "icons": icons,
-            "categories": ["food"],
-        }
+        tenant = getattr(request, "tenant", None)
+        # On the PUBLIC super-app host there is no single tenant (tenant is None, or the
+        # public schema), so a per-restaurant manifest can't be built. Return a default
+        # Kepoli platform manifest instead of a 4xx — otherwise the manifest <link> in
+        # the shared shell resolves to an error and the public super-app is not
+        # installable / has no PWA branding. Per-tenant manifests are unchanged below.
+        if tenant is None or getattr(tenant, "schema_name", "") == "public":
+            manifest = {
+                "name": "Kepoli",
+                "short_name": "Kepoli",
+                "description": "Order food, shop locally, and get around — one app, one wallet.",
+                "start_url": "/",
+                "scope": "/",
+                "display": "standalone",
+                "orientation": "portrait-primary",
+                "background_color": "#0b1c1a",
+                "theme_color": "#F59E0B",
+                "icons": icons,
+                "categories": ["food", "shopping", "travel"],
+            }
+        else:
+            # Pull profile fields
+            profile = getattr(tenant, "profile", None)
+            restaurant_name = getattr(tenant, "name", "Restaurant") or "Restaurant"
+            short_name = restaurant_name[:12]  # manifest short_name limit
+            logo_url = (getattr(profile, "logo_url", "") or "").strip()
+            primary_color = (getattr(profile, "primary_color", "") or "#0b1c1a").strip() or "#0b1c1a"
+            secondary_color = (getattr(profile, "secondary_color", "") or "#F59E0B").strip() or "#F59E0B"
+
+            tenant_icons = list(icons)
+            if logo_url:
+                tenant_icons.insert(0, {"src": logo_url, "sizes": "any", "type": "image/png", "purpose": "any"})
+
+            manifest = {
+                "name": restaurant_name,
+                "short_name": short_name,
+                "description": f"Order online from {restaurant_name}",
+                "start_url": "/browse",
+                "scope": "/",
+                "display": "standalone",
+                "orientation": "portrait-primary",
+                "background_color": primary_color,
+                "theme_color": secondary_color,
+                "icons": tenant_icons,
+                "categories": ["food"],
+            }
 
         response = JsonResponse(manifest)
         response["Content-Type"] = "application/manifest+json"
