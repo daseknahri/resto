@@ -207,3 +207,26 @@ After F1 was resolved (orphan containers removed + Postgres restarted) the platf
 
 **Net:** recovery held; the customer-facing path is healthy. The remaining outage hardening lives in the
 three PRs (#378 merged; #379 headroom + #380 orphan-cleanup/DB-role awaiting the owner's staging pass).
+
+### Deeper gap-hunt — 2026-09-21 (fixes shipped + one live observation)
+
+A follow-on read-only E2E hunt across the public verticals found and **fixed** three real code gaps:
+- **404 storefront UX** (#382) — `/order/<nonexistent>` returned a misleading retryable "Retry" (a 404
+  re-404s forever). Now a distinct "Restaurant not found" state with a Browse CTA.
+- **Cart-bar currency flash** (#382) — a reload with a persisted cart briefly showed the total in `MAD`
+  before the restaurant's real currency loaded. The sticky bar is now gated on `restaurant`.
+- **Public-host PWA manifest** (#383) — `/app-manifest.json` on the public super-app host returned a
+  500/HTML instead of a manifest (route was tenant-only; view 400'd with no tenant). Now serves a default
+  Kepoli platform manifest and is registered on the public urlconf.
+
+**Live operational observation (not a code bug):** during the pass, `GET /api/customer/session/`
+**intermittently 500'd** — three consecutive 500s (the retry wrapper amplifying one call), then immediate
+recovery to 200 (a follow-up 6/6 probe was all 200). Immediate recovery + the middleware's per-request
+tenant DB lookup point to **transient Postgres connection pressure** (the F1 mechanism, at low frequency),
+not a deterministic view bug. This is **live evidence that the connection-headroom + orphan-cleanup work
+(#379/#380) should be deployed** — the pool is still occasionally tight under normal browsing.
+
+**Verticals re-confirmed healthy:** shops marketplace (empty-state clean), `/send-package` (auth-gated with
+a clear CTA, no Leaflet crash), `/ride` (redirects to hub — rides "coming soon"), guest account, phone-OTP
+login modal. Minor cosmetic: `/apple-touch-icon.png` 404 (an explicit `apple-touch-icon` link already
+covers iOS). Cert errors on business/dish images remain **F2** (expired tenant-subdomain TLS, owner).
