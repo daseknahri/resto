@@ -3149,6 +3149,8 @@ customerLeadPage: {
   contactRequired: "Provide phone or email.",
   invalidEmail: "Invalid email address.",
   leadNoteIntro: "Customer lead from restaurant landing",
+  customerNoteLine: "Message: {message}",
+  pageUrlLine: "Page URL: {url}",
   moreInfoMessage: "Hi {tenant}, I'd like more information."
 },
 categoryCard: {

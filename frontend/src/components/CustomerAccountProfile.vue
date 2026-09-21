@@ -36,6 +36,7 @@
           maxlength="80"
           autocomplete="name"
           class="ui-input flex-1 py-1.5 text-sm"
+          :aria-label="t('common.name')"
           :placeholder="t('customerAccount.namePlaceholder')"
           :disabled="savingName"
         />

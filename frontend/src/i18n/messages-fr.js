@@ -3106,6 +3106,8 @@ customerLeadPage: {
   contactRequired: "Indiquez un telephone ou un e-mail.",
   invalidEmail: "Adresse e-mail invalide.",
   leadNoteIntro: "Lead client depuis la landing du restaurant",
+  customerNoteLine: "Message : {message}",
+  pageUrlLine: "URL de la page : {url}",
   moreInfoMessage: "Bonjour {tenant}, je souhaite plus d'informations."
 },
 categoryCard: {

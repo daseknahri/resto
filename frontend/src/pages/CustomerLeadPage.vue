@@ -506,7 +506,11 @@ const validate = () => {
 
 const buildNotes = () => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
-  return [t("customerLeadPage.leadNoteIntro"), form.note ? `Message: ${form.note}` : "", pageUrl ? `Page URL: ${pageUrl}` : ""].filter(Boolean).join("\n");
+  return [
+    t("customerLeadPage.leadNoteIntro"),
+    form.note ? t("customerLeadPage.customerNoteLine", { message: form.note }) : "",
+    pageUrl ? t("customerLeadPage.pageUrlLine", { url: pageUrl }) : "",
+  ].filter(Boolean).join("\n");
 };
 
 const submitLead = async () => {
