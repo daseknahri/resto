@@ -351,6 +351,15 @@
           <span class="text-xs text-slate-600">{{ t("ownerHome.noRatingsYet") }}</span>
         </div>
       </template>
+      <button
+        v-else-if="ratingsError"
+        type="button"
+        class="flex w-full items-center gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-start transition hover:bg-red-500/10"
+        @click="fetchRatings"
+      >
+        <AppIcon name="info" class="h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <span class="text-xs font-semibold text-red-300">{{ t('ownerHome.tileError') }}</span>
+      </button>
       <div v-else class="h-11 animate-pulse rounded-2xl bg-slate-800/30" aria-hidden="true" />
 
       <!-- Today's reservations — lazy-fetched after ratings ───────────────── -->
@@ -382,6 +391,15 @@
           <AppIcon name="chevronRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" aria-hidden="true" />
         </span>
       </RouterLink>
+      <button
+        v-else-if="reservationsError"
+        type="button"
+        class="flex w-full items-center gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-start transition hover:bg-red-500/10"
+        @click="fetchTodayReservations"
+      >
+        <AppIcon name="info" class="h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <span class="text-xs font-semibold text-red-300">{{ t('ownerHome.tileError') }}</span>
+      </button>
       <div v-else-if="todayReservations === null" class="h-11 animate-pulse rounded-2xl bg-slate-800/30" aria-hidden="true" />
 
       <!-- Quick actions (Analytics lives in the top nav now, so it's not duplicated here) -->
@@ -638,22 +656,29 @@ const onReadinessLoaded = ({ soldOutCount: n, dishesData }) => {
 
 // ── Ratings — fetched independently after first paint ────────────────────────
 const ratingsSummary = ref(null); // null = loading, {} = loaded
+// Flag a failed fetch instead of faking { count: 0 } (which rendered the "no ratings
+// yet" empty tile — indistinguishable from a genuinely rating-less restaurant).
+const ratingsError = ref(false);
 
 const fetchRatings = async () => {
+  ratingsError.value = false;
   try {
     const { data } = await api.get("/owner/ratings/", { timeout: 5000 });
     ratingsSummary.value = { count: data?.count ?? 0, average: data?.average ?? null };
   } catch {
-    ratingsSummary.value = { count: 0, average: null };
+    ratingsError.value = true;
   }
 };
 
 // ── Today's reservations — fetched lazily after ratings ──────────────────────
 const todayReservations = ref(null);   // null = loading skeleton
 const todayReservationsNew = ref(0);
+// Flag a failed fetch instead of showing a real-looking "0" reservations tile.
+const reservationsError = ref(false);
 
 const fetchTodayReservations = async () => {
   const today = new Date().toISOString().slice(0, 10);
+  reservationsError.value = false;
   try {
     const { data } = await api.get("/owner/reservations/", {
       params: { booked_for_date: today, page_size: 1 },
@@ -662,7 +687,7 @@ const fetchTodayReservations = async () => {
     todayReservations.value = data?.pagination?.total ?? 0;
     todayReservationsNew.value = data?.counts?.new ?? 0;
   } catch {
-    todayReservations.value = 0;
+    reservationsError.value = true;
   }
 };
 

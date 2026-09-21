@@ -760,6 +760,7 @@ const arabicMessages = {
     "orderUrgentTitle": "في الانتظار منذ {min} د — يحتاج إجراءً",
     "viewAllRatings": "عرض جميع التقييمات",
     "noRatingsYet": "لا توجد تقييمات بعد",
+    "tileError": "تعذّر التحميل - أعد المحاولة",
     "allClear": "كل شيء على ما يرام",
     "soldOutLabel": "نفاد المخزون",
     "alertsRegion": "تنبيهات لوحة التحكم",

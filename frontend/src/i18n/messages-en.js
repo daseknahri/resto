@@ -3961,6 +3961,7 @@ ownerHome: {
   orderUrgentTitle: "Waiting {min} min — needs attention",
   viewAllRatings: "View all ratings",
   noRatingsYet: "No ratings yet",
+  tileError: "Couldn't load — retry",
   allClear: "All clear",
   soldOutLabel: "Sold out",
   alertsRegion: "Dashboard alerts",
