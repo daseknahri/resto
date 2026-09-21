@@ -364,6 +364,7 @@
           v-model="historyFrom"
           type="date"
           class="ui-input py-1 text-xs"
+          :aria-label="t('ownerOrders.dateFrom')"
           :max="historyTo || undefined"
           @change="reloadHistory"
         />
@@ -372,6 +373,7 @@
           v-model="historyTo"
           type="date"
           class="ui-input py-1 text-xs"
+          :aria-label="t('ownerOrders.dateTo')"
           :min="historyFrom || undefined"
           @change="reloadHistory"
         />
@@ -1070,6 +1072,7 @@
                 min="1"
                 max="180"
                 class="ui-input w-20 text-sm"
+                :aria-label="t('ownerOrders.setEstimate')"
                 :placeholder="t('ownerOrders.minutesPlaceholder')"
               />
             </div>

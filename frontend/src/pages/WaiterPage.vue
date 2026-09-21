@@ -749,6 +749,7 @@
         <div
           role="dialog"
           aria-modal="true"
+          :aria-label="t('waiterPage.transferTitle')"
           class="w-full max-w-md rounded-2xl bg-slate-900 shadow-2xl overflow-hidden"
         >
           <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
@@ -777,6 +778,7 @@
               <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.transferDestLabel') }}</p>
               <select
                 v-model="transferDestId"
+                :aria-label="t('waiterPage.transferDestLabel')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">{{ t('waiterPage.transferSelectDest') }}</option>
@@ -818,6 +820,7 @@
         <div
           role="dialog"
           aria-modal="true"
+          :aria-label="t('waiterPage.mergeTitle')"
           class="w-full max-w-sm rounded-2xl bg-slate-900 shadow-2xl overflow-hidden"
         >
           <div class="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-slate-800">
@@ -832,6 +835,7 @@
               <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{{ t('waiterPage.mergeSrcLabel') }}</p>
               <select
                 v-model="mergeSrcId"
+                :aria-label="t('waiterPage.mergeSrcLabel')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">{{ t('waiterPage.transferSelectDest') }}</option>
@@ -874,8 +878,9 @@
           class="ui-panel w-full max-w-sm space-y-2 p-4"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="waiter-overflow-title"
         >
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+          <p id="waiter-overflow-title" class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
             #{{ overflowOrder.order_number }} · {{ orderHeadline(overflowOrder) }}
           </p>
           <!-- Transfer items -->
@@ -946,6 +951,7 @@
           <input
             v-if="voidPickedPreset === 'voidReasonOther'"
             v-model="voidCustomReason"
+            :aria-label="t('waiterPage.voidReasonOtherPlaceholder')"
             type="text"
             maxlength="120"
             class="ui-input w-full text-sm"
@@ -1011,6 +1017,7 @@
           <input
             v-if="compPickedPreset === 'compReasonOther'"
             v-model="compCustomReason"
+            :aria-label="t('waiterPage.compReasonOtherPlaceholder')"
             type="text"
             maxlength="120"
             class="ui-input w-full text-sm"
