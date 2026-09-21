@@ -391,9 +391,29 @@ class AppManifestViewTests(SimpleTestCase):
             req.tenant = tenant
         return self.view(req)
 
-    def test_no_tenant_returns_400(self):
+    def test_no_tenant_returns_default_platform_manifest(self):
+        # Public super-app host (no single tenant): must serve a valid default Kepoli
+        # manifest — NOT a 4xx — so the shared shell's manifest <link> resolves and the
+        # public super-app is installable.
         resp = self._get(tenant=None)
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("application/manifest+json", resp.get("Content-Type", ""))
+        import json
+        data = json.loads(resp.content)
+        self.assertEqual(data["name"], "Kepoli")
+        for field in ("name", "short_name", "icons", "start_url", "display"):
+            self.assertIn(field, data, f"Missing manifest field: {field}")
+        self.assertTrue(len(data["icons"]) >= 1)
+
+    def test_public_schema_tenant_returns_default_platform_manifest(self):
+        # A public-schema tenant object is also the platform host → default manifest.
+        class _PublicTenant:
+            schema_name = "public"
+            name = "public"
+        resp = self._get(tenant=_PublicTenant())
+        self.assertEqual(resp.status_code, 200)
+        import json
+        self.assertEqual(json.loads(resp.content)["name"], "Kepoli")
 
     def test_returns_manifest_json_content_type(self):
         t = _tenant()

@@ -7,9 +7,16 @@ from django.views.static import serve as static_serve
 from accounts.views import EmailUnsubscribeView
 from config.shared_api_urls import build_v1_urlpatterns, shared_api_urlpatterns
 from config.sitemap import sitemap_view
+from tenancy.api import AppManifestView
 
 urlpatterns = [
     *shared_api_urlpatterns,
+    # PWA manifest on the PUBLIC super-app host. The frontend nginx proxies
+    # /app-manifest.json to Django on every host; without this route it only
+    # resolved on tenant hosts (config.urls), so the public super-app had no
+    # valid manifest. AppManifestView returns a default Kepoli platform manifest
+    # when there is no tenant. (Tenant hosts keep the per-tenant manifest.)
+    path("app-manifest.json", AppManifestView.as_view(), name="app-manifest"),
     # B1-followup: public one-click email-unsubscribe (CAN-SPAM / Gmail-Yahoo
     # bulk-sender compliance). Customer-facing + platform-level, so it lives on
     # the PUBLIC urlconf. The recipient is encoded in a signed token — no auth.
