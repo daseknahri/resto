@@ -44,6 +44,18 @@
       </div>
     </div>
 
+    <!-- Not found (permanent 404 — this slug has no storefront; Retry would only re-404) -->
+    <div v-else-if="notFound" class="py-8">
+      <div class="ui-empty-state text-center space-y-1">
+        <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.notFoundTitle') }}</p>
+        <p class="text-xs text-slate-400">{{ t('mktMenu.notFoundBody') }}</p>
+        <router-link
+          :to="{ name: 'marketplace' }"
+          class="ui-btn-outline ui-press mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm"
+        >{{ t('mktMenu.notFoundCta') }}</router-link>
+      </div>
+    </div>
+
     <!-- Error -->
     <div v-else-if="fetchError" role="alert" class="py-8">
       <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
@@ -854,6 +866,10 @@ const slug = route.params.slug;
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);
 const fetchError = ref(false);
+// A 404 (this slug has no storefront) is a PERMANENT miss, not a transient error:
+// retrying will always re-404, so it gets its own "not found" state (no Retry, offers
+// Browse) instead of the retryable `fetchError` panel.
+const notFound = ref(false);
 const restaurant = ref(null);
 
 const { catalog } = useVocabulary(() => restaurant.value?.business_type);
@@ -1761,6 +1777,7 @@ const fmtPrice = (amount) => {
 const fetchMenu = async () => {
   loading.value = true;
   fetchError.value = false;
+  notFound.value = false;
   try {
     const res = await api.get(`/marketplace/menu/${slug}/`);
     restaurant.value = res.data;
@@ -1785,8 +1802,12 @@ const fetchMenu = async () => {
       form.customer_name = customer.value.name || '';
       form.customer_phone = customer.value.phone || '';
     }
-  } catch {
-    fetchError.value = true;
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      notFound.value = true;
+    } else {
+      fetchError.value = true;
+    }
   } finally {
     loading.value = false;
   }

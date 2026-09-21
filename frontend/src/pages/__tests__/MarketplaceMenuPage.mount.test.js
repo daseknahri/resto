@@ -106,3 +106,38 @@ describe("MarketplaceMenuPage — guest pickup payment payload", () => {
     expect(payload.fulfillment_type).toBe("pickup");
   });
 });
+
+describe("MarketplaceMenuPage — menu fetch error states", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  const failMenuWith = (status) =>
+    api.get.mockImplementation((url) =>
+      String(url).includes("/marketplace/menu/")
+        ? Promise.reject({ response: { status } })
+        : Promise.resolve({ data: {} }),
+    );
+
+  // A 404 means this slug has no storefront — permanent. It must show the
+  // "not found" state (Browse, no Retry), NOT the retryable error panel whose
+  // Retry would only re-404.
+  it("shows the not-found state (not the retryable error) on a 404", async () => {
+    failMenuWith(404);
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.vm.notFound).toBe(true);
+    expect(wrapper.vm.fetchError).toBe(false);
+  });
+
+  // A transient/5xx failure IS retryable — it must show the error panel with
+  // Retry, not the permanent not-found state.
+  it("shows the retryable error (not not-found) on a 500", async () => {
+    failMenuWith(500);
+    const wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.vm.fetchError).toBe(true);
+    expect(wrapper.vm.notFound).toBe(false);
+  });
+});
