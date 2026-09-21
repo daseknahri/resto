@@ -201,7 +201,7 @@
                       :key="tag"
                       class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
                       :class="tagBadgeClass(tag)"
-                    >{{ tag }}</span>
+                    >{{ t(`dishPage.tag_${tag}`) }}</span>
                   </div>
                   <div class="mt-2 flex items-center justify-between gap-2">
                     <!-- Price: happy-hour > flash-sale > regular -->
@@ -422,7 +422,7 @@
                         :key="tag"
                         class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
                         :class="tagBadgeClass(tag)"
-                      >{{ tag }}</span>
+                      >{{ t(`dishPage.tag_${tag}`) }}</span>
                     </div>
                     <div class="mt-2 flex items-center justify-between gap-2">
                       <!-- Price: happy-hour > flash-sale > regular -->
