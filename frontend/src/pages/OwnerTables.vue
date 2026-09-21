@@ -109,7 +109,24 @@
       <p class="mt-1 text-xs text-slate-500">{{ t("ownerTables.generatedAt", { date: generatedAt }) }}</p>
     </div>
 
-    <article v-if="!tables.length && !loading" class="ui-empty-state space-y-4 text-center">
+    <!-- Load error (only when there's no cached data to fall back on — fetchTables
+         sets `error` only when the cache is empty). Without this, a failed fetch fell
+         through to the "create your first link" empty state below, making a network
+         failure indistinguishable from a genuinely empty account. Mirrors
+         OwnerReservations' list error state. -->
+    <article v-if="error && !tables.length && !loading" role="alert" class="ui-reveal flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3.5">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p id="owner-tables-list-error" class="flex-1 text-sm text-red-300">{{ error }}</p>
+      <button
+        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        aria-describedby="owner-tables-list-error"
+        @click="fetchTables"
+      >{{ t('common.retry') }}</button>
+    </article>
+
+    <article v-else-if="!tables.length && !loading" class="ui-empty-state space-y-4 text-center">
       <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/60 bg-slate-900/80 text-slate-200 shadow-sm">
         <AppIcon name="qr" class="h-6 w-6" aria-hidden="true" />
       </div>
