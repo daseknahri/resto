@@ -4573,6 +4573,7 @@ reservationCalendar: {
   guests: "{n} guests",
   undatedNote: "{count} reservation(s) have no date set — visible in list view only.",
   emptyDay: "—",
+  loadError: "Couldn't load this week's reservations.",
   weekGrid: "Reservation week view",
   dropSuccess: "{name} moved to {day}",
   dragStart: "Picked up {name} — drag to a day column to reschedule",

@@ -33,6 +33,20 @@
       />
     </div>
 
+    <!-- Load error — must not fall through to a grid of "empty day" hints -->
+    <div v-else-if="loadError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p id="reservation-calendar-error" class="flex-1 text-sm text-red-300">{{ t('reservationCalendar.loadError') }}</p>
+      <button
+        type="button"
+        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        aria-describedby="reservation-calendar-error"
+        @click="fetchWeek"
+      >{{ t('common.retry') }}</button>
+    </div>
+
     <!-- Week grid -->
     <div
       v-else
@@ -174,9 +188,14 @@ const nextWeek = () => weekOffset.value++;
 // ── Data fetching ──────────────────────────────────────────────────────────────
 const reservations = ref([]);
 const loading = ref(false);
+// Without this, a failed /owner/reservations/ fetch reset reservations to [] and the
+// grid rendered every day with the "empty day" hint — a transient API error looked
+// exactly like a genuinely empty week.
+const loadError = ref(false);
 
 const fetchWeek = async () => {
   loading.value = true;
+  loadError.value = false;
   try {
     const from = weekDays.value[0].iso;
     const to = weekDays.value[6].iso;
@@ -187,6 +206,7 @@ const fetchWeek = async () => {
     reservations.value = Array.isArray(res.data?.results) ? res.data.results : [];
   } catch {
     reservations.value = [];
+    loadError.value = true;
   } finally {
     loading.value = false;
   }
