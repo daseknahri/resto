@@ -58,6 +58,18 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
 
     def process_request(self, request):
         connection.set_schema_to_public()
+        # OBS (post-2026-09-18 DB-outage): the health endpoint must answer even when
+        # the database is unreachable, so an outage surfaces as a readable
+        # 503 {db: {ok: false}} from health_view instead of the opaque bare 500 this
+        # middleware would otherwise raise. The tenant lookup below (self.get_tenant)
+        # hits the DB and only catches DomainDoesNotExist, so a DB *connection* error
+        # propagates as a 500 before any view runs — exactly what masked the real cause
+        # during the outage. Route health in the public schema (it is registered in
+        # config.public_urls via shared_api_urlpatterns) and skip tenant resolution;
+        # health_view touches no tenant-scoped data and runs its own guarded DB check.
+        if request.path == "/api/health/":
+            self.setup_url_routing(request, force_public=True)
+            return
         try:
             hostname = self.hostname_from_request(request)
         except DisallowedHost:
