@@ -4528,6 +4528,7 @@ reservationCalendar: {
   guests: "{n} convives",
   undatedNote: "{count} reservation(s) sans date — visibles uniquement en vue liste.",
   emptyDay: "—",
+  loadError: "Impossible de charger les reservations de cette semaine.",
   weekGrid: "Vue semaine des reservations",
   dropSuccess: "{name} deplace vers {day}",
   dragStart: "{name} saisi — faites glisser vers une colonne pour replanifier",
