@@ -47,9 +47,11 @@ data impact (they're stateless app containers; Postgres and its volume are untou
 3. **Least-privilege DB role.** The app connects as the Postgres **superuser**, which let it consume the
    `superuser_reserved_connections` slots — leaving no emergency slot for diagnostics/recovery. Create a
    dedicated non-superuser application role so the reserved slots stay available.
-4. **Make `/api/health/` survive this.** The health view is designed to report `503 {db:down}`, but it
-   sits **behind** the tenant-resolution middleware (which itself queries the DB), so on DB failure it
-   returns a bare 500 instead. A DB-independent liveness route (or running the health check ahead of tenant
-   resolution) would let the healthcheck report the real cause.
+4. **Make `/api/health/` survive this.** ✅ **DONE (PR #378).** The health view is designed to report
+   `503 {db:down}`, but it sat **behind** the tenant-resolution middleware (which itself queries the DB),
+   so on DB failure it returned a bare 500 instead. Fixed: `TenantAwareMainMiddleware.process_request` now
+   exempts `/api/health/` — it routes `force_public` and skips the `get_tenant` DB lookup, so the health
+   view runs its own guarded `SELECT 1` and reports the real `503 {db: {ok: false}}` during an outage.
+   Regression test: `backend/tests/test_health_middleware_outage_resilience.py`.
 5. **Don't retry a 500 on the session bootstrap.** The frontend retry wrapper turned each failing
    `/api/customer/session/` into ~6 calls per page load — pure amplification once the endpoint is known-down.
