@@ -1477,6 +1477,8 @@ const arabicMessages = {
     "contactRequired": "أدخل رقم الهاتف أو البريد الإلكتروني.",
     "invalidEmail": "عنوان البريد الإلكتروني غير صالح.",
     "leadNoteIntro": "طلب عميل من صفحة المطعم",
+    "customerNoteLine": "رسالة: {message}",
+    "pageUrlLine": "رابط الصفحة: {url}",
     "moreInfoMessage": "مرحباً {tenant}، أود الحصول على مزيد من المعلومات.",
     "about": "حول المطعم",
     "businessHours": "ساعات العمل",
