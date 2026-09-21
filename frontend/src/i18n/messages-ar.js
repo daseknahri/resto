@@ -4123,6 +4123,7 @@ Object.assign(arabicMessages, {
   },
   ownerWallet: {
     floatTitle: "رصيد المطعم",
+    floatError: "تعذّر التحميل - أعد المحاولة",
     driverCashoutTitle: "سحب السائق",
     driverCashoutHint: "أدخل الرمز الذي يظهره السائق ثم سلّم المبلغ. يُضاف إلى رصيدك.",
     driverCashoutCodePlaceholder: "رمز سحب السائق",

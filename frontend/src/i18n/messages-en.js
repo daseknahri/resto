@@ -1818,6 +1818,7 @@ ownerWallet: {
   title: "Customer Wallet Top-up",
   subtitle: "Search for a customer and credit their wallet balance.",
   floatTitle: "Restaurant float",
+  floatError: "Couldn't load — retry",
   driverCashoutTitle: "Driver cash-out",
   driverCashoutHint: "Enter the code the driver shows you, then hand over the cash. It is added to your float.",
   driverCashoutCodePlaceholder: "Driver cash-out code",

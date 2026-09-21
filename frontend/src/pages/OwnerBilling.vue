@@ -218,6 +218,23 @@
       </Transition>
     </section>
 
+    <!-- Upgrade-targets load failed (no cache) — must NOT fall through to the
+         "highest tier" success message below, which would mislead the owner. -->
+    <section v-else-if="!loading && targetsError" class="ui-panel ui-reveal p-4" style="--ui-delay: 56ms">
+      <div role="alert" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p id="billing-targets-error" class="flex-1 text-sm text-red-300">{{ t('ownerBilling.loadFailed') }}</p>
+        <button
+          type="button"
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          aria-describedby="billing-targets-error"
+          @click="fetchAll(true)"
+        >{{ t('common.retry') }}</button>
+      </div>
+    </section>
+
     <section v-else-if="!loading" class="ui-panel ui-reveal p-4" style="--ui-delay: 56ms">
       <div class="ui-empty-state space-y-3 py-6 text-center">
         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
@@ -258,6 +275,19 @@
             <div class="h-5 w-16 rounded-full bg-slate-800/60" />
           </div>
         </div>
+      </div>
+
+      <div v-else-if="requestsError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p id="billing-requests-error" class="flex-1 text-sm text-red-300">{{ t('ownerBilling.loadFailed') }}</p>
+        <button
+          type="button"
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          aria-describedby="billing-requests-error"
+          @click="fetchAll(true)"
+        >{{ t('common.retry') }}</button>
       </div>
 
       <div
@@ -488,6 +518,12 @@ const commissionMonth = ref(new Date().getMonth() + 1)
 const showDeletionConfirm = ref(false)
 const deletionReason = ref('')
 const targets = ref([])
+// A rejected request under Promise.allSettled below doesn't throw, so without these a
+// failed load would silently render a misleading state (the "highest tier" success for
+// a failed upgrade-targets fetch, "no requests" for a failed history fetch). True only
+// when the fetch failed AND there is no cached data to fall back on.
+const targetsError = ref(false)
+const requestsError = ref(false)
 const requests = ref([])
 const upgradeMeta = ref({ current_tier_code: '', current_tier_name: '', has_pending_request: false })
 const selectedCode = ref('')
@@ -640,6 +676,10 @@ const fetchAll = async (force = false) => {
       snapshot.usageStaff = staffRes.value.data?.count ?? null
     }
     applyBillingData(snapshot)
+    // Surface a distinct error state when a section failed and nothing filled it
+    // (no cache, no successful response) — otherwise it degrades to a misleading empty.
+    targetsError.value = targetsRes.status === 'rejected' && !targets.value.length
+    requestsError.value = requestsRes.status === 'rejected' && !requests.value.length
     if (Object.keys(snapshot).length) writeCache(BILLING_CACHE_KEY, snapshot)
   } catch {
     if (!cached) toast.show(t('ownerBilling.loadFailed'), 'error')
