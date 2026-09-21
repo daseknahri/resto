@@ -12,6 +12,19 @@ The single "what's the state, how do I work here, and what's left" doc for a fre
 
 ## 1. Current state (2026-08-16)
 
+> **Latest (2026-09-22):** `main` @ `f3031b6`, green. Since the 2026-08-16 snapshot below, several more
+> campaigns shipped (see [`SESSION_LOG.md`](SESSION_LOG.md) newest-first) — most recently the **2026-09-18→22
+> outage response + live E2E + full-app static UI/UX pass** (15 PRs #378, #381–#394). **The entire frontend is now
+> exhaustively audited** (live E2E on the customer surface + an objective static pass over every page/layout/risky
+> component) and the "errors masquerading as success/empty" bug class is **closed app-wide**. **Two PRs are OPEN and
+> owner/staging-gated** (do NOT merge without the owner): **#379** (Postgres connection headroom — needs VPS ≥ 4 GB +
+> a staging deploy) and **#380** (Coolify orphan-cleanup script + least-privilege DB-role SQL — needs the Coolify
+> `--remove-orphans` option + a staging DB rehearsal). The live app shows **intermittent `/api/customer/session/`
+> 500s** (residual connection pressure) — that's the signal to prioritize deploying #379/#380. To go further, a fresh
+> session needs **staging + role credentials** to live-test the authenticated owner/waiter/driver/admin flows (the
+> public customer surface is already covered). **Do NOT re-run the frontend UI/UX audit or the misleading-empty sweep
+> without new churn** — both are complete.
+
 - `main` @ `7629db9`, **green** — frontend lint/build/vitest + backend pytest (on **Django 5.2.17 LTS**) +
   Playwright e2e + Docker builds all pass in CI. Deployable. *(2026-08-10: backend off end-of-life Django —
   upgraded 4.2.30 → 5.2.17 LTS (#215); CI security gates clean. See §4.C.)*

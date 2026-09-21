@@ -12,6 +12,64 @@ replace — [`ARCHITECTURE.md`](ARCHITECTURE.md) (how it's built) and
 
 ---
 
+## 2026-09-18→22 — outage response + live E2E gap-hunt + full-app static UI/UX pass
+
+**Result:** `main` @ `f3031b6`, green. **15 PRs merged (#378, #381–#394)** + **2 owner-gated PRs open (#379, #380)**.
+Three phases, all on the owner's "continue" directive (continuous autonomous work, fresh varied agent per audit,
+keeping the PR/CI/merge gate).
+
+**Phase 1 — the 2026-09-18 prod outage + hardening.** A second Postgres connection-exhaustion outage (root cause in
+[`docs/INCIDENT_2026-09-18_db_connection_exhaustion.md`](INCIDENT_2026-09-18_db_connection_exhaustion.md)): ~8 orphaned
+`admin-*` containers from old deploys held DB connections until `max_connections=50` was exhausted → every `/api/*`
+bare-500. Recovered live with the owner (`docker rm -f` the orphans + restart postgres; the assistant harness blocks
+those destructive host cmds). Durable fixes:
+- **#378 (merged)** — health endpoint survives a DB outage: `TenantAwareMainMiddleware.process_request` now exempts
+  `/api/health/` from the tenant DB lookup (routes `force_public`), so an outage returns a readable `503 {db: down}`
+  from `health_view` instead of a bare 500 that masked the cause. +regression test.
+- **#379 (OPEN, owner/staging-gated)** — `PG_MAX_CONNECTIONS` 50→100 + `POSTGRES_MEM_LIMIT` 1g→1536m + env-tunable
+  `DB_CONN_MAX_AGE`. Lifts the compose memory floor to ~3.4 GB → **confirm VPS ≥ 4 GB + staging-deploy before merge.**
+- **#380 (OPEN, owner-gated)** — `infra/coolify/prune_stale_stack_containers.sh` (dry-run-by-default orphan reaper,
+  never touches postgres/redis) + `infra/sql/least_privilege_app_role.sql` (non-superuser role that OWNS the DB so
+  django-tenants can still `CREATE SCHEMA`/`CONCURRENTLY`; verified no migration needs `CREATE EXTENSION`) +
+  `infra/COOLIFY_ORPHAN_CONTAINER_CLEANUP.md`. Needs the Coolify `--remove-orphans` option + a staging DB rehearsal.
+- **#381, #384 (merged)** — QA records ([`QA_FINDINGS_2026-09-18.md`](QA_FINDINGS_2026-09-18.md)). Also logged a live
+  **intermittent `/api/customer/session/` 500** (recovers immediately) = residual connection pressure → the concrete
+  signal to prioritize deploying #379/#380.
+
+**Phase 2 — live E2E gap-hunt (built-in browser, public customer surface).** Found + fixed 3 real customer-facing bugs:
+- **#382 (merged)** — a 404 storefront (`/order/<nonexistent>`) showed a misleading retryable "Retry" (re-404s
+  forever) → distinct "not found" state + Browse CTA; and the sticky cart bar flashed the wrong currency (`MAD`)
+  before the restaurant's real currency loaded → gated on `restaurant`.
+- **#383 (merged)** — the **public super-app host's PWA manifest returned 500/HTML**: `AppManifestView` was
+  tenant-urlconf-only and 400'd with no tenant → now serves a default Kepoli platform manifest + registered in
+  `config/public_urls`. F3 (USD demo-tenant currency) + F4 (open vs closed-today) re-confirmed as owner data, not bugs.
+
+**Phase 3 — full-app objective static UI/UX pass (~11 read-only audits, fresh varied agent each).** Swept EVERY
+frontend surface — customer, operational (waiter/driver), onboarding wizard, admin console + sub-pages, all 19 owner
+pages, and risky components. Verdict everywhere: **mature**; gaps were three low-severity classes, all fixed in
+**#385–#394**:
+1. *Unassociated labels* (control named only by placeholder / a sibling `<p>`) — #386/#387/#388/#391 gave ~15
+   controls an `:aria-label` from their existing adjacent-label key; OwnerProfile day-toggle `text-left`→`text-start`.
+2. *Untranslated enums* rendered raw (`{{ tag }}`) — #385 (marketplace dietary tags), #389 (onboarding directory tags
+   + a normalize-to-key `tagLabel()` helper that keeps the English VALUE), #388 (lead-note lines).
+3. *Errors masquerading as success/empty* (the highest-value class) — #390 OwnerTables load-error (was masked as an
+   empty account), #392 the money pages (OwnerBilling `Promise.allSettled` catch never fired → "highest tier ★" on a
+   failed load; OwnerWallet no-op catch → fake "MAD 0.00" float), #393 OwnerWallet search/history + OwnerHome
+   ratings/reservations, #394 ReservationCalendar (failed week → empty week). Also #389 StepDishes keyboard-operable
+   inline price + stable combo `:key`. **The class was then swept app-wide** (grep every data-ref-reset `catch` +
+   `Promise.allSettled`) and confirmed closed: allSettled sites are exemplary (OwnerOrders bulk-ops toast partial/total
+   failure), un-audited admin sub-pages (AdminCustomers/Wallet/DeliveryZones/Rides) already do reset+error-flag+branch.
+
+Every UI fix reuses an existing i18n key or a verified new one; `verify:i18n` + full CI green on all. **Zero behavior
+or visual regressions.** Fully-clean files (no findings) spanned DriverPage, SignIn, ReservationPage, Cart, order-status,
+the hub, all 6 admin console files, and most owner pages.
+
+**State:** frontend is exhaustively audited (live E2E + objective static pass, every surface) with every objective
+finding fixed. Remaining work is **owner-gated**: deploy #379/#380 (staging), and — to go further — staging + role
+creds for live-testing the authenticated owner/waiter/driver/admin flows.
+
+---
+
 ## 2026-09-05→06 — mount-smoke test-coverage campaign (COMPLETE: every route component — ~59 pages + 2 stores + Wizard + 6 layouts; 2 real prod bugs)
 
 **Result:** `main` @ `b76b657`, green. **The campaign is complete** — every route component in the app now has a
