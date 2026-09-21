@@ -6114,6 +6114,7 @@ Object.assign(arabicMessages, {
     reconnecting: "\u062c\u0627\u0631\u064d \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0627\u062a\u0635\u0627\u0644\u2026",
   },
   cashDrawer: {
+    "time": "الوقت",
     "closeConfirmTitle": "إغلاق صندوق النقد؟",
     "closeConfirmBody": "هذا ينهي جلسة الصندوق ولا يمكن التراجع عنه. الإجمالي المحسوب: {total}.",
     navLabel: "\u0627\u0644\u062f\u0631\u062c \u0627\u0644\u0646\u0642\u062f\u064a",

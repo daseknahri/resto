@@ -6018,6 +6018,7 @@ realtime: {
   reconnecting: "Reconnecting…",
 },
 cashDrawer: {
+  time: "Time",
   closeConfirmTitle: "Close the cash drawer?",
   closeConfirmBody: "This ends the cash session and can't be undone. Counted total: {total}.",
   navLabel: "Cash drawer",

@@ -6005,6 +6005,7 @@ realtime: {
   reconnecting: "Reconnexion...",
 },
 cashDrawer: {
+  time: "Heure",
   closeConfirmTitle: "Fermer la caisse ?",
   closeConfirmBody: "Ceci termine la session de caisse et est irreversible. Total compte : {total}.",
   navLabel: "Caisse",

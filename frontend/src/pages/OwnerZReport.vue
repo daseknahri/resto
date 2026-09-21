@@ -75,6 +75,7 @@
             min="0"
             step="0.01"
             class="ui-input w-full text-sm"
+            :aria-label="t('zReport.closeDrawerCountLabel')"
             placeholder="0.00"
             :disabled="closingDrawer"
           />

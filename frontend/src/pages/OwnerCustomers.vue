@@ -331,6 +331,7 @@
               rows="2"
               class="ui-input w-full resize-none text-[11px]"
               :placeholder="t('ownerCustomers.notesPlaceholder')"
+              :aria-label="t('ownerCustomers.notesPlaceholder')"
               @keydown.esc="cancelNotesEdit"
             />
             <div class="flex items-center justify-end gap-2">

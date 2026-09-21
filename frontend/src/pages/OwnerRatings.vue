@@ -207,6 +207,7 @@
                 rows="3"
                 maxlength="1000"
                 :placeholder="t('ownerRatings.replyPlaceholder')"
+                :aria-label="t('ownerRatings.replyPlaceholder')"
                 class="ui-textarea w-full resize-none text-sm"
               />
               <div class="flex items-center gap-2">
