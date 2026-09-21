@@ -544,9 +544,12 @@
       </div>
     </Transition>
 
-    <!-- Cart bottom bar (visible when cart has items) -->
+    <!-- Cart bottom bar (visible when cart has items AND the restaurant is loaded —
+         gated on `restaurant` so the total isn't formatted with the 'MAD' currency
+         fallback during the pre-load window, which flashed the wrong symbol on a
+         reload with a persisted cart before the real currency was known). -->
     <button
-      v-if="cart.length && !checkoutOpen"
+      v-if="cart.length && restaurant && !checkoutOpen"
       ref="checkoutTriggerRef"
       class="ui-cart-bar ui-btn-outline ui-press fixed bottom-0 inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md justify-between rounded-2xl px-6 py-3.5 text-sm font-bold text-white"
       style="margin-bottom: calc(var(--safe-bottom) + 1rem)"
