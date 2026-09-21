@@ -1816,6 +1816,7 @@ ownerWallet: {
   title: "Recharge portefeuille client",
   subtitle: "Recherchez un client et creditez son solde portefeuille.",
   floatTitle: "Solde du restaurant",
+  floatError: "Echec du chargement - reessayer",
   driverCashoutTitle: "Retrait livreur",
   driverCashoutHint: "Saisissez le code que le livreur vous montre, puis remettez l argent. Il est ajoute a votre solde.",
   driverCashoutCodePlaceholder: "Code de retrait du livreur",

@@ -19,6 +19,12 @@
         <p class="ui-kicker mb-0.5">{{ t('ownerWallet.floatTitle') }}</p>
         <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight text-emerald-400">
           <span v-if="loadingFloat" class="inline-block h-8 w-28 animate-pulse rounded-lg bg-slate-700/60 align-middle" />
+          <button
+            v-else-if="floatError"
+            type="button"
+            class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1 align-middle text-sm font-semibold text-red-300 transition hover:bg-red-500/10"
+            @click="fetchFloat"
+          >{{ t('ownerWallet.floatError') }}</button>
           <span v-else>{{ fmtBalance(floatBalance) }}</span>
         </p>
         <p class="mt-1 text-xs text-slate-400">{{ t('ownerWallet.floatSubtitle') }}</p>
@@ -334,14 +340,19 @@ let topupKey = null;
 // ── Restaurant float ────────────────────────────────────────────────────────────
 const floatBalance = ref('0.00');
 const loadingFloat = ref(true);
+// Without this, a failed float fetch left floatBalance at its '0.00' init and the
+// headline rendered a fake "MAD 0.00" — indistinguishable from a genuinely empty float,
+// which could make an owner think they can't hand out any cash.
+const floatError = ref(false);
 
 const fetchFloat = async () => {
   loadingFloat.value = true;
+  floatError.value = false;
   try {
     const res = await api.get('/owner/wallet/float/');
     floatBalance.value = res.data?.float_balance ?? '0.00';
   } catch {
-    /* leave previous value */
+    floatError.value = true;
   } finally {
     loadingFloat.value = false;
   }
