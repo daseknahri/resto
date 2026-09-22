@@ -281,7 +281,10 @@ const cancel = async () => {
   cancelling.value = true;
   errorMsg.value = '';
   try {
-    const res = await api.post(`/reservations/manage/${props.token}/cancel/`);
+    // Cancel is a POST to the SAME manage URL (PublicReservationManageView.post) — there
+    // is no `/cancel/` sub-route; the stray segment 404'd, silently breaking the emailed
+    // "cancel my reservation" link. The POST returns the same serialized reservation as GET.
+    const res = await api.post(`/reservations/manage/${props.token}/`);
     _apply(res.data);
     confirming.value = false;
   } catch (err) {

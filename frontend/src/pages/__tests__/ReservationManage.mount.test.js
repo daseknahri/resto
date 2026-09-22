@@ -45,7 +45,8 @@ vi.mock("../../composables/useI18n", () => ({
 }));
 
 // URL-routed api mock. onMounted fires GET /reservations/manage/<token>/, and the
-// cancel action (user click only, never at mount) POSTs .../cancel/. Default:
+// cancel action (user click only, never at mount) POSTs to that SAME base URL (there
+// is no /cancel/ sub-route on the backend). Default:
 // everything resolves empty ({ data: {} }). NOTE: res.data === {} does NOT reject,
 // so load()'s catch never runs → notFound stays false and the page renders its
 // (empty) MAIN card, not the not-found state. Tests set _routes to drive a loaded
@@ -63,6 +64,7 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import ReservationManage from "../ReservationManage.vue";
+import api from "../../lib/api";
 
 // shallowMount needs no component stubs (the SFC imports none). The template's only
 // built-in is <Transition> (in the cancel flow); pass it through so its active
@@ -151,5 +153,37 @@ describe("ReservationManage — mount smoke", () => {
     expect(wrapper.text()).toContain("reservationManage.people");
     // Cancel-flow button renders only on the !cancelled && can_cancel path.
     expect(wrapper.text()).toContain("reservationManage.cancelButton");
+  });
+
+  // ── (3) regression: cancel POSTs to the manage URL itself ───────────────────
+  // The public cancel flow POSTs to PublicReservationManageView.post, which is
+  // mounted at the manage URL itself — there is NO `/cancel/` sub-route. A stray
+  // `/cancel/` segment 404'd, silently breaking the emailed cancel link. Guard the
+  // exact path so it can't regress.
+  it("cancel POSTs to /reservations/manage/<token>/ (not a nonexistent /cancel/ sub-route)", async () => {
+    _routes = {
+      "/reservations/manage/": {
+        data: {
+          restaurant: "Le Gourmet",
+          name: "Sara",
+          booked_for: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+          party_size: 2,
+          status: "confirmed",
+          cancelled: false,
+          is_past: false,
+          can_cancel: true,
+        },
+      },
+    };
+    wrapper = mountPage("tok_cancel");
+    await flushPromises();
+
+    await wrapper.vm.cancel();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const url = api.post.mock.calls[0][0];
+    expect(url).toBe("/reservations/manage/tok_cancel/");
+    expect(url).not.toContain("/cancel/");
   });
 });
