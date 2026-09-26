@@ -145,6 +145,7 @@
         <button
           v-if="canManage && waiter.nextStatus(order) && order.payment_status !== 'paid'"
           class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
+          :aria-label="order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid')"
           :disabled="waiter.updatingOrderIds.has(order.id)"
           @click="emit('settle')"
         ><span aria-hidden="true">💵</span></button>
