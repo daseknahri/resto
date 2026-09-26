@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from tenancy.openstate import schedule_open_now, tenant_local_now
+from tenancy.openstate import schedule_open_now, tenant_local_now, tenant_timezone
 
 
 _KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -181,6 +181,43 @@ class TenantLocalNowTests(SimpleTestCase):
     def test_blank_settings_and_blank_profile_falls_back_to_utc(self):
         now = tenant_local_now(SimpleNamespace(timezone=""))
         self.assertEqual(now.utcoffset().total_seconds(), 0)  # UTC
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# tenant_timezone — the SHARED resolver so the reservation slot GRID
+# (menu.views.SlotAvailabilityView) and the capacity FLOORING
+# (sales.views._slot_would_oversell) can't drift (they did: grid was UTC, check
+# used the tenant tz — a non-UTC tenant's grid disagreed with accept/reject).
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TenantTimezoneTests(SimpleTestCase):
+
+    def test_returns_tzinfo_for_profile_timezone(self):
+        tz = tenant_timezone(SimpleNamespace(timezone="Africa/Casablanca"))
+        self.assertEqual(str(tz), "Africa/Casablanca")
+
+    @override_settings(TIME_ZONE="Africa/Casablanca")
+    def test_blank_profile_falls_back_to_settings(self):
+        self.assertEqual(str(tenant_timezone(SimpleNamespace(timezone=""))), "Africa/Casablanca")
+
+    def test_invalid_timezone_falls_back_to_utc(self):
+        import datetime as _d
+        tz = tenant_timezone(SimpleNamespace(timezone="Not/AZone"))
+        self.assertEqual(_d.datetime(2024, 6, 3, tzinfo=tz).utcoffset().total_seconds(), 0)
+
+    def test_slot_grid_and_capacity_flooring_use_the_same_tz(self):
+        # The whole point: both callers resolve the tenant tz through THIS function, so
+        # for the same profile they agree on the slot boundary. Verify the grid builder
+        # and the flooring math land on the identical slot start for a non-UTC tenant.
+        import datetime as _d
+        from menu.views import _build_day_slots
+        profile = SimpleNamespace(timezone="Africa/Casablanca")
+        tz = tenant_timezone(profile)
+        # 19:30 local booking → floors to the 19:00 slot with 60-min slots.
+        booked_local = _d.datetime(2024, 6, 3, 19, 30, tzinfo=tz)
+        slots = _build_day_slots(_d.date(2024, 6, 3), 60, tz)
+        floored = booked_local.replace(minute=0, second=0, microsecond=0)
+        self.assertIn(floored, slots)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

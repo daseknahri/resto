@@ -795,23 +795,20 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
         """
         try:
             from django.db.models import Sum as _Sum
-            from django.utils import timezone as _tz
             from django_tenants.utils import schema_context as _schema_ctx
 
             with _schema_ctx(tenant_for_lead.schema_name):
                 from tenancy.models import Profile as _Profile
                 _profile = _Profile.objects.filter(tenant=tenant_for_lead).first()
-                _tzname = (getattr(_profile, "timezone", "") or "").strip()
                 _max_covers = int(getattr(_profile, "max_covers_per_slot", 0) or 0)
                 _slot_minutes = int(getattr(_profile, "slot_duration_minutes", 60) or 60) or 60
             if _max_covers <= 0:
                 return None
 
-            try:
-                import zoneinfo
-                _local = zoneinfo.ZoneInfo(_tzname) if _tzname else _tz.get_default_timezone()
-            except Exception:  # noqa: BLE001
-                _local = _tz.get_default_timezone()
+            # Same tenant-timezone resolver SlotAvailabilityView uses to build the grid —
+            # shared so the displayed slots and this capacity flooring can't drift.
+            from tenancy.openstate import tenant_timezone
+            _local = tenant_timezone(_profile)
 
             _bf = booked_for.astimezone(_local)
             _mins = _bf.hour * 60 + _bf.minute
