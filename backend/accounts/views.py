@@ -4868,16 +4868,15 @@ class MarketplacePlaceOrderView(APIView):
                     )
                 except (InvalidOperation, ValueError, TypeError):
                     commission_rate = Decimal("0.10")
-                # BASIS: the POST-discount food total the restaurant actually keeps —
-                # food_subtotal minus both discounts, floored at zero (delivery fee + tip
-                # stay OUT of the base). Charging commission on the pre-discount subtotal
-                # billed the restaurant for revenue a promo/loyalty redemption gave away.
-                # The base definition is shared with the owner statement + analytics via
-                # menu.commission so the three can never drift. The rate snapshot
-                # (commission_rate_applied) is unchanged.
-                from menu.commission import commissionable_food_base as _commissionable_base
-                _commission_base = _commissionable_base(food_subtotal, _promo_discount, _loyalty_discount)
-                commission_amount = (_commission_base * commission_rate).quantize(Decimal("0.01"))
+                # BASIS: commission bills the POST-discount food total the restaurant
+                # actually keeps — food_subtotal minus both discounts, floored at zero
+                # (delivery fee + tip stay OUT). The rate snapshot is fixed here, but the
+                # AMOUNT is computed further down, INSIDE the atomic block AFTER the bounded
+                # promo/flash counters run: a concurrent cap-hit strips the discount, so
+                # commission must bill the corrected (post-strip) base — computing it here
+                # (pre-strip) under-charged the platform on a stripped order. The base
+                # definition is shared with the owner statement + analytics via
+                # menu.commission so the three can never drift.
 
                 # Marketplace pickup & delivery are pay-now: the bill must be settled in
                 # full from the customer's wallet at checkout (mirrors the restaurant
@@ -5001,11 +5000,32 @@ class MarketplacePlaceOrderView(APIView):
                         # menu.order_service (RISK STRUCT-1 slice 3b). Runs inside this atomic block.
                         _order_service.deplete_ingredients(order_items_data, dishes_map)
 
-                        # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create().
-                        # Marketplace only auto-applies promos (no customer code input), so a
-                        # concurrent cap hit strips the discount and the order places at full price.
-                        # max_uses=None → unlimited → no cap to enforce, safe to increment.
+                        # OPS-4 F + flash race: atomic bounded discount counters — MUST run
+                        # BEFORE Order.create() AND before commission is computed. Marketplace
+                        # only auto-applies the single best discount (no customer code input), so
+                        # a concurrent cap hit strips it and the order places (and bills commission)
+                        # at full price. A restaurant promo and a platform flash sale are mutually
+                        # exclusive here (no stacking — the winner nulls the other above), so this
+                        # is if/elif. max cap None → unlimited → no cap to enforce, safe to bump.
                         from django.db.models import F as _F
+
+                        def _strip_discount_full_price():
+                            # Shared strip: the winning discount was capped concurrently. Drop it,
+                            # place at full price. The loyalty redemption STAYS (points already
+                            # debited — dropping it would burn the customer's points AND overcharge).
+                            # Mirrors the direct-checkout strip (menu/views.py ~L3288).
+                            nonlocal total, _promo_discount, _wallet_deduction
+                            total = max(Decimal("0"), food_subtotal + _delivery_fee - _loyalty_discount)
+                            _promo_discount = Decimal("0")
+                            # Re-check wallet balance for pay-now orders on the corrected total.
+                            if use_wallet and _linked_customer and _requires_prepay:
+                                _wallet_avail_now = Decimal(str(_linked_customer.wallet_balance or "0"))
+                                if _wallet_avail_now < total:
+                                    raise _PrepayUnpaid()
+                            if use_wallet and _linked_customer:
+                                _available_now = Decimal(str(_linked_customer.wallet_balance or "0"))
+                                _wallet_deduction = min(_available_now, total)
+
                         if _best_promo is not None:
                             if _best_promo.max_uses is not None:
                                 _mkt_promo_rows = _Promo.objects.filter(
@@ -5013,29 +5033,42 @@ class MarketplacePlaceOrderView(APIView):
                                     use_count__lt=_best_promo.max_uses,
                                 ).update(use_count=_F("use_count") + 1)
                                 if not _mkt_promo_rows:
-                                    # Cap reached concurrently — strip ONLY the now-invalid promo,
-                                    # place at full price. The loyalty redemption is still valid
-                                    # (points were already debited), so it MUST stay in the total —
-                                    # dropping it would both burn the customer's points AND overcharge
-                                    # them. Mirrors the direct-checkout add-back-only-the-promo path
-                                    # (menu/views.py ~L3230). The wallet re-check/deduction below then
-                                    # operates on the correct loyalty-adjusted total.
-                                    total = max(Decimal("0"), food_subtotal + _delivery_fee - _loyalty_discount)
-                                    _promo_discount = Decimal("0")
+                                    _strip_discount_full_price()
                                     _best_promo = None
                                     _applied_promo_name = ""
-                                    # Re-check wallet balance for pay-now orders
-                                    if use_wallet and _linked_customer and _requires_prepay:
-                                        _wallet_avail_now = Decimal(str(_linked_customer.wallet_balance or "0"))
-                                        if _wallet_avail_now < total:
-                                            raise _PrepayUnpaid()
-                                    # Recalculate wallet deduction cap
-                                    if use_wallet and _linked_customer:
-                                        _available_now = Decimal(str(_linked_customer.wallet_balance or "0"))
-                                        _wallet_deduction = min(_available_now, total)
                             else:
                                 # max_uses is None → unlimited → no cap to enforce
                                 _Promo.objects.filter(pk=_best_promo.pk).update(use_count=_F("use_count") + 1)
+                        elif _flash_applied and _flash_sale_used is not None:
+                            # Flash sale was the winning discount — claim a redemption slot
+                            # atomically here (was previously incremented AFTER Order.create,
+                            # which left a race window where a concurrent order over-gave the
+                            # discount past a capped flash sale). The bounded compare-and-set is
+                            # the authoritative gate; is_live()'s in-memory count can be stale-low.
+                            from .models import PlatformFlashSale as _PFS2
+                            if _flash_sale_used.max_redemptions is not None:
+                                _flash_rows = _PFS2.objects.filter(
+                                    pk=_flash_sale_used.pk,
+                                    redemption_count__lt=_flash_sale_used.max_redemptions,
+                                ).update(redemption_count=_F("redemption_count") + 1)
+                                if not _flash_rows:
+                                    # Cap reached concurrently — strip the flash discount.
+                                    _strip_discount_full_price()
+                                    _flash_applied = False
+                                    _flash_sale_used = None
+                                    _applied_promo_name = ""
+                            else:
+                                # max_redemptions None → unlimited → no cap to enforce
+                                _PFS2.objects.filter(pk=_flash_sale_used.pk).update(
+                                    redemption_count=_F("redemption_count") + 1
+                                )
+
+                        # Commission (the platform's cut) — computed HERE, after the bounded
+                        # discount counters have settled _promo_discount, so a cap-strip bills
+                        # the corrected full-price base rather than the stale discounted one.
+                        from menu.commission import commissionable_food_base as _commissionable_base
+                        _commission_base = _commissionable_base(food_subtotal, _promo_discount, _loyalty_discount)
+                        commission_amount = (_commission_base * commission_rate).quantize(Decimal("0.01"))
 
                         # RISK DATA-1: 48-bit entropy (token_hex(6)) — keep in lockstep
                         # with menu.views._generate_order_number (same format/entropy). The
@@ -5136,30 +5169,12 @@ class MarketplacePlaceOrderView(APIView):
 
                         # (Restaurant promo use_count was incremented before Order.create() — see OPS-4 F.)
 
-                        # Increment platform flash-sale redemption_count — ONLY when the
-                        # flash sale was the APPLIED (winning) discount. Gating on
-                        # _flash_applied (not `_flash_sale_used is not None`) is required:
-                        # a flash sale is computed even when it loses to a restaurant promo,
-                        # and _best_promo also goes None on the promo's own cap-strip above —
-                        # so the old gate over-counted redemptions that never happened.
-                        # Bounded by max_redemptions so the counter can't overshoot the cap.
-                        # NOTE: this runs after Order.create, so it can't strip the discount
-                        # if the cap is hit concurrently — the counter stays accurate and
-                        # is_live() blocks further sales; fully closing the small
-                        # concurrency-window over-give would need a bounded compare-and-set +
-                        # strip relocated before Order.create (as the restaurant promo does).
-                        if _flash_applied and _flash_sale_used is not None:
-                            from .models import PlatformFlashSale as _PFS2
-                            from django.db.models import F as _F2
-                            if _flash_sale_used.max_redemptions is not None:
-                                _PFS2.objects.filter(
-                                    pk=_flash_sale_used.pk,
-                                    redemption_count__lt=_flash_sale_used.max_redemptions,
-                                ).update(redemption_count=_F2("redemption_count") + 1)
-                            else:
-                                _PFS2.objects.filter(pk=_flash_sale_used.pk).update(
-                                    redemption_count=_F2("redemption_count") + 1
-                                )
+                        # (Platform flash-sale redemption_count was claimed with a bounded
+                        # compare-and-set BEFORE Order.create() — see OPS-4 F above. Claiming
+                        # it pre-create closes the concurrency-window over-give: a cap hit
+                        # there strips the discount and re-prices the order, whereas an
+                        # after-create bump could only keep the counter accurate, not undo a
+                        # discount already given away.)
 
                         # Wallet deduction
                         _paid_by_wallet = Decimal("0")

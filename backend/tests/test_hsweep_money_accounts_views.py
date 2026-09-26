@@ -213,6 +213,7 @@ class MarketplacePromoCapLoyaltyTests(SimpleTestCase):
         profile.is_menu_published = True
         profile.platform_delivery_enabled = False
         profile.timezone = "UTC"
+        profile.marketplace_commission_pct = Decimal("0.10")  # explicit 10% so commission is deterministic
 
         optin_m = MagicMock()
         optin_m.objects.filter.return_value.values_list.return_value = []  # no flash sales
@@ -273,6 +274,11 @@ class MarketplacePromoCapLoyaltyTests(SimpleTestCase):
         self.assertEqual(kwargs["promotion_discount"], Decimal("0"))
         # The old bug shipped 10.00 (loyalty burned + overcharge) — guard against it.
         self.assertNotEqual(kwargs["total"], Decimal("10.00"))
+        # Commission must bill the CORRECTED (post-strip) base: 10 - 0 promo - 2 loyalty
+        # = 8.00 @ 10% = 0.80. The old code computed commission BEFORE the strip, on the
+        # discounted 3.00 base (= 0.30), silently under-charging the platform on a
+        # cap-stripped order. This is the regression guard for that fix.
+        self.assertEqual(kwargs["commission_amount"], Decimal("0.80"))
 
     def test_promo_not_capped_applies_both_discounts(self):
         """Control: when the promo counter UPDATE succeeds (rows=1), BOTH the promo
@@ -284,6 +290,188 @@ class MarketplacePromoCapLoyaltyTests(SimpleTestCase):
         self.assertEqual(kwargs["total"], Decimal("3.00"))
         self.assertEqual(kwargs["loyalty_discount"], Decimal("2.00"))
         self.assertEqual(kwargs["promotion_discount"], Decimal("5.00"))
+        # Commission on the post-discount base: 10 - 5 promo - 2 loyalty = 3.00 @ 10% = 0.30.
+        self.assertEqual(kwargs["commission_amount"], Decimal("0.30"))
+
+
+# ── Flash-sale redemption race — claim BEFORE Order.create, strip on cap-hit ───
+
+def _flash_sale(fid=7, discount=50, max_redemptions=100, redemption_count=99):
+    """A live platform flash sale (percentage), opted-in and — with no restaurant
+    promo present — the unambiguous winning discount."""
+    fs = MagicMock()
+    fs.id = fid
+    fs.pk = fid
+    fs.name = "Flash 50"
+    fs.discount_value = discount            # real int → Decimal(str(...)) is valid
+    fs.max_redemptions = max_redemptions
+    fs.redemption_count = redemption_count
+    fs.is_live.return_value = True
+    return fs
+
+
+def _fake_menu_models_no_promo(dish):
+    """Like _fake_menu_models but with NO restaurant promo, so the flash sale wins."""
+    order_cls = MagicMock()
+    order_cls.objects.filter.return_value.first.return_value = None
+    order_cls.objects.filter.return_value.exists.return_value = False
+
+    dish_cls = MagicMock()
+    dish_qs = MagicMock()
+    dish_qs.select_related.return_value = dish_qs
+    dish_qs.prefetch_related.return_value = [dish]
+    dish_cls.objects.filter.return_value = dish_qs
+    dish_cls.objects.select_for_update.return_value.filter.return_value = []
+
+    promo_cls = MagicMock()
+    promo_cls.objects.filter.return_value.order_by.return_value = []   # no promo
+
+    do_cls = MagicMock()
+    do_cls.objects.filter.return_value.select_related.return_value = []
+
+    m = MagicMock()
+    m.Dish = dish_cls
+    m.DishOption = do_cls
+    m.Order = order_cls
+    m.OrderItem = MagicMock()
+    m.Promotion = promo_cls
+    m.LoyaltyConfig = MagicMock()
+    return m, order_cls
+
+
+class MarketplaceFlashSaleRedemptionRaceTests(SimpleTestCase):
+    """Regression: the platform flash-sale redemption slot is CLAIMED with a bounded
+    compare-and-set BEFORE Order.create(). When the cap is hit concurrently (the
+    UPDATE returns 0 rows) the flash discount is stripped and the order re-prices at
+    full price — closing the over-give window where the claim used to run AFTER create
+    and could only keep the counter accurate, not undo a discount already given away."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = MarketplacePlaceOrderView.as_view()
+
+    def _post(self, data, customer):
+        req = self.factory.post("/api/marketplace/order/", data, format="json")
+        req.session = {}
+        force_authenticate(req, user=customer)
+        return self.view(req)
+
+    def _run(self, *, flash_update_rows):
+        dish = _dish()
+        customer = _customer(cid=7, wallet="100.00", points=0)
+        fake_menu, order_cls = _fake_menu_models_no_promo(dish)
+
+        created = MagicMock()
+        created.order_number = "ORD-TEST"
+        created.status = "pending"
+        created.total = Decimal("0")
+        created.delivery_fee = Decimal("0")
+        created.wallet_amount_paid = Decimal("0")
+        created.commission_amount = Decimal("0")
+        created.promotion_discount = Decimal("0")
+        created.applied_promotion_name = ""
+        created.loyalty_discount = Decimal("0")
+        created.redeemed_loyalty_points = None
+        created.points_earned = 0
+        created.scheduled_for = None
+        created.currency = "MAD"
+        order_cls.objects.create.return_value = created
+
+        tenant = MagicMock()
+        tenant.id = 1
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.schema_name = "bistro"
+
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=None)
+        cm.__exit__ = MagicMock(return_value=False)
+
+        wallet_tx = MagicMock()
+        wallet_tx.amount = Decimal("10.00")
+
+        profile = MagicMock()
+        profile.is_menu_published = True
+        profile.platform_delivery_enabled = False
+        profile.timezone = "UTC"
+        profile.marketplace_commission_pct = Decimal("0.10")
+
+        fs = _flash_sale()
+        optin_m = MagicMock()
+        optin_m.objects.filter.return_value.values_list.return_value = [fs.id]  # opted in
+
+        pfs_m = MagicMock()
+        _filt = MagicMock()
+        _filt.__iter__.return_value = iter([fs])        # eligibility scan yields the live sale
+        _filt.update.return_value = flash_update_rows   # the bounded redemption claim
+        pfs_m.objects.filter.return_value = _filt
+
+        payload = {
+            "restaurant": "bistro",
+            "items": [{"slug": "burger", "qty": 1}],
+            "fulfillment_type": "pickup",
+        }
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()), \
+                    patch("tenancy.models.Profile") as mock_profile_cls, \
+                    patch("accounts.views.Customer") as mock_cust_cls, \
+                    patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
+                    patch("accounts.models.PlatformFlashSale", pfs_m), \
+                    patch("django.db.transaction.atomic", return_value=cm), \
+                    patch("accounts.views._compute_is_open_now", return_value=True), \
+                    patch("accounts.views._is_promo_active_now", return_value=True), \
+                    patch("accounts.wallet_service.debit_wallet", return_value=wallet_tx), \
+                    patch("menu.views._orders_paused_now", return_value=False), \
+                    patch("menu.views._busy_extra_minutes_now", return_value=0), \
+                    patch("menu.views._auto_accept_now", return_value=False), \
+                    patch("menu.views._cod_eligible", return_value=False), \
+                    patch("menu.views._profile_now", return_value=None), \
+                    patch("menu.pricing.get_active_happy_hours", return_value=[]), \
+                    patch("menu.pricing.effective_unit_price",
+                          side_effect=lambda d, hh: (d.price, None)):
+                mock_profile_cls.objects.filter.return_value.first.return_value = profile
+                mock_cust_cls.DoesNotExist = _FakeDNE
+                mock_cust_cls.objects.get.return_value = customer
+                mock_cust_cls.objects.select_for_update.return_value.get.return_value = customer
+                with _inject_module("menu.models", fake_menu):
+                    resp = self._post(payload, customer=customer)
+        return resp, order_cls, _filt
+
+    def test_flash_cap_hit_strips_discount_and_bills_full_commission(self):
+        """food 10.00, opted-in live 50% flash sale is the winning discount
+        (pre-claim total = 10 - 5 = 5.00). The redemption claim UPDATE returns 0
+        (cap reached concurrently), so the flash discount is STRIPPED:
+          total = 10.00, promotion_discount = 0, commission = 10 @ 10% = 1.00.
+        The OLD code incremented AFTER create, so it shipped the 5.00 discounted
+        order anyway (the over-give) — guard against that."""
+        resp, order_cls, _filt = self._run(flash_update_rows=0)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(order_cls.objects.create.called)
+        kwargs = order_cls.objects.create.call_args.kwargs
+        self.assertEqual(kwargs["total"], Decimal("10.00"))
+        self.assertEqual(kwargs["promotion_discount"], Decimal("0"))
+        self.assertEqual(kwargs["applied_promotion_name"], "")
+        self.assertEqual(kwargs["commission_amount"], Decimal("1.00"))
+        # The claim ran BEFORE create (the relocation) — it was even reached.
+        self.assertTrue(_filt.update.called)
+
+    def test_flash_claim_succeeds_applies_discount(self):
+        """Control: the redemption claim UPDATE succeeds (rows=1) → the 50% flash
+        discount applies: total = 10 - 5 = 5.00, commission on the 5.00 base = 0.50."""
+        resp, order_cls, _filt = self._run(flash_update_rows=1)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        kwargs = order_cls.objects.create.call_args.kwargs
+        self.assertEqual(kwargs["total"], Decimal("5.00"))
+        self.assertEqual(kwargs["promotion_discount"], Decimal("5.00"))
+        self.assertIn("Flash Sale", kwargs["applied_promotion_name"])
+        self.assertEqual(kwargs["commission_amount"], Decimal("0.50"))
+        self.assertTrue(_filt.update.called)
 
 
 # ── Bug 2 — AdminWalletBonus self-defending idempotency (no client key) ────────
