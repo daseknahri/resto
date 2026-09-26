@@ -137,16 +137,18 @@ def resolve_available_dishes(slugs):
 
     Filters to published + available dishes in a published, non-temporarily-disabled category, with
     the combo-component and option-group relations prefetched (the pipeline needs them downstream).
-    This is byte-identical in the storefront (``PlaceOrderView``) and marketplace
-    (``MarketplacePlaceOrderView``) order paths. Schema-agnostic — it runs against whatever tenant
-    schema the caller has already established (ambient for the storefront, ``schema_context`` for the
-    marketplace). The caller compares the returned keys against ``slugs`` to build its own
-    ``items_unavailable`` response, keeping the DRF response contract in the view.
+    A combo dish whose own row is available is ALSO dropped when a component makes it unmakeable
+    (a 86'd or sold-out component) — mirroring the menu display so the server can't accept a combo
+    the menu already hides. This is byte-identical in the storefront (``PlaceOrderView``) and
+    marketplace (``MarketplacePlaceOrderView``) order paths. Schema-agnostic — it runs against
+    whatever tenant schema the caller has already established (ambient for the storefront,
+    ``schema_context`` for the marketplace). The caller compares the returned keys against ``slugs``
+    to build its own ``items_unavailable`` response, keeping the DRF response contract in the view.
     """
     # Function-local import (codebase menu↔accounts cycle-avoidance convention) — also keeps the
     # order paths' existing `menu.models`-patching tests valid after this extraction.
     from menu.models import Dish
-    return {
+    resolved = {
         d.slug: d
         for d in Dish.objects.filter(
             slug__in=slugs,
@@ -158,6 +160,38 @@ def resolve_available_dishes(slugs):
         .select_related("category")
         .prefetch_related("combo_components__component", "option_groups__options")
     }
+    # A combo's own row can pass the availability gate above yet still be unmakeable because a
+    # component dish is 86'd (``is_available=False``) or a finite component is sold out. The menu
+    # display already hides it (``MenuItemSerializer.get_combo_unavailable``) and the client blocks
+    # it, but a stale PWA menu / a direct API call could still POST it. Drop it here with the SAME
+    # predicate so the caller's existing ``slug not in dishes_map`` check rejects it as
+    # ``items_unavailable`` — no view change, no drift between what the menu shows and what we accept.
+    return {slug: d for slug, d in resolved.items() if not _combo_component_unavailable(d)}
+
+
+def _combo_component_unavailable(dish) -> bool:
+    """True when ``dish`` is a combo made unorderable by one of its components — ANY component with
+    ``is_available=False`` or finite ``stock_qty <= 0``.
+
+    Byte-for-byte the predicate of ``menu.serializers.MenuItemSerializer.get_combo_unavailable`` (the
+    display flag the client blocks on), so the order path and the menu agree on what a combo's
+    components make available. Relies on the ``combo_components__component`` prefetch done in
+    ``resolve_available_dishes`` (adds no queries), and degrades to "available" on any error exactly
+    as the display does, so it never rejects a combo the menu showed as orderable.
+    """
+    try:
+        comps = dish.combo_components.all()
+        if not comps:
+            return False
+        for cc in comps:
+            comp = cc.component
+            if not comp.is_available:
+                return True
+            if comp.stock_qty is not None and comp.stock_qty <= 0:
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def resolve_option_map(option_ids):

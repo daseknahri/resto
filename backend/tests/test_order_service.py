@@ -209,6 +209,44 @@ class ResolveItemsTests(SimpleTestCase):
         self.assertTrue(kwargs["category__is_published"])
         self.assertFalse(kwargs["category__is_temporarily_disabled"])
 
+    @patch("menu.models.Dish")
+    def test_resolve_available_dishes_drops_combo_with_unavailable_component(self, mock_dish):
+        # A combo whose own row is available is still dropped when a component is 86'd
+        # (is_available=False) or a finite component is sold out — mirroring the menu display's
+        # get_combo_unavailable so a stale PWA menu / direct API call can't order an unmakeable
+        # combo (the view's `slug not in dishes_map` then rejects it as items_unavailable). A combo
+        # with all components available, and a standalone dish, must be UNAFFECTED.
+        def _combo(slug, components):
+            d = MagicMock(slug=slug)
+            d.combo_components.all.return_value = [SimpleNamespace(component=c) for c in components]
+            return d
+
+        def _avail():
+            return SimpleNamespace(is_available=True, stock_qty=None)
+
+        eighty_sixed = SimpleNamespace(is_available=False, stock_qty=None)  # component 86'd
+        sold_out = SimpleNamespace(is_available=True, stock_qty=0)          # finite stock exhausted
+
+        ok_combo = _combo("ok-combo", [_avail(), _avail()])
+        dead_combo = _combo("dead-combo", [_avail(), eighty_sixed])
+        soldout_combo = _combo("soldout-combo", [sold_out])
+        standalone = _combo("burger", [])  # no components → not a combo, always kept
+
+        (
+            mock_dish.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+        ) = [ok_combo, dead_combo, soldout_combo, standalone]
+
+        result = resolve_available_dishes(["ok-combo", "dead-combo", "soldout-combo", "burger"])
+
+        # Kept: the all-available combo and the standalone dish.
+        self.assertEqual(set(result.keys()), {"ok-combo", "burger"})
+        self.assertIs(result["ok-combo"], ok_combo)
+        # Dropped (→ items_unavailable): a component 86'd, and a finite sold-out component.
+        self.assertNotIn("dead-combo", result)
+        self.assertNotIn("soldout-combo", result)
+
     @patch("menu.models.DishOption")
     def test_resolve_option_map_empty_short_circuits(self, mock_do):
         self.assertEqual(resolve_option_map([]), {})
