@@ -286,8 +286,14 @@ class Profile(models.Model):
     )
     # ── Platform directory & marketplace ─────────────────────────────────────
     directory_opt_in = models.BooleanField(
-        default=False,
-        help_text="Show this restaurant in the platform's public directory. Off by default.",
+        default=True,
+        help_text=(
+            "Show this restaurant in the platform's public marketplace. ON by default "
+            "(opt-out): a new business is listed once it publishes its menu "
+            "(the marketplace query also requires is_menu_published=True, so an "
+            "unpublished/incomplete business never appears prematurely). The owner can "
+            "opt out by unchecking the directory toggle."
+        ),
     )
     cuisine_type = models.CharField(
         max_length=60,
