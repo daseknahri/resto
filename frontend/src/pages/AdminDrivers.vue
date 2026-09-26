@@ -444,6 +444,12 @@ const payAmount = ref('');
 const payMethod = ref('cash');
 const paying = ref(false);
 const payError = ref('');
+// Idempotency key for the payout POST. Generated once per payout intent and held
+// ACROSS retries (cleared only on success / when a different driver panel opens), so
+// a click after an ambiguous failure (response lost mid-flight) replays the same key
+// server-side instead of committing a SECOND real payout. Mirrors AdminWallet /
+// AdminCustomers. A fresh-key-per-click let a partial settlement double-pay.
+let payoutKey = null;
 const detailError = ref(''); // panel-level fetch error (distinct from payError = the payout error shown inside the panel)
 const vetting = ref(false);
 const vettingCar = ref(false);
@@ -455,6 +461,7 @@ const openDriver = async (d) => {
   payError.value = '';
   detailError.value = '';
   rejectReason.value = '';
+  payoutKey = null; // new panel → new payout intent → fresh key
   loadingDetail.value = true;
   try {
     const res = await api.get(`/admin/drivers/${d.id}/earnings/`);
@@ -481,12 +488,14 @@ const submitPayout = async () => {
   });
   if (!okPay) return;
   paying.value = true;
+  if (!payoutKey) payoutKey = newIdempotencyKey(); // stable across retries of THIS payout
   try {
     const res = await api.post(`/admin/drivers/${selected.value.id}/payout/`, {
       amount: amount.toFixed(2),
       method: payMethod.value,
-      idempotency_key: newIdempotencyKey(),
+      idempotency_key: payoutKey,
     });
+    payoutKey = null; // settled — the next payout gets a fresh key
     toast.show(t('adminDrivers.payoutDone'), 'success');
     // Refresh the detail panel + the row's owed.
     await openDriver(selected.value);
