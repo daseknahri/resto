@@ -9,6 +9,8 @@ import { setActivePinia, createPinia } from "pinia";
 import { useSessionStore } from "../session";
 
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: { get: vi.fn(), post: vi.fn() },
 }));
 vi.mock("../../i18n/translate", () => ({

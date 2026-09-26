@@ -61,6 +61,8 @@ const _match = (url) => {
   return hit ? _routes[hit] : { data: {} };
 };
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn((url) => Promise.resolve(_match(url))),
     post: vi.fn(() => Promise.resolve({ data: {} })),

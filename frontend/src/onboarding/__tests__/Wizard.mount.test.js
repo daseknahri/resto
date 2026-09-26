@@ -78,6 +78,8 @@ vi.mock("vue-router", () => ({
 // Seeding tenant.meta means fetchMeta() is skipped entirely; this only keeps any
 // slipped-through store action hermetic (no real network).
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),
