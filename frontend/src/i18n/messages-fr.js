@@ -1921,6 +1921,7 @@ adminDeliveryJobs: {
   statusPickedUp: "Recuperee",
   statusDelivered: "Livree",
   statusFailed: "Echouee",
+  statusCancelled: "Annulee",
 },
 adminCustomers: {
   kicker: "Admin plateforme",

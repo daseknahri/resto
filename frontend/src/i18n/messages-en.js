@@ -1923,6 +1923,7 @@ adminDeliveryJobs: {
   statusPickedUp: "Picked up",
   statusDelivered: "Delivered",
   statusFailed: "Failed",
+  statusCancelled: "Cancelled",
 },
 adminCustomers: {
   kicker: "Platform Admin",

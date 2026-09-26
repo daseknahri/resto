@@ -142,7 +142,7 @@ import { pickupLabelKey } from '../lib/deliveryVocab';
 
 const { t, currentLocale } = useI18n();
 
-const STATUSES = ['all', 'searching', 'assigned', 'at_restaurant', 'picked_up', 'delivered', 'failed'];
+const STATUSES = ['all', 'searching', 'assigned', 'at_restaurant', 'picked_up', 'delivered', 'failed', 'cancelled'];
 const loading = ref(true);
 const fetchError = ref(false);
 const jobs = ref([]);
@@ -155,6 +155,7 @@ const STATUS_LABELS = {
   picked_up: 'adminDeliveryJobs.statusPickedUp',
   delivered: 'adminDeliveryJobs.statusDelivered',
   failed: 'adminDeliveryJobs.statusFailed',
+  cancelled: 'adminDeliveryJobs.statusCancelled',
 };
 // For at_restaurant chips, branch on the job's business_type; all others use static map.
 const statusLabel = (s, businessType) => {
@@ -165,6 +166,7 @@ const statusLabel = (s, businessType) => {
 const statusClass = (s) => {
   if (s === 'delivered') return 'bg-emerald-500/12 text-emerald-300';
   if (s === 'failed') return 'bg-red-500/12 text-red-300';
+  if (s === 'cancelled') return 'bg-slate-500/15 text-slate-300';
   if (s === 'searching') return 'bg-amber-500/12 text-amber-300';
   return 'bg-sky-500/12 text-sky-300';
 };
