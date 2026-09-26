@@ -338,6 +338,7 @@ import { useConfirmModal } from '../composables/useConfirmModal';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
@@ -445,17 +446,8 @@ let searchTimer = null;
 
 const currency = () => tenant.resolvedMeta?.plan?.currency || 'MAD';
 
-const fmtBalance = (bal) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency: currency(),
-      maximumFractionDigits: 2,
-    }).format(parseFloat(bal || 0));
-  } catch {
-    return `${parseFloat(bal || 0).toFixed(2)}`;
-  }
-};
+const fmtBalance = (bal) =>
+  formatCurrencyString(currentLocale.value, bal, currency(), { maximumFractionDigits: 2 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';

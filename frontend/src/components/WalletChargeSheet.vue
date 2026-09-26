@@ -192,6 +192,7 @@ import { useToastStore } from '../stores/toast';
 import { usePayCodeScanner } from '../composables/usePayCodeScanner';
 import { newIdempotencyKey } from '../lib/idempotency';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 
 const props = defineProps({
   prefillAmount: { type: [String, Number], default: '' },
@@ -297,13 +298,8 @@ const cancelAwaiting = () => {
   awaiting.value = null; // back to the amount step; the request expires on its own TTL
 };
 
-const fmtMoney = (v) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 }).format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
 
 const beginScan = async () => {
   error.value = '';

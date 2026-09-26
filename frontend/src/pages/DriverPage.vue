@@ -1106,6 +1106,7 @@ import { useToastStore } from '../stores/toast';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { pickupLabelKey } from '../lib/deliveryVocab';
 
 const { t, currentLocale } = useI18n();
@@ -1303,14 +1304,8 @@ const handleGoOnlineCta = async () => {
   await toggleOnline();
 };
 
-const fmtMoney = (v) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 })
-      .format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';
