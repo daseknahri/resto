@@ -4800,6 +4800,7 @@ class MarketplacePlaceOrderView(APIView):
                 # Check for opted-in platform flash sales
                 _flash_sale_used = None
                 _flash_discount = Decimal("0")
+                _flash_applied = False  # True only when the flash sale is the WINNING discount
                 try:
                     from .models import PlatformFlashSale as _PFS, PlatformFlashSaleOptIn as _PFSOI
                     _opted_sale_ids = set(
@@ -4824,6 +4825,7 @@ class MarketplacePlaceOrderView(APIView):
                 if _flash_discount > _promo_discount:
                     _promo_discount = _flash_discount
                     _best_promo = None
+                    _flash_applied = True
                     _applied_promo_name = f"Flash Sale: {_flash_sale_used.name}" if _flash_sale_used else "Flash Sale"
 
                 total = max(Decimal("0"), food_subtotal + _delivery_fee - _promo_discount)
@@ -5134,11 +5136,30 @@ class MarketplacePlaceOrderView(APIView):
 
                         # (Restaurant promo use_count was incremented before Order.create() — see OPS-4 F.)
 
-                        # Increment platform flash sale redemption_count atomically
-                        if _flash_sale_used is not None:
+                        # Increment platform flash-sale redemption_count — ONLY when the
+                        # flash sale was the APPLIED (winning) discount. Gating on
+                        # _flash_applied (not `_flash_sale_used is not None`) is required:
+                        # a flash sale is computed even when it loses to a restaurant promo,
+                        # and _best_promo also goes None on the promo's own cap-strip above —
+                        # so the old gate over-counted redemptions that never happened.
+                        # Bounded by max_redemptions so the counter can't overshoot the cap.
+                        # NOTE: this runs after Order.create, so it can't strip the discount
+                        # if the cap is hit concurrently — the counter stays accurate and
+                        # is_live() blocks further sales; fully closing the small
+                        # concurrency-window over-give would need a bounded compare-and-set +
+                        # strip relocated before Order.create (as the restaurant promo does).
+                        if _flash_applied and _flash_sale_used is not None:
                             from .models import PlatformFlashSale as _PFS2
                             from django.db.models import F as _F2
-                            _PFS2.objects.filter(pk=_flash_sale_used.pk).update(redemption_count=_F2("redemption_count") + 1)
+                            if _flash_sale_used.max_redemptions is not None:
+                                _PFS2.objects.filter(
+                                    pk=_flash_sale_used.pk,
+                                    redemption_count__lt=_flash_sale_used.max_redemptions,
+                                ).update(redemption_count=_F2("redemption_count") + 1)
+                            else:
+                                _PFS2.objects.filter(pk=_flash_sale_used.pk).update(
+                                    redemption_count=_F2("redemption_count") + 1
+                                )
 
                         # Wallet deduction
                         _paid_by_wallet = Decimal("0")
