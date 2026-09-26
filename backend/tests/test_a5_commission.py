@@ -66,6 +66,7 @@ def _profile(marketplace_commission_pct="0.10"):
     p.cod_min_paid_orders = 3
     p.lat = None
     p.lng = None
+    p.delivery_minimum_order = None  # delivery path reads this; None → no minimum gate
     p.marketplace_commission_pct = (
         Decimal(marketplace_commission_pct) if marketplace_commission_pct is not None else None
     )
@@ -83,6 +84,21 @@ def _dish(slug="burger", price="10.00", currency="MAD", stock_qty=None):
     d.category.course = 0
     d.combo_components.all.return_value = []
     return d
+
+
+def _free_delivery_promo():
+    """A live free_delivery promo. In checkout its discount is modeled as
+    _promo_discount = delivery_fee (a fee waiver) — it must NOT shrink the
+    commission food base, since the restaurant keeps the full food revenue."""
+    p = MagicMock()
+    p.pk = 9
+    p.promo_type = "free_delivery"
+    p.discount_value = 0
+    p.max_uses = None
+    p.use_count = 0
+    p.min_order_amount = "0"
+    p.name = "Free Delivery"
+    return p
 
 
 def _customer(cid=7, wallet="1000"):
@@ -151,10 +167,14 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
             force_authenticate(req, user=customer)
         return self.view(req)
 
-    def _run_order(self, *, profile, customer):
-        """Drive a marketplace pickup order to creation; return (response, order_cls)."""
+    def _run_order(self, *, profile, customer, promo=None, fulfillment="pickup", delivery_fee="15.00"):
+        """Drive a marketplace order to creation; return (response, order_cls).
+        Defaults to pickup/no-promo (the existing tests); pass promo= and
+        fulfillment="delivery" to exercise the free_delivery commission path."""
         dish = _dish()  # 10.00 each
         fake_menu, order_cls = _fake_menu_models(dish)
+        if promo is not None:
+            fake_menu.Promotion.objects.filter.return_value.order_by.return_value = [promo]
 
         created_order = MagicMock()
         created_order.order_number = "ORD-A5"
@@ -179,8 +199,12 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
         payload = {
             "restaurant": "bistro",
             "items": [{"slug": "burger", "qty": 2}],  # food_subtotal = 20.00
-            "fulfillment_type": "pickup",
+            "fulfillment_type": fulfillment,
         }
+        if fulfillment == "delivery":
+            payload["delivery_address"] = "12 Rue Test, Casablanca"
+            payload["delivery_lat"] = 33.58
+            payload["delivery_lng"] = -7.62
 
         # Fake wallet_tx returned by debit_wallet — amount matches the order total.
         fake_wallet_tx = MagicMock()
@@ -196,6 +220,9 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
                     patch("accounts.wallet_service.debit_wallet", return_value=fake_wallet_tx), \
                     patch("django.db.transaction.atomic", return_value=cm), \
                     patch("accounts.views._compute_is_open_now", return_value=True), \
+                    patch("accounts.views._is_promo_active_now", return_value=True), \
+                    patch("tenancy.delivery_pricing.compute_delivery_fee",
+                          return_value={"fee": Decimal(delivery_fee), "out_of_range": False}), \
                     patch("menu.views._cod_eligible", return_value=False), \
                     patch("menu.views._profile_now", return_value=None), \
                     patch("menu.pricing.get_active_happy_hours", return_value=[]), \
@@ -260,6 +287,26 @@ class MarketplaceCommissionRateTests(SimpleTestCase):
         kwargs = order_cls.objects.create.call_args.kwargs
         self.assertEqual(kwargs["commission_amount"], Decimal("1.50"))
         self.assertEqual(kwargs["commission_rate_applied"], Decimal("0.10"))
+
+    def test_free_delivery_promo_does_not_reduce_commission_food_base(self):
+        """A winning free_delivery promo waives the 15.00 delivery fee (modeled as
+        _promo_discount = delivery_fee), but commission must still bill the FULL food
+        revenue — the waiver doesn't reduce what the restaurant keeps on food. So the
+        food-promo discount threaded into commissionable_food_base is 0, and commission
+        = 10% × 20.00 food = 2.00, NOT 10% × (20 − 15) = 0.50 (the bug). Uses the real
+        commissionable_food_base."""
+        resp, order_cls = self._run_order(
+            profile=_profile(marketplace_commission_pct="0.10"),
+            customer=_customer(wallet="1000"),
+            promo=_free_delivery_promo(),
+            fulfillment="delivery",
+            delivery_fee="15.00",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        kwargs = order_cls.objects.create.call_args.kwargs
+        self.assertEqual(kwargs["commission_amount"], Decimal("2.00"))
+        # The order still records the free-delivery waiver as its promotion discount.
+        self.assertEqual(kwargs["promotion_discount"], Decimal("15.00"))
 
 
 # ── Commission STATEMENT — tenant-local month bucketing ───────────────────────
