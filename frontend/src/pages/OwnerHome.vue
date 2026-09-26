@@ -617,6 +617,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useNowTicker } from "../composables/useNowTicker";
 import { upcomingOrders, minutesUntilScheduled } from "../lib/ownerLiveFocus";
 import api from "../lib/api";
+import { formatCurrencyString } from "../lib/intlFormatters";
 import { bustCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
 import { useTenantStore } from "../stores/tenant";
@@ -1063,13 +1064,8 @@ const drawerSession = ref(null);
 const openingDrawer = ref(false);
 
 const fmtDrawerMoney = (val) => {
-  const n = Number(val) || 0;
   const curr = order.orders.find((o) => o.currency)?.currency || "MAD";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: curr, minimumFractionDigits: 2 }).format(n);
-  } catch {
-    return `${curr} ${n.toFixed(2)}`;
-  }
+  return formatCurrencyString(currentLocale.value, val, curr, { minimumFractionDigits: 2 });
 };
 
 const fetchDrawerState = async () => {

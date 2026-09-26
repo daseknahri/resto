@@ -37,7 +37,10 @@ vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
     // t returns the key verbatim (params, when present, are appended so the raw
     // key path is still asserted-on, e.g. ownerCustomers.resultCount).
+    // formatAmount delegates to lib/intlFormatters.formatCurrencyString(
+    // currentLocale.value,…), so currentLocale must be provided (ref-like { value }).
     t: (k, p) => (p ? `${k}(${JSON.stringify(p)})` : k),
+    currentLocale: { value: "en" },
   }),
 }));
 

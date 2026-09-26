@@ -440,8 +440,9 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
+import { formatCurrencyString } from "../lib/intlFormatters";
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -612,15 +613,7 @@ const initials = (name) => {
 const formatAmount = (val, currency) => {
   if (val === null || val === undefined || isNaN(val)) return "—";
   const code = (currency || "").toUpperCase();
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: code || "MAD",
-      maximumFractionDigits: 0,
-    }).format(val);
-  } catch {
-    return `${code} ${Number(val).toFixed(0)}`;
-  }
+  return formatCurrencyString(currentLocale.value, val, code || "MAD", { maximumFractionDigits: 0 });
 };
 
 const formatDate = (iso, full = false) => {
