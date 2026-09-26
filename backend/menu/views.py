@@ -7330,13 +7330,20 @@ class OwnerOrderListView(APIView):
         from accounts.models import DeliveryJob as _DJ
         delivery_job_map: dict = {}  # order_number → serialised job dict
         if tenant_id:
-            marketplace_order_nums = [
-                o.order_number for o in all_orders if getattr(o, "source", "") == "marketplace"
+            # Any DELIVERY order can carry a platform DeliveryJob — a direct-storefront
+            # delivery order (source="direct") gets one too when platform delivery is
+            # enabled (PlaceOrderView creates it). Gating on source=="marketplace" hid the
+            # driver/tracking panel + redispatch/refund/no-show controls for those, so a
+            # stuck DIRECT delivery showed a permanent "Awaiting driver" with no way to act.
+            # Own-driver tenants have no DeliveryJob → the filter simply finds none.
+            delivery_order_nums = [
+                o.order_number for o in all_orders
+                if getattr(o, "fulfillment_type", "") == Order.FulfillmentType.DELIVERY
             ]
-            if marketplace_order_nums:
+            if delivery_order_nums:
                 for _dj in (_DJ.objects.select_related("driver")
                             .filter(tenant_id=tenant_id,
-                                    order_number__in=marketplace_order_nums)):
+                                    order_number__in=delivery_order_nums)):
                     _drv = _dj.driver
                     delivery_job_map[_dj.order_number] = {
                         "id": _dj.id,
@@ -7524,7 +7531,7 @@ class OwnerOrderDetailView(APIView):
         # ── Delivery job lookup (public schema shared model) ─────────────────
         _dj_data = None
         _detail_tenant = getattr(request, "tenant", None)
-        if _detail_tenant and getattr(order, "source", "") == "marketplace":
+        if _detail_tenant and getattr(order, "fulfillment_type", "") == Order.FulfillmentType.DELIVERY:
             from accounts.models import DeliveryJob as _DJD
             _dj = (_DJD.objects.select_related("driver")
                    .filter(tenant_id=_detail_tenant.id,
@@ -8767,10 +8774,19 @@ class OwnerOrderMarkPaidView(APIView):
                     order.handled_by_user_id = _uid
                     order.save(update_fields=["handled_by_user_id"])
 
-            # Optional "settle & close": settling the tab completes a READY dine-in order.
+            # Optional "settle & close": settling the tab completes a READY pickup/dine-in
+            # order. A DELIVERY order must NOT jump straight to COMPLETED here — it has to
+            # go through OUT_FOR_DELIVERY (that path calls complete_delivery_job_for_order,
+            # which credits the driver and closes the DeliveryJob). Skipping it left the job
+            # dangling, the driver uncredited, and the customer seeing "delivered" while the
+            # food never left. Settling still records payment; only the auto-complete is gated.
             completed = False
             _want_complete = str(request.data.get("complete", "")).strip().lower() in ("1", "true", "yes")
-            if _want_complete and order.status == Order.Status.READY:
+            if (
+                _want_complete
+                and order.status == Order.Status.READY
+                and order.fulfillment_type != Order.FulfillmentType.DELIVERY
+            ):
                 order.status = Order.Status.COMPLETED
                 order.status_updated_at = timezone.now()
                 order.save(update_fields=["status", "status_updated_at", "updated_at"])

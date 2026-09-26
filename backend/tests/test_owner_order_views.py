@@ -214,6 +214,35 @@ class OwnerOrderListViewTests(SimpleTestCase):
             self.assertIn(present_field, result)
         self.assertEqual(result["delivery_address"], "5 Rue de Paris")
 
+    @patch("accounts.models.DeliveryJob")
+    @patch("menu.views.Order.objects")
+    def test_direct_delivery_order_is_considered_for_delivery_job(self, objects_mock, dj_mock):
+        """A DIRECT-storefront delivery order (source != 'marketplace') must be included
+        in the DeliveryJob lookup — previously only source=='marketplace' orders were, so
+        a stuck direct delivery showed a permanent 'Awaiting driver' with no driver panel.
+        We assert the job query runs with the direct order's number; the job set is empty
+        here (own-driver tenant → no DeliveryJob), which must not change the outcome."""
+        order = _make_order(number="ORD-DIRECT-1", fulfillment_type="delivery")
+        order.source = "direct"
+        qs_mock = MagicMock()
+        qs_mock.filter.return_value = qs_mock
+        qs_mock.__iter__ = lambda s: iter([order])
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+
+        dj_filter = dj_mock.objects.select_related.return_value.filter
+        dj_filter.return_value = []  # no DeliveryJob (own-driver tenant)
+
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # The delivery-job lookup was performed for the DIRECT delivery order's number
+        # (the fix: gate on fulfillment_type == delivery, not source == marketplace).
+        self.assertTrue(dj_filter.called)
+        self.assertIn("ORD-DIRECT-1", dj_filter.call_args.kwargs.get("order_number__in", []))
+
     @patch("menu.views.Order.objects")
     def test_status_filter_applied_when_valid(self, objects_mock):
         # OPS-4 A: when ?status=pending the view calls qs.filter(status="pending")
