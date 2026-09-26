@@ -7888,12 +7888,16 @@ class OwnerPromotionDetailView(APIView):
         if "days" in data:
             raw = data["days"] or []
             p.days = [d for d in (raw if isinstance(raw, list) else []) if d in _VALID_DAYS]
+        # Validate HH:MM digits (parity with the create path's _parse_hhmm) — a bare
+        # len/colon check accepted "ab:cd".
+        def _valid_hhmm(v):
+            return len(v) == 5 and v[2] == ":" and v[:2].isdigit() and v[3:].isdigit()
         if "time_start" in data:
             v = str(data["time_start"] or "").strip()
-            p.time_start = v if len(v) == 5 and v[2] == ":" else ""
+            p.time_start = v if _valid_hhmm(v) else ""
         if "time_end" in data:
             v = str(data["time_end"] or "").strip()
-            p.time_end = v if len(v) == 5 and v[2] == ":" else ""
+            p.time_end = v if _valid_hhmm(v) else ""
         if "active_from" in data:
             try:
                 p.active_from = _date.fromisoformat(str(data["active_from"])) if data["active_from"] else None

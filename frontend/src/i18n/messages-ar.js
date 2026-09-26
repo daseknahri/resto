@@ -4232,6 +4232,7 @@ Object.assign(arabicMessages, {
     statusPickedUp: "\u062a\u0645 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645",
     statusDelivered: "\u062a\u0645 \u0627\u0644\u062a\u0633\u0644\u064a\u0645",
     statusFailed: "\u0641\u0634\u0644",
+    statusCancelled: "\u0645\u0644\u063a\u0649",
   },
   adminCustomers: {
     kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
