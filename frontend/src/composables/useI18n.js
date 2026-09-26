@@ -3,7 +3,7 @@ import { DEFAULT_LOCALE, LOCALE_OPTIONS, getLocaleDirection, normalizeLocale } f
 import { catalog, ensureLocale, getMessages } from "../i18n/localeLoader";
 import { useLocaleStore } from "../stores/locale";
 import { useCurrencyStore } from "../stores/currency";
-import { getNumberFormat, getDateTimeFormat } from "../lib/intlFormatters";
+import { getNumberFormat, getDateTimeFormat, formatCurrencyString } from "../lib/intlFormatters";
 
 const getByPath = (target, path) =>
   String(path || "")
@@ -36,11 +36,7 @@ export const useI18n = () => {
     getNumberFormat(currentLocale.value, options).format(Number.isFinite(Number(value)) ? Number(value) : 0);
 
   const formatCurrency = (value, currency = "USD", options = {}) =>
-    getNumberFormat(currentLocale.value, {
-      style: "currency",
-      currency: currency || "MAD",
-      ...options,
-    }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
+    formatCurrencyString(currentLocale.value, value, currency, options);
 
   const formatDateTime = (value, options = {}) => {
     if (!value) return "";

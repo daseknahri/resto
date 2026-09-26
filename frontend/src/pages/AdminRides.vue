@@ -254,6 +254,7 @@ import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
 import adminApi from '../lib/adminApi';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import AppIcon from '../components/AppIcon.vue';
 import { useToastStore } from '../stores/toast';
 
@@ -306,13 +307,8 @@ const riderLabel = (r) => {
   return r.rider.name || r.rider.phone || ('#' + r.rider.id);
 };
 
-const fmtMoney = (v) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 }).format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';

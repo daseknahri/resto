@@ -344,6 +344,7 @@ import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
 
@@ -362,14 +363,8 @@ const verifiedOnly = ref(false);
 const driversOnly = ref(false);
 let searchTimer = null;
 
-const fmtMoney = (v, currency = 'MAD') => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: currency || 'MAD', maximumFractionDigits: 2 })
-      .format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v, currency = 'MAD') =>
+  formatCurrencyString(currentLocale.value, v, currency, { maximumFractionDigits: 2 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';

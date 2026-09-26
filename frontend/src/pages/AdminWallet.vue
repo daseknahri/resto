@@ -416,6 +416,7 @@ import { useFocusTrap } from '../composables/useFocusTrap';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import adminApi from '../lib/adminApi';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
@@ -587,17 +588,8 @@ let bonusKey = null; // idempotency key, stable across retries of the same bonus
 
 let searchTimer = null;
 
-const fmtBalance = (bal) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency: 'MAD',
-      maximumFractionDigits: 2,
-    }).format(parseFloat(bal || 0));
-  } catch {
-    return `${parseFloat(bal || 0).toFixed(2)}`;
-  }
-};
+const fmtBalance = (bal) =>
+  formatCurrencyString(currentLocale.value, bal, 'MAD', { maximumFractionDigits: 2 });
 
 const fetch = async () => {
   loading.value = true;

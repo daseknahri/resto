@@ -421,6 +421,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { useToastStore } from '../stores/toast';
 import { newIdempotencyKey } from '../lib/idempotency';
 
@@ -432,13 +433,8 @@ const loading = ref(true);
 const fetchError = ref(false);
 const drivers = ref([]);
 
-const fmtMoney = (v) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 }).format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
 
 // ── Earnings detail slide-over + payout ─────────────────────────────────────
 const selected = ref(null);
