@@ -1,78 +1,85 @@
 <template>
   <!-- Customer-confirmed charge: a restaurant is requesting an above-threshold debit.
        Mounted in CustomerLayout so it surfaces on ANY customer page, not just /account. -->
-  <Transition name="ui-fade">
-    <div
-      v-if="activeCharge"
-      class="fixed inset-0 z-[3500] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="`charge-kicker-${activeCharge.id} charge-title-${activeCharge.id}`"
-      @keydown.capture="onPanelKey"
-    >
+  <!-- Teleport OUT of #app: this dialog marks #app inert while open (to hide the
+       background from AT). Rendered inside #app it would be a descendant of the
+       inert subtree, and inert cannot be un-set on a descendant — so Approve/Decline
+       became non-interactive to pointer, keyboard and focus in every modern browser.
+       Teleporting to <body> puts the dialog beside #app, outside the inert subtree. -->
+  <Teleport to="body">
+    <Transition name="ui-fade">
       <div
-        ref="panelRef"
-        class="ui-glass w-full max-w-sm space-y-4 rounded-t-[2rem] p-5 pb-[calc(1.25rem+var(--safe-bottom))] sm:rounded-[2rem] sm:pb-5 ui-reveal"
+        v-if="activeCharge"
+        class="fixed inset-0 z-[3500] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="`charge-kicker-${activeCharge.id} charge-title-${activeCharge.id}`"
+        @keydown.capture="onPanelKey"
       >
-        <!-- Header -->
-        <div class="space-y-1 text-center">
-          <p
-            :id="`charge-kicker-${activeCharge.id}`"
-            class="ui-kicker text-[var(--color-secondary)]"
-          >{{ t('chargeRequest.title') }}</p>
-          <p
-            :id="`charge-title-${activeCharge.id}`"
-            role="heading"
-            aria-level="2"
-            class="tabular-nums text-3xl font-bold tracking-tight text-white"
-          >{{ formatPrice(activeCharge.amount) }}</p>
-          <p class="ui-subtle">{{ t('chargeRequest.from', { name: activeCharge.restaurant_name || t('chargeRequest.aRestaurant') }) }}</p>
-          <p v-if="activeCharge.order_number" class="text-xs text-slate-500">{{ t('chargeRequest.order', { num: activeCharge.order_number }) }}</p>
-        </div>
-
-        <!-- Balance band -->
-        <div class="ui-context-band px-3 py-2 text-center text-xs text-slate-400">
-          <span class="tabular-nums">{{ t('chargeRequest.balanceLine', { balance: formatPrice(walletBalance) }) }}</span>
-        </div>
-
-        <!-- Error -->
         <div
-          v-if="chargeError"
-          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
-          role="alert"
-          aria-live="assertive"
-          aria-atomic="true"
+          ref="panelRef"
+          class="ui-glass w-full max-w-sm space-y-4 rounded-t-[2rem] p-5 pb-[calc(1.25rem+var(--safe-bottom))] sm:rounded-[2rem] sm:pb-5 ui-reveal"
         >
-          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
-          <p class="flex-1 text-sm text-red-300">{{ chargeError }}</p>
-        </div>
+          <!-- Header -->
+          <div class="space-y-1 text-center">
+            <p
+              :id="`charge-kicker-${activeCharge.id}`"
+              class="ui-kicker text-[var(--color-secondary)]"
+            >{{ t('chargeRequest.title') }}</p>
+            <p
+              :id="`charge-title-${activeCharge.id}`"
+              role="heading"
+              aria-level="2"
+              class="tabular-nums text-3xl font-bold tracking-tight text-white"
+            >{{ formatPrice(activeCharge.amount) }}</p>
+            <p class="ui-subtle">{{ t('chargeRequest.from', { name: activeCharge.restaurant_name || t('chargeRequest.aRestaurant') }) }}</p>
+            <p v-if="activeCharge.order_number" class="text-xs text-slate-500">{{ t('chargeRequest.order', { num: activeCharge.order_number }) }}</p>
+          </div>
 
-        <!-- Actions -->
-        <div class="flex gap-2">
-          <button
-            ref="declineRef"
-            class="ui-btn-outline ui-press ui-touch-target flex-1 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50"
-            :disabled="!!chargeBusy"
-            :aria-busy="!!chargeBusy"
-            :aria-label="chargeBusy ? t('common.loading') : t('chargeRequest.decline')"
-            @click="declineCharge(activeCharge)"
-          >{{ t('chargeRequest.decline') }}</button>
-          <button
-            class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:pointer-events-none disabled:opacity-50"
-            :disabled="!!chargeBusy"
-            :aria-busy="chargeBusy === activeCharge.id"
-            @click="approveCharge(activeCharge)"
+          <!-- Balance band -->
+          <div class="ui-context-band px-3 py-2 text-center text-xs text-slate-400">
+            <span class="tabular-nums">{{ t('chargeRequest.balanceLine', { balance: formatPrice(walletBalance) }) }}</span>
+          </div>
+
+          <!-- Error -->
+          <div
+            v-if="chargeError"
+            class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
           >
-            <template v-if="chargeBusy === activeCharge.id">
-              <span aria-hidden="true">…</span>
-              <span class="sr-only">{{ t('common.loading') }}</span>
-            </template>
-            <template v-else>{{ t('chargeRequest.approve') }}</template>
-          </button>
+            <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+            <p class="flex-1 text-sm text-red-300">{{ chargeError }}</p>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-2">
+            <button
+              ref="declineRef"
+              class="ui-btn-outline ui-press ui-touch-target flex-1 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50"
+              :disabled="!!chargeBusy"
+              :aria-busy="!!chargeBusy"
+              :aria-label="chargeBusy ? t('common.loading') : t('chargeRequest.decline')"
+              @click="declineCharge(activeCharge)"
+            >{{ t('chargeRequest.decline') }}</button>
+            <button
+              class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:pointer-events-none disabled:opacity-50"
+              :disabled="!!chargeBusy"
+              :aria-busy="chargeBusy === activeCharge.id"
+              @click="approveCharge(activeCharge)"
+            >
+              <template v-if="chargeBusy === activeCharge.id">
+                <span aria-hidden="true">…</span>
+                <span class="sr-only">{{ t('common.loading') }}</span>
+              </template>
+              <template v-else>{{ t('chargeRequest.approve') }}</template>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 
   <!-- Surgical 401 re-auth: /customer/ endpoints are excluded from the global
        axios sign-out redirect (see src/lib/api.js), so a stale session on

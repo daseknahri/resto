@@ -75,11 +75,23 @@ const sanitizeProfilePayload = (payload) => {
     "secondary_color",
   ].forEach(trimString);
 
+  // Only normalize keys the caller actually SENT. profileApi.save() does a PUT
+  // (full update), so injecting an empty {}/"" for an absent key would WIPE that
+  // column: a partial save (e.g. OwnerProfile.saveOrderHandling / saveSchedule,
+  // StepPublish.saveDirectory — which each send only their own 2-7 fields) would
+  // erase the logo, hero, social/map links, translations, and weekly schedule on
+  // the live storefront. `key in next` keeps a partial payload partial; the
+  // full-profile savers (StepBrand/StepTheme, which send every key) are unaffected.
   ["tagline_i18n", "description_i18n", "address_i18n", "business_hours_i18n"].forEach((key) => {
-    next[key] = normalizeI18nMap(next[key]);
+    if (key in next) next[key] = normalizeI18nMap(next[key]);
   });
 
-  if (!next.business_hours_schedule || typeof next.business_hours_schedule !== "object" || Array.isArray(next.business_hours_schedule)) {
+  if (
+    "business_hours_schedule" in next &&
+    (!next.business_hours_schedule ||
+      typeof next.business_hours_schedule !== "object" ||
+      Array.isArray(next.business_hours_schedule))
+  ) {
     next.business_hours_schedule = {};
   }
 
@@ -92,7 +104,7 @@ const sanitizeProfilePayload = (payload) => {
     "logo_url",
     "hero_url",
   ].forEach((key) => {
-    next[key] = normalizeOptionalUrl(next[key]);
+    if (key in next) next[key] = normalizeOptionalUrl(next[key]);
   });
 
   if (typeof next.language === "string" && next.language) {
