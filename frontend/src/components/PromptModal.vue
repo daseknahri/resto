@@ -45,9 +45,12 @@
               class="ui-input w-full"
               :placeholder="modal.options.value.placeholder || ''"
               :required="modal.options.value.required"
+              :aria-label="modal.options.value.label || modal.options.value.title"
+              :aria-invalid="validationMsg ? 'true' : undefined"
+              :aria-describedby="validationMsg ? errorId : undefined"
               autocomplete="off"
             />
-            <p v-if="validationMsg" class="text-xs text-red-400">{{ validationMsg }}</p>
+            <p v-if="validationMsg" :id="errorId" class="text-xs text-red-400">{{ validationMsg }}</p>
           </div>
 
           <!-- Actions -->
@@ -84,6 +87,7 @@ const modal = usePromptModal();
 
 const dialogTitleId = "prompt-modal-title";
 const inputId       = "prompt-modal-input";
+const errorId       = "prompt-modal-error";
 
 const inputRef     = ref(null);
 const cancelBtnRef = ref(null);

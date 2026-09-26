@@ -223,7 +223,7 @@
             leave-active-class="transition-transform duration-150"
             leave-to-class="ltr:translate-x-full rtl:-translate-x-full"
           >
-            <aside v-if="selected" class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5" role="dialog" :aria-label="selected.name || t('adminDrivers.unnamed')" aria-modal="true" @keydown.esc="selected = null">
+            <aside v-if="selected" ref="slideOverRef" class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5" role="dialog" :aria-label="selected.name || t('adminDrivers.unnamed')" aria-modal="true" @keydown.esc="selected = null">
               <!-- Header -->
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -420,6 +420,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
+import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
 import { useToastStore } from '../stores/toast';
@@ -438,6 +439,10 @@ const fmtMoney = (v) =>
 
 // ── Earnings detail slide-over + payout ─────────────────────────────────────
 const selected = ref(null);
+// Focus trap for the money/vetting slide-over (mirrors AdminCustomers / AdminWallet):
+// Tab stays inside the drawer, focus enters on open + returns to the trigger on close.
+const slideOverRef = ref(null);
+useFocusTrap(slideOverRef, computed(() => !!selected.value));
 const detail = ref(null);
 const loadingDetail = ref(false);
 const payAmount = ref('');

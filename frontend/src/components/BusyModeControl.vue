@@ -94,11 +94,13 @@
   <Teleport to="body">
       <div
         v-if="sheetOpen"
+        ref="sheetRef"
         class="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
         role="dialog"
         aria-modal="true"
         :aria-label="t('busyMode.title')"
         @click.self="sheetOpen = false"
+        @keydown.esc="sheetOpen = false"
       >
         <div class="w-full max-w-md space-y-4 rounded-t-3xl border border-slate-800 bg-slate-950 p-5 shadow-2xl sm:rounded-3xl">
           <div class="flex items-center justify-between gap-2">
@@ -169,6 +171,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useNowTicker } from "../composables/useNowTicker";
 import api from "../lib/api";
 import { useTenantStore } from "../stores/tenant";
@@ -188,6 +191,11 @@ const { now } = useNowTicker(10_000);
 
 const profile = computed(() => tenant.meta?.profile || {});
 const sheetOpen = ref(false);
+// Focus-manage the busy-mode sheet: focus enters on open, Tab is trapped, focus
+// returns to the trigger on close. Escape-to-close is handled in-template
+// (@keydown.esc) since useFocusTrap only owns Tab + focus, not Escape.
+const sheetRef = ref(null);
+useFocusTrap(sheetRef, sheetOpen);
 const saving = ref(false);
 
 // How long a busy-extra bump lasts when the owner picks one. The pause has
