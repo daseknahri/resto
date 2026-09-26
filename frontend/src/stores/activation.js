@@ -1,4 +1,4 @@
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { defineStore } from "pinia";
 
 // The backend's ActivationSerializer.validate raises plain (non-field) DRF
@@ -9,15 +9,7 @@ import { defineStore } from "pinia";
 // matching on translated text.
 const TOKEN_EXPIRED_OR_USED = "Token expired or used";
 
-const extractErrorMessage = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
-    return String(data.non_field_errors[0]);
-  }
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-};
+const extractErrorMessage = extractApiErrorMessage;  // shared canonical extractor (lib/api)
 
 export const useActivationStore = defineStore("activation", {
   state: () => ({ submitting: false, error: null, success: false, tokenExpiredOrUsed: false }),

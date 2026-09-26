@@ -1064,6 +1064,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
+import { extractApiErrorMessage } from "../lib/api";
 import AdminConsoleDryRunImportModal from "../components/AdminConsoleDryRunImportModal.vue";
 import AdminConsoleLiveOrdersModal from "../components/AdminConsoleLiveOrdersModal.vue";
 import AdminConsoleDeliveryPricingDrawer from "../components/AdminConsoleDeliveryPricingDrawer.vue";
@@ -1167,17 +1168,7 @@ const auditHasNext = ref(false);
 const auditHasPrev = ref(false);
 let tenantsRequestController = null;
 const tenantTimelineControllers = new Map();
-const parseApiError = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return String(data.non_field_errors[0]);
-  if (data && typeof data === "object") {
-    const firstList = Object.values(data).find((v) => Array.isArray(v) && v.length);
-    if (firstList) return String(firstList[0]);
-  }
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-};
+const parseApiError = extractApiErrorMessage;  // shared canonical extractor (lib/api)
 const normalizeSuffix = (value) => String(value || "").trim().replace(/^\.+/, "");
 const djangoAdminUrl = computed(() => {
   if (typeof window === "undefined") return "/admin/";

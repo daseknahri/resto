@@ -573,7 +573,7 @@ import OwnerReservationsWaitlist from "../components/OwnerReservationsWaitlist.v
 import ReservationCalendar from "../components/ReservationCalendar.vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { safeExternalUrl } from "../lib/escape";
 import { readCache, writeCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
@@ -663,12 +663,7 @@ const allSelectedOnPage = computed(() => {
   return pageIds.every((id) => selectedIds.value.includes(id));
 });
 
-const parseApiError = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-};
+const parseApiError = extractApiErrorMessage;  // shared canonical extractor (lib/api)
 
 const formatDate = (value) => formatDateTime(value) || "-";
 

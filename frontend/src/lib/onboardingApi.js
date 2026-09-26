@@ -1,4 +1,4 @@
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { slugify } from "../lib/slug";
 import { translate } from "../i18n/translate";
 import { bustCache } from "../lib/staleCache";
@@ -9,17 +9,7 @@ const MENU_CACHE = "menu.categories";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-const extractApiMessage = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return String(data.non_field_errors[0]);
-  if (data && typeof data === "object") {
-    const firstList = Object.values(data).find((v) => Array.isArray(v) && v.length);
-    if (firstList) return String(firstList[0]);
-  }
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-};
+const extractApiMessage = extractApiErrorMessage;  // shared canonical extractor (lib/api)
 
 const extractFieldErrors = (err) => {
   const data = err?.response?.data;

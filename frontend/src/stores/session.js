@@ -1,16 +1,8 @@
 import { defineStore } from "pinia";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { translate } from "../i18n/translate";
 
-const extractErrorMessage = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
-    return String(data.non_field_errors[0]);
-  }
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-};
+const extractErrorMessage = extractApiErrorMessage;  // shared canonical extractor (lib/api)
 
 export const useSessionStore = defineStore("session", {
   state: () => ({
