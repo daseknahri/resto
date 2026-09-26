@@ -36,17 +36,25 @@ data impact (they're stateless app containers; Postgres and its volume are untou
 > `docker rm -f`/`docker stop` on running containers ("interfere with workloads").
 
 ## Durable fixes (this week — so it can't recur)
-1. **Stop the orphan accumulation (the real fix).** Ensure every deploy removes superseded containers —
-   `docker compose up -d --remove-orphans` in the deploy, and/or a scheduled `docker container prune -f`
-   on the host. Investigate why Coolify leaves old `admin` containers specifically (likely a
-   service-name/compose-project mismatch across versions so compose doesn't recognize them as replaceable).
+1. **Stop the orphan accumulation (the real fix).** 🔶 **Drafted — [`infra/COOLIFY_ORPHAN_CONTAINER_CLEANUP.md`](../infra/COOLIFY_ORPHAN_CONTAINER_CLEANUP.md).**
+   Two layers: (a) make Coolify's `docker compose up` pass **`--remove-orphans`** (or pin the compose
+   project name) so superseded containers are reaped on deploy — the root cause; and (b) a dry-run-by-default
+   safety-net script, [`infra/coolify/prune_stale_stack_containers.sh`](../infra/coolify/prune_stale_stack_containers.sh),
+   that removes stale duplicate *stateless* containers (never postgres/redis) and can run as a host cron.
+   Note `docker container prune` alone would NOT have helped — the orphans were *running*, and prune only
+   removes *stopped* containers. Needs the owner to set the Coolify option + schedule the script.
 2. **Give Postgres headroom + reduce hold time.** Raise `PG_MAX_CONNECTIONS` (50 → 100) with a matching
    `POSTGRES_MEM_LIMIT`, and/or lower `CONN_MAX_AGE` so idle persistent connections are released sooner.
    Sizing rule already documented in `backend/docker/entrypoint.sh`: `workers*4 + ~10` across **all**
-   services (api + admin + worker + beat).
-3. **Least-privilege DB role.** The app connects as the Postgres **superuser**, which let it consume the
-   `superuser_reserved_connections` slots — leaving no emergency slot for diagnostics/recovery. Create a
-   dedicated non-superuser application role so the reserved slots stay available.
+   services (api + admin + worker + beat). _(PR #379 — see its own note.)_
+3. **Least-privilege DB role.** 🔶 **Drafted — [`infra/sql/least_privilege_app_role.sql`](../infra/sql/least_privilege_app_role.sql).**
+   The app connects as the Postgres **superuser**, which let it consume the `superuser_reserved_connections`
+   slots — leaving no emergency slot for diagnostics/recovery. The script creates a dedicated **non-superuser**
+   role that OWNS the app database (so django-tenants can still `CREATE SCHEMA` + run per-tenant migrations,
+   incl. `CREATE INDEX CONCURRENTLY`, at runtime — verified no `CREATE EXTENSION`/superuser DDL is needed),
+   with a greenfield path (recommended) and an in-place ownership-transfer path for the existing prod DB.
+   Staging-gated + take a backup before the in-place path; then repoint `DATABASE_URL` and keep
+   `POSTGRES_USER` as the idle bootstrap superuser. Needs the owner (prod DB access).
 4. **Make `/api/health/` survive this.** ✅ **DONE (PR #378).** The health view is designed to report
    `503 {db:down}`, but it sat **behind** the tenant-resolution middleware (which itself queries the DB),
    so on DB failure it returned a bare 500 instead. Fixed: `TenantAwareMainMiddleware.process_request` now
