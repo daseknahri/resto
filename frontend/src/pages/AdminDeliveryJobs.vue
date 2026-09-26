@@ -137,6 +137,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import AppIcon from '../components/AppIcon.vue';
 import { pickupLabelKey } from '../lib/deliveryVocab';
 
@@ -171,13 +172,8 @@ const statusClass = (s) => {
   return 'bg-sky-500/12 text-sky-300';
 };
 
-const fmtMoney = (v) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 }).format(parseFloat(v || 0));
-  } catch {
-    return `${parseFloat(v || 0).toFixed(2)}`;
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
 
 const fmtDate = (iso) => {
   if (!iso) return '';

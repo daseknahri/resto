@@ -45,6 +45,33 @@ export function getNumberFormat(locale, options = {}) {
 }
 
 /**
+ * Format a numeric amount as a currency string — the single source of truth for
+ * NON-converting currency formatting (the amount is already in `currency`; this
+ * does NOT convert between currencies — that's the currency store's `formatPrice`).
+ *
+ * Consolidates ~a dozen hand-rolled `new Intl.NumberFormat(locale, {style:"currency",…})`
+ * helpers that were copy-pasted across admin/owner/driver/waiter screens, each with
+ * its own try/catch. Callers pass an explicit `locale` (usually `currentLocale.value`)
+ * so this stays a pure leaf with no store/composable import (see module note above).
+ *
+ * Behaviour matches the previous `useI18n.formatCurrency`: non-finite → 0, a falsy
+ * code → "MAD", decimals default to the code's Intl default (MAD → 2) unless
+ * `options` override. The try/catch only guards a malformed (non-ISO-4217) code from
+ * white-screening a money cell — it never fires for the app's real codes; the
+ * symbol-less "CODE 12.34" fallback is intentionally plain.
+ */
+export function formatCurrencyString(locale, value, currency = "MAD", options = {}) {
+  const amount = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const code = currency || "MAD";
+  try {
+    return getNumberFormat(locale, { style: "currency", currency: code, ...options }).format(amount);
+  } catch {
+    const dp = Number.isFinite(options.maximumFractionDigits) ? options.maximumFractionDigits : 2;
+    return `${code} ${amount.toFixed(dp)}`;
+  }
+}
+
+/**
  * Return a cached `Intl.DateTimeFormat` for the given locale + options, creating
  * (and caching) one on first use. Throws exactly as `new Intl.DateTimeFormat`
  * would — a failed construction is not cached.
