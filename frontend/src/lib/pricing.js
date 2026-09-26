@@ -27,10 +27,6 @@ export const PRICING_PLANS = [
   },
 ];
 
-/** Convenience lookup by plan code */
-export const getPlanPricing = (code) =>
-  PRICING_PLANS.find((p) => p.code === code) ?? null;
-
 /**
  * Fetch live pricing from the backend.
  * Returns a map of { code → { price_monthly, currency, billing_period } }.
