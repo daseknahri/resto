@@ -27,7 +27,7 @@ export function ratingErrorKey(err) {
  * @param {() => (void|Promise<void>)} [opts.onRated]  per-page success behavior (toast / refetch / flag)
  * @returns {{ score, comment, submitting, submit }} refs + the submit action
  */
-export function useOrderRating({ getOrderNumber, i18nPrefix, onRated }) {
+export function useOrderRating({ getOrderNumber, i18nPrefix, onRated, buildRateUrl }) {
   const { t } = useI18n();
   const toast = useToastStore();
   const score = ref(0);
@@ -38,7 +38,13 @@ export function useOrderRating({ getOrderNumber, i18nPrefix, onRated }) {
     if (score.value === 0 || submitting.value) return;
     submitting.value = true;
     try {
-      await api.post(`/orders/${getOrderNumber()}/rate/`, {
+      // The tenant order-status page posts to the tenant route /orders/<n>/rate/. The
+      // MARKETPLACE page runs on the public host where that route 404s, so it injects a
+      // buildRateUrl pointing at the shared /marketplace/order/<n>/rate/?restaurant=<slug>.
+      const url = buildRateUrl
+        ? buildRateUrl(getOrderNumber())
+        : `/orders/${getOrderNumber()}/rate/`;
+      await api.post(url, {
         score: score.value,
         comment: comment.value.trim(),
       });

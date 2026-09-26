@@ -21,7 +21,12 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import Customer, User
+from accounts.views import MarketplaceOrderRatingView
 from menu.views import CustomerOrderRateView, OwnerRatingListView
+
+
+class _TenantDNE(Exception):
+    """Stand-in for Tenant.DoesNotExist when Tenant is mocked."""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -237,6 +242,80 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         resp = self._post("BAD-999", {"score": 5}, customer_id=None)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "order_not_found")
+
+
+class MarketplaceOrderRatingViewTests(SimpleTestCase):
+    """The public-host marketplace order-rating route: resolve the tenant from
+    ?restaurant=<slug>, enter its schema, then apply the SHARED rating logic — so every
+    gate matches the tenant route. (Previously the marketplace prompt POSTed to the
+    tenant-only /orders/<n>/rate/, which 404s on the public host → re-prompt loop.)"""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceOrderRatingView.as_view()
+
+    def _post(self, order_number, body, restaurant="demo", customer_id=1):
+        url = f"/api/marketplace/order/{order_number}/rate/"
+        if restaurant is not None:
+            url += f"?restaurant={restaurant}"
+        req = self.factory.post(url, body, format="json")
+        req.session = {}
+        if customer_id is not None:
+            force_authenticate(req, user=_customer(customer_id))
+        return self.view(req, order_number=order_number)
+
+    @staticmethod
+    def _passthrough_schema_cm():
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=None)
+        cm.__exit__ = MagicMock(return_value=False)
+        return cm
+
+    def test_missing_restaurant_param_returns_400(self):
+        resp = self._post("ORD-001", {"score": 5}, restaurant=None)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("tenancy.models.Tenant")
+    def test_unknown_restaurant_returns_404(self, mock_tenant):
+        mock_tenant.DoesNotExist = _TenantDNE
+        mock_tenant.objects.get.side_effect = _TenantDNE
+        resp = self._post("ORD-001", {"score": 5}, restaurant="ghost")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("menu.views.Rating.objects")
+    @patch("menu.views.Order.objects")
+    @patch("django_tenants.utils.schema_context")
+    @patch("tenancy.models.Tenant")
+    def test_known_restaurant_enters_schema_and_rates(self, mock_tenant, mock_sc, mock_orders, mock_ratings):
+        mock_tenant.DoesNotExist = _TenantDNE
+        mock_tenant.objects.get.return_value = SimpleNamespace(id=1, slug="demo", schema_name="demo")
+        mock_sc.return_value = self._passthrough_schema_cm()
+        mock_orders.get.return_value = _completed_order()
+        rating = MagicMock()
+        rating.score = 5
+        rating.comment = ""
+        rating.created_at.isoformat.return_value = "2026-01-01T12:00:00+00:00"
+        mock_ratings.create.return_value = rating
+        with patch("tenancy.api._bust_tenant_meta_cache") as mock_bust:
+            resp = self._post("ORD-001", {"score": 5}, restaurant="demo")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_ratings.create.assert_called_once()
+        # Cache is busted for the RESOLVED restaurant slug (not the public host).
+        mock_bust.assert_called_once_with("demo")
+
+    @patch("menu.views.Order.objects")
+    @patch("django_tenants.utils.schema_context")
+    @patch("tenancy.models.Tenant")
+    def test_non_owner_returns_403(self, mock_tenant, mock_sc, mock_orders):
+        """The ownership gate (anti review-fraud) carries over: a signed-in customer who
+        doesn't own the order gets the coded 403, same as the tenant route."""
+        mock_tenant.DoesNotExist = _TenantDNE
+        mock_tenant.objects.get.return_value = SimpleNamespace(id=1, slug="demo", schema_name="demo")
+        mock_sc.return_value = self._passthrough_schema_cm()
+        mock_orders.get.return_value = _completed_order(customer_id=1)
+        resp = self._post("ORD-001", {"score": 5}, restaurant="demo", customer_id=2)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_order_owner")
 
 
 # ── OwnerRatingListView tests ─────────────────────────────────────────────────

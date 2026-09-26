@@ -84,6 +84,7 @@ from accounts.views import (
     CustomerLinkReferralView,
     ReferralCodeLookupView,
     DeliveryRatingView,
+    MarketplaceOrderRatingView,
     DriverJobAcceptView,
     DriverJobDeclineView,
     DriverJobListView,
@@ -248,6 +249,7 @@ shared_api_urlpatterns = [
     path("api/driver/rides/<int:ride_id>/rate/", DriverRateRideView.as_view(), name="driver-ride-rate"),
     path("api/marketplace/track/<str:order_number>/", OrderTrackingView.as_view(), name="marketplace-track"),
     path("api/marketplace/track/<str:order_number>/rate/", DeliveryRatingView.as_view(), name="marketplace-track-rate"),
+    path("api/marketplace/order/<str:order_number>/rate/", MarketplaceOrderRatingView.as_view(), name="marketplace-order-rate"),
     # ── R7b: TOTP MFA ────────────────────────────────────────────────────────────
     path("api/mfa/status/", MFAStatusView.as_view(), name="mfa-status"),
     path("api/mfa/setup/", MFASetupView.as_view(), name="mfa-setup"),
