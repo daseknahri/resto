@@ -8,6 +8,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 import io
 import json
+from contextlib import contextmanager
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -215,7 +216,7 @@ class FetchCurrencyRatesCommandTests(SimpleTestCase):
         "rates": {"EUR": 0.0917, "SAR": 0.3831, "AED": 0.3745},
     }).encode()
 
-    def _run(self, *args, payload=None, **kwargs):
+    def _run(self, *args, payload=None, tenants=None, **kwargs):
         stdout = io.StringIO()
         stderr = io.StringIO()
         response_obj = MagicMock()
@@ -223,7 +224,21 @@ class FetchCurrencyRatesCommandTests(SimpleTestCase):
         response_obj.__enter__ = lambda s: s
         response_obj.__exit__ = MagicMock(return_value=False)
 
-        with patch("menu.management.commands.fetch_currency_rates.urllib.request.urlopen", return_value=response_obj):
+        # CurrencyRate is a TENANT-schema model, so the command loops active tenant schemas.
+        # Mock a single fake tenant + a passthrough schema_context so the DB-update path runs
+        # (Tenant.objects.filter(...).exclude(...) → [tenant]).
+        fake_tenants = [MagicMock(schema_name="bistro")] if tenants is None else tenants
+        tenant_qs = MagicMock()
+        tenant_qs.exclude.return_value = fake_tenants
+
+        @contextmanager
+        def _passthrough(_schema):
+            yield
+
+        with patch("menu.management.commands.fetch_currency_rates.urllib.request.urlopen", return_value=response_obj), \
+                patch("menu.management.commands.fetch_currency_rates.Tenant") as TenantMock, \
+                patch("menu.management.commands.fetch_currency_rates.schema_context", _passthrough):
+            TenantMock.objects.filter.return_value = tenant_qs
             call_command("fetch_currency_rates", *args, stdout=stdout, stderr=stderr, **kwargs)
 
         return stdout.getvalue(), stderr.getvalue()
@@ -274,20 +289,25 @@ class FetchCurrencyRatesCommandTests(SimpleTestCase):
     def test_skips_bad_rate_and_writes_to_stderr(self, CurrencyRateMock):
         bad_payload = json.dumps({"base": "MAD", "rates": {"EUR": "not-a-number"}}).encode()
         CurrencyRateMock.objects.filter.return_value.update.return_value = 0
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        response_obj = MagicMock()
-        response_obj.read.return_value = bad_payload
-        response_obj.__enter__ = lambda s: s
-        response_obj.__exit__ = MagicMock(return_value=False)
-        with patch("menu.management.commands.fetch_currency_rates.urllib.request.urlopen", return_value=response_obj):
-            call_command("fetch_currency_rates", stdout=stdout, stderr=stderr)
-        err = stderr.getvalue()
+        _, err = self._run(payload=bad_payload)
         self.assertIn("Skipping EUR", err)
 
     @patch("menu.management.commands.fetch_currency_rates.CurrencyRate")
-    def test_unknown_code_logs_warning(self, CurrencyRateMock):
-        """When code not found in DB (update returns 0), a warning is printed."""
+    def test_zero_row_updates_reported_not_crashed(self, CurrencyRateMock):
+        """When a tenant schema has no matching CurrencyRate rows (update returns 0), the
+        command still completes and reports the 0-row-update tally instead of erroring."""
         CurrencyRateMock.objects.filter.return_value.update.return_value = 0
         out, _ = self._run()
-        self.assertIn("not found in DB", out)
+        self.assertIn("Done", out)
+        self.assertIn("0 row updates", out)
+
+    @patch("menu.management.commands.fetch_currency_rates.CurrencyRate")
+    def test_updates_every_active_tenant_schema(self, CurrencyRateMock):
+        """The per-tenant loop is the fix: rates are applied inside EACH active tenant
+        schema (menu_currencyrate is tenant-only), not once on the public schema."""
+        CurrencyRateMock.objects.filter.return_value.update.return_value = 1
+        two = [MagicMock(schema_name="bistro"), MagicMock(schema_name="cafe")]
+        out, _ = self._run(tenants=two)
+        # 3 codes × 2 tenants = 6 filter calls; output notes 2 tenant schemas.
+        self.assertEqual(CurrencyRateMock.objects.filter.call_count, 6)
+        self.assertIn("2 tenant schema", out)
