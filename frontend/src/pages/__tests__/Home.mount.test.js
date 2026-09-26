@@ -41,6 +41,8 @@ vi.mock("../../composables/useI18n", () => ({
 // The session store (pulled in transitively) imports lib/api at module load and
 // calls it inside actions. Default everything to empty so nothing hits the network.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

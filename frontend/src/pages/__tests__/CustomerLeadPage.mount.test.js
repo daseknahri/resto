@@ -43,6 +43,8 @@ vi.mock("../../composables/useI18n", () => ({
 // customer / tenant / toast stores. Default everything to empty so nothing hits
 // the network.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

@@ -56,6 +56,8 @@ vi.mock("vue-router", () => ({
 // (signOut only fires on click). Mock it defensively so importing the store stays
 // hermetic (no lingering real axios instance), mirroring SignIn.mount.test.js.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

@@ -55,6 +55,8 @@ vi.mock("../../composables/useVocabulary", () => ({
 // lib/api: imported for the CSV import POST only (no mount-time GET). Mock the
 // whole surface so the real axios instance never loads.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

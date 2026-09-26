@@ -69,6 +69,8 @@ vi.mock("../../composables/useI18n", () => ({
 // never called by this layout). Mock it defensively so importing the stores stays
 // hermetic (no lingering real axios instance), mirroring the sibling layout tests.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

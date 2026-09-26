@@ -44,6 +44,8 @@ vi.mock("../../composables/useI18n", () => ({
 // handler, never at mount. Mock it defensively so importing the page (and the
 // session store, which also imports lib/api) stays hermetic and side-effect free.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: { post: vi.fn(() => Promise.resolve({ data: {} })) },
 }));
 

@@ -472,7 +472,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import AppIcon from "../components/AppIcon.vue";
 import OwnerFloorSections from "../components/OwnerFloorSections.vue";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
@@ -543,15 +543,8 @@ const filteredTables = computed(() => {
       .some((value) => String(value).toLowerCase().includes(query));
   });
 });
-const parseError = (err, fallback = t("ownerTables.requestFailed")) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (data && typeof data === "object") {
-    const first = Object.values(data).find((v) => Array.isArray(v) && v.length);
-    if (first) return String(first[0]);
-  }
-  return fallback;
-};
+// Thin wrapper preserving OwnerTables' default fallback; delegates to the shared extractor.
+const parseError = (err, fallback = t("ownerTables.requestFailed")) => extractApiErrorMessage(err, fallback);
 
 const tableFullMenuUrl = (table) => {
   const origin = typeof window === "undefined" ? "" : window.location.origin;

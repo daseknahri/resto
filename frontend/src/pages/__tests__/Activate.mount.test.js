@@ -45,6 +45,8 @@ vi.mock("../../composables/useI18n", () => ({
 // and /resend-activation/ (this module) fire only on user submit. Stub both verbs
 // so no real network call can ever escape a future edit.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

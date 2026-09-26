@@ -43,6 +43,8 @@ vi.mock("../../composables/useI18n", () => ({
 // lib/api at module load. The page does NOT hit the network at mount, but keep it
 // mocked so nothing (e.g. an accidental store action) ever can.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),

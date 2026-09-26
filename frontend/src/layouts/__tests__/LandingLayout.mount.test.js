@@ -34,6 +34,8 @@ vi.mock("../../composables/useI18n", () => ({
 // Default { data: {} } → data.customer is undefined → the store keeps customer=null
 // (the guest path). The authenticated test pre-seeds the store so this GET is a no-op.
 vi.mock("../../lib/api", () => ({
+  // shared canonical extractor (added to lib/api; mock returns the fallback)
+  extractApiErrorMessage: (err, fallback = "") => fallback,
   default: {
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),
