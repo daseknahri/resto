@@ -1970,7 +1970,7 @@ class OwnerReservationBulkStatusView(APIView):
                 source__in=RESERVATION_SOURCES,
                 archived_at__isnull=True,
             )
-            leads = list(queryset.only("id", "status"))
+            leads = list(queryset.only("id", "status", "email", "cancel_token"))
             found_ids = [lead.id for lead in leads]
             found_set = set(found_ids)
             missing_ids = sorted([item for item in ids if item not in found_set])
@@ -1995,6 +1995,18 @@ class OwnerReservationBulkStatusView(APIView):
                         )
                     )
                 ReservationTimelineEvent.objects.bulk_create(events)
+
+        # Bulk parity with the single-item confirm (OwnerReservationDetailView.put): email
+        # each customer whose reservation transitioned TO "won" (confirmed). Dispatched
+        # async via enqueue so confirming a big batch doesn't block the request on
+        # sequential SMTP sends. changed_ids (with status_value==WON) is exactly the
+        # not-yet-won → won transition set.
+        if status_value == Lead.Status.WON and changed_ids:
+            from accounts.tasks import enqueue, reservation_confirmed_email
+            changed_set = set(changed_ids)
+            for lead in leads:
+                if lead.id in changed_set and (getattr(lead, "email", "") or "").strip() and lead.cancel_token:
+                    enqueue(reservation_confirmed_email, lead.id, tenant.id)
 
         return Response(
             {

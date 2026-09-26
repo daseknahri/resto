@@ -311,6 +311,38 @@ class OwnerReservationBulkStatusViewTests(SimpleTestCase):
             archived_at__isnull=True,
         )
 
+    @patch("accounts.tasks.enqueue")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.ReservationTimelineEvent.objects")
+    @patch("sales.views.Lead.objects")
+    def test_bulk_confirm_enqueues_email_only_for_won_transitions(
+        self, lead_objects, timeline_objects, schema_context_mock, enqueue_mock
+    ):
+        # Regression: the bulk-confirm path must email each customer whose reservation
+        # transitions to "won" (parity with single-item confirm), async via enqueue.
+        schema_context_mock.return_value = _passthrough_cm()
+        lead_a = Mock(id=1, status="new", email="a@x.com", cancel_token="tok-a")   # new→won, has email → enqueue
+        lead_b = Mock(id=2, status="won", email="b@x.com", cancel_token="tok-b")   # already won → not a transition
+        lead_c = Mock(id=3, status="new", email="", cancel_token="tok-c")          # no email → skip
+        queryset = Mock()
+        queryset.only.return_value = [lead_a, lead_b, lead_c]
+        queryset.filter.return_value = queryset
+        queryset.update.return_value = 2
+        lead_objects.filter.return_value = queryset
+
+        request = self.factory.post(
+            "/api/owner/reservations/bulk-status/",
+            {"ids": [1, 2, 3], "status": "won"},
+            format="json",
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        from accounts.tasks import reservation_confirmed_email
+        enqueue_mock.assert_called_once_with(reservation_confirmed_email, 1, 10)
+
     @patch("sales.views.Lead.objects")
     def test_bulk_status_rejects_invalid_payload(self, lead_objects):
         request = self.factory.post(

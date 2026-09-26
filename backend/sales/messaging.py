@@ -129,6 +129,31 @@ def send_reservation_confirmed_email(tenant, lead, manage_url: str) -> int:
     return sent
 
 
+def send_reservation_confirmed_email_by_ids(lead_id, tenant_id) -> int:
+    """Id-based wrapper around send_reservation_confirmed_email so the confirmation email
+    can be dispatched as an async task (accounts.tasks.enqueue) — used by the BULK
+    owner-confirm path so confirming a batch of reservations doesn't block the request on
+    sequential SMTP sends (the single-item path sends inline; a batch could be many).
+    Loads the reservation Lead + tenant from the public schema; best-effort (never raises)."""
+    try:
+        from django_tenants.utils import schema_context, get_public_schema_name
+        from sales.models import Lead
+        from tenancy.models import Tenant
+        with schema_context(get_public_schema_name()):
+            lead = Lead.objects.filter(pk=lead_id).first()
+            if lead is None or not (getattr(lead, "email", "") or "").strip() or not lead.cancel_token:
+                return 0
+            tenant = Tenant.objects.filter(pk=tenant_id).first()
+            if tenant is None:
+                return 0
+            return send_reservation_confirmed_email(
+                tenant, lead, build_reservation_manage_url(tenant, lead.cancel_token)
+            )
+    except Exception:  # noqa: BLE001 — best-effort notification, never break the caller/task
+        logger.warning("send_reservation_confirmed_email_by_ids failed", exc_info=True)
+        return 0
+
+
 def build_owner_checklist(workspace_url: str, signin_url: str, activation_url: str, onboarding_url: str, public_menu_url: str):
     return [
         f"Open activation link and set password: {activation_url}",
