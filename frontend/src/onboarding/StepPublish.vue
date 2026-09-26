@@ -709,7 +709,10 @@ const form = reactive({
   max_covers_per_slot: 0,
   slot_duration_minutes: 60,
   business_type: "restaurant",
-  directory_opt_in: false,
+  // Opt-out marketplace default: a new business is listed by default (once its menu is
+  // published — the marketplace query also requires is_menu_published). Mirrors the
+  // Profile.directory_opt_in model default; the owner unchecks to opt out.
+  directory_opt_in: true,
   cuisine_type: "",
   city: "",
   lat: null,

@@ -58,3 +58,13 @@ class DirectoryOptInValidationTests(SimpleTestCase):
         s = ProfileSerializer(instance=_inst(directory_opt_in=True))
         out = s.validate({"receipt_message": "thanks"})
         self.assertEqual(out.get("receipt_message"), "thanks")
+
+
+class DirectoryOptInDefaultTests(SimpleTestCase):
+    """Policy: new businesses are LISTED by default (opt-out marketplace). The marketplace
+    query also requires is_menu_published=True, so a new/unpublished business is not shown
+    prematurely — it appears once it publishes its menu, and the owner can opt out."""
+
+    def test_directory_opt_in_defaults_to_true(self):
+        from tenancy.models import Profile
+        self.assertIs(Profile._meta.get_field("directory_opt_in").default, True)
