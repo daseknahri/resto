@@ -15,24 +15,3 @@ export const RIDES = 'rides';
 export const COURIER = 'courier';
 export const DRIVER = 'driver';
 
-export const ALL_VERTICALS = [FOOD, SHOPS, PHARMACY, RIDES, COURIER, DRIVER];
-
-const BUSINESS_TYPE_TO_VERTICAL = {
-  restaurant: FOOD,
-  cafe: FOOD,
-  bakery: SHOPS,
-  grocery: SHOPS,
-  retail: SHOPS,
-  pharmacy: PHARMACY,
-};
-
-/** Map a tenant business_type to its consumer vertical. Unknown/blank → FOOD. */
-export function verticalForBusinessType(businessType) {
-  if (!businessType) return FOOD;
-  return BUSINESS_TYPE_TO_VERTICAL[String(businessType).trim().toLowerCase()] || FOOD;
-}
-
-/** RideRequest.kind ('ride' | 'package') → vertical ('rides' | 'courier'). */
-export function verticalForRideKind(kind) {
-  return String(kind || '').trim().toLowerCase() === 'package' ? COURIER : RIDES;
-}

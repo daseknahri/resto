@@ -63,6 +63,4 @@ export const getPlatformAdminHost = () => firstMatchingHost((host) => isPlatform
 export const getPrimaryPublicHost = () =>
   firstMatchingHost((host) => !isPlatformAdminHost(host) && !isPlatformApiHost(host));
 
-export const getPublicDemoTenantSlug = () => publicDemoTenantSlug;
-
 export const hasPublicDemoTenant = () => Boolean(publicDemoTenantSlug);

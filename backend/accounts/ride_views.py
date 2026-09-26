@@ -207,14 +207,6 @@ def _get_driver(request):
         )
 
 
-def _parse_float(value, label):
-    """Return (float, None) or (None, error str)."""
-    try:
-        return float(value), None
-    except (TypeError, ValueError):
-        return None, f"{label} must be a number"
-
-
 # ── Rider views ───────────────────────────────────────────────────────────────────
 
 
