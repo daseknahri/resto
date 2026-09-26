@@ -27,24 +27,37 @@ The WINDOW rule itself is now identical across all three.
 _WEEKDAY_TO_KEY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
 
 
-def tenant_local_now(profile):
-    """Current local datetime for a restaurant, honoring its IANA ``timezone``.
+def tenant_timezone(profile):
+    """The restaurant's IANA timezone as a ``tzinfo``.
 
-    Resolves the timezone via the same fallback chain used by menu.views._profile_now
-    and _within_business_hours: ``profile.timezone`` → ``settings.TIME_ZONE`` → ``"UTC"``.
-    On an invalid/unknown tz (or any resolution error) it falls back to UTC.
+    Single source of truth for tenant-local time so callers that must agree — the
+    reservation slot-grid builder (menu.views.SlotAvailabilityView) and the capacity
+    flooring (sales.views._slot_would_oversell) — can't drift out of sync (they did:
+    the grid was built in UTC while the accept/reject check used the tenant tz).
 
-    Returns an aware ``datetime`` so callers can compare its tenant-local wall-clock
-    (``%H:%M`` / ``.weekday()``) against the schedule strings.
+    Resolves ``profile.timezone`` → ``settings.TIME_ZONE`` → ``"UTC"``; any
+    invalid/unknown tz (or resolution error) falls back to UTC.
     """
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import timezone as _tz
     try:
         from zoneinfo import ZoneInfo
         from django.conf import settings
         tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
-        return _dt.now(ZoneInfo(tz_name))
+        return ZoneInfo(tz_name)
     except Exception:
-        return _dt.now(_tz.utc)  # invalid/unknown tz → safe UTC fallback
+        return _tz.utc  # invalid/unknown tz → safe UTC fallback
+
+
+def tenant_local_now(profile):
+    """Current local datetime for a restaurant, honoring its IANA ``timezone``.
+
+    Resolves the timezone via ``tenant_timezone`` (``profile.timezone`` →
+    ``settings.TIME_ZONE`` → ``"UTC"``). Returns an aware ``datetime`` so callers can
+    compare its tenant-local wall-clock (``%H:%M`` / ``.weekday()``) against the
+    schedule strings.
+    """
+    from datetime import datetime as _dt
+    return _dt.now(tenant_timezone(profile))
 
 
 def schedule_open_now(schedule, now_local):

@@ -10900,7 +10900,6 @@ class SlotAvailabilityView(APIView):
 
     def get(self, request):
         from datetime import date as date_cls
-        from django.utils import timezone as tz_utils
         from django_tenants.utils import get_public_schema_name, schema_context as _sc
 
         tenant = getattr(request, "tenant", None)
@@ -10919,7 +10918,12 @@ class SlotAvailabilityView(APIView):
         max_covers = getattr(profile, "max_covers_per_slot", 0) or 0
         slot_minutes = getattr(profile, "slot_duration_minutes", 60) or 60
 
-        local_tz = tz_utils.get_current_timezone()
+        # Build the slot grid in the RESTAURANT's timezone (not Django's global default,
+        # which is UTC) so it agrees with the capacity check at booking time
+        # (sales.views._slot_would_oversell); otherwise a non-UTC tenant's displayed grid
+        # could disagree with the accept/reject decision. Shared resolver = no drift.
+        from tenancy.openstate import tenant_timezone
+        local_tz = tenant_timezone(profile)
         slots = _build_day_slots(target_date, slot_minutes, local_tz)
 
         if not slots:
