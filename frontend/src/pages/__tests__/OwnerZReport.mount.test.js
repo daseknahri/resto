@@ -47,9 +47,11 @@ import { setActivePinia, createPinia } from "pinia";
 vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
     // t returns the key verbatim (params, when present, are appended so the raw
-    // key path is still asserted-on). The page defines its own money formatter
-    // (fmtMoney via Intl.NumberFormat), so no formatCurrency is destructured.
+    // key path is still asserted-on). The page's money formatter (fmtMoney)
+    // delegates to lib/intlFormatters.formatCurrencyString(currentLocale.value,…),
+    // so currentLocale must be provided (a ref-like { value }).
     t: (k, p) => (p ? `${k}(${JSON.stringify(p)})` : k),
+    currentLocale: { value: "en" },
   }),
 }));
 

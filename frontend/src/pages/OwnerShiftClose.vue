@@ -208,10 +208,11 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
+import { formatCurrencyString } from "../lib/intlFormatters";
 
 defineOptions({ name: "OwnerShiftClose" });
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const toast = useToastStore();
 const tenant = useTenantStore();
@@ -226,18 +227,8 @@ const countedInput = ref("");
 
 const currency = computed(() => tenant.resolvedMeta?.profile?.currency || "MAD");
 
-const fmtMoney = (val) => {
-  const n = Number(val) || 0;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.value,
-      minimumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${currency.value} ${n.toFixed(2)}`;
-  }
-};
+const fmtMoney = (val) =>
+  formatCurrencyString(currentLocale.value, val, currency.value, { minimumFractionDigits: 2 });
 
 const fmtTime = (iso) => {
   if (!iso) return "";

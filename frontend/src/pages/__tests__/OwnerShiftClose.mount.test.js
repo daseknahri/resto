@@ -15,16 +15,16 @@
  * api mock):
  *   - shallowMount (auto-stubs the one child component, AppIcon) + real pinia
  *     (setActivePinia(createPinia())) + a mocked lib/api
- *   - useI18n mocked to return deterministic keys ({ t } — the ONLY thing the page
- *     destructures; it formats money itself via Intl.NumberFormat in fmtMoney())
+ *   - useI18n mocked to return deterministic keys ({ t, currentLocale } — the page's
+ *     fmtMoney() delegates to lib/intlFormatters.formatCurrencyString(currentLocale.value,…))
  *   - vue-router mocked (the page imports { RouterLink }; uses <RouterLink> twice)
  *
  * Page-specific notes (verified by reading the source, not assumed):
- *   - useI18n destructure is `{ t }` ONLY. The page formats money itself via
- *     Intl.NumberFormat in fmtMoney(), keyed off the tenant currency
- *     (tenant.resolvedMeta?.profile?.currency, which is null in jsdom → falls back
- *     to 'MAD'). So the loaded assertions check DIGITS only, never the currency
- *     symbol/placement — and all amounts are kept < 1000 so the en-US grouping
+ *   - useI18n destructure is `{ t, currentLocale }`. fmtMoney() delegates to the
+ *     shared formatCurrencyString(currentLocale.value, val, currency, …), keyed off
+ *     the tenant currency (tenant.resolvedMeta?.profile?.currency, which is null in
+ *     jsdom → falls back to 'MAD'). So the loaded assertions check DIGITS only, never
+ *     the currency symbol/placement — and all amounts are kept < 1000 so the en-US grouping
  *     separator (e.g. "1,450.00") never splits the digits being asserted.
  *   - It imports ONLY { RouterLink } from vue-router (no useRoute/useRouter, but
  *     both are mocked defensively). Two <RouterLink :to="{ name:'owner-home' }">.
