@@ -2282,6 +2282,7 @@ const arabicMessages = {
     }
   },
   "cartPage": {
+    "promoDiscount": "خصم ترويجي",
     "kicker": "اختياراتك",
     "plan": "الباقة: {plan}",
     "table": "الطاولة: {table}",

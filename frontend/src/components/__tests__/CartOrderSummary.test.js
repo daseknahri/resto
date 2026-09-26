@@ -94,6 +94,28 @@ describe("CartOrderSummary", () => {
     expect(w.text()).toContain("cartPage.loyaltyDiscount");
   });
 
+  // Regression: an applied promo code must show a discount line (with its label)
+  // so the customer can see what they'll actually pay.
+  it("shows the promo discount row with its label when a promo applies", () => {
+    const w = mountIt({ promoDiscount: 20, promoLabel: "SAVE20" });
+    expect(w.text()).toContain("cartPage.promoDiscount");
+    expect(w.text()).toContain("-$20");
+    expect(w.text()).toContain("SAVE20");
+  });
+
+  it("hides the promo discount row when no promo is applied", () => {
+    expect(mountIt({ promoDiscount: 0 }).text()).not.toContain("cartPage.promoDiscount");
+  });
+
+  it("shows the subtotal for a pickup order when only a promo applies", () => {
+    const w = mountIt({
+      fulfillmentType: "pickup", deliveryFeeAmount: 0, tipAmount: 0,
+      loyaltyDiscount: 0, promoDiscount: 15, subtotal: 100,
+    });
+    expect(w.text()).toContain("cartPage.subtotal");
+    expect(w.text()).toContain("cartPage.promoDiscount");
+  });
+
   it("does not show the subtotal for a pickup order with a configured flat fee it never charges", () => {
     // deliveryFeeAmount can be non-zero (flat fee configured) even on pickup, but
     // grandTotal ignores it for non-delivery, so subtotal == total → stay hidden.

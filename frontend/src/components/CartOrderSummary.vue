@@ -2,15 +2,22 @@
   <!-- ── Order summary breakdown ── -->
   <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
     <!-- Show the subtotal whenever it differs from the grand total (a delivery
-         fee, tip, or loyalty discount is applied) so the total always reconciles.
+         fee, tip, promo, or loyalty discount is applied) so the total always reconciles.
          Mirrors orderGrandTotal in Cart.vue, which only adds the delivery fee for
          delivery orders. Hidden only when subtotal == total. -->
     <div
-      v-if="(fulfillmentType === 'delivery' && deliveryFeeAmount > 0) || tipAmount > 0 || loyaltyDiscount > 0"
+      v-if="(fulfillmentType === 'delivery' && deliveryFeeAmount > 0) || tipAmount > 0 || loyaltyDiscount > 0 || promoDiscount > 0"
       class="flex items-center justify-between text-slate-400"
     >
       <span>{{ t('cartPage.subtotal') }}</span>
       <span class="tabular-nums font-medium">{{ formatPrice(subtotal) }}</span>
+    </div>
+    <div v-if="promoDiscount > 0" class="flex items-center justify-between text-emerald-300">
+      <span>
+        {{ t('cartPage.promoDiscount') }}
+        <span v-if="promoLabel" class="text-[11px] text-slate-500">· {{ promoLabel }}</span>
+      </span>
+      <span class="tabular-nums font-semibold">-{{ formatPrice(promoDiscount) }}</span>
     </div>
     <div v-if="loyaltyDiscount > 0" class="flex items-center justify-between text-amber-300">
       <span>{{ t('cartPage.loyaltyDiscount') }}</span>
@@ -60,8 +67,8 @@
 
 <script setup>
 // Order-summary breakdown of Cart.vue's checkout panel, extracted as a standalone
-// presentational child (RISK FE-2). DISPLAY ONLY: it renders the subtotal / loyalty
-// discount / delivery-fee (distance/pending/free/flat) / tip / wallet-credit rows,
+// presentational child (RISK FE-2). DISPLAY ONLY: it renders the subtotal / promo
+// discount / loyalty discount / delivery-fee (distance/pending/free/flat) / tip / wallet-credit rows,
 // the grand total, and the pre-order ETA. It computes NOTHING and mutates NOTHING —
 // every pricing value is computed in the parent (Cart.vue owns the whole pricing +
 // place-order flow) and passed in as a prop; `formatPrice` is a function prop so
@@ -86,6 +93,10 @@ defineProps({
   deliveryFeePending: { type: Boolean, default: false },
   /** Whether the delivery address is out of range. */
   deliveryOutOfRange: { type: Boolean, default: false },
+  /** Promo-code discount applied (0 = none). */
+  promoDiscount: { type: Number, default: 0 },
+  /** Applied promo's name/label, shown beside the promo discount row. */
+  promoLabel: { type: String, default: '' },
   /** Loyalty discount applied (0 = none). */
   loyaltyDiscount: { type: Number, default: 0 },
   /** Tip amount (0 = none). */
