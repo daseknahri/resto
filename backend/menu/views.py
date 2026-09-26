@@ -12784,11 +12784,19 @@ class OwnerWalletChargeRequestStatusView(APIView):
         if cr is None or (tenant is not None and cr.tenant_id != tenant.id):
             return Response({"detail": "Charge request not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Lazy-expire a stale pending request.
+        # Lazy-expire a stale pending request via a GUARDED compare-and-set — NOT a
+        # read-then-blind-save. A concurrent customer approve locks the row and debits the
+        # wallet before committing CHARGED; a blind `UPDATE ... WHERE id=x` here (fired by a
+        # routine poll landing right at the TTL boundary) would queue behind that lock and
+        # overwrite CHARGED with EXPIRED after the money moved, so the bill-sync below (gated
+        # on status==CHARGED) would never run and the order would show unpaid. The
+        # status-guarded UPDATE re-checks WHERE status='pending' under the row lock, so it
+        # can't clobber a charge; re-read so the bill-sync uses the true current status.
         if cr.status == WalletChargeRequest.Status.PENDING and cr.expires_at <= _tz.now():
-            cr.status = WalletChargeRequest.Status.EXPIRED
-            cr.resolved_at = _tz.now()
-            cr.save(update_fields=["status", "resolved_at"])
+            WalletChargeRequest.objects.filter(
+                pk=request_id, status=WalletChargeRequest.Status.PENDING
+            ).update(status=WalletChargeRequest.Status.EXPIRED, resolved_at=_tz.now())
+            cr = WalletChargeRequest.objects.filter(pk=request_id).first()
 
         # Apply the bill update once now that we're in tenant context (claim-safe helper).
         if (cr.status == WalletChargeRequest.Status.CHARGED and cr.order_number
