@@ -80,6 +80,13 @@
         </div>
       </div>
 
+      <!-- Distribution basis: the bars above cover only the loaded page. When the
+           tenant has more ratings than one page, say so — otherwise the all-time
+           headline total would imply the bars span every rating. -->
+      <p v-if="sampleTruncated" class="text-[11px] leading-snug text-slate-500">
+        {{ t("ownerRatings.distributionNote", { n: ratings.length }) }}
+      </p>
+
       <!-- Score filter pills -->
       <div v-if="ratings.length" class="ui-scroll-row min-w-0 max-w-full" role="group" :aria-label="t('ownerRatings.filterAll')">
         <button
@@ -270,6 +277,12 @@ const RATINGS_CACHE_KEY = "owner.ratings";
 const RATINGS_TTL_MS = 5 * 60 * 1000; // 5 min
 
 const ratings = ref([]);
+// All-time aggregates come from the server (Count/Avg over the FULL rating set).
+// The list endpoint paginates at 50, so the headline total + average must NOT be
+// derived from `ratings` (that would cap the total at 50 and average only the
+// newest page). Null until the first successful load / cache read.
+const serverCount = ref(null);
+const serverAverage = ref(null);
 const loading = ref(false);
 const updating = ref(false); // silently revalidating stale cache
 const fetchError = ref(false); // first-load failure (no data to show)
@@ -381,12 +394,25 @@ const scorePercent = (s) => {
   return Math.round(((scoreCounts.value[s] || 0) / ratings.value.length) * 100);
 };
 
+// The distribution bars + filter-pill counts are derived from the loaded page —
+// the list endpoint returns no per-score histogram. When the tenant has more
+// ratings than the loaded page, the bars are a recent-sample view, so we caption
+// them as such (see distributionNote) and never pass them off as the all-time set.
+const sampleTruncated = computed(
+  () => serverCount.value != null && serverCount.value > ratings.value.length
+);
+
 const summary = computed(() => {
   if (!ratings.value.length) return null;
-  const total = ratings.value.length;
-  const avg = ratings.value.reduce((sum, r) => sum + r.score, 0) / total;
+  // Prefer the server's all-time aggregate (over the FULL set); fall back to the
+  // loaded page only if the response omitted count/average — defensive, so a
+  // malformed payload renders gracefully instead of throwing at render.
+  const count = serverCount.value ?? ratings.value.length;
+  const average =
+    serverAverage.value ?? (ratings.value.reduce((sum, r) => sum + r.score, 0) / ratings.value.length);
+  // No server aggregate exists for "with comments"; this stat reflects the loaded page.
   const comments = ratings.value.filter((r) => r.comment?.trim()).length;
-  return { count: total, average: avg, comments };
+  return { count, average, comments };
 });
 
 const formatDate = (iso) => {
@@ -398,11 +424,28 @@ const formatDate = (iso) => {
   }
 };
 
+// The cache historically stored a bare ratings array; current writes store
+// { ratings, count, average } so the all-time aggregate survives a cache hit.
+// (A fresh cache short-circuits the network, so the aggregate MUST be cached too,
+// or the headline would silently fall back to the 50-row sample.) Accept both
+// shapes so an entry written by the previous build still loads.
+const applyPayload = (payload) => {
+  if (Array.isArray(payload)) {
+    ratings.value = payload;
+    serverCount.value = null;
+    serverAverage.value = null;
+  } else {
+    ratings.value = payload?.ratings ?? [];
+    serverCount.value = payload?.count ?? null;
+    serverAverage.value = payload?.average ?? null;
+  }
+};
+
 const fetchRatings = async (force = false) => {
   if (force) bustCache(RATINGS_CACHE_KEY);
   const cached = readCache(RATINGS_CACHE_KEY);
   if (cached) {
-    ratings.value = cached;
+    applyPayload(cached);
     if (isFresh(RATINGS_CACHE_KEY, RATINGS_TTL_MS)) return;
     updating.value = true; // stale — revalidate silently
   } else {
@@ -411,9 +454,13 @@ const fetchRatings = async (force = false) => {
   fetchError.value = false;
   try {
     const res = await api.get("/owner/ratings/");
-    const data = res.data?.ratings ?? res.data ?? [];
-    ratings.value = data;
-    writeCache(RATINGS_CACHE_KEY, data);
+    const payload = {
+      ratings: res.data?.ratings ?? res.data ?? [],
+      count: res.data?.count ?? null,
+      average: res.data?.average ?? null,
+    };
+    applyPayload(payload);
+    writeCache(RATINGS_CACHE_KEY, payload);
   } catch {
     // First-load failure (nothing on screen) shows a dedicated error state with
     // Retry — otherwise it's indistinguishable from a genuine zero-ratings

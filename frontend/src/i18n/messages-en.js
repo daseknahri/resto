@@ -5413,6 +5413,7 @@ ownerRatings: {
   replyDeleteError: "Could not delete reply. Please try again.",
   replyAddPrompt: "Reply to this review",
   replyPostedAt: "Replied {date}",
+  distributionNote: "Distribution of the {n} most recent ratings",
 },
 kitchen: {
   title: "Kitchen Display",
