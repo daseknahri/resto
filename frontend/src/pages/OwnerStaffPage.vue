@@ -324,6 +324,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import api from "../lib/api";
+import { formatCurrencyString } from "../lib/intlFormatters";
 import { useToastStore } from "../stores/toast";
 import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
@@ -394,18 +395,8 @@ const changePeriod = (days) => {
   fetchStaff(true);
 };
 
-const fmtMoney = (v) => {
-  const n = parseFloat(v || 0);
-  try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: "currency",
-      currency: statsCurrency.value || "MAD",
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return n.toFixed(2);
-  }
-};
+const fmtMoney = (v) =>
+  formatCurrencyString(currentLocale.value, v, statsCurrency.value || "MAD", { maximumFractionDigits: 2 });
 
 const fmtTime = (iso) => {
   if (!iso) return "";

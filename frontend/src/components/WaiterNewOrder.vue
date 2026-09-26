@@ -472,6 +472,7 @@ import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { formatCurrencyString } from '../lib/intlFormatters';
 import { newIdempotencyKey } from '../lib/idempotency';
 
 const props = defineProps({
@@ -672,17 +673,8 @@ const cartTotal = computed(() =>
 );
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtPrice = (amount) => {
-  try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency: currency.value,
-      maximumFractionDigits: 2,
-    }).format(amount || 0);
-  } catch {
-    return `${Number(amount || 0).toFixed(2)}`;
-  }
-};
+const fmtPrice = (amount) =>
+  formatCurrencyString(currentLocale.value, amount, currency.value, { maximumFractionDigits: 2 });
 
 // Total qty of a dish across all its cart lines (a dish can appear with
 // different option combinations).
