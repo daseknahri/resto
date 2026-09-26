@@ -119,7 +119,7 @@ def _parse_iso_date(value: str):
         return None
 
 
-def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None):
+def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None, booked_for_from=None, booked_for_to=None):
     queryset = _with_reservation_reminder_metrics(
         Lead.objects.filter(
             tenant_id=tenant_id,
@@ -149,6 +149,12 @@ def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter
         queryset = queryset.filter(created_at__date__lte=to_date)
     if booked_for_date:
         queryset = queryset.filter(booked_for__date=booked_for_date)
+    # booked_for RANGE (the reservation calendar filters by the date a table is booked FOR,
+    # not created_at — an advance booking must appear on the week it's for).
+    if booked_for_from:
+        queryset = queryset.filter(booked_for__date__gte=booked_for_from)
+    if booked_for_to:
+        queryset = queryset.filter(booked_for__date__lte=booked_for_to)
     return queryset
 
 
@@ -170,7 +176,7 @@ def _with_reservation_reminder_metrics(queryset):
     )
 
 
-def _owner_reservations_base_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None):
+def _owner_reservations_base_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None, booked_for_from=None, booked_for_to=None):
     """Lean twin of ``_owner_reservations_queryset`` with the SAME tenant scoping and
     filters but WITHOUT the heavy reminder-metrics annotation (a JOIN + GROUP BY + 3
     subqueries). Use it for ``.count()``-only call sites and the CSV export, where the
@@ -210,6 +216,12 @@ def _owner_reservations_base_queryset(tenant_id, *, status_filter="", reminder_f
         queryset = queryset.filter(created_at__date__lte=to_date)
     if booked_for_date:
         queryset = queryset.filter(booked_for__date=booked_for_date)
+    # booked_for RANGE (the reservation calendar filters by the date a table is booked FOR,
+    # not created_at — an advance booking must appear on the week it's for).
+    if booked_for_from:
+        queryset = queryset.filter(booked_for__date__gte=booked_for_from)
+    if booked_for_to:
+        queryset = queryset.filter(booked_for__date__lte=booked_for_to)
     return queryset
 
 
@@ -1789,17 +1801,27 @@ class OwnerReservationListView(APIView):
         from_date_raw = request.query_params.get("from")
         to_date_raw = request.query_params.get("to")
         booked_for_date_raw = request.query_params.get("booked_for_date")
+        booked_for_from_raw = request.query_params.get("booked_for_from")
+        booked_for_to_raw = request.query_params.get("booked_for_to")
         from_date = _parse_iso_date(from_date_raw or "")
         to_date = _parse_iso_date(to_date_raw or "")
         booked_for_date = _parse_iso_date(booked_for_date_raw or "")
+        booked_for_from = _parse_iso_date(booked_for_from_raw or "")
+        booked_for_to = _parse_iso_date(booked_for_to_raw or "")
         if from_date_raw and from_date is None:
             return Response({"detail": "Invalid 'from' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
         if to_date_raw and to_date is None:
             return Response({"detail": "Invalid 'to' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
         if booked_for_date_raw and booked_for_date is None:
             return Response({"detail": "Invalid 'booked_for_date'. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if booked_for_from_raw and booked_for_from is None:
+            return Response({"detail": "Invalid 'booked_for_from'. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if booked_for_to_raw and booked_for_to is None:
+            return Response({"detail": "Invalid 'booked_for_to'. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
         if from_date and to_date and from_date > to_date:
             return Response({"detail": "'from' date cannot be after 'to' date."}, status=status.HTTP_400_BAD_REQUEST)
+        if booked_for_from and booked_for_to and booked_for_from > booked_for_to:
+            return Response({"detail": "'booked_for_from' cannot be after 'booked_for_to'."}, status=status.HTTP_400_BAD_REQUEST)
         page = _parse_positive_int(
             request.query_params.get("page"),
             default=1,
@@ -1824,6 +1846,8 @@ class OwnerReservationListView(APIView):
                 from_date=from_date,
                 to_date=to_date,
                 booked_for_date=booked_for_date,
+                booked_for_from=booked_for_from,
+                booked_for_to=booked_for_to,
             )
             total = _owner_reservations_base_queryset(
                 tenant.id,
@@ -1833,6 +1857,8 @@ class OwnerReservationListView(APIView):
                 from_date=from_date,
                 to_date=to_date,
                 booked_for_date=booked_for_date,
+                booked_for_from=booked_for_from,
+                booked_for_to=booked_for_to,
             ).count()
             pages = max(1, ceil(total / page_size)) if total else 1
             page = min(page, pages)

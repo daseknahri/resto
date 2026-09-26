@@ -143,6 +143,8 @@ class OwnerReservationListViewTests(SimpleTestCase):
             from_date=date(2026, 3, 1),
             to_date=date(2026, 3, 7),
             booked_for_date=None,
+            booked_for_from=None,
+            booked_for_to=None,
         )
         # ...while the pagination total is counted on the lean queryset (same filters).
         base_queryset_mock.assert_any_call(
@@ -153,6 +155,8 @@ class OwnerReservationListViewTests(SimpleTestCase):
             from_date=date(2026, 3, 1),
             to_date=date(2026, 3, 7),
             booked_for_date=None,
+            booked_for_from=None,
+            booked_for_to=None,
         )
 
     def test_returns_403_when_tenant_missing(self):
@@ -216,6 +220,8 @@ class OwnerReservationListViewTests(SimpleTestCase):
             from_date=None,
             to_date=None,
             booked_for_date=None,
+            booked_for_from=None,
+            booked_for_to=None,
         )
         base_queryset_mock.assert_any_call(
             10,
@@ -225,7 +231,46 @@ class OwnerReservationListViewTests(SimpleTestCase):
             from_date=None,
             to_date=None,
             booked_for_date=None,
+            booked_for_from=None,
+            booked_for_to=None,
         )
+
+    @patch("sales.views.schema_context")
+    @patch("sales.views._owner_reservations_queryset")
+    @patch("sales.views._owner_reservations_base_queryset")
+    def test_threads_booked_for_range_from_query_params(self, base_queryset_mock, queryset_builder_mock, schema_context_mock):
+        """The reservation CALENDAR filters by the date a table is booked FOR
+        (booked_for_from/to), not created_at — so an advance booking shows on the week
+        it's for. The view must thread those params through (created_at from/to stay None)."""
+        schema_context_mock.return_value = _passthrough_cm()
+        main_queryset = Mock()
+        main_queryset.order_by.return_value = []
+        queryset_builder_mock.return_value = main_queryset
+        lean = Mock()
+        lean.count.return_value = 0
+        lean.filter.return_value = lean
+        base_queryset_mock.return_value = lean
+
+        request = self.factory.get(
+            "/api/owner/reservations/?booked_for_from=2026-03-02&booked_for_to=2026-03-08"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        _, kwargs = queryset_builder_mock.call_args
+        self.assertIsNone(kwargs["from_date"])
+        self.assertIsNone(kwargs["to_date"])
+        self.assertEqual(kwargs["booked_for_from"], date(2026, 3, 2))
+        self.assertEqual(kwargs["booked_for_to"], date(2026, 3, 8))
+
+    def test_rejects_invalid_booked_for_range(self):
+        request = self.factory.get("/api/owner/reservations/?booked_for_from=2026-13-02")
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+        response = self.view(request)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class OwnerReservationDetailViewTests(SimpleTestCase):
