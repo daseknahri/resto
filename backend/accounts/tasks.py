@@ -306,6 +306,16 @@ def charge_request(customer_id, restaurant_name, amount):
     _send_charge_request_sync(customer_id, restaurant_name, amount)
 
 
+@shared_task(name="accounts.tasks.reservation_confirmed_email", **_RETRY)
+def reservation_confirmed_email(lead_id, tenant_id):
+    """Send a reservation-confirmed email for the BULK owner-confirm path. Wraps the
+    synchronous id-based sender so confirming a batch of reservations dispatches through
+    enqueue/Celery instead of blocking the request on sequential SMTP sends (the
+    single-item confirm sends inline)."""
+    from sales.messaging import send_reservation_confirmed_email_by_ids
+    send_reservation_confirmed_email_by_ids(lead_id, tenant_id)
+
+
 @shared_task(name="accounts.tasks.driver_dispatch", **_RETRY)
 def driver_dispatch(restaurant_name=None):
     from accounts.push import notify_online_drivers_new_job_sync
