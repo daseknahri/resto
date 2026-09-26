@@ -14,7 +14,7 @@ const runtimeApiBase = () => {
   return `${protocol}://${host}/api`;
 };
 
-const resolveBaseURL = (envValue) => {
+export const resolveBaseURL = (envValue) => {
   const runtime = runtimeApiBase();
   if (!envValue || envValue === "auto") return runtime;
   if (typeof window !== "undefined") {
@@ -49,14 +49,6 @@ const resolveBaseURL = (envValue) => {
   }
   return envValue;
 };
-
-const api = axios.create({
-  baseURL: resolveBaseURL(import.meta.env.VITE_API_BASE_URL),
-  withCredentials: true,
-  xsrfCookieName: "csrftoken",
-  xsrfHeaderName: "X-CSRFToken",
-  timeout: 30000,
-});
 
 const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
 
@@ -104,20 +96,6 @@ const stripCsrfHeaders = (headers) => {
   delete headers["x-csrftoken"];
 };
 
-const refreshCsrfCookie = async () => {
-  const locale = readRuntimeLocale();
-  const config = {
-    withCredentials: true,
-    headers: {},
-    params: {},
-  };
-  if (locale) {
-    config.headers["Accept-Language"] = locale;
-    config.params.lang = locale;
-  }
-  await api.get("/session/", config);
-};
-
 const readRuntimeLocale = () => {
   if (typeof document === "undefined") return "";
   const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
@@ -135,7 +113,8 @@ const readRuntimeLocale = () => {
   return "";
 };
 
-api.interceptors.request.use((config) => {
+// Shared request-header logic (locale header/param + CSRF token on unsafe methods).
+const applyRequestHeaders = (config) => {
   const method = (config.method || "get").toLowerCase();
   const locale = readRuntimeLocale();
   if (locale) {
@@ -156,46 +135,80 @@ api.interceptors.request.use((config) => {
     }
   }
   return config;
-});
+};
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const original = error?.config || {};
-    // Retry transient network/5xx failures on idempotent requests (flaky WiFi).
-    original.__retryCount = original.__retryCount || 0;
-    if (shouldRetry(error, original.__retryCount)) {
-      original.__retryCount += 1;
-      const jitter = Math.random() * 150;
-      await new Promise((resolve) => setTimeout(resolve, retryBackoffMs(original.__retryCount - 1, jitter)));
-      return api.request(original);
+// Single axios-client factory so every client (the tenant `api` and the platform-admin
+// `adminApi`) gets the SAME request + response behavior: locale/CSRF request headers,
+// transient-5xx/network retry, CSRF-mismatch re-fetch-and-retry, the global staff
+// 401 → /signin redirect, and the friendly 429 message. (adminApi used to hand-roll a
+// copy that silently dropped retry / 401-redirect / 429, so every admin call lost them.)
+export function createApiClient({ baseURL, timeout = 30000 }) {
+  const client = axios.create({
+    baseURL,
+    withCredentials: true,
+    xsrfCookieName: "csrftoken",
+    xsrfHeaderName: "X-CSRFToken",
+    timeout,
+  });
+
+  const refreshCsrfCookie = async () => {
+    const locale = readRuntimeLocale();
+    const config = { withCredentials: true, headers: {}, params: {} };
+    if (locale) {
+      config.headers["Accept-Language"] = locale;
+      config.params.lang = locale;
     }
-    if (isCsrfMismatchError(error) && isUnsafeMethod(original.method) && !original.__csrfRetried) {
-      original.__csrfRetried = true;
-      original.headers = { ...(original.headers || {}) };
-      stripCsrfHeaders(original.headers);
-      try {
-        await refreshCsrfCookie();
-        return api.request(original);
-      } catch {
-        // If refresh fails, keep original error.
+    await client.get("/session/", config);
+  };
+
+  client.interceptors.request.use(applyRequestHeaders);
+
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const original = error?.config || {};
+      // Retry transient network/5xx failures on idempotent requests (flaky WiFi).
+      original.__retryCount = original.__retryCount || 0;
+      if (shouldRetry(error, original.__retryCount)) {
+        original.__retryCount += 1;
+        const jitter = Math.random() * 150;
+        await new Promise((resolve) => setTimeout(resolve, retryBackoffMs(original.__retryCount - 1, jitter)));
+        return client.request(original);
       }
-    }
-    if (error?.response?.status === 401 && typeof window !== "undefined") {
-      const isAuthEndpoint = isAuthRedirectExempt(error?.config?.url);
-      if (!isAuthEndpoint) {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        // `expired=1` lets SignIn.vue show "session expired" instead of the generic description
-        window.location.href = `/signin?next=${next}&expired=1`;
-        // Return a never-resolving promise so callers don't see a spurious rejection
-        return new Promise(() => {});
+      if (isCsrfMismatchError(error) && isUnsafeMethod(original.method) && !original.__csrfRetried) {
+        original.__csrfRetried = true;
+        original.headers = { ...(original.headers || {}) };
+        stripCsrfHeaders(original.headers);
+        try {
+          await refreshCsrfCookie();
+          return client.request(original);
+        } catch {
+          // If refresh fails, keep original error.
+        }
       }
+      if (error?.response?.status === 401 && typeof window !== "undefined") {
+        const isAuthEndpoint = isAuthRedirectExempt(error?.config?.url);
+        if (!isAuthEndpoint) {
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          // `expired=1` lets SignIn.vue show "session expired" instead of the generic description
+          window.location.href = `/signin?next=${next}&expired=1`;
+          // Return a never-resolving promise so callers don't see a spurious rejection
+          return new Promise(() => {});
+        }
+      }
+      if (error.response?.status === 429) {
+        error.response.data = { detail: translate("apiClient.rateLimitRetry") };
+      }
+      return Promise.reject(error);
     }
-    if (error.response?.status === 429) {
-      error.response.data = { detail: translate("apiClient.rateLimitRetry") };
-    }
-    return Promise.reject(error);
-  }
-);
+  );
+
+  return client;
+}
+
+const api = createApiClient({
+  baseURL: resolveBaseURL(import.meta.env.VITE_API_BASE_URL),
+  timeout: 30000,
+});
 
 export default api;
