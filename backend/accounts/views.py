@@ -2327,13 +2327,19 @@ class CustomerWalletChargeDeclineView(APIView):
         customer_id = request.user.id
         from .models import WalletChargeRequest
         from django.utils import timezone as _tz
+        # GUARDED compare-and-set, NOT read-then-blind-save (mirrors the lazy-expire at
+        # CustomerWalletChargeRequestsView / DriverCashoutCancelView). A concurrent approve
+        # takes select_for_update and debits the wallet before committing CHARGED; a blind
+        # `UPDATE ... WHERE id=x` here would queue behind that lock and overwrite CHARGED
+        # with DECLINED after the money already moved — the request would then never sync to
+        # the order bill (that path is gated on status==CHARGED). The status-guarded UPDATE
+        # re-checks WHERE status='pending' under the row lock, so it can't clobber a charge.
+        WalletChargeRequest.objects.filter(
+            pk=request_id, customer_id=customer_id, status=WalletChargeRequest.Status.PENDING
+        ).update(status=WalletChargeRequest.Status.DECLINED, resolved_at=_tz.now())
         cr = WalletChargeRequest.objects.filter(pk=request_id, customer_id=customer_id).first()
         if cr is None:
             return Response({"detail": "Charge request not found."}, status=status.HTTP_404_NOT_FOUND)
-        if cr.status == WalletChargeRequest.Status.PENDING:
-            cr.status = WalletChargeRequest.Status.DECLINED
-            cr.resolved_at = _tz.now()
-            cr.save(update_fields=["status", "resolved_at"])
         return Response({"status": cr.status})
 
 

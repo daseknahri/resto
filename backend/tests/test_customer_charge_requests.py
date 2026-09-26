@@ -158,16 +158,42 @@ class DeclineChargeRequestTests(SimpleTestCase):
     def test_unauthenticated_401(self):
         self.assertEqual(self._post(customer_id=None).status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_decline_marks_declined(self):
+    def test_decline_uses_a_status_guarded_update(self):
+        # New behaviour: a GUARDED compare-and-set (filter(status=PENDING).update(DECLINED))
+        # then a re-read to report the true status — NOT a read-then-blind-save that could
+        # clobber a status a concurrent approve committed under its row lock.
         cr = _pending_cr()
+        cr.status = WalletChargeRequest.Status.DECLINED  # the re-read reflects the applied update
         with patch("accounts.models.WalletChargeRequest.objects") as mock_objs:
+            mock_objs.filter.return_value.update.return_value = 1
             mock_objs.filter.return_value.first.return_value = cr
             resp = self._post()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(cr.status, WalletChargeRequest.Status.DECLINED)
+        self.assertEqual(resp.data["status"], WalletChargeRequest.Status.DECLINED)
+        # The transition MUST go through a status-guarded update (not a blind save).
+        self.assertTrue(mock_objs.filter.return_value.update.called)
+        update_kwargs = mock_objs.filter.return_value.update.call_args.kwargs
+        self.assertEqual(update_kwargs.get("status"), WalletChargeRequest.Status.DECLINED)
+        # …and the guard filter must require the row to still be PENDING.
+        guard_kwargs = mock_objs.filter.call_args_list[0].kwargs
+        self.assertEqual(guard_kwargs.get("status"), WalletChargeRequest.Status.PENDING)
+
+    def test_decline_does_not_clobber_an_already_resolved_request(self):
+        # Regression for the status-clobber race: the guarded update matches 0 rows when the
+        # request is no longer PENDING (e.g. a concurrent approve committed CHARGED), so
+        # decline is a no-op and reports the true current status — money is never stranded.
+        charged = _pending_cr()
+        charged.status = WalletChargeRequest.Status.CHARGED
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_objs:
+            mock_objs.filter.return_value.update.return_value = 0
+            mock_objs.filter.return_value.first.return_value = charged
+            resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], WalletChargeRequest.Status.CHARGED)
 
     def test_decline_missing_request_404(self):
         with patch("accounts.models.WalletChargeRequest.objects") as mock_objs:
+            mock_objs.filter.return_value.update.return_value = 0
             mock_objs.filter.return_value.first.return_value = None
             resp = self._post()
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
