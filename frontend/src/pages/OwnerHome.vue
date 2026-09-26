@@ -192,9 +192,9 @@
         </div>
       </div>
 
-      <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
-      <!-- Skeleton while the first orders load -->
-      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
+      <!-- Today's snapshot — realized figures from the /owner/dashboard/ aggregate ─ -->
+      <!-- Skeleton until the aggregate loads, so we never flash a stale/zero figure -->
+      <div v-if="revenueSummaryLoading" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
         <div v-for="i in 4" :key="i" class="animate-pulse space-y-2.5 bg-slate-950/60 px-4 py-3.5">
           <div class="h-2.5 w-16 rounded bg-slate-700/60" />
           <div class="h-7 w-20 rounded-lg bg-slate-700/40" />
@@ -692,6 +692,30 @@ const fetchTodayReservations = async () => {
   }
 };
 
+// ── Today's realized revenue — from the /owner/dashboard/ aggregate ───────────
+// The active-order store (`order.orders`) only holds NON-terminal orders — a
+// COMPLETED order (the normal end state) drops out within ~30s — and includes
+// still-PENDING orders that may cancel, so today/yesterday figures derived from
+// it decay toward zero through service and disagree with OwnerAnalytics. The
+// authoritative source is revenue_summary.daily from GET /owner/dashboard/: a
+// per-day, tenant-tz-bucketed series over the billable/committed statuses
+// (incl. COMPLETED) — the exact same aggregate OwnerAnalytics reads.
+const revenueSummary = ref(null);
+const revenueSummaryLoading = ref(true);
+
+const fetchDashboardSummary = async () => {
+  try {
+    // days:7 comfortably spans today + yesterday in any tenant timezone and
+    // matches OwnerAnalytics' default period window.
+    const { data } = await api.get("/owner/dashboard/", { params: { days: 7 }, timeout: 8000 });
+    if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
+  } catch {
+    // Leave revenueSummary as-is → the KPI tiles fall back to 0 / — gracefully.
+  } finally {
+    revenueSummaryLoading.value = false;
+  }
+};
+
 // ── Profile-derived state ─────────────────────────────────────────────────────
 const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);
@@ -709,7 +733,7 @@ const editingGoal = ref(false);
 const savingGoal = ref(false);
 
 const goalValue = computed(() => parseFloat(profile.value.daily_revenue_goal || 0) || 0);
-const goalCurrency = computed(() => order.orders.find((o) => o.currency)?.currency || "MAD");
+const goalCurrency = computed(() => revenueSummary.value?.currency || "MAD");
 const goalProgress = computed(() => {
   if (!goalValue.value) return 0;
   return (todayStats.value.revenueRaw / goalValue.value) * 100;
@@ -824,12 +848,21 @@ const _tenantDayStr = (d) => {
   }
 };
 
-// ── Today's order stats — derived from the order store ────────────────────────
+// Look up a day's realized figures in the /owner/dashboard/ daily breakdown.
+// `_tenantDayStr` yields the same YYYY-MM-DD the backend emits (both bucket in
+// the tenant timezone — Contract E), so the date keys line up exactly. A day
+// with no billable orders is simply absent → callers fall back to 0.
+const _dailyEntry = (dateStr) => (revenueSummary.value?.daily || []).find((d) => d.date === dateStr);
+
+// ── Today's order stats — realized figures from the server aggregate ──────────
+// count / revenue / avg-ticket come from revenue_summary.daily (authoritative
+// for every order today regardless of terminal status); only `pending` — which
+// the billable aggregate excludes — is read from the live order store.
 const todayStats = computed(() => {
-  const today = _tenantDayStr(new Date());
-  const todayOrders = order.orders.filter((o) => _tenantDayStr(o.created_at) === today);
-  const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-  const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
+  const entry = _dailyEntry(_tenantDayStr(new Date()));
+  const revenue = Number(entry?.revenue) || 0;
+  const count = Number(entry?.orders) || 0;
+  const currency = revenueSummary.value?.currency || "MAD";
   let revenueLabel;
   try {
     revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
@@ -837,10 +870,10 @@ const todayStats = computed(() => {
     revenueLabel = `${currency} ${Math.floor(revenue)}`;
   }
   return {
-    count: todayOrders.length,
+    count,
     revenue: revenueLabel,
     revenueRaw: revenue,
-    pending: todayOrders.filter((o) => o.status === "pending").length,
+    pending: order.orders.filter((o) => o.status === "pending").length,
   };
 });
 
@@ -849,7 +882,7 @@ const avgTicketLabel = computed(() => {
   const { count, revenueRaw } = todayStats.value;
   if (!count) return "—";
   const avg = revenueRaw / count;
-  const currency = order.orders.find((o) => o.currency)?.currency || "MAD";
+  const currency = revenueSummary.value?.currency || "MAD";
   try { return formatNumber(avg, { style: "currency", currency, maximumFractionDigits: 0 }); }
   catch { return `${currency} ${Math.round(avg)}`; }
 });
@@ -857,11 +890,10 @@ const avgTicketLabel = computed(() => {
 const yesterdayStats = computed(() => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = _tenantDayStr(yesterday);
-  const yOrders = order.orders.filter((o) => _tenantDayStr(o.created_at) === yStr);
+  const entry = _dailyEntry(_tenantDayStr(yesterday));
   return {
-    count: yOrders.length,
-    revenue: yOrders.reduce((s, o) => s + (Number(o.total) || 0), 0),
+    count: Number(entry?.orders) || 0,
+    revenue: Number(entry?.revenue) || 0,
   };
 });
 
@@ -1128,6 +1160,7 @@ const manualRefresh = () => {
   void fetchRatings();
   void fetchTodayReservations();
   void fetchDrawerState();
+  void fetchDashboardSummary();
   // Re-fetch readiness data (counts, sold-out count) so the readiness card and
   // the alerts that depend on it stay in sync.
   readinessRef.value?.load();
@@ -1158,6 +1191,7 @@ onMounted(async () => {
     void fetchRatings();
     void fetchTodayReservations();
     void fetchDrawerState();
+    void fetchDashboardSummary();
   });
 
   // 3. Background poll setup

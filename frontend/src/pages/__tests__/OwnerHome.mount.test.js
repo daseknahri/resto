@@ -172,4 +172,58 @@ describe("OwnerHome — mount smoke", () => {
     // Published profile → published chip (not draft).
     expect(wrapper.text()).toContain("ownerHome.published");
   });
+
+  // ── (3) Today's realized KPIs come from the /owner/dashboard/ aggregate ────
+  // Regression guard: OwnerHome used to derive today's revenue / order count /
+  // avg ticket by summing order.orders — the ACTIVE-only store, which drops
+  // COMPLETED orders (they fall out ~30s after completion) and over-counts
+  // still-PENDING ones — so the headline numbers decayed toward zero through
+  // service and disagreed with OwnerAnalytics. The realized figures must instead
+  // read revenue_summary.daily from GET /owner/dashboard/ (billable statuses
+  // incl. COMPLETED, tenant-tz bucketed). formatNumber is mocked to String(v),
+  // so the raw daily figures render verbatim and are asserted directly.
+  it("sources today's revenue + order count from the dashboard aggregate, not the active order store", async () => {
+    const tz = "Africa/Casablanca";
+    const dayStr = (d) =>
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    const now = new Date();
+    const yst = new Date();
+    yst.setDate(yst.getDate() - 1);
+
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true, timezone: tz } } },
+      // Active store holds only a live pending order — summing it could never
+      // produce the aggregate's 98765 / 42, so the assertions below prove the
+      // realized figures are NOT store-derived.
+      "/owner/orders/": {
+        data: { results: [order({ id: 9, order_number: "A900", status: "pending", total: "77.00" })], total: 1 },
+      },
+      // Authoritative realized aggregate for today + yesterday.
+      "/owner/dashboard/": {
+        data: {
+          revenue_summary: {
+            currency: "MAD",
+            daily: [
+              { date: dayStr(yst), revenue: 50000, orders: 40 },
+              { date: dayStr(now), revenue: 98765, orders: 42 },
+            ],
+          },
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountHome();
+    }).not.toThrow();
+
+    await flushPromises();
+    await flushPromises(); // drain the nextTick-deferred batch (incl. /owner/dashboard/)
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("98765"); // today's revenue from revenue_summary.daily
+    expect(text).toContain("42");    // today's order count from revenue_summary.daily
+    // The live-queue pending tile still reflects the store's pending order.
+    expect(text).toContain("ownerOrders.todayPending");
+  });
 });
