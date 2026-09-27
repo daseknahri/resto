@@ -96,6 +96,11 @@ class _FakeRefStore:
     def filter(self, **kw):
         return _FakeRefQuerySet(self, kw)
 
+    def select_for_update(self):
+        # The command now locks the mirror row before recomputing; the lock is a no-op in
+        # this single-threaded test, so the chain just continues to filter().
+        return self
+
     def update_or_create(self, defaults=None, **kw):
         defaults = defaults or {}
         key = (kw.get("tenant_id"), kw.get("order_number"))

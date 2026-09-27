@@ -136,19 +136,18 @@ class Command(BaseCommand):
                             )
                             if ref is None:
                                 continue  # raced away since the cheap pass — not our concern
-                            fresh_order = (
-                                Order.objects.filter(pk=order.pk)
-                                .prefetch_related("items")
-                                .first()
-                            )
-                            if fresh_order is None:
-                                continue  # order vanished under us — skip
+
+                            # Re-read the order's fields FRESH inside the txn so the recompute uses
+                            # current committed data, not the scan-time snapshot. mirror_order_to_public_index
+                            # re-queries items itself and trusts the instance only for status/total/
+                            # created_at — exactly what refresh_from_db reloads.
+                            order.refresh_from_db()
 
                             stats["mirrors_checked"] += 1
                             before = _snapshot(ref)
 
                             # Reuse the exact signal logic to recompute the mirror, from FRESH data.
-                            mirror_order_to_public_index(sender=Order, instance=fresh_order)
+                            mirror_order_to_public_index(sender=Order, instance=order)
 
                             after_ref = CustomerOrderRef.objects.filter(
                                 tenant_id=tid, order_number=order.order_number
