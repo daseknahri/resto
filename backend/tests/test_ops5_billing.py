@@ -334,7 +334,7 @@ class TestAdminLiveOrdersView(SimpleTestCase):
         fake_order = SimpleNamespace(
             order_number="ORD-001",
             status="pending",
-            order_type="dine_in",
+            fulfillment_type="table",
             total=Decimal("25.00"),
             currency="MAD",
             created_at=None,
@@ -377,6 +377,11 @@ class TestAdminLiveOrdersView(SimpleTestCase):
             resp = view.get(request, tenant_id=1)
 
         self.assertEqual(resp.status_code, 200)
+
+        # Regression: the serialized order_type must come from the Order's real
+        # `fulfillment_type` field (was `getattr(o, "order_type", "")`, which the model
+        # has no attribute for → always "" → blank type in the admin live-orders modal).
+        self.assertEqual(resp.data["results"][0]["order_type"], "table")
 
         # Audit log MUST have been created directly (mandatory — not best-effort)
         mock_audit_log_create.assert_called_once()
