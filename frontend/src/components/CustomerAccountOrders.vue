@@ -24,6 +24,7 @@
       type="search"
       class="w-full rounded-xl border border-slate-700/60 bg-slate-800/50 py-2 ps-9 pe-3 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
       :placeholder="t('customerAccount.orderSearchPlaceholder')"
+      :aria-label="t('customerAccount.orderSearchPlaceholder')"
     />
   </div>
 

@@ -11,6 +11,7 @@
       class="ui-touch-target ui-press relative inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
       :aria-label="unreadCount > 0 ? t('notifications.bellAriaUnread', { n: unreadCount }) : t('notifications.bellAria')"
       :aria-expanded="open"
+      aria-haspopup="dialog"
       @click="toggle"
     >
       <AppIcon name="bell" class="h-4 w-4" aria-hidden="true" />

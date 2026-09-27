@@ -525,6 +525,7 @@
             v-model="mktRatingComment"
             rows="2"
             :placeholder="t('mktOrderStatus.rateCommentPlaceholder')"
+            :aria-label="t('mktOrderStatus.rateCommentPlaceholder')"
             class="ui-textarea w-full resize-none text-sm"
           />
           <button
