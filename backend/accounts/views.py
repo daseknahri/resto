@@ -5067,7 +5067,18 @@ class MarketplacePlaceOrderView(APIView):
                         # discount counters have settled _promo_discount, so a cap-strip bills
                         # the corrected full-price base rather than the stale discounted one.
                         from menu.commission import commissionable_food_base as _commissionable_base
-                        _commission_base = _commissionable_base(food_subtotal, _promo_discount, _loyalty_discount)
+                        # A free_delivery promo waives the DELIVERY fee, not food revenue — but it is
+                        # modeled as `_promo_discount = _delivery_fee`. Subtracting it from the food
+                        # base would under-bill the platform's cut by delivery_fee×rate on every such
+                        # order (the restaurant still keeps the full food revenue). Exclude it here;
+                        # percentage/fixed promos and flash sales DO reduce food, so they still net
+                        # out, and a cap-stripped promo already zeroed _promo_discount above.
+                        _food_promo_discount = (
+                            Decimal("0")
+                            if (_best_promo is not None and getattr(_best_promo, "promo_type", "") == "free_delivery")
+                            else _promo_discount
+                        )
+                        _commission_base = _commissionable_base(food_subtotal, _food_promo_discount, _loyalty_discount)
                         commission_amount = (_commission_base * commission_rate).quantize(Decimal("0.01"))
 
                         # RISK DATA-1: 48-bit entropy (token_hex(6)) — keep in lockstep
