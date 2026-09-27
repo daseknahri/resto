@@ -9289,6 +9289,13 @@ class OwnerZReportView(APIView):
         _food_agg = (
             OrderItem.objects
             .filter(
+                # Match the denominator (collected_qs) EXACTLY: COMPLETED + PAID in window.
+                # Without order__status=COMPLETED the numerator is a SUPERSET — pickup/delivery
+                # orders are prepaid (paid_at stamped) while still PENDING/…/OUT_FOR_DELIVERY, so
+                # their food cost was counted with no matching revenue in collected_total → an
+                # inflated food_cost_pct that can read >100% mid-shift. (The sibling analytics in
+                # sales/views.py already scopes numerator+denominator to the same status set.)
+                order__status=Order.Status.COMPLETED,
                 order__payment_status=Order.PaymentStatus.PAID,
                 order__paid_at__gte=window_start,
                 order__paid_at__lt=window_end,
