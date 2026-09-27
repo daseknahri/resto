@@ -4648,8 +4648,13 @@ class MarketplacePlaceOrderView(APIView):
                     slugs.append(str(it["slug"]))
 
                 # RISK STRUCT-1: item resolution shared with PlaceOrderView via menu.order_service.
+                # M7: pass the tenant-local now so a dish outside its availability_schedule window
+                # is dropped here (→ items_unavailable), not just hidden in the marketplace menu.
+                # (profile is non-None here — guarded above.) Reused below for the happy-hour lock.
                 from menu import order_service as _order_service
-                dishes_map = _order_service.resolve_available_dishes(slugs)
+                from menu.views import _profile_now as _pnow
+                _mkt_now_local = _pnow(profile)
+                dishes_map = _order_service.resolve_available_dishes(slugs, now_local=_mkt_now_local)
                 missing = [s for s in slugs if s not in dishes_map]
                 if missing:
                     return Response({"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing}, status=status.HTTP_400_BAD_REQUEST)
@@ -4666,8 +4671,7 @@ class MarketplacePlaceOrderView(APIView):
                     get_active_happy_hours as _get_hh,
                     effective_unit_price as _eff_price,
                 )
-                from menu.views import _profile_now as _pnow
-                _mkt_now_local = _pnow(profile)
+                # _mkt_now_local was computed above (reused for the availability-window gate).
                 _mkt_active_hh = _get_hh(_mkt_now_local)
 
                 order_items_data = []

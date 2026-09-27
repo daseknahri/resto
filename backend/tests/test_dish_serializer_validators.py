@@ -21,9 +21,11 @@ field-level validators and computed fields in menu/serializers.py:
     - validate_disabled_note
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
-datetime.datetime is patched for schedule-availability tests.
+The schedule-availability tests inject a tenant-local "now" via serializer context
+(the M7 fix evaluates the window in the restaurant's wall-clock, not server UTC).
 """
 import datetime as dt_module
+from datetime import timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -270,32 +272,38 @@ class DishValidateStockQtyTests(SimpleTestCase):
 # DishSerializer.get_is_schedule_available
 # ══════════════════════════════════════════════════════════════════════════════
 
-# 2024-06-03 is a Monday (weekday 0) — verified: Jan 1 2024 is Monday.
-_MONDAY_14H = dt_module.datetime(2024, 6, 3, 14, 30, 0)   # Mon 14:30 UTC
-_MONDAY_8H  = dt_module.datetime(2024, 6, 3,  8,  0, 0)   # Mon 08:00 UTC
-_MONDAY_22H = dt_module.datetime(2024, 6, 3, 22, 30, 0)   # Mon 22:30 UTC
-_MONDAY_23H = dt_module.datetime(2024, 6, 3, 23,  0, 0)   # Mon 23:00 UTC
-_MONDAY_10H = dt_module.datetime(2024, 6, 3, 10,  0, 0)   # Mon 10:00 UTC
-_TUESDAY_14H = dt_module.datetime(2024, 6, 4, 14, 30, 0)  # Tue 14:30 UTC
+# 2024-06-03 is a Monday (weekday 0) — verified: Jan 1 2024 is Monday. These are the
+# tenant-local "now" the serializer evaluates the window against (M7), injected via
+# serializer context rather than by patching the process clock.
+_MONDAY_14H = dt_module.datetime(2024, 6, 3, 14, 30, 0)   # Mon 14:30
+_MONDAY_8H  = dt_module.datetime(2024, 6, 3,  8,  0, 0)   # Mon 08:00
+_MONDAY_22H = dt_module.datetime(2024, 6, 3, 22, 30, 0)   # Mon 22:30
+_MONDAY_23H = dt_module.datetime(2024, 6, 3, 23,  0, 0)   # Mon 23:00
+_MONDAY_10H = dt_module.datetime(2024, 6, 3, 10,  0, 0)   # Mon 10:00
 
 
-def _mock_dt(fixed_now: dt_module.datetime):
-    """Return a datetime subclass whose utcnow() returns fixed_now."""
+def _tz_aware_mock_dt(fixed_utc: dt_module.datetime):
+    """datetime stand-in whose .now(tz) converts a FIXED UTC instant into the asked tz —
+    lets a test prove the window is read in the tenant's wall-clock, not the server's."""
     class _M(dt_module.datetime):
         @classmethod
-        def utcnow(cls):
-            return fixed_now
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_utc.replace(tzinfo=None)
+            return fixed_utc.astimezone(tz)
     return _M
 
 
 class DishGetIsScheduleAvailableTests(SimpleTestCase):
-    def _s(self):
-        return DishSerializer()
+    def _s(self, now_local=None):
+        # M7: the window is evaluated against a tenant-local "now" from serializer context.
+        ctx = {"schedule_now_local": now_local} if now_local is not None else {}
+        return DishSerializer(context=ctx)
 
     def _obj(self, schedule):
         return SimpleNamespace(availability_schedule=schedule)
 
-    # ── schedule absent / invalid ──────────────────────────────────────────
+    # ── schedule absent / invalid (None short-circuit — no clock needed) ────
     def test_no_schedule_returns_none(self):
         self.assertIsNone(self._s().get_is_schedule_available(self._obj(None)))
 
@@ -312,72 +320,82 @@ class DishGetIsScheduleAvailableTests(SimpleTestCase):
 
     # ── day restriction ───────────────────────────────────────────────────
     def test_matching_day_no_time_restriction_is_true(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"days": ["mon"]})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"days": ["mon"]})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     def test_non_matching_day_returns_false(self):
         """Monday but schedule only allows tue/wed."""
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"days": ["tue", "wed"]})
-            self.assertFalse(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"days": ["tue", "wed"]})
+        self.assertFalse(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     def test_all_days_always_passes_day_check(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            all_days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-            obj = self._obj({"days": all_days})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        all_days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        obj = self._obj({"days": all_days})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     def test_empty_days_list_no_day_restriction(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"days": []})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"days": []})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     # ── time restriction ──────────────────────────────────────────────────
     def test_within_time_window_is_true(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):  # 14:30
-            obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))  # 14:30
 
     def test_before_time_window_is_false(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_8H)):   # 08:00
-            obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
-            self.assertFalse(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
+        self.assertFalse(self._s(_MONDAY_8H).get_is_schedule_available(obj))  # 08:00
 
     def test_after_time_window_is_false(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_22H)):  # 22:30
-            obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
-            self.assertFalse(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"time_start": "09:00", "time_end": "22:00"})
+        self.assertFalse(self._s(_MONDAY_22H).get_is_schedule_available(obj))  # 22:30
 
-    # ── overnight window (end_m < start_m) ───────────────────────────────
+    # ── overnight window (time_start > time_end) ────────────────────────────
     def test_overnight_window_inside_is_true(self):
-        """22:00–02:00, now 23:00 → inside (>= start)."""
-        with patch("datetime.datetime", _mock_dt(_MONDAY_23H)):
-            obj = self._obj({"time_start": "22:00", "time_end": "02:00"})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        """22:00-02:00, now 23:00 → inside (>= start)."""
+        obj = self._obj({"time_start": "22:00", "time_end": "02:00"})
+        self.assertTrue(self._s(_MONDAY_23H).get_is_schedule_available(obj))
 
     def test_overnight_window_outside_is_false(self):
-        """22:00–02:00, now 10:00 → outside."""
-        with patch("datetime.datetime", _mock_dt(_MONDAY_10H)):
-            obj = self._obj({"time_start": "22:00", "time_end": "02:00"})
-            self.assertFalse(self._s().get_is_schedule_available(obj))
+        """22:00-02:00, now 10:00 → outside."""
+        obj = self._obj({"time_start": "22:00", "time_end": "02:00"})
+        self.assertFalse(self._s(_MONDAY_10H).get_is_schedule_available(obj))
 
-    # ── invalid time format ────────────────────────────────────────────────
+    # ── malformed time → degrade to available, never raise ─────────────────
     def test_invalid_time_format_does_not_raise_returns_true(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"time_start": "bad", "time_end": "also_bad"})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"time_start": "bad", "time_end": "also_bad"})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     # ── combined day + time restriction ───────────────────────────────────
     def test_correct_day_and_within_time_is_true(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"days": ["mon"], "time_start": "09:00", "time_end": "22:00"})
-            self.assertTrue(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"days": ["mon"], "time_start": "09:00", "time_end": "22:00"})
+        self.assertTrue(self._s(_MONDAY_14H).get_is_schedule_available(obj))
 
     def test_wrong_day_even_with_valid_time_is_false(self):
-        with patch("datetime.datetime", _mock_dt(_MONDAY_14H)):
-            obj = self._obj({"days": ["tue"], "time_start": "09:00", "time_end": "22:00"})
-            self.assertFalse(self._s().get_is_schedule_available(obj))
+        obj = self._obj({"days": ["tue"], "time_start": "09:00", "time_end": "22:00"})
+        self.assertFalse(self._s(_MONDAY_14H).get_is_schedule_available(obj))
+
+    # ── M7 regression: window read in the TENANT's wall-clock, not server UTC ──
+    def test_evaluated_in_tenant_local_time_not_server_utc(self):
+        """The SAME instant yields opposite verdicts for two tenants in different
+        timezones — proving the weekday/HH:MM derive from the restaurant's local clock
+        (a Profile in context → menu.views._profile_now), not the server's UTC."""
+        schedule = {"days": ["mon"], "time_start": "09:00", "time_end": "22:00"}
+        obj = self._obj(schedule)
+        # 2024-06-03 23:30 UTC (Monday). America/New_York (EDT, UTC-4) = Mon 19:30 → inside
+        # 09:00-22:00; UTC = Mon 23:30 → after 22:00.
+        instant = dt_module.datetime(2024, 6, 3, 23, 30, 0, tzinfo=timezone.utc)
+        with patch("datetime.datetime", _tz_aware_mock_dt(instant)):
+            ny = DishSerializer(context={"profile": SimpleNamespace(timezone="America/New_York")})
+            self.assertTrue(ny.get_is_schedule_available(obj))
+            utc = DishSerializer(context={"profile": SimpleNamespace(timezone="UTC")})
+            self.assertFalse(utc.get_is_schedule_available(obj))
+
+    def test_no_context_falls_back_to_utc_without_crashing(self):
+        """A context-less serializer must never crash — it falls back to UTC. An all-day
+        window (no times) is tz-independent, so this stays deterministic."""
+        obj = self._obj({"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]})
+        self.assertTrue(DishSerializer().get_is_schedule_available(obj))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

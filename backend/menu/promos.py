@@ -13,16 +13,15 @@ This module is the single rule both copies now delegate to. It evaluates the FUL
 window (date bounds + day-of-week + HH:MM) from a SINGLE ``now_local`` so the
 verdict is internally consistent and tenant-local.
 
-It imports ONLY stdlib (datetime, zoneinfo) and NO Django models / no menu.views
-/ no accounts at module load, so accounts.views can import it at top level with no
-import cycle. It reads a promo field off EITHER a Promotion model instance OR a
-denormalized dict (Profile.marketplace_promos entries) so there is one rule, no
-forked logic.
+It imports ONLY stdlib (datetime) plus the stdlib-only menu.schedule_window helper, and
+NO Django models / no menu.views / no accounts at module load, so accounts.views can
+import it at top level with no import cycle. It reads a promo field off EITHER a Promotion
+model instance OR a denormalized dict (Profile.marketplace_promos entries) so there is one
+rule, no forked logic.
 """
 from datetime import date as _date
 
-
-_WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+from .schedule_window import day_time_window_open
 
 
 def promo_field(promo, name):
@@ -58,18 +57,16 @@ def promo_is_active(promo, *, now_local) -> bool:
     """Return True if a promo is live at the tenant-local instant ``now_local``.
 
     ``now_local`` MUST be a single tz-aware datetime in the tenant's local time.
-    ALL THREE window components derive from it so the evaluation is internally
-    consistent and tenant-local (this is the fix for the today()/utcnow() mismatch):
-
-      - today        = now_local.date()
-      - weekday token = _WDAY[now_local.weekday()]
-      - current HH:MM = now_local.strftime("%H:%M")
+    ALL window components derive from it so the evaluation is internally consistent
+    and tenant-local (this is the fix for the today()/utcnow() mismatch): the date
+    bounds from ``now_local.date()`` and the day/time window from the SAME instant
+    (see ``schedule_window.day_time_window_open``).
 
     Rules (unchanged from the historic behavior, just on one clock):
       - active_from / active_until are INCLUSIVE date bounds (blank/None = unbounded)
-      - days is an allow-list of mon..sun tokens; empty list = every day
-      - time_start/time_end: both blank = all day; otherwise live when
-        time_start <= now_hhmm < time_end
+      - the day-of-week + time-of-day (incl. overnight) window is delegated to
+        ``schedule_window.day_time_window_open`` — the single rule shared with the dish
+        availability_schedule check, so the two can never drift apart.
     """
     today = now_local.date()
 
@@ -80,29 +77,11 @@ def promo_is_active(promo, *, now_local) -> bool:
     if active_until and today > active_until:
         return False
 
-    allowed_days = promo_field(promo, "days") or []
-    today_token = _WDAY[now_local.weekday()]
-    yesterday_token = _WDAY[(now_local.weekday() - 1) % 7]
-
-    ts = (promo_field(promo, "time_start") or "").strip()
-    te = (promo_field(promo, "time_end") or "").strip()
-
-    # No (or partial) time window → all-day: only the day allow-list applies.
-    if not ts or not te:
-        return not allowed_days or today_token in allowed_days
-
-    now_hhmm = now_local.strftime("%H:%M")
-    if ts < te:
-        # Normal same-day window: today's day allowed AND now in [ts, te).
-        if allowed_days and today_token not in allowed_days:
-            return False
-        return ts <= now_hhmm < te
-
-    # Overnight window (ts > te, e.g. "22:00"–"02:00") — previously NEVER matched, so an
-    # overnight promo silently never activated. Mirrors the HappyHour rule (menu/pricing.py):
-    # the evening part belongs to TODAY's day, the after-midnight tail to YESTERDAY's day.
-    if now_hhmm >= ts:
-        return not allowed_days or today_token in allowed_days
-    if now_hhmm < te:
-        return not allowed_days or yesterday_token in allowed_days
-    return False
+    # Day-of-week + HH:MM window (incl. overnight) via the single shared rule, so the
+    # promo window and a dish's availability_schedule can never fork the overnight logic.
+    return day_time_window_open(
+        promo_field(promo, "days"),
+        promo_field(promo, "time_start"),
+        promo_field(promo, "time_end"),
+        now_local=now_local,
+    )
