@@ -5405,6 +5405,19 @@ class StaffVoidOrderItemView(APIView):
             # different items cannot both read a stale wallet_amount_paid and each
             # issue an independent refund (TOCTOU / double-spend fix).
             order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
+            # Re-check terminal status UNDER the lock: a cancel (which refunds the wallet but
+            # leaves wallet_amount_paid non-zero) could have committed between the unlocked check
+            # at the top of post() and this lock. Proceeding would refund the voided line's amount
+            # a SECOND time — the voiditem: idempotency key guards a double-VOID refund, not a
+            # cancel-then-void. Roll back the is_voided mark + restock done above and bail, mirroring
+            # the cancel paths' own post-lock re-read (see #440 / refund_and_cancel_delivery_order).
+            if order.status in self._TERMINAL_STATUSES:
+                transaction.set_rollback(True)
+                return Response(
+                    {"detail": "Order was completed or cancelled concurrently; the void was not applied.",
+                     "code": "bad_status"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             # Capture pre-void food subtotal from the item being voided (already saved
             # as voided, so non-voided list won't include it after recompute).
             _voided_item_subtotal = Decimal(str(item.subtotal or "0"))
@@ -5725,6 +5738,17 @@ class StaffCompOrderItemView(APIView):
             # each issue an independent refund (TOCTOU / double-spend fix) — same
             # pattern as StaffVoidOrderItemView.
             order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
+            # Re-check terminal status UNDER the lock (same race as StaffVoidOrderItemView): a
+            # cancel could have committed between the unlocked check above and this lock, and
+            # comp's refund would then hand back the line amount a SECOND time on top of the
+            # cancel's full refund. Roll back the is_comped mark + restock and bail.
+            if order.status in self._TERMINAL_STATUSES:
+                transaction.set_rollback(True)
+                return Response(
+                    {"detail": "Order was completed or cancelled concurrently; the comp was not applied.",
+                     "code": "bad_status"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             _comped_item_subtotal = Decimal(str(item.subtotal or "0"))
             _recompute_order_totals(order)
 
