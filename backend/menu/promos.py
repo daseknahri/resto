@@ -81,15 +81,28 @@ def promo_is_active(promo, *, now_local) -> bool:
         return False
 
     allowed_days = promo_field(promo, "days") or []
-    if allowed_days:
-        if _WDAY[now_local.weekday()] not in allowed_days:
-            return False
+    today_token = _WDAY[now_local.weekday()]
+    yesterday_token = _WDAY[(now_local.weekday() - 1) % 7]
 
     ts = (promo_field(promo, "time_start") or "").strip()
     te = (promo_field(promo, "time_end") or "").strip()
-    if ts and te:
-        now_hhmm = now_local.strftime("%H:%M")
-        if not (ts <= now_hhmm < te):
-            return False
 
-    return True
+    # No (or partial) time window → all-day: only the day allow-list applies.
+    if not ts or not te:
+        return not allowed_days or today_token in allowed_days
+
+    now_hhmm = now_local.strftime("%H:%M")
+    if ts < te:
+        # Normal same-day window: today's day allowed AND now in [ts, te).
+        if allowed_days and today_token not in allowed_days:
+            return False
+        return ts <= now_hhmm < te
+
+    # Overnight window (ts > te, e.g. "22:00"–"02:00") — previously NEVER matched, so an
+    # overnight promo silently never activated. Mirrors the HappyHour rule (menu/pricing.py):
+    # the evening part belongs to TODAY's day, the after-midnight tail to YESTERDAY's day.
+    if now_hhmm >= ts:
+        return not allowed_days or today_token in allowed_days
+    if now_hhmm < te:
+        return not allowed_days or yesterday_token in allowed_days
+    return False

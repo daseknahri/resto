@@ -37,6 +37,9 @@ _MON_14H = dt_module.datetime(2024, 6, 3, 14, 30, 0, tzinfo=timezone.utc)   # Mo
 _MON_8H  = dt_module.datetime(2024, 6, 3,  8,  0, 0, tzinfo=timezone.utc)   # Mon 08:00
 _MON_22H = dt_module.datetime(2024, 6, 3, 22, 30, 0, tzinfo=timezone.utc)   # Mon 22:30
 _TUE_14H = dt_module.datetime(2024, 6, 4, 14, 30, 0, tzinfo=timezone.utc)   # Tue 14:30
+_FRI_23H = dt_module.datetime(2024, 6, 7, 23, 0, 0, tzinfo=timezone.utc)    # Fri 23:00
+_SAT_1H  = dt_module.datetime(2024, 6, 8,  1,  0, 0, tzinfo=timezone.utc)   # Sat 01:00
+_SAT_14H = dt_module.datetime(2024, 6, 8, 14,  0, 0, tzinfo=timezone.utc)   # Sat 14:00
 
 
 def _mock_dt(fixed_now: dt_module.datetime):
@@ -274,3 +277,41 @@ class AccountsViewIsPromoActiveNowTests(SimpleTestCase):
     def test_partial_time_restriction_no_effect(self):
         """Only time_start set — both needed → no filter applied."""
         self.assertTrue(_is_promo_active_now(_promo(time_start="09:00", time_end="")))
+
+    # ── overnight window (time_start > time_end, e.g. "22:00"–"02:00") ──────────
+    # Previously an overnight promo NEVER matched (ts <= now < te is empty when ts > te),
+    # so a "Late night 22:00-02:00" promo silently did nothing. Now it works, mirroring
+    # HappyHour: the evening part is today's, the after-midnight tail is yesterday's day.
+    def test_overnight_evening_active(self):
+        self.assertTrue(_is_promo_active_now(
+            _promo(time_start="22:00", time_end="02:00"), now_local=_FRI_23H   # Fri 23:00
+        ))
+
+    def test_overnight_early_morning_tail_active(self):
+        self.assertTrue(_is_promo_active_now(
+            _promo(time_start="22:00", time_end="02:00"), now_local=_SAT_1H    # Sat 01:00
+        ))
+
+    def test_overnight_daytime_inactive(self):
+        self.assertFalse(_is_promo_active_now(
+            _promo(time_start="22:00", time_end="02:00"), now_local=_SAT_14H   # Sat 14:00
+        ))
+
+    def test_overnight_evening_respects_today_day(self):
+        # Evening part belongs to TODAY (Fri): allowed when fri in days, not when only sat.
+        self.assertTrue(_is_promo_active_now(
+            _promo(days=["fri"], time_start="22:00", time_end="02:00"), now_local=_FRI_23H
+        ))
+        self.assertFalse(_is_promo_active_now(
+            _promo(days=["sat"], time_start="22:00", time_end="02:00"), now_local=_FRI_23H
+        ))
+
+    def test_overnight_tail_respects_yesterday_day(self):
+        # After-midnight tail (Sat 01:00) belongs to YESTERDAY (Fri): allowed when fri in
+        # days, NOT when only sat — it's the Friday-night promo bleeding past midnight.
+        self.assertTrue(_is_promo_active_now(
+            _promo(days=["fri"], time_start="22:00", time_end="02:00"), now_local=_SAT_1H
+        ))
+        self.assertFalse(_is_promo_active_now(
+            _promo(days=["sat"], time_start="22:00", time_end="02:00"), now_local=_SAT_1H
+        ))
