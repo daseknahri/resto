@@ -3226,7 +3226,12 @@ class AdminTenantLiveOrdersView(APIView):
                     {
                         "order_number": o.order_number,
                         "status": o.status,
-                        "order_type": getattr(o, "order_type", ""),
+                        # The Order field is `fulfillment_type` (pickup/delivery/table); there is
+                        # no `order_type` attribute, so `getattr(o, "order_type", "")` always fell
+                        # back to "" and the admin live-orders modal showed a blank type. Keep the
+                        # response KEY `order_type` (the frontend reads that), source it from the
+                        # real field.
+                        "order_type": getattr(o, "fulfillment_type", ""),
                         "total": str(o.total),
                         "currency": o.currency,
                         "created_at": o.created_at.isoformat() if o.created_at else None,
