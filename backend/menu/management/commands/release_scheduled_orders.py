@@ -92,9 +92,28 @@ class Command(BaseCommand):
                         if dry_run:
                             continue
 
+                        # Atomic claim: only the run that actually flips SCHEDULED→PENDING proceeds
+                        # to the side effects below. A blind save() let two overlapping runs (two
+                        # schedulers, a Beat entry + a Coolify cron, a manual run alongside the
+                        # scheduled one, or a slow run overrunning its ~5-min tick — the WhatsApp
+                        # notify is synchronous) both read SCHEDULED and each fire the broadcast/push/
+                        # WhatsApp and attempt DeliveryJob.create (the 2nd raising a spurious
+                        # unique_together IntegrityError logged as "delivery job failed"). Mirrors the
+                        # conditional-update rowcount claim in sweep_delivery_jobs. NOTE: .update() does
+                        # NOT fire auto_now, so updated_at is stamped explicitly.
+                        _now = timezone.now()
+                        _claimed = Order.objects.filter(
+                            pk=order.pk, status=Order.Status.SCHEDULED
+                        ).update(
+                            status=Order.Status.PENDING,
+                            status_updated_at=_now,
+                            updated_at=_now,
+                        )
+                        if not _claimed:
+                            continue  # another run already released this order — skip its side effects
+                        # Reflect the win on the in-memory instance for the broadcasts below.
                         order.status = Order.Status.PENDING
-                        order.status_updated_at = timezone.now()
-                        order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                        order.status_updated_at = _now
                         total_released += 1
 
                         # Live ping to the customer's tracking page + owner/kitchen sockets.
