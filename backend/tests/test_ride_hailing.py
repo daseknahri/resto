@@ -2442,7 +2442,11 @@ class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
         # Existing delivery fields must not regress
         self.assertEqual(str(result["earned"]), "100.00")
         self.assertEqual(str(result["paid"]), "40.00")
-        self.assertEqual(str(result["owed"]), "60.00")
+        # owed now = the CLAIMABLE wallet_balance (70), NOT earned − paid (60). The mock sets
+        # these two deliberately apart, so this pins owed to wallet_balance (the #290 / Option A
+        # definition): self-service cash-out debits the wallet without writing a DriverPayout,
+        # so earned − paid would overstate the true claimable amount.
+        self.assertEqual(str(result["owed"]), "70.00")
         self.assertEqual(str(result["wallet_balance"]), "70.00")
 
     @patch("accounts.models.Customer")
@@ -2470,6 +2474,42 @@ class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
 
         self.assertEqual(str(result["ride_earned"]), "0.00")
         self.assertEqual(result["rides_completed"], 0)
+
+    @patch("accounts.models.Customer")
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.WalletTransaction")
+    @patch("accounts.models.DriverPayout")
+    @patch("accounts.models.DeliveryJob")
+    def test_owed_is_claimable_wallet_balance_after_full_cashout(
+        self, mock_job, mock_payout, mock_wtx, mock_rr, mock_cust
+    ):
+        """Regression (cash-out overstatement): a driver who EARNED 100 but cashed the whole
+        balance out at a restaurant (wallet_balance drained to 0) must show owed == 0 — the
+        claimable truth — NOT earned − paid == 100. A self-service cash-out debits the wallet
+        but writes NO DriverPayout row, so `paid` stays 0 and earned − paid would overstate.
+        Guards the fix aligning owed to wallet_balance (#290 / Option A)."""
+        from accounts.driver_service import driver_earnings_summary
+
+        # Fully cashed out: confirm_cashout drained the wallet to 0.
+        mock_cust.objects.filter.return_value.values_list.return_value.first.return_value = Decimal("0.00")
+        # Earned 100 across delivered jobs. This same mock also backs the folded today-stats
+        # aggregate, so it must carry both "s" (Sum) and "n" (Count).
+        mock_job.objects.filter.return_value.aggregate.return_value = {"s": Decimal("100.00"), "n": 0}
+        mock_job.Status.DELIVERED = "delivered"
+        # No DriverPayout rows — a self-service cash-out never creates one (the whole point).
+        mock_payout.objects.filter.return_value.aggregate.return_value = {"s": None}
+        mock_wtx.objects.filter.return_value.aggregate.return_value = {"s": None}
+        mock_wtx.Type.EARNING = "earning"
+        mock_rr.objects.filter.return_value.count.return_value = 0
+        mock_rr.Status.COMPLETED = "completed"
+
+        result = driver_earnings_summary(driver_id=7)
+
+        # earned is still reported (100), but owed reflects the empty wallet, not earned − paid.
+        self.assertEqual(str(result["earned"]), "100.00")
+        self.assertEqual(str(result["paid"]), "0.00")
+        self.assertEqual(str(result["owed"]), "0.00")            # NOT "100.00"
+        self.assertEqual(str(result["wallet_balance"]), "0.00")
 
 
 # ── AdminPlatformAnalyticsView: rides block ───────────────────────────────────────

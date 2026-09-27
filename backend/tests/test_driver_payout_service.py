@@ -122,14 +122,16 @@ class RecordDriverPayoutTests(TransactionTestCase):
 
     def test_cannot_settle_after_cashout_double_pay_guard(self):
         # The double-booking bug: a driver earns 100 (wallet credited 100), then CASHES OUT
-        # (wallet -> 0). `owed` still reads 100 because it ignores cash-outs, so the old code
-        # would record another 100 payout — paying the same earnings twice. Now the wallet
-        # debit raises InsufficientFunds (a WalletError) and no DriverPayout is written.
+        # (wallet -> 0). A self-service cash-out writes no DriverPayout, so the ledger guard
+        # `_owed` (= earned − Σ DriverPayout, unchanged) still reads 100 and would let the old
+        # code record another 100 payout — but the wallet debit raises InsufficientFunds (a
+        # WalletError) and no DriverPayout is written. The DISPLAY `owed` now reflects the
+        # drained wallet (0), matching wallet_balance — the claimable truth (#290 / Option A).
         from accounts.models import Customer, DriverPayout
         d = self._driver()
         self._deliver(d, "100")
         self._cashout_all(d)                                      # driver already took the cash
-        self.assertEqual(driver_earnings_summary(d.id)["owed"], Decimal("100.00"))          # owed unaware
+        self.assertEqual(driver_earnings_summary(d.id)["owed"], Decimal("0.00"))            # claimable = 0
         self.assertEqual(driver_earnings_summary(d.id)["wallet_balance"], Decimal("0.00"))  # truth
         with self.assertRaises(WalletError):
             record_driver_payout(d.id, "100")
