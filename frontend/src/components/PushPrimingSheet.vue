@@ -10,6 +10,7 @@
           ref="sheetRef"
           role="dialog"
           aria-modal="true"
+          tabindex="-1"
           aria-labelledby="push-prime-title"
           aria-describedby="push-prime-body"
           class="ui-reveal w-full max-w-sm rounded-3xl border border-slate-800 bg-slate-900 p-6 text-center shadow-2xl shadow-slate-950/60"
@@ -59,6 +60,7 @@
 <script setup>
 import { nextTick, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useCustomerPush } from "../composables/useCustomerPush";
 
 // localStorage flag so a dismissed soft-ask doesn't nag the user again for a while.
@@ -72,6 +74,10 @@ const { supported, permission, subscribe, checkEnabled } = useCustomerPush();
 const visible = ref(false);
 const accepting = ref(false);
 const sheetRef = ref(null);
+// Trap Tab within the sheet + return focus to the trigger on close. `tabindex="-1"`
+// on the dialog root lets the manual focus(-into) below actually land; the trap's
+// "focus if not already inside" guard then defers to it.
+useFocusTrap(sheetRef, visible);
 
 const _recentlyDismissed = () => {
   try {
