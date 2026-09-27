@@ -98,14 +98,20 @@ def driver_earnings_summary(driver_id) -> dict:
 
 
 def _owed(driver_id) -> Decimal:
-    """Lean replica of ``driver_earnings_summary(driver_id)["owed"]`` — only the two Sums
-    the `owed` figure needs (earned, paid), skipping the other 5 aggregates (ride earnings,
-    rides-completed count, wallet balance, today's earned/deliveries). record_driver_payout
-    calls this instead of the full summary while the driver row is locked, so the lock is
-    held only as long as it takes to read the one number the caller actually uses.
+    """The delivery-only payout LEDGER CAP: earned (Σ DELIVERED driver_payout) − paid
+    (Σ DriverPayout rows). record_driver_payout calls this under the locked driver row to cap
+    an admin direct-settlement at what delivery work still owes on the DriverPayout ledger,
+    reading just the two Sums it needs (skipping the summary's other aggregates) so the lock
+    is held briefly.
 
-    Must stay byte-identical to summary["owed"] — same filters, same `_money` quantization
-    order (money(earned) - money(paid), then money() again). Keep both definitions in sync.
+    ⚠ This is DELIBERATELY NOT ``driver_earnings_summary(driver_id)["owed"]`` any more. That
+    display figure was changed to the driver's claimable ``wallet_balance`` (the
+    "owed = wallet_balance" model, #290/#431) because self-service cash-outs write no
+    DriverPayout row and so are invisible to `earned − paid`. Do NOT "resync" this cap to
+    wallet_balance: record_driver_payout's `amount > owed` check would then let a delivery
+    payout draw down ride/tip/no-show wallet credits and corrupt the DriverPayout invariant
+    (owed = Σ delivered payouts − Σ DriverPayout). The wallet debit (allow_partial=False,
+    keyed driverpayout:{id}) always protects the cash balance; THIS cap protects the ledger.
     """
     from .models import DeliveryJob, DriverPayout
 
