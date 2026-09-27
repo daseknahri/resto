@@ -581,6 +581,7 @@
             :loading-marketplace-orders="loadingMarketplaceOrders"
             :loading-more-marketplace-orders="loadingMoreMarketplaceOrders"
             :marketplace-orders-has-more="marketplaceOrdersHasMore"
+            :marketplace-orders-error="marketplaceOrdersError"
             :is-authenticated="customerStore.isAuthenticated"
             :tenant-name="tenantName"
             :api-orders="apiOrders"
@@ -598,6 +599,7 @@
             @reorder-marketplace="reorderMarketplace"
             @cancel-marketplace-order="cancelMarketplaceOrder"
             @load-more-marketplace-orders="loadMoreMarketplaceOrders"
+            @retry-marketplace="retryMarketplaceOrders"
             @retry="fetchOrders"
             @switch-tab="activeTab = $event"
             @cancel-order="cancelOrder"
@@ -1447,7 +1449,10 @@ const handleAuthExpired = (err) => {
     (code === 'not_owner' || code === 'not_order_owner') &&
     customerStore.isAuthenticated;
   if (status !== 401 && !ownershipExpired) return false;
-  toast.show(t('customerAccount.sessionExpired'), 'error');
+  // Idempotent toast: the read fan-out (orders + wallet + marketplace) can all 401 at
+  // once on a lapsed session — only surface the notice when the modal isn't already open
+  // so a single expiry doesn't stack duplicate toasts.
+  if (!showAuthModal.value) toast.show(t('customerAccount.sessionExpired'), 'error');
   showAuthModal.value = true;
   return true;
 };
@@ -2200,7 +2205,11 @@ const fetchWallet = async (page = 1) => {
     if (res.data.balance !== undefined && customerStore.customer) {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }
-  } catch {
+  } catch (err) {
+    // The wallet is an IsCustomer endpoint that 401s once the session lapses. Detect
+    // that here (as the write handlers already do) and re-open sign-in — otherwise the
+    // Retry button just re-fires and 401s forever while the header still shows signed-in.
+    if (handleAuthExpired(err)) return;
     if (isFirstPage) walletError.value = true;
   } finally {
     loadingWallet.value = false;
@@ -2230,7 +2239,11 @@ const fetchOrders = async (page = 1) => {
     }
     ordersHasMore.value = Boolean(res.data.has_more);
     ordersCurrentPage.value = page;
-  } catch {
+  } catch (err) {
+    // IsCustomer endpoint — a 401 means the session lapsed; re-open sign-in rather than
+    // showing a fetch error whose Retry would just 401 again (a non-401 falls through to
+    // the normal retryable error state).
+    if (handleAuthExpired(err)) return;
     if (isFirstPage) ordersError.value = true;
   } finally {
     loadingOrders.value = false;
@@ -2246,6 +2259,9 @@ const loadingMarketplaceOrders = ref(false);
 const loadingMoreMarketplaceOrders = ref(false);
 const marketplaceOrdersHasMore = ref(false);
 const marketplaceOrdersCurrentPage = ref(1);
+// Distinguishes a genuine "no orders" from a failed fetch, so a transient blip shows
+// a retryable error (like the tenant list) instead of a false "no orders yet" empty.
+const marketplaceOrdersError = ref(false);
 
 // ── Order self-cancel ──────────────────────────────────────────────────────────
 const cancellingOrderNumber = ref(null);
@@ -2337,6 +2353,7 @@ const fetchMarketplaceOrders = async (vertical = '', page = 1) => {
   const isFirstPage = page === 1;
   if (isFirstPage) {
     loadingMarketplaceOrders.value = true;
+    marketplaceOrdersError.value = false;
     marketplaceOrdersCurrentPage.value = 1;
   } else {
     loadingMoreMarketplaceOrders.value = true;
@@ -2355,8 +2372,16 @@ const fetchMarketplaceOrders = async (vertical = '', page = 1) => {
     }
     marketplaceOrdersHasMore.value = Boolean(res.data.has_more);
     marketplaceOrdersCurrentPage.value = page;
-  } catch {
-    if (isFirstPage) marketplaceOrders.value = [];
+  } catch (err) {
+    // A 401 (IsCustomer endpoint) means the session lapsed — re-open sign-in instead
+    // of showing a fetch error whose Retry would just 401 again.
+    if (handleAuthExpired(err)) return;
+    // Otherwise a transient failure: flag it so the tab shows a retryable error rather
+    // than a false "no orders yet" (an active customer being told they never ordered).
+    if (isFirstPage) {
+      marketplaceOrders.value = [];
+      marketplaceOrdersError.value = true;
+    }
   } finally {
     loadingMarketplaceOrders.value = false;
     loadingMoreMarketplaceOrders.value = false;
@@ -2365,6 +2390,10 @@ const fetchMarketplaceOrders = async (vertical = '', page = 1) => {
 
 const loadMoreMarketplaceOrders = () =>
   fetchMarketplaceOrders(selectedVertical.value, marketplaceOrdersCurrentPage.value + 1);
+
+// Retry handler for the cross-restaurant list — re-fetches the currently selected
+// vertical (page 1), mirroring the tenant list's @retry="fetchOrders".
+const retryMarketplaceOrders = () => fetchMarketplaceOrders(selectedVertical.value);
 
 const selectVertical = (v) => {
   selectedVertical.value = v;

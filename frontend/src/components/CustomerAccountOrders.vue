@@ -111,6 +111,24 @@
     </div>
   </div>
 
+  <!-- Cross-restaurant fetch failed → retryable error, never a false "no orders yet".
+       Reuses the tenant list's error/retry markup + its customerAccount.fetchError key. -->
+  <div
+    v-else-if="marketplaceOrdersError && !loadingMarketplaceOrders"
+    class="ui-panel ui-reveal p-3"
+  >
+    <div class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-xs text-red-300">{{ t('customerAccount.fetchError') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-2.5 py-1 text-[10px] font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="emit('retry-marketplace')"
+      >{{ t('common.retry') }}</button>
+    </div>
+  </div>
+
   <!-- Unfiltered-empty: no marketplace orders at all -->
   <div
     v-else-if="!selectedVertical && !loadingMarketplaceOrders && isAuthenticated"
@@ -379,6 +397,9 @@ const props = defineProps({
   loadingMarketplaceOrders: { type: Boolean, default: false },
   loadingMoreMarketplaceOrders: { type: Boolean, default: false },
   marketplaceOrdersHasMore: { type: Boolean, default: false },
+  /** True when the cross-restaurant fetch failed — shows a retryable error instead
+   *  of a false "no orders yet" empty. */
+  marketplaceOrdersError: { type: Boolean, default: false },
 
   /** True once the customer is signed in — gates the "no orders yet" empty state. */
   isAuthenticated: { type: Boolean, default: false },
@@ -416,6 +437,7 @@ const emit = defineEmits([
   'reorder-marketplace',
   'cancel-marketplace-order',
   'load-more-marketplace-orders',
+  'retry-marketplace',
   'retry',
   'switch-tab',
   'cancel-order',

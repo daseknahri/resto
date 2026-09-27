@@ -224,6 +224,18 @@ describe("CustomerAccountOrders", () => {
     expect(w.emitted("load-more-marketplace-orders")).toBeTruthy();
   });
 
+  it("shows a retryable error (not a false 'no orders yet') on marketplaceOrdersError and emits retry-marketplace", async () => {
+    // Regression: a transient cross-restaurant fetch failure previously blanked the list
+    // with no error ref, so the empty state told an active customer they had never
+    // ordered. It now shows the same red error + Retry the tenant list uses.
+    const w = mountComp({ marketplaceOrdersError: true });
+    expect(w.text()).toContain("customerAccount.fetchError");
+    expect(w.text()).not.toContain("customerAccount.noOrdersYet");
+    const retryBtn = w.findAll("button").find((b) => b.text() === "common.retry");
+    await retryBtn.trigger("click");
+    expect(w.emitted("retry-marketplace")).toBeTruthy();
+  });
+
   it("emits select-vertical with the option id when a filter chip is clicked", async () => {
     const w = mountComp({
       verticalFilterOptions: [{ id: "", label: "All" }, { id: "food", label: "Food" }],
