@@ -10,7 +10,7 @@
  * /owner/loyalty/, applyConfig() spreading the response into a reactive form, two
  * preview computeds (previewEarn / previewRedeem doing Number()/toFixed math), and
  * a template with loading/error/loaded branches plus a conditional tier section
- * and a conditional stats card (stats.total_points_issued.toLocaleString()).
+ * and a conditional stats card (formatNumber(stats.total_points_issued)).
  * Mounting runs all of that for real, so a crash in setup() or the initial render
  * fails CI here instead of in production.
  *
@@ -20,7 +20,7 @@
  *     mount here — kept for consistency with the other owner-page smoke tests)
  *   - real pinia (the toast store runs for real; it is only touched inside save(),
  *     never at mount) + a mocked lib/api
- *   - useI18n mocked to exactly { t } (the page's real destructure — verified)
+ *   - useI18n mocked to { t, formatNumber } (the page's real destructure — verified)
  *
  * NOT mocked / left REAL because they are jsdom-safe and never crash at mount:
  *   - lib/staleCache readCache/isFresh/writeCache (try/catch localStorage — an empty
@@ -42,6 +42,8 @@ vi.mock("../../composables/useI18n", () => ({
     // t returns the key verbatim (params, when present, are appended so the raw
     // key path is still asserted-on — the preview computeds pass params).
     t: (k, p) => (p ? `${k}(${JSON.stringify(p)})` : k),
+    // formatNumber: the stats panel renders total_points_issued in the app locale.
+    formatNumber: (v) => String(v),
   }),
 }));
 
@@ -135,7 +137,7 @@ describe("OwnerLoyalty — mount smoke", () => {
   // Drives applyConfig() spreading a full payload into the form, the conditional
   // tier section (tier_enabled: true → the silver/gold inputs + labels render), and
   // the stats card (enrolled_customers > 0 → the count + total_points_issued
-  // .toLocaleString() render) — the own-template paths that only run with a loaded,
+  // formatNumber() render) — the own-template paths that only run with a loaded,
   // tiers-on, stats-present config.
   it("mounts with a loaded loyalty config (tiers on + stats) without a crash", async () => {
     _routes = {

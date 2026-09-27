@@ -86,7 +86,7 @@
             <p class="ui-stat-label mt-1.5 text-[10px]">{{ t('ownerLoyalty.statsEnrolled') }}</p>
           </div>
           <div class="bg-slate-950/70 px-4 py-3 text-center">
-            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ stats.total_points_issued.toLocaleString() }}</p>
+            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ formatNumber(stats.total_points_issued) }}</p>
             <p class="ui-stat-label mt-1.5 text-[10px]">{{ t('ownerLoyalty.statsTotalPoints') }}</p>
           </div>
         </div>
@@ -399,7 +399,7 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
-const { t } = useI18n();
+const { t, formatNumber } = useI18n();
 const toast = useToastStore();
 
 const LOYALTY_CACHE_KEY = 'owner.loyalty';
