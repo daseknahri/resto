@@ -18,6 +18,24 @@ from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, R
 from .sla import reservation_sla_snapshot
 
 
+def validate_reservation_booked_for(value):
+    """Reservation time sanity (only runs when a booking time is supplied — plain
+    acquisition leads have no booked_for). Stops past-dated and absurd-horizon bookings
+    that would pollute the reservation list + reminder queue. Shared by the create path
+    (LeadSerializer) and the owner drag-to-reschedule path (OwnerReservationRescheduleSerializer)
+    so there is one rule, not two that can drift."""
+    if value is None:
+        return value
+    from datetime import timedelta as _td
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    if value < now - _td(minutes=2):  # small grace for client/clock skew
+        raise serializers.ValidationError("Please choose a time in the future.")
+    if value > now + _td(days=180):
+        raise serializers.ValidationError("Reservations can be made up to 180 days ahead.")
+    return value
+
+
 class ReservationSlaSerializerMixin:
     def _reservation_sla(self, obj):
         now = self.context.get("_reservation_sla_now")
@@ -113,19 +131,7 @@ class LeadSerializer(ReservationSlaSerializerMixin, ReservationReminderStatsSeri
         read_only_fields = ("status", "archived_at", "onboarded_at", "created_at")
 
     def validate_booked_for(self, value):
-        """Reservation time sanity (only runs when a booking time is supplied — plain
-        acquisition leads have no booked_for). Stops past-dated and absurd-horizon bookings
-        that would pollute the reservation list + reminder queue."""
-        if value is None:
-            return value
-        from datetime import timedelta as _td
-        from django.utils import timezone as _tz
-        now = _tz.now()
-        if value < now - _td(minutes=2):  # small grace for client/clock skew
-            raise serializers.ValidationError("Please choose a time in the future.")
-        if value > now + _td(days=180):
-            raise serializers.ValidationError("Reservations can be made up to 180 days ahead.")
-        return value
+        return validate_reservation_booked_for(value)
 
     def validate(self, attrs):
         if attrs.get("hp"):
@@ -203,7 +209,12 @@ class OwnerReservationUpdateSerializer(serializers.Serializer):
 
 
 class OwnerReservationRescheduleSerializer(serializers.Serializer):
-    booked_for = serializers.DateTimeField(required=True, allow_null=True)
+    # A reschedule always targets a concrete time — allow_null=False rejects a stray
+    # null that would silently un-schedule the reservation (the frontend never sends one).
+    booked_for = serializers.DateTimeField(required=True, allow_null=False)
+
+    def validate_booked_for(self, value):
+        return validate_reservation_booked_for(value)
 
 
 class OwnerReservationBulkUpdateSerializer(serializers.Serializer):

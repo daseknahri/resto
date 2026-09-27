@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import ANY, Mock, patch
 
 from django.test import SimpleTestCase
@@ -6,6 +6,8 @@ from django.http import Http404
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from sales.models import ReservationTimelineEvent
+from sales.serializers import OwnerReservationRescheduleSerializer
 from sales.views import (
     OwnerReservationBulkReminderView,
     OwnerReservationBulkReminderResultView,
@@ -33,7 +35,7 @@ def _owner_user(tenant_id=10):
     return user
 
 
-def _lead_row(*, lead_id=7, status_value="new", created_at=None):
+def _lead_row(*, lead_id=7, status_value="new", created_at=None, booked_for=None):
     created = created_at or datetime(2026, 3, 7, tzinfo=timezone.utc)
     return type(
         "LeadRow",
@@ -47,6 +49,7 @@ def _lead_row(*, lead_id=7, status_value="new", created_at=None):
             "source": "table_reservation",
             "status": status_value,
             "notes": "Party size: 4",
+            "booked_for": booked_for,
             "tenant": type("TenantStub", (), {"slug": "demo"})(),
             "created_at": created,
             "updated_at": created,
@@ -312,6 +315,118 @@ class OwnerReservationDetailViewTests(SimpleTestCase):
         response = self.view(request, lead_id=7)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         get_object_or_404_mock.assert_not_called()
+
+    # -- patch() / drag-to-reschedule (M11 hardening) --------------------------------
+
+    @patch("sales.views._log_reservation_timeline_event")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.get_object_or_404")
+    def test_reschedules_booked_for(self, get_object_or_404_mock, schema_context_mock, timeline_log_mock):
+        schema_context_mock.return_value = _passthrough_cm()
+        previous = datetime(2026, 3, 10, 18, 0, tzinfo=timezone.utc)
+        lead = _lead_row(status_value="won", booked_for=previous)
+        lead.save = Mock()
+        get_object_or_404_mock.return_value = lead
+
+        new_time = datetime.now(timezone.utc) + timedelta(days=2)
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": new_time.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lead.save.assert_called_once_with(update_fields=["booked_for", "updated_at"])
+        timeline_log_mock.assert_called_once()
+        _, log_kwargs = timeline_log_mock.call_args
+        self.assertEqual(log_kwargs["action"], ReservationTimelineEvent.Actions.NOTE)
+        self.assertIn(str(previous), log_kwargs["note"])
+        get_object_or_404_mock.assert_called_once_with(
+            ANY,
+            pk=7,
+            tenant_id=10,
+            source__in=("table_reservation", "reservation", "reserve_table"),
+            archived_at__isnull=True,
+        )
+
+    @patch("sales.views._log_reservation_timeline_event")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_skips_timeline_log_when_time_unchanged(
+        self, get_object_or_404_mock, schema_context_mock, timeline_log_mock
+    ):
+        same_time = datetime.now(timezone.utc) + timedelta(days=2)
+        schema_context_mock.return_value = _passthrough_cm()
+        lead = _lead_row(status_value="won", booked_for=same_time)
+        lead.save = Mock()
+        get_object_or_404_mock.return_value = lead
+
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": same_time.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        timeline_log_mock.assert_not_called()
+
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_rejects_null_booked_for(self, get_object_or_404_mock):
+        # A stray null must not silently un-schedule the reservation.
+        request = self.factory.patch("/api/owner/reservations/7/", {"booked_for": None}, format="json")
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        get_object_or_404_mock.assert_not_called()
+
+    @patch("tenancy.capabilities.tenant_capability_enabled", return_value=False)
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_blocked_when_reservations_capability_disabled(self, get_object_or_404_mock, _cap_mock):
+        # Mirrors put()'s gate: rescheduling must not bypass the reservations capability.
+        new_time = datetime.now(timezone.utc) + timedelta(days=2)
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": new_time.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "reservations_unavailable")
+        get_object_or_404_mock.assert_not_called()
+
+
+class OwnerReservationRescheduleSerializerTests(SimpleTestCase):
+    """OwnerReservationRescheduleSerializer applies the same booked_for rule as the
+    create path (validate_reservation_booked_for) and — unlike the create path — never
+    accepts null; a reschedule always targets a concrete time (M11 hardening)."""
+
+    def test_rejects_past_datetime(self):
+        serializer = OwnerReservationRescheduleSerializer(
+            data={"booked_for": datetime.now(timezone.utc) - timedelta(hours=3)}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_rejects_beyond_180_day_horizon(self):
+        serializer = OwnerReservationRescheduleSerializer(
+            data={"booked_for": datetime.now(timezone.utc) + timedelta(days=400)}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_rejects_null(self):
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": None})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_accepts_valid_near_future_datetime(self):
+        dt = datetime.now(timezone.utc) + timedelta(days=2)
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": dt})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["booked_for"], dt)
 
 
 class OwnerReservationBulkStatusViewTests(SimpleTestCase):
