@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
 
 
-def day_time_window_open(days, time_start, time_end, *, now_local) -> bool:
+def day_time_window_open(days, time_start, time_end, *, now_local: datetime) -> bool:
     """Return True when the day-of-week + HH:MM window is OPEN at ``now_local``.
 
     ``now_local`` MUST be a datetime in the tenant's LOCAL (wall-clock) time — every
