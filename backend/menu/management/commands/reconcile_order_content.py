@@ -121,18 +121,34 @@ class Command(BaseCommand):
                     ).prefetch_related("items")
 
                     for order in orders:
-                        ref = CustomerOrderRef.objects.filter(
-                            tenant_id=tid, order_number=order.order_number
-                        ).first()
-                        if ref is None:
-                            continue  # raced away since the cheap pass — not our concern
-
-                        stats["mirrors_checked"] += 1
-                        before = _snapshot(ref)
-
                         with transaction.atomic():
-                            # Reuse the exact signal logic to recompute the mirror.
-                            mirror_order_to_public_index(sender=Order, instance=order)
+                            # Lock the mirror row and re-read the order FRESH *inside* the txn so the
+                            # recompute runs on current committed data, not the scan-time snapshot.
+                            # mirror_order_to_public_index trusts instance.status/.total/.created_at, so
+                            # recomputing from the stale `order` fetched above could overwrite a mirror
+                            # that a concurrent legitimate order update already refreshed — silently
+                            # reverting it (reported as no-drift) or triggering a false-drift restore.
+                            # Locking the ref serializes us against that concurrent signal write.
+                            ref = (
+                                CustomerOrderRef.objects.select_for_update()
+                                .filter(tenant_id=tid, order_number=order.order_number)
+                                .first()
+                            )
+                            if ref is None:
+                                continue  # raced away since the cheap pass — not our concern
+                            fresh_order = (
+                                Order.objects.filter(pk=order.pk)
+                                .prefetch_related("items")
+                                .first()
+                            )
+                            if fresh_order is None:
+                                continue  # order vanished under us — skip
+
+                            stats["mirrors_checked"] += 1
+                            before = _snapshot(ref)
+
+                            # Reuse the exact signal logic to recompute the mirror, from FRESH data.
+                            mirror_order_to_public_index(sender=Order, instance=fresh_order)
 
                             after_ref = CustomerOrderRef.objects.filter(
                                 tenant_id=tid, order_number=order.order_number
