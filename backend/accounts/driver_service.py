@@ -77,7 +77,18 @@ def driver_earnings_summary(driver_id) -> dict:
     return {
         "earned": earned,
         "paid": paid,
-        "owed": _money(earned - paid),
+        # "owed" (the driver-facing "Owed to you" + admin driver figures) is the driver's
+        # still-CLAIMABLE cash = wallet_balance, NOT earned − paid. A delivered job credits
+        # the wallet (EARNING); the driver extracts it by cashing out at a restaurant
+        # (confirm_cashout debits the wallet) — but a self-service cash-out writes NO
+        # DriverPayout row, so `paid` (Σ DriverPayout) never sees it and earned − paid
+        # OVERSTATES: a driver who already cashed out the whole balance would still show the
+        # full amount owed. wallet_balance is exactly what cash-out draws down, so it's the
+        # claimable truth. Aligns this per-driver stat with the platform-analytics liability
+        # measure adopted in #290 / Option A (driver_owed = Σ driver wallet balances). NB:
+        # this is a DISPLAY figure only — record_driver_payout's own owed-cap (_owed, the
+        # ledger guard) is deliberately separate and unchanged.
+        "owed": _money(wallet_balance),
         "wallet_balance": _money(wallet_balance),
         "ride_earned": _money(ride_earned_raw),
         "rides_completed": rides_completed,

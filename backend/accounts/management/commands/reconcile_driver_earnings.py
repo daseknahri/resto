@@ -3,11 +3,11 @@
 Driver earnings are credited best-effort AFTER the DELIVERED transaction commits, via
 ``accounts.views._credit_driver_earnings`` — idempotent on
 ``idempotency_key = "earning:{job.id}"``. If that credit raises transiently the job stays
-DELIVERED, so ``driver_earnings_summary()`` still counts the payout into ``owed`` (it sums
-delivered-job payouts, independent of ``wallet_balance``), but the driver's actual
-``wallet_balance`` was never incremented — and cash-out (which debits ``wallet_balance``)
-then fails with InsufficientFunds while the dashboard shows money owed. Today only a
-``payments`` log line records that miss; nothing re-applies it.
+DELIVERED, so ``driver_earnings_summary()`` still counts the payout into ``earned`` (it sums
+delivered-job payouts), but the driver's actual ``wallet_balance`` was never incremented — so
+the wallet-based claimable figures (``owed``/``available``) under-show it and cash-out (which
+debits ``wallet_balance``) can't extract it until the credit lands. Today only a ``payments``
+log line records that miss; nothing re-applies it.
 
 This sweep finds DELIVERED jobs (driver set, payout > 0, delivered within ``--days``) whose
 ``earning:{job.id}`` WalletTransaction is missing and re-runs the (idempotent) credit. It

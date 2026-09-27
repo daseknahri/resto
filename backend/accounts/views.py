@@ -7821,7 +7821,11 @@ class AdminDriverListView(APIView):
                 "avg_rating": round(float(avg), 1) if avg is not None else None,
                 "earned": str(earned),
                 "paid": str(paid),
-                "owed": str(earned - paid),
+                # "owed" = the driver's CLAIMABLE wallet balance, not earned − paid. Self-service
+                # cash-out debits the wallet but writes no DriverPayout row, so earned − paid
+                # overstates a driver who has already cashed out. Mirrors driver_earnings_summary
+                # and the #290 platform-liability definition (Σ driver wallet balances).
+                "owed": str(d.wallet_balance),
                 "created_at": d.created_at.isoformat(),
             })
         return Response(result)
