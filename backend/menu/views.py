@@ -747,6 +747,10 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 if profile is not None:
                     now_local = _profile_now(profile)
                     ctx["happy_hours"] = get_active_happy_hours(now_local)
+                    # M7: reuse the same tenant-local instant so the dish availability-window
+                    # display (DishSerializer.get_is_schedule_available) evaluates in the
+                    # restaurant's wall-clock, not server UTC — no recompute per dish.
+                    ctx.setdefault("schedule_now_local", now_local)
                 else:
                     ctx["happy_hours"] = []
             except Exception:
@@ -842,6 +846,10 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 if profile is not None:
                     now_local = _profile_now(profile)
                     ctx["happy_hours"] = get_active_happy_hours(now_local)
+                    # M7: reuse the same tenant-local instant so the dish availability-window
+                    # display (DishSerializer.get_is_schedule_available) evaluates in the
+                    # restaurant's wall-clock, not server UTC — no recompute per dish.
+                    ctx.setdefault("schedule_now_local", now_local)
                 else:
                     ctx["happy_hours"] = []
             except Exception:
@@ -2819,7 +2827,10 @@ class PlaceOrderView(APIView):
             resolve_available_dishes, resolve_option_map, price_line_options,
             deplete_stock, deplete_ingredients,
         )
-        dishes_map = resolve_available_dishes(slugs)
+        # M7: pass the tenant-local now so a dish outside its availability_schedule window
+        # is dropped here (→ items_unavailable) — not just hidden in the menu — blocking a
+        # stale PWA menu / direct API POST of a time-limited dish. (profile is non-None here.)
+        dishes_map = resolve_available_dishes(slugs, now_local=_profile_now(profile) if profile else None)
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
