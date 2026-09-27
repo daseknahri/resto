@@ -36,6 +36,7 @@ from menu.views import (
     StaffVoidOrderItemView,
     StaffCompOrderItemView,
     _award_referral_reward,
+    _staff_order_payload,
     refund_and_cancel_delivery_order,
 )
 from accounts.models import User
@@ -402,3 +403,89 @@ class RefundReadsLockedWalletTests(SimpleTestCase):
         self.assertEqual(seen["wallet_amount_paid"], Decimal("30.00"))
         self.assertEqual(order.wallet_amount_paid, Decimal("30.00"))
         refund_m.assert_called_once_with(order, tenant_id=1)
+
+
+# ── M4: _staff_order_payload `outstanding` folds in wallet/legacy settles ──────
+
+class StaffOrderPayloadOutstandingTests(SimpleTestCase):
+    """`outstanding` (the staff/owner "remaining to collect" the waiter settle sheet
+    reads) must reflect ALL real payments, not just the OrderPayment ledger. The legacy
+    one-shot settle endpoints write NO ledger row — they flip payment_status to PAID and
+    bump wallet_amount_paid — so a ledger-only `total - ledger_paid` showed the full
+    amount still owed on an already-settled order (M4). Mirrors _order_collected():
+    reconcile the ledger with wallet_amount_paid, never double-counting a WALLET row."""
+
+    def test_wallet_settled_paid_order_owes_nothing(self):
+        """(a) Wallet-paid, payment_status=PAID, NO ledger row (legacy WalletSettleView).
+        Pre-fix this showed the full 100 still owed; a PAID order owes 0."""
+        order = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=Decimal("100.00"),
+            payment_rows=[],
+        )
+        payload = _staff_order_payload(order)
+        self.assertEqual(payload["outstanding"], "0.00")
+        # A legacy cash settle records neither a ledger row NOR wallet_amount_paid;
+        # the PAID short-circuit still zeroes it out.
+        cash_settled = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=Decimal("0"),
+            payment_rows=[],
+        )
+        self.assertEqual(_staff_order_payload(cash_settled)["outstanding"], "0.00")
+
+    def test_unpaid_wallet_partial_without_ledger_credits_wallet(self):
+        """(b) UNPAID, 40 wallet-paid of 100, NO ledger row → 60 remaining, not 100."""
+        order = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("40.00"),
+            payment_rows=[],
+        )
+        payload = _staff_order_payload(order)
+        self.assertEqual(payload["outstanding"], "60.00")
+        # `amount_paid` stays ledger-only (unchanged by this fix) — nothing in the ledger.
+        self.assertEqual(payload["amount_paid"], "0.00")
+
+    def test_wallet_payment_in_both_ledger_and_counter_not_double_credited(self):
+        """(c) The split-bill path writes BOTH a WALLET OrderPayment row AND
+        wallet_amount_paid. UNPAID, 40 wallet of 100 present in BOTH signals must credit
+        40 once (→ 60 remaining), never 80 (→ a wrong 20)."""
+        order = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("40.00"),
+            payment_rows=[_wallet_payment("40.00")],
+        )
+        payload = _staff_order_payload(order)
+        self.assertEqual(payload["outstanding"], "60.00")
+        # The ledger figure itself is the 40 WALLET row.
+        self.assertEqual(payload["amount_paid"], "40.00")
+
+    def test_unpaid_cash_partial_ledger_preserved(self):
+        """The R4 split-bill PARTIAL display must be untouched: UNPAID, one 30 CASH
+        ledger row, no wallet → 70 remaining, exactly as before the fix."""
+        order = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("0"),
+            payment_rows=[_wallet_payment("30.00", method="cash")],
+        )
+        payload = _staff_order_payload(order)
+        self.assertEqual(payload["outstanding"], "70.00")
+        self.assertEqual(payload["amount_paid"], "30.00")
+
+    def test_unpaid_mixed_cash_and_wallet_reconciled(self):
+        """UNPAID, 30 CASH ledger + 40 wallet present in BOTH signals of 100 → 30
+        remaining. Ledger=70, wallet-in-ledger=40, so no extra wallet credit is added."""
+        order = _order(
+            total=Decimal("100.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("40.00"),
+            payment_rows=[_wallet_payment("30.00", method="cash"), _wallet_payment("40.00")],
+        )
+        payload = _staff_order_payload(order)
+        self.assertEqual(payload["outstanding"], "30.00")
+        self.assertEqual(payload["amount_paid"], "70.00")

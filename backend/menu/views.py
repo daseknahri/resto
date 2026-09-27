@@ -4730,15 +4730,18 @@ def _staff_order_payload(order):
     updates trivial.
 
     Split-bill fields (R4):
-      amount_paid   — sum of OrderPayment.amount rows (str decimal).
-      outstanding   — max(0, total - amount_paid) (str decimal).
+      amount_paid   — sum of OrderPayment.amount rows (str decimal, ledger only).
+      outstanding   — what is still owed, reconciling the ledger AND
+                      wallet_amount_paid so legacy/one-shot settles read right (M4).
       payments      — list of OrderPayment rows in chronological order.
 
     Note: legacy one-shot settle endpoints do not write OrderPayment rows, so
     for those orders `payments` will be empty while `wallet_amount_paid` on the
     Order row reflects what was charged.  The `amount_paid` figure here is
     computed from the payments ledger only; callers that need the legacy total
-    can still read `wallet_amount_paid` directly from the order fields.
+    can still read `wallet_amount_paid` directly from the order fields.  The
+    `outstanding` figure, unlike `amount_paid`, folds in wallet_amount_paid (see
+    below) so it never over-states what is owed on a wallet/legacy-settled order.
     """
     _CENT = Decimal("0.01")
 
@@ -4747,7 +4750,24 @@ def _staff_order_payload(order):
     ledger_paid = sum(
         (Decimal(str(p.amount)) for p in payment_rows), Decimal("0")
     ).quantize(_CENT)
-    outstanding = max(Decimal("0"), Decimal(str(order.total or "0")) - ledger_paid).quantize(_CENT)
+    # Outstanding must reflect ALL real payments, not just the ledger (M4). The legacy
+    # one-shot settle endpoints (StaffSettleView / WalletSettleView) write NO ledger
+    # row — they flip payment_status to PAID and, for wallet, bump wallet_amount_paid —
+    # so a ledger-only `total - ledger_paid` showed the FULL amount still owed on an
+    # already-paid order. Mirror _order_collected(): a PAID order owes nothing;
+    # otherwise credit the ledger PLUS any wallet_amount_paid not already counted as a
+    # WALLET ledger row (split-bill wallet payments write BOTH signals, so adding both
+    # would double-credit). Reuses the already-loaded payment_rows to avoid a new query.
+    if order.payment_status == Order.PaymentStatus.PAID:
+        outstanding = Decimal("0.00")
+    else:
+        wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+        wallet_in_ledger = sum(
+            (Decimal(str(p.amount)) for p in payment_rows if p.method == OrderPayment.Method.WALLET),
+            Decimal("0"),
+        )
+        credited = ledger_paid + max(Decimal("0"), wallet_paid - wallet_in_ledger)
+        outstanding = max(Decimal("0"), Decimal(str(order.total or "0")) - credited).quantize(_CENT)
     _items = list(order.items.all())
 
     return {
