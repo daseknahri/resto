@@ -137,6 +137,25 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
 
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.Order.objects")
+    def test_settle_does_not_complete_a_ready_delivery_order(self, objects_mock, _gate):
+        """A READY DELIVERY order must NOT jump to COMPLETED on settle — it has to go
+        through OUT_FOR_DELIVERY (which credits the driver + closes the DeliveryJob).
+        Settling still marks it PAID; only the auto-complete is gated by fulfillment.
+        (Pickup/dine-in READY orders still complete — see test_settle_and_complete.)"""
+        order = self._order(status=Order.Status.READY,
+                            fulfillment_type=Order.FulfillmentType.DELIVERY)
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value = order
+        req = self.factory.post("/api/owner/orders/5/mark-paid/", {"complete": True}, format="json")
+        req.user = MagicMock(id=9)
+        resp = self.view(req, order_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["payment_status"], Order.PaymentStatus.PAID)  # still settled
+        self.assertFalse(resp.data["completed"])                                 # but NOT completed
+        self.assertEqual(resp.data["status"], Order.Status.READY)
+        self.assertNotEqual(order.status, Order.Status.COMPLETED)
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.Order.objects")
     def test_complete_flag_ignored_when_not_ready(self, objects_mock, _gate):
         order = self._order(status=Order.Status.PREPARING)
         objects_mock.select_for_update.return_value.filter.return_value.first.return_value =order
