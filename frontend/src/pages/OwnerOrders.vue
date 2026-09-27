@@ -392,7 +392,7 @@
         :aria-label="t('ownerOrders.periodSummaryLabel')"
       >
         <span>
-          <span class="font-semibold text-slate-200 tabular-nums">{{ order.historyOrders.length }}</span>
+          <span class="font-semibold text-slate-200 tabular-nums">{{ historyPeriodCount }}</span>
           {{ t('ownerOrders.periodOrderCount') }}
         </span>
         <span class="h-3 w-px bg-slate-700 shrink-0" aria-hidden="true" />
@@ -1538,9 +1538,20 @@ const historyPeriodRevenue = computed(() => {
   const orders = order.historyOrders;
   if (!orders.length) return '';
   const currency = orders[0]?.currency ?? 'USD';
-  const total = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  // Exclude CANCELLED orders — their food revenue was refunded / never collected, so
+  // summing their full `total` inflated the reported period revenue (the history list
+  // returns COMPLETED *and* CANCELLED, and cancelling never zeroes `total`).
+  const total = orders.reduce(
+    (sum, o) => (o.status === 'cancelled' ? sum : sum + (parseFloat(o.total) || 0)),
+    0,
+  );
   return formatCurrency(total, currency);
 });
+
+// Match the revenue: count non-cancelled orders so "N orders" and "Total" agree.
+const historyPeriodCount = computed(
+  () => order.historyOrders.filter((o) => o.status !== 'cancelled').length,
+);
 
 const switchToHistory = () => {
   activeTab.value = "history";
