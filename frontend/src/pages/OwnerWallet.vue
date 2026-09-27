@@ -166,7 +166,7 @@
             :key="c.id"
           >
             <button
-              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3.5 text-left transition-colors hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8"
+              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3.5 text-start transition-colors hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8"
               :class="selected?.id === c.id ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10' : ''"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
               :aria-pressed="selected?.id === c.id"

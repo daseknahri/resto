@@ -32,7 +32,7 @@
             type="button"
             role="menuitemradio"
             :aria-checked="currentLocaleValue === option.code ? 'true' : 'false'"
-            class="ui-press flex w-full items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[10px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-press flex w-full items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-start text-[10px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
             :class="currentLocaleValue === option.code ? 'bg-slate-800/70 font-semibold text-[var(--color-secondary)]' : ''"
             @click="selectLocale(option.code)"
           >

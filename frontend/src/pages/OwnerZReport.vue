@@ -200,7 +200,7 @@
       <div class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 print:border-slate-300 print:bg-white">
         <button
           type="button"
-          class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
+          class="flex w-full items-center justify-between px-4 py-3 text-start text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
           :aria-expanded="voidsExpanded"
           @click="voidsExpanded = !voidsExpanded"
         >
@@ -213,7 +213,7 @@
             <div class="ui-table-wrap mt-2">
               <table class="w-full min-w-[560px] text-xs">
                 <thead>
-                  <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+                  <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
                     <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
                     <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
                     <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
@@ -250,7 +250,7 @@
       <div v-if="report.comps" class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 print:border-slate-300 print:bg-white">
         <button
           type="button"
-          class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
+          class="flex w-full items-center justify-between px-4 py-3 text-start text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
           :aria-expanded="compsExpanded"
           @click="compsExpanded = !compsExpanded"
         >
@@ -263,7 +263,7 @@
             <div class="ui-table-wrap mt-2">
               <table class="w-full min-w-[560px] text-xs">
                 <thead>
-                  <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+                  <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
                     <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
                     <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
                     <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
@@ -302,7 +302,7 @@
         <div class="ui-table-wrap">
           <table class="w-full min-w-[420px] text-xs">
             <thead>
-              <tr class="text-slate-500 text-left border-b border-slate-800 print:border-slate-300">
+              <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
                 <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
                 <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.staffOrders") }}</th>
                 <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.staffCash") }}</th>
@@ -347,7 +347,7 @@
       <div v-if="report?.labor" class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 print:border-slate-300 print:bg-white">
         <button
           type="button"
-          class="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
+          class="flex w-full items-center justify-between px-4 py-3 text-start text-sm font-semibold text-slate-200 print:pointer-events-none print:text-black"
           :aria-expanded="laborExpanded"
           @click="laborExpanded = !laborExpanded"
         >
@@ -377,7 +377,7 @@
             <div v-else class="ui-table-wrap mt-1">
               <table class="w-full min-w-[380px] text-xs">
                 <thead>
-                  <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
+                  <tr class="border-b border-slate-800 text-start text-slate-500 print:border-slate-300">
                     <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
                     <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
                     <th class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>

@@ -133,7 +133,7 @@
         <h2 class="mb-2 text-sm font-semibold text-slate-200 print:text-black">{{ t("cashDrawer.transactions") }}</h2>
         <table class="w-full text-xs">
           <thead>
-            <tr class="border-b border-slate-800 text-left text-slate-500 print:border-slate-300">
+            <tr class="border-b border-slate-800 text-start text-slate-500 print:border-slate-300">
               <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.amount") }}</th>
               <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.reason") }}</th>
               <th class="py-1.5 font-medium text-end">{{ t("cashDrawer.time") }}</th>

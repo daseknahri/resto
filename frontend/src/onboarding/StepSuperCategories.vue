@@ -104,7 +104,7 @@
         </div>
 
         <!-- Name + slug + meta — the whole block drills into this group's categories (pencil edits) -->
-        <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" :aria-label="t('stepSuperCategories.openCategories')" @click="drillIn(row)">
+        <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-start" :aria-label="t('stepSuperCategories.openCategories')" @click="drillIn(row)">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <span

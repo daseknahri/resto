@@ -168,7 +168,7 @@
         <button
           v-if="newOrderBannerCount > 0"
           type="button"
-          class="ui-press flex w-full items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm font-semibold text-amber-300"
+          class="ui-press flex w-full items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-start text-sm font-semibold text-amber-300"
           @click="activeTab = 'active'; activeStatus = 'pending'; newOrderBannerCount = 0"
         >
           <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shrink-0" aria-hidden="true" />

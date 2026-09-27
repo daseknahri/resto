@@ -305,7 +305,7 @@
       </div>
       <button
         v-else
-        class="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-800 bg-transparent px-4 py-2.5 text-left transition hover:border-slate-700 ui-press"
+        class="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-800 bg-transparent px-4 py-2.5 text-start transition hover:border-slate-700 ui-press"
         @click="startGoalEdit"
       >
         <span class="text-xs text-slate-600">{{ t('ownerHome.goalNone') }}</span>

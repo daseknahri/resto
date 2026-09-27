@@ -1305,7 +1305,7 @@
             <div v-if="bulkPricePreview.length" class="max-h-48 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800/50">
               <table class="w-full text-sm">
                 <thead class="sticky top-0 bg-slate-900/90">
-                  <tr class="text-left text-xs text-slate-400">
+                  <tr class="text-start text-xs text-slate-400">
                     <th class="px-3 py-2">{{ t("stepDishes.bulkPriceColItem") }}</th>
                     <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColBefore") }}</th>
                     <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColAfter") }}</th>
