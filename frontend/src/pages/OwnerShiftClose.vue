@@ -103,6 +103,24 @@
           </div>
         </template>
 
+        <!-- Drawer fetch failed — surfaced distinctly so a failed fetch is never
+             mistaken for "no drawer session" (which would hide the close-shift prompt). -->
+        <div
+          v-else-if="drawerError"
+          role="alert"
+          class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+        >
+          <span>{{ t("zReport.drawerLoadFailed") }}</span>
+          <button
+            type="button"
+            class="ui-btn-outline ui-press inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+            @click="loadData"
+          >
+            <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
+            {{ t("common.retry") }}
+          </button>
+        </div>
+
         <!-- No drawer session -->
         <p v-else class="text-sm text-slate-500">{{ t("shiftClose.noDrawer") }}</p>
       </section>
@@ -220,6 +238,10 @@ const tenant = useTenantStore();
 const report = ref(null);
 const drawer = ref(null);
 const drawerTransactions = ref([]);
+// True only when the drawer-state fetch itself threw (distinct from a 200
+// {session: null} genuine-empty), so a transient failure while a drawer IS open
+// is never mistaken for "no drawer session" — which would block closing the shift.
+const drawerError = ref(false);
 const loading = ref(false);
 const error = ref("");
 const closing = ref(false);
@@ -268,10 +290,15 @@ const overShortClass = computed(() => {
 const loadData = async () => {
   loading.value = true;
   error.value = "";
+  drawerError.value = false;
   try {
-    // Load drawer current state
+    // Track a drawer-fetch throw distinctly from a 200 {session: null}: the
+    // /drawer/current/ endpoint returns 200 with a null session when genuinely
+    // empty, but THROWS on a transient failure. Conflating the two would render
+    // "no drawer session" during an outage and hide the close-shift prompt.
+    let drawerFailed = false;
     const [drawerResp, reportResp] = await Promise.all([
-      api.get("/owner/drawer/current/").catch(() => null),
+      api.get("/owner/drawer/current/").catch(() => { drawerFailed = true; return null; }),
       api.get("/owner/z-report/").catch(() => null),
     ]);
 
@@ -283,12 +310,20 @@ const loadData = async () => {
     if (drawerResp?.data?.session) {
       drawer.value = drawerResp.data.session;
       drawerTransactions.value = drawerResp.data.transactions ?? [];
+    } else if (drawerFailed) {
+      // The fetch threw (not a genuine 200 empty) — surface it distinctly so a
+      // live open shift is never rendered as "no drawer session".
+      drawerError.value = true;
     } else {
-      // No open session — try to get most recent closed session from history
+      // Genuine empty (no OPEN session) — show the most recent CLOSED session.
       const histResp = await api.get("/owner/drawer/history/").catch(() => null);
       if (histResp?.data?.sessions?.length) {
         drawer.value = histResp.data.sessions[0];
         drawerTransactions.value = histResp.data.sessions[0].transactions ?? [];
+      } else if (!histResp) {
+        // History threw too — we still can't confirm the drawer state, so don't
+        // paint "no drawer": surface the same distinct error + Retry.
+        drawerError.value = true;
       }
     }
 

@@ -94,6 +94,12 @@ export const useOrderStore = defineStore("order", {
       if (this._ordersInFlight) return this.orders;
       this._ordersInFlight = true;
       if (!silent) this.ordersLoading = true;
+      // Was an error already surfaced before this fetch cleared it? Background
+      // polls call fetchOrders({ silent: true }) every 15–60s; a transient blip
+      // must NOT paint the error banner over a still-correct live list. Capture
+      // this so a silent poll only re-surfaces the error if one was already
+      // showing (mirrors stores/waiter.js).
+      const hadPriorError = this.ordersError !== null;
       this.ordersError = null;
       this.ordersStatusFilter = statusFilter;
       try {
@@ -108,7 +114,13 @@ export const useOrderStore = defineStore("order", {
         this.ordersHasMore = Boolean(res.data?.has_more);
         return this.orders;
       } catch (err) {
-        this.ordersError = err?.response?.data?.detail || "Failed to load orders.";
+        // Surface on any non-silent load, and on a silent poll only when an error
+        // was already showing or there is nothing good to display (orders empty).
+        // A silent blip while orders are populated stays quiet so the live board
+        // never flickers to a false error banner.
+        if (!silent || hadPriorError || this.orders.length === 0) {
+          this.ordersError = err?.response?.data?.detail || "Failed to load orders.";
+        }
       } finally {
         this._ordersInFlight = false;
         if (!silent) this.ordersLoading = false;

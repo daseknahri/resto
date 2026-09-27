@@ -41,6 +41,25 @@
         <div v-for="i in 5" :key="i" class="ui-skeleton h-28" />
       </div>
 
+      <!-- KPI cards: fetch failed — show an error + Retry instead of a false
+           "0 / MAD 0 / —" grid. Keyed off the child's explicit error emit (not a
+           null summary, which is also a legitimate no-revenue-permission state). -->
+      <div
+        v-else-if="insightsError"
+        role="alert"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3"
+      >
+        <p class="text-sm text-red-300">{{ t("common.loadFailed") }}</p>
+        <button
+          type="button"
+          class="ui-btn-outline ui-press inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
+          @click="retryInsights"
+        >
+          <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ t("common.retry") }}
+        </button>
+      </div>
+
       <!-- KPI cards: today stats + 7-day sparklines -->
       <div v-else class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
         <div
@@ -151,6 +170,7 @@
 
     <!-- Insights (owns the /owner/dashboard/ fetch) -->
     <OwnerDashboardInsights
+      ref="insightsRef"
       :period="insightsPeriod"
       :category-name-by-slug="categoryNameBySlug"
       :dish-name-by-slug="dishNameBySlug"
@@ -158,6 +178,7 @@
       @period-change="insightsPeriod = $event"
       @loading-change="insightsLoading = $event"
       @updating-change="insightsUpdating = $event"
+      @error="onInsightsError"
     />
 
     <!-- Revenue (permission-gated) -->
@@ -212,8 +233,31 @@ const todayNewReservations = ref(0);
 const categoryNameBySlug = ref({});
 const dishNameBySlug = ref({});
 
+// Insights fetch outcome. The child (<OwnerDashboardInsights>) owns the
+// /owner/dashboard/ fetch and only emits `data` on success (or from a fresh
+// cache). On a hard failure — primary AND fallback both down — it emits `error`,
+// which we track so the headline KPI grid can show an alert + Retry instead of a
+// false "0 / MAD 0 / —". We key off this explicit signal rather than
+// `revenueSummary === null` because the backend legitimately returns
+// revenue_summary: null for non-revenue viewers (e.g. platform-admin support) —
+// a null there is a permission state, not a load failure.
+const insightsError = ref(false);
+const insightsRef = ref(null);
+
+const onInsightsError = () => {
+  insightsLoading.value = false;
+  insightsError.value = true;
+};
+
+const retryInsights = () => {
+  insightsError.value = false;
+  insightsLoading.value = true;
+  insightsRef.value?.hydrate?.(true);
+};
+
 const onInsightsData = (data) => {
   insightsLoading.value = false;
+  insightsError.value = false;
   if (data?.today_reservations !== undefined) {
     todayReservations.value = data.today_reservations;
     todayNewReservations.value = data.today_new_reservations ?? 0;
