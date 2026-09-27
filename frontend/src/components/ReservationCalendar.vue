@@ -157,6 +157,13 @@ const mondayOfWeek = computed(() => {
   return mon;
 });
 
+// LOCAL calendar day (YYYY-MM-DD) from a Date, WITHOUT the UTC conversion that
+// `toISOString().slice(0,10)` does. For a non-UTC tenant, a local-midnight date
+// stringified via toISOString() lands on the previous/next UTC day, so the column
+// keys and the by-day grouping disagreed and daytime bookings rendered a day off.
+const localISODate = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const weekDays = computed(() => {
   const days = [];
   const fmt = new Intl.DateTimeFormat(currentLocale.value, { weekday: "short" });
@@ -164,7 +171,7 @@ const weekDays = computed(() => {
     const d = new Date(mondayOfWeek.value);
     d.setDate(d.getDate() + i);
     days.push({
-      iso: d.toISOString().slice(0, 10),
+      iso: localISODate(d),
       dayName: fmt.format(d),
       dayNum: d.getDate(),
       date: d,
@@ -197,11 +204,16 @@ const fetchWeek = async () => {
   loading.value = true;
   loadError.value = false;
   try {
-    const from = weekDays.value[0].iso;
-    const to = weekDays.value[6].iso;
-    // Fetch reservations with booked_for in this week range
+    // Query by BOOKED_FOR (the reservation date), not created_at. The old `from`/`to`
+    // params filter created_at server-side, so an advance booking (created today, booked
+    // weeks out) never appeared on the week it's FOR. Widen the range by ±1 day so a
+    // booking whose UTC date sits on an adjacent day (tenant tz offset) is still fetched;
+    // the by-day grouping below buckets each one into its correct LOCAL column.
+    const pad = (d) => localISODate(d);
+    const lo = new Date(weekDays.value[0].date); lo.setDate(lo.getDate() - 1);
+    const hi = new Date(weekDays.value[6].date); hi.setDate(hi.getDate() + 1);
     const res = await api.get("/owner/reservations/", {
-      params: { from, to, page_size: 200 },
+      params: { booked_for_from: pad(lo), booked_for_to: pad(hi), page_size: 200 },
     });
     reservations.value = Array.isArray(res.data?.results) ? res.data.results : [];
   } catch {
@@ -220,7 +232,9 @@ const reservationsByDay = computed(() => {
   const groups = {};
   for (const r of reservations.value) {
     if (!r.booked_for) continue;
-    const dayIso = r.booked_for.slice(0, 10);
+    // Bucket by the booking's LOCAL calendar day (matches the local column keys above).
+    // Slicing the raw UTC string put a local-evening booking under the wrong day.
+    const dayIso = localISODate(new Date(r.booked_for));
     if (!groups[dayIso]) groups[dayIso] = [];
     groups[dayIso].push(r);
   }
@@ -255,11 +269,17 @@ const onDragStart = (res) => {
 const rescheduleTo = async (res, targetDayIso) => {
   if (!res) return;
 
-  // Compute new booked_for: keep existing time if present, use noon otherwise
+  // Move ONLY the calendar day, preserving the booking's exact time-of-day. The old code
+  // sliced the UTC "HH:MM" out of the ISO string and re-parsed it as LOCAL time, so every
+  // drag shifted the booking by the browser's tz offset (e.g. −1h per drag on a UTC+1
+  // tenant, compounding) — silent data corruption. Keep the local wall-clock time and just
+  // set the target Y/M/D.
   let newBookedFor;
   if (res.booked_for) {
-    const existingTime = res.booked_for.slice(11, 16); // HH:MM
-    newBookedFor = new Date(`${targetDayIso}T${existingTime}`).toISOString();
+    const [ty, tm, td] = targetDayIso.split("-").map(Number);
+    const moved = new Date(res.booked_for);  // local tz
+    moved.setFullYear(ty, tm - 1, td);        // change the date only; h/m/s untouched
+    newBookedFor = moved.toISOString();
   } else {
     newBookedFor = new Date(`${targetDayIso}T12:00`).toISOString();
   }
