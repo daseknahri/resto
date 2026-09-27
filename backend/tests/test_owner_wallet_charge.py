@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core import signing
+from django.db import IntegrityError
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -92,6 +93,7 @@ class OwnerWalletChargeViewTests(SimpleTestCase):
         a real ledger figure to check the settle against."""
         token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
         tx = MagicMock()
+        tx.id = 555
         tx.balance_after = "40.00"
         charged_order = MagicMock(id=77)
         with patch("accounts.wallet_service.debit_wallet", return_value=tx), \
@@ -107,6 +109,36 @@ class OwnerWalletChargeViewTests(SimpleTestCase):
         self.assertEqual(kwargs["order"], charged_order)
         self.assertEqual(kwargs["amount"], Decimal("10.00"))
         self.assertEqual(kwargs["method"], OrderPayment.Method.WALLET)
+        # The ledger row is anchored on the stable wallet-tx id so a debit replay can't
+        # write a duplicate (see the replay test below).
+        self.assertEqual(kwargs["idempotency_key"], "ownercharge:555")
+        # Fresh charge → the bill counter is incremented.
+        mock_order_objects.filter.return_value.update.assert_called_once()
+
+    def test_order_tied_charge_replay_does_not_double_apply(self):
+        """Idempotency: a retry (dropped response / double-tap) re-runs the view with the same
+        pay-code; debit_wallet returns the SAME tx (no second debit), so the OrderPayment insert
+        hits the unique idempotency_key and raises IntegrityError. The bill counter increment
+        MUST be skipped on that replay — otherwise wallet_amount_paid double-counts and
+        _order_collected() over-reports, silently under-collecting real revenue."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.id = 555
+        tx.balance_after = "40.00"
+        charged_order = MagicMock(id=77)
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx), \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views.OrderPayment.objects") as mock_op_objects, \
+             patch("menu.views._settle_order_if_wallet_covers") as mock_settle:
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = charged_order
+            mock_op_objects.create.side_effect = IntegrityError("duplicate key")
+            resp = self._post({"token": token, "amount": "10.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_op_objects.create.assert_called_once()
+        # Replay: the wallet_amount_paid increment is NOT applied a second time.
+        mock_order_objects.filter.return_value.update.assert_not_called()
+        # The settle check still runs (it is idempotent).
+        mock_settle.assert_called_once()
 
     def test_no_order_number_does_not_write_orderpayment(self):
         """The general (non-settle) wallet charge use — no order_number supplied —
