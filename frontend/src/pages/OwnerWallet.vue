@@ -312,15 +312,15 @@
               class="flex items-center justify-between gap-3 rounded-xl border border-slate-700/30 bg-slate-800/30 px-3 py-2.5 text-xs"
             >
               <div class="min-w-0">
-                <p class="truncate font-medium" :class="tx.type === 'payment' ? 'text-red-300' : 'text-slate-200'" :title="tx.note || tx.type || undefined">
+                <p class="truncate font-medium" :class="isDebitTx(tx) ? 'text-red-300' : 'text-slate-200'" :title="tx.note || tx.type || undefined">
                   {{ tx.note || tx.type }}
                 </p>
                 <p class="mt-0.5 text-[10px] text-slate-500">{{ fmtDate(tx.created_at) }}</p>
               </div>
               <span
                 class="shrink-0 rounded-lg px-2 py-0.5 font-semibold tabular-nums"
-                :class="tx.type === 'payment' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'"
-              >{{ tx.type === 'payment' ? '−' : '+' }}{{ fmtBalance(tx.amount) }}</span>
+                :class="isDebitTx(tx) ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'"
+              >{{ isDebitTx(tx) ? '−' : '+' }}{{ fmtBalance(tx.amount) }}</span>
             </li>
           </ul>
         </div>
@@ -448,6 +448,14 @@ const currency = () => tenant.resolvedMeta?.plan?.currency || 'MAD';
 
 const fmtBalance = (bal) =>
   formatCurrencyString(currentLocale.value, bal, currency(), { maximumFractionDigits: 2 });
+
+// WalletTransaction.amount is a positive magnitude; the TYPE carries the direction.
+// Debits (money out): payment, cash-out, P2P transfer sent. Everything else (topup,
+// refund, bonus, earning, transfer_in) is a credit. Previously only `payment` was
+// signed as a debit, so a cashout / transfer_out rendered as a green "+credit" — money
+// out shown as money in.
+const DEBIT_TYPES = new Set(['payment', 'cashout', 'transfer_out']);
+const isDebitTx = (tx) => DEBIT_TYPES.has(tx?.type);
 
 const fmtDate = (iso) => {
   if (!iso) return '';
