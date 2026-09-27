@@ -12726,37 +12726,53 @@ class OwnerWalletChargeView(APIView):
         if order_number:
             try:
                 from django.db.models import F as _F
-                Order.objects.filter(order_number=order_number).update(
-                    wallet_amount_paid=_F("wallet_amount_paid") + amount
-                )
-                # S1 fix: tie this charge to the order as a real OrderPayment ledger
-                # row (not just the wallet_amount_paid counter) so
-                # OwnerOrderMarkPaidView's reconciliation guard has an authoritative
-                # "collected" figure to check the settle against — previously this
-                # charge was invisible to the ledger and mark-paid could flip an
-                # order to PAID/COMPLETED for an amount that never matched the total.
-                # Kept in its own try so a failure writing the ledger row can never
-                # skip the auto-settle check below — a correct full-amount wallet
-                # settle must still flip the order to PAID even if this row fails.
-                try:
-                    _charged_order = Order.objects.filter(order_number=order_number).only("id").first()
-                    if _charged_order is not None:
-                        _recorder_name = (
-                            getattr(request.user, "get_full_name", lambda: "")() or
-                            getattr(request.user, "username", "") or
-                            getattr(request.user, "email", "") or
-                            ""
-                        )[:80]
+                # S1 fix: tie this charge to the order as a real OrderPayment ledger row (not just
+                # the wallet_amount_paid counter) so OwnerOrderMarkPaidView's reconciliation guard
+                # has an authoritative "collected" figure to check the settle against.
+                #
+                # Idempotency: debit_wallet is idempotent on the client-supplied key and returns the
+                # SAME tx on a retry (dropped response / double-tap — POST is deliberately not
+                # auto-retried, so a retry is a human re-tap). The bookkeeping below is NOT
+                # idempotent, though: running it twice would double-count wallet_amount_paid AND
+                # write a duplicate ledger row, inflating _order_collected() and silently
+                # under-collecting real revenue (and defeating the mark-paid reconciliation guard
+                # that trusts that figure). Anchor the ledger row on the stable tx.id (identical
+                # across a debit replay; the public WalletTransaction PK is globally unique and
+                # OrderPayment is tenant-local, so no cross-tenant collision) — a duplicate-key
+                # IntegrityError then means "this charge already applied" and we skip the counter
+                # increment too. Mirrors StaffOrderPaymentView's idempotency_key + IntegrityError
+                # replay handler and _sync_charged_request_bills' claim-before-apply.
+                _charge_replayed = False
+                _charged_order = Order.objects.filter(order_number=order_number).only("id").first()
+                if _charged_order is not None:
+                    _recorder_name = (
+                        getattr(request.user, "get_full_name", lambda: "")() or
+                        getattr(request.user, "username", "") or
+                        getattr(request.user, "email", "") or
+                        ""
+                    )[:80]
+                    try:
+                        # This path runs in autocommit (no request-level atomic wraps the view), so
+                        # a duplicate-key INSERT fails just this statement and leaves the connection
+                        # usable — no savepoint needed to catch it and carry on.
                         OrderPayment.objects.create(
                             order=_charged_order,
                             amount=amount,
                             method=OrderPayment.Method.WALLET,
+                            idempotency_key=f"ownercharge:{tx.id}",
                             recorded_by_user_id=getattr(request.user, "id", None),
                             recorded_by_name=_recorder_name,
                             note=note or "Wallet charge (pay code)",
                         )
-                except Exception:
-                    pass  # ledger row is best-effort; the wallet bill update above already landed
+                    except IntegrityError:
+                        _charge_replayed = True  # this tx's charge already applied — do NOT double-count
+                    except Exception:
+                        pass  # other ledger-write error: best-effort, fall through and still reflect the debit
+                # Reflect the debit on the bill only on a FRESH charge — a replay already applied it.
+                if not _charge_replayed:
+                    Order.objects.filter(order_number=order_number).update(
+                        wallet_amount_paid=_F("wallet_amount_paid") + amount
+                    )
                 _settle_order_if_wallet_covers(order_number)
             except Exception:
                 pass  # the payment is recorded regardless; bill update is best-effort
