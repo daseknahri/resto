@@ -173,4 +173,34 @@ describe("OwnerRatings — mount smoke", () => {
     // Summary block rendered (summary computed non-null → its labels appear).
     expect(wrapper.text()).toContain("ownerRatings.totalRatings");
   });
+
+  // ── (3) regression: headline uses the SERVER aggregate, not the 50-row page ──
+  // The list endpoint paginates at 50 but returns all-time count/average. The
+  // headline must show those server aggregates, NOT the mean/length of the loaded
+  // page — the bug was that a tenant with >50 ratings saw an average of only the
+  // newest 50 and a total capped at 50. Here the loaded page is 2 rows averaging
+  // 2.0, while the server reports 200 ratings averaging 4.6.
+  it("shows the server's all-time count + average, not the loaded-page sample", async () => {
+    _routes = {
+      "/owner/ratings/": {
+        data: {
+          count: 200,     // all-time total (server aggregate over the full set)
+          average: 4.6,   // all-time average (server aggregate)
+          ratings: [rating({ id: 1, score: 2 }), rating({ id: 2, score: 2 })],
+        },
+      },
+    };
+
+    wrapper = mountRatings();
+    await flushPromises();
+
+    const text = wrapper.text();
+    // All-time total (200), not the 2 loaded rows.
+    expect(text).toContain("200");
+    // All-time average (4.6), not the loaded-page mean of 2.0.
+    expect(text).toContain("4.6");
+    expect(text).not.toContain("2.0");
+    // The distribution bars cover only the loaded page → honest caption shown.
+    expect(text).toContain("ownerRatings.distributionNote");
+  });
 });

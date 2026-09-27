@@ -5419,6 +5419,7 @@ ownerRatings: {
   replyDeleteError: "Impossible de supprimer la reponse. Veuillez reessayer.",
   replyAddPrompt: "Repondre a cet avis",
   replyPostedAt: "Repondu le {date}",
+  distributionNote: "Repartition des {n} avis les plus recents",
 },
 kitchen: {
   title: "Affichage cuisine",
