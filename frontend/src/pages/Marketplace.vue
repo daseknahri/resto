@@ -709,10 +709,15 @@ const validateActiveOrder = async () => {
       try { localStorage.removeItem('mktLastOrderNumber'); localStorage.removeItem('mktLastOrderAt'); localStorage.removeItem('mktLastOrderSlug'); } catch { /* ignore */ }
       activeOrderDismissed.value = true;
     }
-  } catch {
-    // 404 / network error — treat as gone
-    try { localStorage.removeItem('mktLastOrderNumber'); localStorage.removeItem('mktLastOrderAt'); localStorage.removeItem('mktLastOrderSlug'); } catch { /* ignore */ }
-    activeOrderDismissed.value = true;
+  } catch (err) {
+    // Only a real 404 means the order is gone — clear the strip. A transient 5xx /
+    // network blip (common on mobile at mount) must NOT wipe it: for an anonymous
+    // customer this localStorage strip is their ONLY re-entry to order tracking.
+    // Keep it and let the next visit re-validate.
+    if (err?.response?.status === 404) {
+      try { localStorage.removeItem('mktLastOrderNumber'); localStorage.removeItem('mktLastOrderAt'); localStorage.removeItem('mktLastOrderSlug'); } catch { /* ignore */ }
+      activeOrderDismissed.value = true;
+    }
   }
 };
 

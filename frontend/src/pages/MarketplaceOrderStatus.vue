@@ -675,9 +675,14 @@ const fetchDelivery = async () => {
       params: { restaurant: slug },
     });
     delivery.value = res.data;
-  } catch {
-    // 404 = no delivery job for this order, that's OK (pickup orders)
-    delivery.value = null;
+  } catch (err) {
+    // Only a real 404 means there is no delivery job (pickup order, or not yet
+    // dispatched) — clear the panel. A transient 5xx / network blip on the 10s poll
+    // must NOT null the job: that would make the driver card + live map vanish AND
+    // render the "restaurant is delivering it itself" self-delivery block (an
+    // affirmatively false state) until the next good poll, thrashing the Leaflet map.
+    // Keep the last-known job — mirrors fetchStatus's 404-only reset above.
+    if (err?.response?.status === 404) delivery.value = null;
   }
 };
 
