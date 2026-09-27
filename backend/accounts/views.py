@@ -5790,6 +5790,19 @@ class AdminFlashSaleListCreateView(APIView):
                 is_active=bool(data.get("is_active", True)),
                 max_redemptions=data.get("max_redemptions") or None,
             )
+        # A flash sale sets a platform-wide discount % — audit who created it.
+        log_admin_action(
+            action=AdminAuditLog.Actions.FLASH_SALE_CREATED,
+            request=request,
+            target_repr=f"flash_sale:{fs.id}",
+            metadata={
+                "name": fs.name,
+                "discount_value": str(fs.discount_value),
+                "active_from": fs.active_from.isoformat(),
+                "active_until": fs.active_until.isoformat(),
+                "is_active": fs.is_active,
+            },
+        )
         # A flash-sale write changes flash_sale_active in the public listing; bust the
         # list cache so it shows immediately instead of waiting out the TTL. Best-effort.
         try:
@@ -5879,6 +5892,17 @@ class AdminFlashSaleDetailView(APIView):
 
             if update_fields:
                 fs.save(update_fields=update_fields)
+                # A flash sale sets a platform-wide discount % — audit the change.
+                log_admin_action(
+                    action=AdminAuditLog.Actions.FLASH_SALE_UPDATED,
+                    request=request,
+                    target_repr=f"flash_sale:{fs.id}",
+                    metadata={
+                        "changed_fields": update_fields,
+                        "discount_value": str(fs.discount_value),
+                        "is_active": fs.is_active,
+                    },
+                )
 
         # A flash-sale edit changes flash_sale_active in the public listing; bust the
         # list cache so it shows immediately instead of waiting out the TTL. Best-effort.
@@ -5894,9 +5918,23 @@ class AdminFlashSaleDetailView(APIView):
         from django_tenants.utils import schema_context
         with schema_context("public"):
             try:
-                PlatformFlashSale.objects.get(pk=fs_id).delete()
+                fs = PlatformFlashSale.objects.get(pk=fs_id)
             except PlatformFlashSale.DoesNotExist:
                 return Response({"detail": "Not found."}, status=404)
+            # Snapshot the money-affecting fields before deletion so the audit trail
+            # records what discount was removed (the row itself is gone afterwards).
+            fs_meta = {
+                "name": fs.name,
+                "discount_value": str(fs.discount_value),
+                "is_active": fs.is_active,
+            }
+            fs.delete()
+        log_admin_action(
+            action=AdminAuditLog.Actions.FLASH_SALE_DELETED,
+            request=request,
+            target_repr=f"flash_sale:{fs_id}",
+            metadata=fs_meta,
+        )
         # Ending a flash sale changes flash_sale_active in the public listing; bust the
         # list cache so it disappears immediately instead of waiting out the TTL.
         try:
@@ -8525,6 +8563,18 @@ class AdminDeliveryZoneListCreateView(APIView):
                 is_active=bool(data.get("is_active", True)),
                 fee_tiers=fee_tiers,
             )
+        # A delivery zone sets fee_tiers (what customers are charged) — audit its creation.
+        log_admin_action(
+            action=AdminAuditLog.Actions.DELIVERY_ZONE_CREATED,
+            request=request,
+            target_repr=f"zone:{zone.id}",
+            metadata={
+                "name": zone.name,
+                "city": zone.city,
+                "fee_tiers": zone.fee_tiers or [],
+                "is_active": zone.is_active,
+            },
+        )
         return Response(_serialize_zone(zone), status=status.HTTP_201_CREATED)
 
 
@@ -8597,6 +8647,17 @@ class AdminDeliveryZoneDetailView(APIView):
 
             if update_fields:
                 zone.save(update_fields=update_fields)
+                # A delivery zone sets fee_tiers (what customers are charged) — audit it.
+                log_admin_action(
+                    action=AdminAuditLog.Actions.DELIVERY_ZONE_UPDATED,
+                    request=request,
+                    target_repr=f"zone:{zone.id}",
+                    metadata={
+                        "changed_fields": update_fields,
+                        "fee_tiers": zone.fee_tiers or [],
+                        "is_active": zone.is_active,
+                    },
+                )
 
         return Response(_serialize_zone(zone))
 
@@ -8606,9 +8667,24 @@ class AdminDeliveryZoneDetailView(APIView):
         from django_tenants.utils import schema_context
         with schema_context("public"):
             try:
-                DeliveryZone.objects.get(pk=zone_id).delete()
+                zone = DeliveryZone.objects.get(pk=zone_id)
             except DeliveryZone.DoesNotExist:
                 return Response({"detail": "Not found."}, status=404)
+            # Snapshot the money-affecting fields before deletion so the audit trail
+            # records what fee schedule was removed (the row is gone afterwards).
+            zone_meta = {
+                "name": zone.name,
+                "city": zone.city,
+                "fee_tiers": zone.fee_tiers or [],
+                "is_active": zone.is_active,
+            }
+            zone.delete()
+        log_admin_action(
+            action=AdminAuditLog.Actions.DELIVERY_ZONE_DELETED,
+            request=request,
+            target_repr=f"zone:{zone_id}",
+            metadata=zone_meta,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
