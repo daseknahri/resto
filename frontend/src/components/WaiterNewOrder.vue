@@ -154,7 +154,7 @@
             >
               <!-- Left: name + hint — tappable to add/customize -->
               <button
-                class="min-w-0 flex-1 text-left disabled:pointer-events-none"
+                class="min-w-0 flex-1 text-start disabled:pointer-events-none"
                 :disabled="!dish.is_available"
                 @click="addDish(dish)"
               >

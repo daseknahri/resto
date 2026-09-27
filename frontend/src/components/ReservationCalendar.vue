@@ -92,7 +92,7 @@
           >
             <button
               type="button"
-              class="w-full text-left ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
+              class="w-full text-start ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
               :style="{ '--ui-delay': `${Math.min(resIndex, 5) * 20}ms` }"
               :class="statusChipClass(res.status)"
               :aria-label="[res.name, res.booked_for ? timeLabel(res.booked_for) : '', res.party_size ? t('reservationCalendar.guests', { n: res.party_size }) : '', t('reservationCalendar.moveHint')].filter(Boolean).join(', ')"

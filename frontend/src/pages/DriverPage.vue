@@ -620,7 +620,7 @@
           <p class="text-[12px] text-slate-400">{{ t('driver.offlineHint') }}</p>
         </div>
         <!-- Quick checklist before going online -->
-        <ul class="mx-auto max-w-[240px] space-y-1.5 text-left text-[12px] text-slate-400">
+        <ul class="mx-auto max-w-[240px] space-y-1.5 text-start text-[12px] text-slate-400">
           <li class="flex items-center gap-2" :class="!geoError ? 'text-emerald-400' : 'text-amber-400'">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0" aria-hidden="true">
               <template v-if="!geoError"><path d="M3.5 8.5l3 3 6-6"/></template>

@@ -435,7 +435,7 @@
             @click="useMyLocation"
           >
             <AppIcon name="location" class="h-4 w-4 shrink-0 text-[var(--color-secondary)]" aria-hidden="true" />
-            <span class="flex-1 text-left text-sm">{{ locating ? t('common.loading') : t('ridePage.useMyLocation') }}</span>
+            <span class="flex-1 text-start text-sm">{{ locating ? t('common.loading') : t('ridePage.useMyLocation') }}</span>
           </button>
           <input
             v-model="pickupAddress"
