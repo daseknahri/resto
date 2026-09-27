@@ -25,8 +25,10 @@ import json
 from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand, CommandError
+from django_tenants.utils import schema_context
 
 from menu.models import CurrencyRate
+from tenancy.models import Tenant
 
 logger = logging.getLogger(__name__)
 
@@ -58,40 +60,54 @@ class Command(BaseCommand):
         if not raw_rates:
             raise CommandError("Empty rates payload received from Frankfurter.")
 
-        updated = []
-        skipped = []
-
+        # Parse + invert once (1 MAD = X <code>  →  1 <code> = 1/X MAD).
+        parsed = {}
+        bad = []
         for code, rate_from_mad in raw_rates.items():
             try:
                 rate_float = float(rate_from_mad)
                 if rate_float <= 0:
                     raise ValueError("non-positive rate")
-                # Invert: 1 MAD = rate_from_mad EUR  →  1 EUR = 1/rate_from_mad MAD
-                mad_per_unit = Decimal(str(round(1.0 / rate_float, 6)))
+                parsed[code] = Decimal(str(round(1.0 / rate_float, 6)))
             except (TypeError, ValueError, InvalidOperation) as exc:
                 self.stderr.write(f"  Skipping {code}: bad rate value {rate_from_mad!r} ({exc})")
-                skipped.append(code)
-                continue
-
-            if dry_run:
-                self.stdout.write(f"  [dry-run] {code}: mad_per_unit = {mad_per_unit}")
-            else:
-                rows_updated = CurrencyRate.objects.filter(code=code).update(mad_per_unit=mad_per_unit)
-                if rows_updated:
-                    updated.append(f"{code}={mad_per_unit}")
-                else:
-                    self.stdout.write(
-                        self.style.WARNING(f"  {code} not found in DB — skipping (add it via admin first).")
-                    )
-                    skipped.append(code)
+                bad.append(code)
 
         if dry_run:
+            for code, mad_per_unit in parsed.items():
+                self.stdout.write(f"  [dry-run] {code}: mad_per_unit = {mad_per_unit}")
             self.stdout.write(self.style.SUCCESS("Dry-run complete. No changes saved."))
-        else:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"Done. Updated: {', '.join(updated) or 'none'}. "
-                    f"Skipped: {', '.join(skipped) or 'none'}."
-                )
+            return
+
+        # CurrencyRate is a TENANT-app model — menu_currencyrate exists ONLY inside each
+        # tenant schema, never in public. This command runs on the PUBLIC schema (the Celery
+        # cron), so the update MUST loop tenant schemas; the previous public-schema update
+        # raised ProgrammingError ("relation does not exist") on every run, so rates never
+        # refreshed after the manual seed. Mirrors release_scheduled_orders / auto_reset_availability.
+        tenants = (
+            Tenant.objects.filter(is_active=True, lifecycle_status=Tenant.LifecycleStatus.ACTIVE)
+            .exclude(schema_name="public")
+        )
+        tenant_count = 0
+        row_updates = 0
+        for tenant in tenants:
+            try:
+                with schema_context(tenant.schema_name):
+                    for code, mad_per_unit in parsed.items():
+                        row_updates += CurrencyRate.objects.filter(code=code).update(mad_per_unit=mad_per_unit)
+                tenant_count += 1
+            except Exception as exc:  # noqa: BLE001 — one bad schema must not abort the rest
+                self.stderr.write(f"  {tenant.schema_name}: update failed ({exc})")
+                logger.warning("fetch_currency_rates: schema %s failed", tenant.schema_name, exc_info=True)
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Done. Rates {', '.join(f'{c}={v}' for c, v in parsed.items()) or 'none'} applied "
+                f"across {tenant_count} tenant schema(s) ({row_updates} row updates). "
+                f"Bad codes skipped: {', '.join(bad) or 'none'}."
             )
-        logger.info("fetch_currency_rates: updated=%s skipped=%s dry_run=%s", updated, skipped, dry_run)
+        )
+        logger.info(
+            "fetch_currency_rates: tenants=%s row_updates=%s bad=%s dry_run=%s",
+            tenant_count, row_updates, bad, dry_run,
+        )
