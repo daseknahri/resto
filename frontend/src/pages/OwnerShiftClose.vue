@@ -255,7 +255,7 @@ const fmtMoney = (val) =>
 const fmtTime = (iso) => {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(currentLocale.value, { timeStyle: "short" }).format(new Date(iso));
   } catch {
     return iso;
   }

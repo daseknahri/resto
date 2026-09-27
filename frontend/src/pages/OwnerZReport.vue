@@ -537,7 +537,7 @@ const fmtMoney = (val) =>
 const formatWindowTime = (iso) => {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(currentLocale.value, {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(iso));
@@ -550,7 +550,7 @@ const formatWindowTime = (iso) => {
 const fmtWindowTime = (iso) => {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(currentLocale.value, { timeStyle: "short" }).format(new Date(iso));
   } catch {
     return iso;
   }

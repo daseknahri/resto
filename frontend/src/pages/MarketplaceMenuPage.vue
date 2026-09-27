@@ -857,7 +857,7 @@ import { useSavedAddresses } from '../composables/useSavedAddresses';
 import { useToastStore } from '../stores/toast';
 import { useConfirmModal } from '../composables/useConfirmModal';
 
-const { t, formatCurrency } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const route = useRoute();
 const router = useRouter();
@@ -1756,7 +1756,7 @@ const weeklyHours = computed(() => {
   return _SCHEDULE_KEYS.map((key, idx) => {
     const entry = sched[key];
     const enabled = entry?.enabled;
-    const label = _scheduleRefDates[idx].toLocaleDateString(undefined, { weekday: 'short' });
+    const label = new Intl.DateTimeFormat(currentLocale.value, { weekday: 'short' }).format(_scheduleRefDates[idx]);
     return {
       key,
       label,

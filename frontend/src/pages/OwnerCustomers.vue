@@ -619,7 +619,7 @@ const formatAmount = (val, currency) => {
 const formatDate = (iso, full = false) => {
   if (!iso) return "";
   try {
-    return new Intl.DateTimeFormat(undefined, full ? { dateStyle: "long" } : { dateStyle: "short" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(currentLocale.value, full ? { dateStyle: "long" } : { dateStyle: "short" }).format(new Date(iso));
   } catch {
     return iso.slice(0, 10);
   }

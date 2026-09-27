@@ -461,7 +461,7 @@ const peakWeekdayBars = computed(() => {
   const days = props.data?.peak_hours?.by_weekday || [];
   const max = Math.max(...days, 1);
   const labels = Array.from({ length: 7 }, (_, i) => {
-    try { return new Intl.DateTimeFormat("en", { weekday: "short" }).format(new Date(2023, 0, 1 + i)); }
+    try { return new Intl.DateTimeFormat(currentLocale.value, { weekday: "short" }).format(new Date(2023, 0, 1 + i)); }
     catch { return ["Su","Mo","Tu","We","Th","Fr","Sa"][i]; }
   });
   return days.map((count, idx) => ({ label: labels[idx] || String(idx), count, heightPct: Math.round((count / max) * 100) }));
