@@ -194,6 +194,28 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         self.assertEqual(len(resp.data["results"]), 1)
         self.assertEqual(resp.data["results"][0]["segment"], "at_risk")
 
+    def test_segment_filter_keeps_full_summary_counts(self):
+        """Regression (M10): selecting a segment must NOT collapse the header chips /
+        segment badges. The summary is computed over the WHOLE search-matched base, so with
+        segment=at_risk active the results list is narrowed to at-risk but total/new/
+        returning/at_risk still reflect all three customers (previously they collapsed to
+        total=1, new=0, returning=0)."""
+        linked = [
+            _linked_row(customer_id=1, order_count=1, days_ago=5),    # new
+            _linked_row(customer_id=2, order_count=5, days_ago=3),    # returning
+            _linked_row(customer_id=3, order_count=3, days_ago=45),   # at_risk
+        ]
+        resp = self._patched_get(linked=linked, params={"segment": "at_risk"})
+        # results narrowed to the active segment …
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["segment"], "at_risk")
+        # … but the counts stay full (segment-independent).
+        summary = resp.data["summary"]
+        self.assertEqual(summary["total"], 3)
+        self.assertEqual(summary["new"], 1)
+        self.assertEqual(summary["returning"], 1)
+        self.assertEqual(summary["at_risk"], 1)
+
     def test_segment_all_returns_all_customers(self):
         linked = [
             _linked_row(customer_id=1, order_count=1, days_ago=5),
