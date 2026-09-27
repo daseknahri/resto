@@ -256,9 +256,9 @@ const errors = reactive({
 });
 
 const selectedPlanLabel = computed(() => {
-  if (form.plan_code === "growth") return "Growth";
-  if (form.plan_code === "pro") return "Pro";
-  return "Basic";
+  if (form.plan_code === "growth") return t("leadCapture.planNameGrowth");
+  if (form.plan_code === "pro") return t("leadCapture.planNamePro");
+  return t("leadCapture.planNameBasic");
 });
 
 const selectedPlanDescription = computed(() => {

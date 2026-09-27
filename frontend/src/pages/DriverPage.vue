@@ -1214,11 +1214,19 @@ const VEHICLE_TYPES = [
   { value: 'bicycle', label: 'driverRides.vehicleBicycle' },
 ];
 
+// Ride statuses that aren't shown as a driver-facing CTA above reuse the canonical
+// translated ride-status set (adminRides.status*) so none leaks the raw enum token.
+const RIDE_STATUS_LABELS = {
+  scheduled: 'adminRides.statusScheduled',
+  accepted: 'adminRides.statusAccepted',
+  completed: 'adminRides.statusCompleted',
+  cancelled: 'adminRides.statusCancelled',
+};
 const rideStatusLabel = (s) => {
   if (s === 'searching') return t('driver.online'); // "on the way"
   if (s === 'arrived') return t('driverRides.arrivedCta');
   if (s === 'in_progress') return t('driverRides.startCta');
-  return s;
+  return RIDE_STATUS_LABELS[s] ? t(RIDE_STATUS_LABELS[s]) : s;
 };
 
 // ── Install-first PWA — drivers work from the installed app ──────────────────────

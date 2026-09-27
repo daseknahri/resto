@@ -49,7 +49,7 @@
         <span
           v-if="ride.rider_driver_rating"
           class="shrink-0 flex items-center gap-0.5 text-amber-400"
-          :aria-label="`${ride.rider_driver_rating} stars`"
+          :aria-label="ride.rider_driver_rating === 1 ? t('common.starsAria_one', { count: ride.rider_driver_rating }) : t('common.starsAria_other', { count: ride.rider_driver_rating })"
         >
           <AppIcon name="star" class="h-3.5 w-3.5" aria-hidden="true" />
           <span class="text-[11px] font-semibold tabular-nums">{{ ride.rider_driver_rating }}</span>

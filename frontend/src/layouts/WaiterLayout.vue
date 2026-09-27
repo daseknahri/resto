@@ -244,7 +244,7 @@ const _waiterRealtime = useOwnerRealtime((event, payload) => {
 // Reuse the staff workspace theme (same ui-* primitives + light CSS as the owner area).
 const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();
 
-const tenantName = computed(() => tenant.meta?.name || "Restaurant");
+const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => tenant.meta?.logo_url || "");
 
 const signingOut = ref(false);
