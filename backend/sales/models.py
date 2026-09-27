@@ -314,6 +314,14 @@ class AdminAuditLog(models.Model):
         DELIVERY_JOB_PII_VIEWED = "delivery_job_pii_viewed", "Delivery job PII viewed"
         # R18: GDPR customer PII erasure
         CUSTOMER_ERASED = "customer_erased", "Customer PII erased"
+        # Money-affecting platform-config writes: a flash sale sets a platform-wide
+        # discount %; a delivery zone sets fee_tiers (what customers are charged).
+        FLASH_SALE_CREATED = "flash_sale_created", "Flash sale created"
+        FLASH_SALE_UPDATED = "flash_sale_updated", "Flash sale updated"
+        FLASH_SALE_DELETED = "flash_sale_deleted", "Flash sale deleted"
+        DELIVERY_ZONE_CREATED = "delivery_zone_created", "Delivery zone created"
+        DELIVERY_ZONE_UPDATED = "delivery_zone_updated", "Delivery zone updated"
+        DELIVERY_ZONE_DELETED = "delivery_zone_deleted", "Delivery zone deleted"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

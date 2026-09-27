@@ -27,6 +27,7 @@ from accounts.views import (
     OwnerDeliveryRadiusUpdateView,
 )
 from accounts.models import User
+from sales.models import AdminAuditLog
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -175,6 +176,30 @@ class AdminDeliveryZoneListCreateViewTests(SimpleTestCase):
                     resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
+    def test_post_writes_audit_log(self):
+        """A delivery zone sets fee_tiers (what customers are charged) — creating one is a
+        money-affecting config write that must land in AdminAuditLog."""
+        zone = _make_zone()
+        req = self._post({
+            "name": "Downtown",
+            "city": "Casablanca",
+            "polygon": [{"lat": 33.5, "lng": -7.6}, {"lat": 33.6, "lng": -7.5}, {"lat": 33.5, "lng": -7.5}],
+            "fee_tiers": [{"min_km": 0, "fee": "10"}],
+        })
+        with patch("accounts.models.DeliveryZone") as mock_dz, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_dz.objects.create.return_value = zone
+            with patch("django_tenants.utils.schema_context", return_value=_sc_mock()):
+                with patch("accounts.views._serialize_zone", side_effect=lambda z: {"id": z.id}):
+                    resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.DELIVERY_ZONE_CREATED)
+        self.assertEqual(kwargs["target_repr"], f"zone:{zone.id}")
+        self.assertEqual(kwargs["metadata"]["city"], zone.city)
+        self.assertIn("fee_tiers", kwargs["metadata"])
+
 
 # ── AdminDeliveryZoneDetailView ───────────────────────────────────────────────
 
@@ -248,6 +273,50 @@ class AdminDeliveryZoneDetailViewTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", return_value=_sc_mock()):
                 resp = self._delete(1)
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_patch_writes_audit_log(self):
+        """Editing a zone's fee_tiers changes what customers are charged — must be audited."""
+        zone = _make_zone()
+        with patch("accounts.models.DeliveryZone") as mock_dz, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_dz.objects.get.return_value = zone
+            with patch("django_tenants.utils.schema_context", return_value=_sc_mock()):
+                with patch("accounts.views._serialize_zone", return_value={"id": 1}):
+                    resp = self._patch(1, {"fee_tiers": [{"min_km": 0, "fee": "12"}]})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.DELIVERY_ZONE_UPDATED)
+        self.assertEqual(kwargs["target_repr"], "zone:1")
+        self.assertIn("fee_tiers", kwargs["metadata"]["changed_fields"])
+
+    def test_patch_no_change_does_not_audit(self):
+        """A no-op PATCH (no recognized fields) changes nothing, so it writes no audit row."""
+        zone = _make_zone()
+        with patch("accounts.models.DeliveryZone") as mock_dz, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_dz.objects.get.return_value = zone
+            with patch("django_tenants.utils.schema_context", return_value=_sc_mock()):
+                with patch("accounts.views._serialize_zone", return_value={"id": 1}):
+                    resp = self._patch(1, {"unknown_field": "x"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_log.assert_not_called()
+
+    def test_delete_writes_audit_log(self):
+        """Deleting a zone must be audited (snapshotting the fee schedule it removed)."""
+        zone = _make_zone(zone_id=3)
+        with patch("accounts.models.DeliveryZone") as mock_dz, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_dz.objects.get.return_value = zone
+            with patch("django_tenants.utils.schema_context", return_value=_sc_mock()):
+                resp = self._delete(3)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        zone.delete.assert_called_once()
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.DELIVERY_ZONE_DELETED)
+        self.assertEqual(kwargs["target_repr"], "zone:3")
+        self.assertIn("fee_tiers", kwargs["metadata"])
 
 
 # ── AdminDriverListView ───────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ from accounts.views import (
     OwnerFlashSaleOptInView,
 )
 from accounts.models import User
+from sales.models import AdminAuditLog
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -210,6 +211,30 @@ class AdminFlashSaleListCreateViewTests(SimpleTestCase):
         # Version was bumped → existing cache entries are orphaned.
         self.assertEqual(cache.get(_PUBLIC_LIST_VER_KEY), 8)
 
+    def test_post_writes_audit_log(self):
+        """A flash sale sets a platform-wide discount % — creating one is a money-affecting
+        config write that must land in AdminAuditLog (accountability: who/when)."""
+        fs = _make_fs(name="Audited Deal", discount_value=Decimal("30.00"))
+        req = self._post({
+            "name": "Audited Deal",
+            "discount_value": "30.0",
+            "active_from": "2026-06-01T00:00:00Z",
+            "active_until": "2026-06-30T23:59:59Z",
+        })
+        with patch("accounts.models.PlatformFlashSale") as mock_fs, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_fs.objects.create.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.FLASH_SALE_CREATED)
+        self.assertEqual(kwargs["target_repr"], f"flash_sale:{fs.id}")
+        self.assertEqual(kwargs["metadata"]["discount_value"], "30.00")
+
 
 # ── AdminFlashSaleDetailView ──────────────────────────────────────────────────
 
@@ -225,6 +250,11 @@ class AdminFlashSaleDetailViewTests(SimpleTestCase):
 
     def _delete(self, fs_id, user=None):
         req = self.factory.delete(f"/api/admin/flash-sales/{fs_id}/")
+        req.user = user or _admin()
+        return self.view(req, fs_id=fs_id)
+
+    def _patch(self, fs_id, data, user=None):
+        req = self.factory.patch(f"/api/admin/flash-sales/{fs_id}/", data, format="json")
         req.user = user or _admin()
         return self.view(req, fs_id=fs_id)
 
@@ -255,6 +285,54 @@ class AdminFlashSaleDetailViewTests(SimpleTestCase):
                 mock_ctx.return_value.__exit__ = lambda s, *a: None
                 resp = self._delete(999)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patch_writes_audit_log(self):
+        """Editing a flash sale's discount % must be audited."""
+        fs = _make_fs(fs_id=7, discount_value=Decimal("20.00"))
+        with patch("accounts.models.PlatformFlashSale") as mock_fs, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_fs.objects.get.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self._patch(7, {"discount_value": "20"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.FLASH_SALE_UPDATED)
+        self.assertEqual(kwargs["target_repr"], "flash_sale:7")
+        self.assertIn("discount_value", kwargs["metadata"]["changed_fields"])
+
+    def test_patch_no_change_does_not_audit(self):
+        """A no-op PATCH (no recognized fields) changes nothing, so it writes no audit row."""
+        fs = _make_fs(fs_id=7)
+        with patch("accounts.models.PlatformFlashSale") as mock_fs, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_fs.objects.get.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self._patch(7, {"unknown_field": "x"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_log.assert_not_called()
+
+    def test_delete_writes_audit_log(self):
+        """Deleting a flash sale must be audited (snapshotting the discount it removed)."""
+        fs = _make_fs(fs_id=9, discount_value=Decimal("40.00"))
+        with patch("accounts.models.PlatformFlashSale") as mock_fs, \
+             patch("accounts.views.log_admin_action") as mock_log:
+            mock_fs.objects.get.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self._delete(9)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        fs.delete.assert_called_once()
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.FLASH_SALE_DELETED)
+        self.assertEqual(kwargs["target_repr"], "flash_sale:9")
+        self.assertEqual(kwargs["metadata"]["discount_value"], "40.00")
 
 
 # ── OwnerFlashSaleListView ────────────────────────────────────────────────────
