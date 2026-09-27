@@ -2604,6 +2604,8 @@ const waiterDjChipLabel = (dj) => {
   if (status === "at_restaurant") return driver_name ? `${t("kitchen.driverAtDoor")} · ${driver_name}` : t("kitchen.driverAtDoor");
   if (status === "picked_up")     return t("kitchen.driverPickedUp");
   if (status === "failed")        return t("kitchen.driverFailed");
+  if (status === "delivered")     return t("kitchen.driverDelivered");
+  if (status === "cancelled")     return t("kitchen.driverCancelled");
   return status;
 };
 
