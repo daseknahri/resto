@@ -698,6 +698,8 @@
             :delivery-distance-km="deliveryDistanceKm"
             :delivery-fee-pending="deliveryFeePending"
             :delivery-out-of-range="deliveryOutOfRange"
+            :promo-discount="promoDiscount"
+            :promo-label="promoApplied?.name || ''"
             :loyalty-discount="loyaltyDiscount"
             :tip-amount="tipAmount"
             :wallet-applied="walletApplied"
@@ -1291,6 +1293,34 @@ const deliveryMinGap = computed(() =>
 // Short zone description shown to customers (empty = not set)
 const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
 
+// Promo discount preview — MIRRORS the backend _compute_promo_discount
+// (menu/views.py) for the applied code, so the order summary shows a discount
+// line AND the pay-now affordability gate uses the real (lower) charge instead
+// of the pre-promo total. The backend recomputes authoritatively at checkout;
+// this is the client-side preview only.
+const promoDiscount = computed(() => {
+  const promo = promoApplied.value;
+  if (!promo) return 0;
+  const subtotal = Number(cart.total) || 0;
+  // Respect min_order_amount: below it the promo yields no discount (the backend
+  // rejects it at checkout), so the preview must show nothing off.
+  const minOrder = Number(promo.min_order_amount) || 0;
+  if (subtotal < minOrder) return 0;
+  const value = Number(promo.discount_value) || 0;
+  let discount = 0;
+  if (promo.promo_type === 'percentage') {
+    const pct = Math.min(100, Math.max(0, value));
+    discount = (subtotal * pct) / 100;
+  } else if (promo.promo_type === 'fixed') {
+    discount = Math.min(subtotal, value);
+  } else if (promo.promo_type === 'free_delivery') {
+    // free_delivery is worth the delivery fee, and only on a delivery order
+    // (the backend's delivery_fee is 0 for pickup/dine-in).
+    discount = fulfillmentType.value === 'delivery' ? deliveryFeeAmount.value : 0;
+  }
+  return Math.round(Math.max(0, discount) * 100) / 100;
+});
+
 // Grand total = items subtotal + delivery fee (when applicable)
 // ── Loyalty redemption at checkout ──────────────────────────────────────────
 const loyaltyConfig = ref(null);
@@ -1308,7 +1338,12 @@ const loyaltyDiscount = computed(() => {
   if (!useLoyalty.value || !loyaltyAvailable.value) return 0;
   const ptsValue = Number(loyaltyConfig.value.points_value) || 0;
   const subtotal = Number(cart.total) || 0;
-  const base = fulfillmentType.value === 'delivery' ? subtotal + deliveryFeeAmount.value : subtotal;
+  // Cap loyalty at the POST-promo charge — the backend sizes redemption on
+  // max(0, food_subtotal + delivery_fee - promo_discount) (menu/views.py).
+  const base = Math.max(
+    0,
+    (fulfillmentType.value === 'delivery' ? subtotal + deliveryFeeAmount.value : subtotal) - promoDiscount.value,
+  );
   return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, base));
 });
 
@@ -1327,7 +1362,10 @@ const orderGrandTotal = computed(() => {
   const base = fulfillmentType.value === 'delivery'
     ? subtotal + deliveryFeeAmount.value
     : subtotal;
-  return Math.max(0, base - loyaltyDiscount.value) + tipAmount.value;
+  // Backend order of operations (menu/views.py): base - promo, then - loyalty,
+  // then + tip. Subtracting the promo here also corrects prepayShortfall / the
+  // wallet affordability gate, which derive from this total.
+  return Math.max(0, base - promoDiscount.value - loyaltyDiscount.value) + tipAmount.value;
 });
 
 // Wallet credits

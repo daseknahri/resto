@@ -3175,6 +3175,7 @@ onboardingWizard: {
   }
 },
 cartPage: {
+  promoDiscount: "Remise promo",
   kicker: "Votre selection",
   plan: "Offre : {plan}",
   table: "Table : {table}",
