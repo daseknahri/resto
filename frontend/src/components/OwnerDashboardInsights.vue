@@ -280,7 +280,7 @@ const loyaltyPromo = ref(null); // { promo_discount_total, loyalty_*_total, poin
 const dashCurrency = ref("");
 
 // ── Emits — lets parent/siblings react to period changes or loaded data ────────
-const emit = defineEmits(["data", "period-change", "loading-change", "updating-change"]);
+const emit = defineEmits(["data", "period-change", "loading-change", "updating-change", "error"]);
 
 // ── Slug → human-readable label ───────────────────────────────────────────────
 // Uses the name map when available; falls back to title-casing the slug.
@@ -377,7 +377,13 @@ const hydrate = async (force = false) => {
 
   if (cached) {
     _apply(cached);
-    if (isFresh(cacheKey, INSIGHTS_TTL_MS)) return;
+    if (isFresh(cacheKey, INSIGHTS_TTL_MS)) {
+      // Fresh cache → no network. Still bubble the cached payload so the parent's
+      // KPI grid renders from cache instead of sitting on its loading skeleton
+      // (the parent only leaves its loading state when it receives a `data` emit).
+      emit("data", cached);
+      return;
+    }
     updating.value = true;
     emit("updating-change", true);
   } else {
@@ -403,7 +409,13 @@ const hydrate = async (force = false) => {
       if (data?.analytics_summary) summary.value = data.analytics_summary;
       else if (data?.counts) summary.value = data;
     } catch {
-      if (!cached) hasError.value = true;
+      // Primary AND fallback both failed. With no cached data to fall back on,
+      // surface the error — and tell the parent so it can replace its zero-value
+      // KPI grid with an error + Retry instead of rendering a false "0 / MAD 0".
+      if (!cached) {
+        hasError.value = true;
+        emit("error");
+      }
     }
   } finally {
     if (!ctrl.signal.aborted) {
