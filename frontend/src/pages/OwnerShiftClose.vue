@@ -134,9 +134,9 @@
         <table class="w-full text-xs">
           <thead>
             <tr class="border-b border-slate-800 text-start text-slate-500 print:border-slate-300">
-              <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.amount") }}</th>
-              <th class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.reason") }}</th>
-              <th class="py-1.5 font-medium text-end">{{ t("cashDrawer.time") }}</th>
+              <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.amount") }}</th>
+              <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("cashDrawer.reason") }}</th>
+              <th scope="col" class="py-1.5 font-medium text-end">{{ t("cashDrawer.time") }}</th>
             </tr>
           </thead>
           <tbody>

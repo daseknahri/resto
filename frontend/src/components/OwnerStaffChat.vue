@@ -7,6 +7,7 @@
       class="ui-press fixed bottom-20 end-3 z-[2100] flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/90 text-slate-200 shadow-lg backdrop-blur transition hover:border-amber-500/50 hover:text-amber-300 md:bottom-6"
       :aria-label="unread > 0 ? t('staffChat.titleWithUnread', { count: unread }) : t('staffChat.title')"
       :aria-expanded="isOpen"
+      aria-haspopup="dialog"
       @click="toggle"
     >
       <AppIcon name="chat" class="h-5 w-5" aria-hidden="true" />

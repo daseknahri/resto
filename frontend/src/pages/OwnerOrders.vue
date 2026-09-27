@@ -124,6 +124,7 @@
             : 'border-slate-700 text-slate-400 hover:text-slate-200'"
           :aria-expanded="filterSheetOpen"
           :aria-label="t('ownerOrders.filterBtn')"
+          aria-haspopup="dialog"
           @click="filterSheetOpen = true"
         >
           <AppIcon name="filter" class="h-3.5 w-3.5" aria-hidden="true" />

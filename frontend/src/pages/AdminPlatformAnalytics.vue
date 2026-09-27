@@ -172,9 +172,9 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="text-start text-[11px] uppercase tracking-wide text-slate-500">
-                <th class="px-4 py-2 text-start font-medium">{{ t('adminAnalytics.revenueVerticalCol') }}</th>
-                <th class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTotalCol') }}</th>
-                <th class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTxnsCol') }}</th>
+                <th scope="col" class="px-4 py-2 text-start font-medium">{{ t('adminAnalytics.revenueVerticalCol') }}</th>
+                <th scope="col" class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTotalCol') }}</th>
+                <th scope="col" class="px-4 py-2 text-end font-medium">{{ t('adminAnalytics.revenueTxnsCol') }}</th>
               </tr>
             </thead>
             <tbody>

@@ -1262,6 +1262,7 @@
                   step="0.01"
                   class="ui-input w-full"
                   :placeholder="isPercentAction ? t('stepDishes.bulkPriceValueHintPercent') : t('stepDishes.bulkPriceValueHintFlat')"
+                  :aria-label="t('stepDishes.bulkPriceValue')"
                   @input="bulkPricePreview = []"
                 />
               </div>
@@ -1306,9 +1307,9 @@
               <table class="w-full text-sm">
                 <thead class="sticky top-0 bg-slate-900/90">
                   <tr class="text-start text-xs text-slate-400">
-                    <th class="px-3 py-2">{{ t("stepDishes.bulkPriceColItem") }}</th>
-                    <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColBefore") }}</th>
-                    <th class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColAfter") }}</th>
+                    <th scope="col" class="px-3 py-2">{{ t("stepDishes.bulkPriceColItem") }}</th>
+                    <th scope="col" class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColBefore") }}</th>
+                    <th scope="col" class="px-3 py-2 text-end">{{ t("stepDishes.bulkPriceColAfter") }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-700/50">

@@ -214,12 +214,12 @@
               <table class="w-full min-w-[560px] text-xs">
                 <thead>
                   <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
-                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
-                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
-                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
-                    <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
-                    <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
-                    <th class="py-1.5 font-medium">{{ t("zReport.colVoidedBy") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
+                    <th scope="col" class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
+                    <th scope="col" class="py-1.5 font-medium">{{ t("zReport.colVoidedBy") }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,12 +264,12 @@
               <table class="w-full min-w-[560px] text-xs">
                 <thead>
                   <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
-                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
-                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
-                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
-                    <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
-                    <th class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
-                    <th class="py-1.5 font-medium">{{ t("zReport.colCompedBy") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.colOrder") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.colItem") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.colQty") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.colTotal") }}</th>
+                    <th scope="col" class="py-1.5 font-medium">{{ t("zReport.colReason") }}</th>
+                    <th scope="col" class="py-1.5 font-medium">{{ t("zReport.colCompedBy") }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -303,10 +303,10 @@
           <table class="w-full min-w-[420px] text-xs">
             <thead>
               <tr class="text-slate-500 text-start border-b border-slate-800 print:border-slate-300">
-                <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
-                <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.staffOrders") }}</th>
-                <th class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.staffCash") }}</th>
-                <th class="py-1.5 font-medium text-end">{{ t("zReport.staffWallet") }}</th>
+                <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
+                <th scope="col" class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.staffOrders") }}</th>
+                <th scope="col" class="py-1.5 pe-2 font-medium text-end">{{ t("zReport.staffCash") }}</th>
+                <th scope="col" class="py-1.5 font-medium text-end">{{ t("zReport.staffWallet") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -378,9 +378,9 @@
               <table class="w-full min-w-[380px] text-xs">
                 <thead>
                   <tr class="border-b border-slate-800 text-start text-slate-500 print:border-slate-300">
-                    <th class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
-                    <th class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
-                    <th class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium">{{ t("zReport.staffName") }}</th>
+                    <th scope="col" class="py-1.5 pe-2 font-medium text-center">{{ t("zReport.laborTotalHours") }}</th>
+                    <th scope="col" class="py-1.5 font-medium text-end">{{ t("zReport.laborTotalCost") }}</th>
                   </tr>
                 </thead>
                 <tbody>
