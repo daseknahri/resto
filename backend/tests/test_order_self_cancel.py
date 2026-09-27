@@ -127,6 +127,27 @@ class CancelOrderTests(SimpleTestCase):
             order_status_email, "ORD-1", 7, Order.Status.CANCELLED
         )
 
+    def test_refunds_locked_wallet_amount_not_stale_snapshot(self):
+        """Regression: refund the amount on the freshly-LOCKED row, not the pre-lock snapshot.
+
+        A concurrent void/comp decrements wallet_amount_paid under its own row lock in the
+        window between this view's unlocked read (top of post) and its select_for_update lock.
+        The cancelrefund idempotency key guards a DOUBLE refund but not a wrong AMOUNT, so
+        refunding the stale (higher) value over-refunds. The view must sync from _locked."""
+        order = _order(status="pending", fulfillment_type="pickup")
+        order.wallet_amount_paid = Decimal("100.00")  # stale snapshot read before the lock
+        self._set(order)
+        # The locked row reflects a concurrent void that already refunded 30 → 70 remains.
+        locked = _order(status="pending", fulfillment_type="pickup")
+        locked.wallet_amount_paid = Decimal("70.00")
+        self.m["orders"].select_for_update.return_value.filter.return_value.first.return_value = locked
+        resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp.status_code, 200)
+        self.m["refund"].assert_called_once()
+        refunded_order = self.m["refund"].call_args.args[0]
+        # Synced to the LOCKED 70, not the stale 100 — no over-refund.
+        self.assertEqual(refunded_order.wallet_amount_paid, Decimal("70.00"))
+
     def test_confirmed_delivery_can_cancel(self):
         order = _order(status="confirmed", fulfillment_type="delivery")
         self._set(order)

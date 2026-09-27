@@ -4042,6 +4042,14 @@ class CustomerOrderCancelView(APIView):
                 _newly_cancelled = True
             else:
                 order.status = Order.Status.CANCELLED  # already cancelled by a peer — reflect it for the caller
+            # Refund from the freshly-LOCKED row's wallet_amount_paid, not the pre-lock `order`
+            # snapshot read at the top of post(). A concurrent void/comp decrements
+            # wallet_amount_paid under its OWN lock in the window between that unlocked read and
+            # this lock; the cancelrefund:{schema}:{order.id} key guards a DOUBLE refund but not a
+            # wrong AMOUNT, so refunding the stale (higher) value would over-refund. Mirrors
+            # refund_and_cancel_delivery_order's identical post-lock sync.
+            if _locked is not None:
+                order.wallet_amount_paid = _locked.wallet_amount_paid
             _refund_wallet_for_cancelled_order(order, tenant_id=_cancel_tenant_id)  # idempotent wallet credit
             if _newly_cancelled:
                 _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
