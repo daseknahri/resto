@@ -2564,6 +2564,17 @@ const handleLogout = async () => {
   for (const k in reviewDrafts) delete reviewDrafts[k];
   for (const k in reviewHover)  delete reviewHover[k];
   walletTransactions.value = [];
+  // Reset every per-customer dataset so a logout→login on a shared device (family
+  // phone / restaurant tablet) can't show the previous customer's data. These were
+  // NOT cleared before, and fetchLoyaltyHistory's `if (loyaltyHistory.value) return`
+  // guard made the history sticky, so customer B saw A's saved addresses + loyalty.
+  savedAddresses.value = [];
+  loyaltyHistory.value = null;
+  loyaltyConfig.value = null;
+  marketplaceOrders.value = [];
+  serviceProfiles.value = {};
+  walletSpendByVertical.value = {};
+  p2pEnabled.value = false;
   editableName.value = '';
   selectedLocale.value = 'en';
   localeConfigured.value = false;
@@ -2635,6 +2646,11 @@ const onAuthenticated = (customer) => {
   fetchWallet();
   fetchLastRide();
   fetchServiceProfiles();
+  // Also (re)load the freshly signed-in customer's addresses + loyalty config —
+  // omitting these left them showing the previous session's data (or empty, so the
+  // redeem card falsely read "loyalty not active" for the new customer).
+  fetchAddresses();
+  fetchLoyaltyConfig();
 };
 
 const onPhoneAdded = (customer) => {
