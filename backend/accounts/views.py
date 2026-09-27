@@ -7478,6 +7478,42 @@ class DeliveryRatingView(APIView):
         return Response({"detail": "Rating saved.", "score": score})
 
 
+class MarketplaceOrderRatingView(APIView):
+    """POST /api/marketplace/order/<order_number>/rate/?restaurant=<slug>
+
+    Marketplace (public-host) sibling of the tenant CustomerOrderRateView: a customer
+    rates their completed RESTAURANT order (distinct from the delivery/driver rating above).
+    Order + Rating are TENANT-schema models, so we resolve the restaurant from
+    ?restaurant=<slug> and run the SHARED rating logic inside that tenant's schema. Every
+    gate (ownership/completed/already-rated/score, with coded responses) is enforced by
+    rate_order_in_current_schema — identical to the tenant route, which is why the customer
+    session (CustomerSessionAuthentication) and the anti-probing throttle carry over.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [AllowAny]
+    throttle_classes = [DeliveryRatingThrottle]
+
+    def post(self, request, order_number, *args, **kwargs):
+        from django_tenants.utils import schema_context
+        from tenancy.models import Tenant
+        from menu.views import rate_order_in_current_schema
+
+        slug = (request.query_params.get("restaurant") or "").strip().lower()
+        if not slug:
+            return Response(
+                {"detail": "restaurant query param required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            tenant = Tenant.objects.get(slug=slug)
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        with schema_context(tenant.schema_name):
+            return rate_order_in_current_schema(request, order_number, cache_bust_slug=slug)
+
+
 class CustomerSavedAddressListCreateView(APIView):
     """GET  /api/customer/addresses/  — list saved addresses (newest first, max 10).
        POST /api/customer/addresses/  — save a new address."""

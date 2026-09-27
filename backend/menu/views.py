@@ -9693,109 +9693,104 @@ class DishBulkPriceUpdateView(APIView):
 
 # ── Ratings ───────────────────────────────────────────────────────────────────
 
+def rate_order_in_current_schema(request, order_number, cache_bust_slug=""):
+    """Core 1–5 star order-rating logic, run in whatever tenant schema is active.
+
+    Shared by CustomerOrderRateView (tenant host) and the marketplace order-rating
+    endpoint (public host, which resolves the tenant from ?restaurant=<slug> and calls
+    this INSIDE schema_context, since Order + Rating are tenant-schema models). Returns a
+    DRF Response. Preserves every gate in order: order-existence 404 first, then the
+    IsOrderOwner 403 ownership check (anti review-fraud, incl. the anonymous case), then
+    completed-only, already-rated, and 1–5 score validation — each with its coded response.
+    `cache_bust_slug` is the restaurant slug whose meta cache to bust (best-effort).
+    """
+    order_number = str(order_number or "").strip()
+    try:
+        order = Order.objects.get(order_number=order_number)
+    except Order.DoesNotExist:
+        return Response(
+            {"detail": "Order not found.", "code": "order_not_found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # OPS-5e ownership gate (anti review-fraud), as a plain predicate so we keep the coded
+    # 403. IsOrderOwner.has_object_permission ignores its `view` arg, so None is fine.
+    if not IsOrderOwner().has_object_permission(request, None, order):
+        return Response(
+            {"detail": "You can only rate your own order.", "code": "not_order_owner"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if order.status != Order.Status.COMPLETED:
+        return Response(
+            {"detail": "You can only rate a completed order.", "code": "order_not_completed"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if hasattr(order, "rating"):
+        return Response(
+            {"detail": "This order has already been rated.", "code": "already_rated"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    score_raw = request.data.get("score")
+    try:
+        score = int(score_raw)
+        if score < 1 or score > 5:
+            raise ValueError
+    except (TypeError, ValueError):
+        return Response(
+            {"detail": "Score must be an integer between 1 and 5.", "code": "invalid_score"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    comment = str(request.data.get("comment", "") or "").strip()[:1000]
+
+    # The ownership gate proved request.user IS this order's customer → it's the link.
+    rating = Rating.objects.create(
+        order=order,
+        score=score,
+        comment=comment,
+        customer=request.user,
+    )
+
+    # Bust the meta cache so the updated average is reflected promptly.
+    if cache_bust_slug:
+        from tenancy.api import _bust_tenant_meta_cache
+        _bust_tenant_meta_cache(cache_bust_slug)
+
+    return Response(
+        {
+            "score": rating.score,
+            "comment": rating.comment,
+            "created_at": rating.created_at.isoformat(),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
 class CustomerOrderRateView(APIView):
     """
-    POST /api/orders/<order_number>/rate/
+    POST /api/orders/<order_number>/rate/  (tenant host)
 
-    Customers submit a 1–5 star rating (+ optional comment) after their order
-    reaches 'completed' status. Only the order's own signed-in customer may rate it
-    (OPS-5e: without that gate, anyone who guessed an order number could rate it —
-    review fraud).
-
-    Request body:
-        { "score": 4, "comment": "Great food!" }
-
-    Responses:
-        201 Created — rating stored; body: {score, comment, created_at}
-        400 Bad Request — invalid score / already rated / order not complete
-        403 Forbidden — the signed-in customer doesn't own this order (also the
-                        anonymous case, preserving the coded response below)
-        404 Not Found — unknown order_number
+    Customers submit a 1–5 star rating (+ optional comment) after their order reaches
+    'completed' status. Only the order's own signed-in customer may rate it (OPS-5e:
+    without that gate, anyone who guessed an order number could rate it — review fraud).
+    Delegates to rate_order_in_current_schema (shared with the marketplace order route).
     """
 
-    # IDENTITY-1 sweep: deliberately AllowAny rather than IsCustomer — the view returns
-    # its own coded 403 ("not_order_owner") for a non-owner INCLUDING an anonymous caller,
-    # and checks order-existence (404) first. IsCustomer would 401 anonymous callers ahead
-    # of both, changing the contract.
+    # IDENTITY-1 sweep: deliberately AllowAny (returns its own coded 403 for a non-owner
+    # incl. anonymous, and 404 for an unknown order first) rather than IsCustomer, which
+    # would 401 anonymous callers ahead of both and change the contract.
     authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
     throttle_classes = [CustomerOrderRateThrottle]  # OPS-5e: stop bulk order-number probing
 
     def post(self, request, order_number, *args, **kwargs):
-        # Normalise the order number (strip whitespace, upper-case for lookup)
-        order_number = str(order_number or "").strip()
-        try:
-            order = Order.objects.get(order_number=order_number)
-        except Order.DoesNotExist:
-            return Response(
-                {"detail": "Order not found.", "code": "order_not_found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # OPS-5e: ownership gate. Without this, any caller who guesses an order number
-        # could rate it (review fraud). IsOrderOwner is the shared home for the comparison
-        # (fails closed on a non-Customer principal or a missing/unparseable id on either
-        # side); used as a plain predicate so this view keeps its own coded 403.
-        if not IsOrderOwner().has_object_permission(request, self, order):
-            return Response(
-                {"detail": "You can only rate your own order.", "code": "not_order_owner"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        if order.status != Order.Status.COMPLETED:
-            return Response(
-                {
-                    "detail": "You can only rate a completed order.",
-                    "code": "order_not_completed",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if hasattr(order, "rating"):
-            return Response(
-                {"detail": "This order has already been rated.", "code": "already_rated"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Validate input
-        score_raw = request.data.get("score")
-        try:
-            score = int(score_raw)
-            if score < 1 or score > 5:
-                raise ValueError
-        except (TypeError, ValueError):
-            return Response(
-                {"detail": "Score must be an integer between 1 and 5.", "code": "invalid_score"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        comment = str(request.data.get("comment", "") or "").strip()[:1000]
-
-        # Link to the platform customer. The ownership gate above already proved
-        # request.user IS this order's customer, so the principal is the link — no need to
-        # re-fetch it (and it can no longer be None here, unlike the old session read).
-        _linked_customer = request.user
-
-        rating = Rating.objects.create(
-            order=order,
-            score=score,
-            comment=comment,
-            customer=_linked_customer,
-        )
-
-        # Bust the meta cache so the updated average is reflected promptly
-        tenant = getattr(request, "tenant", None)
-        if tenant:
-            from tenancy.api import _bust_tenant_meta_cache
-            _bust_tenant_meta_cache(getattr(tenant, "slug", ""))
-
-        return Response(
-            {
-                "score": rating.score,
-                "comment": rating.comment,
-                "created_at": rating.created_at.isoformat(),
-            },
-            status=status.HTTP_201_CREATED,
+        return rate_order_in_current_schema(
+            request,
+            order_number,
+            cache_bust_slug=getattr(getattr(request, "tenant", None), "slug", ""),
         )
 
 

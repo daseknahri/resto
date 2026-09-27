@@ -709,6 +709,10 @@ const {
   getOrderNumber: () => order.value.order_number,
   i18nPrefix: 'mktOrderStatus',
   onRated: () => { if (order.value) order.value = { ...order.value, has_rating: true }; },
+  // Public host: post to the SHARED marketplace order-rating route (the tenant
+  // /orders/<n>/rate/ route 404s here), carrying the restaurant slug so the backend
+  // enters the right tenant schema. `slug` = route.params.slug (same as every other call).
+  buildRateUrl: (num) => `/marketplace/order/${num}/rate/?restaurant=${encodeURIComponent(slug)}`,
 });
 
 // ── Reorder ───────────────────────────────────────────────────────────────────
