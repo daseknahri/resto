@@ -96,6 +96,16 @@ class CapabilityGateEnforcementTests(SimpleTestCase):
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.data.get("code"), "reservations_unavailable")
 
+    def test_reservation_reschedule_returns_403_for_a_shop(self):
+        # M11: the drag-to-reschedule PATCH skipped this gate entirely (unlike its
+        # sibling PUT) — a shop tenant could reschedule with reservations disabled.
+        from sales.views import OwnerReservationDetailView
+        req = SimpleNamespace(tenant=MagicMock())
+        with patch("tenancy.capabilities.tenant_capability_enabled", return_value=False):
+            resp = OwnerReservationDetailView().patch(req, lead_id=7)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data.get("code"), "reservations_unavailable")
+
     def test_waiter_call_list_returns_403_for_a_shop(self):
         from menu.waiter_views import OwnerWaiterCallListView
         req = SimpleNamespace(tenant=MagicMock())

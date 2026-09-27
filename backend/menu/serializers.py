@@ -356,42 +356,44 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         """
         Returns True/False based on the availability_schedule, or None if no
         schedule is configured (meaning the dish is always available by schedule).
+
+        M7: the window is TENANT-LOCAL wall-clock, not server UTC — a "Tue 18:00–22:00"
+        window must be read in the RESTAURANT's timezone (same bug class already fixed for
+        promos and happy-hour). The day/time rule itself is the shared, overnight-aware
+        ``menu.promos.day_time_window_open`` so display and order-time enforcement agree.
         """
         schedule = getattr(obj, "availability_schedule", None)
         if not schedule or not isinstance(schedule, dict):
             return None
 
-        from datetime import datetime as _dt
-        _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
-        now = _dt.utcnow()
+        from .promos import day_time_window_open
+        try:
+            days = schedule.get("days")
+            return day_time_window_open(
+                days if isinstance(days, list) else None,
+                str(schedule.get("time_start") or ""),
+                str(schedule.get("time_end") or ""),
+                now_local=self._schedule_now_local(),
+            )
+        except Exception:
+            # Never hide a dish because of a malformed schedule / eval error (mirrors the
+            # combo + happy-hour degrade paths) — degrade to "available".
+            return True
 
-        # Day restriction
-        days = schedule.get("days")
-        if days and isinstance(days, list) and len(days) > 0:
-            if _WDAY[now.weekday()] not in days:
-                return False
+    def _schedule_now_local(self):
+        """Tenant-local 'now' for availability_schedule evaluation.
 
-        # Time restriction
-        time_start = str(schedule.get("time_start") or "").strip()
-        time_end = str(schedule.get("time_end") or "").strip()
-        if time_start and time_end:
-            try:
-                sh, sm = (int(p) for p in time_start.split(":")[:2])
-                eh, em = (int(p) for p in time_end.split(":")[:2])
-                now_m = now.hour * 60 + now.minute
-                start_m = sh * 60 + sm
-                end_m = eh * 60 + em
-                if end_m <= start_m:
-                    # Overnight window (e.g. 22:00 – 02:00)
-                    if not (now_m >= start_m or now_m < end_m):
-                        return False
-                else:
-                    if not (start_m <= now_m < end_m):
-                        return False
-            except (ValueError, TypeError):
-                pass
-
-        return True
+        Prefer the value the viewset computes ONCE per request (context["now_local"], set
+        beside happy_hours) so no per-dish tz/profile query is issued. Fall back to deriving
+        it from the tenant Profile timezone the same way menu.views._profile_now does (a
+        profile may be passed via context; absent one it degrades to the platform default /
+        UTC) — never raising, so a missing key can't 500 a menu read.
+        """
+        now_local = self.context.get("now_local")
+        if now_local is not None:
+            return now_local
+        from menu.views import _profile_now  # lazy: menu.views imports this serializer
+        return _profile_now(self.context.get("profile"))
 
     def get_combo_components(self, instance) -> list:
         """Read shape: [{component_id, name, qty, position}].

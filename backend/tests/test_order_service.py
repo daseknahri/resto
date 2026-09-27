@@ -8,6 +8,7 @@ origin-patching intercepts the call), pinning the extracted control flow without
 This branch had NO through-the-view characterization test before extraction — these are the new
 coverage the STRUCT-1 scout called for alongside proving the seam is inert.
 """
+import datetime as dt
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -25,6 +26,7 @@ from menu.order_service import (
     resolve_option_map,
     resolve_prepay_and_wallet,
 )
+from menu.promos import day_time_window_open
 
 
 class ComputeOrderDeliveryFeeTests(SimpleTestCase):
@@ -247,6 +249,38 @@ class ResolveItemsTests(SimpleTestCase):
         self.assertNotIn("dead-combo", result)
         self.assertNotIn("soldout-combo", result)
 
+    @patch("menu.models.Dish")
+    def test_resolve_available_dishes_drops_dish_with_closed_schedule_only_when_now_local_passed(self, mock_dish):
+        # M7: a dish whose availability_schedule window is CLOSED at the tenant-local now is dropped
+        # (→ items_unavailable) so a stale PWA menu / direct API POST can't order it outside its
+        # window. A dish whose window is OPEN, and any dish with no schedule, are kept. Passing
+        # now_local=None (the default, un-updated callers) skips schedule filtering entirely.
+        def _dish(slug, schedule):
+            d = MagicMock(slug=slug)
+            d.availability_schedule = schedule
+            d.combo_components.all.return_value = []  # not a combo — isolate the schedule gate
+            return d
+
+        # "now" is Monday 2024-06-03 14:30 (naive is fine — the rule reads weekday + HH:MM only).
+        mon_14h = dt.datetime(2024, 6, 3, 14, 30)
+        closed = _dish("tue-special", {"days": ["tue"], "time_start": "18:00", "time_end": "22:00"})  # wrong day
+        open_now = _dish("mon-lunch", {"days": ["mon"], "time_start": "09:00", "time_end": "22:00"})   # in window
+        no_schedule = _dish("burger", None)
+        (
+            mock_dish.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+        ) = [closed, open_now, no_schedule]
+
+        # now_local passed → the closed-window dish is dropped; open + schedule-less kept.
+        gated = resolve_available_dishes(["tue-special", "mon-lunch", "burger"], now_local=mon_14h)
+        self.assertEqual(set(gated.keys()), {"mon-lunch", "burger"})
+        self.assertNotIn("tue-special", gated)
+
+        # now_local=None (backward-compat) → schedule filtering skipped; the SAME closed dish is kept.
+        ungated = resolve_available_dishes(["tue-special", "mon-lunch", "burger"])
+        self.assertEqual(set(ungated.keys()), {"tue-special", "mon-lunch", "burger"})
+
     @patch("menu.models.DishOption")
     def test_resolve_option_map_empty_short_circuits(self, mock_do):
         self.assertEqual(resolve_option_map([]), {})
@@ -263,6 +297,51 @@ class ResolveItemsTests(SimpleTestCase):
         mock_do.objects.filter.assert_called_once_with(id__in=[5, 7])
         # select_related("dish") is the OPS-5f price-smuggling guard — assert it's applied.
         mock_do.objects.filter.return_value.select_related.assert_called_once_with("dish")
+
+
+class DayTimeWindowOpenTests(SimpleTestCase):
+    """M7: the shared, overnight-aware day-of-week + HH:MM rule (menu.promos.day_time_window_open)
+    that BOTH promo activation and dish availability_schedule enforcement delegate to. Pure
+    function — now_local is fed directly (naive is fine; only weekday + HH:MM are read)."""
+
+    # 2024-06-03 = Monday, 06-07 = Friday, 06-08 = Saturday.
+    _MON_14H = dt.datetime(2024, 6, 3, 14, 30)
+    _MON_8H = dt.datetime(2024, 6, 3, 8, 0)
+    _FRI_23H = dt.datetime(2024, 6, 7, 23, 0)
+    _SAT_1H = dt.datetime(2024, 6, 8, 1, 0)
+    _SAT_14H = dt.datetime(2024, 6, 8, 14, 0)
+
+    def test_same_day_within_window_open(self):
+        self.assertTrue(day_time_window_open(["mon"], "09:00", "22:00", now_local=self._MON_14H))
+
+    def test_same_day_before_window_closed(self):
+        self.assertFalse(day_time_window_open(["mon"], "09:00", "22:00", now_local=self._MON_8H))
+
+    def test_day_not_in_list_closed(self):
+        # Monday now, window allows only tue/wed → closed regardless of the time.
+        self.assertFalse(day_time_window_open(["tue", "wed"], "09:00", "22:00", now_local=self._MON_14H))
+
+    def test_all_day_when_no_time_window(self):
+        # Both times blank → all-day: open iff today's weekday is allowed.
+        self.assertTrue(day_time_window_open(["mon"], "", "", now_local=self._MON_14H))
+        self.assertFalse(day_time_window_open(["tue"], "", "", now_local=self._MON_14H))
+
+    def test_empty_days_means_every_day(self):
+        self.assertTrue(day_time_window_open([], "09:00", "22:00", now_local=self._MON_14H))
+        self.assertTrue(day_time_window_open(None, "", "", now_local=self._MON_14H))
+
+    def test_overnight_evening_belongs_to_today(self):
+        # 22:00–02:00, Fri 23:00 → evening part, today's (Fri) weekday governs.
+        self.assertTrue(day_time_window_open(["fri"], "22:00", "02:00", now_local=self._FRI_23H))
+        self.assertFalse(day_time_window_open(["sat"], "22:00", "02:00", now_local=self._FRI_23H))
+
+    def test_overnight_after_midnight_tail_belongs_to_yesterday(self):
+        # 22:00–02:00, Sat 01:00 → after-midnight tail, yesterday's (Fri) weekday governs.
+        self.assertTrue(day_time_window_open(["fri"], "22:00", "02:00", now_local=self._SAT_1H))
+        self.assertFalse(day_time_window_open(["sat"], "22:00", "02:00", now_local=self._SAT_1H))
+
+    def test_overnight_daytime_closed(self):
+        self.assertFalse(day_time_window_open([], "22:00", "02:00", now_local=self._SAT_14H))
 
 
 class PriceLineOptionsTests(SimpleTestCase):

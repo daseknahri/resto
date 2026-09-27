@@ -746,6 +746,9 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 profile = self._profile()
                 if profile is not None:
                     now_local = _profile_now(profile)
+                    # Share this tenant-local instant with DishSerializer.get_is_schedule_available
+                    # (M7) so the availability_schedule window is read in the restaurant's clock, not UTC.
+                    ctx["now_local"] = now_local
                     ctx["happy_hours"] = get_active_happy_hours(now_local)
                 else:
                     ctx["happy_hours"] = []
@@ -841,6 +844,9 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 profile = self._profile()
                 if profile is not None:
                     now_local = _profile_now(profile)
+                    # Share this tenant-local instant with DishSerializer.get_is_schedule_available
+                    # (M7) so the availability_schedule window is read in the restaurant's clock, not UTC.
+                    ctx["now_local"] = now_local
                     ctx["happy_hours"] = get_active_happy_hours(now_local)
                 else:
                     ctx["happy_hours"] = []
@@ -2819,7 +2825,9 @@ class PlaceOrderView(APIView):
             resolve_available_dishes, resolve_option_map, price_line_options,
             deplete_stock, deplete_ingredients,
         )
-        dishes_map = resolve_available_dishes(slugs)
+        # Pass the tenant-local now so a dish outside its availability_schedule window is dropped
+        # here too (M7) — the order-time gate matching the menu's is_schedule_available display.
+        dishes_map = resolve_available_dishes(slugs, now_local=_profile_now(profile) if profile else None)
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -11188,16 +11196,16 @@ class OwnerCustomerListView(APIView):
         search = (request.query_params.get("search") or "").strip().lower()
         segment = (request.query_params.get("segment") or "all").strip().lower()
 
-        # Push segment predicate to SQL (HAVING on aggregated annotation) so that
-        # a filtered request does not materialise every customer row in Python.
-        # "all" fetches everything; specific segments add a HAVING clause.
-        _seg_having: dict = {}
-        if segment == "at_risk":
-            _seg_having = {"last_order_at__lt": at_risk_cutoff, "order_count__gt": self._NEW_THRESHOLD}
-        elif segment == "new":
-            _seg_having = {"order_count__lte": self._NEW_THRESHOLD}
-        elif segment == "returning":
-            _seg_having = {"order_count__gt": self._NEW_THRESHOLD, "last_order_at__gte": at_risk_cutoff}
+        # The segment predicate is intentionally NOT pushed to SQL. The header stat chips +
+        # segment-filter badges (summary.total/new/returning/at_risk) must reflect the WHOLE
+        # search-matched customer base, independent of which segment is selected — otherwise
+        # picking a segment collapsed "total" to that segment and zeroed the other chips (the
+        # active-filter both drove the results AND the counts). So we aggregate the full
+        # (search-applied) set, tag each row's segment in Python (step 6 — the single source
+        # of truth for the rule), compute the summary over that full set, and only THEN narrow
+        # the results list to the active segment (step 7). The row set is bounded by the search
+        # filter; at realistic per-tenant customer volumes materialising it is negligible — and
+        # the segment=all path (the common case) already did exactly this.
 
         _linked_base_q = Q(customer_id__isnull=False, status__in=self._COUNTED)
         _anon_base_q = Q(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
@@ -11237,7 +11245,6 @@ class OwnerCustomerListView(APIView):
                 last_phone=Max("customer_phone"),
                 currency=Max("currency"),
             )
-            .filter(**_seg_having)
         )
 
         # ── 2. Aggregate anonymous orders (no customer_id, phone only) ───────
@@ -11253,7 +11260,6 @@ class OwnerCustomerListView(APIView):
                 last_name=Max("customer_name"),
                 currency=Max("currency"),
             )
-            .filter(**_seg_having)
         )
 
         # ── 3. Fetch CustomerRating for linked customers (public schema) ──────
@@ -11390,7 +11396,14 @@ class OwnerCustomerListView(APIView):
             else:
                 c["segment"] = "returning"
 
-        # ── 7. Filter — DB HAVING already filtered; Python pass is a safety net ──
+        # ── 7. Segment summary (over the FULL set) + narrow results to active segment ──
+        # Counts are taken BEFORE narrowing so the header chips / segment badges stay stable
+        # regardless of the selected segment (see the aggregation note above). Only the
+        # results list is filtered to the active segment.
+        summary_total = len(customers)
+        summary_new = sum(1 for c in customers if c["segment"] == "new")
+        summary_returning = sum(1 for c in customers if c["segment"] == "returning")
+        summary_at_risk = sum(1 for c in customers if c["segment"] == "at_risk")
         if segment in ("new", "returning", "at_risk"):
             customers = [c for c in customers if c["segment"] == segment]
 
@@ -11413,11 +11426,8 @@ class OwnerCustomerListView(APIView):
         else:
             customers.sort(key=lambda c: (c[sort_key] or ""), reverse=reverse)
 
-        # ── 9. Summary stats ─────────────────────────────────────────────────
-        total_count = len(customers)
-        new_count = sum(1 for c in customers if c["segment"] == "new")
-        returning_count = sum(1 for c in customers if c["segment"] == "returning")
-        at_risk_count = sum(1 for c in customers if c["segment"] == "at_risk")
+        # ── 9. Result-set size (POST segment filter) — drives pagination has_more ──
+        filtered_count = len(customers)
 
         # ── 10. CSV export ────────────────────────────────────────────────────
         if (request.query_params.get("format") or "").strip().lower() == "csv":
@@ -11457,7 +11467,7 @@ class OwnerCustomerListView(APIView):
         except (ValueError, TypeError):
             _c_offset = 0
         _page = customers[_c_offset: _c_offset + _c_limit]
-        _has_more = total_count > _c_offset + _c_limit
+        _has_more = filtered_count > _c_offset + _c_limit
 
         return Response({
             "results": _page,
@@ -11465,10 +11475,10 @@ class OwnerCustomerListView(APIView):
             "limit": _c_limit,
             "offset": _c_offset,
             "summary": {
-                "total": total_count,
-                "new": new_count,
-                "returning": returning_count,
-                "at_risk": at_risk_count,
+                "total": summary_total,
+                "new": summary_new,
+                "returning": summary_returning,
+                "at_risk": summary_at_risk,
             },
         })
 

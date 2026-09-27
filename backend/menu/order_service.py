@@ -131,7 +131,7 @@ def resolve_prepay_and_wallet(*, user, linked_customer, profile, fulfillment_typ
     return requires_prepay, cod_order, use_wallet, wallet_deduction, None
 
 
-def resolve_available_dishes(slugs):
+def resolve_available_dishes(slugs, *, now_local=None):
     """Return ``{slug: Dish}`` for the currently-orderable dishes among ``slugs`` (RISK STRUCT-1,
     slice 2 — item resolution).
 
@@ -144,6 +144,12 @@ def resolve_available_dishes(slugs):
     whatever tenant schema the caller has already established (ambient for the storefront,
     ``schema_context`` for the marketplace). The caller compares the returned keys against ``slugs``
     to build its own ``items_unavailable`` response, keeping the DRF response contract in the view.
+
+    ``now_local`` (M7): when a tz-aware tenant-local datetime is passed, ALSO drop any dish whose
+    ``availability_schedule`` day/time window is currently CLOSED — the order-time gate mirroring the
+    menu display (``DishSerializer.get_is_schedule_available``) so a stale PWA menu / a direct API POST
+    can't order a time-limited dish outside its window. ``now_local=None`` (the default) skips schedule
+    filtering entirely, so every existing caller / test is unchanged.
     """
     # Function-local import (codebase menu↔accounts cycle-avoidance convention) — also keeps the
     # order paths' existing `menu.models`-patching tests valid after this extraction.
@@ -166,7 +172,13 @@ def resolve_available_dishes(slugs):
     # it, but a stale PWA menu / a direct API call could still POST it. Drop it here with the SAME
     # predicate so the caller's existing ``slug not in dishes_map`` check rejects it as
     # ``items_unavailable`` — no view change, no drift between what the menu shows and what we accept.
-    return {slug: d for slug, d in resolved.items() if not _combo_component_unavailable(d)}
+    # The same reasoning applies to a dish whose availability_schedule window is closed (M7) — gated
+    # only when the caller supplies now_local, so un-updated callers keep the pre-M7 behavior.
+    return {
+        slug: d
+        for slug, d in resolved.items()
+        if not _combo_component_unavailable(d) and not _schedule_window_closed(d, now_local)
+    }
 
 
 def _combo_component_unavailable(dish) -> bool:
@@ -190,6 +202,35 @@ def _combo_component_unavailable(dish) -> bool:
             if comp.stock_qty is not None and comp.stock_qty <= 0:
                 return True
         return False
+    except Exception:
+        return False
+
+
+def _schedule_window_closed(dish, now_local) -> bool:
+    """True when ``dish`` has an ``availability_schedule`` whose day/time window is CLOSED at
+    ``now_local`` — the order-time enforcement of the same window the menu displays (M7).
+
+    No-op (returns False → "not closed") when ``now_local`` is None or the dish carries no dict
+    schedule, so un-gated callers are unaffected. Reuses the already-prefetched dish object (no
+    extra query) and delegates to the SHARED ``menu.promos.day_time_window_open`` rule so the
+    order path and the display agree on the overnight/day-allow-list semantics. Degrades to
+    "open" on ANY error (mirrors ``_combo_component_unavailable``) so a malformed schedule never
+    rejects a dish the menu showed as orderable.
+    """
+    if now_local is None:
+        return False
+    try:
+        schedule = getattr(dish, "availability_schedule", None)
+        if not schedule or not isinstance(schedule, dict):
+            return False
+        from menu.promos import day_time_window_open  # function-local (see resolve_available_dishes)
+        days = schedule.get("days")
+        return not day_time_window_open(
+            days if isinstance(days, list) else None,
+            str(schedule.get("time_start") or ""),
+            str(schedule.get("time_end") or ""),
+            now_local=now_local,
+        )
     except Exception:
         return False
 

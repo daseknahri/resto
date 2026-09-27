@@ -1957,6 +1957,13 @@ class OwnerReservationDetailView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(tenant, "reservations"):
+            return Response(
+                {"detail": "Reservations are not available for this business.",
+                 "code": "reservations_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = OwnerReservationRescheduleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1969,8 +1976,21 @@ class OwnerReservationDetailView(APIView):
                 source__in=RESERVATION_SOURCES,
                 archived_at__isnull=True,
             )
+            previous_booked_for = lead.booked_for
             lead.booked_for = serializer.validated_data["booked_for"]
             lead.save(update_fields=["booked_for", "updated_at"])
+            if previous_booked_for != lead.booked_for:
+                _log_reservation_timeline_event(
+                    lead=lead,
+                    tenant=tenant,
+                    actor=request.user,
+                    action=ReservationTimelineEvent.Actions.NOTE,
+                    note=(
+                        f"Reservation time changed from "
+                        f"{previous_booked_for.isoformat() if previous_booked_for else 'unset'} "
+                        f"to {lead.booked_for.isoformat()}."
+                    ),
+                )
             payload = OwnerReservationSerializer(lead).data
 
         return Response(payload)

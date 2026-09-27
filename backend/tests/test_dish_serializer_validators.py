@@ -21,12 +21,12 @@ field-level validators and computed fields in menu/serializers.py:
     - validate_disabled_note
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
-datetime.datetime is patched for schedule-availability tests.
+Schedule-availability tests inject the tenant-local "now" via the serializer
+context (M7: the window is read in the restaurant's clock, not server UTC).
 """
 import datetime as dt_module
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from rest_framework.exceptions import ValidationError

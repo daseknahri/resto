@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import ANY, Mock, patch
 
 from django.test import SimpleTestCase
@@ -6,6 +6,8 @@ from django.http import Http404
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from sales.models import ReservationTimelineEvent
+from sales.serializers import OwnerReservationRescheduleSerializer
 from sales.views import (
     OwnerReservationBulkReminderView,
     OwnerReservationBulkReminderResultView,
@@ -312,6 +314,112 @@ class OwnerReservationDetailViewTests(SimpleTestCase):
         response = self.view(request, lead_id=7)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         get_object_or_404_mock.assert_not_called()
+
+    @patch("sales.views._log_reservation_timeline_event")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_updates_booked_for_and_logs_timeline_change(
+        self, get_object_or_404_mock, schema_context_mock, timeline_log_mock
+    ):
+        schema_context_mock.return_value = _passthrough_cm()
+        lead = _lead_row(status_value="won")
+        lead.booked_for = datetime.now(timezone.utc) - timedelta(days=10)
+        lead.save = Mock()
+        get_object_or_404_mock.return_value = lead
+
+        new_time = datetime.now(timezone.utc) + timedelta(days=2)
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": new_time.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lead.save.assert_called_once_with(update_fields=["booked_for", "updated_at"])
+        self.assertEqual(lead.booked_for, new_time)
+        # Drag-to-reschedule leaves a history trail, same as a status change.
+        timeline_log_mock.assert_called_once()
+        self.assertEqual(
+            timeline_log_mock.call_args.kwargs["action"], ReservationTimelineEvent.Actions.NOTE
+        )
+
+    @patch("sales.views._log_reservation_timeline_event")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_skips_timeline_log_when_time_unchanged(
+        self, get_object_or_404_mock, schema_context_mock, timeline_log_mock
+    ):
+        schema_context_mock.return_value = _passthrough_cm()
+        same_time = datetime.now(timezone.utc) + timedelta(days=2)
+        lead = _lead_row(status_value="won")
+        lead.booked_for = same_time
+        lead.save = Mock()
+        get_object_or_404_mock.return_value = lead
+
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": same_time.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        timeline_log_mock.assert_not_called()
+
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_rejects_null_booked_for(self, get_object_or_404_mock):
+        # A reschedule always targets a concrete time; a stray null must not
+        # silently un-schedule the reservation off the calendar (M11).
+        request = self.factory.patch("/api/owner/reservations/7/", {"booked_for": None}, format="json")
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        get_object_or_404_mock.assert_not_called()
+
+    @patch("sales.views.get_object_or_404")
+    def test_reschedule_rejects_past_datetime(self, get_object_or_404_mock):
+        past = datetime.now(timezone.utc) - timedelta(days=1)
+        request = self.factory.patch(
+            "/api/owner/reservations/7/", {"booked_for": past.isoformat()}, format="json"
+        )
+        request.tenant = Mock(id=10)
+        force_authenticate(request, user=_owner_user(tenant_id=10))
+        response = self.view(request, lead_id=7)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        get_object_or_404_mock.assert_not_called()
+
+
+class OwnerReservationRescheduleSerializerTests(SimpleTestCase):
+    """OwnerReservationRescheduleSerializer — the drag-to-reschedule guard (M11).
+    Shares validate_reservation_booked_for with the create-path LeadSerializer, so
+    this locks in both the shared rule and the allow_null=False tightening."""
+
+    def test_rejects_past_datetime(self):
+        past = datetime.now(timezone.utc) - timedelta(days=1)
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": past.isoformat()})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_rejects_horizon_beyond_180_days(self):
+        too_far = datetime.now(timezone.utc) + timedelta(days=181)
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": too_far.isoformat()})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_rejects_null_booked_for(self):
+        # allow_null=False: a reschedule always targets a concrete time (M11) — a
+        # stray null must be rejected, not silently accepted as "un-schedule".
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": None})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("booked_for", serializer.errors)
+
+    def test_accepts_valid_near_future_datetime(self):
+        soon = datetime.now(timezone.utc) + timedelta(days=2)
+        serializer = OwnerReservationRescheduleSerializer(data={"booked_for": soon.isoformat()})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["booked_for"], soon)
 
 
 class OwnerReservationBulkStatusViewTests(SimpleTestCase):
