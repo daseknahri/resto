@@ -490,7 +490,7 @@ const runSearch = async (q) => {
       .slice(0, 10)
       .map((c) => ({
         id: c.customer_id,
-        name: c.name || `Customer #${c.customer_id}`,
+        name: c.name || t('ownerWallet.customerFallbackName', { id: c.customer_id }),
         phone: c.phone || '',
         email: c.email || '',
         wallet_balance: c.wallet_balance || '0.00',

@@ -691,7 +691,7 @@
           <p class="font-semibold text-slate-100">{{ request.tenant_slug }}</p>
           <p class="text-xs text-slate-400">{{ request.current_plan_name }} &rarr; {{ request.target_plan_name }}</p>
           <p class="text-xs text-slate-500">
-            {{ t("adminConsole.payment") }}: {{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}
+            {{ t("adminConsole.payment") }}: {{ paymentMethodLabel(request.payment_method) }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}
           </p>
           <p v-if="request.target_plan_is_active === false" class="text-xs text-amber-300">{{ t("adminConsole.targetPlanInactive") }}</p>
           <div class="grid grid-cols-2 gap-2">
@@ -734,7 +734,7 @@
                 <span>{{ request.target_plan_name }}</span>
                 <span v-if="request.target_plan_is_active === false" class="ms-2 text-xs text-amber-300">({{ t("adminConsole.inactive") }})</span>
               </td>
-              <td class="px-4 py-3 text-slate-300">{{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ paymentMethodLabel(request.payment_method) }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}</td>
               <td class="px-4 py-3">
                 <span class="ui-status-pill text-[10px] font-semibold" :class="upgradeStatusClass(request.status)">
                   {{ upgradeStatusLabel(request.status) }}
@@ -951,7 +951,7 @@
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold text-slate-100">{{ entry.action }}</p>
+            <p class="text-sm font-semibold text-slate-100">{{ formatAuditAction(entry.action) }}</p>
             <p class="text-[11px] text-slate-500">{{ formatDate(entry.created_at) }}</p>
           </div>
           <p class="text-xs text-slate-400">{{ t("adminConsole.actor") }}: {{ entry.actor_username || t("adminConsole.system") }}</p>
@@ -973,7 +973,7 @@
           <tbody>
             <tr v-for="entry in auditLogs" :key="entry.id" class="border-t border-slate-800">
               <td class="px-4 py-3 text-slate-300">{{ formatDate(entry.created_at) }}</td>
-              <td class="px-4 py-3 text-slate-100">{{ entry.action }}</td>
+              <td class="px-4 py-3 text-slate-100">{{ formatAuditAction(entry.action) }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.actor_username || t("adminConsole.system") }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</td>
               <td class="px-4 py-3 text-slate-400 max-w-[360px] whitespace-pre-wrap text-xs">{{ formatAuditMetadata(entry.metadata) }}</td>
@@ -2087,6 +2087,15 @@ const formatAuditAction = (action) => {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 };
+
+// Tier-upgrade-request payment method → i18n label (validated set: cash, bank_transfer, other).
+const PAYMENT_METHOD_LABELS = {
+  cash: "adminConsole.paymentMethodCash",
+  bank_transfer: "adminConsole.paymentMethodBankTransfer",
+  other: "adminConsole.paymentMethodOther",
+};
+const paymentMethodLabel = (method) =>
+  t(PAYMENT_METHOD_LABELS[String(method || "").trim().toLowerCase()] || "adminConsole.paymentMethodOther");
 
 const formatDate = (value) => {
   if (!value) return "-";

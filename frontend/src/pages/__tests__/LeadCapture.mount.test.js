@@ -83,7 +83,7 @@ describe("LeadCapture — mount smoke", () => {
   // setup() must not throw and onMounted(applyPlanFromQuery) must survive an empty
   // route.query (the undefined-query read this guard exists to catch). With no
   // ?plan, the reactive form stays on its "basic" default, so the first stat tile's
-  // value (selectedPlanLabel) reads "Basic".
+  // value (selectedPlanLabel) reads the default plan-name key (verbatim via the mocked t).
   it("mounts without a setup() crash and renders the lead-intake form", async () => {
     let wrapper;
     expect(() => {
@@ -98,7 +98,7 @@ describe("LeadCapture — mount smoke", () => {
     expect(text).toContain("leadCapture.title");
     expect(text).toContain("leadCapture.kicker");
     // No ?plan → default plan; the first .ui-stat-value renders selectedPlanLabel.
-    expect(wrapper.find(".ui-stat-value").text()).toBe("Basic");
+    expect(wrapper.find(".ui-stat-value").text()).toBe("leadCapture.planNameBasic");
     // A fresh mount is not in the submitted state (lead.success is false).
     expect(text).not.toContain("leadCapture.submittedOk");
   });
@@ -106,7 +106,7 @@ describe("LeadCapture — mount smoke", () => {
   // ── (2) deep-linked plan — ?plan=pro ────────────────────────────────────────
   // The page's real mount-time variation: onMounted(applyPlanFromQuery) reads
   // route.query.plan and pre-selects it. Seed ?plan=pro and assert the selected
-  // plan label flipped to "Pro" — proving the query was read at setup (without
+  // plan label flipped to the pro plan-name key — proving the query was read at setup (without
   // throwing) and selectedPlanLabel recomputed off it.
   it("applies ?plan=pro from the route query at mount", async () => {
     routeState.query = { plan: "pro" };
@@ -120,7 +120,7 @@ describe("LeadCapture — mount smoke", () => {
     expect(wrapper.exists()).toBe(true);
 
     // selectedPlanLabel recomputed from the applied ?plan=pro.
-    expect(wrapper.find(".ui-stat-value").text()).toBe("Pro");
+    expect(wrapper.find(".ui-stat-value").text()).toBe("leadCapture.planNamePro");
     // Heading still renders in this variation.
     expect(wrapper.text()).toContain("leadCapture.title");
   });

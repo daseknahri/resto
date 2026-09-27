@@ -96,12 +96,12 @@ describe("RidePageHistory", () => {
 
   it("renders the star rating badge when rider_driver_rating is present", () => {
     const w = mountComp({ history: [ride({ rider_driver_rating: 4 })] });
-    expect(w.find('[aria-label="4 stars"]').exists()).toBe(true);
+    expect(w.find('[aria-label^="common.starsAria"]').exists()).toBe(true);
   });
 
   it("omits the star rating badge when rider_driver_rating is absent", () => {
     const w = mountComp({ history: [ride({ rider_driver_rating: null })] });
-    expect(w.find('[aria-label$=" stars"]').exists()).toBe(false);
+    expect(w.find('[aria-label^="common.starsAria"]').exists()).toBe(false);
   });
 
   it("renders the section (not the empty state) once history has rows, even while re-fetching", () => {

@@ -197,7 +197,7 @@
               role="radio"
               class="ui-touch-target ui-press flex items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'"
-              :aria-label="`${n} star${n > 1 ? 's' : ''}`"
+              :aria-label="n === 1 ? t('common.starsAria_one', { count: n }) : t('common.starsAria_other', { count: n })"
               :aria-checked="ratingScore === n"
               @click="ratingScore = n"
             >

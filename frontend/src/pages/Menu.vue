@@ -363,7 +363,7 @@
           class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
         >
           <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
-            <span :aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
+            <span :aria-label="review.score === 1 ? t('common.starsAria_one', { count: review.score }) : t('common.starsAria_other', { count: review.score })">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
           </div>
           <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
         </div>
@@ -443,7 +443,7 @@
             <span
               v-if="sectionDishes(cat.slug).length"
               class="shrink-0 rounded-full border border-slate-800/80 bg-slate-900/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums"
-              :aria-label="`${sectionDishes(cat.slug).length} items`"
+              :aria-label="sectionDishes(cat.slug).length === 1 ? t('common.item_one', { count: sectionDishes(cat.slug).length }) : t('common.item_other', { count: sectionDishes(cat.slug).length })"
             >{{ sectionDishes(cat.slug).length }}</span>
           </div>
 

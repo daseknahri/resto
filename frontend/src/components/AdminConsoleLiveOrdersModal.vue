@@ -68,7 +68,7 @@
                     <p class="font-semibold text-slate-100">#{{ order.order_number }}</p>
                     <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                   </div>
-                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.type") }}: {{ order.order_type || "-" }}</p>
+                  <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.type") }}: {{ liveOrderTypeLabel(order.order_type) }}</p>
                   <p class="text-xs text-slate-400">{{ t("adminConsole.liveOrders.total") }}: {{ formatCurrency(order.total, order.currency || 'MAD') }}</p>
                   <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.age") }}: {{ formatAge(order.created_at) }}</p>
                   <p class="text-xs text-slate-500">{{ t("adminConsole.liveOrders.phone") }}: {{ order.customer_phone || "-" }}</p>
@@ -93,7 +93,7 @@
                       <td class="px-3 py-2.5">
                         <span class="ui-status-pill text-[10px] font-semibold" :class="liveOrderStatusClass(order.status)">{{ liveOrderStatusLabel(order.status) }}</span>
                       </td>
-                      <td class="px-3 py-2.5 text-slate-300">{{ order.order_type || "-" }}</td>
+                      <td class="px-3 py-2.5 text-slate-300">{{ liveOrderTypeLabel(order.order_type) }}</td>
                       <td class="px-3 py-2.5 text-slate-300 tabular-nums">{{ formatCurrency(order.total, order.currency || 'MAD') }}</td>
                       <td class="px-3 py-2.5 text-slate-400">{{ formatAge(order.created_at) }}</td>
                       <td class="px-3 py-2.5 text-slate-400">{{ order.customer_phone || "-" }}</td>
@@ -207,6 +207,15 @@ const LIVE_ORDER_STATUS_I18N = {
   cancelled: "orderStatus.statusCancelled",
 };
 const liveOrderStatusLabel = (s) => (s ? t(LIVE_ORDER_STATUS_I18N[s] || s) : "-");
+
+// Localize the cross-tenant live-order type (same class as status above — don't leak the
+// raw fulfillment enum token to the operator). Unknown/empty falls back to raw / "-".
+const ORDER_TYPE_I18N = {
+  pickup: "adminConsole.liveOrders.typePickup",
+  delivery: "adminConsole.liveOrders.typeDelivery",
+  table: "adminConsole.liveOrders.typeTable",
+};
+const liveOrderTypeLabel = (val) => (val ? t(ORDER_TYPE_I18N[val] || val) : "-");
 
 const formatAge = (value) => {
   if (!value) return "-";
