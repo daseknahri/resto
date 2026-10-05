@@ -74,10 +74,11 @@ class TieringUtilsTests(SimpleTestCase):
         self.assertTrue(is_plan_upgrade("starter", "growth"))
         self.assertFalse(is_plan_upgrade("growth", "basic"))
 
+    @patch("sales.services.Lead")  # provision_lead row-locks the lead first
     @patch("sales.services.ProvisioningJob")
     @patch("sales.services.schema_context")
     @patch("sales.services.transaction.atomic")
-    def test_provision_blocks_inactive_plan(self, atomic_mock, schema_context_mock, provisioning_job_mock):
+    def test_provision_blocks_inactive_plan(self, atomic_mock, schema_context_mock, provisioning_job_mock, _lead_mock):
         # Provide no-op context managers for schema/transaction wrappers.
         schema_cm = Mock()
         schema_cm.__enter__ = Mock(return_value=None)

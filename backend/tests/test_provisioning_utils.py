@@ -2,23 +2,27 @@
 Tests for provisioning utility functions in sales/services.py:
   - mask_secret
   - _is_local_suffix
+  - is_reserved_slug
   - _base_slug_for_lead
   - _build_next_slug
   - _availability
+  - preview_lead_provision (slug resolution loop)
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from sales.services import (
     mask_secret,
     _is_local_suffix,
+    is_reserved_slug,
     _base_slug_for_lead,
     _build_next_slug,
     _availability,
+    preview_lead_provision,
 )
 
 
@@ -114,6 +118,41 @@ class BaseSlugForLeadTests(SimpleTestCase):
         from sales.services import SLUG_MAX_LENGTH
         self.assertLessEqual(len(result), SLUG_MAX_LENGTH)
 
+    # M3: generic mailboxes must not auto-generate a platform-host / system-schema slug,
+    # but one-click provisioning must still work (a suffix is appended).
+    def test_reserved_email_local_part_gets_a_suffix(self):
+        for local_part in ("admin", "menu", "www", "api", "app", "mail", "public", "static", "media"):
+            with self.subTest(local_part=local_part):
+                result = _base_slug_for_lead(self._lead(email=f"{local_part}@pizzeria.ma"))
+                self.assertEqual(result, f"{local_part}-2")
+                self.assertFalse(is_reserved_slug(result))
+
+    def test_reserved_name_gets_a_suffix(self):
+        self.assertEqual(_base_slug_for_lead(self._lead(name="Public")), "public-2")
+        self.assertEqual(_base_slug_for_lead(self._lead(name="Admin")), "admin-2")
+
+    def test_pg_prefix_is_neutralised(self):
+        result = _base_slug_for_lead(self._lead(email="pg_toast@example.com"))
+        self.assertEqual(result, "pg-toast")
+        self.assertFalse(is_reserved_slug(result))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# is_reserved_slug
+# ══════════════════════════════════════════════════════════════════════════════
+
+class IsReservedSlugTests(SimpleTestCase):
+    def test_reserved_names(self):
+        for slug in ("public", "www", "admin", "api", "app", "menu", "static", "media", "mail",
+                     "information_schema", "pg_catalog", "pg_toast", "pg_anything", "ADMIN", " www "):
+            with self.subTest(slug=slug):
+                self.assertTrue(is_reserved_slug(slug))
+
+    def test_ordinary_names(self):
+        for slug in ("mybistro", "admin-2", "menus", "pg-foo", "daseknahri", "apiary"):
+            with self.subTest(slug=slug):
+                self.assertFalse(is_reserved_slug(slug))
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # _build_next_slug
@@ -144,22 +183,25 @@ class BuildNextSlugTests(SimpleTestCase):
 # _availability
 # ══════════════════════════════════════════════════════════════════════════════
 
+@patch("sales.services.schema_exists", return_value=False)
 class AvailabilityTests(SimpleTestCase):
     @patch("sales.services.Domain")
     @patch("sales.services.Tenant")
-    def test_both_available(self, TenantMock, DomainMock):
+    def test_both_available(self, TenantMock, DomainMock, _schema_exists):
         TenantMock.objects.filter.return_value.exists.return_value = False
         DomainMock.objects.filter.return_value.exists.return_value = False
         result = _availability("mybistro", "example.com")
         self.assertTrue(result["slug_available"])
         self.assertTrue(result["domain_available"])
+        self.assertTrue(result["schema_available"])
+        self.assertFalse(result["reserved"])
         self.assertTrue(result["available"])
         self.assertEqual(result["slug"], "mybistro")
         self.assertEqual(result["domain"], "mybistro.example.com")
 
     @patch("sales.services.Domain")
     @patch("sales.services.Tenant")
-    def test_slug_taken(self, TenantMock, DomainMock):
+    def test_slug_taken(self, TenantMock, DomainMock, _schema_exists):
         TenantMock.objects.filter.return_value.exists.return_value = True
         DomainMock.objects.filter.return_value.exists.return_value = False
         result = _availability("mybistro", "example.com")
@@ -168,7 +210,7 @@ class AvailabilityTests(SimpleTestCase):
 
     @patch("sales.services.Domain")
     @patch("sales.services.Tenant")
-    def test_domain_taken(self, TenantMock, DomainMock):
+    def test_domain_taken(self, TenantMock, DomainMock, _schema_exists):
         TenantMock.objects.filter.return_value.exists.return_value = False
         DomainMock.objects.filter.return_value.exists.return_value = True
         result = _availability("mybistro", "example.com")
@@ -178,8 +220,104 @@ class AvailabilityTests(SimpleTestCase):
 
     @patch("sales.services.Domain")
     @patch("sales.services.Tenant")
-    def test_domain_format_is_slug_dot_suffix(self, TenantMock, DomainMock):
+    def test_domain_format_is_slug_dot_suffix(self, TenantMock, DomainMock, _schema_exists):
         TenantMock.objects.filter.return_value.exists.return_value = False
         DomainMock.objects.filter.return_value.exists.return_value = False
         result = _availability("bistro-demo", "menu.example.com")
         self.assertEqual(result["domain"], "bistro-demo.menu.example.com")
+
+    # H3: a stray schema (orphan of a failed build) blocks the slug instead of being adopted.
+    @patch("sales.services.Domain")
+    @patch("sales.services.Tenant")
+    def test_existing_postgres_schema_blocks_slug(self, TenantMock, DomainMock, schema_exists_mock):
+        TenantMock.objects.filter.return_value.exists.return_value = False
+        DomainMock.objects.filter.return_value.exists.return_value = False
+        schema_exists_mock.return_value = True
+        result = _availability("mybistro", "example.com")
+        schema_exists_mock.assert_called_once_with("mybistro")
+        self.assertFalse(result["schema_available"])
+        self.assertFalse(result["available"])
+
+    # M3: reserved slugs and platform hosts are never available.
+    @patch("sales.services.Domain")
+    @patch("sales.services.Tenant")
+    def test_reserved_slug_is_unavailable(self, TenantMock, DomainMock, _schema_exists):
+        TenantMock.objects.filter.return_value.exists.return_value = False
+        DomainMock.objects.filter.return_value.exists.return_value = False
+        for slug in ("admin", "menu", "www", "information_schema", "pg_catalog"):
+            with self.subTest(slug=slug):
+                result = _availability(slug, "example.com")
+                self.assertTrue(result["reserved"])
+                self.assertFalse(result["available"])
+
+    @override_settings(
+        PUBLIC_SCHEMA_HOSTS=["localhost", "127.0.0.1", "kepoli.example.com"],
+        BRAND_DOMAIN="brand.example.com",
+        PUBLIC_MENU_BASE_URL="https://go.example.com",
+    )
+    @patch("sales.services.Domain")
+    @patch("sales.services.Tenant")
+    def test_domain_equal_to_a_platform_host_is_unavailable(self, TenantMock, DomainMock, _schema_exists):
+        TenantMock.objects.filter.return_value.exists.return_value = False
+        DomainMock.objects.filter.return_value.exists.return_value = False
+        for slug in ("kepoli", "brand", "go"):
+            with self.subTest(slug=slug):
+                result = _availability(slug, "example.com")
+                self.assertTrue(result["reserved"])
+                self.assertFalse(result["available"])
+        # The same labels under a different suffix are ordinary tenant domains.
+        self.assertTrue(_availability("kepoli", "menus.example.com")["available"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# preview_lead_provision — slug resolution loop
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _noop_cm():
+    cm = Mock()
+    cm.__enter__ = Mock(return_value=None)
+    cm.__exit__ = Mock(return_value=False)
+    return cm
+
+
+@patch("sales.services.schema_exists", return_value=False)
+@patch("sales.services.schema_context", return_value=_noop_cm())
+@patch("sales.services.Domain")
+@patch("sales.services.Tenant")
+class PreviewSlugResolutionTests(SimpleTestCase):
+    def _lead(self, email="owner@example.com"):
+        return SimpleNamespace(id=9, email=email, name="", phone="")
+
+    def _free(self, TenantMock, DomainMock):
+        TenantMock.objects.filter.return_value.exists.return_value = False
+        DomainMock.objects.filter.return_value.exists.return_value = False
+
+    def test_auto_slug_for_generic_mailbox_resolves_without_collision(self, TenantMock, DomainMock, *_):
+        self._free(TenantMock, DomainMock)
+        preview = preview_lead_provision(self._lead("menu@pizzeria.ma"), domain_suffix="example.com")
+        self.assertEqual(preview["input_slug"], "menu-2")
+        self.assertFalse(preview["collision"])
+        self.assertEqual(preview["resolved_slug"], "menu-2")
+        self.assertEqual(preview["resolved_domain"], "menu-2.example.com")
+
+    def test_requested_reserved_slug_is_flagged_and_suffixed(self, TenantMock, DomainMock, *_):
+        self._free(TenantMock, DomainMock)
+        preview = preview_lead_provision(self._lead(), domain_suffix="example.com", requested_slug="admin")
+        self.assertTrue(preview["input_reserved"])
+        self.assertTrue(preview["collision"])
+        self.assertEqual(preview["resolved_slug"], "admin-2")
+
+    def test_requested_pg_prefixed_slug_terminates(self, TenantMock, DomainMock, *_):
+        # Suffixing alone can never clear a `pg_` prefix — the loop must still terminate.
+        self._free(TenantMock, DomainMock)
+        preview = preview_lead_provision(self._lead(), domain_suffix="example.com", requested_slug="pg_foo")
+        self.assertTrue(preview["collision"])
+        self.assertEqual(preview["resolved_slug"], "pg-foo-2")
+        self.assertFalse(is_reserved_slug(preview["resolved_slug"]))
+
+    def test_resolution_is_bounded(self, TenantMock, DomainMock, *_):
+        TenantMock.objects.filter.return_value.exists.return_value = True  # everything taken
+        DomainMock.objects.filter.return_value.exists.return_value = False
+        with patch("sales.services.SLUG_MAX_ATTEMPTS", 5):
+            with self.assertRaisesMessage(ValueError, "Could not find an available tenant slug"):
+                preview_lead_provision(self._lead(), domain_suffix="example.com")
