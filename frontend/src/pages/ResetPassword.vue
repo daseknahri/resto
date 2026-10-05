@@ -123,7 +123,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { stripTokenFromUrl } from "../lib/tokenRedaction";
 
 const route = useRoute();
@@ -173,7 +173,10 @@ const submit = async () => {
     const { data } = await api.post("/password-reset/confirm/", { token: token.value, password: password.value });
     message.value = data?.detail || t("resetPassword.successFallback");
   } catch (err) {
-    error.value = err?.response?.data?.detail || t("resetPassword.failed");
+    // The confirm endpoint answers with non_field_errors / a bare list ("Token expired or
+    // used", "Invalid token") or a password-validator field error — not `detail` — so read
+    // it with the shared extractor instead of always showing the generic failure.
+    error.value = extractApiErrorMessage(err, t("resetPassword.failed"));
   } finally {
     submitting.value = false;
   }
