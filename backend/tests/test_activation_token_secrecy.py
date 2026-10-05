@@ -458,7 +458,7 @@ class PasswordResetConfirmRaceTests(SimpleTestCase):
 class TenantSettingsImportSuperCategoryTests(SimpleTestCase):
     def setUp(self):
         self.patches = {}
-        for name in ("Category", "Dish", "DishOption", "TableLink", "SuperCategory"):
+        for name in ("Category", "ComboComponent", "Dish", "DishOption", "TableLink", "SuperCategory"):
             patcher = patch(f"sales.views.{name}")
             self.patches[name] = patcher.start()
             self.addCleanup(patcher.stop)
