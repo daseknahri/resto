@@ -599,10 +599,20 @@
 
               <!-- Delivery fee info -->
               <div v-if="r.delivery_enabled" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                <span v-if="Number(r.delivery_fee) > 0" class="tabular-nums">
-                  {{ t('marketplace.deliveryFee') }}: {{ fmtFee(r.delivery_fee) }}
+                <!-- Only "Free delivery" when it really is free: a distance-priced restaurant
+                     (base + per-km) can have a 0 flat fee and still charge at checkout. -->
+                <span v-if="deliveryCardPricing(r).kind === 'flat'" class="tabular-nums">
+                  {{ t('marketplace.deliveryFee') }}: {{ fmtFee(deliveryCardPricing(r).fee) }}
+                </span>
+                <span v-else-if="deliveryCardPricing(r).kind === 'distance'" class="tabular-nums">
+                  {{ deliveryCardPricing(r).from > 0
+                    ? t('marketplace.deliveryFrom', { amount: fmtFee(deliveryCardPricing(r).from) })
+                    : t('marketplace.deliveryByDistance') }}
                 </span>
                 <span v-else class="font-medium text-emerald-400/80">{{ t('marketplace.freeDelivery') }}</span>
+                <span v-if="deliveryCardPricing(r).freeOver > 0" class="tabular-nums text-emerald-400/80">
+                  · {{ t('marketplace.freeDeliveryOver', { amount: fmtFee(deliveryCardPricing(r).freeOver) }) }}
+                </span>
                 <span v-if="Number(r.delivery_minimum_order) > 0" class="tabular-nums">
                   · {{ t('marketplace.minOrder', { amount: fmtFee(r.delivery_minimum_order) }) }}
                 </span>
@@ -647,6 +657,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
+import { deliveryCardPricing } from '../lib/deliveryPricing';
 import { SERVICES } from '../lib/services';
 
 const MKT_PAGE_SIZE = 20;
@@ -1033,8 +1044,14 @@ const _buildParams = () => {
   return params;
 };
 
+// Listing request sequence: bumped by every page-1 (re)fetch. A response is applied only if
+// its request is still the latest, so a slow answer for an earlier search term / filter set
+// (or a load-more page of the previous result set) can never overwrite the current one.
+let _listSeq = 0;
+
 // ── Initial / filter-change fetch (resets to page 1, replaces results) ────────
 const fetchRestaurants = async () => {
+  const seq = ++_listSeq;
   loading.value = true;
   fetchError.value = false;
   currentPage.value = 1;
@@ -1042,6 +1059,7 @@ const fetchRestaurants = async () => {
   try {
     const params = { ..._buildParams(), page: 1 };
     const res = await api.get('/marketplace/', { params });
+    if (seq !== _listSeq) return; // superseded by a newer search/filter
     restaurants.value = res.data.restaurants || [];
     hasMore.value = Boolean(res.data.has_more);
     currentPage.value = res.data.page ?? 1;
@@ -1051,9 +1069,11 @@ const fetchRestaurants = async () => {
     if (incoming.cuisines?.length) filters.value.cuisines = incoming.cuisines;
     if (incoming.tags?.length) filters.value.tags = incoming.tags;
   } catch {
-    fetchError.value = true;
+    if (seq === _listSeq) fetchError.value = true;
   } finally {
-    loading.value = false;
+    // Only the latest request owns the spinner — a stale one finishing must not hide it
+    // while the current fetch is still in flight.
+    if (seq === _listSeq) loading.value = false;
   }
 };
 
@@ -1061,10 +1081,13 @@ const fetchRestaurants = async () => {
 const loadMoreRestaurants = async () => {
   if (loadingMore.value || !hasMore.value) return;
   loadingMore.value = true;
+  const seq = _listSeq;
   const nextPage = currentPage.value + 1;
   try {
     const params = { ..._buildParams(), page: nextPage };
     const res = await api.get('/marketplace/', { params });
+    // The filters changed while this page loaded → it belongs to the old result set.
+    if (seq !== _listSeq) return;
     const incoming = res.data.restaurants || [];
     restaurants.value = [...restaurants.value, ...incoming];
     hasMore.value = Boolean(res.data.has_more);
@@ -1076,8 +1099,9 @@ const loadMoreRestaurants = async () => {
     if (incomingFilters.tags?.length) filters.value.tags = incomingFilters.tags;
   } catch {
     // Non-fatal: keep existing results, button remains visible so user can retry.
-    // Surface a toast so a flaky-connection tap isn't a silent no-op.
-    toast.show(t('marketplace.loadMoreFailed'), 'error');
+    // Surface a toast so a flaky-connection tap isn't a silent no-op (unless the page
+    // belonged to a result set the customer has already replaced).
+    if (seq === _listSeq) toast.show(t('marketplace.loadMoreFailed'), 'error');
   } finally {
     loadingMore.value = false;
   }

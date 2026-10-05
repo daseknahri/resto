@@ -66,3 +66,21 @@ export function parseCoordinatesFromMapUrl(value) {
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
 }
+
+// What a marketplace listing card may truthfully say about the delivery fee, before any address
+// is known — mirrors which branch of tenancy/delivery_pricing.compute_delivery_fee the
+// restaurant's config reaches:
+//   per-km > 0 → 'distance': base + per-km × km, so the cheapest possible fee is `from` (= base;
+//                0 means "priced by distance" with no floor worth quoting)
+//   flat  > 0  → 'flat': that fee
+//   otherwise  → 'free' (no per-km, no flat fee: genuinely free; base alone is never charged)
+// `freeOver` (> 0) is the subtotal at which a paid delivery becomes free.
+export function deliveryCardPricing(r) {
+  const flat = Number(r?.delivery_fee) || 0;
+  const base = Number(r?.delivery_base_fee) || 0;
+  const perKm = Number(r?.delivery_per_km) || 0;
+  const freeOver = Math.max(0, Number(r?.delivery_free_over) || 0);
+  if (perKm > 0) return { kind: 'distance', from: Math.max(0, base), freeOver };
+  if (flat > 0) return { kind: 'flat', fee: flat, freeOver };
+  return { kind: 'free', freeOver: 0 };
+}

@@ -4049,6 +4049,13 @@ class MarketplaceView(APIView):
                     "is_open": is_currently_open,
                     "delivery_enabled": bool(profile.delivery_enabled),
                     "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
+                    # M12: the distance-pricing inputs (tenancy.delivery_pricing). delivery_fee is
+                    # only the FLAT fallback, so on its own a base + per-km restaurant read as
+                    # "Free delivery" on the card and was then charged at checkout. Static owner
+                    # config → safe in the cached payload.
+                    "delivery_base_fee": str(profile.delivery_base_fee or "0"),
+                    "delivery_per_km": str(profile.delivery_per_km or "0"),
+                    "delivery_free_over": str(profile.delivery_free_over or "0"),
                     "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
                     "price_tier": profile.price_tier,
                     "tags": profile.tags or [],
@@ -4138,7 +4145,7 @@ class MarketplaceView(APIView):
 # endpoint emits RAW name + full name_i18n dicts and resolves locale CLIENT-side (no
 # server-side locale resolution of the payload), unlike /api/meta/.
 #
-# FIVE fields must NOT be cached under {slug}; they are recomputed per-request on a COPY
+# SIX fields must NOT be cached under {slug}; they are recomputed per-request on a COPY
 # of the cached body (mirrors tenancy.api._refresh_meta_is_open_now and
 # accounts.views._refresh_marketplace_live_fields):
 #   • cod_eligible — PER-CUSTOMER (trusted-repeat-customer status, derived from the
@@ -4156,6 +4163,8 @@ class MarketplaceView(APIView):
 #     component selling out mid-TTL shows the combo as unavailable at once, not up to 60s late.
 #   (both per-dish flags mirror menu.serializers.DishSerializer, which the direct storefront
 #   menu emits — see _mkt_apply_live_dish_flags.)
+#   • loyalty.first_order_bonus_eligible — PER-CUSTOMER (whether the signed-in customer has
+#     any non-cancelled order here yet); same trap as cod_eligible.
 # The publish gate (profile.is_menu_published) is ALSO checked live per request (parity
 # with the twin, which enforces its public-menu policy BEFORE its cache), so an
 # unpublished menu 404s immediately, never served from a warm body.
@@ -4316,6 +4325,18 @@ class MarketplaceMenuView(APIView):
                         "points_value": str(_lc.points_value),
                         "redeem_threshold": _lc.redeem_threshold,
                         "points_per_unit": _lc.points_per_unit,
+                        # The rest of the earn formula (L6) so the checkout projects exactly what
+                        # MarketplacePlaceOrderView grants: tier multiplier + first-order bonus.
+                        # Owner config, same for every shopper → cacheable (mirrors
+                        # menu.views.CustomerLoyaltyConfigView's fields/defaults).
+                        "tier_enabled": bool(getattr(_lc, "tier_enabled", False)),
+                        "tier_silver_threshold": int(getattr(_lc, "tier_silver_threshold", 500) or 500),
+                        "tier_gold_threshold": int(getattr(_lc, "tier_gold_threshold", 2000) or 2000),
+                        "tier_silver_multiplier": str(getattr(_lc, "tier_silver_multiplier", "1.50") or "1.50"),
+                        "tier_gold_multiplier": str(getattr(_lc, "tier_gold_multiplier", "2.00") or "2.00"),
+                        "first_order_bonus_points": int(getattr(_lc, "first_order_bonus_points", 0) or 0),
+                        # PER-CUSTOMER → anonymous default here, set live per request below.
+                        "first_order_bonus_eligible": False,
                     } if _lc else None
 
                     # The public menu's own customer-visibility predicate (menu.visibility) — this
@@ -4518,6 +4539,14 @@ class MarketplaceMenuView(APIView):
                 _mkt_menu_customer = customer_or_none(request)
                 _mkt_menu_cust_id = _mkt_menu_customer.id if _mkt_menu_customer else None
                 out["cod_eligible"] = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
+                # ── PER-CUSTOMER: loyalty first-order-bonus eligibility (L6) — same trap as
+                # cod_eligible (derived from THIS customer's order history here), so it is set on
+                # the per-request copy, never in the {slug}-keyed body.
+                if isinstance(out.get("loyalty"), dict):
+                    from menu.views import _first_order_bonus_eligible as _mkt_first_bonus_eligible
+                    out["loyalty"]["first_order_bonus_eligible"] = bool(_mkt_first_bonus_eligible(
+                        _mkt_menu_cust_id, out["loyalty"].get("first_order_bonus_points", 0),
+                    ))
 
                 # ── PER-REQUEST per-dish flags (is_schedule_available / combo_unavailable) ──
                 # Stamped on the same per-request copy, inside the tenant schema (the combo

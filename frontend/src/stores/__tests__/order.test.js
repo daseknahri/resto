@@ -20,6 +20,7 @@ import api from "../../lib/api";
 vi.mock("../../lib/idempotency", () => ({
   newIdempotencyKey: vi.fn(() => "test-idem-key"),
 }));
+import { newIdempotencyKey } from "../../lib/idempotency";
 
 const deferred = () => {
   let resolve;
@@ -68,5 +69,52 @@ describe("useOrderStore.fetchOrders re-entrancy guard", () => {
     await store.fetchOrders();
     expect(store._ordersInFlight).toBe(false);
     expect(store.ordersError).toBeTruthy();
+  });
+});
+
+// L14: the checkout idempotency key identifies ONE cart snapshot.
+describe("useOrderStore.placeOrder idempotency key", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    let n = 0;
+    newIdempotencyKey.mockImplementation(() => `key-${++n}`);
+  });
+
+  const cartPayload = (qty = 1) => ({ items: [{ slug: "burger", qty }], fulfillment_type: "pickup", use_wallet: true });
+  const sentKey = (call) => api.post.mock.calls[call][1].idempotency_key;
+  const lostResponse = () => api.post.mockRejectedValueOnce(new Error("Network Error"));
+
+  it("retries the SAME cart with the same key (server replays, no double charge)", async () => {
+    const store = useOrderStore();
+    lostResponse();
+    await expect(store.placeOrder(cartPayload())).rejects.toThrow();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1", idempotent_replay: true } });
+    const result = await store.placeOrder(cartPayload());
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    // The replay flag is handed to the caller so it can say the order had already gone through.
+    expect(result.idempotent_replay).toBe(true);
+  });
+
+  it("an edited cart after a failed / unknown attempt gets a NEW key", async () => {
+    const store = useOrderStore();
+    lostResponse();
+    await expect(store.placeOrder(cartPayload(1))).rejects.toThrow();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).not.toBe(sentKey(0));
+  });
+
+  it("mints a fresh key for the next order after a confirmed success", async () => {
+    const store = useOrderStore();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1" } });
+    await store.placeOrder(cartPayload());
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    await store.placeOrder(cartPayload());
+
+    expect(sentKey(1)).not.toBe(sentKey(0));
+    expect(store._checkoutIdem).toBeNull();
   });
 });

@@ -32,9 +32,11 @@ vi.mock("../../lib/api", () => ({
   default: { get: vi.fn().mockResolvedValue({ data: {} }), post: vi.fn() },
 }));
 
-vi.mock("../../lib/idempotency", () => ({
-  newIdempotencyKey: () => "test-idem-key",
-}));
+// A fresh key per mint, so a test can tell a reused key from a rotated one (L14).
+vi.mock("../../lib/idempotency", () => {
+  let n = 0;
+  return { newIdempotencyKey: () => `test-idem-key-${++n}` };
+});
 
 // MarketplaceMenuPage reads route.params.slug at setup and uses the router.
 vi.mock("vue-router", () => ({
@@ -44,6 +46,7 @@ vi.mock("vue-router", () => ({
 
 import api from "../../lib/api";
 import { useCustomerStore } from "../../stores/customer";
+import { useToastStore } from "../../stores/toast";
 import MarketplaceMenuPage from "../MarketplaceMenuPage.vue";
 
 const mountPage = () =>
@@ -449,5 +452,82 @@ describe("MarketplaceMenuPage — customer refresh after money events (M5)", () 
     await wrapper.vm.placeOrder();
     await flushPromises();
     expect(spy).not.toHaveBeenCalledWith(true);
+  });
+});
+
+// ── L6: the points projection must equal what MarketplacePlaceOrderView credits ──
+describe("MarketplaceMenuPage — loyalty earn projection (L6)", () => {
+  beforeEach(resetMocks);
+  afterEach(() => vi.unstubAllGlobals());
+
+  const LOYALTY = {
+    enabled: true, points_per_unit: 10, points_value: "0.0100", redeem_threshold: 100,
+    tier_enabled: true, tier_silver_threshold: 500, tier_gold_threshold: 2000,
+    tier_silver_multiplier: "1.50", tier_gold_multiplier: "2.00",
+    first_order_bonus_points: 50, first_order_bonus_eligible: true,
+  };
+
+  it("earns on the FOOD subtotal (not the delivery fee) × tier, + the first-order bonus; nothing for a guest", async () => {
+    serveMenu({ ...menuFixture(dishFixture()), delivery_enabled: true, delivery_fee: "20.00", loyalty: LOYALTY });
+    const wrapper = mountPage();
+    await flushPromises();
+    wrapper.vm.form.fulfillment_type = "delivery";
+    wrapper.vm.cart.push({ slug: "burger", name: "Burger", qty: 1, price: "10.00", unitPrice: 10 });
+    await flushPromises();
+    expect(wrapper.vm.deliveryFee).toBe(20); // sanity: a fee the old projection counted
+
+    // A guest never earns (the server only credits a signed-in customer).
+    expect(wrapper.vm.loyaltyEarnProjection).toBe(0);
+
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", phone: "0611", wallet_balance: "500.00", lifetime_loyalty_points: 600 });
+    await flushPromises();
+    // floor(10 × 10 × 1.5) + 50 — the old floor((10 + 20) × 10) was 300.
+    expect(wrapper.vm.loyaltyEarnProjection).toBe(200);
+  });
+});
+
+// ── L14: the idempotency key identifies ONE cart snapshot ────────────────────
+describe("MarketplaceMenuPage — checkout retry idempotency (L14)", () => {
+  beforeEach(resetMocks);
+  afterEach(() => vi.unstubAllGlobals());
+
+  const mountSignedInPickup = async () => {
+    serveMenu(menuFixture(dishFixture()));
+    const wrapper = mountPage();
+    await flushPromises();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", phone: "0611", wallet_balance: "500.00" });
+    wrapper.vm.form.fulfillment_type = "pickup";
+    wrapper.vm.form.customer_name = "Ali";
+    wrapper.vm.form.customer_phone = "0611111111";
+    wrapper.vm.cart.push({ slug: "burger", name: "Burger", qty: 1, price: "10.00", unitPrice: 10 });
+    await flushPromises();
+    return wrapper;
+  };
+  const sentKey = (call) => api.post.mock.calls[call][1].idempotency_key;
+  const lostResponse = () => api.post.mockRejectedValueOnce(new Error("Network Error"));
+
+  it("retries the same cart with the same key, but an edited cart with a new one", async () => {
+    const wrapper = await mountSignedInPickup();
+    lostResponse();
+    await wrapper.vm.placeOrder();
+    lostResponse();
+    await wrapper.vm.placeOrder(); // unchanged cart → same key (server would replay)
+    wrapper.vm.cart[0].qty = 2;
+    await flushPromises();
+    api.post.mockResolvedValueOnce({ data: { order_number: "A2" } });
+    await wrapper.vm.placeOrder(); // edited cart → must NOT be answered with the old order
+    await flushPromises();
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    expect(sentKey(2)).not.toBe(sentKey(0));
+  });
+
+  it("says a replayed order had already gone through", async () => {
+    const wrapper = await mountSignedInPickup();
+    const show = vi.spyOn(useToastStore(), "show");
+    api.post.mockResolvedValueOnce({ data: { order_number: "A1", idempotent_replay: true } });
+    await wrapper.vm.placeOrder();
+    await flushPromises();
+    expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
   });
 });

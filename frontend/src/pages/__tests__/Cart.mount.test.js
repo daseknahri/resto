@@ -49,10 +49,11 @@ vi.mock("../../composables/useI18n", () => ({
   }),
 }));
 
-// URL-routed api mock: onMounted fires GETs (/customer/session/, and for a
-// signed-in customer /customer/addresses/, /customer/loyalty/config/,
-// /order-eligibility/) + an analytics POST. Default: everything resolves empty so
-// the guest path renders. _routes is here for parity with the sibling smoke tests.
+// URL-routed api mock: onMounted fires GETs (/customer/session/,
+// /promo-code-check/?auto=1, and for a signed-in customer /customer/addresses/,
+// /customer/loyalty/config/, /order-eligibility/) + an analytics POST. Default:
+// everything resolves empty so the guest path renders. _routes is here for parity
+// with the sibling smoke tests.
 let _routes = {};
 const _match = (url) => {
   const hit = Object.keys(_routes).find((frag) => url.includes(frag));
@@ -83,12 +84,15 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+import api from "../../lib/api";
 import { useCartStore } from "../../stores/cart";
 import { useCustomerStore } from "../../stores/customer";
 import { useTenantStore } from "../../stores/tenant";
+import { useToastStore } from "../../stores/toast";
 import Cart from "../Cart.vue";
 import CartEmptyState from "../../components/CartEmptyState.vue";
 import CartLineItem from "../../components/CartLineItem.vue";
+import CartOrderSummary from "../../components/CartOrderSummary.vue";
 
 const mountCart = () =>
   shallowMount(Cart, {
@@ -320,5 +324,113 @@ describe("Cart — cash on handover vs scheduled order (M1)", () => {
     wrapper.vm.scheduleEnabled = false;
     await flushPromises();
     expect(wrapper.vm.codChosen).toBe(true);
+  });
+});
+
+// ── M8 / L6 / L14: the cart must quote what checkout charges and credits ─────
+describe("Cart — checkout preview parity (auto promo, points, replay)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+  });
+
+  const LUNCH_10 = { name: "Lunch 10%", promo_type: "percentage", discount_value: "10.00", min_order_amount: "50.00" };
+
+  // A signed-in pickup customer with a 100 MAD cart. The default 10% tip adds 10, so the
+  // charge is 100 - promo + 10.
+  const mountPickup = async ({ wallet = "105.00", price = 100, customer = {} } = {}) => {
+    seedOrderableTenant();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", wallet_balance: wallet, ...customer });
+    useCartStore().add({ slug: "burger", name: "Burger", price, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+    wrapper.vm.fulfillmentType = "pickup";
+    await flushPromises();
+  };
+
+  it("previews the auto-applied promo and wallet-gates on the discounted total (M8)", async () => {
+    _routes["/promo-code-check/?auto=1"] = { data: { auto_promos: [LUNCH_10] } };
+    await mountPickup({ wallet: "105.00" });
+
+    expect(api.get).toHaveBeenCalledWith("/promo-code-check/?auto=1");
+    const summary = wrapper.findComponent(CartOrderSummary);
+    expect(summary.props("promoDiscount")).toBe(10);
+    expect(summary.props("promoLabel")).toBe("Lunch 10%");
+    expect(wrapper.vm.orderGrandTotal).toBe(100);
+    // 105 covers the real 100 charge — the old 110 preview wrongly demanded a top-up.
+    expect(wrapper.vm.prepayShortfall).toBe(false);
+    expect(wrapper.vm.validateForm()).toBe(true);
+    // No code entered → no promo_code sent; the server auto-applies the same promo.
+    expect(wrapper.vm.buildPayload().promo_code).toBeUndefined();
+  });
+
+  it("skips an auto promo whose minimum the cart doesn't reach", async () => {
+    _routes["/promo-code-check/?auto=1"] = { data: { auto_promos: [LUNCH_10] } };
+    await mountPickup({ price: 40 });
+    expect(wrapper.vm.promoDiscount).toBe(0);
+    expect(wrapper.findComponent(CartOrderSummary).props("promoLabel")).toBe("");
+  });
+
+  it("a typed code REPLACES the auto promo (server rule) and says when that costs more", async () => {
+    _routes["/promo-code-check/?auto=1"] = { data: { auto_promos: [LUNCH_10] } };
+    await mountPickup({ wallet: "500.00" });
+
+    wrapper.vm.promoCode = "SAVE5";
+    wrapper.vm.promoApplied = { name: "Save 5", promo_type: "fixed", discount_value: "5.00", min_order_amount: "0.00" };
+    await flushPromises();
+
+    expect(wrapper.vm.promoDiscount).toBe(5); // the code's, not max(code, auto)
+    expect(wrapper.findComponent(CartOrderSummary).props("promoLabel")).toBe("Save 5");
+    expect(wrapper.vm.orderGrandTotal).toBe(105);
+    expect(wrapper.text()).toContain('cartPage.promoReplacesAuto({"name":"Lunch 10%"})');
+    expect(wrapper.vm.buildPayload().promo_code).toBe("SAVE5");
+  });
+
+  it("projects points with the tier multiplier and the first-order bonus (L6)", async () => {
+    _routes["/customer/loyalty/config/"] = {
+      data: {
+        enabled: true, points_per_unit: 10, redeem_threshold: 100, points_value: "0.0100",
+        tier_enabled: true, tier_silver_threshold: 500, tier_gold_threshold: 2000,
+        tier_silver_multiplier: "1.50", tier_gold_multiplier: "2.00",
+        first_order_bonus_points: 50, first_order_bonus_eligible: true,
+      },
+    };
+    await mountPickup({ customer: { lifetime_loyalty_points: 600, loyalty_points: 0 } });
+
+    // floor(100 × 10 × 1.5) + 50 — not the old floor(100 × 10).
+    expect(wrapper.vm.loyaltyEarnProjection).toBe(1550);
+    expect(wrapper.text()).toContain('cartPage.loyaltyEarnProjection({"points":1550})');
+  });
+
+  it("announces a replayed order as already placed, not as a new one (L14)", async () => {
+    await mountPickup({ wallet: "500.00" });
+    const toast = useToastStore();
+    const show = vi.spyOn(toast, "show");
+    api.post.mockImplementation((url) =>
+      Promise.resolve(
+        String(url).includes("/place-order/")
+          ? { data: { order_number: "ORD-AAA111", total: "110.00", idempotent_replay: true } }
+          : { data: {} },
+      ),
+    );
+
+    await wrapper.vm.placeInAppOrder();
+    await flushPromises();
+
+    expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
+    expect(show).not.toHaveBeenCalledWith("cartPage_order.placeOrderSuccess", "success");
+    // The key is per cart snapshot, so the replayed order IS this cart's — it's done.
+    expect(useCartStore().items).toHaveLength(0);
   });
 });

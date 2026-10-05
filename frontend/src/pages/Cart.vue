@@ -540,6 +540,9 @@
             @apply="applyPromoCode"
             @remove="removePromoCode"
           />
+          <p v-if="supersededAutoPromo" class="text-[11px] text-amber-300/90 ps-1" role="note">
+            {{ t('cartPage.promoReplacesAuto', { name: supersededAutoPromo.name }) }}
+          </p>
 
           <!-- ── Pay now (pickup/delivery) ── -->
           <div v-if="requiresPrepay && customerStore.isAuthenticated && orderGrandTotal > 0" class="space-y-2">
@@ -701,7 +704,7 @@
             :delivery-fee-pending="deliveryFeePending"
             :delivery-out-of-range="deliveryOutOfRange"
             :promo-discount="promoDiscount"
-            :promo-label="promoApplied?.name || ''"
+            :promo-label="promoLabel"
             :loyalty-discount="loyaltyDiscount"
             :tip-amount="tipAmount"
             :wallet-applied="walletApplied"
@@ -918,6 +921,8 @@ import { trackEvent } from '../lib/analytics';
 import { safeExternalUrl } from '../lib/escape';
 import { addTileLayer } from '../lib/mapTiles';
 import { isRestaurantOpenNow, classifyClosedOrderState } from '../lib/businessHours';
+import { pickBestAutoPromo, promoDiscountAmount, promoMeetsMinimum } from '../lib/promoPreview';
+import { projectLoyaltyEarn } from '../lib/loyaltyEarn';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -995,6 +1000,17 @@ const promoOpen = ref(false);
 const onPromoCodeInput = (value) => {
   promoCode.value = value.toUpperCase();
   promoError.value = '';
+};
+// Code-less promotions checkout applies on its own (GET /promo-code-check/?auto=1 — live,
+// uncapped, in the server's order). Previewed below so the total isn't higher than the charge.
+const autoPromos = ref([]);
+const fetchAutoPromos = async () => {
+  try {
+    const res = await api.get('/promo-code-check/?auto=1');
+    autoPromos.value = Array.isArray(res?.data?.auto_promos) ? res.data.auto_promos : [];
+  } catch {
+    autoPromos.value = []; // no preview — the server still applies them at checkout
+  }
 };
 
 // Saved addresses — shared CRUD in composables/useSavedAddresses (loadSavedAddresses aliased to
@@ -1295,33 +1311,50 @@ const deliveryMinGap = computed(() =>
 // Short zone description shown to customers (empty = not set)
 const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
 
-// Promo discount preview — MIRRORS the backend _compute_promo_discount
-// (menu/views.py) for the applied code, so the order summary shows a discount
-// line AND the pay-now affordability gate uses the real (lower) charge instead
-// of the pre-promo total. The backend recomputes authoritatively at checkout;
-// this is the client-side preview only.
-const promoDiscount = computed(() => {
+// Promo discount preview — MIRRORS PlaceOrderView (menu/views.py) so the order summary
+// shows the discount line AND the pay-now affordability gate (validateForm /
+// prepayShortfall) uses the real (lower) charge instead of the pre-promo total. The
+// backend recomputes authoritatively at checkout; this is the client-side preview only.
+// Rule: a typed code REPLACES auto-apply entirely (even a smaller one); with no code, the
+// best live code-less promo applies. Math: lib/promoPreview (= _compute_promo_discount).
+//
+// The fee the promo math sees: the backend's delivery_fee is 0 for pickup/dine-in, so a
+// free_delivery promo is only worth something on a delivery order.
+const promoDeliveryFee = computed(() => (fulfillmentType.value === 'delivery' ? deliveryFeeAmount.value : 0));
+
+// The applied code's discount. Below its min_order_amount it yields nothing (the backend
+// rejects the code at checkout), so the preview must show nothing off.
+const codePromoDiscount = computed(() => {
   const promo = promoApplied.value;
   if (!promo) return 0;
   const subtotal = Number(cart.total) || 0;
-  // Respect min_order_amount: below it the promo yields no discount (the backend
-  // rejects it at checkout), so the preview must show nothing off.
-  const minOrder = Number(promo.min_order_amount) || 0;
-  if (subtotal < minOrder) return 0;
-  const value = Number(promo.discount_value) || 0;
-  let discount = 0;
-  if (promo.promo_type === 'percentage') {
-    const pct = Math.min(100, Math.max(0, value));
-    discount = (subtotal * pct) / 100;
-  } else if (promo.promo_type === 'fixed') {
-    discount = Math.min(subtotal, value);
-  } else if (promo.promo_type === 'free_delivery') {
-    // free_delivery is worth the delivery fee, and only on a delivery order
-    // (the backend's delivery_fee is 0 for pickup/dine-in).
-    discount = fulfillmentType.value === 'delivery' ? deliveryFeeAmount.value : 0;
-  }
-  return Math.round(Math.max(0, discount) * 100) / 100;
+  if (!promoMeetsMinimum(promo, subtotal)) return 0;
+  return promoDiscountAmount(promo, { subtotal, deliveryFee: promoDeliveryFee.value });
 });
+
+// The auto promo checkout would pick for this cart (ignoring any typed code). Promotions
+// only apply to an in-app order — the WhatsApp handoff of a browse-only plan has none.
+const bestAutoPromo = computed(() => {
+  if (tenant.isBrowseOnlyPlan === true) return null;
+  return pickBestAutoPromo(autoPromos.value, {
+    subtotal: Number(cart.total) || 0,
+    deliveryFee: promoDeliveryFee.value,
+  });
+});
+
+const promoDiscount = computed(() =>
+  promoApplied.value ? codePromoDiscount.value : (bestAutoPromo.value?.discount || 0),
+);
+const promoLabel = computed(() =>
+  promoApplied.value ? (promoApplied.value.name || '') : (bestAutoPromo.value?.promo?.name || ''),
+);
+// The typed code costs the customer an automatic offer worth more — say so (the server
+// would silently honour the code instead).
+const supersededAutoPromo = computed(() =>
+  promoApplied.value && bestAutoPromo.value && bestAutoPromo.value.discount > codePromoDiscount.value
+    ? bestAutoPromo.value.promo
+    : null,
+);
 
 // Grand total = items subtotal + delivery fee (when applicable)
 // ── Loyalty redemption at checkout ──────────────────────────────────────────
@@ -1349,15 +1382,16 @@ const loyaltyDiscount = computed(() => {
   return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, base));
 });
 
-// Projected points earned on this order (mirrors backend: floor(subtotal * points_per_unit))
-const loyaltyEarnProjection = computed(() => {
-  if (!loyaltyConfig.value?.enabled) return 0;
-  const ppu = Number(loyaltyConfig.value.points_per_unit) || 0;
-  if (ppu <= 0) return 0;
-  const subtotal = Number(cart.total) || 0;
-  if (subtotal <= 0) return 0;
-  return Math.floor(subtotal * ppu);
-});
+// Projected points this order credits — the server's exact formula (lib/loyaltyEarn):
+// floor(food subtotal × points_per_unit × tier multiplier) + the first-order bonus.
+const loyaltyEarnProjection = computed(() =>
+  projectLoyaltyEarn({
+    cfg: loyaltyConfig.value,
+    foodSubtotal: cart.total,
+    lifetimePoints: customerStore.customer?.lifetime_loyalty_points,
+    signedIn: customerStore.isAuthenticated,
+  }),
+);
 
 const orderGrandTotal = computed(() => {
   const subtotal = Number(cart.total) || 0;
@@ -2375,6 +2409,10 @@ const placeInAppOrder = async () => {
       },
     });
     const result = await order.placeOrder(buildPayload());
+    // idempotent_replay: an earlier attempt for this exact cart (whose response was lost)
+    // had already placed the order. The key is per cart snapshot, so it IS this cart's order
+    // — but don't announce a new one: say it had already gone through.
+    const replayed = result?.idempotent_replay === true;
     // The order spent wallet balance and earned/redeemed loyalty points server-side —
     // force-refresh the customer (fire-and-forget) so the next screen (order status,
     // account, next checkout) never shows the stale pre-order balance.
@@ -2425,12 +2463,19 @@ const placeInAppOrder = async () => {
         });
       } catch { /* non-critical */ }
     }
-    toast.show(t('cartPage_order.placeOrderSuccess'), 'success');
+    if (replayed) {
+      toast.show(t('cartPage_order.orderAlreadyPlaced'), 'info');
+    } else {
+      toast.show(t('cartPage_order.placeOrderSuccess'), 'success');
+    }
     router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
   } catch (err) {
     const detail = mapOrderApiError(err, t('cartPage_order.placeOrderError'));
     placeOrderError.value = detail;
     toast.show(detail, 'error');
+    // A promo window may have closed (or a cap been hit) while the cart was open — refresh
+    // the auto-promo preview so the retry quotes and wallet-gates on the right total.
+    fetchAutoPromos();
   } finally {
     placingOrder.value = false;
   }
@@ -2477,6 +2522,7 @@ onMounted(async () => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
   fetchSavedAddresses();
   fetchLoyaltyConfig();
+  fetchAutoPromos();
   // Express checkout (opt-in, or auto-on for returning customers) takes
   // precedence over the reorder-context restore.
   const expressDidApply = applyExpressCheckout();

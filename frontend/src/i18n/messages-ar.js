@@ -2493,6 +2493,7 @@ const arabicMessages = {
     "tipLabel": "إضافة بقشيش",
     "tipHighWarning": "هذه البقشيش تتجاوز إجمالي طلبك — تحقق من المبلغ.",
     "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط).",
+    promoReplacesAuto: "هذا الرمز يحلّ محلّ العرض التلقائي «{name}» الأوفر. أزل الرمز للاستفادة منه.",
     "reorderPriceNote": "تم تحديث الأسعار وفق قائمة اليوم.",
     "staleOptions": "تغيّرت القائمة — يرجى مراجعة سلّتك والمحاولة مجدداً.",
     "genericCheckoutError": "حدث خطأ ما. يرجى المحاولة مجدداً أو التواصل مع المطعم.",
@@ -3137,6 +3138,7 @@ const arabicMessages = {
     addedToCart: "تمت إضافة {name}",
     "placeOrderError": "تعذّر إرسال الطلب. يرجى المحاولة مجدداً.",
     "placeOrderSuccess": "تم الطلب!",
+    orderAlreadyPlaced: "تمّ تقديم هذا الطلب مسبقًا — إليك تفاصيله.",
     "switchToInApp": "طلب داخل التطبيق",
     "switchToWhatsapp": "طلب عبر واتساب"
   }
@@ -3394,6 +3396,9 @@ Object.assign(arabicMessages, {
     pickup: "\u0627\u0633\u062a\u0644\u0627\u0645",
     deliveryFee: "\u0631\u0633\u0648\u0645 \u0627\u0644\u062a\u0648\u0635\u064a\u0644",
     freeDelivery: "\u062a\u0648\u0635\u064a\u0644 \u0645\u062c\u0627\u0646\u064a",
+    deliveryFrom: "\u0627\u0644\u062a\u0648\u0635\u064a\u0644 \u0627\u0628\u062a\u062f\u0627\u0621\u064b \u0645\u0646 {amount}",
+    deliveryByDistance: "\u0631\u0633\u0648\u0645 \u0627\u0644\u062a\u0648\u0635\u064a\u0644 \u062d\u0633\u0628 \u0627\u0644\u0645\u0633\u0627\u0641\u0629",
+    freeDeliveryOver: "\u0645\u062c\u0627\u0646\u064a \u0627\u0628\u062a\u062f\u0627\u0621\u064b \u0645\u0646 {amount}",
     minOrder: "\u062d\u062f \u0623\u062f\u0646\u0649 {amount}",
     kmAway: "{km} \u0643\u0645",
     viewMenu: "\u0627\u0637\u0644\u0628 \u0627\u0644\u0622\u0646",

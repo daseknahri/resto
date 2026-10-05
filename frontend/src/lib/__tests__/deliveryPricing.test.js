@@ -2,11 +2,40 @@ import { describe, it, expect } from 'vitest';
 import {
   ROAD_FACTOR,
   AVG_SPEED_KMH,
+  deliveryCardPricing,
   haversineKm,
   validCoord,
   parseCoordinateValue,
   parseCoordinatesFromMapUrl,
 } from '../deliveryPricing';
+
+// M12: a marketplace card said "Free delivery" whenever the FLAT fee was 0 — including for a
+// base + per-km restaurant that then charged at checkout (tenancy/delivery_pricing).
+describe('deliveryCardPricing', () => {
+  it('is distance-priced whenever per-km is set, quoting the base as the floor', () => {
+    expect(deliveryCardPricing({ delivery_fee: '0', delivery_base_fee: '8.00', delivery_per_km: '2.50', delivery_free_over: '0' }))
+      .toEqual({ kind: 'distance', from: 8, freeOver: 0 });
+    // No base → nothing worth quoting as "from".
+    expect(deliveryCardPricing({ delivery_fee: '0', delivery_base_fee: '0', delivery_per_km: '3', delivery_free_over: '150' }))
+      .toEqual({ kind: 'distance', from: 0, freeOver: 150 });
+  });
+
+  it('is the flat fee when there is no per-km pricing', () => {
+    expect(deliveryCardPricing({ delivery_fee: '15.00', delivery_base_fee: '0', delivery_per_km: '0', delivery_free_over: '100' }))
+      .toEqual({ kind: 'flat', fee: 15, freeOver: 100 });
+  });
+
+  it('is free only when nothing is ever charged (a base alone is not charged without per-km)', () => {
+    expect(deliveryCardPricing({ delivery_fee: '0', delivery_base_fee: '0', delivery_per_km: '0', delivery_free_over: '0' }).kind).toBe('free');
+    expect(deliveryCardPricing({ delivery_fee: '0', delivery_base_fee: '5', delivery_per_km: '0', delivery_free_over: '50' }))
+      .toEqual({ kind: 'free', freeOver: 0 });
+  });
+
+  it('keeps the old flat-only reading for a row without the pricing keys', () => {
+    expect(deliveryCardPricing({ delivery_fee: '12.00' }).kind).toBe('flat');
+    expect(deliveryCardPricing({ delivery_fee: '0' }).kind).toBe('free');
+  });
+});
 
 describe('deliveryPricing primitives', () => {
   it('exposes the backend-matching constants', () => {

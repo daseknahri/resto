@@ -864,7 +864,8 @@ import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
 import MarketplaceMenuLoyaltyTeaser from '../components/MarketplaceMenuLoyaltyTeaser.vue';
 import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
-import { newIdempotencyKey } from '../lib/idempotency';
+import { checkoutSnapshot, keyForCheckoutSnapshot } from '../lib/checkoutIdempotency';
+import { projectLoyaltyEarn } from '../lib/loyaltyEarn';
 import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
 import { resolveMarketplaceReorderItems } from '../lib/reorder';
 import { classifyClosedOrderState } from '../lib/businessHours';
@@ -1000,10 +1001,11 @@ const shareDish = async (dish) => {
 };
 
 const placing = ref(false);
-// Idempotency key for the in-flight/retryable checkout attempt (null between attempts):
-// reused on retry of the same submit so the backend replays instead of double-charging,
-// reset to null after a confirmed success so the next order mints a fresh key.
-let checkoutIdemKey = null;
+// Idempotency key of the retryable checkout attempt, tied to the cart snapshot it was minted
+// for ({ key, fingerprint }; null between attempts): a retry of the SAME cart reuses it so the
+// backend replays instead of double-charging; any edit mints a new one, so an edited cart is
+// never answered with the old cart's order (L14). Reset after a confirmed success.
+let checkoutIdem = null;
 const checkoutError = ref('');
 const showAuthModal = ref(false); // opens when delivery order requires sign-in
 
@@ -1700,15 +1702,17 @@ const orderTotal = computed(() =>
   Math.max(0, orderBaseTotal.value - flashSaleDiscount.value - loyaltyDiscount.value)
 );
 
-// Projected points earned on this order (mirrors backend: floor(subtotal * points_per_unit))
-const loyaltyEarnProjection = computed(() => {
-  if (!loyaltyConfig.value?.enabled) return 0;
-  const ppu = Number(loyaltyConfig.value.points_per_unit) || 0;
-  if (ppu <= 0) return 0;
-  const subtotal = Number(orderBaseTotal.value) || 0;
-  if (subtotal <= 0) return 0;
-  return Math.floor(subtotal * ppu);
-});
+// Projected points this order credits — the server's exact formula (lib/loyaltyEarn): on the
+// FOOD subtotal (MarketplacePlaceOrderView earns on food_subtotal — never the delivery fee),
+// × the tier multiplier, + the first-order bonus. Only a signed-in customer earns.
+const loyaltyEarnProjection = computed(() =>
+  projectLoyaltyEarn({
+    cfg: loyaltyConfig.value,
+    foodSubtotal: cartTotal.value,
+    lifetimePoints: customer.value?.lifetime_loyalty_points,
+    signedIn: customerStore.isAuthenticated,
+  }),
+);
 
 // Marketplace orders are pay-now: settled in full from the wallet at checkout.
 const walletBalanceNum = computed(() => {
@@ -1969,10 +1973,16 @@ const placeOrder = async () => {
     if (useLoyalty.value && loyaltyAvailable.value && loyaltyPoints.value > 0) {
       payload.redeem_points = loyaltyPoints.value;
     }
-    if (!checkoutIdemKey) checkoutIdemKey = newIdempotencyKey();
-    payload.idempotency_key = checkoutIdemKey;
+    checkoutIdem = keyForCheckoutSnapshot(checkoutIdem, checkoutSnapshot(payload));
+    payload.idempotency_key = checkoutIdem.key;
     const res = await api.post('/marketplace/order/', payload);
-    checkoutIdemKey = null;
+    checkoutIdem = null;
+    // idempotent_replay: an earlier attempt for this exact cart (response lost) had already
+    // placed it — it IS this cart's order, but say it had already gone through rather than
+    // presenting it as freshly placed.
+    if (res.data?.idempotent_replay === true) {
+      toastStore.show(t('cartPage_order.orderAlreadyPlaced'), 'info');
+    }
     // The order spent wallet balance / moved loyalty points server-side — force-refresh the
     // customer (fire-and-forget) so the order-status / account screens never show the stale
     // pre-order balance.
