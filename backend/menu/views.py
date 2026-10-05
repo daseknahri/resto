@@ -1959,10 +1959,10 @@ class OrderHandoffView(APIView):
             .prefetch_related("option_groups__options")
         )
         if not can_preview:
-            qs = qs.filter(
-                is_published=True, is_available=True,
-                category__is_published=True, category__is_temporarily_disabled=False,
-            )
+            # What the public menu shows (menu.visibility — incl. the parent section's
+            # published/paused flags) AND available.
+            from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER
+            qs = qs.filter(is_available=True, **CUSTOMER_VISIBLE_DISH_FILTER)
         return {dish.slug: dish for dish in qs}
 
     def _fetch_options(self, option_ids, can_preview):
@@ -1970,11 +1970,8 @@ class OrderHandoffView(APIView):
             return {}
         qs = DishOption.objects.filter(id__in=option_ids).select_related("dish", "dish__category")
         if not can_preview:
-            qs = qs.filter(
-                dish__is_published=True,
-                dish__category__is_published=True,
-                dish__category__is_temporarily_disabled=False,
-            )
+            from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER
+            qs = qs.filter(**{f"dish__{k}": v for k, v in CUSTOMER_VISIBLE_DISH_FILTER.items()})
         return {opt.id: opt for opt in qs}
 
     def _sanitize_phone(self, value: str) -> str:

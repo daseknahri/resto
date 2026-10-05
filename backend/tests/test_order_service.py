@@ -210,6 +210,23 @@ class ResolveItemsTests(SimpleTestCase):
         self.assertTrue(kwargs["is_available"])
         self.assertTrue(kwargs["category__is_published"])
         self.assertFalse(kwargs["category__is_temporarily_disabled"])
+        # ...and the parent SECTION must be published + not paused, exactly like the public menu
+        # (a dish under a hidden section was orderable by direct API / stale menu).
+        self.assertTrue(kwargs["category__super_category__is_published"])
+        self.assertFalse(kwargs["category__super_category__is_temporarily_disabled"])
+
+    @patch("menu.models.Dish")
+    def test_resolve_available_dishes_uses_the_public_menu_visibility_predicate(self, mock_dish):
+        from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER
+        (
+            mock_dish.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+        ) = []
+        resolve_available_dishes(["burger"])
+        kwargs = mock_dish.objects.filter.call_args.kwargs
+        for key, value in CUSTOMER_VISIBLE_DISH_FILTER.items():
+            self.assertEqual(kwargs.get(key), value, key)
 
     @patch("menu.models.Dish")
     def test_resolve_available_dishes_drops_combo_with_unavailable_component(self, mock_dish):

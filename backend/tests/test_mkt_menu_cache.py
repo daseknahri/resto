@@ -241,6 +241,21 @@ class IsOpenLiveOnCacheHitTests(_MktMenuCacheBase):
         self.assertEqual(dish_cls.objects.filter.call_count, 1)
 
 
+class MenuVisibilityFilterTests(_MktMenuCacheBase):
+    def test_dish_query_uses_the_public_menu_visibility_predicate(self):
+        """The marketplace menu must list exactly what the direct storefront shows: it used to
+        skip `category__super_category__is_published`, so dishes under an UNPUBLISHED section
+        were listed (and orderable) here while the storefront hid them."""
+        from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER
+
+        fake_menu, dish_cls = _make_fake_menu()
+        self._drive(slug="vis", fake_menu=fake_menu, profile=_make_profile())
+
+        kwargs = dish_cls.objects.filter.call_args.kwargs
+        self.assertEqual(kwargs, CUSTOMER_VISIBLE_DISH_FILTER)
+        self.assertTrue(kwargs["category__super_category__is_published"])
+
+
 class FlashSaleLiveOnCacheHitTests(_MktMenuCacheBase):
     def test_flash_sale_reflects_live_state_on_a_cache_hit(self):
         """Build the body with no live sale, then hit the cache once a sale is live: flash_sale
