@@ -56,7 +56,11 @@ from accounts.permissions import IsCustomer, IsOrderOwner, customer_or_none
 # RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
 # sales.permissions imports only rest_framework + accounts.models.User (accounts.models
 # does not import menu), the same import accounts/views.py already does at module level.
-from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
+# Admin PII read audit (AdminWalletListView). Circular-safe like sales.permissions above:
+# sales.audit / sales.models import only tenancy.models + django.
+from sales.audit import log_admin_action
+from sales.models import AdminAuditLog
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
 from tenancy.openstate import schedule_open_now
@@ -82,6 +86,7 @@ from .serializers import (
 )
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
 from accounts.throttles import (
+    AdminPIIThrottle,
     ReservationAvailabilityThrottle,
     WaitlistJoinThrottle,
     DriverCashoutConfirmThrottle,
@@ -13134,15 +13139,17 @@ class AdminWalletListView(APIView):
       search      — filter by name, phone, email
       min_balance — only show customers with balance >= this value (default: 0)
       page, page_size
+
+    Audit/throttle completeness: exposes name/email/phone/wallet_balance for every wallet
+    customer, so it follows the AdminCustomerListView PII pattern — IsPlatformAdmin gate
+    (same `is_superuser or is_platform_admin` predicate the inline check used), per-admin
+    AdminPIIThrottle, and a CUSTOMER_PII_VIEWED audit row per read.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
-        user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or getattr(user, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from accounts.models import Customer
         from decimal import Decimal as _Dec
 
@@ -13181,6 +13188,18 @@ class AdminWalletListView(APIView):
                 "wallet_balance": str(c.wallet_balance),
             })
 
+        # No PII in the audit metadata — only the filters and result size.
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
+            request=request,
+            target_repr="wallet_list",
+            metadata={
+                "query": search,
+                "min_balance": str(min_balance),
+                "count": total,
+                "page": page,
+            },
+        )
         return Response({
             "total": total,
             "page": page,
