@@ -194,6 +194,26 @@ class ApplyTemplateViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertNotEqual(cache.get(_PUBLIC_LIST_VER_KEY), before)
 
+    def test_post_busts_tenant_meta_cache(self):
+        # Regression: the template writes theme + business_type onto the profile, which the
+        # /api/meta/ payload caches for 300s. This write bypasses ProfileView's bust, so the
+        # owner's new theme/vertical stayed stale for up to 5 minutes after applying.
+        from django.core.cache import cache
+        from tenancy.api import _META_CACHE_LOCALE_VARIANTS, _meta_cache_key
+        slug = "tpl-meta-bust"
+        keys = [_meta_cache_key(slug, loc) for loc in _META_CACHE_LOCALE_VARIANTS]
+        for key in keys:
+            cache.set(key, {"profile": {"business_type": "restaurant"}}, 300)
+        prof = MagicMock()
+        tenant = SimpleNamespace(id=1, schema_name="tenant1", slug=slug)
+        with patch("django.db.transaction.atomic", _noop_atomic), \
+             patch("menu.views.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value.first.return_value = prof
+            resp = self._post({"template": "cafe", "with_sample_content": False}, tenant=tenant)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for key in keys:
+            self.assertIsNone(cache.get(key), f"{key} must be evicted after a template apply")
+
     def test_post_with_content_creates_sample_menu(self):
         prof = MagicMock()
         with patch("django.db.transaction.atomic", _noop_atomic), \

@@ -222,6 +222,8 @@ export const categoryApi = {
       position: Number(cat.position) || 0,
       is_published: cat.is_published ?? true,
       course: Number(cat.course) || 0,
+      // Prep station (kitchen-screen filter) — free text, capped like the model (40).
+      station: String(cat.station || "").trim().slice(0, 40),
     };
     try {
       let result;
@@ -252,14 +254,44 @@ export const categoryApi = {
   },
 };
 
+// null/"" = unlimited stock; otherwise a non-negative integer (mirrors the editor input).
+const normalizeStockQty = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  return Math.max(0, Number.parseInt(value, 10) || 0);
+};
+
+// {days, time_start, time_end} or null (= always available). The server validates and
+// normalizes the rest (day tokens, HH:MM, both-or-neither times).
+const normalizeAvailabilitySchedule = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return {
+    days: Array.isArray(value.days) ? value.days.map((day) => String(day).trim().toLowerCase()).filter(Boolean) : [],
+    time_start: String(value.time_start || "").trim(),
+    time_end: String(value.time_end || "").trim(),
+  };
+};
+
 export const dishApi = {
   async list() {
     const { data } = await api.get("/dishes/");
     return data;
   },
-  async upsert(dish) {
+  /**
+   * Create or (full-PUT) update a dish.
+   *
+   * `baselineStockQty` is the stock_qty last loaded from / saved to the server for this
+   * dish (`undefined` = unknown). stock_qty is a LIVE counter — every order decrements it
+   * server-side — so echoing the editor's load-time value on every re-save would silently
+   * undo those decrements. It is therefore sent only when CREATING the dish, or when the
+   * owner changed it in this edit session (value differs from the known baseline). An
+   * unknown baseline on an update never sends it (fail safe: keep the live stock).
+   */
+  async upsert(dish, { baselineStockQty } = {}) {
     const baseSlug = slugify(dish.name || dish.slug || "dish");
     const categoryId = Number(dish.category);
+    const stockQty = normalizeStockQty(dish.stock_qty);
+    const sendStock = !dish.id
+      || (baselineStockQty !== undefined && stockQty !== normalizeStockQty(baselineStockQty));
     const payload = {
       category: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : dish.category,
       name: String(dish.name || "").trim(),
@@ -274,6 +306,11 @@ export const dishApi = {
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
       attributes: dish.attributes && typeof dish.attributes === 'object' ? dish.attributes : {},
+      availability_schedule: normalizeAvailabilitySchedule(dish.availability_schedule),
+      ...(sendStock && { stock_qty: stockQty }),
+      // A restock re-enables a dish the checkout auto-zeroed to "sold out" (same rule as
+      // OwnerInventory) — otherwise it would keep stock yet stay unorderable.
+      ...(sendStock && stockQty !== null && stockQty > 0 && { is_available: true }),
       ...(dish.low_stock_threshold !== undefined && { low_stock_threshold: dish.low_stock_threshold }),
       ...(Array.isArray(dish.combo_components) && { combo_components: dish.combo_components.map(c => ({ component_id: Number(c.component_id), qty: Math.max(1, Number(c.qty) || 1) })) }),
     };

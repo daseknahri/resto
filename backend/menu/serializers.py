@@ -633,6 +633,50 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             raise serializers.ValidationError("Stock quantity must be zero or greater.")
         return value
 
+    _SCHEDULE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    _SCHEDULE_HHMM = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]")
+
+    def validate_availability_schedule(self, value):
+        """Shape: ``{days: [mon..sun], time_start: "HH:MM"|"", time_end: "HH:MM"|""}`` or null.
+
+        ``schedule_window.day_time_window_open`` compares zero-padded ``"HH:MM"`` strings
+        lexically and silently treats a non-list ``days`` / a half-set window as "no
+        restriction", so a malformed value would mis-evaluate (or quietly never restrict)
+        instead of failing. Normalize here: lowercase + dedupe days in week order, reject
+        unknown day tokens and malformed times, require both times or neither, and collapse
+        an empty schedule (no days, no times — restricts nothing) to null.
+        """
+        if value is None or value == "":
+            return None
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Availability schedule must be an object or null.")
+        raw_days = value.get("days") or []
+        if not isinstance(raw_days, list):
+            raise serializers.ValidationError("Availability days must be a list.")
+        picked = set()
+        for raw_day in raw_days:
+            token = str(raw_day).strip().lower()
+            if token not in self._SCHEDULE_DAYS:
+                raise serializers.ValidationError(
+                    f"Unknown day '{raw_day}'. Use mon, tue, wed, thu, fri, sat or sun."
+                )
+            picked.add(token)
+        times = {}
+        for key in ("time_start", "time_end"):
+            raw = value.get(key)
+            text = "" if raw is None else str(raw).strip()
+            if len(text) == 8 and text[5:6] == ":":
+                text = text[:5]  # <input type="time" step=…> may send HH:MM:SS
+            if text and not self._SCHEDULE_HHMM.fullmatch(text):
+                raise serializers.ValidationError("Availability times must look like 18:30 (24-hour HH:MM).")
+            times[key] = text
+        if bool(times["time_start"]) != bool(times["time_end"]):
+            raise serializers.ValidationError("Set both an availability start and end time, or leave both blank.")
+        days = [day for day in self._SCHEDULE_DAYS if day in picked]
+        if not days and not times["time_start"]:
+            return None
+        return {"days": days, "time_start": times["time_start"], "time_end": times["time_end"]}
+
     def get_category_name(self, instance):
         category = getattr(instance, "category", None)
         if category is None:

@@ -559,13 +559,29 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         if publish_value:
             from menu.models import Category, Dish
 
-            category_count = Category.objects.filter(is_published=True).count()
-            dish_count = Dish.objects.filter(is_published=True, category__is_published=True).count()
+            # A FRESH publish (OFF→ON) must have content a customer can actually SEE: count
+            # with the public menu's own visibility predicate (menu.visibility), so a menu
+            # whose only section is unpublished/paused can't go "live" as an empty storefront.
+            # An already-published profile keeps the legacy row-flag check unchanged: the
+            # wizard PUTs the whole profile (is_menu_published=True round-trips), so the
+            # stricter count there would 400 every unrelated save after a section is paused.
+            was_published = bool(getattr(self.instance, "is_menu_published", False))
+            if was_published:
+                category_filter = {"is_published": True}
+                dish_filter = {"is_published": True, "category__is_published": True}
+            else:
+                from menu.visibility import (
+                    CUSTOMER_VISIBLE_CATEGORY_FILTER as category_filter,
+                    CUSTOMER_VISIBLE_DISH_FILTER as dish_filter,
+                )
+            category_count = Category.objects.filter(**category_filter).count()
+            dish_count = Dish.objects.filter(**dish_filter).count()
             if category_count < 1 or dish_count < 1:
                 raise serializers.ValidationError(
                     {
                         "is_menu_published": (
-                            "Add at least 1 published category and 1 published dish before publishing."
+                            "Add at least 1 published category and 1 published dish that customers "
+                            "can see (in a menu section that is published and not paused) before publishing."
                         )
                     }
                 )
