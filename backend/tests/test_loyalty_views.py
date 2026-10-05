@@ -402,3 +402,75 @@ class LoyaltyCustomerViewAuthContractTests(SimpleTestCase):
         self.assertIn(CustomerSessionAuthentication,
                       CustomerLoyaltyHistoryView.authentication_classes)
         self.assertIn(IsCustomer, CustomerLoyaltyHistoryView.permission_classes)
+
+
+# ── L6: first-order-bonus eligibility for the cart's earn projection ──────────
+
+class CustomerLoyaltyConfigFirstOrderBonusTests(SimpleTestCase):
+    """L6: the cart's "you'll earn N points" ignored the first-order bonus both checkouts grant
+    (when the customer has no non-cancelled order here). The config now tells a signed-in
+    customer whether their next order gets it. Before the fix the key did not exist."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = CustomerLoyaltyConfigView.as_view()
+
+    def _get(self, principal=None):
+        req = self.factory.get("/api/customer/loyalty/config/")
+        if principal is not None:
+            force_authenticate(req, user=principal)
+        req.tenant = _tenant()
+        return self.view(req)
+
+    def _cfg(self, bonus=50):
+        cfg = _make_loyalty_config(enabled=True)
+        cfg.tier_enabled = False
+        cfg.tier_silver_threshold = 500
+        cfg.tier_gold_threshold = 2000
+        cfg.tier_silver_multiplier = "1.50"
+        cfg.tier_gold_multiplier = "2.00"
+        cfg.first_order_bonus_points = bonus
+        cfg.birthday_bonus_points = 0
+        return cfg
+
+    @patch("menu.views.Order.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    def test_customer_without_orders_here_is_eligible(self, mock_cfg_objs, mock_orders):
+        from menu.models import Order
+        mock_cfg_objs.filter.return_value.first.return_value = self._cfg(bonus=50)
+        mock_orders.filter.return_value.exclude.return_value.exists.return_value = False
+
+        resp = self._get(principal=Customer(id=7))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(resp.data["first_order_bonus_eligible"], True)
+        self.assertEqual(resp.data["first_order_bonus_points"], 50)
+        # Same predicate as the grant: any NON-cancelled order of this customer disqualifies.
+        mock_orders.filter.assert_called_once_with(customer_id=7)
+        mock_orders.filter.return_value.exclude.assert_called_once_with(status=Order.Status.CANCELLED)
+
+    @patch("menu.views.Order.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    def test_customer_with_a_prior_order_is_not_eligible(self, mock_cfg_objs, mock_orders):
+        mock_cfg_objs.filter.return_value.first.return_value = self._cfg(bonus=50)
+        mock_orders.filter.return_value.exclude.return_value.exists.return_value = True
+
+        resp = self._get(principal=Customer(id=7))
+
+        self.assertIs(resp.data["first_order_bonus_eligible"], False)
+
+    @patch("menu.views.Order.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    def test_anonymous_or_no_bonus_is_never_eligible_and_runs_no_order_query(self, mock_cfg_objs, mock_orders):
+        mock_cfg_objs.filter.return_value.first.return_value = self._cfg(bonus=50)
+        self.assertIs(self._get().data["first_order_bonus_eligible"], False)
+
+        mock_cfg_objs.filter.return_value.first.return_value = self._cfg(bonus=0)
+        self.assertIs(self._get(principal=Customer(id=7)).data["first_order_bonus_eligible"], False)
+
+        mock_orders.filter.assert_not_called()
+
+    def test_config_view_is_optional_customer_auth(self):
+        self.assertIn(CustomerSessionAuthentication, CustomerLoyaltyConfigView.authentication_classes)
+        from rest_framework.permissions import AllowAny
+        self.assertIn(AllowAny, CustomerLoyaltyConfigView.permission_classes)

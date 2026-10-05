@@ -20,6 +20,7 @@ import api from "../../lib/api";
 vi.mock("../../lib/idempotency", () => ({
   newIdempotencyKey: vi.fn(() => "test-idem-key"),
 }));
+import { newIdempotencyKey } from "../../lib/idempotency";
 
 const deferred = () => {
   let resolve;
@@ -68,5 +69,77 @@ describe("useOrderStore.fetchOrders re-entrancy guard", () => {
     await store.fetchOrders();
     expect(store._ordersInFlight).toBe(false);
     expect(store.ordersError).toBeTruthy();
+  });
+});
+
+// L14: the checkout idempotency key identifies ONE cart snapshot.
+describe("useOrderStore.placeOrder idempotency key", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    let n = 0;
+    newIdempotencyKey.mockImplementation(() => `key-${++n}`);
+  });
+
+  const cartPayload = (qty = 1) => ({ items: [{ slug: "burger", qty }], fulfillment_type: "pickup", use_wallet: true });
+  const sentKey = (call) => api.post.mock.calls[call][1].idempotency_key;
+  const lostResponse = () => api.post.mockRejectedValueOnce(new Error("Network Error"));
+
+  it("retries the SAME cart with the same key (server replays, no double charge)", async () => {
+    const store = useOrderStore();
+    lostResponse();
+    await expect(store.placeOrder(cartPayload())).rejects.toThrow();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1", idempotent_replay: true } });
+    const result = await store.placeOrder(cartPayload());
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    // The replay flag is handed to the caller so it can say the order had already gone through.
+    expect(result.idempotent_replay).toBe(true);
+    expect(result.replayed_previous_cart).toBe(false); // same cart → it IS this cart's order
+  });
+
+  it("an edited cart after an UNKNOWN outcome keeps the key (no second charge) and flags the old-cart replay", async () => {
+    const store = useOrderStore();
+    lostResponse(); // the server may well have placed + charged this one
+    await expect(store.placeOrder(cartPayload(1))).rejects.toThrow();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1", idempotent_replay: true } });
+    const result = await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    expect(result.replayed_previous_cart).toBe(true);
+    expect(store._checkoutIdem).toBeNull();
+  });
+
+  it("a 5xx is an unknown outcome too", async () => {
+    const store = useOrderStore();
+    api.post.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+    await expect(store.placeOrder(cartPayload(1))).rejects.toBeTruthy();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    const result = await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    // Not a replay → the lost attempt placed nothing and THIS (edited) cart was placed.
+    expect(result.replayed_previous_cart).toBe(false);
+  });
+
+  it("an edited cart after a DEFINITIVE 4xx rejection gets a NEW key", async () => {
+    const store = useOrderStore();
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { code: "items_unavailable", detail: "x" } } });
+    await expect(store.placeOrder(cartPayload(1))).rejects.toBeTruthy();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).not.toBe(sentKey(0));
+  });
+
+  it("mints a fresh key for the next order after a confirmed success", async () => {
+    const store = useOrderStore();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1" } });
+    await store.placeOrder(cartPayload());
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    await store.placeOrder(cartPayload());
+
+    expect(sentKey(1)).not.toBe(sentKey(0));
+    expect(store._checkoutIdem).toBeNull();
   });
 });

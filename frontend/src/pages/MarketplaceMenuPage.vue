@@ -864,7 +864,8 @@ import MarketplaceMenuHeader from '../components/MarketplaceMenuHeader.vue';
 import MarketplaceMenuLoyaltyTeaser from '../components/MarketplaceMenuLoyaltyTeaser.vue';
 import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
-import { newIdempotencyKey } from '../lib/idempotency';
+import { afterFailedCheckout, checkoutSnapshot, isSameSnapshot, keyForCheckoutSnapshot } from '../lib/checkoutIdempotency';
+import { projectLoyaltyEarn } from '../lib/loyaltyEarn';
 import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
 import { resolveMarketplaceReorderItems } from '../lib/reorder';
 import { classifyClosedOrderState } from '../lib/businessHours';
@@ -1000,10 +1001,12 @@ const shareDish = async (dish) => {
 };
 
 const placing = ref(false);
-// Idempotency key for the in-flight/retryable checkout attempt (null between attempts):
-// reused on retry of the same submit so the backend replays instead of double-charging,
-// reset to null after a confirmed success so the next order mints a fresh key.
-let checkoutIdemKey = null;
+// Idempotency state of the retryable checkout attempt ({ key, fingerprint, outcomeUnknown };
+// null between orders — lib/checkoutIdempotency, L14): a retry of the SAME cart reuses the key
+// so the backend replays instead of double-charging; after an unknown outcome the key is kept
+// even across edits (that attempt may have charged); after definitive rejections an edited cart
+// gets a new key. Reset after a confirmed success.
+let checkoutIdem = null;
 const checkoutError = ref('');
 const showAuthModal = ref(false); // opens when delivery order requires sign-in
 
@@ -1700,15 +1703,17 @@ const orderTotal = computed(() =>
   Math.max(0, orderBaseTotal.value - flashSaleDiscount.value - loyaltyDiscount.value)
 );
 
-// Projected points earned on this order (mirrors backend: floor(subtotal * points_per_unit))
-const loyaltyEarnProjection = computed(() => {
-  if (!loyaltyConfig.value?.enabled) return 0;
-  const ppu = Number(loyaltyConfig.value.points_per_unit) || 0;
-  if (ppu <= 0) return 0;
-  const subtotal = Number(orderBaseTotal.value) || 0;
-  if (subtotal <= 0) return 0;
-  return Math.floor(subtotal * ppu);
-});
+// Projected points this order credits — the server's exact formula (lib/loyaltyEarn): on the
+// FOOD subtotal (MarketplacePlaceOrderView earns on food_subtotal — never the delivery fee),
+// × the tier multiplier, + the first-order bonus. Only a signed-in customer earns.
+const loyaltyEarnProjection = computed(() =>
+  projectLoyaltyEarn({
+    cfg: loyaltyConfig.value,
+    foodSubtotal: cartTotal.value,
+    lifetimePoints: customer.value?.lifetime_loyalty_points,
+    signedIn: customerStore.isAuthenticated,
+  }),
+);
 
 // Marketplace orders are pay-now: settled in full from the wallet at checkout.
 const walletBalanceNum = computed(() => {
@@ -1969,14 +1974,43 @@ const placeOrder = async () => {
     if (useLoyalty.value && loyaltyAvailable.value && loyaltyPoints.value > 0) {
       payload.redeem_points = loyaltyPoints.value;
     }
-    if (!checkoutIdemKey) checkoutIdemKey = newIdempotencyKey();
-    payload.idempotency_key = checkoutIdemKey;
-    const res = await api.post('/marketplace/order/', payload);
-    checkoutIdemKey = null;
+    const snapshot = checkoutSnapshot(payload);
+    checkoutIdem = keyForCheckoutSnapshot(checkoutIdem, snapshot);
+    const sameCart = isSameSnapshot(checkoutIdem, snapshot);
+    payload.idempotency_key = checkoutIdem.key;
+    let res;
+    try {
+      res = await api.post('/marketplace/order/', payload);
+    } catch (postErr) {
+      // Unknown outcome (no response / 5xx) keeps the key even if the cart is edited next —
+      // that attempt may have placed and charged an order (lib/checkoutIdempotency).
+      checkoutIdem = afterFailedCheckout(checkoutIdem, postErr);
+      throw postErr;
+    }
+    checkoutIdem = null;
+    const replayed = res.data?.idempotent_replay === true;
     // The order spent wallet balance / moved loyalty points server-side — force-refresh the
     // customer (fire-and-forget) so the order-status / account screens never show the stale
     // pre-order balance.
     if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
+    if (replayed && !sameCart) {
+      // The lost attempt was for an EARLIER version of this cart (key kept so it couldn't be
+      // charged twice). That order is the one that exists — show it — but it lacks the later
+      // edits: say so, and keep the edited cart (not cleared) so nothing is silently lost.
+      try {
+        localStorage.setItem('mktLastOrderNumber', String(res.data.order_number));
+        localStorage.setItem('mktLastOrderAt', String(Date.now()));
+        localStorage.setItem('mktLastOrderSlug', String(slug));
+      } catch { /* storage unavailable */ }
+      toastStore.show(t('cartPage_order.orderAlreadyPlacedEditsKept'), 'warning', 9000);
+      router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
+      return;
+    }
+    // idempotent_replay for this same cart: an earlier attempt (response lost) had already
+    // placed it — say it had already gone through rather than presenting it as freshly placed.
+    if (replayed) {
+      toastStore.show(t('cartPage_order.orderAlreadyPlaced'), 'info');
+    }
     // Optionally persist the delivery address for future orders.
     if (form.fulfillment_type === 'delivery' && saveAddressAfterOrder.value && form.delivery_address) {
       try {

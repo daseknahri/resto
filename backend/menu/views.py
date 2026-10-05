@@ -2663,6 +2663,30 @@ def _cod_eligible(profile, customer_id):
         return False
 
 
+def _first_order_bonus_eligible(customer_id, bonus_points):
+    """True when a signed-in customer's NEXT order here would get the loyalty first-order bonus.
+
+    The exact pre-placement form of the grant predicate both checkouts use (PlaceOrderView and
+    MarketplacePlaceOrderView): the bonus is configured and the customer has no non-cancelled
+    order at this tenant. Lets the checkout's points projection include the bonus (L6). Per
+    customer and live — never bake it into a shared cache. Must run in the tenant schema.
+    """
+    try:
+        bonus = int(bonus_points or 0)
+    except (TypeError, ValueError):
+        return False
+    if not customer_id or bonus <= 0:
+        return False
+    try:
+        return not (
+            Order.objects.filter(customer_id=customer_id)
+            .exclude(status=Order.Status.CANCELLED)
+            .exists()
+        )
+    except Exception:
+        return False
+
+
 class OrderEligibilityView(APIView):
     """GET /api/order-eligibility/ — payment options for the signed-in customer on a
     pay-now (pickup/delivery) order at this restaurant. Lets the cart offer trusted
@@ -11872,8 +11896,11 @@ class OwnerLoyaltyView(APIView):
 class CustomerLoyaltyConfigView(APIView):
     """GET /api/customer/loyalty/config/ — public loyalty config for the current tenant.
     Used by the customer account page to display points info and redemption options.
-    No authentication required."""
+    No authentication required; a signed-in customer also gets
+    ``first_order_bonus_eligible`` so the cart's earn projection matches the grant (L6)."""
 
+    # Optional-auth (see OrderEligibilityView): anonymous callers keep getting the public config.
+    authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
@@ -11883,6 +11910,8 @@ class CustomerLoyaltyConfigView(APIView):
             cfg = None
         if not cfg or not cfg.enabled:
             return Response({"enabled": False})
+        _customer = customer_or_none(request)
+        _first_bonus = int(getattr(cfg, "first_order_bonus_points", 0) or 0)
         return Response({
             "enabled": cfg.enabled,
             "points_per_unit": cfg.points_per_unit,
@@ -11893,8 +11922,11 @@ class CustomerLoyaltyConfigView(APIView):
             "tier_gold_threshold": int(getattr(cfg, "tier_gold_threshold", 2000) or 2000),
             "tier_silver_multiplier": str(getattr(cfg, "tier_silver_multiplier", "1.50") or "1.50"),
             "tier_gold_multiplier": str(getattr(cfg, "tier_gold_multiplier", "2.00") or "2.00"),
-            "first_order_bonus_points": int(getattr(cfg, "first_order_bonus_points", 0) or 0),
+            "first_order_bonus_points": _first_bonus,
             "birthday_bonus_points": int(getattr(cfg, "birthday_bonus_points", 0) or 0),
+            "first_order_bonus_eligible": _first_order_bonus_eligible(
+                _customer.id if _customer else None, _first_bonus,
+            ),
         })
 
 
@@ -12122,14 +12154,62 @@ class CustomerLoyaltyHistoryView(APIView):
         })
 
 
+def _live_auto_promos(now_local):
+    """The auto-applied (code-less) promotions live at ``now_local``, for the cart preview (M8).
+
+    Mirrors the auto-apply loop in PlaceOrderView EXACTLY: the same queryset (is_active, code="",
+    default -created_at ordering), the same usage-cap skip and the same promo window. What depends
+    on the cart — min_order_amount and the discount size — is left to the client, which applies
+    _compute_promo_discount's math and the loop's strict ``>`` best pick in that order, so it
+    previews the very promo the order will get.
+
+    code="": a code-protected promo is redeemable only by entering its code (see #455), so it is
+    never listed here. Computed per request (time-sensitive) — never cache this.
+    """
+    live = []
+    for promo in Promotion.objects.filter(is_active=True, code=""):
+        if promo.max_uses is not None and promo.use_count >= promo.max_uses:
+            continue
+        if not _is_promo_active_now(promo, now_local=now_local):
+            continue
+        live.append({
+            "name": promo.name,
+            "promo_type": promo.promo_type,
+            "discount_value": str(promo.discount_value),
+            "min_order_amount": str(promo.min_order_amount),
+        })
+    return live
+
+
 class PromoCodeCheckView(APIView):
     """GET /api/promo-code-check/?code=XXX
     Returns promo validity and a preview of the discount without placing an order.
     Accessible to any authenticated customer (or unauthenticated for simplicity).
+
+    GET /api/promo-code-check/?auto=1 returns ``{"auto_promos": [...]}`` — the code-less promos
+    checkout would auto-apply right now (see _live_auto_promos), so the cart can preview them.
     """
     permission_classes = [AllowAny]
 
+    @staticmethod
+    def _tenant_now_local(request):
+        """The tenant-local "now" a promo window is evaluated in (a promo "Tue 14:00–16:00"
+        means tenant-local), not the server's. If the tenant profile can't be resolved, fall
+        back to the wrapper's consistent UTC clock (None) — still tz-consistent, just not
+        tenant-local."""
+        try:
+            _tenant = getattr(request, "tenant", None)
+            _profile = Profile.objects.filter(tenant=_tenant).first() if _tenant else None
+            if _profile is not None:
+                return _profile_now(_profile)
+        except Exception:
+            pass
+        return None
+
     def get(self, request, *args, **kwargs):
+        if str(request.query_params.get("auto") or "") == "1":
+            return Response({"auto_promos": _live_auto_promos(self._tenant_now_local(request))})
+
         code = str(request.query_params.get("code") or "").strip().upper()
         if not code:
             return Response({"valid": False, "detail": "No code provided."}, status=status.HTTP_400_BAD_REQUEST)
@@ -12144,18 +12224,8 @@ class PromoCodeCheckView(APIView):
         if promo.max_uses is not None and promo.use_count >= promo.max_uses:
             return Response({"valid": False, "detail": "Promo code has reached its usage limit."})
 
-        # Check schedule — evaluate the window in the TENANT's local wall-clock time
-        # (a promo "Tue 14:00–16:00" means tenant-local), not the server's. If the
-        # tenant profile can't be resolved, fall back to the wrapper's consistent UTC
-        # clock (now_local=None) — still tz-consistent, just not tenant-local.
-        _now_local = None
-        try:
-            _tenant = getattr(request, "tenant", None)
-            _profile = Profile.objects.filter(tenant=_tenant).first() if _tenant else None
-            if _profile is not None:
-                _now_local = _profile_now(_profile)
-        except Exception:
-            _now_local = None
+        # Check schedule — evaluated in the tenant's local wall-clock time.
+        _now_local = self._tenant_now_local(request)
         if not _is_promo_active_now(promo, now_local=_now_local):
             return Response({"valid": False, "detail": "Promo code is not active at this time."})
 

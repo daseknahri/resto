@@ -483,3 +483,82 @@ class PromoCodeCheckViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["valid"])
         mock_promo_objs.get.assert_not_called()
+
+
+# ── PromoCodeCheckView ?auto=1 (M8: cart preview of auto-applied promos) ──────
+
+class AutoPromoPreviewTests(SimpleTestCase):
+    """M8: checkout auto-applies the best live code-less promo, but the cart only previewed a
+    typed code — so it quoted (and wallet-gated) a higher total than it charged. ?auto=1 lists
+    the promos PlaceOrderView's auto-apply loop would consider right now, so the cart can pick
+    the same one. Before the fix ?auto=1 was a code-less call → 400 "No code provided."."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = PromoCodeCheckView.as_view()
+
+    def _get_auto(self):
+        req = self.factory.get("/api/promo-code-check/", {"auto": "1"})
+        req.user = MagicMock(is_authenticated=False)
+        req.tenant = _tenant()
+        return self.view(req)
+
+    @patch("menu.views.Profile")
+    @patch("menu.views._is_promo_active_now")
+    @patch("menu.views.Promotion.objects")
+    def test_lists_live_uncapped_auto_promos_in_checkout_order(self, mock_objs, mock_active, mock_profile):
+        lunch = _make_promo(promo_id=1, name="Lunch 10%", code="", discount_value="10.00",
+                            min_order_amount="50.00")
+        capped = _make_promo(promo_id=2, name="Capped", code="", max_uses=5, use_count=5)
+        night = _make_promo(promo_id=3, name="Night", code="")
+        free_del = _make_promo(promo_id=4, name="Free delivery", promo_type="free_delivery", code="",
+                               discount_value="0.00", max_uses=10, use_count=3)
+        mock_objs.filter.return_value = [lunch, capped, night, free_del]
+        mock_active.side_effect = lambda promo, now_local=None: promo is not night
+        mock_profile.objects.filter.return_value.first.return_value = None
+
+        resp = self._get_auto()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Capped and out-of-window promos are dropped; order is the queryset's (= checkout's).
+        self.assertEqual([p["name"] for p in resp.data["auto_promos"]], ["Lunch 10%", "Free delivery"])
+        # Only what the preview needs — never the usage counters.
+        self.assertEqual(resp.data["auto_promos"][0], {
+            "name": "Lunch 10%",
+            "promo_type": "percentage",
+            "discount_value": "10.00",
+            "min_order_amount": "50.00",
+        })
+
+    @patch("menu.views.Profile")
+    @patch("menu.views._is_promo_active_now", return_value=True)
+    @patch("menu.views.Promotion.objects")
+    def test_uses_checkouts_queryset_so_code_protected_promos_never_leak(self, mock_objs, _active, mock_profile):
+        """The SAME filter as PlaceOrderView's auto-apply loop, with no re-ordering: a promo with
+        a code is redeemable only by typing it (#455), so it must never be listed."""
+        mock_objs.filter.return_value = []
+        mock_profile.objects.filter.return_value.first.return_value = None
+
+        resp = self._get_auto()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["auto_promos"], [])
+        mock_objs.filter.assert_called_once_with(is_active=True, code="")
+
+    @patch("menu.views._profile_now")
+    @patch("menu.views.Profile")
+    @patch("menu.views._is_promo_active_now", return_value=True)
+    @patch("menu.views.Promotion.objects")
+    def test_window_is_evaluated_on_the_tenant_local_clock(self, mock_objs, mock_active, mock_profile, mock_now):
+        """Same clock as checkout (_profile_now(profile)), so a "Tue 14:00-16:00" promo previews
+        exactly when the order would get it."""
+        promo = _make_promo(code="")
+        mock_objs.filter.return_value = [promo]
+        profile = SimpleNamespace(timezone="Africa/Casablanca")
+        mock_profile.objects.filter.return_value.first.return_value = profile
+        mock_now.return_value = "TENANT-NOW"
+
+        self._get_auto()
+
+        mock_now.assert_called_once_with(profile)
+        mock_active.assert_called_once_with(promo, now_local="TENANT-NOW")

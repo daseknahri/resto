@@ -1365,3 +1365,56 @@ class BusinessTypeFilterTests(SimpleTestCase):
         qs = MagicMock()
         _apply_business_type_filter(qs, _bt_request(" Pharmacy , GROCERY "))
         self.assertEqual(_in_values(qs.filter.call_args[0][0]), {"pharmacy", "grocery"})
+
+
+# ── M12: listing card delivery-pricing signal ─────────────────────────────────
+
+class MarketplaceListingDeliveryPricingTests(SimpleTestCase):
+    """M12: the card said "Free delivery" whenever the FLAT delivery_fee was 0 — but delivery_fee
+    is only the fallback; a base + per-km restaurant (tenancy.delivery_pricing) was advertised as
+    free and then charged at checkout. The row now carries the distance-pricing inputs. Before
+    the fix these keys were absent from the listing row."""
+
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceView.as_view()
+
+    def _rows(self, profiles):
+        req = self.factory.get("/api/marketplace/")
+        req.user = _anon()
+        fake_qs = _FakeListQS(profiles)
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = fake_qs
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                optin_m = MagicMock(); optin_m.objects.values.return_value = []
+                fs_m = MagicMock(); fs_m.objects.filter.return_value = []
+                with patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
+                        patch("accounts.models.PlatformFlashSale", fs_m):
+                    resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return {r["slug"]: r for r in resp.data["restaurants"]}
+
+    def test_distance_priced_restaurant_exposes_base_per_km_and_free_over(self):
+        from decimal import Decimal
+        [distance, flat] = _profiles(2)
+        distance.delivery_fee = None  # no flat fallback set
+        distance.delivery_base_fee = Decimal("8.00")
+        distance.delivery_per_km = Decimal("2.50")
+        distance.delivery_free_over = Decimal("150.00")
+        flat.delivery_fee = Decimal("15.00")
+        flat.delivery_base_fee = None
+        flat.delivery_per_km = Decimal("0")
+        flat.delivery_free_over = None
+
+        rows = self._rows([distance, flat])
+
+        self.assertEqual(rows["r0"]["delivery_fee"], "0")
+        self.assertEqual(rows["r0"]["delivery_base_fee"], "8.00")
+        self.assertEqual(rows["r0"]["delivery_per_km"], "2.50")
+        self.assertEqual(rows["r0"]["delivery_free_over"], "150.00")
+        # Unset → "0" (same shape as the marketplace menu payload).
+        self.assertEqual(rows["r1"]["delivery_fee"], "15.00")
+        self.assertEqual(rows["r1"]["delivery_base_fee"], "0")
+        self.assertEqual(rows["r1"]["delivery_per_km"], "0")
+        self.assertEqual(rows["r1"]["delivery_free_over"], "0")

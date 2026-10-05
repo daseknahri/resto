@@ -93,7 +93,7 @@ defineProps({
   deliveryFeePending: { type: Boolean, default: false },
   /** Whether the delivery address is out of range. */
   deliveryOutOfRange: { type: Boolean, default: false },
-  /** Promo-code discount applied (0 = none). */
+  /** Promo discount applied — the typed code's, else the auto-applied promotion's (0 = none). */
   promoDiscount: { type: Number, default: 0 },
   /** Applied promo's name/label, shown beside the promo discount row. */
   promoLabel: { type: String, default: '' },

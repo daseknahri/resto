@@ -107,6 +107,23 @@ describe("MarketplaceMenuHeader", () => {
     expect(w.text()).toContain("mktMenu.freeDelivery");
   });
 
+  // M12 (same reading as the marketplace card): a 0 flat fee is only the fallback — a
+  // base + per-km restaurant charges by distance at checkout, so it must not read "free".
+  it("never says free delivery for a distance-priced restaurant", () => {
+    const fromBase = mountComp({ restaurant: restaurant({
+      delivery_enabled: true, delivery_fee: "0", delivery_base_fee: "8.00", delivery_per_km: "2.50", delivery_free_over: "150.00",
+    }) });
+    expect(fromBase.text()).not.toContain("mktMenu.freeDelivery");
+    expect(fromBase.text()).toContain('marketplace.deliveryFrom:{"amount":"$8"}');
+    expect(fromBase.text()).toContain('marketplace.freeDeliveryOver:{"amount":"$150"}');
+
+    const byKmOnly = mountComp({ restaurant: restaurant({
+      delivery_enabled: true, delivery_fee: "0", delivery_base_fee: "0", delivery_per_km: "3.00",
+    }) });
+    expect(byKmOnly.text()).toContain("marketplace.deliveryByDistance");
+    expect(byKmOnly.text()).not.toContain("mktMenu.freeDelivery");
+  });
+
   it("hides delivery chips entirely when delivery is disabled", () => {
     const w = mountComp({ restaurant: restaurant({ delivery_enabled: false, delivery_fee: "5.00", delivery_minimum_order: "50" }) });
     expect(w.text()).not.toContain("mktMenu.deliveryFee");

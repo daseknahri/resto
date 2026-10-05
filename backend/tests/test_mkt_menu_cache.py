@@ -275,6 +275,57 @@ class FlashSaleLiveOnCacheHitTests(_MktMenuCacheBase):
         self.assertEqual(dish_cls.objects.filter.call_count, 1)
 
 
+class LoyaltyEarnInputsTests(_MktMenuCacheBase):
+    """L6: the marketplace checkout's points projection needs the whole earn formula
+    MarketplacePlaceOrderView applies — the tier multiplier config (owner config → cacheable)
+    and whether THIS customer's next order gets the first-order bonus (per customer → like
+    cod_eligible, recomputed per request on the copy, never cached under {slug}). Before the
+    fix the payload carried only points_per_unit, so neither could be projected."""
+
+    def _fake_menu_with_loyalty(self):
+        fake_menu, dish_cls = _make_fake_menu()
+        fake_menu.LoyaltyConfig.objects.filter.return_value.first.return_value = SimpleNamespace(
+            points_value=Decimal("0.0100"), redeem_threshold=100, points_per_unit=10,
+            tier_enabled=True, tier_silver_threshold=500, tier_gold_threshold=2000,
+            tier_silver_multiplier=Decimal("1.50"), tier_gold_multiplier=Decimal("2.00"),
+            first_order_bonus_points=50,
+        )
+        return fake_menu, dish_cls
+
+    def test_tier_config_and_first_order_bonus_points_are_exposed(self):
+        fake_menu, _ = self._fake_menu_with_loyalty()
+        with patch("menu.views._cod_eligible", return_value=False), \
+                patch("menu.views._first_order_bonus_eligible", return_value=False):
+            resp = self._drive(slug="loy", fake_menu=fake_menu, profile=_make_profile())
+
+        loyalty = resp.data["loyalty"]
+        self.assertEqual(loyalty["points_per_unit"], 10)
+        self.assertIs(loyalty["tier_enabled"], True)
+        self.assertEqual(loyalty["tier_silver_threshold"], 500)
+        self.assertEqual(loyalty["tier_gold_threshold"], 2000)
+        self.assertEqual(loyalty["tier_silver_multiplier"], "1.50")
+        self.assertEqual(loyalty["tier_gold_multiplier"], "2.00")
+        self.assertEqual(loyalty["first_order_bonus_points"], 50)
+
+    def test_first_order_bonus_eligibility_is_per_customer_not_cached(self):
+        """Customer 1 has never ordered here, customer 2 has; an anonymous shopper never earns.
+        All three share ONE cached body, yet each gets their own verdict."""
+        fake_menu, dish_cls = self._fake_menu_with_loyalty()
+        profile = _make_profile()
+        with patch("menu.views._cod_eligible", return_value=False), \
+                patch("menu.views._first_order_bonus_eligible",
+                      side_effect=lambda cid, bonus: cid == 1 and bonus == 50) as mock_first:
+            resp_new = self._drive(slug="loy2", fake_menu=fake_menu, profile=profile, customer_id=1)
+            resp_repeat = self._drive(slug="loy2", fake_menu=fake_menu, profile=profile, customer_id=2)
+            resp_anon = self._drive(slug="loy2", fake_menu=fake_menu, profile=profile)
+
+        self.assertIs(resp_new.data["loyalty"]["first_order_bonus_eligible"], True)
+        self.assertIs(resp_repeat.data["loyalty"]["first_order_bonus_eligible"], False)
+        self.assertIs(resp_anon.data["loyalty"]["first_order_bonus_eligible"], False)
+        mock_first.assert_any_call(None, 50)
+        self.assertEqual(dish_cls.objects.filter.call_count, 1, "body built once, verdict per request")
+
+
 def _dish_stub(slug="burger", *, schedule=None, component_ids=()):
     """A concrete (picklable-once-serialized) dish as _build reads it. `component_ids` makes it a combo."""
     sc = SimpleNamespace(id=1, name="Mains", name_i18n={}, position=0)
