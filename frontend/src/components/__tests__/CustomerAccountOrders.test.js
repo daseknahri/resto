@@ -128,6 +128,27 @@ describe("CustomerAccountOrders", () => {
     expect(highlighted).toBeGreaterThan(0);
   });
 
+  it("M6: a scheduled order is badged 'Scheduled' (not 'Pending') and shows when it's due", () => {
+    const due = "2026-07-02T19:30:00Z";
+    const o = tenantOrder({ status: "scheduled", scheduled_for: due });
+    const m = marketplaceOrder({ order_number: "2002", status: "scheduled", scheduled_for: due });
+    const w = mountComp({ apiOrders: [o], marketplaceOrders: [m], filteredMarketplaceOrders: [m] });
+    const text = w.text();
+    const time = new Intl.DateTimeFormat("en", {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    }).format(new Date(due));
+    expect(text).toContain("orderStatus.statusScheduled");
+    expect(text).not.toContain("orderStatus.statusPending");
+    // Due time on BOTH lists (this restaurant + all restaurants).
+    const dueLabel = `customerAccount.scheduledDue:${JSON.stringify({ time })}`;
+    expect(text.split(dueLabel).length - 1).toBe(2);
+  });
+
+  it("M6: an ASAP order shows no due-time line", () => {
+    const w = mountComp({ apiOrders: [tenantOrder({ status: "pending", scheduled_for: null })] });
+    expect(w.text()).not.toContain("customerAccount.scheduledDue");
+  });
+
   it("mini-timeline: a ready DINE-IN order reads 'Served', not 'Ready for pickup'", () => {
     const o = tenantOrder({ status: "ready", fulfillment_type: "table" });
     const w = mountComp({ apiOrders: [o] });

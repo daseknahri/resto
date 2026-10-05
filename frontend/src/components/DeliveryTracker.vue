@@ -16,7 +16,7 @@
           'border-sky-500/30 bg-sky-500/12 text-sky-300': delivery.status === 'assigned' || delivery.status === 'at_restaurant',
           'border-violet-500/30 bg-violet-500/12 text-violet-300': delivery.status === 'picked_up',
           'border-emerald-500/30 bg-emerald-500/12 text-emerald-300': delivery.status === 'delivered',
-          'border-red-500/30 bg-red-500/12 text-red-300': delivery.status === 'failed',
+          'border-red-500/30 bg-red-500/12 text-red-300': delivery.status === 'failed' || delivery.status === 'cancelled',
         }"
         aria-live="polite"
         aria-atomic="true"
@@ -65,7 +65,14 @@
         {{ t('deliveryTracker.call') }}
       </a>
     </section>
-    <template v-else>
+    <!-- No driver on a job that has ENDED (cancelled / failed before anyone accepted):
+         say so plainly — the "Finding a driver…" live dot below contradicted the pill. -->
+    <p
+      v-else-if="endedWithoutDriverText"
+      class="ui-subtle text-xs"
+      data-test="ended-without-driver"
+    >{{ endedWithoutDriverText }}</p>
+    <template v-else-if="isSearching">
       <p class="ui-subtle flex items-center gap-1.5 text-xs" aria-live="polite" aria-atomic="true">
         <span class="ui-live-dot bg-amber-400" aria-hidden="true"></span>
         {{ t('deliveryTracker.searching') }}
@@ -275,6 +282,15 @@ const positionAgeText = computed(() => {
 // ticking and a gentle banner appears once the search runs long. Presentational
 // only — dispatch keeps trying regardless.
 const isSearching = computed(() => props.delivery?.status === 'searching');
+// Terminal job with no driver attached: the body must agree with the "Cancelled" /
+// "Delivery failed" pill instead of still claiming we're looking for a driver.
+const endedWithoutDriverText = computed(() => {
+  const d = props.delivery;
+  if (!d || d.driver) return '';
+  if (d.status === 'cancelled') return t('deliveryTracker.endedCancelled');
+  if (d.status === 'failed') return t('deliveryTracker.endedFailed');
+  return '';
+});
 const nowMs = ref(Date.now());
 const searchStartedMs = ref(null);
 let _searchTimer = null;

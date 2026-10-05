@@ -227,6 +227,9 @@
                 {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
               </p>
               <p class="text-[11px] text-slate-400">{{ statusLabel(order.status) }}</p>
+              <p v-if="scheduledDueLabel(order)" class="mt-0.5 text-[10px] font-semibold text-violet-300/90">
+                {{ scheduledDueLabel(order) }}
+              </p>
               <p v-if="order.estimated_ready_minutes && ['confirmed','preparing'].includes(order.status)" class="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-300/80">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 shrink-0" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75V8l2.25 2"/></svg>
                 {{ t('customerAccount.etaMin', { min: order.estimated_ready_minutes }) }}
@@ -1366,6 +1369,7 @@ import { useConfirmModal } from '../composables/useConfirmModal';
 import { useReorder } from '../composables/useReorder';
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER } from '../lib/verticals';
 import { groupWalletTransactionsByDate } from '../lib/walletHistory';
+import { CUSTOMER_ACTIVE_STATUSES, customerStatusKey, formatScheduledDue } from '../lib/orderStatusMeta';
 
 const { t, formatPrice, formatCurrency, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -1589,8 +1593,15 @@ const loadingReservations = ref(false);
 const reservationsError = ref(false);
 const apiReservations = ref([]);
 
-const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
+// Includes `scheduled` — a prepaid advance order gets the live-order banner too.
+const ACTIVE_STATUSES = CUSTOMER_ACTIVE_STATUSES;
 const activeOrders = computed(() => apiOrders.value.filter(o => ACTIVE_STATUSES.has(o.status)));
+// "Scheduled for Tue 7 Oct, 19:30" for a scheduled order ('' otherwise / no time).
+const scheduledDueLabel = (order) => {
+  if (order?.status !== 'scheduled') return '';
+  const time = formatScheduledDue(currentLocale.value, order.scheduled_for);
+  return time ? t('customerAccount.scheduledDue', { time }) : '';
+};
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 const reviewDrafts     = reactive({});   // { [orderNumber]: { score: 0, comment: '' } }
@@ -2032,16 +2043,7 @@ const formatDate = (iso) => {
   } catch { return iso; }
 };
 
-const STATUS_I18N = {
-  pending: 'orderStatus.statusPending',
-  confirmed: 'orderStatus.statusConfirmed',
-  preparing: 'orderStatus.statusPreparing',
-  ready: 'orderStatus.statusReady',
-  out_for_delivery: 'orderStatus.stepOutForDelivery',
-  completed: 'orderStatus.statusCompleted',
-  cancelled: 'orderStatus.statusCancelled',
-};
-const statusLabel = (s) => s ? t(STATUS_I18N[s] || 'orderStatus.statusPending') : '';
+const statusLabel = (s) => s ? t(customerStatusKey(s)) : '';
 
 const TX_LABEL_MAP = {
   topup:   'customerAccount.walletTxTopup',
@@ -2264,6 +2266,27 @@ const marketplaceOrdersCurrentPage = ref(1);
 const marketplaceOrdersError = ref(false);
 
 // ── Order self-cancel ──────────────────────────────────────────────────────────
+// The server's "past the self-cancel window" codes (409): the tenant cancel view sends
+// not_cancellable, the marketplace one cancel_too_late. (The old check for a
+// 'cannot_cancel' code matched neither, so customers got a generic "try again".)
+const CANCEL_TOO_LATE_CODES = new Set(['not_cancellable', 'cancel_too_late']);
+
+// After a too-late refusal: hide that row's Cancel button now (the server just said
+// no), then re-read just that order so its status badge catches up — without
+// reloading the paginated list. Best-effort; the next list load re-syncs anyway.
+const refreshCancelledRow = async (list, orderNumber, url, config) => {
+  const row = () => list.value.find((o) => o.order_number === orderNumber);
+  if (row()) row().can_cancel = false;
+  try {
+    const { data } = await api.get(url, config);
+    const target = row();
+    if (target && data?.status) {
+      target.status = data.status;
+      target.can_cancel = Boolean(data.can_cancel);
+    }
+  } catch { /* keep the optimistic can_cancel=false */ }
+};
+
 const cancellingOrderNumber = ref(null);
 const cancelOrder = async (order) => {
   if (cancellingOrderNumber.value) return;
@@ -2286,9 +2309,9 @@ const cancelOrder = async (order) => {
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    const code = err?.response?.data?.code;
-    if (code === 'cannot_cancel') {
+    if (CANCEL_TOO_LATE_CODES.has(err?.response?.data?.code)) {
       toast.show(t('customerAccount.orderCannotCancel'), 'error');
+      refreshCancelledRow(apiOrders, order.order_number, `/order-status/${order.order_number}/`);
     } else {
       toast.show(t('customerAccount.orderCancelFailed'), 'error');
     }
@@ -2315,7 +2338,17 @@ const cancelMarketplaceOrder = async (order) => {
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    toast.show(t('customerAccount.orderCancelFailed'), 'error');
+    if (CANCEL_TOO_LATE_CODES.has(err?.response?.data?.code)) {
+      toast.show(t('customerAccount.orderCannotCancel'), 'error');
+      refreshCancelledRow(
+        marketplaceOrders,
+        order.order_number,
+        `/marketplace/order/${order.order_number}/`,
+        { params: { restaurant: order.restaurant_slug } },
+      );
+    } else {
+      toast.show(t('customerAccount.orderCancelFailed'), 'error');
+    }
   } finally {
     cancellingOrderNumber.value = null;
   }

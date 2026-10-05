@@ -184,7 +184,8 @@
               <span v-if="orderData.can_cancel" class="ui-chip border-red-400/30 bg-red-500/8 text-red-300 text-[11px]">{{ t('orderStatus.cancelAvailable') }}</span>
             </div>
           </div>
-          <div class="text-end space-y-1 shrink-0">
+          <!-- Total + item count — not in the restricted (status-only) payload, where they'd read "0.00" -->
+          <div v-if="!detailsRestricted" class="text-end space-y-1 shrink-0">
             <p class="text-2xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(orderData.total, orderData.currency) }}</p>
             <p class="text-[10px] text-slate-500 tracking-wide">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
           </div>
@@ -344,12 +345,41 @@
         </p>
       </div>
 
+      <!-- Restricted (status-only) view: the order belongs to an account and this viewer
+           isn't signed in as it. Explain + offer sign-in instead of an empty receipt. -->
+      <div
+        v-if="detailsRestricted"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-3"
+        :style="{ '--ui-delay': '98ms' }"
+        data-test="restricted-details"
+      >
+        <div class="flex items-start gap-3">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-700/60 bg-slate-800/60" aria-hidden="true">
+            <AppIcon name="user" class="h-4 w-4 text-slate-300" />
+          </span>
+          <div class="min-w-0 space-y-1">
+            <h2 class="text-sm font-semibold text-slate-100">{{ t("orderStatus.restrictedTitle") }}</h2>
+            <p class="text-xs leading-relaxed text-slate-400">{{ t("orderStatus.restrictedBody") }}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="ui-btn-primary inline-flex w-full items-center justify-center gap-2 py-2.5 text-sm"
+          @click="showAuthModal = true"
+        >
+          <AppIcon name="user" class="h-3.5 w-3.5" aria-hidden="true" />
+          {{ t("orderStatus.restrictedSignIn") }}
+        </button>
+      </div>
+
       <!-- Items -->
-      <div class="ui-panel ui-reveal p-4 sm:p-5 space-y-3" :style="{ '--ui-delay': '98ms' }">
+      <div v-else class="ui-panel ui-reveal p-4 sm:p-5 space-y-3" :style="{ '--ui-delay': '98ms' }">
         <h2 class="ui-kicker">{{ t("orderStatus.items") }}</h2>
+        <!-- Index-qualified key: two lines of the same dish with different options (and
+             no note) used to share a key. -->
         <div
           v-for="(item, idx) in orderData.items"
-          :key="item.dish_name + item.note"
+          :key="`${idx}:${item.dish_slug || item.dish_name}`"
           class="ui-reveal flex items-start justify-between gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm transition-colors hover:border-slate-700/60"
           :class="item.is_voided ? 'opacity-60' : ''"
           :style="{ '--ui-delay': `${Math.min(idx, 9) * 20}ms` }"
@@ -426,8 +456,8 @@
           v-if="Number(orderData.wallet_amount_paid) > 0"
           class="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs"
         >
-          <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: formatCurrency(orderData.wallet_amount_paid) }) }}</span>
-          <span class="font-semibold text-emerald-200">💰 {{ formatCurrency(orderData.wallet_amount_paid) }}</span>
+          <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: formatCurrency(orderData.wallet_amount_paid, orderData.currency) }) }}</span>
+          <span class="font-semibold text-emerald-200">💰 {{ formatCurrency(orderData.wallet_amount_paid, orderData.currency) }}</span>
         </div>
 
         <!-- Payment status — Paid, or what's expected (pay-now vs pay-at-table) -->
@@ -529,41 +559,37 @@
         </template>
       </div>
 
-      <!-- Loyalty points earned — celebration (completed) or pending (in-progress) -->
+      <!-- Loyalty points earned. They're credited at placement (not at completion) and
+           clawed back only if the order is cancelled — so never "+N" on a cancelled order,
+           and the in-progress hint says they can still be reversed. -->
       <div
-        v-if="Number(orderData.points_earned) > 0"
-        class="ui-panel ui-reveal flex items-center justify-between p-4"
-        :class="orderData.status === 'completed'
-          ? 'border-violet-500/25 bg-violet-500/8'
-          : 'border-slate-700/60 bg-slate-900/40'"
+        v-if="Number(orderData.points_earned) > 0 && orderData.status !== 'cancelled'"
+        class="ui-panel ui-reveal flex items-center justify-between p-4 border-violet-500/25 bg-violet-500/8"
         :style="{ '--ui-delay': '100ms' }"
+        data-test="points-earned"
       >
         <div class="flex items-center gap-2.5">
-          <div
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border"
-            :class="orderData.status === 'completed' ? 'border-violet-500/25 bg-violet-500/12' : 'border-slate-700/50 bg-slate-800/60'"
-          >
-            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" :class="orderData.status === 'completed' ? 'text-violet-400' : 'text-slate-400'" aria-hidden="true">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/12">
+            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4 text-violet-400" aria-hidden="true">
               <path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/>
             </svg>
           </div>
           <div>
-            <p class="text-sm font-semibold" :class="orderData.status === 'completed' ? 'text-violet-200' : 'text-slate-300'">
-              {{ orderData.status === 'completed' ? t('orderStatus.pointsEarned') : t('orderStatus.pointsPending') }}
-            </p>
-            <p class="mt-0.5 text-[11px]" :class="orderData.status === 'completed' ? 'text-violet-300/60' : 'text-slate-500'">
-              {{ orderData.status === 'completed' ? t('orderStatus.pointsEarnedHint') : t('orderStatus.pointsPendingHint') }}
+            <p class="text-sm font-semibold text-violet-200">{{ t('orderStatus.pointsEarned') }}</p>
+            <p class="mt-0.5 text-[11px] text-violet-300/60">
+              {{ orderData.status === 'completed' ? t('orderStatus.pointsEarnedHint') : t('orderStatus.pointsCreditedHint') }}
             </p>
           </div>
         </div>
-        <span class="text-base font-bold tabular-nums" :class="orderData.status === 'completed' ? 'text-violet-200' : 'text-slate-400'">
+        <span class="text-base font-bold tabular-nums text-violet-200">
           +{{ orderData.points_earned }}
         </span>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->
       <div
-        v-if="orderData.receipt_message && ['confirmed', 'ready', 'completed'].includes(orderData.status)"
+        v-if="orderData.receipt_message && RECEIPT_MESSAGE_STATUSES.has(orderData.status)"
+        data-test="receipt-message"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-2 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
         :style="{ '--ui-delay': '112ms' }"
       >
@@ -578,7 +604,7 @@
            not_order_owner for anonymous callers, so an anonymous dine-in
            customer would otherwise see a form that can never succeed (B6). -->
       <div
-        v-if="orderData.status === 'completed' && !orderData.has_rating && customerStore.isAuthenticated"
+        v-if="orderData.status === 'completed' && !detailsRestricted && !orderData.has_rating && customerStore.isAuthenticated"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-4"
         :style="{ '--ui-delay': '126ms' }"
       >
@@ -623,9 +649,10 @@
       </div>
 
       <!-- Anonymous/non-owner completed order — brief sign-in-to-rate nudge instead
-           of a form that would always 403 (B6). -->
+           of a form that would always 403 (B6). (A restricted view already shows the
+           sign-in card above; has_rating isn't in that payload.) -->
       <div
-        v-else-if="orderData.status === 'completed' && !orderData.has_rating && !customerStore.isAuthenticated"
+        v-else-if="orderData.status === 'completed' && !detailsRestricted && !orderData.has_rating && !customerStore.isAuthenticated"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-3"
         :style="{ '--ui-delay': '126ms' }"
       >
@@ -674,9 +701,9 @@
         <p v-if="orderData.restaurant_feedback.note" class="text-sm text-slate-400 italic leading-relaxed">{{ orderData.restaurant_feedback.note }}</p>
       </div>
 
-      <!-- Sign-in nudge for anonymous table orders -->
+      <!-- Sign-in nudge for anonymous table orders (the restricted view has its own card) -->
       <div
-        v-if="orderData.fulfillment_type === 'table' && !customerStore.isAuthenticated"
+        v-if="orderData.fulfillment_type === 'table' && !customerStore.isAuthenticated && !detailsRestricted"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-3"
         :style="{ '--ui-delay': '154ms' }"
       >
@@ -693,11 +720,11 @@
       <!-- Re-order + navigation -->
       <div class="flex flex-wrap items-center justify-between gap-3 px-1">
         <span v-if="isLiveStatus" class="text-xs text-slate-500">
-          {{ t("orderStatus.autoRefresh", { seconds: POLL_INTERVAL_S }) }}
+          {{ t("orderStatus.autoRefresh", { seconds: pollSeconds }) }}
         </span>
         <div class="flex flex-wrap gap-2 ms-auto">
           <button
-            v-if="orderData.status === 'completed'"
+            v-if="orderData.status === 'completed' && !detailsRestricted"
             class="ui-btn-outline inline-flex items-center gap-1.5 px-4 py-2 text-sm print:hidden"
             @click="printReceipt"
           >
@@ -765,15 +792,20 @@ const showAuthModal = ref(false);
 // order to their account so it enters their history and the business becomes reorderable.
 // Best-effort — the claim endpoint enforces the phone-digits match (the diner must have left
 // their phone at ordering), so a mismatch / already-claimed just means no toast; the sign-in
-// still succeeds either way.
+// still succeeds either way. Either way, reload: the now-signed-in owner gets the full
+// order body (this is also how the restricted view's "Sign in" card resolves).
 const onClaimAuthenticated = async () => {
   showAuthModal.value = false;
   const slug = tenant.resolvedMeta?.slug || tenant.resolvedMeta?.profile?.slug;
-  if (!slug) return;
-  try {
-    await api.post("/customer/orders/claim/", { restaurant: slug, order_number: props.orderNumber });
-    toast.show(t("orderStatus.claimSuccess"), "success");
-  } catch { /* phone mismatch / already claimed — stay quiet; sign-in still succeeded */ }
+  // A restricted (status-only) view means the order already belongs to an account —
+  // there is nothing to claim, only details to reload.
+  if (slug && !detailsRestricted.value) {
+    try {
+      await api.post("/customer/orders/claim/", { restaurant: slug, order_number: props.orderNumber });
+      toast.show(t("orderStatus.claimSuccess"), "success");
+    } catch { /* phone mismatch / already claimed — stay quiet; sign-in still succeeded */ }
+  }
+  await fetchStatus();
 };
 // Push-permission priming soft-ask — triggered post-checkout (high-intent moment).
 const pushPrimingSheet = ref(null);
@@ -787,7 +819,23 @@ const POLL_INTERVAL_S = 15;
 // arrive by push, so the poll drops to a slow safety-net; otherwise it stays at
 // the fast rate as the primary update path.
 const POLL_SAFETY_NET_S = 60;
+// ...EXCEPT while a driver is on the job: driver-side events (accept, at-restaurant,
+// GPS fixes, a failed delivery) update the public DeliveryJob and are never pushed on
+// the order channel, so a healthy socket says nothing about them. Poll at the
+// marketplace tracker's rate until the job ends, whatever the socket state.
+const POLL_DELIVERY_TRACKING_S = 10;
+const ACTIVE_DELIVERY_JOB_STATUSES = new Set(["searching", "assigned", "at_restaurant", "picked_up"]);
+// The owner's thank-you note belongs to an accepted order: from confirmed onward
+// (it used to vanish at preparing / out_for_delivery), never on a cancelled one.
+const RECEIPT_MESSAGE_STATUSES = new Set(["confirmed", "preparing", "ready", "out_for_delivery", "completed"]);
 const orderData = ref(null);
+// The server sends a minimal, status-only payload (no items, totals or payment state)
+// to anyone but the order's own signed-in customer — e.g. the customer themself,
+// signed out, opening the order from Find-my-order. Detect that shape so the page
+// shows a "Sign in to see your order details" card instead of a fake 0.00 total, an
+// empty item list and a bogus "Payment due" pill. `items` is always an array in the
+// full payload.
+const detailsRestricted = computed(() => !!orderData.value && !Array.isArray(orderData.value.items));
 const loading = ref(false);
 const notFound = ref(false);
 // First-load failure that is NOT a 404 (5xx / network / other 4xx) — retryable, so
@@ -1286,10 +1334,14 @@ const cancelOrder = async () => {
     cancelConfirming.value = false;
   } catch (err) {
     const code = err?.response?.data?.code;
-    const message = code === "not_cancellable" ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed");
+    const tooLate = code === "not_cancellable";
+    const message = tooLate ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed");
     cancelError.value = message;
     toast.show(message, "error");
     cancelConfirming.value = false;
+    // The order moved past the cancel window (e.g. the kitchen started it) — refresh so
+    // the status catches up and can_cancel hides the button, instead of waiting a poll.
+    if (tooLate) fetchStatus();
   } finally {
     cancelling.value = false;
   }
@@ -1316,17 +1368,35 @@ const orderRealtime = useOrderRealtime(
 // anything else (connecting/polling/idle) → amber "reconnecting" cue.
 const { connectionState: realtimeState } = orderRealtime;
 
+// A driver is searching for / working this order's delivery job (see
+// POLL_DELIVERY_TRACKING_S). Only the order owner's payload carries `delivery`.
+const trackingActiveDelivery = computed(() =>
+  isLiveStatus.value && ACTIVE_DELIVERY_JOB_STATUSES.has(orderData.value?.delivery?.status)
+);
+// Current poll cadence: fast while a driver is on the job; otherwise the 60s safety
+// net when the WS is 'live', else the fast rate as the primary update path.
+const pollSeconds = computed(() => {
+  if (trackingActiveDelivery.value) return POLL_DELIVERY_TRACKING_S;
+  return realtimeState.value === "live" ? POLL_SAFETY_NET_S : POLL_INTERVAL_S;
+});
+
 // Self-rescheduling poll so the cadence adapts if the WS connection flips during
-// the session (RISK ASYNC-3). 'live' → 60s safety-net; otherwise the fast rate.
+// the session (RISK ASYNC-3) or a delivery job starts / ends.
 const scheduleNextPoll = () => {
-  const seconds = realtimeState.value === "live" ? POLL_SAFETY_NET_S : POLL_INTERVAL_S;
+  clearTimeout(pollTimer);
   pollTimer = setTimeout(() => {
     if (typeof document === "undefined" || document.visibilityState !== "hidden") {
       if (isLiveStatus.value) fetchStatus();
     }
     scheduleNextPoll();
-  }, seconds * 1000);
+  }, pollSeconds.value * 1000);
 };
+// Re-arm as soon as the cadence changes rather than waiting out a stale timer: the
+// first timer is armed at mount, before the order (and its delivery job) has loaded,
+// so without this a live socket would hold a just-assigned driver to the 60s timer.
+watch(pollSeconds, () => {
+  if (pollTimer !== null) scheduleNextPoll();
+});
 
 onMounted(() => {
   // Request notification permission proactively (non-blocking)
