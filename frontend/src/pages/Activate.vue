@@ -111,6 +111,17 @@
               <p class="flex-1 text-sm text-red-300">{{ store.error }}</p>
             </div>
 
+            <div v-if="store.alreadyActivated" class="flex flex-col gap-2 sm:flex-row">
+              <RouterLink
+                :to="signinLink"
+                class="ui-btn-outline ui-press ui-touch-target inline-flex flex-1 items-center justify-center"
+              >{{ t("activateAccount.signInAction") }}</RouterLink>
+              <RouterLink
+                :to="{ name: 'forgot-password' }"
+                class="ui-btn-outline ui-press ui-touch-target inline-flex flex-1 items-center justify-center"
+              >{{ t("activateAccount.forgotPasswordAction") }}</RouterLink>
+            </div>
+
             <div v-if="store.tokenExpiredOrUsed" class="ui-section-band space-y-3">
               <p class="text-sm text-slate-300">{{ t("activateAccount.resendPrompt") }}</p>
 
@@ -155,12 +166,13 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from "vue";
+import { computed, reactive, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useActivationStore } from "../stores/activation";
 import { useSessionStore } from "../stores/session";
 import api from "../lib/api";
+import { stripTokenFromUrl } from "../lib/tokenRedaction";
 
 const route = useRoute();
 const router = useRouter();
@@ -178,8 +190,18 @@ const resendSubmitting = ref(false);
 const resendSent = ref(false);
 const resendError = ref("");
 
+const signinLink = computed(() => {
+  const next = typeof route.query.next === "string" ? route.query.next : "";
+  return next ? { name: "signin", query: { next } } : { name: "signin" };
+});
+
 onMounted(() => {
-  if (typeof route.query.token === "string") token.value = route.query.token;
+  if (typeof route.query.token === "string") {
+    token.value = route.query.token;
+    // The token is a live credential: once it's in the form, drop it from the
+    // address bar (history, Referer, screenshots) — other params (e.g. next) stay.
+    stripTokenFromUrl(route, router);
+  }
 });
 
 const submit = async () => {

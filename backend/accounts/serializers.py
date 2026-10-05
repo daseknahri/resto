@@ -44,9 +44,12 @@ def _check_password_strength(password: str, user=None) -> None:
 
 
 ACTIVATION_TOKEN_EXPIRED_OR_USED = "Token expired or used"  # the frontend matches this exact string
+# The frontend (stores/activation.js) matches the leading "This account is already
+# activated" to offer Sign in / Forgot password actions — keep that prefix stable.
 ACTIVATION_ALREADY_DONE = (
     "This account is already activated. Sign in, or use \"Forgot password\" to reset your password."
 )
+PASSWORD_RESET_TOKEN_EXPIRED_OR_USED = "Token expired or used"
 ACTIVATION_ACCOUNT_DISABLED = "This account is disabled. Contact support."
 
 
@@ -207,7 +210,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         except PasswordResetToken.DoesNotExist:
             raise serializers.ValidationError("Invalid token")
         if not reset.is_valid():
-            raise serializers.ValidationError("Token expired or used")
+            raise serializers.ValidationError(PASSWORD_RESET_TOKEN_EXPIRED_OR_USED)
         attrs["reset"] = reset
         # Run AUTH_PASSWORD_VALIDATORS with the user so similarity checks work.
         _check_password_strength(attrs["password"], user=reset.user)
@@ -216,10 +219,17 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self, **kwargs):
         reset: PasswordResetToken = self.validated_data["reset"]
         password = self.validated_data["password"]
-        user = reset.user
-        user.set_password(password)
-        user.save(update_fields=["password"])
-        reset.mark_used()
+        with transaction.atomic():
+            # Lock the account row so concurrent resets of the same account (the
+            # same link submitted twice, or two sibling links) serialize here.
+            user = User.objects.select_for_update().get(pk=reset.user_id)
+            # validate() checked is_valid() without a lock — two concurrent submits
+            # could both pass it. Compare-and-set: only the request that flips
+            # used_at NULL→now may set the password; it also revokes the siblings.
+            if not reset.consume():
+                raise serializers.ValidationError(PASSWORD_RESET_TOKEN_EXPIRED_OR_USED)
+            user.set_password(password)
+            user.save(update_fields=["password"])
         # OPS-5f: invalidate the user's OTHER sessions on reset so a stolen/active
         # session dies the moment the password is reset (account-recovery hardening).
         # set_password rotates the password hash; Django's SessionAuthenticationMiddleware

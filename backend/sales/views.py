@@ -3,7 +3,7 @@ import logging
 import re
 
 # Import shared CSV-injection sanitiser (see menu/views.py for the rationale).
-from menu.views import _csv_safe
+from menu.views import _csv_safe, get_or_create_default_super_category
 from datetime import date, timedelta
 from math import ceil
 from urllib.parse import quote_plus
@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 from .throttles import PublicLeadThrottle, UserLeadsThrottle
 
 from menu.commission import COMMISSIONABLE_STATUSES
-from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, TableLink
+from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, SuperCategory, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
 from tenancy.tiering import (
@@ -73,7 +73,9 @@ from .sla import (
     reservation_overdue_cutoff,
     reservation_sla_minutes,
 )
+from .redaction import mask_token_in
 from .services import (
+    OwnerAlreadyActivatedError,
     create_tier_upgrade_request,
     decide_tier_upgrade_request,
     onboarding_package_for_lead,
@@ -269,7 +271,8 @@ def _build_tenant_settings_export_payload(tenant):
         # the old explicit .order_by() applied — so iterating the prefetch cache directly
         # preserves output order while collapsing 1+N+M queries into ~3.
         categories = (
-            Category.objects.order_by("position", "name")
+            Category.objects.select_related("super_category")
+            .order_by("position", "name")
             .prefetch_related(
                 Prefetch("dishes__options", queryset=DishOption.objects.order_by("id"))
             )
@@ -305,6 +308,9 @@ def _build_tenant_settings_export_payload(tenant):
 
             categories_payload.append(
                 {
+                    # Lets an import back into this tenant keep each category under
+                    # its own super category (unknown slugs fall back to the default).
+                    "super_category": category.super_category.slug,
                     "name": category.name,
                     "name_i18n": category.name_i18n or {},
                     "slug": category.slug,
@@ -407,9 +413,20 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
 
                 category_slugs: set[str] = set()
                 dish_slugs: set[str] = set()
+                # Category.super_category is NOT NULL (the old import omitted it, so every
+                # categories import died on an IntegrityError reported as "duplicate slug").
+                # Super categories are kept; a category goes under the one its payload names
+                # (by slug) when this tenant has it, else under the shared default.
+                super_categories = {sc.slug: sc for sc in SuperCategory.objects.all()}
+                default_super_category = None
                 for index, raw_category in enumerate(categories_payload, start=1):
                     if not isinstance(raw_category, dict):
                         raise ValueError(f"categories[{index - 1}] must be an object.")
+                    super_category = super_categories.get(str(raw_category.get("super_category") or "").strip())
+                    if super_category is None:
+                        if default_super_category is None:
+                            default_super_category = get_or_create_default_super_category()
+                        super_category = default_super_category
                     category_name = str(raw_category.get("name", "")).strip() or f"Category {index}"
                     category_slug = _next_unique_slug(
                         raw_category.get("slug") or category_name,
@@ -418,6 +435,7 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
                         used=category_slugs,
                     )
                     category = Category.objects.create(
+                        super_category=super_category,
                         name=category_name[:150],
                         name_i18n=_coerce_i18n_dict(
                             raw_category.get("name_i18n"),
@@ -1619,6 +1637,8 @@ class LeadResendActivationView(APIView):
         lead = get_object_or_404(Lead, pk=lead_id)
         try:
             result = resend_activation_for_lead(lead)
+        except OwnerAlreadyActivatedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
@@ -1633,7 +1653,8 @@ class LeadResendActivationView(APIView):
             tenant=result.tenant,
             lead=lead,
             target_repr=f"tenant:{result.tenant.slug}",
-            metadata={"activation_url": result.activation_url},
+            # Audit rows are persisted + listed in the console: never the raw token.
+            metadata={"activation_url": mask_token_in(result.activation_url, result.activation_token.token)},
         )
         onboarding_url = build_onboarding_url(result.tenant)
         public_menu_url = build_public_menu_url(result.tenant)
@@ -1708,6 +1729,8 @@ class LeadOnboardingPackageView(APIView):
         refresh_token = request.query_params.get("refresh_token") in {"1", "true", "yes"}
         try:
             result = onboarding_package_for_lead(lead, refresh_token=refresh_token)
+        except OwnerAlreadyActivatedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
@@ -1725,7 +1748,10 @@ class LeadOnboardingPackageView(APIView):
             tenant=result.tenant,
             lead=lead,
             target_repr=f"tenant:{result.tenant.slug}",
-            metadata={"refresh_token": refresh_token, "activation_url": result.activation_url},
+            metadata={
+                "refresh_token": refresh_token,
+                "activation_url": mask_token_in(result.activation_url, result.activation_token.token),
+            },
         )
         onboarding_url = build_onboarding_url(result.tenant)
         public_menu_url = build_public_menu_url(result.tenant)

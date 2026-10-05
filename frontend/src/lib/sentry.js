@@ -13,6 +13,8 @@
  *   VITE_APP_VERSION                   — release tag injected at build time
  */
 
+import { scrubSentryPayload } from './tokenRedaction.js'
+
 let _initialized = false
 
 /**
@@ -112,6 +114,11 @@ export function initSentry(app) {
           /^chrome-extension:\/\//i,
           /^moz-extension:\/\//i,
         ],
+        // Activation / reset links carry a live bearer token in the URL: redact it
+        // from every event, the pageload transaction and navigation/xhr breadcrumbs.
+        beforeSend: scrubSentryPayload,
+        beforeSendTransaction: scrubSentryPayload,
+        beforeBreadcrumb: scrubSentryPayload,
       })
 
       _initialized = true

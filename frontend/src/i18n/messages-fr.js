@@ -1190,7 +1190,9 @@ activateAccount: {
   resendEmailRequired: "L'e-mail est requis",
   resendAction: "Renvoyer le lien d'activation",
   resendSending: "Envoi...",
-  resendConfirmation: "Si cette adresse e-mail est enregistree, un nouveau lien d'activation a ete envoye."
+  resendConfirmation: "Si cette adresse e-mail est enregistree, un nouveau lien d'activation a ete envoye.",
+  signInAction: "Se connecter",
+  forgotPasswordAction: "Mot de passe oublie ?"
 },
 ownerLaunchSuccess: {
   launch: "Lancement du menu",

@@ -733,9 +733,24 @@ class PasswordResetToken(models.Model):
             expires_at=timezone.now() + timedelta(hours=hours_valid),
         )
 
-    def mark_used(self):
-        self.used_at = timezone.now()
-        self.save(update_fields=["used_at"])
+    def consume(self) -> bool:
+        """Atomically claim this token (compare-and-set on ``used_at``) — the
+        password-reset twin of ``sales.models.ActivationToken.consume``.
+
+        Returns True for exactly ONE caller — the one whose UPDATE flips
+        ``used_at`` from NULL while the token is unexpired — and then revokes the
+        user's other unused reset tokens. A concurrent or replayed submit gets
+        False and must not touch the password.
+        """
+        now = timezone.now()
+        claimed = type(self).objects.filter(
+            pk=self.pk, used_at__isnull=True, expires_at__gt=now,
+        ).update(used_at=now)
+        if claimed != 1:
+            return False
+        self.used_at = now
+        type(self).objects.filter(user_id=self.user_id, used_at__isnull=True).update(used_at=now)
+        return True
 
     def is_valid(self) -> bool:
         return self.used_at is None and timezone.now() < self.expires_at

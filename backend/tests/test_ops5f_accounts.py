@@ -478,6 +478,18 @@ class ResetInvalidatesSessionsTests(SimpleTestCase):
     """PasswordResetConfirmSerializer.save() must invalidate the user's other
     sessions on reset so a stolen/active session dies."""
 
+    def setUp(self):
+        # save() resets the password on the row-LOCKED user, after the token's
+        # compare-and-set consume() wins (no DB here: both are mocked).
+        self.locked_user = MagicMock(pk=11)
+        user_patcher = patch("accounts.serializers.User")
+        user_cls = user_patcher.start()
+        self.addCleanup(user_patcher.stop)
+        user_cls.objects.select_for_update.return_value.get.return_value = self.locked_user
+        tx_patcher = patch("accounts.serializers.transaction")
+        tx_patcher.start()
+        self.addCleanup(tx_patcher.stop)
+
     def _serializer(self, reset):
         from accounts.serializers import PasswordResetConfirmSerializer
         s = PasswordResetConfirmSerializer()
@@ -487,8 +499,7 @@ class ResetInvalidatesSessionsTests(SimpleTestCase):
 
     def test_save_invalidates_user_sessions(self):
         reset = MagicMock()
-        reset.user = MagicMock(pk=11)
-        reset.user.set_password = MagicMock()
+        reset.consume.return_value = True
 
         # Two sessions in the store: one belongs to the user, one to someone else.
         mine = MagicMock(session_key="aaa")
@@ -518,13 +529,13 @@ class ResetInvalidatesSessionsTests(SimpleTestCase):
 
     def test_save_still_resets_password(self):
         reset = MagicMock()
-        reset.user = MagicMock(pk=11)
+        reset.consume.return_value = True
         with patch("django.contrib.sessions.models.Session") as MockSession:
             MockSession.objects.filter.return_value = []
             user = self._serializer(reset).save()
-        reset.user.set_password.assert_called_once_with("newpass999")
-        reset.mark_used.assert_called_once()
-        self.assertIs(user, reset.user)
+        self.locked_user.set_password.assert_called_once_with("newpass999")
+        reset.consume.assert_called_once()
+        self.assertIs(user, self.locked_user)
 
     def test_invalidation_in_source(self):
         from accounts.serializers import PasswordResetConfirmSerializer

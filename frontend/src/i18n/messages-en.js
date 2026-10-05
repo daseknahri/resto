@@ -1192,7 +1192,9 @@ activateAccount: {
   resendEmailRequired: "Email is required",
   resendAction: "Resend activation link",
   resendSending: "Sending...",
-  resendConfirmation: "If that email is registered, a new activation link has been sent."
+  resendConfirmation: "If that email is registered, a new activation link has been sent.",
+  signInAction: "Sign in",
+  forgotPasswordAction: "Forgot password?"
 },
 ownerLaunchSuccess: {
   launch: "Menu launch",

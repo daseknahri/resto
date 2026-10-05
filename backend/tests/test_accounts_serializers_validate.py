@@ -13,7 +13,7 @@ the view layer):
 
   PasswordResetConfirmSerializer
     - validate: token not found / expired / valid
-    - save: updates password, marks token used
+    - save: locks the user, consumes the token (CAS), updates the password
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
@@ -276,6 +276,21 @@ class PasswordResetConfirmValidateTests(SimpleTestCase):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PasswordResetConfirmSaveTests(SimpleTestCase):
+    """save() locks the account row, consumes the token with a compare-and-set and
+    only then sets the password (race regressions: test_activation_token_secrecy.py)."""
+
+    def setUp(self):
+        self.locked_user = MagicMock()
+        user_patcher = patch("accounts.serializers.User")
+        self.user_cls = user_patcher.start()
+        self.addCleanup(user_patcher.stop)
+        self.user_cls.objects.select_for_update.return_value.get.return_value = self.locked_user
+        tx_patcher = patch("accounts.serializers.transaction")
+        tx_patcher.start()
+        self.addCleanup(tx_patcher.stop)
+        sessions_patcher = patch("accounts.serializers._invalidate_user_sessions")
+        sessions_patcher.start()
+        self.addCleanup(sessions_patcher.stop)
 
     def _s_validated(self, reset):
         s = PasswordResetConfirmSerializer()
@@ -283,26 +298,29 @@ class PasswordResetConfirmSaveTests(SimpleTestCase):
         s._errors = {}
         return s
 
-    def test_save_sets_new_password(self):
+    def _reset(self):
         reset = _reset_token()
-        s = self._s_validated(reset)
-        s.save()
-        reset.user.set_password.assert_called_once_with("newpass999")
+        reset.consume.return_value = True
+        return reset
+
+    def test_save_sets_new_password_on_locked_user(self):
+        reset = self._reset()
+        self._s_validated(reset).save()
+        self.user_cls.objects.select_for_update.return_value.get.assert_called_once_with(pk=reset.user_id)
+        self.locked_user.set_password.assert_called_once_with("newpass999")
 
     def test_save_updates_user(self):
-        reset = _reset_token()
-        s = self._s_validated(reset)
-        s.save()
-        reset.user.save.assert_called_once_with(update_fields=["password"])
+        reset = self._reset()
+        self._s_validated(reset).save()
+        self.locked_user.save.assert_called_once_with(update_fields=["password"])
 
-    def test_save_marks_token_used(self):
-        reset = _reset_token()
-        s = self._s_validated(reset)
-        s.save()
-        reset.mark_used.assert_called_once()
+    def test_save_consumes_token_atomically(self):
+        reset = self._reset()
+        self._s_validated(reset).save()
+        reset.consume.assert_called_once()
+        reset.mark_used.assert_not_called()
 
-    def test_save_returns_user(self):
-        reset = _reset_token()
-        s = self._s_validated(reset)
-        result = s.save()
-        self.assertIs(result, reset.user)
+    def test_save_returns_locked_user(self):
+        reset = self._reset()
+        result = self._s_validated(reset).save()
+        self.assertIs(result, self.locked_user)

@@ -55,13 +55,14 @@ vi.mock("../../lib/api", () => ({
 // (or omit) route.query.token before mount. onMounted reads route.query.token;
 // the signinLink computed reads route.query.next.
 const routeState = vi.hoisted(() => ({ params: {}, query: {} }));
+const routerSpies = vi.hoisted(() => ({ push: null, replace: null }));
 
-// The page imports ONLY { useRoute } from vue-router. useRouter is provided
-// defensively (never called by this page). RouterLink is NOT imported here — it
-// is the global component and is stubbed via global.stubs in mountPage().
+// The page imports { useRoute, useRouter } (useRouter only to strip the token from
+// the URL after reading it). RouterLink is NOT imported here — it is the global
+// component and is stubbed via global.stubs in mountPage().
 vi.mock("vue-router", () => ({
   useRoute: () => routeState,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => routerSpies,
 }));
 
 import api from "../../lib/api";
@@ -87,8 +88,11 @@ describe("ResetPassword — mount smoke", () => {
     localStorage.clear();
     setActivePinia(createPinia());
     routeState.params = {};
+    routeState.path = "/reset-password";
     routeState.query = {};
     vi.clearAllMocks();
+    routerSpies.push = vi.fn();
+    routerSpies.replace = vi.fn(() => Promise.resolve());
   });
 
   afterEach(() => {
@@ -141,5 +145,20 @@ describe("ResetPassword — mount smoke", () => {
     expect(api.post).not.toHaveBeenCalled();
     // Own-template validation error rendered (key echoed by the i18n mock).
     expect(wrapper.text()).toContain("resetPassword.tokenRequired");
+    // No token in the URL → nothing to strip.
+    expect(routerSpies.replace).not.toHaveBeenCalled();
+  });
+
+  // ── (3) token hygiene: the live reset token leaves the address bar ──────────
+  it("strips the token from the URL after seeding the form, keeping other params", async () => {
+    routeState.query = { token: "reset-token-abc123", next: "/owner" };
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.vm.token).toBe("reset-token-abc123");
+    expect(routerSpies.replace).toHaveBeenCalledTimes(1);
+    const target = routerSpies.replace.mock.calls[0][0];
+    expect(target.path).toBe("/reset-password");
+    expect(target.query).toEqual({ next: "/owner" });
   });
 });
