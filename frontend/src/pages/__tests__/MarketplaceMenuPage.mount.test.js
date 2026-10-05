@@ -525,9 +525,11 @@ describe("MarketplaceMenuPage — checkout retry idempotency (L14)", () => {
   it("says a replayed order had already gone through", async () => {
     const wrapper = await mountSignedInPickup();
     const show = vi.spyOn(useToastStore(), "show");
-    api.post.mockResolvedValueOnce({ data: { order_number: "A1", idempotent_replay: true } });
+    api.post.mockResolvedValue({ data: { order_number: "A1", idempotent_replay: true } });
     await wrapper.vm.placeOrder();
     await flushPromises();
+    expect(wrapper.vm.checkoutError).toBe("");
+    expect(api.post).toHaveBeenCalledWith("/marketplace/order/", expect.any(Object));
     expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
   });
 });
