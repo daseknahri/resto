@@ -7,12 +7,14 @@ Covers:
   - happy_hour_payload: serialization helper
   - DishSerializer: effective_price / happy_hour present; fallback when no context
   - HappyHourSerializer: validation (percent_off bounds, days, start==end, max-8, name)
-  - PlaceOrderView: charges effective price (patches get_active_happy_hours)
-  - StaffAppendOrderItemsView: charges effective price
+  - PlaceOrderView: charges the effective price INSIDE the rule's day/time window and the
+    full price OUTSIDE it (patches menu.pricing.HappyHour + menu.views._profile_now)
+  - StaffAppendOrderItemsView: same window semantics for dine-in appends
   - MarketplacePlaceOrderView: charges effective price
 
 All tests are SimpleTestCase + MagicMock — no DB.
 """
+from contextlib import ExitStack
 from datetime import datetime, time, timezone as _tz
 from decimal import Decimal
 from types import SimpleNamespace
@@ -584,134 +586,116 @@ def _make_order_mock(total="80.00"):
     return o
 
 
-class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
-    """View-level integration: PlaceOrderView must write discounted unit_price to OrderItem.
+# Fixed tenant-local instants for the view-level tests (2026-06-08 is a Monday). The views read
+# the clock through menu.views._profile_now, which the tests patch to one of these.
+_MON_1800 = datetime(2026, 6, 8, 18, 0, tzinfo=_tz.utc)  # inside a Mon-Fri 17:00-19:00 window
+_MON_1000 = datetime(2026, 6, 8, 10, 0, tzinfo=_tz.utc)  # same weekday, window closed
 
-    These tests invoke the actual view through APIRequestFactory and assert that
-    OrderItem.objects.bulk_create() receives an OrderItem carrying the happy-hour-
-    discounted unit_price. A developer who removes the effective_unit_price() call
-    from the view will cause unit_price to revert to dish.price — these tests catch that.
+
+def _evening_rule(percent_off):
+    """An ACTIVE Mon-Fri 17:00-19:00 rule covering every category (the bug's example rule)."""
+    return _make_rule(
+        percent_off=percent_off, days=[0, 1, 2, 3, 4],
+        start_time=time(17, 0), end_time=time(19, 0), category_ids=[],
+    )
+
+
+class PlaceOrderViewHappyHourIntegrationTests(SimpleTestCase):
+    """View-level integration: PlaceOrderView must write the WINDOWED happy-hour price to OrderItem.
+
+    These tests invoke the actual view through APIRequestFactory and assert on the unit_price
+    of the OrderItem handed to OrderItem.objects.bulk_create(). Only the HappyHour model is
+    mocked — rules flow through the real get_active_happy_hours window filter, evaluated at a
+    patched tenant-local now — so they catch both a removed effective_unit_price() call (price
+    reverts to dish.price inside the window) and a regression to the old all-day rule source
+    (discount charged outside the window, i.e. a price the menu never showed).
     """
 
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = PlaceOrderView.as_view()
 
-    def _staff_post(self, data, prof=None, dish=None):
-        """Build a POST request authenticated as a tenant staff member (exempts wallet prepay)."""
-        req = self.factory.post("/api/place-order/", data, format="json")
-        req.tenant = _tenant()
-        req.user = _staff_user(tenant_id=req.tenant.id)
-        req.session = _session()
-        req._prof = prof or _profile()
-        req._dish = dish
-        return req
+    def _place_order_unit_price(self, *, dish_price, rules, now_local):
+        """POST one pickup line as tenant staff (exempts wallet prepay) at *now_local*;
+        return the unit_price on the created OrderItem."""
+        with ExitStack() as stack:
+            stack.enter_context(patch("menu.models.RecipeLine"))
+            promo_mock = stack.enter_context(patch("menu.views.Promotion.objects"))
+            orderitem_mock = stack.enter_context(patch("menu.views.OrderItem.objects"))
+            order_mock = stack.enter_context(patch("menu.views.Order.objects"))
+            opt_mock = stack.enter_context(patch("menu.views.DishOption.objects"))
+            dish_mock = stack.enter_context(patch("menu.views.Dish.objects"))
+            profile_mock = stack.enter_context(patch("menu.views.Profile.objects"))
+            mock_hh = stack.enter_context(patch("menu.pricing.HappyHour"))
+            stack.enter_context(patch("menu.views._profile_now", return_value=now_local))
+            tx_mock = stack.enter_context(patch("menu.views.transaction"))
+            stack.enter_context(patch("menu.views._generate_order_number", return_value="ORD-HH-001"))
+            stack.enter_context(patch("menu.views._broadcast_order_change"))
 
-    @patch("menu.models.RecipeLine")
-    @patch("menu.views.Promotion.objects")
-    @patch("menu.views.OrderItem.objects")
-    @patch("menu.views.Order.objects")
-    @patch("menu.views.DishOption.objects")
-    @patch("menu.views.Dish.objects")
-    @patch("menu.views.Profile.objects")
-    @patch("menu.pricing.HappyHour")
-    def test_orderitem_created_with_discounted_unit_price(
-        self, mock_hh, profile_mock, dish_mock, opt_mock,
-        order_mock, orderitem_mock, promo_mock, mock_rl,
-    ):
-        """A bulk_create'd OrderItem must carry the happy-hour-discounted unit_price, not dish.price."""
-        # Profile
-        prof = _profile()
-        profile_mock.filter.return_value.first.return_value = prof
-
-        # Dish priced at 100.00
-        dish = _make_dish(price="100.00")
-        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
-
-        # Active happy-hour rule: 20% off → unit_price should be 80.00
-        rule = _make_rule(percent_off=20, category_ids=[])
-        mock_hh.objects.filter.return_value.prefetch_related.return_value = [rule]
-
-        # Options: none
-        opt_mock.filter.return_value = []
-
-        # Promotions: none
-        promo_mock.filter.return_value = []
-
-        # Order creation
-        mock_order = _make_order_mock(total="80.00")
-        order_mock.create.return_value = mock_order
-        orderitem_mock.bulk_create.return_value = []
-
-        with patch("menu.views.transaction") as tx_mock:
+            profile_mock.filter.return_value.first.return_value = _profile()
+            dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [
+                _make_dish(price=dish_price)
+            ]
+            mock_hh.objects.filter.return_value.prefetch_related.return_value = rules
+            opt_mock.filter.return_value = []
+            promo_mock.filter.return_value = []
+            order_mock.create.return_value = _make_order_mock(total=dish_price)
+            orderitem_mock.bulk_create.return_value = []
             tx_mock.atomic.return_value = _make_transaction_ctx()
-            with patch("menu.views._generate_order_number", return_value="ORD-HH-001"):
-                with patch("menu.views._broadcast_order_change"):
-                    req = self._staff_post(
-                        data={"items": [{"slug": "dish-1", "qty": 1}], "fulfillment_type": "pickup"}
-                    )
-                    resp = self.view(req)
+
+            req = self.factory.post(
+                "/api/place-order/",
+                {"items": [{"slug": "dish-1", "qty": 1}], "fulfillment_type": "pickup"},
+                format="json",
+            )
+            req.tenant = _tenant()
+            req.user = _staff_user(tenant_id=req.tenant.id)
+            req.session = _session()
+            resp = self.view(req)
 
         # The view should not error out before reaching OrderItem creation.
         self.assertNotIn(resp.status_code, [400, 403, 503], msg=f"Unexpected early exit: {resp.data}")
-        # Assert OrderItem was created with unit_price == 80.00 (not 100.00)
         self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
-        created_items = orderitem_mock.bulk_create.call_args[0][0]
-        self.assertEqual(
-            created_items[0].unit_price, Decimal("80.00"),
-            f"Expected discounted unit_price 80.00, got {created_items[0].unit_price}"
+        return orderitem_mock.bulk_create.call_args[0][0][0].unit_price
+
+    def test_orderitem_created_with_discounted_unit_price(self):
+        """INSIDE the window: the OrderItem carries the happy-hour-discounted price (20% off 100 = 80)."""
+        unit_price = self._place_order_unit_price(
+            dish_price="100.00", rules=[_evening_rule(20)], now_local=_MON_1800,
         )
+        self.assertEqual(unit_price, Decimal("80.00"),
+                         f"Expected discounted unit_price 80.00, got {unit_price}")
 
-    @patch("menu.models.RecipeLine")
-    @patch("menu.views.Promotion.objects")
-    @patch("menu.views.OrderItem.objects")
-    @patch("menu.views.Order.objects")
-    @patch("menu.views.DishOption.objects")
-    @patch("menu.views.Dish.objects")
-    @patch("menu.views.Profile.objects")
-    @patch("menu.pricing.HappyHour")
-    def test_orderitem_unit_price_unchanged_when_no_active_rule(
-        self, mock_hh, profile_mock, dish_mock, opt_mock,
-        order_mock, orderitem_mock, promo_mock, mock_rl,
-    ):
+    def test_orderitem_full_price_outside_happy_hour_window(self):
+        """Regression: OUTSIDE the window an active rule must NOT discount the order.
+
+        The menu shows 100.00 at 10:00 for a Mon-Fri 17:00-19:00 rule, so checkout must charge
+        100.00 — the old all-day rule source charged 80.00 (owner lost margin all day, and the
+        price diverged from the marketplace checkout for the same dish).
+        """
+        unit_price = self._place_order_unit_price(
+            dish_price="100.00", rules=[_evening_rule(20)], now_local=_MON_1000,
+        )
+        self.assertEqual(unit_price, Decimal("100.00"),
+                         f"Expected full price 100.00 outside the window, got {unit_price}")
+
+    def test_orderitem_unit_price_unchanged_when_no_active_rule(self):
         """Without an active happy-hour rule, unit_price equals dish.price."""
-        prof = _profile()
-        profile_mock.filter.return_value.first.return_value = prof
-
-        dish = _make_dish(price="50.00")
-        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
-
-        # No active rules
-        mock_hh.objects.filter.return_value.prefetch_related.return_value = []
-
-        opt_mock.filter.return_value = []
-        promo_mock.filter.return_value = []
-
-        mock_order = _make_order_mock(total="50.00")
-        order_mock.create.return_value = mock_order
-        orderitem_mock.bulk_create.return_value = []
-
-        with patch("menu.views.transaction") as tx_mock:
-            tx_mock.atomic.return_value = _make_transaction_ctx()
-            with patch("menu.views._generate_order_number", return_value="ORD-HH-002"):
-                with patch("menu.views._broadcast_order_change"):
-                    req = self._staff_post(
-                        data={"items": [{"slug": "dish-1", "qty": 1}], "fulfillment_type": "pickup"}
-                    )
-                    resp = self.view(req)
-
-        self.assertNotIn(resp.status_code, [400, 403, 503], msg=f"Unexpected early exit: {resp.data}")
-        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
-        created_items = orderitem_mock.bulk_create.call_args[0][0]
-        self.assertEqual(created_items[0].unit_price, Decimal("50.00"))
+        unit_price = self._place_order_unit_price(dish_price="50.00", rules=[], now_local=_MON_1800)
+        self.assertEqual(unit_price, Decimal("50.00"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# StaffAppendOrderItemsView — view-level: OrderItem.unit_price is discounted
+# StaffAppendOrderItemsView — view-level: OrderItem.unit_price is the WINDOWED price
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
-    """StaffAppendOrderItemsView must write discounted unit_price to OrderItem."""
+    """StaffAppendOrderItemsView must write the windowed happy-hour price to OrderItem.
+
+    Same approach as PlaceOrderViewHappyHourIntegrationTests: HappyHour is mocked, the window is
+    evaluated by the real get_active_happy_hours at a patched tenant-local now (resolved from the
+    tenant Profile, which is mocked through menu.views.Profile.objects).
+    """
 
     def setUp(self):
         self.factory = APIRequestFactory()
@@ -737,98 +721,70 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
         o.table_section_id = None
         return o
 
-    @patch("menu.views.OrderItem.objects")
-    @patch("menu.views.Order.objects")
-    @patch("menu.views.DishOption.objects")
-    @patch("menu.views.Dish.objects")
-    @patch("menu.views.Profile.objects")
-    @patch("menu.pricing.HappyHour")
-    def test_staff_append_writes_discounted_unit_price(
-        self, mock_hh, profile_mock, dish_mock, opt_mock, order_mock, orderitem_mock
-    ):
-        """OrderItem created by StaffAppendOrderItemsView must carry the HH-discounted price."""
-        prof = _profile()
-        profile_mock.filter.return_value.first.return_value = prof
+    def _append_unit_price(self, *, dish_price, rules, now_local):
+        """Append one line to an open table order at *now_local*; return the created unit_price."""
+        with ExitStack() as stack:
+            orderitem_mock = stack.enter_context(patch("menu.views.OrderItem.objects"))
+            order_mock = stack.enter_context(patch("menu.views.Order.objects"))
+            opt_mock = stack.enter_context(patch("menu.views.DishOption.objects"))
+            dish_mock = stack.enter_context(patch("menu.views.Dish.objects"))
+            profile_mock = stack.enter_context(patch("menu.views.Profile.objects"))
+            mock_hh = stack.enter_context(patch("menu.pricing.HappyHour"))
+            profile_now_mock = stack.enter_context(patch("menu.views._profile_now", return_value=now_local))
+            stack.enter_context(patch("menu.views._can_edit_tenant_order", return_value=True))
+            stack.enter_context(patch("menu.views._can_access_order", return_value=True))
+            tx_mock = stack.enter_context(patch("menu.views.transaction"))
+            stack.enter_context(patch("menu.views._broadcast_order_change"))
+            stack.enter_context(patch("menu.views._staff_order_payload", return_value={}))
 
-        dish = _make_dish(price="80.00")
-        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
-
-        # 10% off → 72.00
-        rule = _make_rule(percent_off=10, category_ids=[])
-        mock_hh.objects.filter.return_value.prefetch_related.return_value = [rule]
-
-        opt_mock.filter.return_value = []
-
-        open_order = self._make_open_table_order()
-        # First call: Order.objects.prefetch_related("items").filter(pk=10).first()
-        order_mock.prefetch_related.return_value.filter.return_value.first.return_value = open_order
-        # Second call after create: Order.objects.prefetch_related("items").get(pk=10)
-        order_mock.prefetch_related.return_value.get.return_value = open_order
-        orderitem_mock.bulk_create.return_value = []
-
-        payload = {"items": [{"dish_slug": "dish-1", "qty": 1}]}
-        req = self.factory.post("/api/staff/orders/10/items/", payload, format="json")
-        req.tenant = _tenant()
-        req.user = _staff_user(tenant_id=req.tenant.id)
-
-        with patch("menu.views._can_edit_tenant_order", return_value=True), \
-             patch("menu.views._can_access_order", return_value=True), \
-             patch("menu.views.transaction") as tx_mock, \
-             patch("menu.views._broadcast_order_change"), \
-             patch("menu.views._staff_order_payload", return_value={}):
+            prof = _profile()
+            profile_mock.filter.return_value.first.return_value = prof
+            dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [
+                _make_dish(price=dish_price)
+            ]
+            mock_hh.objects.filter.return_value.prefetch_related.return_value = rules
+            opt_mock.filter.return_value = []
+            open_order = self._make_open_table_order()
+            # First call: Order.objects.prefetch_related("items").filter(pk=10).first()
+            order_mock.prefetch_related.return_value.filter.return_value.first.return_value = open_order
+            # Second call after create: Order.objects.prefetch_related("items").get(pk=10)
+            order_mock.prefetch_related.return_value.get.return_value = open_order
+            orderitem_mock.bulk_create.return_value = []
             tx_mock.atomic.return_value = _make_transaction_ctx()
+
+            req = self.factory.post(
+                "/api/staff/orders/10/items/", {"items": [{"dish_slug": "dish-1", "qty": 1}]}, format="json",
+            )
+            req.tenant = _tenant()
+            req.user = _staff_user(tenant_id=req.tenant.id)
             resp = self.view(req, order_id=10)
 
         self.assertNotIn(resp.status_code, [400, 403, 409], msg=f"Unexpected error: {getattr(resp, 'data', resp)}")
         self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
-        created_items = orderitem_mock.bulk_create.call_args[0][0]
-        self.assertEqual(
-            created_items[0].unit_price, Decimal("72.00"),
-            f"Expected 72.00 (10% off 80.00), got {created_items[0].unit_price}"
+        # The window was evaluated on the TENANT's clock (resolved from its Profile).
+        profile_now_mock.assert_called_with(prof)
+        return orderitem_mock.bulk_create.call_args[0][0][0].unit_price
+
+    def test_staff_append_writes_discounted_unit_price(self):
+        """INSIDE the window: the appended OrderItem carries the HH price (10% off 80 = 72)."""
+        unit_price = self._append_unit_price(
+            dish_price="80.00", rules=[_evening_rule(10)], now_local=_MON_1800,
         )
+        self.assertEqual(unit_price, Decimal("72.00"),
+                         f"Expected 72.00 (10% off 80.00), got {unit_price}")
 
-    @patch("menu.views.OrderItem.objects")
-    @patch("menu.views.Order.objects")
-    @patch("menu.views.DishOption.objects")
-    @patch("menu.views.Dish.objects")
-    @patch("menu.views.Profile.objects")
-    @patch("menu.pricing.HappyHour")
-    def test_staff_append_no_discount_without_rule(
-        self, mock_hh, profile_mock, dish_mock, opt_mock, order_mock, orderitem_mock
-    ):
+    def test_staff_append_full_price_outside_happy_hour_window(self):
+        """Regression: a dine-in append OUTSIDE the window is charged full price (no discount)."""
+        unit_price = self._append_unit_price(
+            dish_price="80.00", rules=[_evening_rule(10)], now_local=_MON_1000,
+        )
+        self.assertEqual(unit_price, Decimal("80.00"),
+                         f"Expected full price 80.00 outside the window, got {unit_price}")
+
+    def test_staff_append_no_discount_without_rule(self):
         """Without an active HH rule, staff-appended item keeps dish.price."""
-        prof = _profile()
-        profile_mock.filter.return_value.first.return_value = prof
-
-        dish = _make_dish(price="80.00")
-        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
-
-        mock_hh.objects.filter.return_value.prefetch_related.return_value = []
-
-        opt_mock.filter.return_value = []
-
-        open_order = self._make_open_table_order()
-        order_mock.prefetch_related.return_value.filter.return_value.first.return_value = open_order
-        order_mock.prefetch_related.return_value.get.return_value = open_order
-        orderitem_mock.bulk_create.return_value = []
-
-        payload = {"items": [{"dish_slug": "dish-1", "qty": 1}]}
-        req = self.factory.post("/api/staff/orders/10/items/", payload, format="json")
-        req.tenant = _tenant()
-        req.user = _staff_user(tenant_id=req.tenant.id)
-
-        with patch("menu.views._can_edit_tenant_order", return_value=True), \
-             patch("menu.views._can_access_order", return_value=True), \
-             patch("menu.views.transaction") as tx_mock, \
-             patch("menu.views._broadcast_order_change"), \
-             patch("menu.views._staff_order_payload", return_value={}):
-            tx_mock.atomic.return_value = _make_transaction_ctx()
-            resp = self.view(req, order_id=10)
-
-        self.assertNotIn(resp.status_code, [400, 403, 409], msg=f"Unexpected error: {getattr(resp, 'data', resp)}")
-        self.assertTrue(orderitem_mock.bulk_create.called, "OrderItem.objects.bulk_create was never called")
-        created_items = orderitem_mock.bulk_create.call_args[0][0]
-        self.assertEqual(created_items[0].unit_price, Decimal("80.00"))
+        unit_price = self._append_unit_price(dish_price="80.00", rules=[], now_local=_MON_1800)
+        self.assertEqual(unit_price, Decimal("80.00"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -856,10 +812,10 @@ class MarketplacePlaceOrderHappyHourTests(SimpleTestCase):
 
         with patch("menu.pricing.HappyHour") as mock_hh:
             mock_hh.objects.filter.return_value.prefetch_related.return_value = [rule]
-            now_dt = datetime(2026, 6, 8, 17, 0, tzinfo=_tz.utc)  # Friday 17:00 — Mon-Fri rule matches
+            now_dt = datetime(2026, 6, 8, 17, 0, tzinfo=_tz.utc)  # Monday 17:00 — Mon-Fri rule matches
             active = get_active_happy_hours(now_dt)
 
-        self.assertEqual(len(active), 1, "Expected 1 active rule for Friday 17:00")
+        self.assertEqual(len(active), 1, "Expected 1 active rule for Monday 17:00")
         price, matched = effective_unit_price(dish, active)
         self.assertEqual(price, Decimal("30.00"), "25% off 40.00 should yield 30.00")
         self.assertIs(matched, active[0])

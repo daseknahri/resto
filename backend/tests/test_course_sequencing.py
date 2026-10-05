@@ -450,7 +450,7 @@ class PlacementCourseSnapshotTests(SimpleTestCase):
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.LoyaltyConfig.objects")
-    @patch("menu.views.get_all_active_hh_rules", return_value=[])
+    @patch("menu.views.get_active_happy_hours", return_value=[])
     @patch("menu.views._generate_order_number", return_value="ORD-TEST")
     def test_place_order_snapshots_category_course(
         self, mock_gen, mock_hh, mock_lc, mock_promo,
@@ -715,7 +715,7 @@ class PlacementCourseOverrideTests(SimpleTestCase):
              patch("menu.views.Profile.objects") as profile_om, \
              patch("menu.views.Promotion.objects") as promo_om, \
              patch("menu.views.LoyaltyConfig.objects") as lc_om, \
-             patch("menu.views.get_all_active_hh_rules", return_value=[]), \
+             patch("menu.views.get_active_happy_hours", return_value=[]), \
              patch("menu.views._generate_order_number", return_value="ORD-TEST"), \
              patch("menu.views.TableLink.objects") as tl_om:
 

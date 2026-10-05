@@ -339,7 +339,7 @@ class PlaceOrderLoyaltyConcurrencyTests(SimpleTestCase):
              patch("menu.views.Profile.objects") as profile_om, \
              patch("menu.views.Promotion.objects") as promo_om, \
              patch("menu.views.LoyaltyConfig.objects") as lc_om, \
-             patch("menu.views.get_all_active_hh_rules", return_value=[]), \
+             patch("menu.views.get_active_happy_hours", return_value=[]), \
              patch("menu.views._generate_order_number", return_value="ORD-TEST"), \
              patch("menu.views.TableLink.objects") as tl_om, \
              patch("accounts.models.Customer") as CustModel:
