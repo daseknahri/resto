@@ -46,6 +46,15 @@ describe("MarketplaceCheckoutTotals", () => {
     expect(w.text()).toContain("-$5.00");
   });
 
+  it("shows the auto-applied restaurant promo line (with its name) only when > 0 (M8)", () => {
+    expect(mountIt({ autoPromoDiscount: 0, autoPromoName: "Lunch" }).text()).not.toContain("mktMenu.autoPromoDiscount");
+    const w = mountIt({ autoPromoDiscount: 20, autoPromoName: "Lunch 20%", orderTotal: 80 });
+    expect(w.text()).toContain("mktMenu.autoPromoDiscount");
+    expect(w.text()).toContain("Lunch 20%");
+    expect(w.text()).toContain("-$20.00");
+    expect(w.text()).not.toContain("mktMenu.flashDiscount");
+  });
+
   it("shows the ETA chip only when prepEta is present", () => {
     expect(mountIt({ prepEta: null }).text()).not.toContain("menu.etaReadyIn");
     expect(mountIt({ prepEta: { min: 20, max: 30 } }).text()).toContain('menu.etaReadyIn:{"min":20,"max":30}');

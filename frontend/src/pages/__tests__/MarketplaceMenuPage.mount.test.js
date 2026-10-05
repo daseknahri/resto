@@ -553,3 +553,96 @@ describe("MarketplaceMenuPage — checkout retry idempotency (L14)", () => {
     expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
   });
 });
+
+// ── M8 (marketplace): preview the restaurant auto promo the server applies ──────
+// MarketplacePlaceOrderView auto-applies the best live code-less promo OR the flash sale
+// (strictly larger wins; a tie keeps the promo; never both). The page used to preview only the
+// flash sale, so it showed — and wallet-gated on — a higher total than the server charged.
+describe("MarketplaceMenuPage — auto promo vs flash sale preview (M8)", () => {
+  beforeEach(resetMocks);
+  afterEach(() => vi.unstubAllGlobals());
+
+  const promo = (over = {}) => ({
+    name: "Lunch 20%", promo_type: "percentage", discount_value: "20.00", min_order_amount: "0.00", ...over,
+  });
+  const flash = (pct) => ({ name: "Flash", discount_pct: String(pct), active_until: "2099-01-01T00:00:00+00:00" });
+
+  const mountWithCart = async (menuExtra, { qty = 10, fulfillment = "pickup" } = {}) => {
+    serveMenu({ ...menuFixture(dishFixture()), ...menuExtra });
+    const wrapper = mountPage();
+    await flushPromises();
+    wrapper.vm.form.fulfillment_type = fulfillment;
+    wrapper.vm.cart.push({ slug: "burger", name: "Burger", qty, price: "10.00", unitPrice: 10 });
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("applies a bigger auto promo instead of the flash sale (food subtotal base)", async () => {
+    const wrapper = await mountWithCart({ auto_promos: [promo()], flash_sale: flash(10) });
+    expect(wrapper.vm.autoPromoDiscount).toBe(20);
+    expect(wrapper.vm.autoPromoName).toBe("Lunch 20%");
+    expect(wrapper.vm.flashSaleDiscount).toBe(0); // no stacking
+    expect(wrapper.vm.orderTotal).toBe(80);
+  });
+
+  it("applies the flash sale when it is strictly larger, and the promo on a tie", async () => {
+    const flashWins = await mountWithCart({ auto_promos: [promo({ promo_type: "fixed", discount_value: "5.00" })], flash_sale: flash(30) });
+    expect(flashWins.vm.flashSaleDiscount).toBe(30);
+    expect(flashWins.vm.autoPromoDiscount).toBe(0);
+    expect(flashWins.vm.orderTotal).toBe(70);
+
+    resetMocks();
+    // 10% of 50 = 5 = the fixed 5 → tie → the server keeps the restaurant promo.
+    const tie = await mountWithCart(
+      { auto_promos: [promo({ name: "Five off", promo_type: "fixed", discount_value: "5.00" })], flash_sale: flash(10) },
+      { qty: 5 },
+    );
+    expect(tie.vm.autoPromoDiscount).toBe(5);
+    expect(tie.vm.autoPromoName).toBe("Five off");
+    expect(tie.vm.flashSaleDiscount).toBe(0);
+    expect(tie.vm.orderTotal).toBe(45);
+  });
+
+  it("a free-delivery promo is worth the delivery fee (delivery only) and can beat the flash sale", async () => {
+    const wrapper = await mountWithCart(
+      { delivery_enabled: true, delivery_fee: "20.00", auto_promos: [promo({ name: "Free delivery", promo_type: "free_delivery", discount_value: "0.00" })], flash_sale: flash(10) },
+      { qty: 1, fulfillment: "delivery" },
+    );
+    expect(wrapper.vm.deliveryFee).toBe(20);
+    expect(wrapper.vm.autoPromoDiscount).toBe(20); // the fee, not 10% of the food
+    expect(wrapper.vm.flashSaleDiscount).toBe(0);
+    expect(wrapper.vm.orderTotal).toBe(10);
+
+    // On pickup there is no fee to waive → the flash sale (1.00) applies instead.
+    wrapper.vm.form.fulfillment_type = "pickup";
+    await flushPromises();
+    expect(wrapper.vm.autoPromoDiscount).toBe(0);
+    expect(wrapper.vm.flashSaleDiscount).toBe(1);
+    expect(wrapper.vm.orderTotal).toBe(9);
+  });
+
+  it("skips a promo whose minimum the food subtotal doesn't reach", async () => {
+    const wrapper = await mountWithCart({ auto_promos: [promo({ min_order_amount: "150.00" })], flash_sale: flash(10) });
+    expect(wrapper.vm.autoPromoDiscount).toBe(0);
+    expect(wrapper.vm.flashSaleDiscount).toBe(10);
+    expect(wrapper.vm.orderTotal).toBe(90);
+  });
+
+  it("the wallet gate uses the promo-discounted total — no 'top up' when the wallet covers the real charge", async () => {
+    const wrapper = await mountWithCart({ auto_promos: [promo()] });
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", phone: "0611", wallet_balance: "85.00" });
+    wrapper.vm.form.customer_name = "Ali";
+    wrapper.vm.form.customer_phone = "0611111111";
+    await flushPromises();
+
+    expect(wrapper.vm.orderTotal).toBe(80); // 100 − 20%
+    expect(wrapper.vm.walletCoversTotal).toBe(true);
+    expect(wrapper.vm.prepayShortfall).toBe(false);
+
+    api.post.mockResolvedValueOnce({ data: { order_number: "A1" } });
+    await wrapper.vm.placeOrder();
+    await flushPromises();
+    expect(wrapper.vm.checkoutError).toBe("");
+    expect(api.post).toHaveBeenCalledWith("/marketplace/order/", expect.any(Object));
+  });
+});

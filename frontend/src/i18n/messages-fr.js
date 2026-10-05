@@ -692,6 +692,7 @@ mktMenu: {
   flashSaleBanner: "⚡ -{pct}% sur tout — vente flash !",
   flashSaleEnds: "Se termine dans {time}",
   flashDiscount: "Vente flash ({pct}% de reduction)",
+  autoPromoDiscount: "Offre du restaurant",
   loyaltyTeaserPts: "Vous avez {points} pts fidelite",
   loyaltyTeaserEarn: "Gagnez des points a chaque commande",
   loyaltyTeaserRedeem: "A utiliser au paiement",
