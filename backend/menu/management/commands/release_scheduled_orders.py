@@ -53,6 +53,7 @@ class Command(BaseCommand):
             _SCHEDULE_RELEASE_LEAD_MINUTES,
             _broadcast_order_change,
             _notify_restaurant_new_order,
+            _placement_eta_minutes,
         )
 
         release_by = now + timedelta(minutes=_SCHEDULE_RELEASE_LEAD_MINUTES)
@@ -73,6 +74,7 @@ class Command(BaseCommand):
 
         for tenant in tenants:
             try:
+                profile = getattr(tenant, "profile", None)
                 with schema_context(tenant.schema_name):
                     due = list(
                         Order.objects
@@ -101,19 +103,32 @@ class Command(BaseCommand):
                         # unique_together IntegrityError logged as "delivery job failed"). Mirrors the
                         # conditional-update rowcount claim in sweep_delivery_jobs. NOTE: .update() does
                         # NOT fire auto_now, so updated_at is stamped explicitly.
+                        #
+                        # L7: the same claim stamps the ETA the way a FRESH placement would
+                        # (_placement_eta_minutes — the busy-mode quote, else none until the owner
+                        # confirms) and anchors it at release time via estimated_ready_at. Without
+                        # it the customer countdown fell back to created_at (placed days ago) and
+                        # the just-released order read "Ready any moment now". It also clears a stale
+                        # ETA stamped at placement by older code / the marketplace checkout.
                         _now = timezone.now()
+                        _eta_minutes = _placement_eta_minutes(profile)
+                        _eta_at = _now + timedelta(minutes=_eta_minutes) if _eta_minutes else None
                         _claimed = Order.objects.filter(
                             pk=order.pk, status=Order.Status.SCHEDULED
                         ).update(
                             status=Order.Status.PENDING,
                             status_updated_at=_now,
                             updated_at=_now,
+                            estimated_ready_minutes=_eta_minutes,
+                            estimated_ready_at=_eta_at,
                         )
                         if not _claimed:
                             continue  # another run already released this order — skip its side effects
                         # Reflect the win on the in-memory instance for the broadcasts below.
                         order.status = Order.Status.PENDING
                         order.status_updated_at = _now
+                        order.estimated_ready_minutes = _eta_minutes
+                        order.estimated_ready_at = _eta_at
                         total_released += 1
 
                         # Live ping to the customer's tracking page + owner/kitchen sockets.
@@ -136,7 +151,6 @@ class Command(BaseCommand):
                             logger.exception("release: web push failed for %s", order.order_number)
 
                         # Platform delivery: spawn the searching driver job now (opt-in).
-                        profile = getattr(tenant, "profile", None)
                         if (
                             order.fulfillment_type == Order.FulfillmentType.DELIVERY
                             and profile is not None
