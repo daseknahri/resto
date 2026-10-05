@@ -41,8 +41,20 @@
             </span>
             <span v-if="restaurant.cuisine_type" class="ui-chip">{{ restaurant.cuisine_type }}</span>
             <span v-if="restaurant.city" class="ui-chip">{{ restaurant.city }}</span>
+            <!-- Same reading as the marketplace card (lib/deliveryPricing): never "free" for a
+                 distance-priced restaurant whose flat fallback fee happens to be 0. -->
             <span v-if="restaurant.delivery_enabled" class="ui-chip text-sky-300">
-              {{ t('mktMenu.deliveryFee') }}: {{ Number(restaurant.delivery_fee) > 0 ? fmtPrice(restaurant.delivery_fee) : t('mktMenu.freeDelivery') }}
+              <template v-if="deliveryPricing.kind === 'distance'">
+                {{ deliveryPricing.from > 0
+                  ? t('marketplace.deliveryFrom', { amount: fmtPrice(deliveryPricing.from) })
+                  : t('marketplace.deliveryByDistance') }}
+              </template>
+              <template v-else>
+                {{ t('mktMenu.deliveryFee') }}: {{ deliveryPricing.kind === 'flat' ? fmtPrice(restaurant.delivery_fee) : t('mktMenu.freeDelivery') }}
+              </template>
+            </span>
+            <span v-if="restaurant.delivery_enabled && deliveryPricing.freeOver > 0" class="ui-chip">
+              {{ t('marketplace.freeDeliveryOver', { amount: fmtPrice(deliveryPricing.freeOver) }) }}
             </span>
             <span
               v-if="restaurant.delivery_enabled && Number(restaurant.delivery_minimum_order) > 0"
@@ -110,12 +122,13 @@
 // convention as OwnerOrdersCashierModal's formatCurrency) so currency
 // formatting and the business-type icon stay single-sourced in the parent.
 import AppIcon from './AppIcon.vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { deliveryCardPricing } from '../lib/deliveryPricing';
 
 const { t } = useI18n();
 
-defineProps({
+const props = defineProps({
   /** The loaded restaurant/menu payload (display fields only). */
   restaurant: { type: Object, required: true },
   /** Pre-order prep estimate { min, max } for the ETA chip, or null. */
@@ -133,6 +146,9 @@ defineProps({
 });
 
 const emit = defineEmits(['share']);
+
+// Which delivery price the header may truthfully show before an address is known.
+const deliveryPricing = computed(() => deliveryCardPricing(props.restaurant));
 
 // Pure local UI state: whether the weekly-hours disclosure is expanded.
 const hoursExpanded = ref(false);
