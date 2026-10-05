@@ -154,14 +154,16 @@ def resolve_available_dishes(slugs, *, now_local=None):
     # Function-local import (codebase menu↔accounts cycle-avoidance convention) — also keeps the
     # order paths' existing `menu.models`-patching tests valid after this extraction.
     from menu.models import Dish
+    from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER
+    # Orderable = what the public menu SHOWS (menu.visibility — incl. the parent section's
+    # published/paused flags, which a direct API call or stale menu could otherwise bypass)
+    # AND available.
     resolved = {
         d.slug: d
         for d in Dish.objects.filter(
             slug__in=slugs,
-            is_published=True,
             is_available=True,
-            category__is_published=True,
-            category__is_temporarily_disabled=False,
+            **CUSTOMER_VISIBLE_DISH_FILTER,
         )
         .select_related("category")
         .prefetch_related("combo_components__component", "option_groups__options")

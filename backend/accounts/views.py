@@ -4312,13 +4312,13 @@ class MarketplaceMenuView(APIView):
                         "points_per_unit": _lc.points_per_unit,
                     } if _lc else None
 
+                    # The public menu's own customer-visibility predicate (menu.visibility) — this
+                    # used to skip `category__super_category__is_published`, so a dish under an
+                    # UNPUBLISHED section was listed here while the direct storefront hid it.
+                    from menu.visibility import CUSTOMER_VISIBLE_DISH_FILTER as _mkt_visible_dish
+
                     dishes_qs = (
-                        _Dish.objects.filter(
-                            is_published=True,
-                            category__is_published=True,
-                            category__is_temporarily_disabled=False,
-                            category__super_category__is_temporarily_disabled=False,
-                        )
+                        _Dish.objects.filter(**_mkt_visible_dish)
                         .select_related("category__super_category")
                         # combo_components (ids only — no `__component` join): the cached body keeps
                         # just the component ids; their LIVE state is read per request.
