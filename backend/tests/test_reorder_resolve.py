@@ -6,6 +6,7 @@ OrderHandoffView) are stubbed so availability + pricing logic can be exercised
 in isolation. Happy-hour resolution is patched to empty so current_price equals
 base price + valid option deltas (matching PlaceOrderView's pricing path).
 """
+from datetime import datetime, time, timezone as dt_timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
@@ -52,7 +53,7 @@ class ReorderResolveTests(SimpleTestCase):
         }
         DummyReorderResolveView.test_can_preview = False
         # Patch happy-hour resolution to no rules so current_price == base + options.
-        self._hh_patch = mock.patch("menu.views.get_all_active_hh_rules", return_value=[])
+        self._hh_patch = mock.patch("menu.views.get_active_happy_hours", return_value=[])
         self._hh_patch.start()
         self.addCleanup(self._hh_patch.stop)
 
@@ -147,11 +148,43 @@ class ReorderResolveTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "tenant_missing")
 
+    # ── happy hour: priced through the REAL windowed rule source ────────────────
+    def _request_at(self, now_local, payload):
+        """POST at a fixed tenant-local now, with a Mon-Fri 17:00-19:00 50%-off rule stored.
+
+        Undoes setUp's empty-rules patch by routing through the real
+        get_active_happy_hours, so the rule's day/time window is what decides the price.
+        """
+        from menu.pricing import get_active_happy_hours as real_get_active_happy_hours
+
+        rule = SimpleNamespace(
+            percent_off=50, days=[0, 1, 2, 3, 4], start_time=time(17, 0), end_time=time(19, 0),
+            categories=SimpleNamespace(all=lambda: []),
+        )
+        hh_model = mock.MagicMock()
+        hh_model.objects.filter.return_value.prefetch_related.return_value = [rule]
+        with mock.patch("menu.views.get_active_happy_hours", real_get_active_happy_hours), \
+             mock.patch("menu.pricing.HappyHour", hh_model), \
+             mock.patch("menu.views._profile_now", return_value=now_local):
+            return self._request(payload)
+
     def test_happy_hour_discount_reflected_in_current_price(self):
-        # A 50%-off rule covering all categories should halve the base price.
-        rule = SimpleNamespace(percent_off=50, categories=SimpleNamespace(all=lambda: []))
-        with mock.patch("menu.views.get_all_active_hh_rules", return_value=[rule]):
-            resp = self._request({"items": [{"slug": "burger", "option_ids": [1]}]})
+        # Monday 18:00 — inside the window: 50% off halves the base price.
+        resp = self._request_at(
+            datetime(2026, 6, 8, 18, 0, tzinfo=dt_timezone.utc),
+            {"items": [{"slug": "burger", "option_ids": [1]}]},
+        )
         line = resp.data["items"][0]
         # base 10.00 -> 5.00 after 50% off; option +2.00 (never discounted) = 7.00
         self.assertEqual(Decimal(line["current_price"]), Decimal("7.00"))
+
+    def test_happy_hour_outside_window_is_full_price(self):
+        # Monday 10:00 — the rule is active but its window is closed: no discount, matching
+        # what the menu shows and what checkout will charge.
+        resp = self._request_at(
+            datetime(2026, 6, 8, 10, 0, tzinfo=dt_timezone.utc),
+            {"items": [{"slug": "burger", "option_ids": [1]}]},
+        )
+        line = resp.data["items"][0]
+        # base 10.00 (no discount) + option 2.00 = 12.00
+        self.assertEqual(Decimal(line["current_price"]), Decimal("12.00"))

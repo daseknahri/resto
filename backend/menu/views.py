@@ -70,7 +70,7 @@ from django_tenants.utils import schema_context
 from .commission import COMMISSIONABLE_STATUSES
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
-from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
+from .pricing import get_active_happy_hours, effective_unit_price
 from .revenue import split_revenue_for_orders
 from .tax import order_vat_fields
 from .serializers import (
@@ -2333,9 +2333,11 @@ class ReorderResolveView(OrderHandoffView):
         dishes_by_slug = self._fetch_dishes(slugs, can_preview=can_preview)
         options_by_id = self._fetch_options(all_option_ids, can_preview=can_preview)
 
-        # Compute happy-hour rules ONCE (same source PlaceOrderView uses).
+        # Compute happy-hour rules ONCE (same source PlaceOrderView uses): only rules whose
+        # day/time window is open at the tenant-local now, so the re-resolved price is what
+        # checkout would charge right now.
         try:
-            active_happy_hours = get_all_active_hh_rules()
+            active_happy_hours = get_active_happy_hours(_profile_now(profile))
         except Exception:
             active_happy_hours = []
 
@@ -2848,7 +2850,9 @@ class PlaceOrderView(APIView):
         # M7: pass the tenant-local now so a dish outside its availability_schedule window
         # is dropped here (→ items_unavailable) — not just hidden in the menu — blocking a
         # stale PWA menu / direct API POST of a time-limited dish. (profile is non-None here.)
-        dishes_map = resolve_available_dishes(slugs, now_local=_profile_now(profile) if profile else None)
+        # Reused below for the happy-hour window (one placement-time instant for both gates).
+        _now_local = _profile_now(profile)
+        dishes_map = resolve_available_dishes(slugs, now_local=_now_local)
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -2858,12 +2862,12 @@ class PlaceOrderView(APIView):
 
         # Compute active happy-hour rules ONCE for this request (placement-time lock).
         # Price is evaluated at submission time, not at scheduled_for — see class docstring.
-        # We use get_all_active_hh_rules() (no time-window filter) so that tests patching
-        # menu.pricing.HappyHour fully control which rules apply.  The is_active flag is
-        # the owner's primary on/off switch; the start/end window governs menu-display only.
+        # Only rules whose day/time window is open at the tenant-local now apply — the same
+        # windowed source the menu display and the marketplace checkout use, so the customer
+        # is charged exactly what the menu showed (a rule outside its window = full price).
         # Graceful fallback: if HappyHour table is unavailable, skip discount entirely.
         try:
-            _active_happy_hours = get_all_active_hh_rules()
+            _active_happy_hours = get_active_happy_hours(_now_local)
         except Exception:
             _active_happy_hours = []
 
@@ -2876,8 +2880,8 @@ class PlaceOrderView(APIView):
             dish = dishes_map[item_input["slug"]]
             currency = dish.currency or "MAD"
             # Apply happy-hour discount (largest percent_off wins; option price_delta unchanged).
-            # Rule source: get_all_active_hh_rules() (no time-window) — the storefront's own source,
-            # kept here so its `menu.views.effective_unit_price` patch target and this divergence hold.
+            # Called here (not in the shared order_service) so the storefront's
+            # `menu.views.effective_unit_price` patch target holds.
             unit_price, _ = effective_unit_price(dish, _active_happy_hours)
 
             # OPS-5f option binding + B2 group-select + price_delta accumulation — the byte-identical
@@ -5048,12 +5052,15 @@ class StaffAppendOrderItemsView(APIView):
 
         # ── Happy-hour pricing (compute once, charge effective price per item) ──
         # Price locked at the moment the staff member appends — same semantics as
-        # PlaceOrderView.  Option price_delta is added on top unchanged.
-        # We use get_all_active_hh_rules() (no time-window filter) so that tests
-        # patching menu.pricing.HappyHour fully control which rules apply.
-        # Graceful fallback: if the HH query fails, skip discount.
+        # PlaceOrderView: only rules whose day/time window is open at the tenant-local
+        # now apply.  Option price_delta is added on top unchanged.
+        # Graceful fallback: if the profile or HH query fails (or there is no profile,
+        # in which case the menu shows no happy hour either), skip discount.
         try:
-            _staff_active_hh = get_all_active_hh_rules()
+            _staff_profile = Profile.objects.filter(tenant=getattr(request, "tenant", None)).first()
+            _staff_active_hh = (
+                get_active_happy_hours(_profile_now(_staff_profile)) if _staff_profile is not None else []
+            )
         except Exception:
             _staff_active_hh = []
 
