@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from menu.views import _size_loyalty_redemption
+from menu.views import _loyalty_points_earned, _size_loyalty_redemption
 
 
 def _cfg(enabled=True, points_value="0.01", redeem_threshold=100):
@@ -68,3 +68,53 @@ class SizeLoyaltyRedemptionTests(SimpleTestCase):
         d, p, err = _size_loyalty_redemption(_cfg(), 500, 200, Decimal("0"))
         self.assertIsNone(err)
         self.assertEqual((d, p), (Decimal("0"), 0))
+
+
+class LoyaltyPointsEarnedTests(SimpleTestCase):
+    """_loyalty_points_earned: floor(subtotal * rate * tier) in exact Decimal math.
+
+    Regression: the old ``int(float(subtotal) * rate * float(mul))`` dropped a point
+    when the exact product was an integer but the float product landed just below it.
+    """
+
+    def test_float_trap_029_times_100_earns_29(self):
+        # float(0.29) * 100 == 28.999999999999996 -> int() gave 28; exact product is 29.
+        self.assertEqual(int(float(Decimal("0.29")) * 100 * float(Decimal("1"))), 28)
+        self.assertEqual(_loyalty_points_earned(Decimal("0.29"), 100, Decimal("1")), 29)
+
+    def test_default_config_unchanged(self):
+        # points_per_unit=10 and the stock tier multipliers {1, 1.5, 2}.
+        self.assertEqual(_loyalty_points_earned(Decimal("12.34"), 10, Decimal("1")), 123)
+        self.assertEqual(_loyalty_points_earned(Decimal("12.34"), 10, Decimal("1.50")), 185)
+        self.assertEqual(_loyalty_points_earned(Decimal("12.34"), 10, Decimal("2.00")), 246)
+
+    def test_fractional_product_is_floored_not_rounded(self):
+        # 9.99 * 10 * 1.5 = 149.85 -> 149 (floor), never 150.
+        self.assertEqual(_loyalty_points_earned(Decimal("9.99"), 10, Decimal("1.5")), 149)
+
+    def test_exact_integer_product_is_kept(self):
+        self.assertEqual(_loyalty_points_earned(Decimal("20.00"), 10, Decimal("1")), 200)
+        self.assertEqual(_loyalty_points_earned(Decimal("4.00"), 5, Decimal("1.50")), 30)
+
+    def test_zero_and_negative_subtotal_earn_nothing(self):
+        self.assertEqual(_loyalty_points_earned(Decimal("0"), 10, Decimal("1")), 0)
+        self.assertEqual(_loyalty_points_earned(Decimal("-5.00"), 10, Decimal("1")), 0)
+
+    def test_zero_rate_earns_nothing(self):
+        self.assertEqual(_loyalty_points_earned(Decimal("50"), 0, Decimal("2")), 0)
+
+    def test_returns_plain_int(self):
+        self.assertIsInstance(_loyalty_points_earned(Decimal("1.00"), 10, Decimal("1")), int)
+
+    def test_both_checkout_paths_use_the_shared_helper(self):
+        # Guard against the float formula creeping back into either checkout.
+        import inspect
+
+        import accounts.views as accounts_views
+        import menu.views as menu_views
+
+        for mod in (menu_views, accounts_views):
+            src = inspect.getsource(mod)
+            self.assertIn("_loyalty_points_earned(", src, mod.__name__)
+            self.assertNotIn("* int(_loyalty_cfg.points_per_unit)", src, mod.__name__)
+            self.assertNotIn("* int(_earn_cfg.points_per_unit)", src, mod.__name__)
