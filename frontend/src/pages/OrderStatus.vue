@@ -774,6 +774,7 @@ import { useOrderStore } from "../stores/order";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
+import { getNumberFormat } from "../lib/intlFormatters";
 
 const props = defineProps({
   orderNumber: { type: String, required: true },
@@ -1189,10 +1190,12 @@ const fulfillmentLabel = (o) => {
   return "";
 };
 
+// Native (non-converting) amount in the order's own currency. Uses the shared cached
+// Intl.NumberFormat — this runs per receipt line on every status poll re-render.
 const formatCurrency = (amount, currency) => {
   if (!currency) return formatPrice(amount);
   try {
-    return new Intl.NumberFormat(currentLocale.value, {
+    return getNumberFormat(currentLocale.value, {
       style: 'currency',
       currency,
       maximumFractionDigits: 2,
