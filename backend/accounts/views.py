@@ -521,19 +521,38 @@ def _verify_google_token(credential: str, client_id: str) -> dict | None:
     return data
 
 
+def _mask_phone(phone: str) -> str:
+    return f"...{phone[-4:]}" if phone and len(phone) >= 4 else "****"
+
+
 def _send_otp_sms(phone: str, code: str) -> bool:
-    """Send OTP via Twilio SMS. Returns True on success, False if not configured."""
+    """Send OTP via Twilio SMS. Returns True on success, False otherwise.
+
+    Every failure logs its REAL reason (missing settings by name, or Twilio's HTTP status +
+    error code + message) so a silent "no SMS arrived" is diagnosable from the worker log —
+    it used to swallow everything and report "not configured" even when Twilio rejected the
+    message (trial account / geo-permission / bad sender). Never logs the code, the token or
+    the full phone number (Twilio's message can echo the 'To' number — it is masked).
+    """
+    import base64
+    import urllib.error as _urlerr
+    import urllib.request as _urlreq
+    import urllib.parse as _urlparse
+
+    sid = getattr(settings, "TWILIO_ACCOUNT_SID", "")
+    token = getattr(settings, "TWILIO_AUTH_TOKEN", "")
+    from_number = getattr(settings, "TWILIO_FROM_NUMBER", "")
+    missing = [
+        name for name, value in (
+            ("TWILIO_ACCOUNT_SID", sid), ("TWILIO_AUTH_TOKEN", token), ("TWILIO_FROM_NUMBER", from_number),
+        ) if not value
+    ]
+    if missing:
+        logger.warning("OTP SMS not sent to %s: Twilio not configured (empty: %s)",
+                       _mask_phone(phone), ", ".join(missing))
+        return False
+
     try:
-        import base64
-        import urllib.request as _urlreq
-        import urllib.parse as _urlparse
-
-        sid = getattr(settings, "TWILIO_ACCOUNT_SID", "")
-        token = getattr(settings, "TWILIO_AUTH_TOKEN", "")
-        from_number = getattr(settings, "TWILIO_FROM_NUMBER", "")
-        if not sid or not token or not from_number:
-            return False
-
         url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
         body = f"Your verification code is {code}. Valid for 5 minutes. Do not share it."
         data = _urlparse.urlencode({"To": phone, "From": from_number, "Body": body}).encode()
@@ -544,7 +563,24 @@ def _send_otp_sms(phone: str, code: str) -> bool:
         with _urlreq.urlopen(req, timeout=10):
             pass
         return True
-    except Exception:  # noqa: BLE001
+    except _urlerr.HTTPError as exc:
+        twilio_code, message = None, ""
+        try:
+            payload = json.loads(exc.read().decode("utf-8", "replace") or "{}")
+            twilio_code, message = payload.get("code"), str(payload.get("message") or "")
+        except Exception:  # noqa: BLE001
+            pass
+        if phone:
+            message = message.replace(phone, _mask_phone(phone))
+        logger.warning(
+            "OTP SMS rejected by Twilio for %s: HTTP %s, Twilio error %s: %s "
+            "(see https://www.twilio.com/docs/api/errors/%s)",
+            _mask_phone(phone), exc.code, twilio_code, message[:300], twilio_code,
+        )
+        return False
+    except Exception as exc:  # noqa: BLE001 — network / timeout / unexpected
+        logger.warning("OTP SMS to %s failed before Twilio answered: %s: %s",
+                       _mask_phone(phone), type(exc).__name__, str(exc)[:200])
         return False
 
 
