@@ -90,6 +90,10 @@ class PlaceOrderViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = PlaceOrderView.as_view()
+        # Hold the ClosureDate lookup neutral (no DB) — default "not a closure date".
+        _closure = patch("menu.views.is_closure_date", return_value=False)
+        self.closure_mock = _closure.start()
+        self.addCleanup(_closure.stop)
 
     def _post(self, data=None, tenant=None, profile=None, principal=None):
         """`principal` is the request.user under test: a real Customer (customer order),
@@ -145,6 +149,40 @@ class PlaceOrderViewTests(SimpleTestCase):
         resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "restaurant_closed")
+
+    @patch("menu.views.Profile.objects")
+    def test_rejects_asap_order_on_a_closure_date(self, profile_mock):
+        """An open restaurant (is_open, no schedule) whose tenant-local today is an
+        owner-declared closure date must 409 restaurant_closed — the customer UI already
+        shows "closed", so a stale tab / direct API call can't place an ASAP order."""
+        profile_mock.filter.return_value.first.return_value = _profile(is_open=True)
+        self.closure_mock.return_value = True
+        resp = self.view(self._post())
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "restaurant_closed")
+
+    @patch("menu.views.DishOption.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_rejects_scheduled_order_on_a_closure_date(self, profile_mock, dish_mock, opt_mock):
+        """A scheduled (advance) order skips the live open gate by design, so
+        _validate_scheduled_for must refuse a requested time that falls on a closure date
+        — otherwise it'd be prepaid and released to the kitchen on the holiday."""
+        from datetime import timedelta
+        from django.utils import timezone
+
+        profile_mock.filter.return_value.first.return_value = _profile(is_open=True)
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish()]
+        opt_mock.filter.return_value = []
+        self.closure_mock.return_value = True
+        payload = {
+            "items": [{"slug": "burger", "qty": 1}],
+            "fulfillment_type": "pickup",
+            "scheduled_for": (timezone.now() + timedelta(days=2)).isoformat(),
+        }
+        resp = self.view(self._post(data=payload))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "schedule_closed")
 
     @patch("menu.views.Profile.objects")
     def test_preview_user_bypasses_closed_check(self, profile_mock):

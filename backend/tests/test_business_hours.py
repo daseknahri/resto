@@ -7,12 +7,21 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 
 def _profile(is_open=True, schedule=None):
     return SimpleNamespace(is_open=is_open, business_hours_schedule=schedule, timezone="")
 
 
 from menu.views import _schedule_open, _is_restaurant_currently_open
+
+
+@pytest.fixture(autouse=True)
+def closure_lookup():
+    """Hold the ClosureDate lookup neutral (no DB) — default "not a closure date"."""
+    with patch("menu.views.is_closure_date", return_value=False) as m:
+        yield m
 
 _MON_NOON = datetime(2025, 5, 5, 12, 0)   # Monday 12:00
 _MON_0700 = datetime(2025, 5, 5, 7, 0)    # Monday 07:00
@@ -97,3 +106,34 @@ class TestIsRestaurantCurrentlyOpen:
 
     def test_no_schedule_relies_on_is_open_false(self):
         assert _is_restaurant_currently_open(_profile(is_open=False, schedule=None)) is False
+
+    # ── Holiday / closure dates ────────────────────────────────────────────────
+    # The ASAP order gate must refuse on an owner-declared closure date, exactly like the
+    # customer UI (ProfileSerializer.is_open_now) already shows "closed" — otherwise a stale
+    # tab or direct API call could place an ASAP order on a holiday.
+
+    def test_closure_date_closes_even_inside_the_schedule_window(self, closure_lookup):
+        closure_lookup.return_value = True
+        with patch("menu.views._profile_now", return_value=_MON_NOON):
+            schedule = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
+            assert _is_restaurant_currently_open(_profile(schedule=schedule)) is False
+
+    def test_closure_date_closes_even_with_no_schedule(self, closure_lookup):
+        closure_lookup.return_value = True
+        assert _is_restaurant_currently_open(_profile(is_open=True, schedule=None)) is False
+
+    def test_closure_lookup_receives_the_tenant_local_date(self, closure_lookup):
+        with patch("menu.views._profile_now", return_value=_MON_NOON):
+            schedule = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
+            _is_restaurant_currently_open(_profile(schedule=schedule))
+        closure_lookup.assert_called_once_with(_MON_NOON.date())
+
+    def test_not_a_closure_date_leaves_the_schedule_verdict_unchanged(self, closure_lookup):
+        closure_lookup.return_value = False
+        with patch("menu.views._profile_now", return_value=_MON_NOON):
+            schedule = {"mon": {"enabled": True, "open": "09:00", "close": "22:00"}}
+            assert _is_restaurant_currently_open(_profile(schedule=schedule)) is True
+
+    def test_manual_closed_short_circuits_before_the_closure_lookup(self, closure_lookup):
+        assert _is_restaurant_currently_open(_profile(is_open=False)) is False
+        closure_lookup.assert_not_called()
