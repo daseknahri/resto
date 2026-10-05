@@ -324,6 +324,29 @@ def _auto_accept_now(profile, *, is_scheduled: bool, fulfillment_type) -> bool:
         return False
 
 
+def _placement_eta_minutes(profile, *, auto_accept: bool = False):
+    """Up-front ETA (minutes) for an order ENTERING the live kitchen flow, or None.
+
+    Busy-mode quote bump: while the kitchen is slammed (``_busy_extra_minutes_now`` > 0) the
+    customer is quoted ``default_prep_minutes`` (default 20) + the bump up front, so they see the
+    slower quote at checkout rather than being surprised. An auto-accepted order is quoted up
+    front too (it skips the owner's confirm tap, where the ETA is otherwise set). Otherwise None —
+    the normal "no estimate until the owner confirms" behaviour. Never raises.
+
+    Shared by ``PlaceOrderView`` (an ASAP order at placement) and ``release_scheduled_orders`` (an
+    advance order handed to the kitchen at release), so both quote identically. A SCHEDULED order
+    gets no placement-time ETA: it isn't cooked until release, possibly days later.
+    """
+    busy_extra = _busy_extra_minutes_now(profile)
+    if busy_extra <= 0 and not auto_accept:
+        return None
+    base_prep = getattr(profile, "default_prep_minutes", None) or 20
+    try:
+        return int(base_prep) + busy_extra
+    except (TypeError, ValueError):
+        return None
+
+
 # ── Advance / scheduled orders ──────────────────────────────────────────────
 # A customer may place a pickup/delivery order now for a future time. It is paid
 # up front (wallet), kept hidden from the kitchen as status=SCHEDULED, then moved
@@ -1928,7 +1951,13 @@ class OrderHandoffView(APIView):
         return user.role in {user.Roles.TENANT_OWNER, user.Roles.TENANT_STAFF}
 
     def _fetch_dishes(self, slugs, can_preview):
-        qs = Dish.objects.filter(slug__in=slugs).select_related("category")
+        # option_groups prefetch: the shared per-line helper (price_line_options) validates
+        # option-group min/max per dish — prefetched so that's 2 queries, not 2 per dish.
+        qs = (
+            Dish.objects.filter(slug__in=slugs)
+            .select_related("category")
+            .prefetch_related("option_groups__options")
+        )
         if not can_preview:
             qs = qs.filter(
                 is_published=True, is_available=True,
@@ -1950,6 +1979,42 @@ class OrderHandoffView(APIView):
 
     def _sanitize_phone(self, value: str) -> str:
         return "".join(ch for ch in (value or "") if ch.isdigit())
+
+    @staticmethod
+    def _quote_delivery_fee(profile, food_subtotal, delivery_lat, delivery_lng):
+        """The delivery fee direct checkout would charge for this address, or None when the
+        WhatsApp message can't quote it reliably (M11).
+
+        Uses the SAME helper as PlaceOrderView (``menu.order_service.compute_order_delivery_fee``
+        → ``tenancy.delivery_pricing``), so the free-over threshold and distance pricing match
+        checkout. Returns None (the restaurant confirms the fee) when:
+
+        * the address is outside the delivery area — checkout would refuse the order, so there
+          is no fee to quote; or
+        * the restaurant is distance-priced (``delivery_per_km`` > 0) but the distance is
+          unknown (no customer coordinates, e.g. only a map link, or no restaurant
+          coordinates) — checkout's flat/base fallback for that case is not this address's fee.
+
+        A flat-fee restaurant delivering inside its area gets its fee quoted as before (now
+        also honouring the free-over threshold, as checkout does).
+        """
+        from menu.order_service import compute_order_delivery_fee  # function-local (convention)
+        fee, distance_km, error_code = compute_order_delivery_fee(
+            profile,
+            fulfillment_type=Order.FulfillmentType.DELIVERY,
+            food_subtotal=food_subtotal,
+            delivery_lat=delivery_lat,
+            delivery_lng=delivery_lng,
+        )
+        if error_code:
+            return None
+        try:
+            distance_priced = Decimal(str(getattr(profile, "delivery_per_km", 0) or 0)) > 0
+        except Exception:
+            distance_priced = False
+        if distance_priced and distance_km is None:
+            return None
+        return fee
 
     def _fetch_active_table_by_slug(self, slug: str):
         normalized = (slug or "").strip().lower()
@@ -2057,35 +2122,29 @@ class OrderHandoffView(APIView):
                 lines.append(f"Delivery coordinates: {payload['delivery_lat']}, {payload['delivery_lng']}")
             if payload.get("delivery_location_url"):
                 lines.append(f"Map: {payload['delivery_location_url']}")
+        # M11: price each line EXACTLY as direct checkout (PlaceOrderView) does — the same
+        # windowed happy-hour rule source at the tenant-local now + effective_unit_price, then
+        # the shared per-line option helper — so the WhatsApp quote is what the menu / cart
+        # show and what checkout would charge (it used to quote the full dish.price all
+        # through a happy hour). Graceful fallback: no rules → no discount, like checkout.
+        from menu.order_service import price_line_options
+        try:
+            active_happy_hours = get_active_happy_hours(_profile_now(profile))
+        except Exception:
+            active_happy_hours = []
         total = Decimal("0")
         currency = None
         for item in requested_items:
             dish = dishes_by_slug[item["slug"]]
             qty = int(item["qty"])
             unique_option_ids = list(dict.fromkeys(int(opt_id) for opt_id in item.get("option_ids", [])))
-            selected_options = []
-            invalid_option_ids = []
-            for opt_id in unique_option_ids:
-                opt = options_by_id.get(opt_id)
-                opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
-                if opt is None or opt_dish_slug != dish.slug:
-                    invalid_option_ids.append(opt_id)
-                    continue
-                selected_options.append(opt)
+            base_unit_price, _ = effective_unit_price(dish, active_happy_hours)
+            unit_price, option_snapshots, line_err = price_line_options(
+                dish, unique_option_ids, options_by_id, base_unit_price,
+            )
+            if line_err:
+                return Response(line_err, status=status.HTTP_400_BAD_REQUEST)
 
-            if invalid_option_ids:
-                return Response(
-                    {
-                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
-                        "code": "stale_options",
-                        "dish_slug": dish.slug,
-                        "invalid_option_ids": invalid_option_ids,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            option_total = sum((Decimal(opt.price_delta) for opt in selected_options), Decimal("0"))
-            unit_price = dish.price + option_total
             line_total = unit_price * qty
             total += line_total
             if currency is None:
@@ -2096,28 +2155,31 @@ class OrderHandoffView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             line = f"- {qty} x {dish.name} ({unit_price} {dish.currency})"
-            if selected_options:
-                line += f" | options: {', '.join(opt.name for opt in selected_options)}"
+            if option_snapshots:
+                line += f" | options: {', '.join(snap['name'] for snap in option_snapshots)}"
             if item.get("note"):
                 line += f" | note: {item['note']}"
             lines.append(line)
 
-        # Add delivery fee for delivery orders (snapshot from profile at handoff time)
+        # Delivery fee — the fee direct checkout would charge (M11), or None when it can't be
+        # quoted (see _quote_delivery_fee). Then the message says the restaurant will confirm
+        # it and prints no Total, rather than a misleading number.
         _wa_delivery_fee = Decimal("0")
         if payload.get("fulfillment_type") == "delivery":
-            try:
-                _profile = getattr(tenant, "profile", None)
-                _raw_fee = getattr(_profile, "delivery_fee", 0) or 0
-                _wa_delivery_fee = Decimal(str(_raw_fee))
-            except Exception:
-                _wa_delivery_fee = Decimal("0")
+            _wa_delivery_fee = self._quote_delivery_fee(
+                profile, total, payload.get("delivery_lat"), payload.get("delivery_lng"),
+            )
 
-        if _wa_delivery_fee > 0:
-            lines.append(f"Subtotal: {total} {currency or 'USD'}")
-            lines.append(f"Delivery fee: {_wa_delivery_fee} {currency or 'USD'}")
-            lines.append(f"Total: {total + _wa_delivery_fee} {currency or 'USD'}")
+        _cur = currency or "USD"
+        if _wa_delivery_fee is None:
+            lines.append(f"Subtotal: {total} {_cur}")
+            lines.append("Delivery fee: to be confirmed by the restaurant")
+        elif _wa_delivery_fee > 0:
+            lines.append(f"Subtotal: {total} {_cur}")
+            lines.append(f"Delivery fee: {_wa_delivery_fee} {_cur}")
+            lines.append(f"Total: {total + _wa_delivery_fee} {_cur}")
         else:
-            lines.append(f"Total: {total} {currency or 'USD'}")
+            lines.append(f"Total: {total} {_cur}")
 
         if payload.get("customer_note"):
             lines.append(f"Customer note: {payload['customer_note']}")
@@ -2140,9 +2202,11 @@ class OrderHandoffView(APIView):
                 "delivery_lat": payload.get("delivery_lat", None),
                 "delivery_lng": payload.get("delivery_lng", None),
                 "subtotal": str(total),
-                "delivery_fee": str(_wa_delivery_fee),
-                "total": str(total + _wa_delivery_fee),
-                "currency": currency or "USD",
+                # None (with delivery_fee_pending) when the restaurant will confirm the fee.
+                "delivery_fee": None if _wa_delivery_fee is None else str(_wa_delivery_fee),
+                "total": None if _wa_delivery_fee is None else str(total + _wa_delivery_fee),
+                "delivery_fee_pending": _wa_delivery_fee is None,
+                "currency": _cur,
             },
             status=status.HTTP_200_OK,
         )
@@ -3128,8 +3192,16 @@ class PlaceOrderView(APIView):
             if not _is_promo_active_now(_code_promo, now_local=_promo_now_local):
                 _code_valid = False
             if _code_valid:
-                _best_promo = _code_promo
                 _promo_discount = _compute_promo_discount(_code_promo, _food_subtotal, _delivery_fee)
+                # L9: a code that takes NOTHING off this order (e.g. a free_delivery code on a
+                # pickup order, or on a delivery that is already free) doesn't apply to it —
+                # same as being below its minimum. Attaching it anyway burned one of its
+                # limited uses (use_count / max_uses) for a 0 discount.
+                if _promo_discount <= Decimal("0"):
+                    _promo_discount = Decimal("0")
+                    _code_valid = False
+            if _code_valid:
+                _best_promo = _code_promo
             else:
                 return Response(
                     {"detail": "Promo code is not valid for this order.", "code": "promo_invalid"},
@@ -3361,21 +3433,6 @@ class PlaceOrderView(APIView):
                     if getattr(_ru, "role", None) in {_U.Roles.TENANT_OWNER, _U.Roles.TENANT_STAFF}:
                         _staff_creator_id = _ru.id
 
-                # Busy-mode quote bump: when the kitchen is slammed the owner adds
-                # +N min to quotes. We stamp an up-front estimate (default prep +
-                # bump) so the customer sees the slower quote at checkout rather
-                # than being surprised. Only applied when a bump is active — an
-                # un-busy order keeps the normal "no estimate until owner confirms"
-                # behaviour untouched.
-                _busy_extra = _busy_extra_minutes_now(profile)
-                _est_ready_at_placement = None
-                if _busy_extra > 0:
-                    _base_prep = getattr(profile, "default_prep_minutes", None) or 20
-                    try:
-                        _est_ready_at_placement = int(_base_prep) + _busy_extra
-                    except (TypeError, ValueError):
-                        _est_ready_at_placement = None
-
                 # Auto-accept (Toast/Square parity): when the owner has opted in,
                 # routine online orders (pickup/delivery) skip the manual-confirm
                 # tap — they are created directly in CONFIRMED with a quoted prep
@@ -3385,12 +3442,17 @@ class PlaceOrderView(APIView):
                 _auto_accept = _auto_accept_now(
                     profile, is_scheduled=_is_scheduled, fulfillment_type=fulfillment_type
                 )
-                if _auto_accept and _est_ready_at_placement is None:
-                    _base_prep = getattr(profile, "default_prep_minutes", None) or 20
-                    try:
-                        _est_ready_at_placement = int(_base_prep) + _busy_extra
-                    except (TypeError, ValueError):
-                        _est_ready_at_placement = None
+                # Up-front ETA: the busy-mode quote bump (default prep + bump while the
+                # kitchen is slammed) or the auto-accept quote — see _placement_eta_minutes.
+                # L7: a SCHEDULED order gets none. It isn't cooked until
+                # release_scheduled_orders hands it to the kitchen (possibly days later),
+                # and a placement-time ETA anchored the customer countdown to created_at,
+                # so the released order read "Ready any moment now". The release stamps a
+                # fresh ETA with the same helper instead.
+                _est_ready_at_placement = (
+                    None if _is_scheduled
+                    else _placement_eta_minutes(profile, auto_accept=_auto_accept)
+                )
                 if _is_scheduled:
                     _initial_status = Order.Status.SCHEDULED
                 elif _auto_accept:
