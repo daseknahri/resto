@@ -205,6 +205,27 @@ class TestCustomerActiveItemsView(SimpleTestCase):
         self.assertEqual(resp.data["ride"]["dropoff_address"], "Dropoff Ave")
         self.assertIsNone(resp.data["package"])
 
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.CustomerOrderRef")
+    def test_scheduled_advance_order_is_resumable_with_its_due_time(self, mock_ref, mock_ride):
+        # A prepaid advance order is in-flight: the resume rail / live bar must list it
+        # (mirroring the account's CUSTOMER_ACTIVE_STATUSES), with when it's due.
+        due = datetime.datetime(2026, 6, 2, 12, 30, tzinfo=datetime.timezone.utc)
+        order = MagicMock(
+            order_number="S1", restaurant_name="Bistro", restaurant_slug="bistro", status="scheduled",
+            fulfillment_type="pickup", total="50.00", currency="MAD", vertical="food",
+            order_created_at=due - datetime.timedelta(days=1), scheduled_for=due,
+        )
+        mock_ref.objects.filter.return_value.order_by.return_value.__getitem__.return_value = [order]
+        mock_ride.TERMINAL_STATUSES = {"completed", "cancelled"}
+        chain = mock_ride.objects.filter.return_value.exclude.return_value.order_by.return_value
+        chain.first.side_effect = [None, None]
+
+        resp = self.view(self._req(1))
+
+        self.assertIn("scheduled", mock_ref.objects.filter.call_args.kwargs["status__in"])
+        self.assertEqual(resp.data["orders"][0]["scheduled_for"], due.isoformat())
+
 
 class TestSerializeCustomerRoleFlags(SimpleTestCase):
     """Additive read-only role flags on the customer session serializer."""
