@@ -5,6 +5,7 @@
 
 Unit-level (SimpleTestCase + mocks). Run with DJANGO_DEBUG=True.
 """
+import json
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -13,6 +14,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from sales.models import AdminAuditLog
 from sales.views import AdminTenantDeliveryView
 from tenancy.serializers import ProfileSerializer
 
@@ -87,6 +89,11 @@ class AdminTenantDeliveryViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = AdminTenantDeliveryView.as_view()
+        # Every successful PATCH now writes an AdminAuditLog row; patch the helper
+        # so these SimpleTestCase tests never touch the DB.
+        log_patcher = patch("sales.views.log_admin_action")
+        self.mock_log = log_patcher.start()
+        self.addCleanup(log_patcher.stop)
 
     def test_non_admin_forbidden(self):
         req = self.factory.get("/api/admin-tenants/1/delivery/")
@@ -171,3 +178,92 @@ class AdminTenantDeliveryViewTests(SimpleTestCase):
         force_authenticate(req, user=_admin())
         resp = self.view(req, tenant_id=1)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        # A rejected PATCH saves nothing, so it must not write an audit row.
+        self.mock_log.assert_not_called()
+
+    # --- Audit trail: this endpoint is the ONLY writer of the platform's revenue
+    # share (delivery/marketplace commission) — every real change must be logged.
+
+    @patch("tenancy.models.Profile")
+    @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())
+    @patch("sales.views.get_object_or_404")
+    def test_commission_change_is_audited_with_old_and_new(self, mock_g404, mock_profile):
+        tenant = _tenant()
+        mock_g404.return_value = tenant
+        prof = _profile(
+            delivery_commission_pct=Decimal("10.00"),
+            marketplace_commission_pct=Decimal("0.10"),
+        )
+        mock_profile.objects.filter.return_value.first.return_value = prof
+        req = self.factory.patch(
+            "/api/admin-tenants/1/delivery/",
+            {"delivery_commission_pct": "20", "marketplace_commission_pct": "0.15"},
+            format="json",
+        )
+        force_authenticate(req, user=_admin())
+        resp = self.view(req, tenant_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        self.mock_log.assert_called_once()
+        kwargs = self.mock_log.call_args.kwargs
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.TENANT_DELIVERY_PRICING_UPDATED)
+        self.assertIs(kwargs["tenant"], tenant)
+        self.assertEqual(kwargs["target_repr"], "tenant:demo")
+        meta = kwargs["metadata"]
+        self.assertEqual(
+            meta["changes"]["delivery_commission_pct"], {"old": "10.00", "new": "20.00"}
+        )
+        self.assertEqual(
+            meta["changes"]["marketplace_commission_pct"], {"old": "0.10", "new": "0.15"}
+        )
+        self.assertIn("delivery_commission_pct", meta["changed_fields"])
+        self.assertIn("marketplace_commission_pct", meta["changed_fields"])
+        # Must be JSON-serializable: a raw Decimal would make log_admin_action
+        # swallow the error and silently drop the audit row.
+        json.dumps(meta)
+
+    @patch("tenancy.models.Profile")
+    @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())
+    @patch("sales.views.get_object_or_404")
+    def test_audit_records_only_real_diffs_and_no_free_text(self, mock_g404, mock_profile):
+        mock_g404.return_value = _tenant()
+        prof = _profile(delivery_fee=Decimal("7.00"))
+        mock_profile.objects.filter.return_value.first.return_value = prof
+        req = self.factory.patch(
+            "/api/admin-tenants/1/delivery/",
+            {
+                "delivery_fee": "7",  # re-submitted unchanged (full-form PATCH)
+                "delivery_per_km": "5",
+                "platform_delivery_enabled": True,
+                "delivery_zone_description": "Downtown only",
+            },
+            format="json",
+        )
+        force_authenticate(req, user=_admin())
+        resp = self.view(req, tenant_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        meta = self.mock_log.call_args.kwargs["metadata"]
+        self.assertEqual(meta["changes"]["delivery_per_km"], {"old": "0.00", "new": "5.00"})
+        self.assertEqual(meta["changes"]["platform_delivery_enabled"], {"old": False, "new": True})
+        self.assertNotIn("delivery_fee", meta["changes"])
+        # Free-text field: its name is recorded, its value never is.
+        self.assertIn("delivery_zone_description", meta["changed_fields"])
+        self.assertNotIn("delivery_zone_description", meta["changes"])
+        self.assertNotIn("Downtown only", json.dumps(meta))
+
+    @patch("tenancy.models.Profile")
+    @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())
+    @patch("sales.views.get_object_or_404")
+    def test_noop_patch_is_not_audited(self, mock_g404, mock_profile):
+        mock_g404.return_value = _tenant()
+        prof = _profile()
+        mock_profile.objects.filter.return_value.first.return_value = prof
+        req = self.factory.patch(
+            "/api/admin-tenants/1/delivery/", {"unknown_field": "x"}, format="json"
+        )
+        force_authenticate(req, user=_admin())
+        resp = self.view(req, tenant_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        prof.save.assert_not_called()
+        self.mock_log.assert_not_called()

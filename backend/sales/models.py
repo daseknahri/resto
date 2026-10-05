@@ -322,6 +322,9 @@ class AdminAuditLog(models.Model):
         DELIVERY_ZONE_CREATED = "delivery_zone_created", "Delivery zone created"
         DELIVERY_ZONE_UPDATED = "delivery_zone_updated", "Delivery zone updated"
         DELIVERY_ZONE_DELETED = "delivery_zone_deleted", "Delivery zone deleted"
+        # A tenant's delivery pricing + the platform's own revenue share
+        # (delivery_commission_pct / marketplace_commission_pct) — admin-only writes.
+        TENANT_DELIVERY_PRICING_UPDATED = "tenant_delivery_pricing_updated", "Tenant delivery pricing updated"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(
