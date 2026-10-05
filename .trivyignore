@@ -40,3 +40,9 @@ GHSA-rgw5-rvv9-x895  # brace-expansion unbounded-intermediate-array DoS (npm aud
 # a patched js-yaml in range. Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs.
 CVE-2026-59870       # js-yaml <=4.x !!omap quadratic-CPU DoS
 GHSA-5p4m-2wfm-xmqj  # same advisory — GitHub Advisory DB id Trivy uses for npm
+
+# braces stack-exhaustion DoS (<=3.0.3, no patched release exists). dev/build-tooling
+# only — chokidar + micromatch under tailwindcss 3.4 (devDependency) expanding our own
+# content globs; never shipped, never fed untrusted input. Fix = tailwind 4 major (#154).
+# Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs.
+GHSA-vfj7-8cjw-p6xm  # braces deeply-nested-pattern stack exhaustion
