@@ -870,6 +870,9 @@ const cancelOrder = async () => {
   cancelling.value = true;
   try {
     await api.post(`/marketplace/order/${orderNumber}/cancel/`, { restaurant: slug });
+    // The server auto-refunds the wallet on cancel — force-refresh the customer
+    // (fire-and-forget) so the balance isn't the stale pre-refund one.
+    if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
     toast.show(t('mktOrderStatus.cancelledOk'), 'success');
     cancelConfirming.value = false;
     await fetchStatus();

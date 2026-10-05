@@ -84,6 +84,7 @@ vi.mock("vue-router", () => ({
 }));
 
 import { useCartStore } from "../../stores/cart";
+import { useCustomerStore } from "../../stores/customer";
 import { useTenantStore } from "../../stores/tenant";
 import Cart from "../Cart.vue";
 import CartEmptyState from "../../components/CartEmptyState.vue";
@@ -175,5 +176,149 @@ describe("Cart — mount smoke", () => {
     // Own-template heading: the guest sign-in wall renders inside the order panel
     // (proves the non-empty, non-browse-only main branch rendered).
     expect(wrapper.text()).toContain("cartPage.orderAuthRequired");
+  });
+});
+
+// ── H3: a rejected cart line must be actionable ─────────────────────────────
+// The place-order endpoints reject unorderable lines as
+// { code: "items_unavailable", slugs: [...] } (the WhatsApp / checkout-intent endpoints use
+// `unavailable_slugs`). Cart.vue used to read only the latter, so the red "Unavailable items…
+// Remove" block was unreachable and the customer got a generic error.
+describe("Cart — items_unavailable rejection (H3)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountWithBurger = async () => {
+    seedOrderableTenant();
+    useCartStore().add({ slug: "burger", name: "Burger", price: 50, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+  };
+
+  const rejection = (data) => ({ response: { status: 400, data } });
+
+  it("reads the place-order `slugs` field, names the line (not the slug) and shows the Remove block", async () => {
+    await mountWithBurger();
+
+    const msg = wrapper.vm.mapOrderApiError(rejection({ code: "items_unavailable", slugs: ["burger"] }));
+    await flushPromises();
+
+    // The error text names the cart line, never the raw slug.
+    expect(msg).toBe('cartPage.itemsUnavailable({"items":"Burger"})');
+    expect(wrapper.vm.unavailableSlugs).toEqual(["burger"]);
+    // The (previously unreachable) red block renders with the line name + a Remove button.
+    expect(wrapper.text()).toContain('cartPage.unavailableItemsDetected({"items":"Burger"})');
+    expect(wrapper.text()).toContain("cartPage.removeUnavailableItems");
+  });
+
+  it("still honours the legacy `unavailable_slugs` field (WhatsApp / checkout-intent)", async () => {
+    await mountWithBurger();
+    wrapper.vm.mapOrderApiError(rejection({ code: "items_unavailable", unavailable_slugs: ["burger"] }));
+    expect(wrapper.vm.unavailableSlugs).toEqual(["burger"]);
+  });
+
+  it("Remove drops exactly the rejected line from the cart and clears the block", async () => {
+    await mountWithBurger();
+    const cart = useCartStore();
+    cart.add({ slug: "fries", name: "Fries", price: 20, qty: 1, currency: "MAD" });
+    await flushPromises();
+    wrapper.vm.mapOrderApiError(rejection({ code: "items_unavailable", slugs: ["burger"] }));
+    await flushPromises();
+
+    const removeBtn = wrapper.findAll("button").find((b) => b.text().includes("cartPage.removeUnavailableItems"));
+    expect(removeBtn).toBeTruthy();
+    await removeBtn.trigger("click");
+    await flushPromises();
+
+    expect(cart.items.map((i) => i.slug)).toEqual(["fries"]);
+    expect(wrapper.vm.unavailableSlugs).toEqual([]);
+  });
+
+  it("lowering a quantity lapses a stale rejection so the customer can retry", async () => {
+    await mountWithBurger();
+    const cart = useCartStore();
+    cart.increment(cart.items[0].key); // 2 → so a decrement below is a real edit
+    await flushPromises();
+    wrapper.vm.mapOrderApiError(rejection({ code: "items_unavailable", slugs: ["burger"] }));
+    expect(wrapper.vm.unavailableSlugs).toEqual(["burger"]);
+
+    cart.decrement(cart.items[0].key);
+    await flushPromises();
+    expect(wrapper.vm.unavailableSlugs).toEqual([]);
+  });
+
+  it("re-syncs the stale wallet balance on a 402 wallet_insufficient", async () => {
+    await mountWithBurger();
+    const customerStore = useCustomerStore();
+    const spy = vi.spyOn(customerStore, "fetchCustomer");
+    const msg = wrapper.vm.mapOrderApiError(rejection({ code: "wallet_insufficient" }));
+    expect(msg).toBe("cartPage.walletInsufficientError");
+    expect(spy).toHaveBeenCalledWith(true);
+  });
+});
+
+// ── M1: "Cash on handover" + "Schedule for later" ────────────────────────────
+// The server honours cash only for IMMEDIATE orders; a scheduled order silently falls back
+// to the wallet. The cart must not promise cash while scheduling.
+describe("Cart — cash on handover vs scheduled order (M1)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  it("hides the cash option, explains why, and pays from the wallet while scheduling", async () => {
+    seedOrderableTenant();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", wallet_balance: "500.00" });
+    useCartStore().add({ slug: "burger", name: "Burger", price: 50, qty: 1, currency: "MAD" });
+    _routes["/order-eligibility/"] = { data: { cod_eligible: true } };
+    wrapper = mountCart();
+    await flushPromises();
+
+    wrapper.vm.fulfillmentType = "pickup";
+    wrapper.vm.paymentMethod = "cash";
+    await flushPromises();
+
+    // Immediate order: cash is offered and chosen.
+    expect(wrapper.vm.codChosen).toBe(true);
+    expect(wrapper.text()).toContain("cartPage.payMethodCash");
+    expect(wrapper.vm.buildPayload().payment_method).toBe("cash");
+
+    // Schedule for later: cash is neither offered nor chosen; the wallet is charged.
+    wrapper.vm.scheduleEnabled = true;
+    await flushPromises();
+    expect(wrapper.vm.codChosen).toBe(false);
+    expect(wrapper.text()).not.toContain("cartPage.payMethodCash");
+    expect(wrapper.text()).not.toContain("cartPage.payCashOnHandoverTitle");
+    expect(wrapper.text()).toContain("cartPage.cashNotForScheduled");
+    const payload = wrapper.vm.buildPayload();
+    expect(payload.payment_method).toBeUndefined();
+    expect(payload.use_wallet).toBe(true);
+
+    // Back to ASAP: the customer's cash choice is restored.
+    wrapper.vm.scheduleEnabled = false;
+    await flushPromises();
+    expect(wrapper.vm.codChosen).toBe(true);
   });
 });

@@ -2278,6 +2278,9 @@ const cancelOrder = async (order) => {
   try {
     await api.post(`/order-status/${order.order_number}/cancel/`);
     toast.show(t('customerAccount.orderCancelled'), 'success');
+    // The cancel auto-refunds the wallet (and returns redeemed loyalty points) server-side —
+    // force-refresh so the balance/points shown on this page aren't the stale pre-cancel ones.
+    customerStore.fetchCustomer(true);
     // Optimistically mark as cancelled in the list; full refetch will sync.
     const target = apiOrders.value.find((o) => o.order_number === order.order_number);
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
@@ -2307,6 +2310,7 @@ const cancelMarketplaceOrder = async (order) => {
   try {
     await api.post(`/marketplace/order/${order.order_number}/cancel/`, { restaurant: order.restaurant_slug });
     toast.show(t('customerAccount.orderCancelled'), 'success');
+    customerStore.fetchCustomer(true); // wallet refund — see cancelOrder above
     const target = marketplaceOrders.value.find((o) => o.order_number === order.order_number);
     if (target) { target.status = 'cancelled'; target.can_cancel = false; }
   } catch (err) {

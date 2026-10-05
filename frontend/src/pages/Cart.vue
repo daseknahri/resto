@@ -544,7 +544,7 @@
           <!-- ── Pay now (pickup/delivery) ── -->
           <div v-if="requiresPrepay && customerStore.isAuthenticated && orderGrandTotal > 0" class="space-y-2">
             <!-- Trusted customers: choose wallet or cash on handover -->
-            <div v-if="codEligible" class="grid grid-cols-2 gap-2">
+            <div v-if="codEligible && !scheduleBlocksCash" class="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
@@ -560,6 +560,8 @@
                 @click="paymentMethod = 'cash'"
               >{{ t('cartPage.payMethodCash') }}</button>
             </div>
+            <!-- Scheduled orders can't be paid on handover — say why the cash option is gone. -->
+            <p v-else-if="codEligible" class="text-[11px] text-slate-400">{{ t('cartPage.cashNotForScheduled') }}</p>
 
             <!-- Cash on handover panel -->
             <div v-if="codChosen" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3">
@@ -1425,8 +1427,12 @@ const walletCoversTotal = computed(() => walletBalance.value >= orderGrandTotal.
 const codEligible = ref(false);
 const codMinOrders = ref(3);
 const paymentMethod = ref('wallet'); // 'wallet' | 'cash' (cash only when codEligible)
+// The server only honours cash-on-handover for IMMEDIATE orders — a scheduled
+// (advance) order silently falls back to the wallet. So while "Schedule for later"
+// is on, cash is not offered and never reported as chosen (the wallet panel shows).
+const scheduleBlocksCash = computed(() => canSchedule.value && scheduleEnabled.value);
 const codChosen = computed(
-  () => requiresPrepay.value && codEligible.value && paymentMethod.value === 'cash'
+  () => requiresPrepay.value && codEligible.value && !scheduleBlocksCash.value && paymentMethod.value === 'cash'
 );
 // Wallet is applied for prepay orders unless the customer picked cash-on-handover.
 const walletApplied = computed(
@@ -2093,9 +2099,16 @@ const assignFieldErrors = (data) => {
 const mapOrderApiError = (err) => {
   const data = err?.response?.data || {};
   const code = data?.code || '';
-  const unavailable = Array.isArray(data?.unavailable_slugs)
-    ? data.unavailable_slugs
-    : [];
+  // The place-order endpoints reject unorderable lines as `{ code: 'items_unavailable',
+  // slugs: [...] }`; only the WhatsApp / checkout-intent endpoints use `unavailable_slugs`.
+  // Read both so a rejected line is always actionable (named + removable), never a
+  // generic "something went wrong".
+  const unavailableRaw = code === 'items_unavailable' && Array.isArray(data?.slugs)
+    ? data.slugs
+    : Array.isArray(data?.unavailable_slugs)
+      ? data.unavailable_slugs
+      : [];
+  const unavailable = unavailableRaw.map(String);
   unavailableSlugs.value = unavailable;
   const note =
     typeof data?.note === 'string' && data.note.trim() ? data.note.trim() : '';
@@ -2112,6 +2125,9 @@ const mapOrderApiError = (err) => {
     return t('cartPage.deliveryAuthRequired');
   }
   if (code === 'wallet_insufficient') {
+    // Our cached balance was stale (the server says it can't cover the order) — re-sync it
+    // so the wallet panel and the shortfall gate show the real number.
+    customerStore.fetchCustomer(true);
     return t('cartPage.walletInsufficientError');
   }
   if (code === 'not_verified') {
@@ -2121,7 +2137,8 @@ const mapOrderApiError = (err) => {
     return t('cartPage.deliveryPhoneRequired');
   }
   if (code === 'items_unavailable' && unavailable.length) {
-    return t('cartPage.itemsUnavailable', { items: unavailable.join(', ') });
+    // Name the lines the way the customer sees them (the cart line name), not the slug.
+    return t('cartPage.itemsUnavailable', { items: unavailableNames.value.join(', ') });
   }
   if (code === 'plan_forbidden' || code === 'plan_forbidden_checkout') {
     return t('cartPage.actionNotAvailableOnPlan');
@@ -2196,6 +2213,16 @@ const removeUnavailable = () => {
   unavailableSlugs.value = [];
   toast.show(t('cartPage.unavailableItemsRemoved'), 'success');
 };
+
+// Editing a line (e.g. lowering a quantity the server said was no longer in stock)
+// invalidates the rejection. Drop the stale "unavailable" block — it disables Place
+// Order — so the customer can retry; the server re-rejects if the line is still bad.
+watch(
+  () => cart.items.map((i) => `${i.key}:${i.qty}`).join('|'),
+  () => {
+    if (unavailableSlugs.value.length) unavailableSlugs.value = [];
+  }
+);
 
 const startCheckout = async () => {
   checkoutError.value = '';
@@ -2348,6 +2375,10 @@ const placeInAppOrder = async () => {
       },
     });
     const result = await order.placeOrder(buildPayload());
+    // The order spent wallet balance and earned/redeemed loyalty points server-side —
+    // force-refresh the customer (fire-and-forget) so the next screen (order status,
+    // account, next checkout) never shows the stale pre-order balance.
+    if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
     // Save to recent orders BEFORE clearing the cart so we still have item data
     cart.pushRecentOrder({
       order_number: result.order_number,

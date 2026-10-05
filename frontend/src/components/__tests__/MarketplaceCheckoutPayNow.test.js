@@ -29,6 +29,21 @@ describe("MarketplaceCheckoutPayNow", () => {
     expect(btns[0].attributes("aria-pressed")).toBe("true"); // wallet active
   });
 
+  it("replaces the cash option with an explanation while a scheduled order blocks cash", () => {
+    // M1: the server ignores cash for scheduled orders (falls back to the wallet), so the
+    // selector must not offer it — and the customer is told why instead of silently charged.
+    const w = mountIt({ codEligible: true, scheduleBlocksCash: true, paymentMethod: "cash", codChosen: false });
+    expect(w.findAll('button[aria-pressed]')).toHaveLength(0);
+    expect(w.text()).toContain("mktMenu.cashNotForScheduled");
+    // The wallet panel (what will actually be charged) is what shows.
+    expect(w.text()).toContain("mktMenu.payFromWalletTitle");
+    expect(w.text()).not.toContain("mktMenu.payCashOnHandoverTitle");
+  });
+
+  it("shows no schedule/cash note for a customer who was never cash-eligible", () => {
+    expect(mountIt({ codEligible: false, scheduleBlocksCash: true }).text()).not.toContain("mktMenu.cashNotForScheduled");
+  });
+
   it("emits update:paymentMethod when a method is chosen", async () => {
     const w = mountIt({ codEligible: true, paymentMethod: "wallet" });
     await w.findAll('button[aria-pressed]')[1].trigger("click"); // cash

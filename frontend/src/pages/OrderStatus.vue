@@ -1278,6 +1278,9 @@ const cancelOrder = async () => {
   cancelError.value = "";
   try {
     await api.post(`/order-status/${props.orderNumber}/cancel/`);
+    // The server auto-refunds the wallet on cancel — force-refresh the customer
+    // (fire-and-forget) so the balance shown elsewhere isn't the stale pre-refund one.
+    if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
     await fetchStatus(); // refresh → flips to Cancelled, hides the button
     toast.show(t("orderStatus.cancelledOk"), "success");
     cancelConfirming.value = false;
