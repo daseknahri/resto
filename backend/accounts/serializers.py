@@ -1,10 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import Q
 from rest_framework import serializers
 
-from sales.models import ActivationToken
+from sales.models import ActivationToken, account_is_activated
 
 from .models import PasswordResetToken
 
@@ -42,6 +43,29 @@ def _check_password_strength(password: str, user=None) -> None:
         raise serializers.ValidationError({"password": list(exc.messages)})
 
 
+ACTIVATION_TOKEN_EXPIRED_OR_USED = "Token expired or used"  # the frontend matches this exact string
+ACTIVATION_ALREADY_DONE = (
+    "This account is already activated. Sign in, or use \"Forgot password\" to reset your password."
+)
+ACTIVATION_ACCOUNT_DISABLED = "This account is disabled. Contact support."
+
+
+def _ensure_account_activatable(user) -> None:
+    """Reject activation for an account that must not be (re)activated.
+
+    * ``is_active=False`` — no flow ever creates a user inactive-pending-activation
+      (provisioning and staff invites both create active users), so an inactive
+      user was deliberately deactivated by a platform admin; a token must not
+      revive it.
+    * already activated (see ``account_is_activated``) — the token would
+      otherwise be a password reset that bypasses MFA.
+    """
+    if not user.is_active:
+        raise serializers.ValidationError(ACTIVATION_ACCOUNT_DISABLED)
+    if account_is_activated(user):
+        raise serializers.ValidationError(ACTIVATION_ALREADY_DONE)
+
+
 class ActivationSerializer(serializers.Serializer):
     token = serializers.CharField()
     password = serializers.CharField(min_length=8, write_only=True)
@@ -52,8 +76,11 @@ class ActivationSerializer(serializers.Serializer):
             activation = ActivationToken.objects.select_related("user", "tenant").get(token=token)
         except ActivationToken.DoesNotExist:
             raise serializers.ValidationError("Invalid token")
+        # Account state first: an already-activated owner re-clicking an old
+        # (used/expired) link is told to sign in rather than offered a resend.
+        _ensure_account_activatable(activation.user)
         if not activation.is_valid():
-            raise serializers.ValidationError("Token expired or used")
+            raise serializers.ValidationError(ACTIVATION_TOKEN_EXPIRED_OR_USED)
         attrs["activation"] = activation
         # Run AUTH_PASSWORD_VALIDATORS now that we have the user object for
         # UserAttributeSimilarityValidator (checks against username/email).
@@ -63,11 +90,20 @@ class ActivationSerializer(serializers.Serializer):
     def save(self, **kwargs):
         activation: ActivationToken = self.validated_data["activation"]
         password = self.validated_data["password"]
-        user: User = activation.user
-        user.set_password(password)
-        user.is_active = True
-        user.save()
-        activation.mark_used()
+        with transaction.atomic():
+            # Lock the account row so concurrent activations of the same account
+            # (same token replayed, or two sibling links) serialize here instead of
+            # racing — and instead of deadlocking on each other's sibling revoke.
+            user: User = User.objects.select_for_update().get(pk=activation.user_id)
+            # validate() ran without the lock — re-check the account state under it.
+            _ensure_account_activatable(user)
+            # Compare-and-set: only the request that flips used_at NULL→now may
+            # set the password; it also revokes every other unused sibling token.
+            if not activation.consume():
+                raise serializers.ValidationError(ACTIVATION_TOKEN_EXPIRED_OR_USED)
+            user.set_password(password)
+            # is_active is deliberately NOT touched (see _ensure_account_activatable).
+            user.save(update_fields=["password"])
         return user
 
 

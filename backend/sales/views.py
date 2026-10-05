@@ -1673,8 +1673,13 @@ class SelfServiceResendActivationView(APIView):
     Security:
       - ALWAYS returns the same generic 200, whether or not the email matches
         a real, not-yet-activated account — prevents account enumeration.
-      - Rate-limited (reuses PublicLeadThrottle / "public_leads" scope, the
-        same throttle the public lead-capture endpoint uses).
+      - Rate-limited per IP (reuses PublicLeadThrottle / "public_leads" scope,
+        the same throttle the public lead-capture endpoint uses) AND per email
+        address (sales.services.activation_resend_allowed — 3/hour; over the cap
+        nothing is sent but the response stays the same generic 200).
+      - Only a never-activated, active tenant OWNER gets a link — an account
+        that has signed in or enrolled MFA is never re-activatable (that would
+        be an MFA-less password reset); see sales.models.account_is_activated.
     """
 
     permission_classes = [AllowAny]
