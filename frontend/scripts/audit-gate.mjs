@@ -42,6 +42,14 @@ const ALLOWLIST = {
     'unreachable at runtime. No in-range fix: not backported to 4.x, and @eslint/eslintrc caps ' +
     "js-yaml at ^4.1.1 (can't move to a fixed major without an eslint-chain bump). Mirrored in " +
     '.trivyignore. Revisit when the eslint config chain ships a patched js-yaml in range.',
+  'GHSA-vfj7-8cjw-p6xm':
+    'braces stack-exhaustion DoS on deeply nested patterns (affects <=3.0.3). braces 3.0.3 is ' +
+    'dev/build-tooling only (dev:true in the lockfile) — pulled solely by chokidar + micromatch ' +
+    "under tailwindcss 3.4 (a devDependency) to expand our own content globs at build/dev time; " +
+    'never in the shipped bundle and never fed untrusted input. No fix exists: 3.0.3 is the ' +
+    "latest braces release and the advisory covers it, so no override can help — npm's only " +
+    'fix is the deferred tailwindcss 4 major (#154). Mirrored in .trivyignore. Remove when ' +
+    'tailwind 4 lands or braces ships a patched release.',
 }
 
 // Match the old gate: fail on moderate and above (low stays informational).
