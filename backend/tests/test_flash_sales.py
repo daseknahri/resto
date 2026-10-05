@@ -316,6 +316,45 @@ class AdminFlashSaleDetailViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_log.assert_not_called()
 
+    def _patch_discount(self, value):
+        """PATCH discount_value=value against a mocked flash sale; returns (resp, fs, mock_log)."""
+        fs = _make_fs(fs_id=7, discount_value=Decimal("20.00"))
+        with patch("accounts.models.PlatformFlashSale") as mock_fs, \
+             patch("accounts.views.log_admin_action") as mock_log, \
+             patch("accounts.views._bust_public_list_cache"):
+            mock_fs.objects.get.return_value = fs
+            with patch("django_tenants.utils.schema_context") as mock_ctx:
+                mock_ctx.return_value.__enter__ = lambda s: None
+                mock_ctx.return_value.__exit__ = lambda s, *a: None
+                resp = self._patch(7, {"discount_value": value})
+        return resp, fs, mock_log
+
+    def test_patch_rejects_out_of_range_or_non_numeric_discount(self):
+        """PATCH must enforce the same 0 < discount_value <= 100 bound as POST: a bad value
+        would render a nonsense discount badge. Nothing is saved or audited on rejection."""
+        for bad in (0, "0", -5, "-5", 150, "100.01", "abc", "NaN", "Infinity", None, ""):
+            with self.subTest(discount_value=bad):
+                resp, fs, mock_log = self._patch_discount(bad)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                # Same error shape as the create path (POST).
+                self.assertEqual(
+                    resp.data["detail"],
+                    "discount_value must be a number between 0 and 100.",
+                )
+                fs.save.assert_not_called()
+                mock_log.assert_not_called()
+
+    def test_patch_accepts_discount_at_the_bounds(self):
+        """Upper bound is inclusive (100) and fractional percentages are valid."""
+        for good, expected in (("100", Decimal("100")), (100, Decimal("100")),
+                               ("0.5", Decimal("0.5")), ("15.00", Decimal("15.00"))):
+            with self.subTest(discount_value=good):
+                resp, fs, mock_log = self._patch_discount(good)
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+                self.assertEqual(fs.discount_value, expected)
+                fs.save.assert_called_once()
+                mock_log.assert_called_once()
+
     def test_delete_writes_audit_log(self):
         """Deleting a flash sale must be audited (snapshotting the discount it removed)."""
         fs = _make_fs(fs_id=9, discount_value=Decimal("40.00"))

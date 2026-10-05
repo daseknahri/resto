@@ -159,6 +159,15 @@ class RepairTenantLinkViewTests(SimpleTestCase):
 
 class AdminWalletListViewTests(SimpleTestCase):
     def setUp(self):
+        # The view is behind AdminPIIThrottle (cache-backed): start each test with a clean bucket
+        # so accumulated hits can never 429 a test (see test-throttle-cache-accumulation).
+        from django.core.cache import cache
+        cache.clear()
+        # The PII read audit writes an AdminAuditLog row; stub it so SimpleTestCase never
+        # touches the DB (and so tests can assert on the call).
+        patcher = patch("menu.views.log_admin_action")
+        self.mock_log = patcher.start()
+        self.addCleanup(patcher.stop)
         self.factory = APIRequestFactory()
         self.view = AdminWalletListView.as_view()
 
@@ -167,9 +176,68 @@ class AdminWalletListViewTests(SimpleTestCase):
         req.user = user or _admin()
         return self.view(req)
 
+    def _empty_get(self, user=None, params=None):
+        """GET against an empty mocked Customer queryset."""
+        with patch("accounts.models.Customer") as mock_cust:
+            qs = MagicMock()
+            mock_cust.objects.filter.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs  # a ?search= narrows the queryset again
+            qs.count.return_value = 0
+            qs.__getitem__ = lambda s, k: []
+            return self._get(user=user, params=params)
+
     def test_non_admin_returns_403(self):
         resp = self._get(user=_non_admin())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.mock_log.assert_not_called()
+
+    # ── Audit / throttle completeness (admin PII read) ───────────────────────
+    def test_uses_platform_admin_permission_and_pii_throttle(self):
+        from accounts.throttles import AdminPIIThrottle
+        from sales.permissions import IsPlatformAdmin
+        self.assertEqual(AdminWalletListView.permission_classes, [IsPlatformAdmin])
+        self.assertIn(AdminPIIThrottle, AdminWalletListView.throttle_classes)
+
+    def test_superuser_without_platform_admin_role_still_allowed(self):
+        """IsPlatformAdmin keeps the superuser bypass the inline check had."""
+        u = _non_admin()
+        u.is_superuser = True
+        self.assertEqual(self._empty_get(user=u).status_code, status.HTTP_200_OK)
+
+    def test_platform_admin_who_is_not_superuser_still_allowed(self):
+        u = _non_admin()
+        u.is_platform_admin = True
+        self.assertEqual(self._empty_get(user=u).status_code, status.HTTP_200_OK)
+
+    def test_get_writes_customer_pii_viewed_audit_without_pii(self):
+        from sales.models import AdminAuditLog
+        resp = self._empty_get(params={"search": "ali", "min_balance": "5", "page": 2})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.mock_log.assert_called_once()
+        kwargs = self.mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.CUSTOMER_PII_VIEWED)
+        self.assertEqual(kwargs["target_repr"], "wallet_list")
+        self.assertEqual(
+            kwargs["metadata"],
+            {"query": "ali", "min_balance": "5", "count": 0, "page": 2},
+        )
+
+    def test_audit_metadata_never_carries_customer_rows(self):
+        """Only filters + counts are logged — never a customer's name/email/phone/balance."""
+        customer = MagicMock()
+        customer.id = 1
+        customer.name = "Ali Hassan"
+        customer.email = "ali@example.com"
+        customer.phone = "0612345678"
+        customer.wallet_balance = "50.00"
+        with patch("accounts.models.Customer") as mock_cust:
+            qs = mock_cust.objects.filter.return_value.order_by.return_value
+            qs.count.return_value = 1
+            qs.__getitem__ = lambda s, k: [customer]
+            self._get()
+        flat = repr(self.mock_log.call_args[1]["metadata"])
+        for secret in ("Ali Hassan", "ali@example.com", "0612345678", "50.00"):
+            self.assertNotIn(secret, flat)
 
     def test_returns_wallet_list_structure(self):
         customer = MagicMock()

@@ -17,7 +17,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.negotiation import BaseContentNegotiation
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
@@ -5744,6 +5744,24 @@ def _serialize_flash_sale(fs, opted_in: bool = False):
     }
 
 
+_FLASH_SALE_DISCOUNT_ERROR = "discount_value must be a number between 0 and 100."
+
+
+def _parse_flash_sale_discount(raw):
+    """Return ``raw`` as a Decimal percentage in (0, 100], or ``None`` if it is not a number
+    or out of range. Shared by the flash-sale create (POST) and edit (PATCH) so both enforce
+    the same bound — a bad value would otherwise render a nonsense discount badge."""
+    from decimal import Decimal
+    try:
+        discount = Decimal(str(raw))
+        if 0 < discount <= 100:
+            return discount
+    except Exception:
+        # Not a number (or NaN, whose comparison raises InvalidOperation) → rejected below.
+        pass
+    return None
+
+
 class AdminFlashSaleListCreateView(APIView):
     """
     GET /api/admin/flash-sales/          — list all flash sales (platform admin only)
@@ -5766,7 +5784,6 @@ class AdminFlashSaleListCreateView(APIView):
         # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
-        from decimal import Decimal
 
         data = request.data
         required = ("name", "discount_value", "active_from", "active_until")
@@ -5774,12 +5791,9 @@ class AdminFlashSaleListCreateView(APIView):
             if not data.get(field):
                 return Response({"detail": f"{field} is required."}, status=400)
 
-        try:
-            discount = Decimal(str(data["discount_value"]))
-            if not (0 < discount <= 100):
-                raise ValueError
-        except (ValueError, Exception):
-            return Response({"detail": "discount_value must be a number between 0 and 100."}, status=400)
+        discount = _parse_flash_sale_discount(data["discount_value"])
+        if discount is None:
+            return Response({"detail": _FLASH_SALE_DISCOUNT_ERROR}, status=400)
 
         from django.utils.dateparse import parse_datetime
         active_from = parse_datetime(data["active_from"])
@@ -5856,7 +5870,6 @@ class AdminFlashSaleDetailView(APIView):
         # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
-        from decimal import Decimal
         from django.utils.dateparse import parse_datetime
 
         with schema_context("public"):
@@ -5875,11 +5888,12 @@ class AdminFlashSaleDetailView(APIView):
                 fs.description = data["description"]
                 update_fields.append("description")
             if "discount_value" in data:
-                try:
-                    fs.discount_value = Decimal(str(data["discount_value"]))
-                    update_fields.append("discount_value")
-                except Exception:
-                    return Response({"detail": "Invalid discount_value."}, status=400)
+                # Same 0 < value <= 100 bound as the create path (POST).
+                discount = _parse_flash_sale_discount(data["discount_value"])
+                if discount is None:
+                    return Response({"detail": _FLASH_SALE_DISCOUNT_ERROR}, status=400)
+                fs.discount_value = discount
+                update_fields.append("discount_value")
             if "active_from" in data:
                 dt = parse_datetime(data["active_from"])
                 if not dt:
@@ -7750,9 +7764,13 @@ class AdminDriverListView(APIView):
     """GET /api/admin/drivers/ — list all registered drivers with job stats (platform admin).
 
     OPS-5b: consolidated onto IsPlatformAdmin.
+    Audit/throttle completeness: the payload carries KYC document URLs (licence/insurance) plus
+    phone/email/GPS for up to 200 drivers, so it follows the AdminCustomerListView PII pattern —
+    AdminPIIThrottle + a CAR_DOCS_VIEWED audit row per read (the action existed but was unused).
     """
 
     permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
         # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
@@ -7837,6 +7855,12 @@ class AdminDriverListView(APIView):
                 "owed": str(d.wallet_balance),
                 "created_at": d.created_at.isoformat(),
             })
+        log_admin_action(
+            action=AdminAuditLog.Actions.CAR_DOCS_VIEWED,
+            request=request,
+            target_repr="admin:driver_list",
+            metadata={"count": len(result)},
+        )
         return Response(result)
 
 
@@ -7952,9 +7976,21 @@ class AdminDriverApprovalView(APIView):
 class AdminDriverEarningsView(APIView):
     """GET  /api/admin/drivers/<id>/earnings/ — earnings summary + recent deliveries/payouts.
        POST /api/admin/drivers/<id>/payout/   — record a settlement paid to the driver.
+
+    Audit/throttle completeness: the GET exposes a driver's name/phone/earnings, so it follows
+    the AdminCustomerListView PII pattern — AdminPIIThrottle + a CUSTOMER_PII_VIEWED audit row
+    (a driver is a Customer row). The throttle is scoped to the read: the payout POST is a
+    money action with its own DRIVER_PAYOUT_RECORDED audit and must not be rate-limited (or
+    have its budget eaten) by the PII-read bucket.
     """
 
     permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
+
+    def get_throttles(self):
+        if self.request.method in SAFE_METHODS:
+            return super().get_throttles()
+        return []
 
     def _check(self, request):
         u = getattr(request, "user", None)
@@ -7978,6 +8014,12 @@ class AdminDriverEarningsView(APIView):
             .order_by("-delivered_at")[:20]
         )
         payouts = list(DriverPayout.objects.filter(driver_id=driver_id)[:20])
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
+            request=request,
+            target_repr=f"driver:{driver_id}",
+            metadata={"driver_id": driver_id, "view": "earnings"},
+        )
         return Response({
             "driver_id": driver.id,
             "name": driver.name or "",
