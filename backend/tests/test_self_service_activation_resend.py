@@ -3,7 +3,7 @@
 Covers:
   - sales.services.resend_activation_for_email: known un-activated email
     reissues a token (via issue_activation); unknown email returns None;
-    already-activated email returns None.
+    already-activated email (account state, see account_is_activated) returns None.
   - sales.views.SelfServiceResendActivationView: ALWAYS returns the same
     generic 200 response (no account enumeration) and uses the public-lead
     throttle scope.
@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -40,23 +41,27 @@ def _make_user_qs(user):
 # ── sales.services.resend_activation_for_email ────────────────────────────────
 
 class ResendActivationForEmailTests(SimpleTestCase):
+    def setUp(self):
+        # The per-email resend quota lives in the (locmem) cache.
+        cache.clear()
+
     @patch("sales.services._log_provisioning_event")
     @patch("sales.services.issue_activation")
-    @patch("sales.services.ActivationToken")
+    @patch("sales.services.account_is_activated")
     @patch("sales.services.get_user_model")
     @patch("django_tenants.utils.schema_context", _noop_ctx)
     @patch("django.db.transaction.atomic", _noop_ctx)
     def test_known_unactivated_email_reissues_and_sends(
-        self, get_user_model_mock, activation_token_mock, issue_activation_mock, log_event_mock,
+        self, get_user_model_mock, account_is_activated_mock, issue_activation_mock, log_event_mock,
     ):
         tenant = SimpleNamespace(id=7, slug="demo")
-        user = SimpleNamespace(id=11, email="owner@example.com", tenant=tenant)
+        user = SimpleNamespace(id=11, email="owner@example.com", tenant=tenant, last_login=None)
         User = MagicMock()
         User.objects.filter.return_value = _make_user_qs(user)
         get_user_model_mock.return_value = User
 
-        # No used ActivationToken exists yet → not yet activated.
-        activation_token_mock.objects.filter.return_value.exists.return_value = False
+        # Never signed in, no MFA → not yet activated.
+        account_is_activated_mock.return_value = False
 
         activation = SimpleNamespace(token="fresh-token")
         issue_activation_mock.return_value = (
@@ -92,12 +97,12 @@ class ResendActivationForEmailTests(SimpleTestCase):
         self.assertIsNone(result)
 
     @patch("sales.services.issue_activation")
-    @patch("sales.services.ActivationToken")
+    @patch("sales.services.account_is_activated")
     @patch("sales.services.get_user_model")
     @patch("django_tenants.utils.schema_context", _noop_ctx)
     @patch("django.db.transaction.atomic", _noop_ctx)
     def test_already_activated_email_does_not_reissue(
-        self, get_user_model_mock, activation_token_mock, issue_activation_mock,
+        self, get_user_model_mock, account_is_activated_mock, issue_activation_mock,
     ):
         tenant = SimpleNamespace(id=7, slug="demo")
         user = SimpleNamespace(id=11, email="owner@example.com", tenant=tenant)
@@ -105,12 +110,13 @@ class ResendActivationForEmailTests(SimpleTestCase):
         User.objects.filter.return_value = _make_user_qs(user)
         get_user_model_mock.return_value = User
 
-        # A used ActivationToken exists → already activated.
-        activation_token_mock.objects.filter.return_value.exists.return_value = True
+        # Account state says activated (signed in before / MFA enrolled).
+        account_is_activated_mock.return_value = True
 
         result = resend_activation_for_email("owner@example.com")
 
         self.assertIsNone(result)
+        account_is_activated_mock.assert_called_once_with(user)
         issue_activation_mock.assert_not_called()
 
     def test_blank_email_returns_none_without_query(self):

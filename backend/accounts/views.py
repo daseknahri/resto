@@ -21,7 +21,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import StaticHTMLRenderer
 
 from sales.audit import log_admin_action
-from sales.models import AdminAuditLog
+from sales.models import AdminAuditLog, user_has_confirmed_mfa
 from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerStaffForbidden
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -209,6 +209,15 @@ class ActivationView(APIView):
         serializer = ActivationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        # The MFA gate lives in LoginView only. An account with a confirmed TOTP
+        # device is already rejected by the serializer (account_is_activated), so
+        # this is defence in depth: never mint a session past a second factor —
+        # the password is set, the user signs in through LoginView (→ MFA).
+        if user_has_confirmed_mfa(user):
+            return Response(
+                {"detail": "Account activated. Please sign in.", "login_required": True, "user": None},
+                status=status.HTTP_200_OK,
+            )
         login(request, user)
         return Response({"detail": "Account activated", "user": serialize_user_session(user)}, status=status.HTTP_200_OK)
 
