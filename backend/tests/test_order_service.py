@@ -369,6 +369,19 @@ class PriceLineOptionsTests(SimpleTestCase):
             price_line_options(dish, [1, 2], {1: o1, 2: o2}, Decimal("10.00"))
         vogs.assert_called_once_with(dish, [1, 2])
 
+    def test_repeated_option_id_is_charged_once(self):
+        # A replayed/malformed [1, 1, 2] must price + snapshot option 1 ONCE, and hand the
+        # group-select check the deduped ids (the API never treats a repeat as a quantity).
+        dish = self._dish()
+        o1 = self._opt(1, "burger", "1.50", "cheese")
+        o2 = self._opt(2, "burger", "0.50", "bacon")
+        with patch("menu.views._validate_option_group_selections", return_value=None) as vogs:
+            price, snaps, err = price_line_options(dish, [1, 1, 2], {1: o1, 2: o2}, Decimal("10.00"))
+        self.assertIsNone(err)
+        self.assertEqual(price, Decimal("12.00"))
+        self.assertEqual([s["id"] for s in snaps], [1, 2])
+        vogs.assert_called_once_with(dish, [1, 2])
+
 
 class DepleteStockTests(SimpleTestCase):
     """RISK STRUCT-1 slice 3: deplete_stock — dish + component validate/decrement over the
