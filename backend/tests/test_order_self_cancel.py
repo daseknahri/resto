@@ -72,8 +72,15 @@ class CancelOrderTests(SimpleTestCase):
         req.tenant = MagicMock(id=7)
         return req
 
-    def _set(self, order):
+    def _set(self, order, locked=None):
+        """`order` is the UNLOCKED read at the top of post(); `locked` is the row re-read
+        under select_for_update (defaults to the same row, as in production when nothing
+        raced). The view re-checks cancellability on the LOCKED row, so it must be a real
+        row-shaped object here, not an auto-MagicMock."""
         self.m["orders"].filter.return_value.first.return_value = order
+        self.m["orders"].select_for_update.return_value.filter.return_value.first.return_value = (
+            order if locked is None else locked
+        )
 
     def test_unknown_order_404(self):
         self._set(None)
@@ -108,6 +115,49 @@ class CancelOrderTests(SimpleTestCase):
         self._set(_order(status="preparing"))
         resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
         self.assertEqual(resp.status_code, 409)
+
+    def test_order_advanced_to_preparing_under_the_lock_is_not_cancellable(self):
+        """Regression (TOCTOU, same class as the void/comp fix #442): the unlocked read says
+        PENDING (cancellable) but the owner advanced the order to PREPARING in the window
+        before the select_for_update lock. The cancellability gate must be re-checked on the
+        LOCKED row — refuse with 409 not_cancellable and touch nothing (no status flip, no
+        refund, no restock, no loyalty reversal, no broadcast/email)."""
+        for locked_status in (
+            Order.Status.PREPARING,
+            Order.Status.READY,
+            Order.Status.OUT_FOR_DELIVERY,
+        ):
+            with self.subTest(locked_status=locked_status):
+                for key in ("refund", "restock", "broadcast", "enqueue"):
+                    self.m[key].reset_mock()
+                order = _order(status="pending", fulfillment_type="pickup")
+                self._set(order, locked=_order(status=locked_status, fulfillment_type="pickup"))
+                with patch("django.db.transaction.set_rollback") as rollback, \
+                     patch("menu.views._reverse_loyalty_for_cancelled_order") as revloy:
+                    resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+                self.assertEqual(resp.status_code, 409)
+                self.assertEqual(resp.data["code"], "not_cancellable")
+                rollback.assert_called_once_with(True)
+                order.save.assert_not_called()
+                self.assertEqual(order.status, "pending")  # untouched
+                self.m["refund"].assert_not_called()
+                self.m["restock"].assert_not_called()
+                revloy.assert_not_called()
+                self.m["broadcast"].assert_not_called()
+                self.m["enqueue"].assert_not_called()
+
+    def test_peer_cancelled_under_the_lock_still_replays_idempotently(self):
+        """The new locked re-check must NOT turn the existing peer-cancel replay (double
+        tap / sweep racing the customer) into a 409: a row already CANCELLED under the lock
+        is the idempotent 200 path (keyed wallet credit replays; restock does not re-run)."""
+        order = _order(status="pending", fulfillment_type="pickup")
+        self._set(order, locked=_order(status=Order.Status.CANCELLED, fulfillment_type="pickup"))
+        with patch("django.db.transaction.set_rollback") as rollback:
+            resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp.status_code, 200)
+        rollback.assert_not_called()
+        self.m["refund"].assert_called_once()
+        self.m["restock"].assert_not_called()
 
     def test_pending_pickup_cancels_refunds_and_restocks(self):
         order = _order(status="pending", fulfillment_type="pickup")

@@ -279,3 +279,15 @@ class ClosureDateTests(SimpleTestCase):
             # No schedule → falls back to is_open
             result = _ser().get_is_open_now(_profile(is_open=True, schedule=None))
         self.assertTrue(result)
+
+    def test_closure_check_uses_the_tenant_local_date_not_server_utc(self):
+        """Regression: the closure date was looked up with timezone.localdate() (the
+        server/UTC calendar day), so for a non-UTC tenant it drifted from the restaurant's
+        own day. 23:30 UTC on 2025-05-05 is already 2025-05-06 08:30 in Tokyo — the lookup
+        must be for the 6th."""
+        instant = dt_module.datetime(2025, 5, 5, 23, 30, tzinfo=timezone.utc)
+        mock_cls = _no_closure()
+        with patch(_CLOSURE_DATE_PATH, mock_cls), \
+             patch("datetime.datetime", _tz_aware_mock_dt(instant)):
+            _ser().get_is_open_now(_profile(is_open=True, schedule=None, timezone="Asia/Tokyo"))
+        mock_cls.objects.filter.assert_called_once_with(date=dt_module.date(2025, 5, 6))

@@ -374,20 +374,17 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         # menu page agrees with the marketplace card on a temp-disabled restaurant.
         if getattr(obj, "is_menu_temporarily_disabled", False):
             return False
-        # Check if today is an explicit closure date (lazy import avoids circular dep).
-        try:
-            from menu.models import ClosureDate
-            from django.utils import timezone as _tz
-            if ClosureDate.objects.filter(date=_tz.localdate()).exists():
-                return False
-        except Exception:
-            pass
-        # Evaluate the schedule in the restaurant's OWN timezone (was UTC — the bug:
-        # schedule open/close strings are tenant-local wall-clock). None → no schedule
-        # configured → fall back to the manual is_open boolean.
-        from .openstate import schedule_open_now, tenant_local_now
+        # Evaluate in the restaurant's OWN timezone (was UTC — the bug: schedule
+        # open/close strings AND the closure-date calendar day are tenant-local, not
+        # server/UTC). Compute "now" once so the closure check and the window rule agree.
+        from .openstate import is_closure_date, schedule_open_now, tenant_local_now
+        now_local = tenant_local_now(obj)
+        # Is today (tenant-local) an explicit closure date? Shared single-source helper.
+        if is_closure_date(now_local.date()):
+            return False
+        # None → no schedule configured → fall back to the manual is_open boolean.
         schedule = getattr(obj, "business_hours_schedule", None)
-        result = schedule_open_now(schedule, tenant_local_now(obj))
+        result = schedule_open_now(schedule, now_local)
         return bool(obj.is_open) if result is None else result
 
     def _prep_eta(self, obj):

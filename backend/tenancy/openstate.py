@@ -15,12 +15,16 @@ The three callers intentionally differ ONLY in their extra guards layered around
 shared window rule:
   - listing card (accounts._compute_is_open_now): is_open + is_menu_temporarily_disabled
   - menu/meta page (tenancy.serializers.get_is_open_now): is_open + is_menu_temporarily_disabled
-                                                          + ClosureDate (serializer-only —
-                                                          the public listing runs in the
-                                                          public schema and skips it)
-  - order-acceptance gate (menu.views._is_restaurant_currently_open): neither, because a
-                                                                      separate 503 blocks ordering
-The WINDOW rule itself is now identical across all three.
+                                                          + ClosureDate (the public listing
+                                                          runs in the public schema and uses
+                                                          the denormalized Profile.closure_dates
+                                                          list instead)
+  - order-acceptance gate (menu.views._is_restaurant_currently_open): is_open + ClosureDate
+                                                                      (is_menu_temporarily_disabled
+                                                                      is NOT checked here — a
+                                                                      separate 503 blocks ordering)
+The WINDOW rule itself is now identical across all three, and the ClosureDate lookup used
+by the two tenant-schema callers (and by advance-order scheduling) is is_closure_date().
 """
 
 # Weekday index (datetime.weekday(): Mon=0 .. Sun=6) → schedule dict key.
@@ -58,6 +62,30 @@ def tenant_local_now(profile):
     """
     from datetime import datetime as _dt
     return _dt.now(tenant_timezone(profile))
+
+
+def is_closure_date(local_date):
+    """True iff *local_date* (a tenant-LOCAL ``datetime.date``) is an owner-declared
+    holiday / closure date (``menu.ClosureDate``) in the CURRENT tenant schema.
+
+    The SINGLE source of truth for the closure-date rule, shared by the menu-page
+    serializer (``is_open_now``), the cached ``/api/meta/`` recompute, the direct
+    order-acceptance gate (``menu.views._is_restaurant_currently_open``) and advance
+    scheduling (``menu.views._validate_scheduled_for``, which the marketplace order
+    flow reuses). Callers MUST pass a tenant-local date (``tenant_local_now(profile)
+    .date()`` — or the scheduled instant converted with ``tenant_timezone``), never
+    ``timezone.localdate()``, which is the server/UTC date and drifts from the
+    restaurant's own calendar day for any non-UTC tenant.
+
+    Must run inside the tenant's schema (``ClosureDate`` is a per-tenant table). The
+    import is lazy (tenancy is a SHARED app; menu is a tenant app) and any lookup
+    failure fails OPEN (``False``) so a closure-table hiccup never wedges ordering shut.
+    """
+    try:
+        from menu.models import ClosureDate
+        return ClosureDate.objects.filter(date=local_date).exists()
+    except Exception:
+        return False
 
 
 def schedule_open_now(schedule, now_local):

@@ -59,7 +59,7 @@ from accounts.permissions import IsCustomer, IsOrderOwner, customer_or_none
 from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
-from tenancy.openstate import schedule_open_now
+from tenancy.openstate import is_closure_date, schedule_open_now, tenant_timezone
 
 from django_tenants.utils import schema_context
 
@@ -234,10 +234,16 @@ def _is_restaurant_currently_open(profile) -> bool:
 
     Decision tree:
     1. ``is_open = False`` (manual closed toggle) → always closed.
-    2. A configured schedule (at least one enabled day) → schedule wins.
-    3. No schedule → rely on ``is_open`` boolean (True = open).
+    2. Today (tenant-local) is an owner-declared closure / holiday date → closed. The
+       customer UI already shows "closed" on such a day (ProfileSerializer.is_open_now),
+       so the server must refuse the order too — a stale tab / direct API call can't
+       place an ASAP order on a holiday.
+    3. A configured schedule (at least one enabled day) → schedule wins.
+    4. No schedule → rely on ``is_open`` boolean (True = open).
     """
     if profile.is_open is False:
+        return False
+    if is_closure_date(_profile_now(profile).date()):
         return False
     result = _schedule_open(profile)
     if result is not None:
@@ -371,6 +377,13 @@ def _validate_scheduled_for(profile, fulfillment_type, scheduled_for):
     if dt > now + timedelta(days=_SCHEDULE_MAX_AHEAD_DAYS):
         return None, "schedule_too_far"
     if not _within_business_hours(profile, dt):
+        return None, "schedule_closed"
+    # The weekly schedule says open — but an owner-declared closure / holiday on the
+    # requested tenant-LOCAL calendar day overrides it. Without this a "Schedule for
+    # later" order on a closure day (the very thing the closed storefront steers the
+    # customer to) would be accepted, prepaid, and released to the kitchen on the
+    # holiday. Shared by the direct and marketplace order flows (both call this).
+    if is_closure_date(dt.astimezone(tenant_timezone(profile)).date()):
         return None, "schedule_closed"
     return dt, None
 
@@ -4034,8 +4047,23 @@ class CustomerOrderCancelView(APIView):
             # credit is separately idempotent via its schema-namespaced key, so it safely
             # replays either way.) Falls back to the passed copy if the row vanished.
             _locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+            # Re-check cancellability UNDER the lock. The _customer_can_cancel gate above ran
+            # on the UNLOCKED row, so an owner advancing the order to PREPARING / READY /
+            # OUT_FOR_DELIVERY (food already being made) in the window before this lock would
+            # otherwise still be self-cancelled + refunded. A peer-CANCELLED row is NOT a
+            # failure here — it falls through to the idempotent replay below. Nothing has been
+            # written yet, so the rollback is a pure no-op safety net. Same TOCTOU class as the
+            # void/comp post-lock status re-check (#442).
+            _current = _locked or order
+            if _current.status != Order.Status.CANCELLED and not _customer_can_cancel(_current):
+                _tx.set_rollback(True)
+                return Response(
+                    {"detail": "This order can no longer be cancelled — please contact the restaurant.",
+                     "code": "not_cancellable"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             _newly_cancelled = False
-            if (_locked or order).status != Order.Status.CANCELLED:
+            if _current.status != Order.Status.CANCELLED:
                 order.status = Order.Status.CANCELLED
                 order.status_updated_at = timezone.now()
                 order.save(update_fields=["status", "status_updated_at", "updated_at"])

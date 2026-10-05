@@ -5682,6 +5682,17 @@ class MarketplaceOrderCancelView(APIView):
                     # CANCELLED and skips them. Mirrors refund_and_cancel_delivery_order
                     # (menu/views.py). Falls back to the pre-lock copy if the row vanished.
                     locked = _Order.objects.select_for_update().filter(pk=order.pk).first() or order
+                    # Re-check cancellability UNDER the lock: the _ccc gate above ran on the
+                    # UNLOCKED row, so an owner advancing the order to PREPARING (food already
+                    # being made) in the window before this lock would otherwise still be
+                    # self-cancelled + refunded. A peer-CANCELLED row is not a failure — it
+                    # falls through to the idempotent replay below. Nothing is written yet, so
+                    # the rollback is a no-op safety net. Same TOCTOU class as #442 / the
+                    # direct CustomerOrderCancelView.
+                    if locked.status != _Order.Status.CANCELLED and not _ccc(locked):
+                        _dbtx.set_rollback(True)
+                        return Response({"detail": "This order can no longer be cancelled.", "code": "cancel_too_late"},
+                                        status=status.HTTP_409_CONFLICT)
                     newly_cancelled = locked.status != _Order.Status.CANCELLED
                     if newly_cancelled:
                         locked.status = _Order.Status.CANCELLED

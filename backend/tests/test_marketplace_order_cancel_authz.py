@@ -86,6 +86,92 @@ class MarketplaceOrderCancelAuthzTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "not_owner")
 
 
+class MarketplaceOrderCancelLockedRecheckTests(SimpleTestCase):
+    """Regression (TOCTOU, same class as the void/comp fix #442): cancellability is gated on
+    the UNLOCKED row, so an owner advancing the order to PREPARING in the window before the
+    select_for_update lock must NOT be cancelled + refunded. The REAL _customer_can_cancel is
+    exercised (deliberately not patched) against the LOCKED row."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # MarketplaceOrderStatusThrottle counts per-actor
+        self.factory = APIRequestFactory()
+        self.view = MarketplaceOrderCancelView.as_view()
+
+    def _cancel(self, *, pre_status, locked_status):
+        customer = Customer(id=42)
+        order = MagicMock()
+        order.customer_id = 42  # == customer.id → IsOrderOwner passes
+        order.status = pre_status  # the UNLOCKED read at the top of post()
+        order.fulfillment_type = Order.FulfillmentType.PICKUP
+        locked = MagicMock()
+        locked.status = locked_status  # the row re-read UNDER select_for_update
+        locked.fulfillment_type = Order.FulfillmentType.PICKUP
+
+        req = self.factory.post(
+            "/api/marketplace/order/ORD-1/cancel/", {"restaurant": "tacos"}, format="json"
+        )
+        req.session = {"customer_id": 42}
+        force_authenticate(req, user=customer)
+
+        tenant = SimpleNamespace(id=7, schema_name="tacos", slug="tacos")
+        Tenant = MagicMock()
+        Tenant.objects.get.return_value = tenant
+        OrderObjs = MagicMock()
+        OrderObjs.filter.return_value.first.return_value = order
+        (OrderObjs.select_for_update.return_value
+            .filter.return_value.first.return_value) = locked
+
+        with patch("tenancy.models.Tenant", Tenant), \
+             patch("menu.models.Order.objects", OrderObjs), \
+             patch("django_tenants.utils.schema_context", return_value=_noop_cm()), \
+             patch("django.db.transaction.atomic", return_value=_noop_cm()), \
+             patch("django.db.transaction.set_rollback") as rollback, \
+             patch("menu.views._refund_wallet_for_cancelled_order") as refund, \
+             patch("menu.views._reverse_loyalty_for_cancelled_order") as revloy, \
+             patch("menu.views._restock_cancelled_order") as restock, \
+             patch("menu.views._broadcast_order_change") as broadcast, \
+             patch("accounts.delivery_service.cancel_delivery_job_for_order") as cancel_job:
+            resp = self.view(req, order_number="ORD-1")
+        return SimpleNamespace(
+            resp=resp, rollback=rollback, refund=refund, revloy=revloy, restock=restock,
+            broadcast=broadcast, cancel_job=cancel_job, locked=locked,
+        )
+
+    def test_order_advanced_to_preparing_under_the_lock_is_refused(self):
+        for locked_status in (
+            Order.Status.PREPARING,
+            Order.Status.READY,
+            Order.Status.OUT_FOR_DELIVERY,
+        ):
+            with self.subTest(locked_status=locked_status):
+                r = self._cancel(pre_status=Order.Status.PENDING, locked_status=locked_status)
+                self.assertEqual(r.resp.status_code, 409)
+                self.assertEqual(r.resp.data["code"], "cancel_too_late")
+                r.rollback.assert_called_once_with(True)
+                self.assertEqual(r.locked.status, locked_status)  # never flipped to CANCELLED
+                r.refund.assert_not_called()
+                r.revloy.assert_not_called()
+                r.restock.assert_not_called()
+                r.broadcast.assert_not_called()
+                r.cancel_job.assert_not_called()
+
+    def test_still_cancellable_under_the_lock_proceeds(self):
+        r = self._cancel(pre_status=Order.Status.PENDING, locked_status=Order.Status.CONFIRMED)
+        self.assertEqual(r.resp.status_code, 200)
+        r.rollback.assert_not_called()
+        self.assertEqual(r.locked.status, Order.Status.CANCELLED)
+        r.refund.assert_called_once()
+        r.restock.assert_called_once()
+
+    def test_peer_cancelled_under_the_lock_is_the_idempotent_replay_not_a_409(self):
+        r = self._cancel(pre_status=Order.Status.PENDING, locked_status=Order.Status.CANCELLED)
+        self.assertEqual(r.resp.status_code, 200)
+        r.rollback.assert_not_called()
+        r.refund.assert_called_once()   # keyed wallet credit replays
+        r.restock.assert_not_called()   # non-idempotent helper does NOT re-run
+
+
 class MarketplaceOrderCancelRefundTenantScopingTests(SimpleTestCase):
     """Regression: the marketplace cancel path must forward the OWNING tenant's id to the
     wallet-refund helper.
