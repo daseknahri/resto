@@ -9,7 +9,10 @@ know their order is coming up soon.
 
 Because the transition window is checked against ``predispatch_reminder_sent_at IS NULL``
 and the field is stamped on first send, this is naturally idempotent: a missed run
-broadens the window; a duplicate run skips already-stamped orders.
+broadens the window; a duplicate run skips already-stamped orders. The stamp is a
+conditional UPDATE taken BEFORE the push (claim-then-send), so two OVERLAPPING runs
+cannot both nudge the same customer. Trade-off: a crash between the claim and the
+push drops that one reminder.
 
 Cron (Coolify / crontab) — every 15 minutes:
     */15 * * * * cd /app && python manage.py send_predispatch_reminders >> /var/log/predispatch_reminders.log 2>&1
@@ -98,6 +101,20 @@ class Command(BaseCommand):
                         if dry_run:
                             continue
 
+                        # Claim the order atomically BEFORE pushing: a conditional
+                        # UPDATE ... WHERE predispatch_reminder_sent_at IS NULL succeeds
+                        # for exactly one of any overlapping runs, so the customer is
+                        # never double-nudged. The stamp is kept regardless of delivery
+                        # (at-most-once). .update() skips auto_now, so updated_at is
+                        # bumped explicitly (staff delta-poll keys on it).
+                        claimed_at = timezone.now()
+                        claimed = Order.objects.filter(
+                            pk=order.pk, predispatch_reminder_sent_at__isnull=True,
+                        ).update(predispatch_reminder_sent_at=claimed_at, updated_at=claimed_at)
+                        if not claimed:
+                            self.stdout.write("    skipped — already reminded by another run")
+                            continue
+
                         try:
                             sent = send_predispatch_reminder_sync(
                                 order.customer_id,
@@ -110,11 +127,6 @@ class Command(BaseCommand):
                                 "predispatch push failed for order %s (tenant %s)",
                                 order.order_number, tenant.slug,
                             )
-
-                        # Stamp regardless of delivery so we never double-nudge
-                        # this order on the next run.
-                        order.predispatch_reminder_sent_at = timezone.now()
-                        order.save(update_fields=["predispatch_reminder_sent_at", "updated_at"])
                         total_processed += 1
             except Exception:
                 logger.exception("send_predispatch_reminders: error processing tenant %s", tenant.slug)

@@ -13,7 +13,9 @@ deep-linking to OwnerOrders filtered to that order (``?q=order_number``).
 Idempotency: each order is stamped with ``Order.sla_notified_at`` on first
 escalation and the query excludes already-stamped rows, so every stale order
 escalates at most once. A missed run simply widens the lookback; a duplicate run
-skips already-stamped orders.
+skips already-stamped orders. The stamp is a conditional UPDATE taken BEFORE the
+push (claim-then-send), so two OVERLAPPING runs cannot both push the same order.
+Trade-off: a crash between the claim and the push drops that one notification.
 
 Cron (Coolify / crontab) — every 3 minutes:
     */3 * * * * cd /app && python manage.py escalate_stale_pending_orders >> /var/log/escalate_stale_pending_orders.log 2>&1
@@ -108,6 +110,21 @@ class Command(BaseCommand):
                         if dry_run:
                             continue
 
+                        # Claim the order atomically BEFORE pushing: a conditional
+                        # UPDATE ... WHERE sla_notified_at IS NULL succeeds for exactly
+                        # one of any overlapping runs (two schedulers, Beat + a manual
+                        # run), so the owner is never double-pushed. The stamp is also
+                        # kept regardless of push outcome, so a failed push is not
+                        # retried (at-most-once). .update() skips auto_now, so
+                        # updated_at is bumped explicitly (staff delta-poll keys on it).
+                        claimed_at = timezone.now()
+                        claimed = Order.objects.filter(
+                            pk=order.pk, sla_notified_at__isnull=True,
+                        ).update(sla_notified_at=claimed_at, updated_at=claimed_at)
+                        if not claimed:
+                            self.stdout.write("    skipped — already escalated by another run")
+                            continue
+
                         try:
                             push_sla_escalation(
                                 schema_name=tenant.schema_name,
@@ -119,11 +136,6 @@ class Command(BaseCommand):
                                 "sla escalation push failed for order %s (tenant %s)",
                                 order.order_number, tenant.slug,
                             )
-
-                        # Stamp regardless of push outcome so we never double-escalate
-                        # this order on the next run.
-                        order.sla_notified_at = timezone.now()
-                        order.save(update_fields=["sla_notified_at", "updated_at"])
                         total_escalated += 1
             except Exception:
                 logger.exception(
