@@ -14,33 +14,6 @@
 # NEVER add entries without justification; never add wildcards or ecosystem-
 # wide ignores.  The goal is zero entries here through timely patching.
 
-# ── Deferred: brace-expansion OOM DoS — dev/build tooling only ────────────────
-# Present only in the frontend build/lint/test toolchain (eslint, glob,
-# minimatch, workbox-build, vitest js-beautify) — NEVER in the shipped bundle,
-# and it only ever expands our own source globs, never untrusted input. Fixed
-# only in brace-expansion 5.0.8, whose named-export shape breaks eslint's
-# minimatch 3.x ("expand is not a function"); npm's only alternative is a major
-# eslint downgrade — so there is no in-range fix. Accepted 2026-07-28; revisit
-# when the eslint/minimatch chain ships a patched brace-expansion in range.
-# Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs (kept in lockstep).
-CVE-2026-14257       # brace-expansion <=5.0.7 unbounded-expansion OOM DoS
-GHSA-mh99-v99m-4gvg  # same advisory — GitHub Advisory DB id Trivy uses for npm
-# Follow-up brace-expansion DoS (unbounded intermediate arrays) that bypasses the 5.0.8
-# mitigation — same dev-only package + usage, still no in-range fix (any patched version
-# breaks eslint's minimatch 3.x, and eslint 9 is peer-capped by eslint-plugin-vue 9.29.0).
-# Accepted 2026-08-03; revisit when the eslint/minimatch chain ships a patched range.
-GHSA-rgw5-rvv9-x895  # brace-expansion unbounded-intermediate-array DoS (npm audit id)
-
-# ── Deferred: js-yaml quadratic-CPU DoS — dev/build tooling only ──────────────
-# js-yaml 4.3.0 is dev-only (dev:true), pulled solely by @eslint/eslintrc (eslint's
-# config loader) to parse our own eslint config — NEVER in the shipped bundle and
-# never fed untrusted input, so the !!omap quadratic-CPU DoS is unreachable at runtime.
-# No in-range fix: CVE-2026-59870 is not backported to js-yaml 4.x, and @eslint/eslintrc
-# caps js-yaml at ^4.1.1. Accepted 2026-08-07; revisit when the eslint config chain ships
-# a patched js-yaml in range. Mirror of the ALLOWLIST in frontend/scripts/audit-gate.mjs.
-CVE-2026-59870       # js-yaml <=4.x !!omap quadratic-CPU DoS
-GHSA-5p4m-2wfm-xmqj  # same advisory — GitHub Advisory DB id Trivy uses for npm
-
 # braces stack-exhaustion DoS (<=3.0.3, no patched release exists). dev/build-tooling
 # only — chokidar + micromatch under tailwindcss 3.4 (devDependency) expanding our own
 # content globs; never shipped, never fed untrusted input. Fix = tailwind 4 major (#154).
