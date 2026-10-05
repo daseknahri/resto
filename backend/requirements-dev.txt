@@ -5,5 +5,5 @@
 # Pinned to the versions used locally.
 pytest==9.1.1
 pytest-django==4.14.0
-pytz==2026.3.post1
-pypdf==6.16.2
+pytz==2026.4
+pypdf==6.19.0
