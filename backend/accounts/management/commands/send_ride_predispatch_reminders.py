@@ -3,7 +3,10 @@
 Runs every 15 min via Celery Beat (same cadence as the food-order equivalent).
 
 Window: `scheduled_for` between now+WINDOW_MIN_MINUTES and now+WINDOW_MAX_MINUTES,
-with `predispatch_reminder_sent_at IS NULL` as the idempotency guard.
+with `predispatch_reminder_sent_at IS NULL` as the idempotency guard. The stamp is a
+conditional UPDATE taken BEFORE the push (claim-then-send), so two OVERLAPPING runs
+cannot both nudge the same rider. Trade-off: a crash between the claim and the push
+drops that one reminder.
 
     python manage.py send_ride_predispatch_reminders
     python manage.py send_ride_predispatch_reminders --dry-run
@@ -57,13 +60,26 @@ class Command(BaseCommand):
                 )
 
                 if not dry_run:
+                    # Claim the ride atomically BEFORE pushing: a conditional
+                    # UPDATE ... WHERE predispatch_reminder_sent_at IS NULL succeeds for
+                    # exactly one of any overlapping runs (two schedulers, Beat + a manual
+                    # run), so the rider is never double-nudged. The stamp is kept even
+                    # on push failure (at-most-once) to prevent retrying a broken sub
+                    # loop. RideRequest has no auto_now field, so only the stamp is written.
+                    claimed = RideRequest.objects.filter(
+                        pk=ride.pk, predispatch_reminder_sent_at__isnull=True,
+                    ).update(predispatch_reminder_sent_at=now)
+                    if not claimed:
+                        self.stdout.write(
+                            f"[send_ride_predispatch_reminders] ride {ride.id} "
+                            f"skipped - already reminded by another run"
+                        )
+                        continue
+
                     try:
                         send_ride_predispatch_reminder_sync(ride.rider_id, kind, minutes)
                     except Exception:
                         pass
-                    # Stamp even on push failure to prevent retrying a broken sub loop.
-                    ride.predispatch_reminder_sent_at = now
-                    ride.save(update_fields=["predispatch_reminder_sent_at"])
                     sent_count += 1
 
         self.stdout.write(

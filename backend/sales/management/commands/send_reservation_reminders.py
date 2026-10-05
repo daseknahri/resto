@@ -4,8 +4,10 @@ Management command: send_reservation_reminders
 Designed to run on a cron schedule (every hour is sufficient).
 Finds all confirmed (WON) reservations with `booked_for` in the
 1.5 – 2.5 hour window from now whose reminder has not been sent yet,
-then sends each customer an email (and an SMS when Twilio is configured)
-and stamps `Lead.reminder_sent_at`.
+then sends each customer an email (and an SMS when Twilio is configured).
+`Lead.reminder_sent_at` is claimed with a conditional UPDATE BEFORE sending
+(claim-then-send), so two overlapping runs cannot both email/SMS the same lead.
+Trade-off: a crash between the claim and the send drops that one reminder.
 
 Usage:
     python manage.py send_reservation_reminders
@@ -210,22 +212,34 @@ class Command(BaseCommand):
                     total_skipped += 1
                     continue
 
+                # Claim the lead atomically BEFORE sending: a conditional
+                # UPDATE ... WHERE reminder_sent_at IS NULL succeeds for exactly one
+                # of any overlapping runs, so the customer never gets a duplicate
+                # email/SMS (SMS costs real money). The stamp was already applied
+                # regardless of delivery outcome (a lead with no contact info or a
+                # failed channel is not retried), so claiming first changes no retry
+                # semantics. .update() skips auto_now, so updated_at is set explicitly.
+                claimed_at = timezone.now()
+                claimed = Lead.objects.filter(
+                    pk=lead.pk, reminder_sent_at__isnull=True,
+                ).update(reminder_sent_at=claimed_at, updated_at=claimed_at)
+                if not claimed:
+                    total_skipped += 1
+                    self.stdout.write(self.style.WARNING("    skipped — already reminded by another run"))
+                    continue
+
                 email_ok = _send_reminder_email(lead, tenant_name)
                 sms_ok = _send_reminder_sms(lead, tenant_name)
 
                 if email_ok or sms_ok:
-                    lead.reminder_sent_at = timezone.now()
-                    lead.save(update_fields=["reminder_sent_at", "updated_at"])
                     total_sent += 1
                     channels = ", ".join(
                         ch for ch, ok in [("email", email_ok), ("SMS", sms_ok)] if ok
                     )
                     self.stdout.write(self.style.SUCCESS(f"    sent via {channels}"))
                 else:
-                    # No contact details or all channels failed — still stamp
-                    # so we don't retry on the next run for a lead with no contact info.
-                    lead.reminder_sent_at = timezone.now()
-                    lead.save(update_fields=["reminder_sent_at", "updated_at"])
+                    # No contact details or all channels failed — the lead stays
+                    # stamped (claimed above) so we don't retry on the next run.
                     total_skipped += 1
                     self.stdout.write(self.style.WARNING("    no channel sent (no contact info or all failed)"))
 

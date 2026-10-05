@@ -177,8 +177,18 @@ class TestSendPredispatchRemindersCommand(SimpleTestCase):
         o.scheduled_for = timezone.now() + timedelta(minutes=minutes_ahead)
         return o
 
-    def test_dry_run_does_not_save(self):
-        """--dry-run prints orders but never calls order.save()."""
+    def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders, claim=1):
+        mock_t.objects.filter.return_value.exclude.return_value = [tenant]
+        mock_ctx.return_value.__enter__ = lambda s: s
+        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        mock_order_cls.Status.SCHEDULED = "scheduled"
+        mock_order_cls.objects.filter.return_value.only.return_value = orders
+        # The atomic claim: Order.objects.filter(pk=..., predispatch_reminder_sent_at__isnull=True)
+        # .update(...) returns the rows it won (1 = we own the reminder, 0 = lost the race).
+        mock_order_cls.objects.filter.return_value.update.return_value = claim
+
+    def test_dry_run_does_not_claim(self):
+        """--dry-run prints orders but never claims (updates) or pushes."""
         tenant = self._make_tenant()
         order = self._make_order()
 
@@ -186,44 +196,76 @@ class TestSendPredispatchRemindersCommand(SimpleTestCase):
              patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
              patch("menu.models.Order") as mock_order_cls, \
              patch("accounts.push.send_predispatch_reminder_sync") as mock_push:
-
-            mock_t.objects.filter.return_value.exclude.return_value = [tenant]
-            mock_ctx.return_value.__enter__ = lambda s: s
-            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_order_cls.Status.SCHEDULED = "scheduled"
-            mock_order_cls.objects.filter.return_value.only.return_value = [order]
-
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             output = self._run_command(dry_run=True)
 
-        order.save.assert_not_called()
+        mock_order_cls.objects.filter.return_value.update.assert_not_called()
         mock_push.assert_not_called()
         self.assertIn("DRY RUN", output)
 
-    def test_stamps_predispatch_reminder_sent_at(self):
-        """On a real run, saves predispatch_reminder_sent_at on each eligible order."""
+    def test_claims_predispatch_reminder_sent_at(self):
+        """On a real run, claims predispatch_reminder_sent_at (conditional UPDATE) then pushes."""
         tenant = self._make_tenant()
         order = self._make_order()
 
         with patch("menu.management.commands.send_predispatch_reminders.Tenant") as mock_t, \
              patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
              patch("menu.models.Order") as mock_order_cls, \
-             patch("accounts.push.send_predispatch_reminder_sync", return_value=1):
-
-            mock_t.objects.filter.return_value.exclude.return_value = [tenant]
-            mock_ctx.return_value.__enter__ = lambda s: s
-            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_order_cls.Status.SCHEDULED = "scheduled"
-            mock_order_cls.objects.filter.return_value.only.return_value = [order]
-
+             patch("accounts.push.send_predispatch_reminder_sync", return_value=1) as mock_push:
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             self._run_command()
 
-        order.save.assert_called_once()
-        update_fields = order.save.call_args.kwargs.get("update_fields", [])
-        self.assertIn("predispatch_reminder_sent_at", update_fields)
-        self.assertIsNotNone(order.predispatch_reminder_sent_at)
+        # Conditional UPDATE scoped to this pk AND still-unstamped (not a blind save);
+        # stamps predispatch_reminder_sent_at + updated_at (update() skips auto_now).
+        order.save.assert_not_called()
+        self.assertEqual(
+            mock_order_cls.objects.filter.call_args.kwargs,
+            {"pk": order.pk, "predispatch_reminder_sent_at__isnull": True},
+        )
+        claim_update = mock_order_cls.objects.filter.return_value.update
+        claim_update.assert_called_once()
+        self.assertEqual(
+            set(claim_update.call_args.kwargs), {"predispatch_reminder_sent_at", "updated_at"}
+        )
+        self.assertIsNotNone(claim_update.call_args.kwargs["predispatch_reminder_sent_at"])
+        mock_push.assert_called_once()
+
+    def test_lost_claim_skips_push(self):
+        """Another overlapping run already claimed the order (update() -> 0): no duplicate push."""
+        tenant = self._make_tenant()
+        order = self._make_order()
+
+        with patch("menu.management.commands.send_predispatch_reminders.Tenant") as mock_t, \
+             patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("accounts.push.send_predispatch_reminder_sync") as mock_push:
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order], claim=0)
+            output = self._run_command()
+
+        mock_order_cls.objects.filter.return_value.update.assert_called_once()
+        mock_push.assert_not_called()
+        self.assertIn("already reminded", output)
+        self.assertIn("0 order(s)", output)
+
+    def test_overlapping_runs_push_once(self):
+        """Two runs see the same eligible order; only the first claim wins, so one push total."""
+        tenant = self._make_tenant()
+        order = self._make_order()
+
+        with patch("menu.management.commands.send_predispatch_reminders.Tenant") as mock_t, \
+             patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("accounts.push.send_predispatch_reminder_sync", return_value=1) as mock_push:
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
+            # First run wins the row; the second (overlapping) run finds it already stamped.
+            mock_order_cls.objects.filter.return_value.update.side_effect = [1, 0]
+            self._run_command()
+            self._run_command()
+
+        self.assertEqual(mock_push.call_count, 1)
 
     def test_push_exception_still_stamps(self):
-        """If push raises, the command still stamps predispatch_reminder_sent_at."""
+        """If push raises, the claim (stamp) was already taken, so it is not retried."""
         tenant = self._make_tenant()
         order = self._make_order()
 
@@ -231,16 +273,10 @@ class TestSendPredispatchRemindersCommand(SimpleTestCase):
              patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
              patch("menu.models.Order") as mock_order_cls, \
              patch("accounts.push.send_predispatch_reminder_sync", side_effect=RuntimeError("boom")):
-
-            mock_t.objects.filter.return_value.exclude.return_value = [tenant]
-            mock_ctx.return_value.__enter__ = lambda s: s
-            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_order_cls.Status.SCHEDULED = "scheduled"
-            mock_order_cls.objects.filter.return_value.only.return_value = [order]
-
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             self._run_command()  # must not raise
 
-        order.save.assert_called_once()
+        mock_order_cls.objects.filter.return_value.update.assert_called_once()
 
     def test_no_tenants_exits_cleanly(self):
         with patch("menu.management.commands.send_predispatch_reminders.Tenant") as mock_t:
@@ -257,13 +293,7 @@ class TestSendPredispatchRemindersCommand(SimpleTestCase):
              patch("menu.management.commands.send_predispatch_reminders.schema_context") as mock_ctx, \
              patch("menu.models.Order") as mock_order_cls, \
              patch("accounts.push.send_predispatch_reminder_sync", return_value=1):
-
-            mock_t.objects.filter.return_value.exclude.return_value = [tenant]
-            mock_ctx.return_value.__enter__ = lambda s: s
-            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_order_cls.Status.SCHEDULED = "scheduled"
-            mock_order_cls.objects.filter.return_value.only.return_value = [order]
-
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             output = self._run_command()
 
         self.assertIn("ORD-XYZ", output)
