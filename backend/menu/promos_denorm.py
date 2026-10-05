@@ -80,7 +80,10 @@ def recompute_tenant_promos(tenant) -> None:
             promos = [
                 _serialize_promo(p)
                 for p in Promotion.objects
-                    .filter(is_active=True)
+                    # code="": a code-protected promo is redeemable only by customers who
+                    # enter the code, so it must never be advertised as a public badge
+                    # (mirrors the direct checkout's auto-apply set).
+                    .filter(is_active=True, code="")
                     .filter(Q(max_uses__isnull=True) | Q(use_count__lt=F("max_uses")))
                     .order_by("-discount_value")[:5]
             ]

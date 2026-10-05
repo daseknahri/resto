@@ -270,6 +270,59 @@ class RecomputeTenantPromosTests(SimpleTestCase):
         self.assertIn("20.00", discounts)
         self.assertNotIn("10.00", discounts)
 
+    def test_code_protected_promo_is_never_badged(self):
+        """Regression: a promo with a redemption code is only for customers who enter it, so
+        the public marketplace badge must exclude it (it used to advertise private codes)."""
+        from menu import promos_denorm as mod
+        import sys
+
+        public = self._promo_model(discount_value="10.00")
+        public.code = ""
+        public.max_uses = None
+        private = self._promo_model(discount_value="50.00")
+        private.code = "VIP50"
+        private.max_uses = None
+        all_promos = [private, public]
+
+        class _FakeQS(list):
+            def filter(self, *args, **kwargs):
+                if "is_active" in kwargs:
+                    items = list(all_promos)
+                    if "code" in kwargs:
+                        items = [p for p in items if p.code == kwargs["code"]]
+                    return _FakeQS(items)
+                return _FakeQS(list(self))  # cap Q: none capped here
+            def order_by(self, *a, **k):
+                return self
+            def __getitem__(self, k):
+                return list.__getitem__(self, k) if isinstance(k, int) else _FakeQS(list.__getitem__(self, k))
+
+        mock_promotion = MagicMock()
+        mock_promotion.objects = _FakeQS()
+        mock_profile = MagicMock()
+
+        @contextmanager
+        def _sc(*a, **k):
+            yield
+
+        fake_menu_models = MagicMock()
+        fake_menu_models.Promotion = mock_promotion
+        original = sys.modules.get("menu.models")
+        sys.modules["menu.models"] = fake_menu_models
+        try:
+            with patch("django_tenants.utils.schema_context", _sc),                     patch("tenancy.models.Profile", mock_profile),                     patch("accounts.views._bust_public_list_cache"):
+                mod.recompute_tenant_promos(_tenant())
+        finally:
+            if original is None:
+                sys.modules.pop("menu.models", None)
+            else:
+                sys.modules["menu.models"] = original
+
+        promos = mock_profile.objects.filter.return_value.update.call_args.kwargs["marketplace_promos"]
+        discounts = [e["discount_value"] for e in promos]
+        self.assertEqual(discounts, ["10.00"])
+        self.assertNotIn("50.00", discounts)
+
     def test_null_dates_serialize_to_none(self):
         promo = self._promo_model(active_from=None, active_until=None)
         mock_profile, _, _ = self._run([promo])

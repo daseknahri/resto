@@ -4783,7 +4783,11 @@ class MarketplacePlaceOrderView(APIView):
                     _promo_now_local = _promo_dt.now(_PromoZI("UTC"))
                 _best_promo = None
                 _promo_discount = Decimal("0")
-                for _p in _Promo.objects.filter(is_active=True).order_by("-discount_value"):
+                # code="": the marketplace has no promo-code entry, so it may only AUTO-apply
+                # code-less promotions — exactly like the direct checkout. Without this, a
+                # private code (e.g. "VIP50") was silently applied to EVERY marketplace order
+                # and burned its use_count.
+                for _p in _Promo.objects.filter(is_active=True, code="").order_by("-discount_value"):
                     if _p.max_uses is not None and _p.use_count >= _p.max_uses:
                         continue
                     if Decimal(str(_p.min_order_amount or "0")) > food_subtotal:
