@@ -1,6 +1,11 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
-import { checkoutSnapshot, keyForCheckoutSnapshot } from "../lib/checkoutIdempotency";
+import {
+  afterFailedCheckout,
+  checkoutSnapshot,
+  isSameSnapshot,
+  keyForCheckoutSnapshot,
+} from "../lib/checkoutIdempotency";
 
 export const useOrderStore = defineStore("order", {
   state: () => ({
@@ -9,8 +14,8 @@ export const useOrderStore = defineStore("order", {
     placing: false,
     placeError: null,
     placeFieldErrors: {},
-    // Idempotency key of the retryable checkout attempt, tied to the cart snapshot it was
-    // minted for: { key, fingerprint } (null between attempts). See lib/checkoutIdempotency.
+    // Idempotency state of the retryable checkout attempt: { key, fingerprint, outcomeUnknown }
+    // (null between orders). See lib/checkoutIdempotency.
     _checkoutIdem: null,
 
     // Owner order list — ACTIVE (hot poll path, ?mode=active, no pagination)
@@ -50,18 +55,23 @@ export const useOrderStore = defineStore("order", {
     // -------------------------------------------------------
     // Customer: place order
     // -------------------------------------------------------
-    // Idempotency: a retry of the SAME cart (e.g. a timeout-then-resubmit) reuses the key, so
-    // the backend replays the existing order instead of double-charging the wallet. Any change
-    // to what is being ordered mints a new key — otherwise the server would replay the order
-    // placed for the old cart as if it were the edited one (L14). A response with
-    // `idempotent_replay: true` is returned as-is for the caller to present honestly. Reset
-    // after a confirmed success so the next order mints a fresh key.
+    // Idempotency (lib/checkoutIdempotency, L14): a retry of the SAME cart reuses the key, so
+    // the backend replays the existing order instead of double-charging the wallet. After an
+    // attempt with an UNKNOWN outcome (no response / 5xx) the key is kept even if the cart was
+    // edited — that attempt may have placed and charged an order. Only after definitive 4xx
+    // rejections does an edited cart get a new key. Reset after a confirmed success.
+    //
+    // The returned data carries `replayed_previous_cart: true` when the server replayed an
+    // order placed for an EARLIER version of the cart (a lost success, then an edit): that
+    // order does not contain the later edits, and the caller must say so.
     async placeOrder(payload) {
       this.placing = true;
       this.placeError = null;
       this.placeFieldErrors = {};
       this.placedOrderNumber = null;
-      this._checkoutIdem = keyForCheckoutSnapshot(this._checkoutIdem, checkoutSnapshot(payload));
+      const snapshot = checkoutSnapshot(payload);
+      this._checkoutIdem = keyForCheckoutSnapshot(this._checkoutIdem, snapshot);
+      const sameCart = isSameSnapshot(this._checkoutIdem, snapshot);
       try {
         const res = await api.post("/place-order/", {
           ...payload,
@@ -69,8 +79,12 @@ export const useOrderStore = defineStore("order", {
         });
         this.placedOrderNumber = res.data.order_number;
         this._checkoutIdem = null;
-        return res.data;
+        return {
+          ...res.data,
+          replayed_previous_cart: res.data?.idempotent_replay === true && !sameCart,
+        };
       } catch (err) {
+        this._checkoutIdem = afterFailedCheckout(this._checkoutIdem, err);
         const data = err?.response?.data || {};
         if (typeof data === "object" && !data.detail) {
           this.placeFieldErrors = data;

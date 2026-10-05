@@ -5668,6 +5668,7 @@ cartPage_order: {
   placeOrderError: "Could not place order. Please try again.",
   placeOrderSuccess: "Order placed!",
   orderAlreadyPlaced: "This order had already gone through — here it is.",
+  orderAlreadyPlacedEditsKept: "Your earlier order had already gone through — here it is. Your later changes weren't added to it; they're still in your cart.",
   switchToInApp: "Order in-app",
   switchToWhatsapp: "Order via WhatsApp"
 },

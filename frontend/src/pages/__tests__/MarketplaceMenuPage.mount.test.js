@@ -506,20 +506,40 @@ describe("MarketplaceMenuPage — checkout retry idempotency (L14)", () => {
   const sentKey = (call) => api.post.mock.calls[call][1].idempotency_key;
   const lostResponse = () => api.post.mockRejectedValueOnce(new Error("Network Error"));
 
-  it("retries the same cart with the same key, but an edited cart with a new one", async () => {
+  it("after a lost response, even an EDITED cart keeps the key — the lost attempt may have charged", async () => {
     const wrapper = await mountSignedInPickup();
+    const show = vi.spyOn(useToastStore(), "show");
     lostResponse();
     await wrapper.vm.placeOrder();
     lostResponse();
     await wrapper.vm.placeOrder(); // unchanged cart → same key (server would replay)
     wrapper.vm.cart[0].qty = 2;
     await flushPromises();
-    api.post.mockResolvedValueOnce({ data: { order_number: "A2" } });
-    await wrapper.vm.placeOrder(); // edited cart → must NOT be answered with the old order
+    // The lost attempt had placed the 1-burger order: the server replays it.
+    api.post.mockResolvedValueOnce({ data: { order_number: "A1", idempotent_replay: true } });
+    await wrapper.vm.placeOrder();
     await flushPromises();
 
     expect(sentKey(1)).toBe(sentKey(0));
-    expect(sentKey(2)).not.toBe(sentKey(0));
+    expect(sentKey(2)).toBe(sentKey(0)); // no second order / charge
+    // Honest: that order lacks the edit — say so, and keep the edited cart.
+    expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlacedEditsKept", "warning", 9000);
+    expect(show).not.toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
+    expect(wrapper.vm.cart).toHaveLength(1);
+    expect(wrapper.vm.cart[0].qty).toBe(2);
+  });
+
+  it("after a definitive 4xx rejection, an edited cart gets a new key", async () => {
+    const wrapper = await mountSignedInPickup();
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { code: "stale_options" } } });
+    await wrapper.vm.placeOrder();
+    wrapper.vm.cart[0].qty = 2;
+    await flushPromises();
+    api.post.mockResolvedValueOnce({ data: { order_number: "A2" } });
+    await wrapper.vm.placeOrder();
+    await flushPromises();
+
+    expect(sentKey(1)).not.toBe(sentKey(0));
   });
 
   it("says a replayed order had already gone through", async () => {

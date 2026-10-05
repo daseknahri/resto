@@ -2409,14 +2409,26 @@ const placeInAppOrder = async () => {
       },
     });
     const result = await order.placeOrder(buildPayload());
-    // idempotent_replay: an earlier attempt for this exact cart (whose response was lost)
-    // had already placed the order. The key is per cart snapshot, so it IS this cart's order
-    // — but don't announce a new one: say it had already gone through.
+    // idempotent_replay: an earlier attempt (whose response was lost) had already placed the
+    // order — don't announce a new one, say it had already gone through.
     const replayed = result?.idempotent_replay === true;
     // The order spent wallet balance and earned/redeemed loyalty points server-side —
     // force-refresh the customer (fire-and-forget) so the next screen (order status,
     // account, next checkout) never shows the stale pre-order balance.
     if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
+    if (result?.replayed_previous_cart === true) {
+      // The lost attempt was for an EARLIER version of this cart, and the key was kept (its
+      // outcome was unknown) so it couldn't be charged twice. That order is the one that
+      // exists — show it — but it doesn't include the later edits. Say so and leave the
+      // edited cart untouched (not recorded as this order, not cleared) so nothing is lost.
+      try {
+        localStorage.setItem('lastOrderNumber', result.order_number);
+        localStorage.setItem('lastOrderAt', String(Date.now()));
+      } catch { /* best-effort: ignore failures */ }
+      toast.show(t('cartPage_order.orderAlreadyPlacedEditsKept'), 'warning', 9000);
+      router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
+      return;
+    }
     // Save to recent orders BEFORE clearing the cart so we still have item data
     cart.pushRecentOrder({
       order_number: result.order_number,

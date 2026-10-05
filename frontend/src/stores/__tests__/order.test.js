@@ -95,12 +95,37 @@ describe("useOrderStore.placeOrder idempotency key", () => {
     expect(sentKey(1)).toBe(sentKey(0));
     // The replay flag is handed to the caller so it can say the order had already gone through.
     expect(result.idempotent_replay).toBe(true);
+    expect(result.replayed_previous_cart).toBe(false); // same cart → it IS this cart's order
   });
 
-  it("an edited cart after a failed / unknown attempt gets a NEW key", async () => {
+  it("an edited cart after an UNKNOWN outcome keeps the key (no second charge) and flags the old-cart replay", async () => {
     const store = useOrderStore();
-    lostResponse();
+    lostResponse(); // the server may well have placed + charged this one
     await expect(store.placeOrder(cartPayload(1))).rejects.toThrow();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-1", idempotent_replay: true } });
+    const result = await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    expect(result.replayed_previous_cart).toBe(true);
+    expect(store._checkoutIdem).toBeNull();
+  });
+
+  it("a 5xx is an unknown outcome too", async () => {
+    const store = useOrderStore();
+    api.post.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+    await expect(store.placeOrder(cartPayload(1))).rejects.toBeTruthy();
+    api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
+    const result = await store.placeOrder(cartPayload(2));
+
+    expect(sentKey(1)).toBe(sentKey(0));
+    // Not a replay → the lost attempt placed nothing and THIS (edited) cart was placed.
+    expect(result.replayed_previous_cart).toBe(false);
+  });
+
+  it("an edited cart after a DEFINITIVE 4xx rejection gets a NEW key", async () => {
+    const store = useOrderStore();
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { code: "items_unavailable", detail: "x" } } });
+    await expect(store.placeOrder(cartPayload(1))).rejects.toBeTruthy();
     api.post.mockResolvedValueOnce({ data: { order_number: "ORD-2" } });
     await store.placeOrder(cartPayload(2));
 

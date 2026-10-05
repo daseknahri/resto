@@ -3139,6 +3139,7 @@ const arabicMessages = {
     "placeOrderError": "تعذّر إرسال الطلب. يرجى المحاولة مجدداً.",
     "placeOrderSuccess": "تم الطلب!",
     orderAlreadyPlaced: "تمّ تقديم هذا الطلب مسبقًا — إليك تفاصيله.",
+    orderAlreadyPlacedEditsKept: "طلبك السابق قد تمّ بالفعل — هذا هو. تعديلاتك اللاحقة لم تُضَف إليه وما زالت في سلّتك.",
     "switchToInApp": "طلب داخل التطبيق",
     "switchToWhatsapp": "طلب عبر واتساب"
   }

@@ -4571,6 +4571,7 @@ cartPage_order: {
   placeOrderError: "Impossible de passer la commande. Veuillez reessayer.",
   placeOrderSuccess: "Commande passee !",
   orderAlreadyPlaced: "Cette commande etait deja passee — la voici.",
+  orderAlreadyPlacedEditsKept: "Votre commande precedente etait deja passee — la voici. Vos modifications suivantes n'y ont pas ete ajoutees ; elles sont toujours dans votre panier.",
   switchToInApp: "Commander en app",
   switchToWhatsapp: "Commander via WhatsApp"
 },

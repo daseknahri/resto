@@ -430,7 +430,39 @@ describe("Cart — checkout preview parity (auto promo, points, replay)", () => 
 
     expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlaced", "info");
     expect(show).not.toHaveBeenCalledWith("cartPage_order.placeOrderSuccess", "success");
-    // The key is per cart snapshot, so the replayed order IS this cart's — it's done.
+    // Same cart as the key was minted for, so the replayed order IS this cart's — it's done.
     expect(useCartStore().items).toHaveLength(0);
+  });
+
+  it("lost response, then an edit: replays the EARLIER order, says the edits weren't added, keeps the cart (L14)", async () => {
+    await mountPickup({ wallet: "500.00" });
+    const cart = useCartStore();
+    const show = vi.spyOn(useToastStore(), "show");
+    const placeCalls = () => api.post.mock.calls.filter(([url]) => String(url).includes("/place-order/"));
+    let attempt = 0;
+    api.post.mockImplementation((url) => {
+      if (!String(url).includes("/place-order/")) return Promise.resolve({ data: {} });
+      attempt += 1;
+      // 1st: the order IS placed server-side but the response is lost. 2nd: the server replays it.
+      return attempt === 1
+        ? Promise.reject(new Error("Network Error"))
+        : Promise.resolve({ data: { order_number: "ORD-OLD111", total: "110.00", idempotent_replay: true } });
+    });
+
+    await wrapper.vm.placeInAppOrder();
+    await flushPromises();
+    cart.increment(cart.items[0].key); // the customer edits the cart before retrying
+    await flushPromises();
+    await wrapper.vm.placeInAppOrder();
+    await flushPromises();
+
+    // Same key → no second order / charge.
+    expect(placeCalls()).toHaveLength(2);
+    expect(placeCalls()[1][1].idempotency_key).toBe(placeCalls()[0][1].idempotency_key);
+    expect(show).toHaveBeenCalledWith("cartPage_order.orderAlreadyPlacedEditsKept", "warning", 9000);
+    expect(show).not.toHaveBeenCalledWith("cartPage_order.placeOrderSuccess", "success");
+    // The edited cart is kept (not cleared, not recorded as that order).
+    expect(cart.items).toHaveLength(1);
+    expect(cart.items[0].qty).toBe(2);
   });
 });
