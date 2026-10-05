@@ -167,6 +167,20 @@ describe("TemplateGallery", () => {
     });
   });
 
+  it("force-refetches meta after applying, so a still-fresh cached theme/vertical is replaced", async () => {
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    const burgerCard = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("ownerTemplates.kinds.burger"));
+    await burgerCard.trigger("click");
+    await flushPromises();
+
+    expect(fetchMetaMock).toHaveBeenCalledTimes(1);
+    expect(fetchMetaMock).toHaveBeenCalledWith({ force: true });
+  });
+
   it("posts with_sample_content: false when the sample toggle is unchecked", async () => {
     const wrapper = mountGallery({ showSampleToggle: true, initialWithSample: true });
     await flushPromises();

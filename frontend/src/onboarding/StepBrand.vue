@@ -94,26 +94,15 @@
           <p v-if="fieldError('whatsapp')" id="step-brand-whatsapp-error" role="alert" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
           <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
         </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("stepBrand.deliveryFee") }}
-          <div class="relative">
-            <input
-              v-model="form.delivery_fee"
-              type="number"
-              min="0"
-              step="0.01"
-              :class="inputClass('delivery_fee') + ' pe-14'"
-              :aria-invalid="fieldError('delivery_fee') ? 'true' : undefined"
-              aria-describedby="step-brand-delivery-fee-error"
-              @input="clearField('delivery_fee')"
-            />
-            <span class="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-              {{ t("stepBrand.deliveryFeeUnit") }}
-            </span>
-          </div>
-          <p class="text-xs text-slate-500">{{ t("stepBrand.deliveryFeeHint") }}</p>
-          <p v-if="fieldError('delivery_fee')" id="step-brand-delivery-fee-error" role="alert" class="text-xs text-red-300">{{ fieldError("delivery_fee") }}</p>
-        </label>
+        <!-- Delivery pricing is platform-managed (read-only on the owner ProfileSerializer),
+             so there is no fee to set here — a read-only note instead of an input that
+             "saved" but never applied. -->
+        <div class="space-y-1 text-sm text-slate-200">
+          <span>{{ t("stepBrand.deliveryFee") }}</span>
+          <p class="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400">
+            {{ t("stepPublish.deliveryPricingAdminNote") }}
+          </p>
+        </div>
         <div class="grid grid-cols-[1fr_auto] gap-3">
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("stepBrand.vatRate") }}
@@ -505,7 +494,6 @@ const form = reactive({
   timezone: "",
   phone: "",
   whatsapp: "",
-  delivery_fee: "0",
   vat_rate: "0",
   vat_label: "",
   address: "",

@@ -15,9 +15,10 @@
  * a cached payload between cases (staleCache is backed by real localStorage, which
  * persists across tests within a file).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useTenantStore } from "../tenant";
+import { readCache, isFresh } from "../../lib/staleCache";
 
 // api is mocked in every store test (avoids importing the real axios client).
 // Getters never touch it; fetchMeta drives it explicitly per-test.
@@ -285,6 +286,41 @@ describe("useTenantStore", () => {
       expect(store.error).toBe("tenantStore.loadFailed");
       expect(store.loading).toBe(false);
       errSpy.mockRestore();
+    });
+
+    describe("fresh cache vs force", () => {
+      const cachedMeta = { slug: "acme", profile: { business_type: "restaurant" } };
+
+      afterEach(() => {
+        // clearAllMocks keeps overridden return values — restore the "no cache" defaults
+        // so these cache hits never leak into another test.
+        readCache.mockReset();
+        readCache.mockReturnValue(null);
+        isFresh.mockReset();
+        isFresh.mockReturnValue(false);
+      });
+
+      it("serves a still-fresh cache without a network call by default", async () => {
+        readCache.mockReturnValue(cachedMeta);
+        isFresh.mockReturnValue(true);
+        const store = useTenantStore();
+        await store.fetchMeta();
+        expect(api.get).not.toHaveBeenCalled();
+        expect(store.meta).toEqual(cachedMeta);
+      });
+
+      it("force: true revalidates a still-fresh cache (e.g. right after a template apply)", async () => {
+        readCache.mockReturnValue(cachedMeta);
+        isFresh.mockReturnValue(true);
+        const fresh = { slug: "acme", profile: { business_type: "cafe" } };
+        api.get.mockResolvedValueOnce({ data: fresh });
+        const store = useTenantStore();
+        await store.fetchMeta({ force: true });
+        expect(api.get).toHaveBeenCalledWith("/meta/", { params: { force_locale: 1 } });
+        expect(store.meta).toEqual(fresh);
+        expect(store.businessType).toBe("cafe");
+        expect(store.loading).toBe(false);
+      });
     });
   });
 });

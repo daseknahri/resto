@@ -135,7 +135,9 @@ const applyTemplate = async (key) => {
       template: key,
       with_sample_content: withSampleContent.value,
     });
-    await tenant.fetchMeta();
+    // force: the template just rewrote the theme + business_type, so a still-"fresh"
+    // cached meta is stale — bypass the SWR freshness short-circuit.
+    await tenant.fetchMeta({ force: true });
     toast.show(
       t("ownerTemplates.applied", { dishes: data.created_dishes, categories: data.created_categories }),
       "success",

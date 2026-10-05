@@ -131,7 +131,13 @@ export const useTenantStore = defineStore("tenant", {
         cart.clear();
       }
     },
-    async fetchMeta() {
+    /**
+     * `force: true` always revalidates from the network, even when the cached meta is still
+     * fresh — for callers that just changed something meta carries (e.g. applying a starter
+     * template rewrites the theme + business_type). The cache is still painted first, so a
+     * forced refresh never flashes a loading state.
+     */
+    async fetchMeta({ force = false } = {}) {
       const isDemo = isPublicDemoHost() && !hasPublicDemoTenant();
 
       // ── 1. Serve stale cache instantly ──────────────────────────────────────
@@ -144,8 +150,8 @@ export const useTenantStore = defineStore("tenant", {
         // OPS-5-A: tag Sentry with this tenant so SPA errors are attributable
         setTenantContext(cached.slug ?? cached.profile?.slug ?? null, cached.id ?? null);
         this.loading = false;
-        // Still fresh → no network call needed this visit
-        if (isFresh(META_CACHE, META_TTL)) return;
+        // Still fresh → no network call needed this visit (unless the caller forces one)
+        if (!force && isFresh(META_CACHE, META_TTL)) return;
         // Stale → fall through to background revalidate without a spinner,
         // since the user already sees a fully-rendered UI from cache.
       } else {

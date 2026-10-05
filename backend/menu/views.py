@@ -12366,6 +12366,7 @@ class ApplyTemplateView(APIView):
 
         created_categories = 0
         created_dishes = 0
+        profile_updated = False
         with _txn.atomic():
             # 1. Apply the theme + business_type to the tenant profile.
             profile = Profile.objects.filter(tenant=tenant).first() if tenant else None
@@ -12381,6 +12382,7 @@ class ApplyTemplateView(APIView):
                     "primary_color", "secondary_color", "menu_theme",
                     "menu_card_layout", "business_type",
                 ])
+                profile_updated = True
                 # business_type is listing-relevant (serialized in the public
                 # directory/marketplace + a member of LISTING_RELEVANT_FIELDS) and this
                 # owner-reachable write bypasses ProfileView's bust, so refresh the
@@ -12436,6 +12438,11 @@ class ApplyTemplateView(APIView):
         if created_categories or created_dishes:
             if tenant is not None:
                 _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+        # The theme + business_type live on the cached /api/meta/ payload, and this write
+        # bypasses ProfileView's bust — evict it (after commit) so the new look/vertical shows
+        # now instead of after the 300s TTL.
+        if profile_updated:
+            _bust_meta_cache_for_request(request)
 
         return Response({
             "applied": key,

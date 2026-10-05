@@ -2265,6 +2265,10 @@ const validateClient = () => {
 // 3+ requests each) on every click — 500+ requests on a large menu. Snapshot
 // each dish's saved state and only persist rows that actually changed.
 const savedSnapshots = new Map(); // local_id → serialized saved state
+// local_id → stock_qty as last loaded from / saved to the server. dishApi.upsert only
+// sends stock_qty when the editor's value differs from this baseline, so a re-save can't
+// reset stock that orders have decremented since the menu was loaded.
+const savedStockQty = new Map();
 
 const dishSnapshot = (dish) => {
   const { local_id, ...rest } = dish; // eslint-disable-line no-unused-vars
@@ -2273,6 +2277,7 @@ const dishSnapshot = (dish) => {
 
 const rememberSaved = (dish) => {
   savedSnapshots.set(dish.local_id, dishSnapshot(dish));
+  savedStockQty.set(dish.local_id, dish.stock_qty ?? null);
 };
 
 const isDishDirty = (dish) =>
@@ -2294,17 +2299,25 @@ const persistDish = async (dish, allowedTranslationLocales) => {
       .map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])
       .filter(([, v]) => v !== "" && v != null)
   );
-  const saved = await dishApi.upsert({
-    ...dish,
-    category: Number(dish.category) || dish.category,
-    price: Number(dish.price) || 0,
-    currency: normalizeCurrency(dish.currency),
-    name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
-    description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
-    attributes: cleanedAttrs,
-  });
+  const saved = await dishApi.upsert(
+    {
+      ...dish,
+      category: Number(dish.category) || dish.category,
+      price: Number(dish.price) || 0,
+      currency: normalizeCurrency(dish.currency),
+      name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
+      description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
+      attributes: cleanedAttrs,
+    },
+    { baselineStockQty: savedStockQty.get(dish.local_id) }
+  );
   dish.id = saved.id;
   dish.slug = saved.slug;
+  // Show the server's LIVE stock (orders may have decremented it since the load); the
+  // rememberSaved() below re-baselines on it for the next re-save.
+  if (saved && "stock_qty" in saved) {
+    dish.stock_qty = saved.stock_qty != null ? parseInt(saved.stock_qty, 10) : null;
+  }
   const desiredOptions = Array.isArray(dish.options) ? dish.options : [];
   const savedOptions = await dishOptionApi.syncForDish(
     dish.id,
@@ -2357,11 +2370,13 @@ const load = async () => {
     const rows = data.length ? data.map(normalize) : [];
     dishes.splice(0, dishes.length, ...rows);
     savedSnapshots.clear();
+    savedStockQty.clear();
     rows.forEach(rememberSaved);
   } catch {
     status.value = t("common.loadFailed");
     dishes.splice(0, dishes.length);
     savedSnapshots.clear();
+    savedStockQty.clear();
   }
   syncActiveCategory();
 };

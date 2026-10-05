@@ -597,7 +597,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useToastStore } from "../stores/toast";
-import { categoryApi, dishApi, profileApi } from "../lib/onboardingApi";
+import { categoryApi, dishApi, profileApi, superCategoryApi } from "../lib/onboardingApi";
+import { countCustomerVisible } from "../lib/menuVisibility";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import { useTenantStore } from "../stores/tenant";
@@ -817,14 +818,18 @@ const load = async () => {
 const refreshChecks = async () => {
   loadingChecks.value = true;
   try {
-    const [profile, categories, dishes] = await Promise.all([
+    const [profile, superCategories, categories, dishes] = await Promise.all([
       profileApi.get(),
+      superCategoryApi.list(),
       categoryApi.list(),
       dishApi.list(),
     ]);
     profileSnapshot.value = profile || {};
-    categoriesCount.value = Array.isArray(categories) ? categories.length : 0;
-    dishesCount.value = Array.isArray(dishes) ? dishes.length : 0;
+    // The owner's lists include hidden rows (preview mode) — count only what a customer
+    // would see, matching the server's publish gate (menu.visibility).
+    const visible = countCustomerVisible({ superCategories, categories, dishes });
+    categoriesCount.value = visible.categories;
+    dishesCount.value = visible.dishes;
   } catch {
     toast.show(t("stepPublish.refreshChecksFailed"), "error");
   } finally {
