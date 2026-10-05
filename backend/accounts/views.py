@@ -5273,6 +5273,7 @@ class MarketplacePlaceOrderView(APIView):
                             if _earn_cfg and _linked_customer is not None:
                                 from decimal import Decimal as _DloyMkt
                                 from django.db.models import F as _Fearn
+                                from menu.views import _loyalty_points_earned
                                 # Serialize milestone grants for this customer. On COD /
                                 # zero-total orders nothing else locks the Customer row (no
                                 # debit_wallet), so two concurrent orders could both pass the
@@ -5295,7 +5296,7 @@ class MarketplacePlaceOrderView(APIView):
                                         _mkt_mul = _DloyMkt("1")
                                 else:
                                     _mkt_mul = _DloyMkt("1")
-                                _pts = int(float(food_subtotal) * int(_earn_cfg.points_per_unit) * float(_mkt_mul))
+                                _pts = _loyalty_points_earned(food_subtotal, _earn_cfg.points_per_unit, _mkt_mul)
                                 if _pts > 0:
                                     Customer.objects.filter(pk=_linked_customer.pk).update(
                                         loyalty_points=_Fearn("loyalty_points") + _pts,

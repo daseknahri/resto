@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone as dt_timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 import csv
 import hashlib
 from io import BytesIO, StringIO
@@ -411,6 +411,19 @@ def _size_loyalty_redemption(cfg, available_points, requested_points, pre_tip_to
     import math as _math
     points_spent = min(requested_points, int(_math.ceil(discount / pts_value)))
     return discount, points_spent, None
+
+
+def _loyalty_points_earned(food_subtotal, points_per_unit, tier_multiplier):
+    """Whole loyalty points earned on an order: floor(food_subtotal * rate * tier).
+
+    Computed in Decimal and floored deterministically. The old ``int(float * int *
+    float)`` form dropped a point whenever the exact product was an integer but the
+    float landed just below it (e.g. 0.29 * 100 -> 28.999..., exact answer 29).
+    Shared by the storefront and marketplace checkouts so both award identically.
+    Never negative (a zero/negative subtotal earns nothing).
+    """
+    exact = Decimal(str(food_subtotal)) * Decimal(str(points_per_unit)) * Decimal(str(tier_multiplier))
+    return max(0, int(exact.to_integral_value(rounding=ROUND_FLOOR)))
 
 
 class PublishAccessMixin:
@@ -3498,7 +3511,7 @@ class PlaceOrderView(APIView):
                                 _tier_mul = _Dloy("1")
                         else:
                             _tier_mul = _Dloy("1")
-                        _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit) * float(_tier_mul))
+                        _pts = _loyalty_points_earned(_food_subtotal, _loyalty_cfg.points_per_unit, _tier_mul)
                         if _pts > 0:
                             _CustLoy.objects.filter(pk=_linked_customer.pk).update(
                                 loyalty_points=F("loyalty_points") + _pts,
