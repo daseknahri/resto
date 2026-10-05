@@ -17,6 +17,7 @@ Mock-only (SimpleTestCase, no DB): `connection`, `Tenant`, `Profile` and `Custom
 are patched so only tenant-resolution + the update_or_create / delete call is exercised — the
 same style as test_order_mirror_delete.py, so they run without a Postgres connection.
 """
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -132,6 +133,47 @@ class MirrorResolvesTenantUnderSchemaContextTests(SimpleTestCase):
 
         mock_tenant.objects.filter.assert_not_called()
         mock_ref.objects.update_or_create.assert_not_called()
+
+
+class MirrorCarriesScheduledForTests(SimpleTestCase):
+    """M6: the cross-restaurant "My Orders" list reads ONLY the public CustomerOrderRef
+    mirror, so a prepaid advance order's due time must be mirrored or the list can't say
+    when the order is due."""
+
+    def _mirror(self, instance):
+        from menu.signals import mirror_order_to_public_index
+
+        captured = {}
+        with patch("menu.signals.connection") as mock_conn, \
+                patch("accounts.models.CustomerOrderRef") as mock_ref, \
+                patch("tenancy.models.Tenant"), \
+                patch("tenancy.models.Profile") as mock_profile:
+            mock_conn.tenant = SimpleNamespace(
+                id=777, name="Bistro", slug="bistro", schema_name="bistro",
+            )
+            mock_profile.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_ref.objects.update_or_create.side_effect = lambda **kw: captured.update(kw)
+            mirror_order_to_public_index(sender=None, instance=instance)
+        return captured["defaults"]
+
+    def test_scheduled_order_mirrors_its_due_time(self):
+        due = timezone.now() + timedelta(days=1)
+        instance = _order_instance()
+        instance.status = "scheduled"
+        instance.scheduled_for = due
+
+        defaults = self._mirror(instance)
+
+        self.assertEqual(defaults["scheduled_for"], due)
+
+    def test_asap_order_mirrors_a_null_due_time(self):
+        instance = _order_instance()
+        instance.scheduled_for = None
+
+        defaults = self._mirror(instance)
+
+        self.assertIn("scheduled_for", defaults)
+        self.assertIsNone(defaults["scheduled_for"])
 
 
 class RemoveMirrorResolvesTenantUnderSchemaContextTests(SimpleTestCase):

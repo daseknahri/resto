@@ -55,3 +55,40 @@ class CustomerMarketplaceOrdersViewTests(SimpleTestCase):
         self.assertEqual(row["restaurant_slug"], "pizza-place")
         self.assertEqual(row["order_number"], "ORD-AAA")
         self.assertEqual(row["total"], "85.00")
+
+    def _ref(self, **overrides):
+        ref = MagicMock()
+        ref.order_number = "ORD-SCH"
+        ref.restaurant_name = "Pizza Place"
+        ref.restaurant_slug = "pizza-place"
+        ref.status = "scheduled"
+        ref.fulfillment_type = "delivery"
+        ref.total = "85.00"
+        ref.currency = "MAD"
+        ref.vertical = "food"
+        ref.items_snapshot = []
+        ref.order_created_at = MagicMock()
+        ref.order_created_at.isoformat.return_value = "2026-06-01T10:00:00+00:00"
+        ref.scheduled_for = None
+        for k, v in overrides.items():
+            setattr(ref, k, v)
+        return ref
+
+    def _list(self, ref):
+        with patch("accounts.models.CustomerOrderRef") as mock_ref:
+            mock_ref.objects.filter.return_value.order_by.return_value.__getitem__ = lambda s, k: [ref]
+            return self._get(customer=Customer(id=5))
+
+    def test_scheduled_order_exposes_its_due_time(self):
+        """M6: the list can only say when a prepaid advance order is due if the payload
+        carries the mirrored scheduled_for."""
+        due = MagicMock()
+        due.isoformat.return_value = "2026-06-02T19:30:00+00:00"
+        resp = self._list(self._ref(scheduled_for=due))
+        self.assertEqual(resp.data["orders"][0]["scheduled_for"], "2026-06-02T19:30:00+00:00")
+
+    def test_asap_order_has_null_due_time(self):
+        resp = self._list(self._ref(status="pending", scheduled_for=None))
+        row = resp.data["orders"][0]
+        self.assertIn("scheduled_for", row)
+        self.assertIsNone(row["scheduled_for"])

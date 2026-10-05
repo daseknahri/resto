@@ -767,3 +767,51 @@ class CustomerOrdersViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("orders", resp.data)
+
+    def _list_one(self, order):
+        """GET /customer/orders/ as a signed-in customer whose only order is `order`."""
+        from accounts.models import Customer
+
+        qs = MagicMock()
+        qs.__getitem__.return_value = [order]
+        req = self.factory.get("/api/customer/orders/")
+        req.session = _session()
+        force_authenticate(req, user=Customer(id=1))
+        with patch("django.db.connection") as conn_mock, \
+                patch("menu.models.Order") as order_cls:
+            conn_mock.schema_name = "demo"
+            order_cls.objects.filter.return_value.prefetch_related.return_value \
+                .select_related.return_value.order_by.return_value = qs
+            return CustomerOrdersView.as_view()(req)
+
+    def _order(self, **overrides):
+        order = MagicMock()
+        order.order_number = "SCH1"
+        order.status = "scheduled"
+        order.fulfillment_type = "delivery"
+        order.table_label = ""
+        order.total = "40.00"
+        order.currency = "MAD"
+        order.created_at = "2026-07-01T09:00:00Z"
+        order.customer_name = "Alice"
+        order.rating = None
+        order.items.all.return_value = []
+        order.scheduled_for = None
+        for k, v in overrides.items():
+            setattr(order, k, v)
+        return order
+
+    def test_scheduled_order_exposes_its_due_time(self):
+        """M6: a prepaid advance order must carry its due time so the account can show
+        when it's due (not just when it was placed)."""
+        due = MagicMock()
+        due.isoformat.return_value = "2026-07-02T19:30:00+00:00"
+        resp = self._list_one(self._order(scheduled_for=due))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["orders"][0]["scheduled_for"], "2026-07-02T19:30:00+00:00")
+
+    def test_asap_order_has_null_due_time(self):
+        resp = self._list_one(self._order(status="pending", scheduled_for=None))
+        row = resp.data["orders"][0]
+        self.assertIn("scheduled_for", row)
+        self.assertIsNone(row["scheduled_for"])

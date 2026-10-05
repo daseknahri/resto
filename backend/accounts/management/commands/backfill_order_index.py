@@ -70,6 +70,7 @@ class Command(BaseCommand):
                     "total": o.total or 0,
                     "currency": o.currency or "MAD",
                     "order_created_at": o.created_at,
+                    "scheduled_for": o.scheduled_for,
                     "items_snapshot": items_snap,
                 },
             )

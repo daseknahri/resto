@@ -345,3 +345,96 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         resp = self._get()
         self.assertIn("items", resp.data)
         self.assertEqual(resp.data["total"], "45.00")
+
+
+class OrderStatusAmountDueLedgerAwareTests(SimpleTestCase):
+    """L4: `amount_due` (the "Pay X with wallet" label) must equal what
+    CustomerOrderPayWalletView actually charges — total - _order_collected(order), which
+    counts cash/card split-bill OrderPayment rows — not the wallet-only
+    total - wallet_amount_paid. Display only; the pay view's own charge is untouched."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = CustomerOrderStatusView.as_view()
+
+    def _owner_get(self, order, objects_mock):
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.defer.return_value.first.return_value = order
+        req = self.factory.get("/api/order-status/ORD123/")
+        force_authenticate(req, user=_customer(42))  # the order's owner
+        req.tenant = MagicMock(id=7)
+        return self.view(req, order_number="ORD123")
+
+    def _open_tab(self, total="100.00", wallet_paid="0.00"):
+        order = _make_order(fulfillment_type="table", total=total)
+        order.customer_id = 42
+        order.payment_status = "unpaid"
+        order.wallet_amount_paid = Decimal(wallet_paid)
+        return order
+
+    @patch("menu.views._order_collected")
+    @patch("accounts.models.Customer.objects")
+    @patch("menu.views.Order.objects")
+    def test_cash_partial_lowers_amount_due_to_what_the_pay_view_charges(
+        self, objects_mock, cust_objects, collected_mock
+    ):
+        # 60 already collected in cash at the table (a ledger row, NOT wallet_amount_paid).
+        order = self._open_tab(total="100.00", wallet_paid="0.00")
+        collected_mock.return_value = Decimal("60.00")
+        cust_objects.filter.return_value.only.return_value.first.return_value = MagicMock(
+            wallet_balance=Decimal("500.00")
+        )
+
+        resp = self._owner_get(order, objects_mock)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Old code said "100.00" here while the pay view would charge 40.00.
+        self.assertEqual(resp.data["amount_due"], "40.00")
+        self.assertTrue(resp.data["can_pay_with_wallet"])
+        collected_mock.assert_called_once_with(order)
+
+    @patch("menu.views._order_collected")
+    @patch("accounts.models.Customer.objects")
+    @patch("menu.views.Order.objects")
+    def test_ledger_fully_covering_the_bill_hides_the_wallet_button(
+        self, objects_mock, cust_objects, collected_mock
+    ):
+        # Cash + card partials already cover the whole tab (not yet flipped to PAID):
+        # nothing is left to charge, so no "Pay 100 with wallet" button.
+        order = self._open_tab(total="100.00", wallet_paid="0.00")
+        collected_mock.return_value = Decimal("100.00")
+
+        resp = self._owner_get(order, objects_mock)
+
+        self.assertEqual(resp.data["amount_due"], "0.00")
+        self.assertFalse(resp.data["can_pay_with_wallet"])
+        cust_objects.filter.assert_not_called()
+
+    @patch("menu.views._order_collected")
+    @patch("accounts.models.Customer.objects")
+    @patch("menu.views.Order.objects")
+    def test_paid_order_skips_the_ledger_read(self, objects_mock, cust_objects, collected_mock):
+        # The extra ledger query is confined to the owner of an OPEN bill.
+        order = self._open_tab(total="100.00", wallet_paid="0.00")
+        order.payment_status = "paid"
+
+        resp = self._owner_get(order, objects_mock)
+
+        self.assertFalse(resp.data["can_pay_with_wallet"])
+        collected_mock.assert_not_called()
+
+    @patch("menu.views._order_collected", side_effect=RuntimeError("ledger down"))
+    @patch("accounts.models.Customer.objects")
+    @patch("menu.views.Order.objects")
+    def test_ledger_read_failure_falls_back_to_wallet_only_figure(
+        self, objects_mock, cust_objects, _collected_mock
+    ):
+        order = self._open_tab(total="100.00", wallet_paid="30.00")
+        cust_objects.filter.return_value.only.return_value.first.return_value = MagicMock(
+            wallet_balance=Decimal("500.00")
+        )
+
+        resp = self._owner_get(order, objects_mock)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["amount_due"], "70.00")
+        self.assertTrue(resp.data["can_pay_with_wallet"])
