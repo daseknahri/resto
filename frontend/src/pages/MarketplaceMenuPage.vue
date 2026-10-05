@@ -167,7 +167,7 @@
                 v-for="dish in group.dishes"
                 :key="dish.slug"
                 class="ui-panel ui-surface-lift group flex items-start gap-3.5 p-3.5"
-                :class="{ 'opacity-50': !dish.is_available }"
+                :class="{ 'opacity-50': !isDishOrderable(dish) }"
               >
                 <div
                   class="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
@@ -182,12 +182,12 @@
                   <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                   <!-- Sold-out frosted overlay on thumbnail -->
                   <div
-                    v-if="!dish.is_available"
+                    v-if="!isDishOrderable(dish)"
                     class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px]"
                     aria-hidden="true"
                   >
                     <span class="rounded-full border border-slate-600/40 bg-slate-900/80 px-1.5 py-px text-[8px] font-bold uppercase tracking-widest text-slate-400">
-                      {{ t('mktMenu.soldOut') }}
+                      {{ dishUnavailableLabel(dish) }}
                     </span>
                   </div>
                 </div>
@@ -247,7 +247,7 @@
                       </button>
                     </div>
                     <button
-                      v-else-if="dish.is_available"
+                      v-else-if="isDishOrderable(dish)"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                       :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                       @click="addToCart(dish)"
@@ -258,7 +258,7 @@
                     <span
                       v-else
                       class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
-                    >{{ t('mktMenu.soldOut') }}</span>
+                    >{{ dishUnavailableLabel(dish) }}</span>
                   </div>
                 </div>
               </article>
@@ -314,7 +314,7 @@
                 :key="fd.slug"
                 type="button"
                 class="ui-press flex shrink-0 flex-col items-start gap-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-2.5 text-start transition hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
-                :class="{ 'opacity-50': !fd.is_available }"
+                :class="{ 'opacity-50': !isDishOrderable(fd) }"
                 style="min-width: 110px; max-width: 140px"
                 @click="openOptionPanel(fd)"
               >
@@ -326,7 +326,7 @@
                 />
                 <div v-else class="flex h-12 w-full items-center justify-center rounded-xl bg-rose-500/10 text-xl" aria-hidden="true">❤️</div>
                 <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">{{ fd.name }}</p>
-                <p v-if="!fd.is_available" class="text-[10px] font-semibold text-slate-500">{{ t('mktMenu.soldOut') }}</p>
+                <p v-if="!isDishOrderable(fd)" class="text-[10px] font-semibold text-slate-500">{{ dishUnavailableLabel(fd) }}</p>
                 <p v-else class="text-[10px] font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(fd.effective_price || fd.price) }}</p>
               </button>
             </div>
@@ -377,7 +377,7 @@
                   v-for="(dish, dishIndex) in cat.dishes"
                   :key="dish.slug"
                   class="ui-panel ui-surface-lift ui-reveal group flex items-start gap-3.5 p-3.5"
-                  :class="{ 'opacity-50': !dish.is_available }"
+                  :class="{ 'opacity-50': !isDishOrderable(dish) }"
                   :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
                 >
                   <!-- Image (clickable → detail/option sheet) -->
@@ -402,12 +402,12 @@
                     <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                     <!-- Sold-out frosted overlay on thumbnail -->
                     <div
-                      v-if="!dish.is_available"
+                      v-if="!isDishOrderable(dish)"
                       class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px]"
                       aria-hidden="true"
                     >
                       <span class="rounded-full border border-slate-600/40 bg-slate-900/80 px-1.5 py-px text-[8px] font-bold uppercase tracking-widest text-slate-400">
-                        {{ t('mktMenu.soldOut') }}
+                        {{ dishUnavailableLabel(dish) }}
                       </span>
                     </div>
                   </div>
@@ -480,7 +480,7 @@
                         </button>
                       </div>
                       <button
-                        v-else-if="dish.is_available"
+                        v-else-if="isDishOrderable(dish)"
                         class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                         :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                         @click="addToCart(dish)"
@@ -491,7 +491,7 @@
                       <span
                         v-else
                         class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
-                      >{{ t('mktMenu.soldOut') }}</span>
+                      >{{ dishUnavailableLabel(dish) }}</span>
                     </div>
                   </div>
                 </article>
@@ -600,10 +600,15 @@
           <!-- Unavailable items warning banner -->
           <div
             v-if="unavailableSlugs.size > 0"
-            class="rounded-xl border border-red-500/30 bg-red-900/15 px-3 py-2.5 text-[11px] font-semibold text-red-300"
+            class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-500/30 bg-red-900/15 px-3 py-2.5 text-[11px] font-semibold text-red-300"
             role="alert"
           >
-            {{ t('mktMenu.cartHasUnavailableItems') }}
+            <p class="min-w-0 flex-1">{{ t('mktMenu.cartHasUnavailableItems') }}</p>
+            <button
+              type="button"
+              class="ui-touch-target shrink-0 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-100 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+              @click="removeUnavailable"
+            >{{ t('cartPage.removeUnavailableItems') }}</button>
           </div>
 
           <!-- Cart items (RISK FE-2) -->
@@ -721,6 +726,7 @@
             v-model:payment-method="paymentMethod"
             :cod-eligible="codEligible"
             :cod-chosen="codChosen"
+            :schedule-blocks-cash="scheduleBlocksCash"
             :wallet-covers-total="walletCoversTotal"
             :wallet-balance="customer?.wallet_balance || 0"
             :currency="restaurant?.currency"
@@ -729,13 +735,22 @@
             :fmt-price="fmtPrice"
           />
 
-          <!-- Guest + pickup: pay-in-person reassurance (PayNow is auth-only) -->
+          <!-- Guest + pickup: the server rejects any guest pickup/delivery order with a payable
+               total (403 auth_required — pickup and delivery are wallet-paid), so prompt the
+               sign-in up front instead of promising a pay-in-person option that doesn't exist.
+               (Guest + delivery gets the same prompt from MarketplaceCheckoutWarnings below.) -->
           <div
             v-if="!customerStore.isAuthenticated && form.fulfillment_type === 'pickup' && orderTotal > 0"
-            class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-800/40 px-3 py-2.5"
+            class="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/8 px-3 py-2.5"
+            role="status"
           >
-            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-xs font-medium text-slate-300">{{ t('mktMenu.guestPickupPayNote') }}</p>
+            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
+            <p class="flex-1 text-xs font-medium text-sky-200">{{ t('mktMenu.guestSignInToOrder') }}</p>
+            <button
+              type="button"
+              class="ui-touch-target shrink-0 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+              @click="showAuthModal = true"
+            >{{ t('mktMenu.authRequiredSignIn') }}</button>
           </div>
 
           <!-- Totals (RISK FE-2) -->
@@ -1453,9 +1468,23 @@ const activeOptionDish = ref(null);   // dish object when panel is open, null = 
 const panelSelections = ref({});      // groupId → [selectedOptionId, ...]
 const panelShowErrors = ref(false);
 
+// A dish is orderable only when the server clears ALL three signals — the owner's
+// availability switch, its combo components, and its time window — mirroring DishCard.vue
+// (isSoldOut / isScheduleUnavailable) on the direct storefront. Missing flags (older
+// cached payloads, the recently-viewed snapshots) read as "no objection".
+const isDishOrderable = (dish) =>
+  Boolean(dish?.is_available) && dish.combo_unavailable !== true && dish.is_schedule_available !== false;
+// "Not available now" (outside its time window) is a different message from "Sold out".
+const isScheduleOnlyUnavailable = (dish) =>
+  Boolean(dish?.is_available) && dish.combo_unavailable !== true && dish.is_schedule_available === false;
+const dishUnavailableLabel = (dish) =>
+  isScheduleOnlyUnavailable(dish) ? t('mktMenu.notAvailableNow') : t('mktMenu.soldOut');
+const dishUnavailableToast = (dish) =>
+  isScheduleOnlyUnavailable(dish) ? t('mktMenu.notAvailableNow') : t('menu.soldOutToast');
+
 const openOptionPanel = (dish) => {
-  if (!dish.is_available) {
-    toastStore.show(t('menu.soldOutToast'), 'error', 2500);
+  if (!isDishOrderable(dish)) {
+    toastStore.show(dishUnavailableToast(dish), 'error', 2500);
     return;
   }
   trackRecentlyViewed(dish);
@@ -1516,8 +1545,8 @@ const optionPanelUnitPrice = computed(() => {
 const confirmOptionSelection = () => {
   const dish = activeOptionDish.value;
   if (!dish) return;
-  if (!dish.is_available) {
-    toastStore.show(t('menu.soldOutToast'), 'error', 2500);
+  if (!isDishOrderable(dish)) {
+    toastStore.show(dishUnavailableToast(dish), 'error', 2500);
     closeOptionPanel();
     return;
   }
@@ -1691,8 +1720,12 @@ const walletCoversTotal = computed(() => walletBalanceNum.value >= orderTotal.va
 // menu payload (backend reports cod_eligible for the signed-in customer).
 const codEligible = computed(() => restaurant.value?.cod_eligible === true);
 const paymentMethod = ref('wallet'); // 'wallet' | 'cash' (cash only when codEligible)
+// The server only honours cash-on-handover for IMMEDIATE orders — a scheduled (advance)
+// order silently falls back to the wallet. So while "Schedule for later" is on, cash is
+// not offered and never reported as chosen (the wallet panel + shortfall gate apply).
+const scheduleBlocksCash = computed(() => scheduleEnabled.value);
 const codChosen = computed(
-  () => codEligible.value && paymentMethod.value === 'cash'
+  () => codEligible.value && !scheduleBlocksCash.value && paymentMethod.value === 'cash'
 );
 // If eligibility drops (e.g. a different restaurant), fall back to wallet.
 watch(codEligible, (ok) => {
@@ -1777,8 +1810,11 @@ const fmtPrice = (amount) => {
 };
 
 // ── API ───────────────────────────────────────────────────────────────────────
-const fetchMenu = async () => {
-  loading.value = true;
+// `silent` = a background refresh while the customer is mid-checkout: keep the menu on
+// screen (no skeleton flash) and, if the refetch fails, keep showing the last good menu
+// instead of replacing it with an error panel.
+const fetchMenu = async ({ silent = false } = {}) => {
+  if (!silent) loading.value = true;
   fetchError.value = false;
   notFound.value = false;
   try {
@@ -1796,16 +1832,21 @@ const fetchMenu = async () => {
         [{ slug, ts: Date.now() }, ...existing].slice(0, 8)
       ));
     } catch { /* storage unavailable */ }
-    // Restore fulfillment preference — only if that type is available here
-    if (_savedFulfillment === 'delivery' && res.data?.delivery_enabled) {
-      form.fulfillment_type = 'delivery';
-    }
-    // Pre-fill customer info if signed in
-    if (customer.value) {
-      form.customer_name = customer.value.name || '';
-      form.customer_phone = customer.value.phone || '';
+    // First-load defaults only — a silent mid-checkout refresh must NOT clobber what the
+    // customer has since chosen (pickup vs delivery) or typed (name / phone).
+    if (!silent) {
+      // Restore fulfillment preference — only if that type is available here
+      if (_savedFulfillment === 'delivery' && res.data?.delivery_enabled) {
+        form.fulfillment_type = 'delivery';
+      }
+      // Pre-fill customer info if signed in
+      if (customer.value) {
+        form.customer_name = customer.value.name || '';
+        form.customer_phone = customer.value.phone || '';
+      }
     }
   } catch (err) {
+    if (silent) return; // keep the last good menu on screen
     if (err?.response?.status === 404) {
       notFound.value = true;
     } else {
@@ -1932,6 +1973,10 @@ const placeOrder = async () => {
     payload.idempotency_key = checkoutIdemKey;
     const res = await api.post('/marketplace/order/', payload);
     checkoutIdemKey = null;
+    // The order spent wallet balance / moved loyalty points server-side — force-refresh the
+    // customer (fire-and-forget) so the order-status / account screens never show the stale
+    // pre-order balance.
+    if (customerStore.isAuthenticated) customerStore.fetchCustomer(true);
     // Optionally persist the delivery address for future orders.
     if (form.fulfillment_type === 'delivery' && saveAddressAfterOrder.value && form.delivery_address) {
       try {
@@ -1962,6 +2007,8 @@ const placeOrder = async () => {
       // they can sign in inline and retry without losing their cart.
       showAuthModal.value = true;
     } else if (code === 'wallet_insufficient') {
+      // Our cached balance was stale — re-sync it so the wallet panel + shortfall gate are right.
+      customerStore.fetchCustomer(true);
       checkoutError.value = t('mktMenu.walletInsufficientError');
     } else if (code === 'stale_options') {
       checkoutError.value = t('cartPage.staleOptions');
@@ -1969,7 +2016,19 @@ const placeOrder = async () => {
     } else if (code === 'restaurant_closed') {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {
-      checkoutError.value = t('mktMenu.itemsUnavailable');
+      // Mark the exact lines the server rejected (flagged in the cart, Place disabled,
+      // "Remove" offered), name them, and refetch the menu in the background so the
+      // storefront catches up with whatever changed (sold out / off-menu / out of window).
+      const rejectedSlugs = Array.isArray(err?.response?.data?.slugs) ? err.response.data.slugs.map(String) : [];
+      const marked = new Map();
+      for (const rejectedSlug of rejectedSlugs) {
+        if (cart.value.some((i) => i.slug === rejectedSlug)) marked.set(rejectedSlug, cartQty(rejectedSlug));
+      }
+      serverRejected.value = marked;
+      checkoutError.value = unavailableNames.value.length
+        ? t('cartPage.itemsUnavailable', { items: unavailableNames.value.join(', ') })
+        : t('mktMenu.itemsUnavailable');
+      fetchMenu({ silent: true });
     } else if (code === 'below_delivery_minimum') {
       const minimum = err?.response?.data?.minimum ? fmtPrice(Number(err.response.data.minimum)) : '';
       checkoutError.value = minimum
@@ -2086,17 +2145,54 @@ const _buildDishMap = () => {
   return map;
 };
 
-// Reactive set of cart slugs whose live dish is currently marked unavailable.
-// Updates whenever the restaurant menu refreshes or the cart changes.
+// Cart lines the SERVER rejected at checkout (`items_unavailable` → `slugs`), as
+// slug → quantity-in-cart at rejection time. The menu can't always explain a rejection
+// (the dish went off-menu or finite stock ran short after the 60s menu cache), so the
+// rejection itself marks the line. Keyed to the quantity so that lowering a qty the
+// server said wasn't in stock lapses the mark (the customer can retry) instead of
+// leaving the Place button disabled behind a stale flag.
+const serverRejected = ref(new Map());
+
+// Reactive set of cart slugs that can't be ordered right now: the live menu marks the
+// dish sold-out / combo-unmakeable / outside its time window, or the server just rejected
+// the line. Updates whenever the restaurant menu refreshes or the cart changes.
 const unavailableSlugs = computed(() => {
   const map = _buildDishMap();
   const slugs = new Set();
   for (const item of cart.value) {
     const live = map.get(item.slug);
-    if (live && live.is_available === false) slugs.add(item.slug);
+    if (live && (live.is_available === false || live.combo_unavailable === true || live.is_schedule_available === false)) {
+      slugs.add(item.slug);
+    }
+  }
+  for (const [rejectedSlug, rejectedQty] of serverRejected.value) {
+    if (cartQty(rejectedSlug) === rejectedQty) slugs.add(rejectedSlug);
   }
   return slugs;
 });
+
+// Customer-facing names of the unavailable cart lines (the line name, never the slug).
+const unavailableNames = computed(() => {
+  const names = [];
+  for (const item of cart.value) {
+    if (unavailableSlugs.value.has(item.slug) && !names.includes(item.name || item.slug)) {
+      names.push(item.name || item.slug);
+    }
+  }
+  return names;
+});
+
+// One-tap "Remove unavailable items" — drops every flagged line so the order can proceed.
+const removeUnavailable = () => {
+  const blocked = unavailableSlugs.value;
+  if (!blocked.size) return;
+  cart.value = cart.value.filter((i) => !blocked.has(i.slug));
+  serverRejected.value = new Map();
+  checkoutError.value = ''; // the "…unavailable: X, Y" message no longer applies
+  // Removing the last line empties the cart — close the drawer (mirrors removeFromCart).
+  if (!cart.value.length) checkoutOpen.value = false;
+  toastStore.show(t('cartPage.unavailableItemsRemoved'), 'success');
+};
 
 // Pre-fill the cart from a re-order navigation (items_snapshot from CustomerOrderRef).
 // Called after fetchMenu so live prices are available. Silently drops items no longer

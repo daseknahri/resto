@@ -19,7 +19,9 @@ the second request was a cache HIT) while a live/per-customer field still differ
 """
 import sys
 from contextlib import contextmanager
+from datetime import datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
@@ -135,7 +137,7 @@ class _MktMenuCacheBase(SimpleTestCase):
         cache.clear()
 
     def _drive(self, *, slug, fake_menu, profile, customer_id=None,
-               is_open=True, flash_optin_ids=(), flash_sales=()):
+               is_open=True, flash_optin_ids=(), flash_sales=(), now_local=None):
         """Drive MarketplaceMenuView once. Reuse the SAME `fake_menu`/`profile` across calls to
         share the cache + build spy. Live values (is_open, flash) are per-call so a cache HIT can
         be shown to still reflect the current request-time state."""
@@ -165,7 +167,7 @@ class _MktMenuCacheBase(SimpleTestCase):
                             first=MagicMock(return_value=profile)))))), \
                     patch("accounts.views._compute_is_open_now", return_value=is_open), \
                     patch("menu.pricing.get_active_happy_hours", return_value=[]), \
-                    patch("menu.views._profile_now", return_value=None), \
+                    patch("menu.views._profile_now", return_value=now_local), \
                     patch("accounts.models.PlatformFlashSaleOptIn", optin_m), \
                     patch("accounts.models.PlatformFlashSale", fs_m):
                 with _inject_module("menu.models", fake_menu):
@@ -256,6 +258,118 @@ class FlashSaleLiveOnCacheHitTests(_MktMenuCacheBase):
         self.assertIsNotNone(resp_live_sale.data["flash_sale"], "flash_sale must go live on a cache hit")
         self.assertEqual(resp_live_sale.data["flash_sale"]["discount_pct"], "20")
         self.assertEqual(dish_cls.objects.filter.call_count, 1)
+
+
+def _dish_stub(slug="burger", *, schedule=None, component_ids=()):
+    """A concrete (picklable-once-serialized) dish as _build reads it. `component_ids` makes it a combo."""
+    sc = SimpleNamespace(id=1, name="Mains", name_i18n={}, position=0)
+    cat = SimpleNamespace(id=1, name="Burgers", name_i18n={}, slug="burgers", image_url="", position=0,
+                          super_category=sc)
+    return SimpleNamespace(
+        id=sum(map(ord, slug)), slug=slug, name=slug.title(), name_i18n={}, description="", description_i18n={},
+        price=Decimal("10.00"), currency="MAD", image_url="", tags=[], allergens=[], is_available=True,
+        availability_schedule=schedule, category=cat, position=0,
+        option_groups=SimpleNamespace(all=lambda: []),
+        combo_components=SimpleNamespace(all=lambda: [SimpleNamespace(component_id=c) for c in component_ids]),
+    )
+
+
+def _fake_menu_with(dishes):
+    """_make_fake_menu() but the (single) build returns real dish stubs. Returns (fake_menu, dish_qs)
+    — `dish_qs.order_by.call_count` is the heavy-build spy (the per-request combo-state read ALSO
+    hits `Dish.objects.filter`, so `filter.call_count` can't be used for these tests)."""
+    fake_menu, dish_cls = _make_fake_menu()
+    dish_qs = dish_cls.objects.filter.return_value
+    dish_qs.order_by.return_value = list(dishes)
+    return fake_menu, dish_qs
+
+
+def _all_dishes(resp):
+    return [d for sc in resp.data["super_categories"] for c in sc["categories"] for d in c["dishes"]]
+
+
+# 2026-10-05 is a Monday.
+_MON_10H = datetime(2026, 10, 5, 10, 0)
+_MON_12H = datetime(2026, 10, 5, 12, 0)
+
+
+class DishFlagsLiveOnCacheHitTests(_MktMenuCacheBase):
+    """The marketplace menu must emit the same per-dish `is_schedule_available` /
+    `combo_unavailable` the direct storefront menu does — and, like is_open, compute them PER
+    REQUEST, never baked into the {slug}-keyed body."""
+
+    def test_sanity_fixture_dates_are_a_monday(self):
+        self.assertEqual(_MON_10H.weekday(), 0)
+
+    def test_schedule_flag_reflects_the_live_clock_on_a_cache_hit(self):
+        """Window Mon 09:00-11:00. Build the body at 10:00 (open), then hit the cache at 12:00:
+        the dish must flip to NOT available now on the cache hit (it can't freeze for the TTL)."""
+        schedule = {"days": ["mon"], "time_start": "09:00", "time_end": "11:00"}
+        fake_menu, dish_qs = _fake_menu_with([_dish_stub(schedule=schedule)])
+        profile = _make_profile()
+
+        resp_open = self._drive(slug="sched", fake_menu=fake_menu, profile=profile, now_local=_MON_10H)
+        resp_closed = self._drive(slug="sched", fake_menu=fake_menu, profile=profile, now_local=_MON_12H)
+
+        self.assertIs(_all_dishes(resp_open)[0]["is_schedule_available"], True)
+        self.assertIs(_all_dishes(resp_closed)[0]["is_schedule_available"], False)
+        self.assertEqual(dish_qs.order_by.call_count, 1, "2nd request must be a cache HIT (body built once)")
+
+    def test_no_schedule_is_none_and_private_carriers_never_leak(self):
+        """No schedule → None (always available by schedule, as in DishSerializer). The private
+        cache-only carriers must be stripped from every response (hit or miss)."""
+        schedule = {"days": ["mon"], "time_start": "09:00", "time_end": "11:00"}
+        fake_menu, _ = _fake_menu_with([
+            _dish_stub("plain"),
+            _dish_stub("timed", schedule=schedule, component_ids=(5,)),
+        ])
+        profile = _make_profile()
+
+        for _ in range(2):  # miss, then hit
+            resp = self._drive(slug="strip", fake_menu=fake_menu, profile=profile, now_local=_MON_10H)
+            by_slug = {d["slug"]: d for d in _all_dishes(resp)}
+            self.assertIsNone(by_slug["plain"]["is_schedule_available"])
+            self.assertIs(by_slug["plain"]["combo_unavailable"], False)
+            for d in by_slug.values():
+                self.assertNotIn("_availability_schedule", d)
+                self.assertNotIn("_combo_component_ids", d)
+
+    def test_malformed_schedule_degrades_to_available(self):
+        """A garbage schedule must never hide a dish or 500 the menu (matches the serializer)."""
+        fake_menu, _ = _fake_menu_with([_dish_stub(schedule={"days": "mon", "time_start": 9, "time_end": 11})])
+        resp = self._drive(slug="badsched", fake_menu=fake_menu, profile=_make_profile(), now_local=_MON_10H)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNot(_all_dishes(resp)[0]["is_schedule_available"], False)
+
+    def test_combo_unavailable_reflects_live_component_state_on_a_cache_hit(self):
+        """A component selling out mid-TTL must grey the combo out on the CACHE HIT — not up to 60s late."""
+        fake_menu, dish_qs = _fake_menu_with([_dish_stub("combo", component_ids=(7,))])
+        profile = _make_profile()
+
+        def drive(rows):
+            dish_qs.values_list.return_value = rows
+            resp = self._drive(slug="combo", fake_menu=fake_menu, profile=profile)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            return _all_dishes(resp)[0]["combo_unavailable"]
+
+        self.assertIs(drive([(7, True, 5)]), False)       # component available, stock 5
+        self.assertIs(drive([(7, False, None)]), True)    # component 86'd
+        self.assertIs(drive([(7, True, 0)]), True)        # finite stock sold out
+        self.assertIs(drive([(7, True, None)]), False)    # unlimited stock → fine
+        self.assertEqual(dish_qs.order_by.call_count, 1, "every request after the 1st is a cache hit")
+
+    def test_combo_state_read_failure_degrades_to_available(self):
+        fake_menu, dish_qs = _fake_menu_with([_dish_stub("combo", component_ids=(7,))])
+        dish_qs.values_list.side_effect = RuntimeError("db down")
+        resp = self._drive(slug="combofail", fake_menu=fake_menu, profile=_make_profile())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(_all_dishes(resp)[0]["combo_unavailable"], False)
+
+    def test_menu_without_combos_makes_no_component_query(self):
+        fake_menu, dish_qs = _fake_menu_with([_dish_stub("plain")])
+        dish_qs.values_list.side_effect = AssertionError("must not query component state without combos")
+        resp = self._drive(slug="nocombo", fake_menu=fake_menu, profile=_make_profile())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
 class MarketplaceMenuBustSeamTests(SimpleTestCase):

@@ -37,8 +37,12 @@ export const useCustomerStore = defineStore("customer", {
         const { data } = await api.get("/customer/session/");
         this.customer = data.customer || null;
         this.platform = data.platform || null;
-      } catch {
-        this.customer = null;
+      } catch (err) {
+        // A FORCED refresh (post-order / post-cancel balance sync, 402 re-sync) that fails
+        // transiently — a network blip, a 5xx — must not silently sign the customer out of
+        // the UI: keep the last known customer. A first load, or an explicit 401/403, clears.
+        const status = err?.response?.status;
+        if (!(force && this.customer) || status === 401 || status === 403) this.customer = null;
       } finally {
         this.loaded = true;
         this.loading = false;

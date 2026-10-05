@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useCustomerStore } from "../customer";
+import api from "../../lib/api";
 
 // ── api mock ──────────────────────────────────────────────────────────────────
 vi.mock("../../lib/api", () => ({
@@ -114,5 +115,63 @@ describe("useCustomerStore — state and actions", () => {
 
     store.customer = { name: "", phone: "", email: "s@x.com" };
     expect(store.displayName).toBe("s@x.com");
+  });
+});
+
+describe("useCustomerStore — fetchCustomer (guarded vs forced refresh)", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    api.get.mockReset();
+  });
+
+  it("is a no-op once loaded — the stale-balance trap a forced refresh exists to fix", async () => {
+    const store = useCustomerStore();
+    store.setCustomer({ id: 1, wallet_balance: "100.00" });
+    await store.fetchCustomer();
+    expect(api.get).not.toHaveBeenCalled();
+    expect(store.customer.wallet_balance).toBe("100.00");
+  });
+
+  it("fetchCustomer(true) re-reads the session even when already loaded (post-order / post-cancel sync)", async () => {
+    const store = useCustomerStore();
+    store.setCustomer({ id: 1, wallet_balance: "100.00" });
+    api.get.mockResolvedValueOnce({ data: { customer: { id: 1, wallet_balance: "60.00" }, platform: null } });
+    await store.fetchCustomer(true);
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(store.customer.wallet_balance).toBe("60.00");
+  });
+
+  it("a transient failure on a FORCED refresh keeps the last known customer (no phantom sign-out)", async () => {
+    const store = useCustomerStore();
+    store.setCustomer({ id: 1, wallet_balance: "100.00" });
+    api.get.mockRejectedValueOnce({ response: { status: 503 } });
+    await store.fetchCustomer(true);
+    expect(store.isAuthenticated).toBe(true);
+    expect(store.customer.wallet_balance).toBe("100.00");
+    expect(store.loading).toBe(false);
+  });
+
+  it("a network error (no response) on a forced refresh also keeps the customer", async () => {
+    const store = useCustomerStore();
+    store.setCustomer({ id: 1 });
+    api.get.mockRejectedValueOnce(new Error("Network Error"));
+    await store.fetchCustomer(true);
+    expect(store.isAuthenticated).toBe(true);
+  });
+
+  it("an explicit 401 on a forced refresh clears the customer (the session really is gone)", async () => {
+    const store = useCustomerStore();
+    store.setCustomer({ id: 1 });
+    api.get.mockRejectedValueOnce({ response: { status: 401 } });
+    await store.fetchCustomer(true);
+    expect(store.customer).toBeNull();
+  });
+
+  it("a failed FIRST load leaves the customer null and marks the store loaded", async () => {
+    const store = useCustomerStore();
+    api.get.mockRejectedValueOnce({ response: { status: 500 } });
+    await store.fetchCustomer();
+    expect(store.customer).toBeNull();
+    expect(store.loaded).toBe(true);
   });
 });

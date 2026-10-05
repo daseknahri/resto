@@ -4123,7 +4123,7 @@ class MarketplaceView(APIView):
 # endpoint emits RAW name + full name_i18n dicts and resolves locale CLIENT-side (no
 # server-side locale resolution of the payload), unlike /api/meta/.
 #
-# THREE fields must NOT be cached under {slug}; they are recomputed per-request on a COPY
+# FIVE fields must NOT be cached under {slug}; they are recomputed per-request on a COPY
 # of the cached body (mirrors tenancy.api._refresh_meta_is_open_now and
 # accounts.views._refresh_marketplace_live_fields):
 #   • cod_eligible — PER-CUSTOMER (trusted-repeat-customer status, derived from the
@@ -4132,6 +4132,15 @@ class MarketplaceView(APIView):
 #   • is_open      — TIME-SENSITIVE open/closed verdict; recomputed live so it never
 #     freezes for the TTL.
 #   • flash_sale   — TIME-SENSITIVE sale window; recomputed live from the opted-in ids.
+#   • is_schedule_available (per dish) — TIME-SENSITIVE: a time-limited dish's availability
+#     window (tenant-local clock) opens/closes mid-TTL. The cached body carries only the raw
+#     schedule as a private `_availability_schedule`; the live verdict is stamped per request.
+#   • combo_unavailable (per dish) — a combo is unmakeable when a component is 86'd or sold
+#     out. The cached body carries only the component ids (`_combo_component_ids`); the
+#     component state is read live (one indexed query, only when the menu has combos) so a
+#     component selling out mid-TTL shows the combo as unavailable at once, not up to 60s late.
+#   (both per-dish flags mirror menu.serializers.DishSerializer, which the direct storefront
+#   menu emits — see _mkt_apply_live_dish_flags.)
 # The publish gate (profile.is_menu_published) is ALSO checked live per request (parity
 # with the twin, which enforces its public-menu policy BEFORE its cache), so an
 # unpublished menu 404s immediately, never served from a warm body.
@@ -4140,6 +4149,79 @@ _MKT_MENU_CACHE_TTL = 60  # seconds — parity with menu.views._MENU_CACHE_TTL
 
 def _mkt_menu_cache_key(slug: str) -> str:
     return f"mkt_menu:v1:{slug}"
+
+
+def _mkt_apply_live_dish_flags(body: dict, profile) -> None:
+    """Stamp the per-request, per-dish ``is_schedule_available`` / ``combo_unavailable`` onto a
+    COPY of the cached marketplace-menu body, and strip the private cache-only carriers.
+
+    Mirrors ``menu.serializers.DishSerializer`` (what the direct storefront menu emits and
+    ``DishCard.vue`` renders), so the marketplace page can grey a dish out the same way:
+
+    * ``is_schedule_available`` — ``None`` when the dish has no schedule, else ``True``/``False``
+      from the shared ``schedule_window.day_time_window_open`` rule evaluated at the restaurant's
+      LOCAL "now" (the same instant the order path uses to reject it). A malformed schedule / tz
+      degrades to ``True`` (never hides a dish over bad data), exactly like the serializer.
+    * ``combo_unavailable`` — ``True`` when ANY component is ``is_available=False`` or has finite
+      ``stock_qty <= 0`` (the order-path predicate ``order_service._combo_component_unavailable``),
+      read LIVE with ONE query (only when the menu has at least one combo). A failed read degrades
+      to "available", never to a hidden dish.
+
+    Must be called inside the tenant ``schema_context`` (it reads ``menu.Dish``). Mutates ``body``
+    in place — callers pass the per-request deepcopy, never the shared cached object.
+    """
+    from menu.schedule_window import day_time_window_open
+
+    dishes = [
+        dish
+        for sc in body.get("super_categories") or []
+        for cat in sc.get("categories") or []
+        for dish in cat.get("dishes") or []
+    ]
+
+    now_local = None
+    if any(d.get("_availability_schedule") for d in dishes):
+        from menu.views import _profile_now
+        now_local = _profile_now(profile)
+
+    component_ids = {cid for d in dishes for cid in (d.get("_combo_component_ids") or ())}
+    component_state = {}
+    if component_ids:
+        try:
+            from menu.models import Dish as _Dish
+
+            component_state = {
+                cid: (is_available, stock_qty)
+                for cid, is_available, stock_qty in _Dish.objects.filter(id__in=component_ids).values_list(
+                    "id", "is_available", "stock_qty"
+                )
+            }
+        except Exception:
+            logger.exception("MarketplaceMenuView: combo component state read failed; degrading to available")
+            component_state = {}
+
+    for dish in dishes:
+        schedule = dish.pop("_availability_schedule", None)
+        comp_ids = dish.pop("_combo_component_ids", None) or ()
+
+        if not schedule or not isinstance(schedule, dict):
+            dish["is_schedule_available"] = None
+        else:
+            try:
+                dish["is_schedule_available"] = day_time_window_open(
+                    schedule.get("days"),
+                    schedule.get("time_start"),
+                    schedule.get("time_end"),
+                    now_local=now_local,
+                )
+            except Exception:
+                dish["is_schedule_available"] = True
+
+        dish["combo_unavailable"] = any(
+            cid in component_state
+            and (not component_state[cid][0] or (component_state[cid][1] is not None and component_state[cid][1] <= 0))
+            for cid in comp_ids
+        )
 
 
 def _bust_marketplace_menu_cache(slug: str) -> None:
@@ -4206,8 +4288,9 @@ class MarketplaceMenuView(APIView):
                 def _build():
                     # ==== ANONYMOUS, non-per-customer, cacheable body (the heavy work) ====
                     # Every field here is identical to the pre-cache inline payload EXCEPT the
-                    # three per-request fields (cod_eligible / is_open / flash_sale), which get
-                    # SAFE defaults here and are overwritten with LIVE values per request below.
+                    # per-request fields (cod_eligible / is_open / flash_sale + the per-dish
+                    # is_schedule_available / combo_unavailable), which get SAFE defaults here
+                    # and are overwritten with LIVE values per request below.
                     from menu.models import Dish as _Dish
 
                     # Loyalty config (so the marketplace checkout can offer points redemption).
@@ -4228,7 +4311,9 @@ class MarketplaceMenuView(APIView):
                             category__super_category__is_temporarily_disabled=False,
                         )
                         .select_related("category__super_category")
-                        .prefetch_related("option_groups__options")
+                        # combo_components (ids only — no `__component` join): the cached body keeps
+                        # just the component ids; their LIVE state is read per request.
+                        .prefetch_related("option_groups__options", "combo_components")
                         .order_by("position", "name")
                     )
 
@@ -4309,6 +4394,13 @@ class MarketplaceMenuView(APIView):
                             "tags": dish.tags or [],
                             "allergens": dish.allergens or [],
                             "is_available": dish.is_available,
+                            # Per-request fields — SAFE defaults; the private `_`-carriers are
+                            # consumed (and stripped) by _mkt_apply_live_dish_flags on every
+                            # request, which stamps the LIVE verdicts. Never serve these cached.
+                            "is_schedule_available": None,
+                            "combo_unavailable": False,
+                            "_availability_schedule": dish.availability_schedule or None,
+                            "_combo_component_ids": [cc.component_id for cc in dish.combo_components.all()],
                             "option_groups": option_groups,
                         })
 
@@ -4411,6 +4503,11 @@ class MarketplaceMenuView(APIView):
                 _mkt_menu_customer = customer_or_none(request)
                 _mkt_menu_cust_id = _mkt_menu_customer.id if _mkt_menu_customer else None
                 out["cod_eligible"] = bool(_mkt_menu_cod_eligible(profile, _mkt_menu_cust_id))
+
+                # ── PER-REQUEST per-dish flags (is_schedule_available / combo_unavailable) ──
+                # Stamped on the same per-request copy, inside the tenant schema (the combo
+                # component state is a live read) — never baked into the cached body.
+                _mkt_apply_live_dish_flags(out, profile)
 
         except Exception as exc:
             logger.exception("MarketplaceMenuView error for slug=%s: %s", slug, exc)

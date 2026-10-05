@@ -2,7 +2,7 @@
   <!-- Pay now (marketplace orders are pay-now) -->
   <div class="space-y-2">
     <!-- Trusted customers: choose wallet or cash on handover -->
-    <div v-if="codEligible" class="grid grid-cols-2 gap-2">
+    <div v-if="codEligible && !scheduleBlocksCash" class="grid grid-cols-2 gap-2">
       <button
         type="button"
         class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -18,6 +18,8 @@
         @click="paymentMethod = 'cash'"
       >{{ t('mktMenu.payMethodCash') }}</button>
     </div>
+    <!-- Scheduled orders can't be paid on handover — say why the cash option is gone. -->
+    <p v-else-if="codEligible" class="text-xs text-slate-400">{{ t('mktMenu.cashNotForScheduled') }}</p>
 
     <!-- Cash on handover panel -->
     <div v-if="codChosen" class="ui-panel rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3">
@@ -68,6 +70,10 @@ defineProps({
   codEligible: { type: Boolean, default: false },
   /** Whether cash-on-handover is the current choice (codChosen). */
   codChosen: { type: Boolean, default: false },
+  /** True while "Schedule for later" is on: the server only honours cash for IMMEDIATE
+   *  orders (a scheduled one falls back to the wallet), so the cash option is replaced
+   *  by an explanation. */
+  scheduleBlocksCash: { type: Boolean, default: false },
   /** Whether the wallet balance covers the total (walletCoversTotal). */
   walletCoversTotal: { type: Boolean, default: false },
   /** Displayed wallet balance (customer.wallet_balance || 0). */
