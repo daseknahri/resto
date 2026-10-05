@@ -1,13 +1,20 @@
 import logging
+import re
 from dataclasses import dataclass
+from datetime import timedelta
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import connections, transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from django_tenants.utils import get_public_schema_name, schema_context
+from django_tenants.utils import (
+    get_public_schema_name,
+    get_tenant_database_alias,
+    schema_context,
+    schema_exists,
+)
 from django.utils.text import slugify
 
 from tenancy.models import Domain, Plan, Tenant
@@ -29,6 +36,40 @@ from .models import ActivationToken, Lead, ProvisioningJob, Subscription, TierUp
 logger = logging.getLogger(__name__)
 provisioning_logger = logging.getLogger("sales.provisioning")
 SLUG_MAX_LENGTH = 50
+# Upper bound on "-2", "-3", ... candidates tried when resolving a free slug, so a
+# pathological base can never spin the preview loop forever.
+SLUG_MAX_ATTEMPTS = 500
+
+# A RUNNING ProvisioningJob younger than this is an in-flight attempt and blocks a second
+# provision of the same lead. Older ones are presumed dead (the HTTP worker that ran it
+# was killed mid schema build — request timeouts are ~60s) and may be superseded.
+PROVISIONING_STALE_AFTER = timedelta(minutes=15)
+
+# The slug is BOTH the tenant's Postgres schema name and the leftmost DNS label of its
+# domain, so it must never shadow a Postgres system schema or a platform/infra host
+# (a lead `admin@…` or `menu@…` provisioned in one click would otherwise take over that
+# host — the tenant middleware resolves Domain rows before the public-host fallback).
+RESERVED_SLUGS = frozenset({
+    "public",
+    "www",
+    "admin",
+    "api",
+    "app",
+    "menu",
+    "static",
+    "media",
+    "mail",
+    "information_schema",
+    "pg_catalog",
+    "pg_toast",
+})
+# Postgres reserves the whole `pg_` namespace for system schemas.
+RESERVED_SLUG_PREFIX = "pg_"
+
+# The only schema names ever interpolated into DROP SCHEMA (and they are quoted too).
+# Slugs are slugify() output — lowercase ASCII alphanumerics, "-" and "_" — so this
+# admits every real tenant schema while excluding quotes, whitespace and dots.
+_DROPPABLE_SCHEMA_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 
 
 @dataclass
@@ -147,16 +188,21 @@ def issue_activation(tenant, user, phone: str = ""):
     return activation, admin_url, workspace_url, signin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template
 
 
+def _hostname_of(value: str) -> str:
+    """Lower-cased hostname of a URL or bare host ("" when there is none)."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    return (parsed.hostname or "").strip().lower().strip(".")
+
+
 def _default_domain_suffix() -> str:
     configured_suffix = (getattr(settings, "TENANT_DOMAIN_SUFFIX", "") or "").strip().lower().lstrip(".")
     if configured_suffix:
         return configured_suffix
 
-    base_url = (getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
-    if not base_url:
-        return "localhost"
-    parsed = urlparse(base_url if "://" in base_url else f"https://{base_url}")
-    host = (parsed.hostname or "").strip().lower().strip(".")
+    host = _hostname_of(getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "")
     if host.startswith("www."):
         host = host[4:]
     return host or "localhost"
@@ -180,6 +226,37 @@ def normalize_domain_suffix(domain_suffix: str | None) -> str:
     return raw
 
 
+def is_reserved_slug(slug: str) -> bool:
+    """True when ``slug`` may never become a tenant (system schema / platform host label)."""
+    value = (slug or "").strip().lower()
+    return (
+        value in RESERVED_SLUGS
+        or value == get_public_schema_name()
+        or value.startswith(RESERVED_SLUG_PREFIX)
+    )
+
+
+def _platform_hosts() -> set[str]:
+    """Hosts the platform itself serves — a tenant Domain must never equal one of them."""
+    hosts = {_hostname_of(host) for host in (getattr(settings, "PUBLIC_SCHEMA_HOSTS", None) or [])}
+    hosts.add(_hostname_of(getattr(settings, "BRAND_DOMAIN", "") or ""))
+    hosts.add(_hostname_of(getattr(settings, "PUBLIC_MENU_BASE_URL", "") or ""))
+    hosts.discard("")
+    return hosts
+
+
+def _unreserved_slug(slug: str) -> str:
+    """The nearest non-reserved variant of ``slug`` (``admin`` -> ``admin-2``).
+
+    A ``pg_`` prefix can't be fixed by appending a suffix, so it becomes ``pg-``.
+    """
+    if slug.startswith(RESERVED_SLUG_PREFIX):
+        slug = "pg-" + slug[len(RESERVED_SLUG_PREFIX):]
+    if is_reserved_slug(slug):
+        slug = _build_next_slug(slug, 2)
+    return slug
+
+
 def _base_slug_for_lead(lead: Lead) -> str:
     source = ""
     if lead.email:
@@ -192,7 +269,8 @@ def _base_slug_for_lead(lead: Lead) -> str:
     base_slug = slugify(source)[:SLUG_MAX_LENGTH]
     if not base_slug:
         base_slug = f"tenant-{lead.id or 'new'}"
-    return base_slug
+    # One-click provisioning must keep working for generic mailboxes (admin@, menu@…).
+    return _unreserved_slug(base_slug)
 
 
 def _build_next_slug(base_slug: str, index: int) -> str:
@@ -205,14 +283,21 @@ def _build_next_slug(base_slug: str, index: int) -> str:
 
 def _availability(slug: str, domain_suffix: str) -> dict:
     domain = f"{slug}.{domain_suffix}"
+    reserved = is_reserved_slug(slug) or domain.lower() in _platform_hosts()
     slug_available = not Tenant.objects.filter(slug=slug).exists()
     domain_available = not Domain.objects.filter(domain=domain).exists()
+    # A stray Postgres schema (e.g. the orphan of a failed build) must BLOCK the slug,
+    # never be adopted: create_schema(check_if_exists=True) would skip migrating it and
+    # the "provisioned" tenant would 500 on every endpoint.
+    schema_available = not schema_exists(slug)
     return {
         "slug": slug,
         "domain": domain,
+        "reserved": reserved,
         "slug_available": slug_available,
         "domain_available": domain_available,
-        "available": slug_available and domain_available,
+        "schema_available": schema_available,
+        "available": not reserved and slug_available and domain_available and schema_available,
     }
 
 
@@ -229,7 +314,9 @@ def preview_lead_provision(lead: Lead, domain_suffix: str = "localhost", request
         resolved = requested
         while not resolved["available"]:
             index += 1
-            candidate = _build_next_slug(base_slug, index)
+            if index > SLUG_MAX_ATTEMPTS:
+                raise ValueError("Could not find an available tenant slug. Request a different slug.")
+            candidate = _unreserved_slug(_build_next_slug(base_slug, index))
             resolved = _availability(candidate, normalized_suffix)
 
     return {
@@ -237,6 +324,7 @@ def preview_lead_provision(lead: Lead, domain_suffix: str = "localhost", request
         "domain_suffix": normalized_suffix,
         "input_slug": requested["slug"],
         "input_domain": requested["domain"],
+        "input_reserved": requested["reserved"],
         "input_slug_available": requested["slug_available"],
         "input_domain_available": requested["domain_available"],
         "input_available": requested["available"],
@@ -244,6 +332,108 @@ def preview_lead_provision(lead: Lead, domain_suffix: str = "localhost", request
         "resolved_slug": resolved["slug"],
         "resolved_domain": resolved["domain"],
     }
+
+
+def _lock_lead(lead: Lead) -> None:
+    """Row-lock the lead for the rest of the caller's transaction."""
+    try:
+        Lead.objects.select_for_update().only("id").get(pk=lead.id)
+    except Lead.DoesNotExist as exc:
+        raise ValueError("Lead no longer exists.") from exc
+
+
+def _block_or_supersede_running_jobs(lead: Lead) -> None:
+    """Refuse while another provision of ``lead`` is in flight; retire dead attempts.
+
+    Must run under the lead row lock (``_lock_lead``) so the check and the new RUNNING
+    job it precedes are atomic with respect to a concurrent provision.
+    """
+    stale_before = timezone.now() - PROVISIONING_STALE_AFTER
+    in_flight = ProvisioningJob.objects.filter(
+        lead=lead,
+        status=ProvisioningJob.Status.RUNNING,
+        created_at__gte=stale_before,
+    ).exists()
+    if in_flight:
+        _log_provisioning_event("lead_provision_blocked", lead_id=lead.id, reason="already_in_progress")
+        raise ValueError(
+            "Provisioning is already in progress for this lead. "
+            "Wait a minute and refresh — do not provision it again."
+        )
+
+    stale_jobs = ProvisioningJob.objects.filter(
+        lead=lead,
+        status=ProvisioningJob.Status.RUNNING,
+        created_at__lt=stale_before,
+    )
+    for stale in stale_jobs:
+        # Its tenant row (and possibly a partial schema) is deliberately left in place
+        # for ops review — dropping data on a timeout heuristic is not safe.
+        stale.status = ProvisioningJob.Status.FAILED
+        stale.append_log(
+            f"Superseded: still RUNNING after {int(PROVISIONING_STALE_AFTER.total_seconds() // 60)} min "
+            "(worker presumed dead). Tenant left in place for manual review."
+        )
+        stale.save(update_fields=["status", "updated_at"])
+        _log_provisioning_event(
+            "lead_provision_stale_job_superseded",
+            lead_id=lead.id,
+            provisioning_job_id=stale.id,
+            tenant_id=getattr(stale, "tenant_id", None),
+        )
+
+
+def _assert_owner_account_reusable(user, lead: Lead, *, owner_role: str) -> None:
+    """Refuse to re-parent an existing account onto a newly provisioned tenant.
+
+    ``provision_lead`` keys the owner on the lead's email, so without this check a
+    lead (incl. a public one) carrying an existing owner's email would silently move
+    that owner off their restaurant, or attach a platform/staff account to a tenant.
+    Multi-restaurant ownership is a future product decision; refusing is the safe default.
+    """
+    if (
+        getattr(user, "is_superuser", False)
+        or getattr(user, "is_staff", False)
+        or getattr(user, "role", None) != owner_role
+    ):
+        raise ValueError(
+            "This email belongs to a platform or staff account and cannot own a restaurant. "
+            "Use a different email for this lead."
+        )
+    current_tenant_id = getattr(user, "tenant_id", None)
+    if current_tenant_id is None:
+        return
+    # The one tenant it may be moved off: an earlier, never-live attempt for THIS lead
+    # (e.g. a superseded stale RUNNING job whose tenant was left in place).
+    abandoned_attempt_of_this_lead = (
+        ProvisioningJob.objects.filter(lead=lead, tenant_id=current_tenant_id)
+        .exclude(status=ProvisioningJob.Status.SUCCESS)
+        .exists()
+    )
+    if abandoned_attempt_of_this_lead:
+        return
+    raise ValueError("This email already owns another restaurant — use a different email for this lead.")
+
+
+def _drop_schema_created_by_attempt(schema_name: str) -> bool:
+    """DROP a schema a failed provisioning attempt created. Returns True when dropped.
+
+    The name comes from the slug, so it is validated against a strict pattern AND
+    quoted before interpolation; reserved/system names are never dropped.
+    """
+    if not _DROPPABLE_SCHEMA_NAME_RE.fullmatch(schema_name or "") or is_reserved_slug(schema_name):
+        logger.error("Refusing to drop schema with unexpected name %r", schema_name)
+        return False
+    try:
+        conn = connections[get_tenant_database_alias()]
+        conn.set_schema_to_public()
+        with conn.cursor() as cursor:
+            cursor.execute(f"DROP SCHEMA IF EXISTS {conn.ops.quote_name(schema_name)} CASCADE")
+    except Exception:
+        logger.exception("Could not drop partially-built schema %s", schema_name)
+        return False
+    _log_provisioning_event("lead_provision_schema_dropped", schema_name=schema_name)
+    return True
 
 
 def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug: str | None = None) -> ProvisionResult:
@@ -260,6 +450,11 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
     # Tenant/domain writes are shared-data writes and must run in the public schema.
     with schema_context(get_public_schema_name()):
         with transaction.atomic():
+            # Serialize provisions of the same lead: a second click / admin action
+            # waits here until the first one's phase 1 commits, then sees its RUNNING
+            # job below instead of racing it into a second tenant.
+            _lock_lead(lead)
+
             already_live = ProvisioningJob.objects.filter(
                 lead=lead,
                 status=ProvisioningJob.Status.SUCCESS,
@@ -268,6 +463,7 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             if already_live:
                 _log_provisioning_event("lead_provision_blocked", lead_id=lead.id, reason="already_provisioned")
                 raise ValueError("Lead already provisioned. Use resend activation or package actions instead.")
+            _block_or_supersede_running_jobs(lead)
 
             plan = lead.plan
             if plan is None:
@@ -296,6 +492,34 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                     domain=domain_name,
                 )
                 raise ValueError("Tenant slug/domain is no longer available. Please retry provisioning.")
+            if is_reserved_slug(slug) or domain_name.lower() in _platform_hosts():
+                _log_provisioning_event(
+                    "lead_provision_blocked",
+                    lead_id=lead.id,
+                    reason="slug_reserved",
+                    slug=slug,
+                    domain=domain_name,
+                )
+                raise ValueError(f"'{slug}' is reserved by the platform and cannot be used as a restaurant address.")
+
+            owner_email = lead.email or f"{slug}@example.com"
+            user, created = User.objects.get_or_create(
+                username=owner_email,
+                defaults={
+                    "email": owner_email,
+                    "role": User.Roles.TENANT_OWNER,
+                },
+            )
+            if created:
+                # Temp password: user never sees it and authenticates via the
+                # activation link, so it just needs to be strong and unguessable.
+                # (User.objects.make_random_password() was removed in Django 5.1.)
+                user.set_password(get_random_string(length=32))
+            else:
+                # Lock the existing account so two concurrent provisions can't both
+                # adopt it, then refuse to silently move it off another restaurant.
+                user = User.objects.select_for_update().get(pk=user.pk)
+                _assert_owner_account_reusable(user, lead, owner_role=User.Roles.TENANT_OWNER)
 
             # Create the tenant ROW only. Physical-schema creation is deferred to
             # phase 2 (below), OUTSIDE this transaction — a new tenant's migrations
@@ -312,19 +536,6 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             tenant.save()
             Domain.objects.create(domain=domain_name, tenant=tenant, is_primary=True)
 
-            owner_email = lead.email or f"{slug}@example.com"
-            user, created = User.objects.get_or_create(
-                username=owner_email,
-                defaults={
-                    "email": owner_email,
-                    "role": User.Roles.TENANT_OWNER,
-                },
-            )
-            if created:
-                # Temp password: user never sees it and authenticates via the
-                # activation link, so it just needs to be strong and unguessable.
-                # (User.objects.make_random_password() was removed in Django 5.1.)
-                user.set_password(get_random_string(length=32))
             user.tenant = tenant
             user.save()
 
@@ -338,7 +549,21 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
         # ── Phase 2: build the physical schema OUTSIDE the transaction ────────────
         # phase 1 has committed the public-schema rows; now run the tenant's
         # migrations (incl. the AddIndexConcurrently ones) with no transaction open.
+        schema_name = tenant.schema_name
+        # True once we know no schema of this name pre-dated this attempt — only then
+        # is a leftover schema ours to drop on failure.
+        schema_owned_by_attempt = False
         try:
+            if schema_exists(schema_name):
+                # Never adopt a pre-existing schema: create_schema(check_if_exists=True)
+                # would return WITHOUT migrating it, and the tenant would go LIVE
+                # half-migrated. (_availability already rejects such slugs; this is the
+                # race backstop.)
+                raise ValueError(
+                    f"A database schema named '{schema_name}' already exists. "
+                    "Retry provisioning to get a different address, or ask ops to remove the stray schema."
+                )
+            schema_owned_by_attempt = True
             tenant.create_schema(check_if_exists=True)
         except Exception as exc:
             logger.exception("Schema creation failed for tenant %s (lead %s)", slug, lead.id)
@@ -348,9 +573,20 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                 tenant_slug=slug,
                 error=str(exc),
             )
+            # Drop the partially-migrated schema THIS attempt created (auto_drop_schema
+            # is off, so deleting the Tenant row below would orphan it); never touch a
+            # schema that existed before we started.
+            schema_dropped = schema_owned_by_attempt and _drop_schema_created_by_attempt(schema_name)
             with transaction.atomic():
                 job.status = ProvisioningJob.Status.FAILED
                 job.append_log(f"Schema creation failed: {exc}")
+                if schema_owned_by_attempt:
+                    job.append_log(
+                        f"Partially-built schema '{schema_name}' dropped"
+                        if schema_dropped
+                        else f"WARNING: could not drop partially-built schema '{schema_name}'; "
+                        "it blocks this slug until removed manually"
+                    )
                 job.save(update_fields=["status", "updated_at"])
                 # Free the slug/domain so the lead can be retried: deleting the tenant
                 # CASCADEs its Domain + Subscription and SET_NULLs this job + the owner.
