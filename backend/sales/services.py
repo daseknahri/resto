@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -6,6 +7,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connections, transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -31,7 +33,14 @@ from .messaging import (
     send_activation_email,
     send_activation_whatsapp,
 )
-from .models import ActivationToken, Lead, ProvisioningJob, Subscription, TierUpgradeRequest
+from .models import (
+    ActivationToken,
+    Lead,
+    ProvisioningJob,
+    Subscription,
+    TierUpgradeRequest,
+    account_is_activated,
+)
 
 logger = logging.getLogger(__name__)
 provisioning_logger = logging.getLogger("sales.provisioning")
@@ -701,22 +710,65 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
     )
 
 
+ACTIVATION_RESEND_PER_EMAIL_LIMIT = 3
+ACTIVATION_RESEND_PER_EMAIL_WINDOW_SECONDS = 3600
+
+
+def _activation_resend_cache_key(email: str) -> str:
+    # Hash the normalized address: no raw email (PII) in cache keys, and case /
+    # whitespace variants of the same mailbox share one counter.
+    digest = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    return f"activation_resend:{digest}"
+
+
+def activation_resend_allowed(email: str) -> bool:
+    """Per-email fixed-window cap on the PUBLIC activation resend (anti mail-flood).
+
+    Complements the per-IP PublicLeadThrottle, which a distributed caller can
+    rotate around. Counts every request for the address (known or not) so the
+    limit itself reveals nothing. Same fixed-window add+incr pattern as the
+    per-account login lockout; fails OPEN on a cache outage like that lockout.
+    """
+    key = _activation_resend_cache_key(email)
+    try:
+        cache.add(key, 0, ACTIVATION_RESEND_PER_EMAIL_WINDOW_SECONDS)
+        count = cache.incr(key)
+    except Exception:
+        return True
+    if count is None:  # django-redis IGNORE_EXCEPTIONS swallowed an outage
+        return True
+    return count <= ACTIVATION_RESEND_PER_EMAIL_LIMIT
+
+
 def resend_activation_for_email(email: str) -> ActivationResendResult | None:
     """B1: self-service activation resend, keyed by the owner's email.
 
-    Returns None when there is nothing to resend — unknown email, no tenant
-    attached, or the account has ALREADY completed activation (has a used
-    ActivationToken). Callers (the public view) MUST return the same generic
+    Returns None (and sends nothing) when there is nothing to resend — the
+    per-email resend quota is exhausted, unknown email, not an active tenant
+    owner, or the account is ALREADY activated (``account_is_activated``: it has
+    signed in before or enrolled MFA — account state, NOT token rows, which are
+    pruned after 30 days). Callers (the public view) MUST return the same generic
     response regardless of the return value, to avoid account enumeration.
     """
     email = (email or "").strip()
     if not email:
         return None
+    if not activation_resend_allowed(email):
+        _log_provisioning_event("self_service_activation_resend_rate_limited")
+        return None
     User = get_user_model()
     with schema_context(get_public_schema_name()):
         with transaction.atomic():
+            # Activation is the OWNER onboarding flow: staff are invited with a
+            # temp password (must_change_password) and never get a token, and a
+            # deactivated account must not be handed a fresh credential.
             user = (
-                User.objects.filter(email__iexact=email, tenant__isnull=False)
+                User.objects.filter(
+                    email__iexact=email,
+                    tenant__isnull=False,
+                    role=User.Roles.TENANT_OWNER,
+                    is_active=True,
+                )
                 .select_related("tenant")
                 .order_by("id")
                 .first()
@@ -725,8 +777,7 @@ def resend_activation_for_email(email: str) -> ActivationResendResult | None:
                 return None
             tenant = user.tenant
 
-            already_activated = ActivationToken.objects.filter(user=user, used_at__isnull=False).exists()
-            if already_activated:
+            if account_is_activated(user):
                 return None
 
             (

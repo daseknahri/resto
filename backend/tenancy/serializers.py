@@ -374,20 +374,17 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         # menu page agrees with the marketplace card on a temp-disabled restaurant.
         if getattr(obj, "is_menu_temporarily_disabled", False):
             return False
-        # Check if today is an explicit closure date (lazy import avoids circular dep).
-        try:
-            from menu.models import ClosureDate
-            from django.utils import timezone as _tz
-            if ClosureDate.objects.filter(date=_tz.localdate()).exists():
-                return False
-        except Exception:
-            pass
-        # Evaluate the schedule in the restaurant's OWN timezone (was UTC — the bug:
-        # schedule open/close strings are tenant-local wall-clock). None → no schedule
-        # configured → fall back to the manual is_open boolean.
-        from .openstate import schedule_open_now, tenant_local_now
+        # Evaluate in the restaurant's OWN timezone (was UTC — the bug: schedule
+        # open/close strings AND the closure-date calendar day are tenant-local, not
+        # server/UTC). Compute "now" once so the closure check and the window rule agree.
+        from .openstate import is_closure_date, schedule_open_now, tenant_local_now
+        now_local = tenant_local_now(obj)
+        # Is today (tenant-local) an explicit closure date? Shared single-source helper.
+        if is_closure_date(now_local.date()):
+            return False
+        # None → no schedule configured → fall back to the manual is_open boolean.
         schedule = getattr(obj, "business_hours_schedule", None)
-        result = schedule_open_now(schedule, tenant_local_now(obj))
+        result = schedule_open_now(schedule, now_local)
         return bool(obj.is_open) if result is None else result
 
     def _prep_eta(self, obj):
@@ -593,7 +590,16 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         # rule) — turning it on requires the data, but editing an unrelated field on an
         # already-listed profile isn't blocked. Runs AFTER coord normalization above, so a bad
         # (0,0)/out-of-range pair is treated as "no location".
-        if "directory_opt_in" in attrs and attrs.get("directory_opt_in"):
+        #
+        # Enforce only on a genuine OFF→ON transition. Since #402 a new Profile defaults to
+        # directory_opt_in=True, and the onboarding wizard (StepBrand/StepTheme/StepPublish)
+        # loads the whole profile and PUTs it back, so an already-stored True round-trips in
+        # every save. Gating on "present and truthy" therefore 400'd a brand-new tenant's very
+        # first wizard save (no city/coords yet) on a step that has no city field. A profile
+        # that is already listed but lacks a location simply sorts last in the marketplace
+        # (distance_km=None), so only an explicit opt-in needs the data.
+        _already_listed = bool(getattr(self.instance, "directory_opt_in", False)) if self.instance is not None else False
+        if "directory_opt_in" in attrs and attrs.get("directory_opt_in") and not _already_listed:
             from .delivery_pricing import valid_coord
             eff_city = attrs.get("city") if "city" in attrs else getattr(self.instance, "city", "")
             d_lat = attrs.get("lat") if "lat" in attrs else getattr(self.instance, "lat", None)

@@ -12,6 +12,7 @@ All unit-level (SimpleTestCase + lightweight stand-ins).
 """
 from datetime import timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -40,6 +41,12 @@ def _profile(schedule=None, tz="UTC"):
 
 
 class ValidateScheduledForTests(SimpleTestCase):
+    def setUp(self):
+        # Hold the ClosureDate lookup neutral (no DB) — default "not a closure date".
+        p = patch("menu.views.is_closure_date", return_value=False)
+        self.closure = p.start()
+        self.addCleanup(p.stop)
+
     def test_none_passes_through_as_asap(self):
         self.assertEqual(_validate_scheduled_for(_profile(), PICKUP, None), (None, None))
 
@@ -79,6 +86,48 @@ class ValidateScheduledForTests(SimpleTestCase):
         dt, err = _validate_scheduled_for(_profile(_ALWAYS_OPEN), DELIVERY, when)
         self.assertIsNone(err)
         self.assertEqual(dt, when)
+
+    # ── Holiday / closure dates ────────────────────────────────────────────────
+    # The closed storefront steers customers to "Schedule for later"; a requested time on
+    # an owner-declared closure day must be refused, or it would be accepted, prepaid, and
+    # released to the kitchen on the holiday. Shared by the direct AND marketplace flows
+    # (both call _validate_scheduled_for), so this is the single seam under test.
+
+    def test_refused_on_a_closure_date_when_no_schedule_configured(self):
+        self.closure.return_value = True
+        when = timezone.now() + timedelta(days=2)
+        dt, err = _validate_scheduled_for(_profile(), PICKUP, when)
+        self.assertIsNone(dt)
+        self.assertEqual(err, "schedule_closed")
+
+    def test_refused_on_a_closure_date_even_inside_the_schedule_window(self):
+        self.closure.return_value = True
+        when = (timezone.now() + timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+        dt, err = _validate_scheduled_for(_profile(_ALWAYS_OPEN), DELIVERY, when)
+        self.assertIsNone(dt)
+        self.assertEqual(err, "schedule_closed")
+
+    def test_closure_lookup_receives_the_scheduled_instants_tenant_local_date(self):
+        # 23:30 UTC two days out is already the NEXT calendar day in Tokyo (UTC+9): the
+        # closure lookup must use the tenant-local date of the SCHEDULED instant, not the
+        # server/UTC date and not "today".
+        when = (timezone.now() + timedelta(days=2)).replace(hour=23, minute=30, second=0, microsecond=0)
+        dt, err = _validate_scheduled_for(_profile(tz="Asia/Tokyo"), PICKUP, when)
+        self.assertIsNone(err)
+        self.closure.assert_called_once_with(when.date() + timedelta(days=1))
+
+    def test_open_day_with_no_closure_is_accepted(self):
+        self.closure.return_value = False
+        when = timezone.now() + timedelta(days=2)
+        dt, err = _validate_scheduled_for(_profile(), PICKUP, when)
+        self.assertIsNone(err)
+        self.assertEqual(dt, when)
+
+    def test_closure_lookup_skipped_when_an_earlier_check_already_refused(self):
+        when = timezone.now() + timedelta(minutes=10)  # too soon
+        dt, err = _validate_scheduled_for(_profile(), PICKUP, when)
+        self.assertEqual(err, "schedule_too_soon")
+        self.closure.assert_not_called()
 
 
 class WithinBusinessHoursTests(SimpleTestCase):

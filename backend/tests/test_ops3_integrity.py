@@ -269,7 +269,7 @@ class PlaceOrderIdempotencyTests(SimpleTestCase):
     @patch("menu.views._validate_scheduled_for", return_value=(None, None))
     @patch("menu.views._is_restaurant_currently_open", return_value=True)
     @patch("menu.views.OrderHandoffSerializer")
-    @patch("menu.views.get_all_active_hh_rules", return_value=[])
+    @patch("menu.views.get_active_happy_hours", return_value=[])
     @patch("menu.views.effective_unit_price", return_value=(Decimal("10.00"), None))
     @patch("menu.views._generate_order_number", return_value="ORD-RACE")
     def test_integrity_error_race_refetches_winner(
@@ -361,7 +361,7 @@ class PlaceOrderIdempotencyTests(SimpleTestCase):
     @patch("menu.views._validate_scheduled_for", return_value=(None, None))
     @patch("menu.views._is_restaurant_currently_open", return_value=True)
     @patch("menu.views.OrderHandoffSerializer")
-    @patch("menu.views.get_all_active_hh_rules", return_value=[])
+    @patch("menu.views.get_active_happy_hours", return_value=[])
     @patch("menu.views.effective_unit_price", return_value=(Decimal("10.00"), None))
     def test_different_keys_create_two_orders(
         self, mock_eup, mock_hh, mock_ser, mock_open, mock_sched,

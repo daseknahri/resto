@@ -258,6 +258,9 @@ class ActivationToken(models.Model):
 
     @classmethod
     def issue(cls, tenant, user, hours_valid: int = 24):
+        # Only the newest link may work: revoke the user's outstanding tokens so a
+        # resend kills the previous link (mirrors PasswordResetToken.issue).
+        cls.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
         return cls.objects.create(
             tenant=tenant,
             user=user,
@@ -265,15 +268,59 @@ class ActivationToken(models.Model):
             expires_at=timezone.now() + timedelta(hours=hours_valid),
         )
 
-    def mark_used(self):
-        self.used_at = timezone.now()
-        self.save(update_fields=["used_at"])
+    def consume(self) -> bool:
+        """Atomically claim this token (compare-and-set on ``used_at``).
+
+        Returns True for exactly ONE caller — the one whose UPDATE flips
+        ``used_at`` from NULL while the token is unexpired — and then revokes the
+        user's other unused tokens so no sibling link stays usable. A concurrent
+        or replayed request gets False and must not touch the account.
+        """
+        now = timezone.now()
+        claimed = type(self).objects.filter(
+            pk=self.pk, used_at__isnull=True, expires_at__gt=now,
+        ).update(used_at=now)
+        if claimed != 1:
+            return False
+        self.used_at = now
+        type(self).objects.filter(user_id=self.user_id, used_at__isnull=True).update(used_at=now)
+        return True
 
     def is_valid(self) -> bool:
         return self.used_at is None and timezone.now() < self.expires_at
 
     def __str__(self):
         return f"Activation for {self.user.email} ({self.tenant.slug})"
+
+
+def user_has_confirmed_mfa(user) -> bool:
+    """True when ``user`` has a CONFIRMED TOTP device (the LoginView MFA gate)."""
+    from accounts.models import UserTOTPDevice  # local import: accounts.serializers imports this module
+
+    return UserTOTPDevice.objects.filter(user=user, confirmed=True).exists()
+
+
+def account_is_activated(user) -> bool:
+    """True when ``user`` has demonstrably finished account setup, so an
+    activation token must never (re)set its password or log it in again.
+
+    Defined by ACCOUNT STATE, not by ActivationToken rows: consumed tokens are
+    deleted after 30 days by ``prune_auth_tokens``, staff created by invite never
+    had one, and ``ActivationToken.issue`` marks revoked siblings as used — so
+    "a used token exists" is neither durable nor precise.
+
+    * ``last_login`` is set — every owner/staff session is created through
+      ``django.contrib.auth.login()`` (LoginView, MFAVerifyView, ActivationView),
+      whose ``user_logged_in`` signal stamps ``last_login``. Provisioning creates
+      the owner with a random 32-char password and ``last_login=None`` (the
+      password is usable, so ``has_usable_password()`` can NOT tell the states
+      apart), hence a genuinely never-activated owner is never matched.
+    * a CONFIRMED TOTP device exists — enrolment needs a signed-in session, and
+      activation must never become a password reset that skips the second factor.
+    """
+    if getattr(user, "last_login", None) is not None:
+        return True
+    return user_has_confirmed_mfa(user)
 
 
 class AdminAuditLog(models.Model):
@@ -322,6 +369,9 @@ class AdminAuditLog(models.Model):
         DELIVERY_ZONE_CREATED = "delivery_zone_created", "Delivery zone created"
         DELIVERY_ZONE_UPDATED = "delivery_zone_updated", "Delivery zone updated"
         DELIVERY_ZONE_DELETED = "delivery_zone_deleted", "Delivery zone deleted"
+        # A tenant's delivery pricing + the platform's own revenue share
+        # (delivery_commission_pct / marketplace_commission_pct) — admin-only writes.
+        TENANT_DELIVERY_PRICING_UPDATED = "tenant_delivery_pricing_updated", "Tenant delivery pricing updated"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

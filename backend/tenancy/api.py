@@ -321,10 +321,11 @@ class TenantMetaView(APIView):
             # stripped from the HTTP response by _refresh_meta_is_open_now.
             profile = getattr(tenant, "profile", None)
             if profile is not None and isinstance(built_data.get("profile"), dict):
+                # Tenant-LOCAL today (not the server/UTC date) via the shared helper —
+                # the same rule ProfileSerializer.get_is_open_now applies.
+                from .openstate import is_closure_date, tenant_local_now
                 try:
-                    from menu.models import ClosureDate
-                    from django.utils import timezone as _tz
-                    closure_today = ClosureDate.objects.filter(date=_tz.localdate()).exists()
+                    closure_today = is_closure_date(tenant_local_now(profile).date())
                 except Exception:
                     closure_today = False
                 built_data[_META_ISOPEN_RAW_KEY] = {

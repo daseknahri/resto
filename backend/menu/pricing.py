@@ -5,7 +5,9 @@ Public API
 ----------
 get_active_happy_hours(now_local)
     Return all HappyHour rules whose window is active at *now_local*
-    (a timezone-aware datetime in the tenant's local timezone).
+    (a timezone-aware datetime in the tenant's local timezone).  Used by
+    BOTH the menu display and order pricing, so a dish is charged at the
+    price the menu shows (no discount outside the rule's day/time window).
     Issues ONE query for is_active rules + ONE prefetch for the M2M
     categories relation.  The caller should cache this list for the
     lifetime of a single request to avoid per-dish re-queries.
@@ -50,21 +52,14 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 
-def get_all_active_hh_rules() -> list:
-    """Return ALL HappyHour rules with is_active=True (no time-window filter).
-
-    Used at order-placement time so that the test can fully control the returned
-    rules by patching ``menu.pricing.HappyHour`` — the time-window filter that
-    ``get_active_happy_hours`` applies would make tests time-dependent.
-
-    The ``is_active`` flag is the primary on/off switch for an owner; the
-    start/end window is a convenience for the menu-display layer only.
-    """
-    return list(HappyHour.objects.filter(is_active=True).prefetch_related("categories"))
-
-
 def get_active_happy_hours(now_local: "datetime") -> list:
     """Return all HappyHour rules active at *now_local* (tenant-local aware dt).
+
+    This is the SINGLE rule source for both the menu display AND every order-pricing
+    path (storefront place-order, reorder-resolve, staff dine-in append, marketplace
+    checkout): a rule discounts an order only while its day/time window is open, so the
+    customer is charged exactly what the menu showed. Callers pass the tenant-local now
+    (``menu.views._profile_now(profile)``).
 
     Performs ONE query (is_active filter) plus ONE prefetch (categories M2M).
     """

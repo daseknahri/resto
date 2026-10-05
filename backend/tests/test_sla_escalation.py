@@ -73,15 +73,18 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
         o.created_at = timezone.now() - timedelta(minutes=minutes_ago)
         return o
 
-    def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders):
+    def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders, claim=1):
         mock_t.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
         mock_ctx.return_value.__enter__ = lambda s: s
         mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         mock_order_cls.Status.PENDING = "pending"
         (mock_order_cls.objects.filter.return_value
          .only.return_value.order_by.return_value) = orders
+        # The atomic claim: Order.objects.filter(pk=..., sla_notified_at__isnull=True).update(...)
+        # returns the number of rows it won (1 = we own the escalation, 0 = lost the race).
+        mock_order_cls.objects.filter.return_value.update.return_value = claim
 
-    def test_dry_run_does_not_save_or_push(self):
+    def test_dry_run_does_not_claim_or_push(self):
         tenant = self._make_tenant()
         order = self._make_order()
 
@@ -92,11 +95,11 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
             self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             output = self._run_command(dry_run=True)
 
-        order.save.assert_not_called()
+        mock_order_cls.objects.filter.return_value.update.assert_not_called()
         mock_push.assert_not_called()
         self.assertIn("DRY RUN", output)
 
-    def test_stamps_sla_notified_at_and_pushes(self):
+    def test_claims_sla_notified_at_and_pushes(self):
         tenant = self._make_tenant()
         order = self._make_order()
 
@@ -107,11 +110,52 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
             self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             self._run_command()
 
-        order.save.assert_called_once()
-        update_fields = order.save.call_args.kwargs.get("update_fields", [])
-        self.assertIn("sla_notified_at", update_fields)
-        self.assertIsNotNone(order.sla_notified_at)
+        # Claimed via a conditional UPDATE (not a blind save): scoped to this pk AND
+        # still-unstamped, stamping sla_notified_at + updated_at (update() skips auto_now).
+        order.save.assert_not_called()
+        self.assertEqual(
+            mock_order_cls.objects.filter.call_args.kwargs,
+            {"pk": order.pk, "sla_notified_at__isnull": True},
+        )
+        claim_update = mock_order_cls.objects.filter.return_value.update
+        claim_update.assert_called_once()
+        self.assertEqual(set(claim_update.call_args.kwargs), {"sla_notified_at", "updated_at"})
+        self.assertIsNotNone(claim_update.call_args.kwargs["sla_notified_at"])
         mock_push.assert_called_once()
+
+    def test_lost_claim_skips_push(self):
+        """Another overlapping run already claimed the order (update() -> 0): no duplicate push."""
+        tenant = self._make_tenant()
+        order = self._make_order()
+
+        with patch(f"{CMD}.Tenant") as mock_t, \
+             patch(f"{CMD}.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("menu.push.push_sla_escalation") as mock_push:
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order], claim=0)
+            output = self._run_command()
+
+        mock_order_cls.objects.filter.return_value.update.assert_called_once()
+        mock_push.assert_not_called()
+        self.assertIn("already escalated", output)
+        self.assertIn("0 order(s)", output)
+
+    def test_overlapping_runs_push_once(self):
+        """Two runs see the same stale order; only the first claim wins, so one push total."""
+        tenant = self._make_tenant()
+        order = self._make_order()
+
+        with patch(f"{CMD}.Tenant") as mock_t, \
+             patch(f"{CMD}.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("menu.push.push_sla_escalation") as mock_push:
+            self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
+            # First run wins the row; the second (overlapping) run finds it already stamped.
+            mock_order_cls.objects.filter.return_value.update.side_effect = [1, 0]
+            self._run_command()
+            self._run_command()
+
+        self.assertEqual(mock_push.call_count, 1)
 
     def test_push_exception_still_stamps(self):
         tenant = self._make_tenant()
@@ -124,7 +168,8 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
             self._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order])
             self._run_command()  # must not raise
 
-        order.save.assert_called_once()
+        # The claim (stamp) was taken before the failing push, so it is not retried.
+        mock_order_cls.objects.filter.return_value.update.assert_called_once()
 
     def test_only_pending_unstamped_queried(self):
         """The query filters status=PENDING + sla_notified_at IS NULL + created_at<=cutoff."""

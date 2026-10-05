@@ -306,6 +306,55 @@ class MarketplaceCodPlaceOrderTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "wallet_insufficient")
 
 
+# ── MarketplacePlaceOrderView — scheduling on a holiday / closure date ────────
+
+class MarketplaceScheduledClosureDateTests(SimpleTestCase):
+    """The marketplace reuses menu.views._validate_scheduled_for for advance orders, so a
+    requested time on an owner-declared closure date must be refused here too (the live
+    ASAP gate is skipped for scheduled orders by design — this is the only server check)."""
+
+    def test_scheduled_order_on_a_closure_date_is_rejected(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        customer = _customer(cid=7, wallet="100.00")
+        fake_menu, _order_cls = _fake_menu_models(_dish())
+
+        tenant = MagicMock()
+        tenant.id = 1
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.schema_name = "bistro"
+
+        payload = {
+            "restaurant": "bistro",
+            "items": [{"slug": "burger", "qty": 1}],
+            "fulfillment_type": "pickup",
+            "scheduled_for": (timezone.now() + timedelta(days=2)).isoformat(),
+        }
+
+        factory = APIRequestFactory()
+        req = factory.post("/api/marketplace/order/", payload, format="json")
+        req.session = {}
+        force_authenticate(req, user=customer)
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()), \
+                    patch("tenancy.models.Profile") as mock_profile_cls, \
+                    patch("accounts.views._compute_is_open_now", return_value=True), \
+                    patch("menu.views.is_closure_date", return_value=True) as closure:
+                mock_profile_cls.objects.filter.return_value.first.return_value = _profile()
+                with _inject_module("menu.models", fake_menu):
+                    resp = MarketplacePlaceOrderView.as_view()(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "schedule_closed")
+        closure.assert_called_once()
+
+
 # ── MarketplaceMenuView — eligibility exposure ────────────────────────────────
 
 class MarketplaceMenuCodExposureTests(SimpleTestCase):

@@ -1227,6 +1227,22 @@ class AdminTenantDeliveryView(APIView):
         "delivery_free_over", "delivery_minimum_order",
     )
 
+    # Fields whose old -> new values go into the audit row. All numeric/boolean
+    # (no PII). delivery_zone_description is free text, so only its NAME is
+    # recorded (via changed_fields), never its value.
+    _AUDITED_VALUE_FIELDS = _DECIMAL_FIELDS + (
+        "delivery_radius_km", "delivery_commission_pct",
+        "marketplace_commission_pct", "platform_delivery_enabled",
+    )
+
+    @staticmethod
+    def _audit_value(v):
+        # Decimal isn't JSON-serializable — an unserializable value would make
+        # log_admin_action swallow the error and silently drop the audit row.
+        if v is None or isinstance(v, (bool, int, float)):
+            return v
+        return str(v)
+
     @staticmethod
     def _serialize(profile):
         def _s(v):
@@ -1275,6 +1291,9 @@ class AdminTenantDeliveryView(APIView):
             profile = Profile.objects.filter(tenant=tenant).first()
             if profile is None:
                 return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Snapshot before mutating so the audit row can record old -> new.
+            before = {f: getattr(profile, f, None) for f in self._AUDITED_VALUE_FIELDS}
 
             update_fields = []
             for f in self._DECIMAL_FIELDS:
@@ -1353,6 +1372,29 @@ class AdminTenantDeliveryView(APIView):
                 except Exception:
                     pass
             data = self._serialize(profile)
+
+        if update_fields:
+            # This endpoint is the ONLY writer of the platform's own revenue share
+            # (delivery_commission_pct / marketplace_commission_pct) and of what the
+            # tenant's customers are charged for delivery — audit who changed what.
+            # `changes` holds old -> new only for values that actually differ (the
+            # admin form PATCHes every field on each save). AdminAuditLog is a
+            # shared (public-schema) model, so write it there, like the sibling
+            # lifecycle/settings views.
+            changes = {
+                f: {"old": self._audit_value(before[f]), "new": self._audit_value(getattr(profile, f, None))}
+                for f in update_fields
+                if f in before and before[f] != getattr(profile, f, None)
+            }
+            with schema_context(get_public_schema_name()):
+                log_admin_action(
+                    action=AdminAuditLog.Actions.TENANT_DELIVERY_PRICING_UPDATED,
+                    request=request,
+                    actor=request.user,
+                    tenant=tenant,
+                    target_repr=f"tenant:{tenant.slug}",
+                    metadata={"changed_fields": update_fields, "changes": changes},
+                )
 
         return Response({"detail": "Delivery settings updated.", "delivery": data})
 
@@ -1631,8 +1673,13 @@ class SelfServiceResendActivationView(APIView):
     Security:
       - ALWAYS returns the same generic 200, whether or not the email matches
         a real, not-yet-activated account — prevents account enumeration.
-      - Rate-limited (reuses PublicLeadThrottle / "public_leads" scope, the
-        same throttle the public lead-capture endpoint uses).
+      - Rate-limited per IP (reuses PublicLeadThrottle / "public_leads" scope,
+        the same throttle the public lead-capture endpoint uses) AND per email
+        address (sales.services.activation_resend_allowed — 3/hour; over the cap
+        nothing is sent but the response stays the same generic 200).
+      - Only a never-activated, active tenant OWNER gets a link — an account
+        that has signed in or enrolled MFA is never re-activatable (that would
+        be an MFA-less password reset); see sales.models.account_is_activated.
     """
 
     permission_classes = [AllowAny]

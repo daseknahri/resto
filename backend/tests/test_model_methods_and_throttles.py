@@ -3,14 +3,14 @@ Tests for:
   - accounts.throttles._IPThrottle.get_cache_key  (+ concrete subclasses)
   - menu.throttles._IPThrottle.get_cache_key  (+ concrete subclasses)
   - accounts.models.PasswordResetToken.is_valid / mark_used
-  - sales.models.ActivationToken.is_valid / mark_used
+  - sales.models.ActivationToken.is_valid / consume
   - sales.models.ProvisioningJob.append_log
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -250,7 +250,7 @@ class PasswordResetTokenMarkUsedTests(SimpleTestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# sales.models.ActivationToken — is_valid / mark_used
+# sales.models.ActivationToken — is_valid / consume
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ActivationTokenIsValidTests(SimpleTestCase):
@@ -283,29 +283,35 @@ class ActivationTokenIsValidTests(SimpleTestCase):
         self.assertFalse(tok.is_valid())
 
 
-class ActivationTokenMarkUsedTests(SimpleTestCase):
-    def _token(self):
-        tok = ActivationToken.__new__(ActivationToken)
-        tok.used_at = None
-        tok.expires_at = timezone.now() + timedelta(hours=24)
-        tok.save = MagicMock()
-        return tok
+class ActivationTokenConsumeTests(SimpleTestCase):
+    """consume() replaced the non-atomic mark_used(): a compare-and-set UPDATE
+    (detailed CAS/sibling-revocation regressions: test_activation_token_hardening.py)."""
 
-    def test_mark_used_sets_used_at(self):
+    def _token(self):
+        return ActivationToken(id=5, user_id=9, used_at=None, expires_at=timezone.now() + timedelta(hours=24))
+
+    def test_consume_sets_used_at(self):
         tok = self._token()
         before = timezone.now()
-        tok.mark_used()
+        with patch.object(ActivationToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            self.assertTrue(tok.consume())
         self.assertIsNotNone(tok.used_at)
         self.assertGreaterEqual(tok.used_at, before)
 
-    def test_mark_used_calls_save_with_correct_fields(self):
+    def test_consume_does_not_save_whole_row(self):
         tok = self._token()
-        tok.mark_used()
-        tok.save.assert_called_once_with(update_fields=["used_at"])
+        tok.save = MagicMock()
+        with patch.object(ActivationToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            tok.consume()
+        tok.save.assert_not_called()
 
-    def test_mark_used_makes_is_valid_false(self):
+    def test_consume_makes_is_valid_false(self):
         tok = self._token()
-        tok.mark_used()
+        with patch.object(ActivationToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            tok.consume()
         self.assertFalse(tok.is_valid())
 
 

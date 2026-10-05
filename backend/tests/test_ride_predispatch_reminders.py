@@ -181,30 +181,34 @@ class TestSendRidePredispatchRemindersCommand(SimpleTestCase):
         ride.predispatch_reminder_sent_at = None
         return ride
 
+    def _wire(self, mock_rr, mock_ctx, rides, claim=1):
+        mock_ctx.return_value.__enter__ = lambda s: s
+        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        mock_rr.objects.filter.return_value.select_related.return_value = rides
+        mock_rr.Status.SCHEDULED = "scheduled"
+        # The atomic claim: RideRequest.objects.filter(pk=..., predispatch_reminder_sent_at__isnull=True)
+        # .update(...) returns the rows it won (1 = we own the reminder, 0 = lost the race).
+        mock_rr.objects.filter.return_value.update.return_value = claim
+
     @patch("accounts.push.send_ride_predispatch_reminder_sync")
     @patch("django_tenants.utils.schema_context")
     @patch("accounts.models.RideRequest")
     def test_dry_run_no_push_no_stamp(self, mock_rr, mock_ctx, mock_push):
-        mock_ctx.return_value.__enter__ = lambda s: s
-        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         ride = self._make_ride(55)
-        mock_rr.objects.filter.return_value.select_related.return_value = [ride]
-        mock_rr.Status.SCHEDULED = "scheduled"
+        self._wire(mock_rr, mock_ctx, [ride])
         out = self._run(dry_run=True)
         mock_push.assert_not_called()
         ride.save.assert_not_called()
+        mock_rr.objects.filter.return_value.update.assert_not_called()
         self.assertIn("(dry)", out)
         self.assertIn("55", out)
 
     @patch("accounts.push.send_ride_predispatch_reminder_sync")
     @patch("django_tenants.utils.schema_context")
     @patch("accounts.models.RideRequest")
-    def test_stamps_and_calls_push(self, mock_rr, mock_ctx, mock_push):
-        mock_ctx.return_value.__enter__ = lambda s: s
-        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+    def test_claims_and_calls_push(self, mock_rr, mock_ctx, mock_push):
         ride = self._make_ride(12, kind="ride", minutes=30)
-        mock_rr.objects.filter.return_value.select_related.return_value = [ride]
-        mock_rr.Status.SCHEDULED = "scheduled"
+        self._wire(mock_rr, mock_ctx, [ride])
         self._run()
         # minutes = int((scheduled_for - now)/60); sub-second drift between the
         # fixture's now and the command's now can truncate 30 -> 29, so allow both
@@ -213,20 +217,53 @@ class TestSendRidePredispatchRemindersCommand(SimpleTestCase):
         _args = mock_push.call_args.args
         self.assertEqual((_args[0], _args[1]), (ride.rider_id, "ride"))
         self.assertIn(_args[2], (29, 30))
-        ride.save.assert_called_once_with(update_fields=["predispatch_reminder_sent_at"])
-        self.assertIsNotNone(ride.predispatch_reminder_sent_at)
+        # Claimed via a conditional UPDATE scoped to this pk AND still-unstamped (not a
+        # blind save); writes only the stamp (RideRequest has no auto_now field).
+        ride.save.assert_not_called()
+        self.assertEqual(
+            mock_rr.objects.filter.call_args.kwargs,
+            {"pk": ride.pk, "predispatch_reminder_sent_at__isnull": True},
+        )
+        claim_update = mock_rr.objects.filter.return_value.update
+        claim_update.assert_called_once()
+        self.assertEqual(set(claim_update.call_args.kwargs), {"predispatch_reminder_sent_at"})
+        self.assertIsNotNone(claim_update.call_args.kwargs["predispatch_reminder_sent_at"])
+
+    @patch("accounts.push.send_ride_predispatch_reminder_sync")
+    @patch("django_tenants.utils.schema_context")
+    @patch("accounts.models.RideRequest")
+    def test_lost_claim_skips_push(self, mock_rr, mock_ctx, mock_push):
+        """Another overlapping run already claimed the ride (update() -> 0): no duplicate push."""
+        ride = self._make_ride(31)
+        self._wire(mock_rr, mock_ctx, [ride], claim=0)
+        out = self._run()
+        mock_rr.objects.filter.return_value.update.assert_called_once()
+        mock_push.assert_not_called()
+        self.assertIn("already reminded", out)
+        self.assertIn("sent=0", out)
+
+    @patch("accounts.push.send_ride_predispatch_reminder_sync")
+    @patch("django_tenants.utils.schema_context")
+    @patch("accounts.models.RideRequest")
+    def test_overlapping_runs_push_once(self, mock_rr, mock_ctx, mock_push):
+        """Two runs see the same eligible ride; only the first claim wins, so one push total."""
+        ride = self._make_ride(32)
+        self._wire(mock_rr, mock_ctx, [ride])
+        # First run wins the row; the second (overlapping) run finds it already stamped.
+        mock_rr.objects.filter.return_value.update.side_effect = [1, 0]
+        self._run()
+        self._run()
+        self.assertEqual(mock_push.call_count, 1)
 
     @patch("accounts.push.send_ride_predispatch_reminder_sync", side_effect=RuntimeError("boom"))
     @patch("django_tenants.utils.schema_context")
     @patch("accounts.models.RideRequest")
     def test_push_exception_still_stamps(self, mock_rr, mock_ctx, mock_push):
-        mock_ctx.return_value.__enter__ = lambda s: s
-        mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         ride = self._make_ride(7)
-        mock_rr.objects.filter.return_value.select_related.return_value = [ride]
-        mock_rr.Status.SCHEDULED = "scheduled"
+        self._wire(mock_rr, mock_ctx, [ride])
         self._run()  # must not raise
-        ride.save.assert_called_once_with(update_fields=["predispatch_reminder_sent_at"])
+        # The claim (stamp) was taken before the failing push, so it is not retried.
+        mock_rr.objects.filter.return_value.update.assert_called_once()
 
     @patch("accounts.push.send_ride_predispatch_reminder_sync")
     @patch("django_tenants.utils.schema_context")

@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from tenancy.openstate import schedule_open_now, tenant_local_now, tenant_timezone
+from tenancy.openstate import is_closure_date, schedule_open_now, tenant_local_now, tenant_timezone
 
 
 _KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
@@ -218,6 +218,41 @@ class TenantTimezoneTests(SimpleTestCase):
         slots = _build_day_slots(_d.date(2024, 6, 3), 60, tz)
         floored = booked_local.replace(minute=0, second=0, microsecond=0)
         self.assertIn(floored, slots)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# is_closure_date — the SHARED holiday/closure lookup (serializer is_open_now, the
+# cached /api/meta/ recompute, the direct order-acceptance gate, advance scheduling)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _closure_cls(*, exists=False, error=None):
+    """Mock menu.models.ClosureDate whose .objects.filter(...).exists() is controlled."""
+    qs = MagicMock()
+    if error is not None:
+        qs.exists.side_effect = error
+    else:
+        qs.exists.return_value = exists
+    cls = MagicMock()
+    cls.objects.filter.return_value = qs
+    return cls
+
+
+class IsClosureDateTests(SimpleTestCase):
+
+    def test_true_when_a_closure_row_exists_for_the_date(self):
+        cls = _closure_cls(exists=True)
+        with patch("menu.models.ClosureDate", cls):
+            self.assertTrue(is_closure_date(dt_module.date(2025, 12, 25)))
+        cls.objects.filter.assert_called_once_with(date=dt_module.date(2025, 12, 25))
+
+    def test_false_when_no_closure_row(self):
+        with patch("menu.models.ClosureDate", _closure_cls(exists=False)):
+            self.assertFalse(is_closure_date(dt_module.date(2025, 12, 25)))
+
+    def test_lookup_failure_fails_open(self):
+        # A closure-table hiccup must never wedge ordering shut.
+        with patch("menu.models.ClosureDate", _closure_cls(error=Exception("DB offline"))):
+            self.assertFalse(is_closure_date(dt_module.date(2025, 12, 25)))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

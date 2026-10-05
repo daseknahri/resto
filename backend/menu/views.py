@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone as dt_timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 import csv
 import hashlib
 from io import BytesIO, StringIO
@@ -56,17 +56,21 @@ from accounts.permissions import IsCustomer, IsOrderOwner, customer_or_none
 # RISK AUTHZ-1: owner-only policy classes. Module-level import is circular-safe —
 # sales.permissions imports only rest_framework + accounts.models.User (accounts.models
 # does not import menu), the same import accounts/views.py already does at module level.
-from sales.permissions import IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
+from sales.permissions import IsPlatformAdmin, IsTenantOwner, IsTenantOwnerAccessDenied, IsTenantOwnerForbidden
+# Admin PII read audit (AdminWalletListView). Circular-safe like sales.permissions above:
+# sales.audit / sales.models import only tenancy.models + django.
+from sales.audit import log_admin_action
+from sales.models import AdminAuditLog
 from tenancy.cache_utils import get_or_build_single_flight
 from tenancy.models import Profile
-from tenancy.openstate import schedule_open_now
+from tenancy.openstate import is_closure_date, schedule_open_now, tenant_timezone
 
 from django_tenants.utils import schema_context
 
 from .commission import COMMISSIONABLE_STATUSES
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
-from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price
+from .pricing import get_active_happy_hours, effective_unit_price
 from .revenue import split_revenue_for_orders
 from .tax import order_vat_fields
 from .serializers import (
@@ -82,6 +86,7 @@ from .serializers import (
 )
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
 from accounts.throttles import (
+    AdminPIIThrottle,
     ReservationAvailabilityThrottle,
     WaitlistJoinThrottle,
     DriverCashoutConfirmThrottle,
@@ -234,10 +239,16 @@ def _is_restaurant_currently_open(profile) -> bool:
 
     Decision tree:
     1. ``is_open = False`` (manual closed toggle) → always closed.
-    2. A configured schedule (at least one enabled day) → schedule wins.
-    3. No schedule → rely on ``is_open`` boolean (True = open).
+    2. Today (tenant-local) is an owner-declared closure / holiday date → closed. The
+       customer UI already shows "closed" on such a day (ProfileSerializer.is_open_now),
+       so the server must refuse the order too — a stale tab / direct API call can't
+       place an ASAP order on a holiday.
+    3. A configured schedule (at least one enabled day) → schedule wins.
+    4. No schedule → rely on ``is_open`` boolean (True = open).
     """
     if profile.is_open is False:
+        return False
+    if is_closure_date(_profile_now(profile).date()):
         return False
     result = _schedule_open(profile)
     if result is not None:
@@ -372,6 +383,13 @@ def _validate_scheduled_for(profile, fulfillment_type, scheduled_for):
         return None, "schedule_too_far"
     if not _within_business_hours(profile, dt):
         return None, "schedule_closed"
+    # The weekly schedule says open — but an owner-declared closure / holiday on the
+    # requested tenant-LOCAL calendar day overrides it. Without this a "Schedule for
+    # later" order on a closure day (the very thing the closed storefront steers the
+    # customer to) would be accepted, prepaid, and released to the kitchen on the
+    # holiday. Shared by the direct and marketplace order flows (both call this).
+    if is_closure_date(dt.astimezone(tenant_timezone(profile)).date()):
+        return None, "schedule_closed"
     return dt, None
 
 
@@ -411,6 +429,19 @@ def _size_loyalty_redemption(cfg, available_points, requested_points, pre_tip_to
     import math as _math
     points_spent = min(requested_points, int(_math.ceil(discount / pts_value)))
     return discount, points_spent, None
+
+
+def _loyalty_points_earned(food_subtotal, points_per_unit, tier_multiplier):
+    """Whole loyalty points earned on an order: floor(food_subtotal * rate * tier).
+
+    Computed in Decimal and floored deterministically. The old ``int(float * int *
+    float)`` form dropped a point whenever the exact product was an integer but the
+    float landed just below it (e.g. 0.29 * 100 -> 28.999..., exact answer 29).
+    Shared by the storefront and marketplace checkouts so both award identically.
+    Never negative (a zero/negative subtotal earns nothing).
+    """
+    exact = Decimal(str(food_subtotal)) * Decimal(str(points_per_unit)) * Decimal(str(tier_multiplier))
+    return max(0, int(exact.to_integral_value(rounding=ROUND_FLOOR)))
 
 
 class PublishAccessMixin:
@@ -2315,9 +2346,11 @@ class ReorderResolveView(OrderHandoffView):
         dishes_by_slug = self._fetch_dishes(slugs, can_preview=can_preview)
         options_by_id = self._fetch_options(all_option_ids, can_preview=can_preview)
 
-        # Compute happy-hour rules ONCE (same source PlaceOrderView uses).
+        # Compute happy-hour rules ONCE (same source PlaceOrderView uses): only rules whose
+        # day/time window is open at the tenant-local now, so the re-resolved price is what
+        # checkout would charge right now.
         try:
-            active_happy_hours = get_all_active_hh_rules()
+            active_happy_hours = get_active_happy_hours(_profile_now(profile))
         except Exception:
             active_happy_hours = []
 
@@ -2830,7 +2863,9 @@ class PlaceOrderView(APIView):
         # M7: pass the tenant-local now so a dish outside its availability_schedule window
         # is dropped here (→ items_unavailable) — not just hidden in the menu — blocking a
         # stale PWA menu / direct API POST of a time-limited dish. (profile is non-None here.)
-        dishes_map = resolve_available_dishes(slugs, now_local=_profile_now(profile) if profile else None)
+        # Reused below for the happy-hour window (one placement-time instant for both gates).
+        _now_local = _profile_now(profile)
+        dishes_map = resolve_available_dishes(slugs, now_local=_now_local)
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -2840,12 +2875,12 @@ class PlaceOrderView(APIView):
 
         # Compute active happy-hour rules ONCE for this request (placement-time lock).
         # Price is evaluated at submission time, not at scheduled_for — see class docstring.
-        # We use get_all_active_hh_rules() (no time-window filter) so that tests patching
-        # menu.pricing.HappyHour fully control which rules apply.  The is_active flag is
-        # the owner's primary on/off switch; the start/end window governs menu-display only.
+        # Only rules whose day/time window is open at the tenant-local now apply — the same
+        # windowed source the menu display and the marketplace checkout use, so the customer
+        # is charged exactly what the menu showed (a rule outside its window = full price).
         # Graceful fallback: if HappyHour table is unavailable, skip discount entirely.
         try:
-            _active_happy_hours = get_all_active_hh_rules()
+            _active_happy_hours = get_active_happy_hours(_now_local)
         except Exception:
             _active_happy_hours = []
 
@@ -2858,8 +2893,8 @@ class PlaceOrderView(APIView):
             dish = dishes_map[item_input["slug"]]
             currency = dish.currency or "MAD"
             # Apply happy-hour discount (largest percent_off wins; option price_delta unchanged).
-            # Rule source: get_all_active_hh_rules() (no time-window) — the storefront's own source,
-            # kept here so its `menu.views.effective_unit_price` patch target and this divergence hold.
+            # Called here (not in the shared order_service) so the storefront's
+            # `menu.views.effective_unit_price` patch target holds.
             unit_price, _ = effective_unit_price(dish, _active_happy_hours)
 
             # OPS-5f option binding + B2 group-select + price_delta accumulation — the byte-identical
@@ -3498,7 +3533,7 @@ class PlaceOrderView(APIView):
                                 _tier_mul = _Dloy("1")
                         else:
                             _tier_mul = _Dloy("1")
-                        _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit) * float(_tier_mul))
+                        _pts = _loyalty_points_earned(_food_subtotal, _loyalty_cfg.points_per_unit, _tier_mul)
                         if _pts > 0:
                             _CustLoy.objects.filter(pk=_linked_customer.pk).update(
                                 loyalty_points=F("loyalty_points") + _pts,
@@ -4034,8 +4069,23 @@ class CustomerOrderCancelView(APIView):
             # credit is separately idempotent via its schema-namespaced key, so it safely
             # replays either way.) Falls back to the passed copy if the row vanished.
             _locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+            # Re-check cancellability UNDER the lock. The _customer_can_cancel gate above ran
+            # on the UNLOCKED row, so an owner advancing the order to PREPARING / READY /
+            # OUT_FOR_DELIVERY (food already being made) in the window before this lock would
+            # otherwise still be self-cancelled + refunded. A peer-CANCELLED row is NOT a
+            # failure here — it falls through to the idempotent replay below. Nothing has been
+            # written yet, so the rollback is a pure no-op safety net. Same TOCTOU class as the
+            # void/comp post-lock status re-check (#442).
+            _current = _locked or order
+            if _current.status != Order.Status.CANCELLED and not _customer_can_cancel(_current):
+                _tx.set_rollback(True)
+                return Response(
+                    {"detail": "This order can no longer be cancelled — please contact the restaurant.",
+                     "code": "not_cancellable"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             _newly_cancelled = False
-            if (_locked or order).status != Order.Status.CANCELLED:
+            if _current.status != Order.Status.CANCELLED:
                 order.status = Order.Status.CANCELLED
                 order.status_updated_at = timezone.now()
                 order.save(update_fields=["status", "status_updated_at", "updated_at"])
@@ -5030,12 +5080,15 @@ class StaffAppendOrderItemsView(APIView):
 
         # ── Happy-hour pricing (compute once, charge effective price per item) ──
         # Price locked at the moment the staff member appends — same semantics as
-        # PlaceOrderView.  Option price_delta is added on top unchanged.
-        # We use get_all_active_hh_rules() (no time-window filter) so that tests
-        # patching menu.pricing.HappyHour fully control which rules apply.
-        # Graceful fallback: if the HH query fails, skip discount.
+        # PlaceOrderView: only rules whose day/time window is open at the tenant-local
+        # now apply.  Option price_delta is added on top unchanged.
+        # Graceful fallback: if the profile or HH query fails (or there is no profile,
+        # in which case the menu shows no happy hour either), skip discount.
         try:
-            _staff_active_hh = get_all_active_hh_rules()
+            _staff_profile = Profile.objects.filter(tenant=getattr(request, "tenant", None)).first()
+            _staff_active_hh = (
+                get_active_happy_hours(_profile_now(_staff_profile)) if _staff_profile is not None else []
+            )
         except Exception:
             _staff_active_hh = []
 
@@ -13134,15 +13187,17 @@ class AdminWalletListView(APIView):
       search      — filter by name, phone, email
       min_balance — only show customers with balance >= this value (default: 0)
       page, page_size
+
+    Audit/throttle completeness: exposes name/email/phone/wallet_balance for every wallet
+    customer, so it follows the AdminCustomerListView PII pattern — IsPlatformAdmin gate
+    (same `is_superuser or is_platform_admin` predicate the inline check used), per-admin
+    AdminPIIThrottle, and a CUSTOMER_PII_VIEWED audit row per read.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
-        user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or getattr(user, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from accounts.models import Customer
         from decimal import Decimal as _Dec
 
@@ -13181,6 +13236,18 @@ class AdminWalletListView(APIView):
                 "wallet_balance": str(c.wallet_balance),
             })
 
+        # No PII in the audit metadata — only the filters and result size.
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
+            request=request,
+            target_repr="wallet_list",
+            metadata={
+                "query": search,
+                "min_balance": str(min_balance),
+                "count": total,
+                "page": page,
+            },
+        )
         return Response({
             "total": total,
             "page": page,

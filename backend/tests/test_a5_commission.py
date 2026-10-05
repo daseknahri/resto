@@ -604,6 +604,10 @@ class AdminCanSetMarketplaceCommissionTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = AdminTenantDeliveryView.as_view()
+        # A successful PATCH writes an AdminAuditLog row — keep it off the DB.
+        log_patcher = patch("sales.views.log_admin_action")
+        log_patcher.start()
+        self.addCleanup(log_patcher.stop)
 
     @patch("tenancy.models.Profile")
     @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())

@@ -82,13 +82,15 @@ class ActivationViewTests(SimpleTestCase):
             instance = mock_ser.return_value
             instance.is_valid.return_value = True
             instance.save.return_value = user
-            with patch("accounts.views.login"):
-                with patch("accounts.views.serialize_user_session", return_value=_session_data()):
-                    resp = self._post({"token": "validtoken"})
+            with patch("accounts.views.user_has_confirmed_mfa", return_value=False):
+                with patch("accounts.views.login") as login_mock:
+                    with patch("accounts.views.serialize_user_session", return_value=_session_data()):
+                        resp = self._post({"token": "validtoken"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("user", resp.data)
         self.assertEqual(resp.data["detail"], "Account activated")
+        login_mock.assert_called_once()
 
 
 # ── LoginView ─────────────────────────────────────────────────────────────────

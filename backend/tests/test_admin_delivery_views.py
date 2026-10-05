@@ -323,6 +323,14 @@ class AdminDeliveryZoneDetailViewTests(SimpleTestCase):
 
 class AdminDriverListViewTests(SimpleTestCase):
     def setUp(self):
+        # AdminPIIThrottle is cache-backed: clean bucket per test (no 429 accumulation).
+        from django.core.cache import cache
+        cache.clear()
+        # The KYC-docs read audit writes an AdminAuditLog row; stub it so SimpleTestCase never
+        # touches the DB (and so tests can assert on the call).
+        patcher = patch("accounts.views.log_admin_action")
+        self.mock_log = patcher.start()
+        self.addCleanup(patcher.stop)
         self.factory = APIRequestFactory()
         self.view = AdminDriverListView.as_view()
 
@@ -394,6 +402,58 @@ class AdminDriverListViewTests(SimpleTestCase):
         for field in ("id", "name", "phone", "email", "is_online", "driver_lat", "driver_lng",
                       "total_jobs", "completed_jobs", "avg_rating"):
             self.assertIn(field, d, f"Missing field: {field}")
+
+    # ── Audit / throttle completeness (KYC docs + phone/email/GPS) ───────────
+    def test_has_pii_throttle(self):
+        from accounts.throttles import AdminPIIThrottle
+        self.assertIn(AdminPIIThrottle, AdminDriverListView.throttle_classes)
+
+    def test_non_admin_403_writes_no_audit(self):
+        self._get(user=_non_admin())
+        self.mock_log.assert_not_called()
+
+    def test_get_writes_car_docs_viewed_audit_with_count_only(self):
+        """The payload carries licence/insurance URLs + contact + GPS, so every read is audited
+        under CAR_DOCS_VIEWED — and the audit row itself must hold no driver PII."""
+        driver = MagicMock()
+        driver.id = 1
+        driver.name = "Ali"
+        driver.phone = "0612345678"
+        driver.email = "ali@example.com"
+        driver.driver_licence_url = "https://files.example/licence-secret.jpg"
+        driver.driver_insurance_url = "https://files.example/insurance-secret.jpg"
+        driver.is_driver_online = False
+        driver.driver_lat = None
+        driver.driver_lng = None
+        driver.driver_position_updated_at = None
+        driver.created_at = MagicMock()
+        driver.created_at.isoformat.return_value = "2026-01-01T00:00:00+00:00"
+
+        with patch("accounts.models.Customer") as mock_cust:
+            mock_cust.objects.filter.return_value.order_by.return_value = [driver]
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("accounts.models.DriverPayout") as mock_dp:
+                mock_dj.objects.filter.return_value.values.return_value.annotate.return_value = []
+                mock_dp.objects.filter.return_value.values.return_value.annotate.return_value = []
+                resp = self._get()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.mock_log.assert_called_once()
+        kwargs = self.mock_log.call_args[1]
+        self.assertEqual(kwargs["action"], AdminAuditLog.Actions.CAR_DOCS_VIEWED)
+        self.assertEqual(kwargs["target_repr"], "admin:driver_list")
+        self.assertEqual(kwargs["metadata"], {"count": 1})
+        flat = repr(kwargs)
+        for secret in ("0612345678", "ali@example.com", "licence-secret", "insurance-secret"):
+            self.assertNotIn(secret, flat)
+
+    def test_empty_list_is_still_audited(self):
+        with patch("accounts.models.Customer") as mock_cust:
+            mock_cust.objects.filter.return_value.order_by.return_value = []
+            with patch("accounts.models.DeliveryJob"):
+                self._get()
+        self.mock_log.assert_called_once()
+        self.assertEqual(self.mock_log.call_args[1]["metadata"], {"count": 0})
 
 
 # ── AdminPlatformAnalyticsView ────────────────────────────────────────────────

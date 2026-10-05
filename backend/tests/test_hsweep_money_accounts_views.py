@@ -179,6 +179,7 @@ class MarketplacePromoCapLoyaltyTests(SimpleTestCase):
         promo = _promo()
         customer = _customer(cid=7, wallet="100.00", points=20)
         fake_menu, order_cls = _fake_menu_models(dish, promo, promo_update_rows=promo_update_rows)
+        self._last_promo_cls = fake_menu.Promotion
 
         created = MagicMock()
         created.order_number = "ORD-TEST"
@@ -292,6 +293,18 @@ class MarketplacePromoCapLoyaltyTests(SimpleTestCase):
         self.assertEqual(kwargs["promotion_discount"], Decimal("5.00"))
         # Commission on the post-discount base: 10 - 5 promo - 2 loyalty = 3.00 @ 10% = 0.30.
         self.assertEqual(kwargs["commission_amount"], Decimal("0.30"))
+
+    def test_auto_apply_scan_excludes_code_protected_promos(self):
+        """Regression: the marketplace has no promo-code entry, so its best-promo scan may
+        only consider code-less promotions (exactly like the direct checkout). It used to scan
+        every active promo, silently applying a private code (e.g. "VIP50") to EVERY
+        marketplace order and burning its use_count."""
+        self._run(promo_update_rows=1)
+        scan_calls = [c for c in self._last_promo_cls.objects.filter.call_args_list
+                      if c.kwargs.get("is_active") is True]
+        self.assertTrue(scan_calls, "best-promo scan did not run")
+        for c in scan_calls:
+            self.assertEqual(c.kwargs.get("code"), "", c)
 
 
 # ── Flash-sale redemption race — claim BEFORE Order.create, strip on cap-hit ───

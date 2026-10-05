@@ -5,7 +5,7 @@ the view layer):
 
   ActivationSerializer
     - validate: invalid token / expired / valid
-    - save: activates user, marks token used
+    - save: locks the user, consumes the token (CAS), sets the password only
 
   PasswordResetRequestSerializer
     - validate: empty identifier / user found / user not found
@@ -51,6 +51,13 @@ def _reset_token(*, is_valid=True):
 
 class ActivationSerializerValidateTests(SimpleTestCase):
 
+    def setUp(self):
+        # Account-state gate (already activated?) is covered in
+        # test_activation_token_hardening.py; here the account is never-activated.
+        patcher = patch("accounts.serializers.account_is_activated", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _s(self):
         return ActivationSerializer()
 
@@ -93,6 +100,23 @@ class ActivationSerializerValidateTests(SimpleTestCase):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ActivationSerializerSaveTests(SimpleTestCase):
+    """save() locks the account row, re-checks it, consumes the token with a
+    compare-and-set and only then sets the password (see
+    test_activation_token_hardening.py for the rejection paths)."""
+
+    def setUp(self):
+        self.locked_user = MagicMock()
+        self.locked_user.is_active = True
+        user_patcher = patch("accounts.serializers.User")
+        self.user_cls = user_patcher.start()
+        self.addCleanup(user_patcher.stop)
+        self.user_cls.objects.select_for_update.return_value.get.return_value = self.locked_user
+        tx_patcher = patch("accounts.serializers.transaction")
+        tx_patcher.start()
+        self.addCleanup(tx_patcher.stop)
+        activated_patcher = patch("accounts.serializers.account_is_activated", return_value=False)
+        activated_patcher.start()
+        self.addCleanup(activated_patcher.stop)
 
     def _s_validated(self, activation):
         s = ActivationSerializer()
@@ -100,35 +124,34 @@ class ActivationSerializerSaveTests(SimpleTestCase):
         s._errors = {}
         return s
 
-    def test_save_sets_password(self):
+    def _activation(self):
         activation = _activation()
-        s = self._s_validated(activation)
-        s.save()
-        activation.user.set_password.assert_called_once_with("newpass123")
+        activation.consume.return_value = True
+        return activation
 
-    def test_save_activates_user(self):
-        activation = _activation()
-        s = self._s_validated(activation)
-        s.save()
-        self.assertTrue(activation.user.is_active)
+    def test_save_sets_password_on_locked_user(self):
+        activation = self._activation()
+        self._s_validated(activation).save()
+        self.user_cls.objects.select_for_update.return_value.get.assert_called_once_with(pk=activation.user_id)
+        self.locked_user.set_password.assert_called_once_with("newpass123")
 
-    def test_save_calls_user_save(self):
-        activation = _activation()
-        s = self._s_validated(activation)
-        s.save()
-        activation.user.save.assert_called_once()
+    def test_save_does_not_touch_is_active(self):
+        # Old behaviour forced is_active=True (reviving a deactivated account);
+        # only the password is persisted now.
+        activation = self._activation()
+        self._s_validated(activation).save()
+        self.locked_user.save.assert_called_once_with(update_fields=["password"])
 
-    def test_save_marks_token_used(self):
-        activation = _activation()
-        s = self._s_validated(activation)
-        s.save()
-        activation.mark_used.assert_called_once()
+    def test_save_consumes_token_atomically(self):
+        activation = self._activation()
+        self._s_validated(activation).save()
+        activation.consume.assert_called_once()
+        activation.mark_used.assert_not_called()
 
-    def test_save_returns_user(self):
-        activation = _activation()
-        s = self._s_validated(activation)
-        result = s.save()
-        self.assertIs(result, activation.user)
+    def test_save_returns_locked_user(self):
+        activation = self._activation()
+        result = self._s_validated(activation).save()
+        self.assertIs(result, self.locked_user)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

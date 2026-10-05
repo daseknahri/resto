@@ -236,12 +236,10 @@ class SendReservationRemindersCommandTests(SimpleTestCase):
         self.assertIn("Done", out)
         LeadMock.objects.filter.assert_not_called()
 
-    @patch("sales.management.commands.send_reservation_reminders._send_reminder_email", return_value=True)
-    @patch("sales.management.commands.send_reservation_reminders._send_reminder_sms", return_value=False)
-    @patch("sales.management.commands.send_reservation_reminders._profile_reminders_enabled", return_value=True)
-    @patch("sales.management.commands.send_reservation_reminders.Lead")
-    @patch("sales.management.commands.send_reservation_reminders.Tenant")
-    def test_sends_reminders_and_stamps_lead(self, TenantMock, LeadMock, reminders_mock, sms_mock, email_mock):
+    def _wire_lead(self, TenantMock, LeadMock, lead, claim=1):
+        """One active tenant + one eligible lead. ``claim`` is what the atomic
+        ``Lead.objects.filter(pk=..., reminder_sent_at__isnull=True).update(...)`` returns
+        (1 = we own the reminder, 0 = another overlapping run already claimed it)."""
         tenant = _tenant()
         tenant_qs = MagicMock()
         tenant_qs.filter.return_value = tenant_qs
@@ -249,10 +247,20 @@ class SendReservationRemindersCommandTests(SimpleTestCase):
         TenantMock.objects.filter.return_value = tenant_qs
         TenantMock.LifecycleStatus = SimpleNamespace(ACTIVE="active")
 
-        lead = _lead()
         lead_qs = MagicMock()
         lead_qs.__iter__ = lambda s: iter([lead])
+        lead_qs.update.return_value = claim
         LeadMock.objects.filter.return_value = lead_qs
+        return lead_qs
+
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_email", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_sms", return_value=False)
+    @patch("sales.management.commands.send_reservation_reminders._profile_reminders_enabled", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders.Lead")
+    @patch("sales.management.commands.send_reservation_reminders.Tenant")
+    def test_sends_reminders_and_claims_lead(self, TenantMock, LeadMock, reminders_mock, sms_mock, email_mock):
+        lead = _lead()
+        lead_qs = self._wire_lead(TenantMock, LeadMock, lead)
 
         with patch("sales.management.commands.send_reservation_reminders.timezone") as tz_mock:
             now = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
@@ -261,7 +269,54 @@ class SendReservationRemindersCommandTests(SimpleTestCase):
 
         self.assertIn("Done", out)
         self.assertIn("1 reminder", out)
-        lead.save.assert_called_once()
+        # Claimed via a conditional UPDATE scoped to this pk AND still-unstamped (not a blind
+        # save); stamps reminder_sent_at + updated_at since update() skips auto_now.
+        lead.save.assert_not_called()
+        self.assertEqual(
+            LeadMock.objects.filter.call_args.kwargs,
+            {"pk": lead.pk, "reminder_sent_at__isnull": True},
+        )
+        lead_qs.update.assert_called_once_with(reminder_sent_at=now, updated_at=now)
+        email_mock.assert_called_once()
+
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_email", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_sms", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders._profile_reminders_enabled", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders.Lead")
+    @patch("sales.management.commands.send_reservation_reminders.Tenant")
+    def test_lost_claim_sends_nothing(self, TenantMock, LeadMock, reminders_mock, sms_mock, email_mock):
+        """Another overlapping run already claimed the lead (update() -> 0): no duplicate email/SMS."""
+        lead = _lead()
+        lead_qs = self._wire_lead(TenantMock, LeadMock, lead, claim=0)
+
+        with patch("sales.management.commands.send_reservation_reminders.timezone") as tz_mock:
+            tz_mock.now.return_value = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
+            out = self._run()
+
+        lead_qs.update.assert_called_once()
+        email_mock.assert_not_called()
+        sms_mock.assert_not_called()
+        self.assertIn("already reminded", out)
+        self.assertIn("0 reminder", out)
+
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_email", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders._send_reminder_sms", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders._profile_reminders_enabled", return_value=True)
+    @patch("sales.management.commands.send_reservation_reminders.Lead")
+    @patch("sales.management.commands.send_reservation_reminders.Tenant")
+    def test_overlapping_runs_send_once(self, TenantMock, LeadMock, reminders_mock, sms_mock, email_mock):
+        """Two runs see the same eligible lead; only the first claim wins, so one email + one SMS."""
+        lead = _lead()
+        lead_qs = self._wire_lead(TenantMock, LeadMock, lead)
+        lead_qs.update.side_effect = [1, 0]
+
+        with patch("sales.management.commands.send_reservation_reminders.timezone") as tz_mock:
+            tz_mock.now.return_value = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
+            self._run()
+            self._run()
+
+        self.assertEqual(email_mock.call_count, 1)
+        self.assertEqual(sms_mock.call_count, 1)
 
     @patch("sales.management.commands.send_reservation_reminders._send_reminder_email", return_value=False)
     @patch("sales.management.commands.send_reservation_reminders._send_reminder_sms", return_value=False)
@@ -269,40 +324,24 @@ class SendReservationRemindersCommandTests(SimpleTestCase):
     @patch("sales.management.commands.send_reservation_reminders.Lead")
     @patch("sales.management.commands.send_reservation_reminders.Tenant")
     def test_stamps_lead_even_when_all_channels_fail(self, TenantMock, LeadMock, reminders_mock, sms_mock, email_mock):
-        """Lead gets stamped (no retry) even when email and SMS both fail."""
-        tenant = _tenant()
-        tenant_qs = MagicMock()
-        tenant_qs.filter.return_value = tenant_qs
-        tenant_qs.exclude.return_value = [tenant]
-        TenantMock.objects.filter.return_value = tenant_qs
-        TenantMock.LifecycleStatus = SimpleNamespace(ACTIVE="active")
-
+        """Lead stays claimed/stamped (no retry) even when email and SMS both fail."""
         lead = _lead()
-        lead_qs = MagicMock()
-        lead_qs.__iter__ = lambda s: iter([lead])
-        LeadMock.objects.filter.return_value = lead_qs
+        lead_qs = self._wire_lead(TenantMock, LeadMock, lead)
 
         with patch("sales.management.commands.send_reservation_reminders.timezone") as tz_mock:
             tz_mock.now.return_value = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
-            self._run()
+            out = self._run()
 
-        lead.save.assert_called_once()
+        # The claim is taken before the sends, so the failure leaves the lead stamped.
+        lead_qs.update.assert_called_once()
+        self.assertIn("no channel sent", out)
 
     @patch("sales.management.commands.send_reservation_reminders._profile_reminders_enabled", return_value=True)
     @patch("sales.management.commands.send_reservation_reminders.Lead")
     @patch("sales.management.commands.send_reservation_reminders.Tenant")
     def test_dry_run_does_not_send_or_stamp(self, TenantMock, LeadMock, reminders_mock):
-        tenant = _tenant()
-        tenant_qs = MagicMock()
-        tenant_qs.filter.return_value = tenant_qs
-        tenant_qs.exclude.return_value = [tenant]
-        TenantMock.objects.filter.return_value = tenant_qs
-        TenantMock.LifecycleStatus = SimpleNamespace(ACTIVE="active")
-
         lead = _lead()
-        lead_qs = MagicMock()
-        lead_qs.__iter__ = lambda s: iter([lead])
-        LeadMock.objects.filter.return_value = lead_qs
+        lead_qs = self._wire_lead(TenantMock, LeadMock, lead)
 
         with patch("sales.management.commands.send_reservation_reminders.timezone") as tz_mock:
             tz_mock.now.return_value = datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
@@ -310,3 +349,4 @@ class SendReservationRemindersCommandTests(SimpleTestCase):
 
         self.assertIn("DRY RUN", out)
         lead.save.assert_not_called()
+        lead_qs.update.assert_not_called()

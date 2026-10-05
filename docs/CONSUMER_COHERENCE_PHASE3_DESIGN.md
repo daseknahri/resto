@@ -77,8 +77,10 @@ accounts/views.py:4288) settled the backend-convergence fork:
   revisiting *after* Option B proves the shared core.
 
 **Divergences that MUST stay explicit parameters (current per-caller default), never flattened —**
-they are money/security-affecting: happy-hour rule source (all-active `get_all_active_hh_rules` vs
-time-windowed `get_active_happy_hours`); open-now gate (`_is_restaurant_currently_open` vs
+they are money/security-affecting: ~~happy-hour rule source (all-active `get_all_active_hh_rules` vs
+time-windowed `get_active_happy_hours`)~~ — **resolved 2026-10 (owner-approved):** every order path now
+prices with the windowed `get_active_happy_hours(tenant-local now)`, so customers pay what the menu shows;
+`get_all_active_hh_rules` was removed; open-now gate (`_is_restaurant_currently_open` vs
 `_compute_is_open_now`, the latter honours closure_dates + temp-disable); **delivery verification**
 (storefront requires verified account + phone; marketplace requires only signed-in); tip; table/dine-in;
 promo-code vs flash-sales; commission + `source=MARKETPLACE`; staff preview/attribution/coursing;

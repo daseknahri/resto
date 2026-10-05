@@ -59,6 +59,23 @@ class DirectoryOptInValidationTests(SimpleTestCase):
         out = s.validate({"receipt_message": "thanks"})
         self.assertEqual(out.get("receipt_message"), "thanks")
 
+    def test_round_trip_of_already_listed_true_is_not_blocked(self):
+        # Regression: a new Profile defaults to directory_opt_in=True (#402) and the onboarding
+        # wizard PUTs the WHOLE profile back, so a stored True round-trips with a blank city and
+        # no coordinates. That must not 400 — it broke every new tenant's first wizard save.
+        s = ProfileSerializer(instance=_inst(directory_opt_in=True))
+        out = s.validate({"directory_opt_in": True, "city": "", "lat": None, "lng": None,
+                          "name": "Bistro"})
+        self.assertIs(out.get("directory_opt_in"), True)
+
+    def test_opt_in_transition_from_off_still_requires_data(self):
+        # A genuine OFF→ON opt-in is still gated: the owner must add city + location first.
+        s = ProfileSerializer(instance=_inst(directory_opt_in=False))
+        with self.assertRaises(serializers.ValidationError) as ctx:
+            s.validate({"directory_opt_in": True})
+        self.assertIn("city", ctx.exception.detail)
+        self.assertIn("lat", ctx.exception.detail)
+
 
 class DirectoryOptInDefaultTests(SimpleTestCase):
     """Policy: new businesses are LISTED by default (opt-out marketplace). The marketplace
