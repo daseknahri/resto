@@ -281,7 +281,9 @@ def price_line_options(dish, option_ids, options_map, base_unit_price):
 
     invalid_option_ids = []
     bound_options = []
-    for oid in option_ids:
+    # An option is selected or not — a repeated id ([5, 5]) must not charge its price_delta
+    # twice, nor count twice against max_select. Dedupe, keeping selection order.
+    for oid in dict.fromkeys(option_ids):
         opt = options_map.get(int(oid)) if str(oid).isdigit() else None
         opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
         if opt is None or opt_dish_slug != dish.slug:
