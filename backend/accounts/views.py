@@ -1262,6 +1262,9 @@ class CustomerOrdersView(APIView):
                 "total": str(order.total),
                 "currency": order.currency,
                 "created_at": order.created_at,
+                # Advance-order due time (null for ASAP) so the account can show when a
+                # scheduled order is due, not just when it was placed.
+                "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
                 "customer_name": order.customer_name,
                 "has_rating": rating is not None,
                 "rating_score": rating.score if rating else None,
@@ -1336,6 +1339,7 @@ class CustomerMarketplaceOrdersView(APIView):
                     "currency": r.currency,
                     "vertical": r.vertical or "",
                     "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+                    "scheduled_for": r.scheduled_for.isoformat() if r.scheduled_for else None,
                     "items_snapshot": r.items_snapshot or [],
                     "can_cancel": (
                         r.status in ("scheduled", "pending", "confirmed")

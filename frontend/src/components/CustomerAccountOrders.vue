@@ -68,6 +68,10 @@
                   'text-slate-400': !activeStatuses.has(o.status) && o.status !== 'completed' && o.status !== 'cancelled',
                 }"
               >{{ mktOrderStatus(o.status) }}</span>
+              <span
+                v-if="scheduledDueLabel(o)"
+                class="rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-300"
+              >{{ scheduledDueLabel(o) }}</span>
               <span v-if="o.vertical" class="rounded-full border border-slate-700/40 bg-slate-800/50 px-1.5 py-0.5 text-[10px] text-slate-500">{{ verticalSvcLabels[o.vertical] || o.vertical }}</span>
               <span class="text-[11px] text-slate-500">{{ formatDate(o.created_at) }}</span>
             </div>
@@ -215,9 +219,17 @@
                 >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
                 <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(order.status) }}</span>
               </div>
+              <!-- Scheduled (advance) order: when it's due — it isn't on the progress rail yet -->
+              <p
+                v-if="scheduledDueLabel(order)"
+                class="inline-flex items-center gap-1 text-[11px] font-medium text-violet-300"
+              >
+                <AppIcon name="calendar" class="h-3 w-3 shrink-0" aria-hidden="true" />
+                {{ scheduledDueLabel(order) }}
+              </p>
               <!-- Order status mini-timeline — shown for active (non-cancelled) orders -->
               <div
-                v-if="order.status !== 'cancelled'"
+                v-else-if="order.status !== 'cancelled'"
                 class="flex items-center gap-0.5 overflow-x-auto pb-0.5"
                 :aria-label="t('customerAccount.orderTimeline')"
                 style="scrollbar-width:none"
@@ -380,6 +392,7 @@ import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { customerStatusKey, formatScheduledDue } from '../lib/orderStatusMeta';
 
 const { t, formatCurrency, currentLocale } = useI18n();
 
@@ -455,20 +468,18 @@ const searchDraft = computed({
   set: (v) => emit('update-order-search', v),
 });
 
-// Presentational status -> i18n label helpers, local to this tab (identical
-// content to the parent's STATUS_I18N — the parent keeps its own copy because
-// it also labels orders in the live-order banner and the overview re-order rail).
-const STATUS_I18N = {
-  pending: 'orderStatus.statusPending',
-  confirmed: 'orderStatus.statusConfirmed',
-  preparing: 'orderStatus.statusPreparing',
-  ready: 'orderStatus.statusReady',
-  out_for_delivery: 'orderStatus.stepOutForDelivery',
-  completed: 'orderStatus.statusCompleted',
-  cancelled: 'orderStatus.statusCancelled',
+// Presentational status -> i18n label helpers. The map is shared with the parent
+// (lib/orderStatusMeta) — the two private copies it replaced both lacked `scheduled`.
+const statusLabel = (s) => (s ? t(customerStatusKey(s)) : '');
+const mktOrderStatus = (s) => t(customerStatusKey(s));
+
+// "Scheduled for Tue 7 Oct, 19:30" — when a prepaid advance order is due (its
+// created_at is only when it was placed). '' for ASAP orders / a missing time.
+const scheduledDueLabel = (order) => {
+  if (order?.status !== 'scheduled') return '';
+  const time = formatScheduledDue(currentLocale.value, order.scheduled_for);
+  return time ? t('customerAccount.scheduledDue', { time }) : '';
 };
-const statusLabel = (s) => (s ? t(STATUS_I18N[s] || 'orderStatus.statusPending') : '');
-const mktOrderStatus = (s) => t(STATUS_I18N[s] || 'orderStatus.statusPending');
 
 // Compact per-order progress rail. Mirrors the tracker/stepper flow so the same
 // order reads consistently here and on its status page: a delivery order keeps a

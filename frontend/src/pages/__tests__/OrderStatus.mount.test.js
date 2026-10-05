@@ -76,15 +76,20 @@ vi.mock("../../lib/api", () => ({
 }));
 
 // Realtime channel → no-op transport (see file header). connectionState is a plain
-// { value } object: the page reads realtimeState.value and passes it to the
-// (stubbed) ConnectionDot, so no reactivity is required.
+// { value } object: the page reads realtimeState.value (poll cadence + the stubbed
+// ConnectionDot). It's hoisted so a test can flip it to "live" BEFORE mounting, and
+// the page's onEvent callback is captured so a test can simulate a WS "status" push.
+const realtime = vi.hoisted(() => ({ state: { value: "polling" }, onEvent: null }));
 vi.mock("../../composables/useOrderRealtime", () => ({
-  useOrderRealtime: () => ({
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    connected: { value: false },
-    connectionState: { value: "polling" },
-  }),
+  useOrderRealtime: (_getOrderNumber, onEvent) => {
+    realtime.onEvent = onEvent;
+    return {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      connected: { value: false },
+      connectionState: realtime.state,
+    };
+  },
 }));
 
 // The page imports { useRouter } from 'vue-router' only (no useRoute, no
@@ -94,6 +99,8 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+import api from "../../lib/api";
+import CustomerAuthModal from "../../components/CustomerAuthModal.vue";
 import OrderStatus from "../OrderStatus.vue";
 
 const mountPage = (orderNumber = "A1") =>
@@ -118,6 +125,8 @@ describe("OrderStatus — mount smoke", () => {
     localStorage.clear();
     setActivePinia(createPinia());
     _routes = {};
+    realtime.state.value = "polling";
+    realtime.onEvent = null;
     vi.clearAllMocks();
   });
 
@@ -145,9 +154,11 @@ describe("OrderStatus — mount smoke", () => {
 
     await flushPromises();
     expect(wrapper.exists()).toBe(true);
-    // Header (h1) + items heading always render in the main template — the crash-guard anchors.
+    // Header (h1) always renders in the main template — the crash-guard anchor.
     expect(wrapper.text()).toContain("orderStatus.orderNumber");
-    expect(wrapper.text()).toContain("orderStatus.items");
+    // An empty body has no `items` array — the same shape as the server's status-only
+    // payload for a non-owner — so it renders the sign-in card, not an empty receipt.
+    expect(wrapper.text()).toContain("orderStatus.restrictedTitle");
   });
 
   // ── (2) realistic loaded delivery order ───────────────────────────────────
@@ -198,5 +209,253 @@ describe("OrderStatus — mount smoke", () => {
     // Status pill label (statusLabel("preparing") → this key) — proves the loaded
     // status ran through the label + timeline machinery.
     expect(wrapper.text()).toContain("orderStatus.statusPreparing");
+  });
+});
+
+// ── Behaviour: order-status / customer-account fixes ─────────────────────────
+const iso = (offsetMin) => new Date(Date.now() + offsetMin * 60_000).toISOString();
+
+// A full (owner) payload; override per test.
+const ownerOrder = (overrides = {}) => ({
+  order_number: "B1",
+  status: "preparing",
+  fulfillment_type: "pickup",
+  currency: "MAD",
+  total: "50.00",
+  items_count: 1,
+  delivery_fee: "0",
+  tip_amount: "0",
+  promotion_discount: "0",
+  loyalty_discount: "0",
+  vat_amount: "0",
+  wallet_amount_paid: "0",
+  payment_status: "unpaid",
+  requires_prepayment: true,
+  created_at: iso(-5),
+  status_updated_at: iso(-1),
+  points_earned: 0,
+  receipt_message: "",
+  items: [{ dish_slug: "pizza", dish_name: "Pizza", note: "", qty: 1, subtotal: "50.00", options: [] }],
+  ...overrides,
+});
+
+const statusFetches = () =>
+  api.get.mock.calls.filter(([url]) => String(url).includes("/order-status/")).length;
+
+describe("OrderStatus — restricted (status-only) payload (M10)", () => {
+  let wrapper;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    realtime.state.value = "polling";
+    vi.clearAllMocks();
+    // Exactly what CustomerOrderStatusView returns to a non-owner (e.g. the customer
+    // themself, signed out, arriving from Find-my-order): no items / total / payment.
+    _routes = {
+      "/order-status/": {
+        data: {
+          order_number: "R1",
+          status: "preparing",
+          fulfillment_type: "delivery",
+          requires_prepayment: true,
+          estimated_ready_minutes: 20,
+          created_at: iso(-5),
+          status_updated_at: iso(-1),
+          receipt_message: "",
+          tenant_phone: "",
+        },
+      },
+    };
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  it("shows a sign-in card instead of a fake total, empty items and a 'Payment due' pill", async () => {
+    wrapper = mountPage("R1");
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(wrapper.find("[data-test='restricted-details']").exists()).toBe(true);
+    expect(text).toContain("orderStatus.restrictedTitle");
+    // Status + progress the minimal payload DOES carry are kept.
+    expect(text).toContain("orderStatus.statusPreparing");
+    // Misleading owner-only sections are gone: header total/item count + items panel
+    // (both read orderStatus.items), the payment pill, the total row.
+    expect(text).not.toContain("orderStatus.items");
+    expect(text).not.toContain("orderStatus.paymentDue");
+    expect(text).not.toContain("orderStatus.total");
+  });
+
+  it("signing in from the card reloads the order (and doesn't try to claim it)", async () => {
+    wrapper = mountPage("R1");
+    await flushPromises();
+    expect(statusFetches()).toBe(1);
+
+    await wrapper.find("[data-test='restricted-details'] button").trigger("click");
+    wrapper.findComponent(CustomerAuthModal).vm.$emit("authenticated", { id: 42 });
+    await flushPromises();
+
+    expect(statusFetches()).toBe(2);
+    expect(api.post).not.toHaveBeenCalledWith("/customer/orders/claim/", expect.anything());
+  });
+
+  it("a full owner payload still renders the receipt, not the sign-in card", async () => {
+    _routes = { "/order-status/": { data: ownerOrder() } };
+    wrapper = mountPage("B1");
+    await flushPromises();
+    expect(wrapper.find("[data-test='restricted-details']").exists()).toBe(false);
+    expect(wrapper.text()).toContain("orderStatus.items");
+  });
+});
+
+describe("OrderStatus — poll cadence while a driver is on the job (M4)", () => {
+  let wrapper;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    // Fake only the timers the page uses; flushPromises (setImmediate) stays real.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    realtime.state.value = "live"; // healthy socket
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    realtime.state.value = "polling";
+    vi.useRealTimers();
+  });
+
+  const deliveryOrder = (delivery) =>
+    ownerOrder({ status: "out_for_delivery", fulfillment_type: "delivery", delivery });
+
+  it("polls every 10s with a live socket while the driver is en route (driver events aren't pushed)", async () => {
+    _routes = { "/order-status/": { data: deliveryOrder({ status: "picked_up", driver: { name: "Ali" } }) } };
+    wrapper = mountPage("D1");
+    await flushPromises();
+    expect(statusFetches()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(statusFetches()).toBe(2);
+    expect(wrapper.text()).toContain('orderStatus.autoRefresh({"seconds":10})');
+  });
+
+  it("also polls fast while still searching for a driver", async () => {
+    _routes = { "/order-status/": { data: deliveryOrder({ status: "searching", driver: null }) } };
+    wrapper = mountPage("D2");
+    await flushPromises();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(statusFetches()).toBe(2);
+  });
+
+  it("keeps the 60s safety net on a live socket when no driver is on the job", async () => {
+    _routes = { "/order-status/": { data: ownerOrder({ status: "preparing" }) } };
+    wrapper = mountPage("P1");
+    await flushPromises();
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(statusFetches()).toBe(1);
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(statusFetches()).toBe(2);
+  });
+
+  it("stops the fast poll once the job is delivered", async () => {
+    _routes = { "/order-status/": { data: deliveryOrder({ status: "delivered", driver: { name: "Ali" } }) } };
+    wrapper = mountPage("D3");
+    await flushPromises();
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(statusFetches()).toBe(1);
+  });
+});
+
+describe("OrderStatus — receipt details (L5 / L12 / L13 / M9)", () => {
+  let wrapper;
+  let warnSpy;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    realtime.state.value = "polling";
+    vi.clearAllMocks();
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    warnSpy.mockRestore();
+  });
+
+  const load = async (data) => {
+    _routes = { "/order-status/": { data } };
+    wrapper = mountPage(data.order_number);
+    await flushPromises();
+    return wrapper.text();
+  };
+
+  it("L5: wallet credits use the order's own currency, not the converting display formatter", async () => {
+    const text = await load(ownerOrder({ wallet_amount_paid: "10.00" }));
+    const native = new Intl.NumberFormat("en", { style: "currency", currency: "MAD", maximumFractionDigits: 2 }).format(10);
+    expect(text).toContain(`orderStatus.walletPaid(${JSON.stringify({ amount: native })})`);
+  });
+
+  it("L12: the thank-you note shows while preparing / out for delivery, not when cancelled", async () => {
+    expect(await load(ownerOrder({ status: "preparing", receipt_message: "Thanks!" }))).toContain("Thanks!");
+    wrapper.unmount();
+    expect(await load(ownerOrder({ status: "out_for_delivery", fulfillment_type: "delivery", receipt_message: "Thanks!" }))).toContain("Thanks!");
+    wrapper.unmount();
+    expect(await load(ownerOrder({ status: "cancelled", receipt_message: "Thanks!" }))).not.toContain("Thanks!");
+    wrapper.unmount();
+    expect(await load(ownerOrder({ status: "pending", receipt_message: "Thanks!" }))).not.toContain("Thanks!");
+  });
+
+  it("L13: two lines of the same dish (different options) keep distinct keys across a refresh", async () => {
+    const pizza = (opt) => ({ dish_slug: "pizza", dish_name: "Pizza", note: "", qty: 1, subtotal: "50.00", options: [{ name: opt }] });
+    const fries = { dish_slug: "fries", dish_name: "Fries", note: "", qty: 1, subtotal: "15.00", options: [] };
+    await load(ownerOrder({ items: [fries, pizza("Large"), pizza("Small")] }));
+
+    // A WS push re-fetches with the lines reordered — Vue's keyed diff runs and would
+    // warn "Duplicate keys" under the old dish_name + note key.
+    _routes = { "/order-status/": { data: ownerOrder({ items: [pizza("Large"), pizza("Small"), fries] }) } };
+    realtime.onEvent("status");
+    await flushPromises();
+
+    const dupWarnings = warnSpy.mock.calls.filter((args) => String(args[0]).includes("Duplicate keys"));
+    expect(dupWarnings).toEqual([]);
+    expect(wrapper.text()).toContain("Large");
+    expect(wrapper.text()).toContain("Small");
+  });
+
+  it("M9: points read as already credited (reversible) while in progress", async () => {
+    const text = await load(ownerOrder({ status: "preparing", points_earned: 12 }));
+    expect(wrapper.find("[data-test='points-earned']").exists()).toBe(true);
+    expect(text).toContain("+12");
+    expect(text).toContain("orderStatus.pointsCreditedHint");
+    expect(text).not.toContain("orderStatus.pointsPending");
+  });
+
+  it("M9: a cancelled order never shows '+N points'", async () => {
+    const text = await load(ownerOrder({ status: "cancelled", points_earned: 12 }));
+    expect(wrapper.find("[data-test='points-earned']").exists()).toBe(false);
+    expect(text).not.toContain("+12");
+  });
+
+  it("a too-late cancel refusal (409 not_cancellable) re-fetches so the button can disappear", async () => {
+    await load(ownerOrder({ status: "confirmed", can_cancel: true }));
+    expect(statusFetches()).toBe(1);
+    api.post.mockImplementationOnce(() =>
+      Promise.reject({ response: { status: 409, data: { code: "not_cancellable" } } }),
+    );
+
+    const button = (key) => wrapper.findAll("button").find((b) => b.text().includes(key));
+    await button("orderStatus.cancelOrder").trigger("click");
+    await button("orderStatus.cancelConfirmYes").trigger("click");
+    await flushPromises();
+
+    expect(statusFetches()).toBe(2);
   });
 });

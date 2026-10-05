@@ -15,6 +15,7 @@ patched managers, so the actual production recompute logic runs without a databa
 model never touches the database, only `.save()`/queries do — so the command's generic
 `_meta`-driven before/after snapshot works exactly as it does in production.
 """
+from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
 from types import SimpleNamespace
@@ -149,7 +150,8 @@ def _make_item(slug, name, qty, price):
 
 
 def _make_order(order_number, *, customer_id=9, status="pending", total=Decimal("30.00"),
-                 currency="MAD", fulfillment_type="delivery", created_at=None, items=None):
+                 currency="MAD", fulfillment_type="delivery", created_at=None, items=None,
+                 scheduled_for=None):
     order = MagicMock()
     order.order_number = order_number
     order.customer_id = customer_id
@@ -158,6 +160,9 @@ def _make_order(order_number, *, customer_id=9, status="pending", total=Decimal(
     order.currency = currency
     order.fulfillment_type = fulfillment_type
     order.created_at = created_at or timezone.now()
+    # Set explicitly: the mirror copies it, and a bare MagicMock attribute would read as
+    # a (bogus) due time and show up as drift on every in-sync row.
+    order.scheduled_for = scheduled_for
     order.items.filter.return_value = items if items is not None else []
     return order
 
@@ -273,6 +278,36 @@ class ReconcileOrderContentTests(SimpleTestCase):
             stored.items_snapshot,
             [{"slug": "burger", "name": "Burger", "qty": 1, "price": 25.0}],
         )
+
+    def test_missing_scheduled_for_is_drift_and_fix_backfills_it(self):
+        """M6: a scheduled order's mirror written before `scheduled_for` was mirrored (null
+        due time) is reported as drift, and --fix backfills the due time — the generic
+        _meta-driven snapshot picks the new field up with no command change."""
+        now = timezone.now()
+        due = now + timedelta(hours=20)
+        ref = _make_ref(
+            status="scheduled",
+            total=Decimal("25.00"),
+            order_created_at=now,
+            items_snapshot=[{"slug": "burger", "name": "Burger", "qty": 1, "price": 25.0}],
+        )  # scheduled_for left at its default (None)
+        order = _make_order(
+            "ORD-1",
+            status="scheduled",
+            total=Decimal("25.00"),
+            created_at=now,
+            items=[_make_item("burger", "Burger", 1, Decimal("25.00"))],
+            scheduled_for=due,
+        )
+        tenant = SimpleNamespace(id=1, schema_name="t1", slug="t1", name="Bistro")
+
+        detect = self._run([ref], [order], tenant)
+        self.assertIn("drifted=1", detect["out"])
+        self.assertIsNone(detect["ref_store"].rows[(1, "ORD-1")].scheduled_for)
+
+        fixed = self._run([ref], [order], tenant, args=("--fix",))
+        self.assertIn("fixed=1", fixed["out"])
+        self.assertEqual(fixed["ref_store"].rows[(1, "ORD-1")].scheduled_for, due)
 
     def test_no_mirror_no_tenant_skipped(self):
         """A tenant with zero CustomerOrderRef rows is skipped before entering its schema."""

@@ -119,6 +119,7 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+import api from "../../lib/api";
 import { useCustomerStore } from "../../stores/customer";
 import CustomerLayout from "../CustomerLayout.vue";
 
@@ -243,5 +244,76 @@ describe("CustomerLayout — mount smoke (customer chrome crash guard)", () => {
     // is_driver → the driver-mode switch renders (roleSwitch.driverMode appears ONLY
     // inside the customer?.is_driver branches — absent for a guest).
     expect(text).toContain("roleSwitch.driverMode");
+  });
+
+  // ── (3) L3: the track-order banner is validated against the API ─────────────────
+  // It's seeded from localStorage at checkout; without a server check it kept pulsing
+  // for 2h after the order completed / was cancelled. One GET per tracked order.
+  describe("track-order banner validation", () => {
+    const BANNER = "customerLayout.trackOrderBanner";
+    const seedTrackedOrder = (number = "T100") => {
+      localStorage.setItem("lastOrderNumber", number);
+      localStorage.setItem("lastOrderAt", String(Date.now())); // inside the 2h window
+    };
+    const routeOrderStatus = (impl) => {
+      api.get.mockImplementation((url) =>
+        String(url).includes("/order-status/") ? impl(url) : Promise.resolve({ data: {} }),
+      );
+    };
+    const statusCalls = () =>
+      api.get.mock.calls.filter(([url]) => String(url).includes("/order-status/"));
+
+    afterEach(() => {
+      api.get.mockImplementation(() => Promise.resolve({ data: {} }));
+    });
+
+    it("hides the banner and forgets the order once it has completed", async () => {
+      seedTrackedOrder();
+      routeOrderStatus(() => Promise.resolve({ data: { status: "completed" } }));
+      wrapper = mountLayout();
+      await flushPromises();
+
+      expect(statusCalls().map(([url]) => url)).toEqual(["/order-status/T100/"]);
+      expect(wrapper.text()).not.toContain(BANNER);
+      expect(localStorage.getItem("lastOrderNumber")).toBeNull();
+    });
+
+    it("hides the banner for a cancelled order", async () => {
+      seedTrackedOrder();
+      routeOrderStatus(() => Promise.resolve({ data: { status: "cancelled" } }));
+      wrapper = mountLayout();
+      await flushPromises();
+      expect(wrapper.text()).not.toContain(BANNER);
+    });
+
+    it("keeps the banner for an order that is still in progress (one fetch, no polling)", async () => {
+      seedTrackedOrder();
+      routeOrderStatus(() => Promise.resolve({ data: { status: "preparing" } }));
+      wrapper = mountLayout();
+      await flushPromises();
+      expect(wrapper.text()).toContain(BANNER);
+      expect(statusCalls()).toHaveLength(1);
+    });
+
+    it("keeps the banner on a transient failure, clears it on a real 404", async () => {
+      seedTrackedOrder();
+      routeOrderStatus(() => Promise.reject({ response: { status: 503 } }));
+      wrapper = mountLayout();
+      await flushPromises();
+      expect(wrapper.text()).toContain(BANNER);
+      wrapper.unmount();
+
+      routeOrderStatus(() => Promise.reject({ response: { status: 404 } }));
+      wrapper = mountLayout();
+      await flushPromises();
+      expect(wrapper.text()).not.toContain(BANNER);
+      expect(localStorage.getItem("lastOrderNumber")).toBeNull();
+    });
+
+    it("doesn't fetch at all when no order is being tracked", async () => {
+      wrapper = mountLayout();
+      await flushPromises();
+      expect(statusCalls()).toHaveLength(0);
+    });
   });
 });

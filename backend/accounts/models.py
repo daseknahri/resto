@@ -343,6 +343,9 @@ class CustomerOrderRef(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     currency = models.CharField(max_length=8, default="MAD")
     order_created_at = models.DateTimeField(db_index=True)
+    # Mirrors Order.scheduled_for (null for ASAP orders) so "My Orders" can show when a
+    # prepaid advance order is due — the list reads this index, never the tenant Order.
+    scheduled_for = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     # Compact items snapshot for re-order: [{slug, name, qty, unit_price}]
     items_snapshot = models.JSONField(default=list, blank=True)

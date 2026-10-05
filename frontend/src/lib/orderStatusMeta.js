@@ -1,5 +1,8 @@
+import { getDateTimeFormat } from "./intlFormatters";
+
 /**
- * Single source of truth for order-status chip and dot colors.
+ * Single source of truth for order-status chip and dot colors (staff surfaces) and
+ * for the customer-facing status labels / "active" set (below).
  * Only literal Tailwind class strings (purge-safe — no dynamic concatenation).
  *
  * chip: full class string for rounded-full pill badges
@@ -47,4 +50,51 @@ export function chipClass(status) {
 
 export function dotClass(status) {
   return (STATUS_META[status] ?? STATUS_META.scheduled).dot;
+}
+
+// ── Customer-facing status labels ────────────────────────────────────────────
+// Single source for the customer account page and its Orders tab. Each used to keep
+// its own copy of this map, and both silently lacked `scheduled`, so a prepaid
+// advance order was badged "Pending".
+
+/** Order status → i18n key for the customer's own order lists. */
+export const CUSTOMER_STATUS_I18N = {
+  scheduled: "orderStatus.statusScheduled",
+  pending: "orderStatus.statusPending",
+  confirmed: "orderStatus.statusConfirmed",
+  preparing: "orderStatus.statusPreparing",
+  ready: "orderStatus.statusReady",
+  out_for_delivery: "orderStatus.stepOutForDelivery",
+  completed: "orderStatus.statusCompleted",
+  cancelled: "orderStatus.statusCancelled",
+};
+
+/** i18n key for a customer-facing order status (unknown → "Pending", as before). */
+export function customerStatusKey(status) {
+  return CUSTOMER_STATUS_I18N[status] || "orderStatus.statusPending";
+}
+
+/**
+ * Statuses a customer sees as live / still in progress (live-order banner, pulsing
+ * dot). `scheduled` belongs here: a prepaid advance order is a live commitment the
+ * customer needs a way back to, not history.
+ */
+export const CUSTOMER_ACTIVE_STATUSES = new Set([
+  "scheduled", "pending", "confirmed", "preparing", "ready", "out_for_delivery",
+]);
+
+const SCHEDULED_DUE_OPTIONS = {
+  weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+};
+
+/** "Tue 7 Oct, 19:30"-style due time for a scheduled order ('' when absent/invalid). */
+export function formatScheduledDue(locale, iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return getDateTimeFormat(locale, SCHEDULED_DUE_OPTIONS).format(date);
+  } catch {
+    return date.toLocaleString();
+  }
 }

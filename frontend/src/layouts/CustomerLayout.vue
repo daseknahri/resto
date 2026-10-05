@@ -354,6 +354,29 @@ const dismissTrackBanner = () => {
   } catch { /* best-effort: ignore failures */ }
   trackedOrderNumber.value = null;
 };
+
+// The banner is driven by localStorage alone (written at checkout), so it kept pulsing
+// "Track your order" for the full 2h even after the order completed or was cancelled.
+// Check it against the API — once per tracked order, plus once more on leaving that
+// order's status page (where its status may just have moved on). One GET, no polling.
+// Same rule as the Marketplace strip: only a terminal status or a real 404 clears it;
+// a transient failure keeps it (for a guest it's their only way back to the order).
+const TERMINAL_ORDER_STATUSES = new Set(['completed', 'cancelled']);
+let _validatedTrackOrder = null;
+const validateTrackBanner = async ({ force = false } = {}) => {
+  const orderNumber = trackBannerOrder.value;
+  if (!orderNumber || (!force && _validatedTrackOrder === orderNumber)) return;
+  _validatedTrackOrder = orderNumber;
+  let gone;
+  try {
+    const { data } = await api.get(`/order-status/${encodeURIComponent(orderNumber)}/`);
+    gone = TERMINAL_ORDER_STATUSES.has(data?.status);
+  } catch (err) {
+    gone = err?.response?.status === 404;
+  }
+  // Only clear the order we checked (a newer checkout may have replaced it meanwhile).
+  if (gone && trackedOrderNumber.value === orderNumber) dismissTrackBanner();
+};
 // ─────────────────────────────────────────────────────────────────────────────
 
 const humanizeSlug = (value) =>
@@ -399,6 +422,7 @@ const { autoRestore: pushAutoRestore, checkEnabled: pushCheckEnabled } = useCust
 
 onMounted(() => {
   loadOrderTracking();
+  validateTrackBanner();
   syncTableFromQuery();
   customerStore.fetchCustomer().then(() => {
     // Re-establish a previously-granted push subscription so charge nudges keep working.
@@ -419,8 +443,12 @@ watch(() => route.query?.table, syncTableFromQuery);
 watch(() => route.query?.t, syncTableFromQuery);
 watch(() => route.params?.tableSlug, syncTableFromQuery);
 // Re-read localStorage whenever leaving order-status so the banner appears immediately
-watch(() => route.name, (name) => {
-  if (name !== 'order-status') loadOrderTracking();
+// (and re-validate it when coming back FROM the order's status page).
+watch(() => route.name, (name, prevName) => {
+  if (name !== 'order-status') {
+    loadOrderTracking();
+    validateTrackBanner({ force: prevName === 'order-status' });
+  }
   // Re-apply color scheme on every route change so non-menu pages stay in sync
   applyColorScheme();
 });

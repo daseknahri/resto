@@ -3962,14 +3962,27 @@ class CustomerOrderStatusView(APIView):
             and order.status != Order.Status.CANCELLED
             and order_outstanding > Decimal("0")
         ):
+            # Ledger-aware: CustomerOrderPayWalletView charges total - _order_collected()
+            # (cash/card split-bill rows + wallet), so amount_due — the "Pay X with wallet"
+            # label — must be that SAME figure; the wallet-only one above over-stated it on
+            # a split bill. Display only: the pay view re-computes under its own lock.
+            # _order_collected() >= wallet_amount_paid, so this only ever lowers the figure,
+            # and the extra ledger read is confined to the owner of an open bill.
             try:
-                from accounts.models import Customer as _Cust
-                _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
-                if _c is not None:
-                    wallet_balance = str(_c.wallet_balance)
-                    can_pay_with_wallet = True
+                order_outstanding = max(
+                    Decimal("0"), Decimal(str(order.total or "0")) - _order_collected(order)
+                )
             except Exception:
-                pass  # balance lookup is best-effort; never breaks order status
+                pass  # keep the wallet-only figure
+            if order_outstanding > Decimal("0"):
+                try:
+                    from accounts.models import Customer as _Cust
+                    _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
+                    if _c is not None:
+                        wallet_balance = str(_c.wallet_balance)
+                        can_pay_with_wallet = True
+                except Exception:
+                    pass  # balance lookup is best-effort; never breaks order status
 
         # Delivery tracking — the order owner can see + contact their assigned driver
         # (name, phone, vehicle, rating) and watch the live position. Owner-gated like

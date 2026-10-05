@@ -128,6 +128,8 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
                 "total": instance.total or 0,
                 "currency": instance.currency or "MAD",
                 "order_created_at": instance.created_at,
+                # Advance-order due time (null for ASAP) — "My Orders" shows when it's due.
+                "scheduled_for": getattr(instance, "scheduled_for", None),
                 "items_snapshot": items_snap,
                 "vertical": vertical,
             },
