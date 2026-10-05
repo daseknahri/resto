@@ -85,6 +85,48 @@ class SendOtpSmsTests(SimpleTestCase):
         self.assertTrue(len(captured) == 1)
         self.assertIn("ACtest", captured[0])
 
+    # ── diagnosability: the REAL reason is logged (never the code / full phone) ──
+    @override_settings(TWILIO_ACCOUNT_SID="", TWILIO_AUTH_TOKEN="tok", TWILIO_FROM_NUMBER="")
+    def test_missing_settings_are_named_in_the_log(self):
+        with patch("accounts.views.logger") as mock_logger:
+            _send_otp_sms("+212600001234", "123456")
+        logged = str(mock_logger.warning.call_args)
+        self.assertIn("TWILIO_ACCOUNT_SID", logged)
+        self.assertIn("TWILIO_FROM_NUMBER", logged)
+        self.assertNotIn("TWILIO_AUTH_TOKEN", logged)  # it is set — only empty ones are listed
+        self.assertNotIn("123456", logged)
+
+    @override_settings(**_CREDS)
+    def test_twilio_rejection_logs_status_code_and_masked_message(self):
+        import io
+        import json
+        import urllib.error
+
+        body = json.dumps({
+            "code": 21408,
+            "message": "Permission to send an SMS has not been enabled for the region indicated by "
+                       "the 'To' number: +212600001234.",
+        }).encode()
+        err = urllib.error.HTTPError("https://api.twilio.com", 400, "Bad Request", {}, io.BytesIO(body))
+        with patch("urllib.request.urlopen", side_effect=err):
+            with patch("accounts.views.logger") as mock_logger:
+                self.assertFalse(_send_otp_sms("+212600001234", "654321"))
+        logged = str(mock_logger.warning.call_args)
+        self.assertIn("21408", logged)
+        self.assertIn("400", logged)
+        self.assertIn("region", logged)
+        self.assertNotIn("+212600001234", logged)  # the echoed 'To' number is masked
+        self.assertNotIn("654321", logged)         # never the code
+
+    @override_settings(**_CREDS)
+    def test_network_error_reason_is_logged(self):
+        with patch("urllib.request.urlopen", side_effect=OSError("timed out")):
+            with patch("accounts.views.logger") as mock_logger:
+                _send_otp_sms("+212600001234", "654321")
+        logged = str(mock_logger.warning.call_args)
+        self.assertIn("OSError", logged)
+        self.assertIn("timed out", logged)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # _send_otp
