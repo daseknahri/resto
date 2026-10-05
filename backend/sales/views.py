@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 from .throttles import PublicLeadThrottle, UserLeadsThrottle
 
 from menu.commission import COMMISSIONABLE_STATUSES
-from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, SuperCategory, TableLink
+from menu.models import AnalyticsEvent, Category, ComboComponent, Dish, DishOption, Order, OrderItem, SuperCategory, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
 from tenancy.tiering import (
@@ -407,6 +407,11 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
     with schema_context(getattr(tenant, "schema_name", get_public_schema_name())):
         with transaction.atomic():
             if categories_payload is not None:
+                # The import REPLACES the whole menu. Combo links go first: their component FK
+                # is on_delete=PROTECT, so deleting the dishes while any combo exists raised
+                # ProtectedError (surfaced as a misleading "duplicate slug" 409). The export
+                # carries no combo structure, so imported dishes come back as plain dishes.
+                ComboComponent.objects.all().delete()
                 DishOption.objects.all().delete()
                 Dish.objects.all().delete()
                 Category.objects.all().delete()
