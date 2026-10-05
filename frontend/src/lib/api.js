@@ -77,12 +77,14 @@ export const isAuthRedirectExempt = (url) => {
 // Canonical extractor for a human message out of an axios/DRF error. Single source of
 // truth — several files had hand-rolled copies of varying completeness (the weakest
 // missed `non_field_errors` and field-level errors), so error quality drifted per screen.
-// Order: DRF `detail` → `non_field_errors[0]` → first non-empty array field (serializer
-// field errors) → a plain string body → the caller's fallback.
+// Order: DRF `detail` → `non_field_errors[0]` → a bare list body's first entry (DRF's shape
+// for a ValidationError raised from a serializer's save()) → first non-empty array field
+// (serializer field errors) → a plain string body → the caller's fallback.
 export const extractApiErrorMessage = (err, fallback = "") => {
   const data = err?.response?.data;
   if (typeof data?.detail === "string") return data.detail;
   if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return String(data.non_field_errors[0]);
+  if (Array.isArray(data)) return data.length && typeof data[0] === "string" ? data[0] : fallback;
   if (data && typeof data === "object") {
     const firstList = Object.values(data).find((v) => Array.isArray(v) && v.length);
     if (firstList) return String(firstList[0]);

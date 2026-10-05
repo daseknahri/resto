@@ -48,6 +48,14 @@ vi.mock("../../lib/api", () => ({
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // Pass-through of the real precedence for the two shapes the confirm endpoint returns
+  // (bare list from save(), non_field_errors from validate()); fallback otherwise.
+  extractApiErrorMessage: (err, fallback = "") => {
+    const data = err?.response?.data;
+    if (Array.isArray(data) && typeof data[0] === "string") return data[0];
+    if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return data.non_field_errors[0];
+    return fallback;
+  },
 }));
 
 // vi.hoisted mutable route holder: hoisted above the imports so it can be
@@ -160,5 +168,22 @@ describe("ResetPassword — mount smoke", () => {
     const target = routerSpies.replace.mock.calls[0][0];
     expect(target.path).toBe("/reset-password");
     expect(target.query).toEqual({ next: "/owner" });
+  });
+
+  // ── (4) a spent link shows the server's reason, not the generic failure ──────
+  it("shows the server's 'Token expired or used' message when the reset is rejected", async () => {
+    routeState.query = { token: "reset-token-abc123" };
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: ["Token expired or used"] } });
+    wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.password = "a-strong-password-1";
+    wrapper.vm.confirmPassword = "a-strong-password-1";
+    await wrapper.vm.submit();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("Token expired or used");
+    expect(wrapper.text()).not.toContain("resetPassword.failed");
   });
 });
