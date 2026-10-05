@@ -738,6 +738,11 @@ const submitHHForm = async () => {
     hhDrawerError.value = t('happyHour.timeRequired');
     return;
   }
+  // The server rejects an empty day list (a rule with no days never applies).
+  if (!hhForm.days.length) {
+    hhDrawerError.value = t('happyHour.daysRequired');
+    return;
+  }
   hhSubmitting.value = true;
   const payload = {
     name: hhForm.name.trim(),
