@@ -47,6 +47,7 @@ vi.mock("../../composables/useI18n", () => ({
         "globalLiveStatusBar.statusInProgress":      "In progress",
         "tripSchedule.statusScheduled":              "Scheduled",
         "orderStatus.statusPending":                 "Pending",
+        "orderStatus.statusScheduled":               "Scheduled",
         "orderStatus.statusConfirmed":               "Confirmed",
         "orderStatus.statusPreparing":               "Preparing",
         "orderStatus.statusReady":                   "Ready for pickup",
@@ -181,6 +182,21 @@ describe("GlobalLiveStatusBar", () => {
     const w = mountBar();
     await w.vm.$nextTick();
     expect(w.find(".glsb-chip").text()).toBe("Ready to dispatch");
+  });
+
+  it("labels a scheduled (advance) order 'Scheduled', not the 'Pending' fallback", async () => {
+    setActive({
+      orders: [{
+        order_number: "ORD-SCH",
+        status: "scheduled",
+        fulfillment_type: "pickup",
+        restaurant_name: "Pizza Co",
+        restaurant_slug: "pizza-co",
+      }],
+    });
+    const w = mountBar();
+    await w.vm.$nextTick();
+    expect(w.find(".glsb-chip").text()).toBe("Scheduled");
   });
 
   it("labels a ready PICKUP order 'Ready for pickup'", async () => {

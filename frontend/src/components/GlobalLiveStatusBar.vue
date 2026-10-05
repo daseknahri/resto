@@ -109,6 +109,7 @@ onUnmounted(() => {
 // never reads one thing here and another there. "ready" is resolved per fulfillment
 // type in _orderStatus below (delivery ≠ pickup ≠ dine-in).
 const ORDER_STATUS_LABEL = {
+  scheduled:        "orderStatus.statusScheduled",
   pending:          "orderStatus.statusPending",
   confirmed:        "orderStatus.statusConfirmed",
   preparing:        "orderStatus.statusPreparing",

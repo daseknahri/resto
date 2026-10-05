@@ -750,8 +750,9 @@ class CustomerActiveItemsView(APIView):
     authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [IsCustomer]
 
-    # Order statuses that are still in-flight (mirror of the FE ACTIVE_STATUSES set).
-    _ACTIVE_ORDER_STATUSES = ("pending", "confirmed", "preparing", "ready", "out_for_delivery")
+    # Order statuses that are still in-flight — mirror of the FE CUSTOMER_ACTIVE_STATUSES
+    # (lib/orderStatusMeta.js), which includes a prepaid advance ("scheduled") order.
+    _ACTIVE_ORDER_STATUSES = ("scheduled", "pending", "confirmed", "preparing", "ready", "out_for_delivery")
 
     def get(self, request):
         # IsCustomer guarantees request.user is the signed-in Customer principal.
@@ -771,6 +772,7 @@ class CustomerActiveItemsView(APIView):
                 "currency": r.currency,
                 "vertical": r.vertical or "",
                 "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+                "scheduled_for": r.scheduled_for.isoformat() if r.scheduled_for else None,
             }
             for r in (
                 CustomerOrderRef.objects.filter(
