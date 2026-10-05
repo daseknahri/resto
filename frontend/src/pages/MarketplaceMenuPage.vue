@@ -764,6 +764,8 @@
             :delivery-fee="deliveryFee"
             :flash-sale-discount="flashSaleDiscount"
             :flash-sale-pct="restaurant?.flash_sale?.discount_pct"
+            :auto-promo-discount="autoPromoDiscount"
+            :auto-promo-name="autoPromoName"
             :loyalty-discount="loyaltyDiscount"
             :order-total="orderTotal"
             :fmt-price="fmtPrice"
@@ -866,6 +868,7 @@ import MarketplaceMenuReviews from '../components/MarketplaceMenuReviews.vue';
 import api from '../lib/api';
 import { afterFailedCheckout, checkoutSnapshot, isSameSnapshot, keyForCheckoutSnapshot } from '../lib/checkoutIdempotency';
 import { projectLoyaltyEarn } from '../lib/loyaltyEarn';
+import { pickBestAutoPromo, promoDiscountAmount } from '../lib/promoPreview';
 import { AVG_SPEED_KMH, ROAD_FACTOR, haversineKm, validCoord, parseCoordinateValue, parseCoordinatesFromMapUrl } from '../lib/deliveryPricing';
 import { resolveMarketplaceReorderItems } from '../lib/reorder';
 import { classifyClosedOrderState } from '../lib/businessHours';
@@ -1346,12 +1349,8 @@ const cartTotal = computed(() =>
   cart.value.reduce((s, i) => s + Number(i.unitPrice ?? i.price) * i.qty, 0)
 );
 
-// Flash sale discount — mirrors backend: pct applied to food subtotal only
-const flashSaleDiscount = computed(() => {
-  if (!restaurant.value?.flash_sale) return 0;
-  const pct = Number(restaurant.value.flash_sale.discount_pct);
-  return pct > 0 ? Math.round(cartTotal.value * pct) / 100 : 0;
-});
+// (The checkout's flash-sale vs restaurant-promo discount is resolved after the delivery fee,
+// below — a free-delivery promo is worth the fee.)
 
 // Per-dish flash-sale helpers
 const flashSalePct = computed(() => Number(restaurant.value?.flash_sale?.discount_pct) || 0);
@@ -1676,6 +1675,37 @@ const deliveryBlocked = computed(
   () => form.fulfillment_type === 'delivery' && deliveryOutOfRange.value,
 );
 
+// ── Checkout discount: restaurant auto promo vs platform flash sale (M8) ──────
+// Mirrors MarketplacePlaceOrderView exactly, so the summary, the total and the wallet gate use
+// the charge the server will actually make (the server stays authoritative):
+//   • auto promo — the best live code-less restaurant promo (menu payload `auto_promos`, already
+//     filtered server-side to live + uncapped + code="" in the placement loop's order): skip one
+//     below its min_order_amount, strictly-largest discount wins (lib/promoPreview). Percentage /
+//     fixed apply to the FOOD subtotal; free_delivery is worth the delivery fee (0 on pickup —
+//     deliveryFee is already 0 there, as the server's is).
+//   • flash sale — its percentage of the FOOD subtotal (same cent rounding as the server).
+//   • No stacking: the flash sale wins only when STRICTLY larger; a tie keeps the promo.
+// The marketplace has no promo-code entry, so a code-protected promo never applies (#455).
+const bestAutoPromo = computed(() =>
+  pickBestAutoPromo(restaurant.value?.auto_promos, {
+    subtotal: cartTotal.value,
+    deliveryFee: deliveryFee.value,
+  }),
+);
+const flashSaleCandidateDiscount = computed(() => {
+  const pct = restaurant.value?.flash_sale?.discount_pct;
+  if (!(Number(pct) > 0)) return 0;
+  return promoDiscountAmount({ promo_type: 'percentage', discount_value: pct }, { subtotal: cartTotal.value });
+});
+const flashSaleWins = computed(
+  () => flashSaleCandidateDiscount.value > (bestAutoPromo.value?.discount || 0),
+);
+const flashSaleDiscount = computed(() => (flashSaleWins.value ? flashSaleCandidateDiscount.value : 0));
+const autoPromoDiscount = computed(() => (flashSaleWins.value ? 0 : (bestAutoPromo.value?.discount || 0)));
+const autoPromoName = computed(() => (autoPromoDiscount.value > 0 ? (bestAutoPromo.value?.promo?.name || '') : ''));
+// The one discount the order gets (flash sale OR restaurant promo — never both).
+const promoDiscount = computed(() => flashSaleDiscount.value + autoPromoDiscount.value);
+
 // ── Loyalty redemption ───────────────────────────────────────────────────────
 const loyaltyPoints = computed(() => Number(customerStore.customer?.loyalty_points) || 0);
 const loyaltyAvailable = computed(() =>
@@ -1694,13 +1724,15 @@ const orderBaseTotal = computed(() => {
 const loyaltyDiscount = computed(() => {
   if (!useLoyalty.value || !loyaltyAvailable.value) return 0;
   const ptsValue = Number(loyaltyConfig.value.points_value) || 0;
-  // Cap redeemable amount against the post-flash-sale total (mirrors backend)
-  const maxRedeemable = Math.max(0, orderBaseTotal.value - flashSaleDiscount.value);
+  // Cap redeemable amount against the post-promo / post-flash-sale total (mirrors backend)
+  const maxRedeemable = Math.max(0, orderBaseTotal.value - promoDiscount.value);
   return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, maxRedeemable));
 });
 
+// Rounded to the cent (the server's Decimal total) so float noise can't make the wallet gate
+// read a covered total as a shortfall.
 const orderTotal = computed(() =>
-  Math.max(0, orderBaseTotal.value - flashSaleDiscount.value - loyaltyDiscount.value)
+  Math.max(0, Math.round((orderBaseTotal.value - promoDiscount.value - loyaltyDiscount.value) * 100) / 100)
 );
 
 // Projected points this order credits — the server's exact formula (lib/loyaltyEarn): on the

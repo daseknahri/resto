@@ -21,6 +21,13 @@
       <span>{{ t('mktMenu.flashDiscount', { pct: flashSalePct }) }}</span>
       <span class="tabular-nums">-{{ fmtPrice(flashSaleDiscount) }}</span>
     </div>
+    <div v-if="autoPromoDiscount > 0" class="flex justify-between gap-2 text-emerald-300">
+      <span class="min-w-0">
+        {{ t('mktMenu.autoPromoDiscount') }}
+        <span v-if="autoPromoName" class="text-[11px] text-slate-500 break-words">· {{ autoPromoName }}</span>
+      </span>
+      <span class="tabular-nums shrink-0">-{{ fmtPrice(autoPromoDiscount) }}</span>
+    </div>
     <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
       <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
       <span class="tabular-nums">-{{ fmtPrice(loyaltyDiscount) }}</span>
@@ -35,9 +42,9 @@
 <script setup>
 // The order-totals panel of MarketplaceMenuPage.vue's checkout drawer, extracted as a
 // DISPLAY-ONLY child (RISK FE-2). It shows the prep-time ETA chip, subtotal, the
-// delivery fee (distance / free / flat), flash-sale + loyalty discount lines, and the
+// delivery fee (distance / free / flat), flash-sale / restaurant-promo + loyalty discount lines, and the
 // grand total. It computes NOTHING and mutates NOTHING — every value is derived in
-// the parent (cartTotal / deliveryFee / flashSaleDiscount / loyaltyDiscount /
+// the parent (cartTotal / deliveryFee / flashSaleDiscount / autoPromoDiscount / loyaltyDiscount /
 // orderTotal / prepEta) and passed as a prop.
 import { useI18n } from '../composables/useI18n';
 
@@ -62,6 +69,11 @@ defineProps({
   flashSaleDiscount: { type: Number, default: 0 },
   /** Flash-sale percent (restaurant.flash_sale.discount_pct) for the label. */
   flashSalePct: { type: [Number, String], default: 0 },
+  /** Auto-applied restaurant promo discount (autoPromoDiscount) — 0 when none applies or the
+   *  flash sale won (the two never stack). */
+  autoPromoDiscount: { type: Number, default: 0 },
+  /** That promo's name (autoPromoName), shown beside its row. */
+  autoPromoName: { type: String, default: '' },
   /** Loyalty discount amount (loyaltyDiscount). */
   loyaltyDiscount: { type: Number, default: 0 },
   /** Grand total (orderTotal). */

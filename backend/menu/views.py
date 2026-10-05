@@ -12154,7 +12154,7 @@ class CustomerLoyaltyHistoryView(APIView):
         })
 
 
-def _live_auto_promos(now_local):
+def _live_auto_promos(now_local, *, order_by=()):
     """The auto-applied (code-less) promotions live at ``now_local``, for the cart preview (M8).
 
     Mirrors the auto-apply loop in PlaceOrderView EXACTLY: the same queryset (is_active, code="",
@@ -12163,11 +12163,18 @@ def _live_auto_promos(now_local):
     _compute_promo_discount's math and the loop's strict ``>`` best pick in that order, so it
     previews the very promo the order will get.
 
+    ``order_by``: a caller whose auto-apply loop orders differently passes that ordering so the
+    list (and therefore the strict-``>`` tie-break) matches it — the marketplace menu passes
+    MarketplacePlaceOrderView's ``("-discount_value",)``. Default: the model ordering, as above.
+
     code="": a code-protected promo is redeemable only by entering its code (see #455), so it is
     never listed here. Computed per request (time-sensitive) — never cache this.
     """
     live = []
-    for promo in Promotion.objects.filter(is_active=True, code=""):
+    promos = Promotion.objects.filter(is_active=True, code="")
+    if order_by:
+        promos = promos.order_by(*order_by)
+    for promo in promos:
         if promo.max_uses is not None and promo.use_count >= promo.max_uses:
             continue
         if not _is_promo_active_now(promo, now_local=now_local):

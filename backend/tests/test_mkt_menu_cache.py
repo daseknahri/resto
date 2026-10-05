@@ -438,6 +438,104 @@ class DishFlagsLiveOnCacheHitTests(_MktMenuCacheBase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
+def _promo_row(name, *, code="", promo_type="percentage", discount_value="10.00",
+               min_order_amount="0.00", max_uses=None, use_count=0):
+    return SimpleNamespace(
+        name=name, code=code, is_active=True, promo_type=promo_type,
+        discount_value=Decimal(discount_value), min_order_amount=Decimal(min_order_amount),
+        max_uses=max_uses, use_count=use_count,
+    )
+
+
+def _fake_promotion_model(rows):
+    """A fake ``menu.models.Promotion`` whose ``objects.filter(**kw)`` really applies its kwargs to
+    ``rows`` (so a code-protected row is only excluded if the query asks for ``code=""``) and whose
+    ``.order_by("-discount_value")`` sorts like the DB would."""
+    model = MagicMock()
+
+    def _filter(**kw):
+        matched = [p for p in rows if all(getattr(p, k) == v for k, v in kw.items())]
+        qs = MagicMock()
+        qs.__iter__.side_effect = lambda: iter(matched)
+
+        def _order_by(*fields):
+            assert fields == ("-discount_value",), fields
+            return sorted(matched, key=lambda p: p.discount_value, reverse=True)
+
+        qs.order_by.side_effect = _order_by
+        return qs
+
+    model.objects.filter.side_effect = _filter
+    return model
+
+
+class AutoPromosLiveOnCacheHitTests(_MktMenuCacheBase):
+    """M8 on the marketplace: MarketplacePlaceOrderView auto-applies the best live code-less
+    restaurant promo, but the menu payload carried no promos, so the checkout previewed only the
+    flash sale (total shown > total charged; the wallet gate over-blocked). `auto_promos` lists what
+    the placement loop would consider — per request (time-sensitive), never from the cached body."""
+
+    def _drive_promos(self, *, slug, fake_menu, profile, rows, live_at):
+        """live_at: {now_local: set of promo names whose window is open at that instant}."""
+        with patch("menu.views.Promotion", _fake_promotion_model(rows)), \
+                patch("menu.views._is_promo_active_now",
+                      side_effect=lambda promo, now_local=None: promo.name in live_at[now_local]), \
+                patch("menu.views._cod_eligible", return_value=False):
+            return {
+                now: self._drive(slug=slug, fake_menu=fake_menu, profile=profile, now_local=now)
+                for now in live_at
+            }
+
+    def test_auto_promos_reflect_the_live_window_on_a_cache_hit(self):
+        """Build the body at 10:00 (lunch promo live), then hit the cache at 12:00 (lunch over,
+        happy promo live): the cache hit must list the 12:00 promos, and the body is built once."""
+        fake_menu, dish_cls = _make_fake_menu()
+        rows = [
+            _promo_row("Lunch 10%", discount_value="10.00", min_order_amount="50.00"),
+            _promo_row("Noon 20%", discount_value="20.00"),
+            _promo_row("Capped", discount_value="30.00", max_uses=5, use_count=5),
+        ]
+        resps = self._drive_promos(
+            slug="promo", fake_menu=fake_menu, profile=_make_profile(), rows=rows,
+            live_at={_MON_10H: {"Lunch 10%", "Capped"}, _MON_12H: {"Noon 20%", "Lunch 10%", "Capped"}},
+        )
+
+        self.assertEqual(resps[_MON_10H].data["auto_promos"], [{
+            "name": "Lunch 10%", "promo_type": "percentage",
+            "discount_value": "10.00", "min_order_amount": "50.00",
+        }])
+        # Cache HIT, yet live: the 12:00 window — in the placement loop's -discount_value order.
+        self.assertEqual([p["name"] for p in resps[_MON_12H].data["auto_promos"]], ["Noon 20%", "Lunch 10%"])
+        self.assertEqual(dish_cls.objects.filter.call_count, 1, "2nd request must be a cache HIT")
+        # Never cached: the shared body still carries only the safe default.
+        self.assertEqual(cache.get(_mkt_menu_cache_key("promo"))["auto_promos"], [])
+
+    def test_code_protected_promos_are_never_exposed(self):
+        """A promo with a code is redeemable only by typing it (#455) — and the marketplace has no
+        code entry — so it must never reach the payload, live window or not."""
+        fake_menu, _ = _make_fake_menu()
+        rows = [
+            _promo_row("VIP50", code="VIP50", discount_value="50.00"),
+            _promo_row("Auto 5", discount_value="5.00"),
+        ]
+        resps = self._drive_promos(
+            slug="vip", fake_menu=fake_menu, profile=_make_profile(), rows=rows,
+            live_at={_MON_10H: {"VIP50", "Auto 5"}},
+        )
+        promos = resps[_MON_10H].data["auto_promos"]
+        self.assertEqual([p["name"] for p in promos], ["Auto 5"])
+        self.assertNotIn("code", promos[0])
+
+    def test_promo_read_failure_degrades_to_no_preview(self):
+        fake_menu, _ = _make_fake_menu()
+        broken = MagicMock()
+        broken.objects.filter.side_effect = RuntimeError("db down")
+        with patch("menu.views.Promotion", broken), patch("menu.views._cod_eligible", return_value=False):
+            resp = self._drive(slug="promofail", fake_menu=fake_menu, profile=_make_profile(), now_local=_MON_10H)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["auto_promos"], [])
+
+
 class MarketplaceMenuBustSeamTests(SimpleTestCase):
     """Every write seam that already busts a related cache also drops mkt_menu:v1:{slug}."""
 

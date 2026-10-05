@@ -693,6 +693,7 @@ mktMenu: {
   flashSaleBanner: "⚡ {pct}% off everything — flash sale!",
   flashSaleEnds: "Ends in {time}",
   flashDiscount: "Flash sale ({pct}% off)",
+  autoPromoDiscount: "Restaurant offer",
   loyaltyTeaserPts: "You have {points} loyalty pts",
   loyaltyTeaserEarn: "Earn loyalty points with every order",
   loyaltyTeaserRedeem: "Redeem at checkout",

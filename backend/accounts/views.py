@@ -4154,6 +4154,8 @@ class MarketplaceView(APIView):
 #   • is_open      — TIME-SENSITIVE open/closed verdict; recomputed live so it never
 #     freezes for the TTL.
 #   • flash_sale   — TIME-SENSITIVE sale window; recomputed live from the opted-in ids.
+#   • auto_promos  — TIME-SENSITIVE: the restaurant's live code-less promos (window + usage
+#     cap), read per request inside the tenant schema at the tenant-local now (M8).
 #   • is_schedule_available (per dish) — TIME-SENSITIVE: a time-limited dish's availability
 #     window (tenant-local clock) opens/closes mid-TTL. The cached body carries only the raw
 #     schedule as a private `_availability_schedule`; the live verdict is stamped per request.
@@ -4515,6 +4517,9 @@ class MarketplaceMenuView(APIView):
                         "loyalty": loyalty_cfg_data,
                         # flash_sale: recomputed live per request below.
                         "flash_sale": None,
+                        # auto_promos: the live code-less restaurant promos — recomputed per
+                        # request below (time-sensitive); never cached.
+                        "auto_promos": [],
                         "rating_average": rating_average,
                         "rating_count": rating_count,
                         "recent_reviews": recent_reviews,
@@ -4552,6 +4557,26 @@ class MarketplaceMenuView(APIView):
                 # Stamped on the same per-request copy, inside the tenant schema (the combo
                 # component state is a live read) — never baked into the cached body.
                 _mkt_apply_live_dish_flags(out, profile)
+
+                # ── LIVE auto promos (M8) — the restaurant's code-less promotions that
+                # MarketplacePlaceOrderView would auto-apply right now, so the checkout previews
+                # (and wallet-gates on) the real charge, not the pre-promo one. TIME-SENSITIVE
+                # (promo window / usage cap) → computed per request on the copy, inside the tenant
+                # schema, at the tenant-local now; never baked into the {slug}-keyed body. Same
+                # queryset + ordering as the placement loop, so the client's strict-">" pick lands
+                # on the same promo. code="" → a code-protected promo is never exposed (#455).
+                # A failed read degrades to [] (no preview; placement still applies the promo).
+                try:
+                    from menu.views import (
+                        _live_auto_promos as _mkt_live_auto_promos,
+                        _profile_now as _mkt_promo_now,
+                    )
+                    out["auto_promos"] = _mkt_live_auto_promos(
+                        _mkt_promo_now(profile), order_by=("-discount_value",),
+                    )
+                except Exception:
+                    logger.exception("MarketplaceMenuView: auto-promo read failed for slug=%s; no preview", slug)
+                    out["auto_promos"] = []
 
         except Exception as exc:
             logger.exception("MarketplaceMenuView error for slug=%s: %s", slug, exc)
