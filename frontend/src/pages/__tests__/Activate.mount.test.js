@@ -56,18 +56,25 @@ vi.mock("../../lib/api", () => ({
 // The page imports { useRoute, useRouter } and calls both at setup. onMounted
 // reads route.query.token, so a token is seeded here. Hoisted so the mutable
 // holder can be referenced from inside the vi.mock factory without a TDZ error.
-const { routeState } = vi.hoisted(() => ({
+const { routeState, routerSpies } = vi.hoisted(() => ({
   routeState: { params: {}, query: { token: "seed-token-abc123" } },
+  routerSpies: { push: null, replace: null },
 }));
 vi.mock("vue-router", () => ({
   useRoute: () => routeState,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => routerSpies,
 }));
 
 import { useActivationStore } from "../../stores/activation";
 import Activate from "../Activate.vue";
 
-const mountPage = () => shallowMount(Activate);
+// The already-activated actions use the global <RouterLink> (not imported):
+// a pass-through stub that exposes `to` so the targets can be asserted.
+const RouterLinkStub = {
+  props: ["to"],
+  template: '<a :data-to="JSON.stringify(to)"><slot /></a>',
+};
+const mountPage = () => shallowMount(Activate, { global: { stubs: { RouterLink: RouterLinkStub } } });
 
 describe("Activate — mount smoke", () => {
   let wrapper;
@@ -79,8 +86,11 @@ describe("Activate — mount smoke", () => {
     setActivePinia(createPinia());
     // Reset the route query to the default (token present) before each test.
     routeState.params = {};
+    routeState.path = "/activate";
     routeState.query = { token: "seed-token-abc123" };
     vi.clearAllMocks();
+    routerSpies.push = vi.fn();
+    routerSpies.replace = vi.fn(() => Promise.resolve());
   });
 
   afterEach(() => {
@@ -125,5 +135,52 @@ describe("Activate — mount smoke", () => {
     expect(wrapper.text()).toContain("activateAccount.resendAction");
     // The base form still renders alongside the resend block.
     expect(wrapper.text()).toContain("activateAccount.title");
+  });
+
+  // ── (3) token hygiene: the live token leaves the address bar ───────────────
+  it("strips the token from the URL once it is in the form, keeping other params", async () => {
+    routeState.query = { token: "seed-token-abc123", next: "/owner" };
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.vm.token).toBe("seed-token-abc123");
+    expect(routerSpies.replace).toHaveBeenCalledTimes(1);
+    const target = routerSpies.replace.mock.calls[0][0];
+    expect(target.path).toBe("/activate");
+    expect(target.query).toEqual({ next: "/owner" });
+  });
+
+  it("does not navigate when the URL has no token", async () => {
+    routeState.query = {};
+    wrapper = mountPage();
+    await flushPromises();
+    expect(routerSpies.replace).not.toHaveBeenCalled();
+  });
+
+  // ── (4) already-activated account: offer Sign in / Forgot password ─────────
+  it("offers Sign in and Forgot password actions for an already-activated account", async () => {
+    routeState.query = { next: "/owner" };
+    useActivationStore().$patch({
+      error: 'This account is already activated. Sign in, or use "Forgot password" to reset your password.',
+      alreadyActivated: true,
+    });
+    wrapper = mountPage();
+    await flushPromises();
+
+    const links = wrapper.findAll("a");
+    const targets = links.map((a) => JSON.parse(a.attributes("data-to")));
+    expect(targets).toContainEqual({ name: "signin", query: { next: "/owner" } });
+    expect(targets).toContainEqual({ name: "forgot-password" });
+    expect(wrapper.text()).toContain("activateAccount.signInAction");
+    expect(wrapper.text()).toContain("activateAccount.forgotPasswordAction");
+    // Not the expired-token resend flow.
+    expect(wrapper.text()).not.toContain("activateAccount.resendPrompt");
+  });
+
+  it("does not render the account actions for other errors", async () => {
+    useActivationStore().$patch({ error: "Invalid token", alreadyActivated: false });
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("activateAccount.signInAction");
   });
 });

@@ -12230,13 +12230,7 @@ class OwnerMenuImportView(APIView):
 
         # Fetch the default super-category (position=0 / first) or create one for imports
         try:
-            default_super_cat = SuperCategory.objects.order_by("position", "id").first()
-            if default_super_cat is None:
-                default_super_cat = SuperCategory.objects.create(
-                    name="Menu",
-                    slug=_make_unique_slug("menu", SuperCategory),
-                    position=0,
-                )
+            default_super_cat = get_or_create_default_super_category()
         except Exception as _e:
             return Response({"detail": f"Could not access menu structure: {_e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -12397,13 +12391,7 @@ class ApplyTemplateView(APIView):
 
             # 2. Optionally seed the sample menu (idempotent by name).
             if with_content:
-                default_super_cat = SuperCategory.objects.order_by("position", "id").first()
-                if default_super_cat is None:
-                    default_super_cat = SuperCategory.objects.create(
-                        name=tpl.get("super_category", "Menu"),
-                        slug=_make_unique_slug(tpl.get("super_category", "menu"), SuperCategory),
-                        position=0,
-                    )
+                default_super_cat = get_or_create_default_super_category(name=tpl.get("super_category", "Menu"))
                 for cat in tpl["categories"]:
                     category = Category.objects.filter(name__iexact=cat["name"]).first()
                     if category is None:
@@ -12463,6 +12451,23 @@ def _make_unique_slug(name: str, model_class, max_length: int = 200) -> str:
         slug = f"{base}-{suffix}"
         suffix += 1
     return slug
+
+
+def get_or_create_default_super_category(name: str = "Menu") -> SuperCategory:
+    """The super category that bulk-created categories attach to (Category.super_category
+    is NOT NULL): the tenant's first one by position, else a new top-level ``name``.
+
+    Shared by the CSV menu import, template seeding and the admin settings import.
+    Must run inside the tenant's schema.
+    """
+    existing = SuperCategory.objects.order_by("position", "id").first()
+    if existing is not None:
+        return existing
+    return SuperCategory.objects.create(
+        name=name,
+        slug=_make_unique_slug(name, SuperCategory),
+        position=0,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -416,7 +416,9 @@ const arabicMessages = {
     "resendEmailRequired": "البريد الإلكتروني مطلوب",
     "resendAction": "إعادة إرسال رابط التفعيل",
     "resendSending": "جارٍ الإرسال...",
-    "resendConfirmation": "إذا كان هذا البريد الإلكتروني مسجلاً، فقد تم إرسال رابط تفعيل جديد إليه."
+    "resendConfirmation": "إذا كان هذا البريد الإلكتروني مسجلاً، فقد تم إرسال رابط تفعيل جديد إليه.",
+    "signInAction": "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
+    "forgotPasswordAction": "\u0646\u0633\u064a\u062a \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631\u061f"
   },
   "router": {
     "orderingDisabled": "الطلبات غير مفعلة لهذه الباقة.",

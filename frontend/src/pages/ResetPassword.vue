@@ -121,11 +121,13 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
+import { stripTokenFromUrl } from "../lib/tokenRedaction";
 
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 const token = ref("");
 const password = ref("");
@@ -143,6 +145,8 @@ const signinLink = computed(() => {
 onMounted(() => {
   if (typeof route.query.token === "string" && route.query.token.trim()) {
     token.value = route.query.token.trim();
+    // Live credential: keep it in the form only, not in the address bar.
+    stripTokenFromUrl(route, router);
   }
 });
 

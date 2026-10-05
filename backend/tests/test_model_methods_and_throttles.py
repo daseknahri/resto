@@ -2,7 +2,7 @@
 Tests for:
   - accounts.throttles._IPThrottle.get_cache_key  (+ concrete subclasses)
   - menu.throttles._IPThrottle.get_cache_key  (+ concrete subclasses)
-  - accounts.models.PasswordResetToken.is_valid / mark_used
+  - accounts.models.PasswordResetToken.is_valid / consume
   - sales.models.ActivationToken.is_valid / consume
   - sales.models.ProvisioningJob.append_log
 
@@ -187,7 +187,7 @@ class MenuIPThrottleGetCacheKeyTests(SimpleTestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# accounts.models.PasswordResetToken  — is_valid / mark_used
+# accounts.models.PasswordResetToken  — is_valid / consume
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PasswordResetTokenIsValidTests(SimpleTestCase):
@@ -222,31 +222,40 @@ class PasswordResetTokenIsValidTests(SimpleTestCase):
         self.assertFalse(tok.is_valid())
 
 
-class PasswordResetTokenMarkUsedTests(SimpleTestCase):
-    def _token(self):
-        tok = PasswordResetToken.__new__(PasswordResetToken)
-        tok.used_at = None
-        tok.save = MagicMock()
-        return tok
+class PasswordResetTokenConsumeTests(SimpleTestCase):
+    """consume() replaced the non-atomic mark_used(): a compare-and-set UPDATE
+    (CAS / sibling-revocation regressions: test_activation_token_secrecy.py)."""
 
-    def test_mark_used_sets_used_at(self):
+    def _token(self):
+        return PasswordResetToken(id=5, user_id=9, used_at=None, expires_at=timezone.now() + timedelta(hours=1))
+
+    def test_consume_sets_used_at(self):
         tok = self._token()
         before = timezone.now()
-        tok.mark_used()
+        with patch.object(PasswordResetToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            self.assertTrue(tok.consume())
         self.assertIsNotNone(tok.used_at)
         self.assertGreaterEqual(tok.used_at, before)
 
-    def test_mark_used_calls_save_with_correct_fields(self):
+    def test_consume_does_not_save_whole_row(self):
         tok = self._token()
-        tok.mark_used()
-        tok.save.assert_called_once_with(update_fields=["used_at"])
-
-    def test_mark_used_makes_is_valid_false(self):
-        tok = self._token()
-        tok.expires_at = timezone.now() + timedelta(hours=1)
         tok.save = MagicMock()
-        tok.mark_used()
+        with patch.object(PasswordResetToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            tok.consume()
+        tok.save.assert_not_called()
+
+    def test_consume_makes_is_valid_false(self):
+        tok = self._token()
+        with patch.object(PasswordResetToken, "objects") as objects:
+            objects.filter.return_value.update.return_value = 1
+            tok.consume()
         self.assertFalse(tok.is_valid())
+
+    def test_mark_used_is_gone(self):
+        # The validate-then-mark_used pattern let two concurrent submits both reset.
+        self.assertFalse(hasattr(PasswordResetToken, "mark_used"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

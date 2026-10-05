@@ -15,6 +15,7 @@ from tenancy.tiering import (
 )
 
 from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, ReservationTimelineEvent, TierUpgradeRequest
+from .redaction import redact_tokens, redact_tokens_in
 from .sla import reservation_sla_snapshot
 
 
@@ -327,16 +328,28 @@ class OwnerReservationBulkReminderResultSerializer(serializers.Serializer):
 class ProvisioningJobSerializer(serializers.ModelSerializer):
     tenant_slug = serializers.CharField(source="tenant.slug", read_only=True)
     lead_name = serializers.CharField(source="lead.name", read_only=True)
+    # Logs are masked at write time; this also masks rows written before that
+    # (raw activation URLs / WhatsApp links) without rewriting stored data.
+    log = serializers.SerializerMethodField()
 
     class Meta:
         model = ProvisioningJob
         fields = ["id", "lead_name", "tenant_slug", "status", "log", "created_at", "updated_at"]
+
+    def get_log(self, obj):
+        return redact_tokens(obj.log or "")
 
 
 class AdminAuditLogSerializer(serializers.ModelSerializer):
     actor_username = serializers.CharField(source="actor.username", read_only=True)
     tenant_slug = serializers.CharField(source="tenant.slug", read_only=True)
     lead_name = serializers.CharField(source="lead.name", read_only=True)
+    # Same defensive mask for historical ACTIVATION_RESENT / ONBOARDING_PACKAGE_SENT
+    # rows, whose metadata stored the raw activation URL.
+    metadata = serializers.SerializerMethodField()
+
+    def get_metadata(self, obj):
+        return redact_tokens_in(obj.metadata or {})
 
     class Meta:
         model = AdminAuditLog

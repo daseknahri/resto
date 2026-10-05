@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
-from django.contrib.auth import get_user_model
 
+from .audit import log_admin_action
 from .models import (
     ActivationToken,
     AdminAuditLog,
@@ -14,7 +14,8 @@ from .models import (
 )
 from django.contrib import messages
 
-from .services import issue_activation, provision_lead
+from .redaction import mask_token_in
+from .services import provision_lead, resend_activation_for_lead
 
 
 @admin.register(Lead)
@@ -47,36 +48,35 @@ class LeadAdmin(admin.ModelAdmin):
     confirm_sale.short_description = "Confirm sale and provision tenant"
 
     def resend_activation(self, request, queryset):
+        """Resend through the same service as the platform console's resend
+        (sales.services.resend_activation_for_lead): it finds the tenant via the
+        lead's successful ProvisioningJob, refuses an owner who already activated,
+        and logs only the MASKED token."""
+        resent = 0
         for lead in queryset:
-            tenant = lead.tenant_set.first() if hasattr(lead, "tenant_set") else None
-            if not tenant:
+            try:
+                result = resend_activation_for_lead(lead)
+            except ValueError as exc:
+                # Expected, actionable: not provisioned yet / owner already activated.
+                self.message_user(request, f"{lead.name}: {exc}", level=messages.WARNING)
                 continue
-            owner = tenant.users.filter(role=get_user_model().Roles.TENANT_OWNER).first()
-            if not owner:
+            except Exception as exc:  # noqa: BLE001 — surface unexpected errors to the admin
+                self.message_user(request, f"{lead.name}: activation resend failed — {exc}", level=messages.ERROR)
                 continue
-            (
-                activation,
-                admin_url,
-                workspace_url,
-                signin_url,
-                tenant_url,
-                activation_url,
-                whatsapp_link,
-                whatsapp_message_template,
-            ) = issue_activation(tenant, owner)
-            job = ProvisioningJob.objects.create(lead=lead, tenant=tenant, status=ProvisioningJob.Status.SUCCESS)
-            job.append_log("Resent activation")
-            job.append_log(f"Activation token: {activation.token}")
-            job.append_log(f"Workspace URL: {workspace_url}")
-            job.append_log(f"Sign-in URL: {signin_url}")
-            job.append_log(f"Django admin URL: {admin_url}")
-            job.append_log(f"Tenant URL: {tenant_url}")
-            job.append_log(f"Activation URL: {activation_url}")
-            if whatsapp_link:
-                job.append_log(f"WhatsApp link: {whatsapp_link}")
-            if whatsapp_message_template:
-                job.append_log("WhatsApp template refreshed")
-        self.message_user(request, "Activation re-sent where possible")
+            log_admin_action(
+                action=AdminAuditLog.Actions.ACTIVATION_RESENT,
+                request=request,
+                tenant=result.tenant,
+                lead=lead,
+                target_repr=f"tenant:{result.tenant.slug}",
+                metadata={
+                    "activation_url": mask_token_in(result.activation_url, result.activation_token.token),
+                    "source": "django_admin",
+                },
+            )
+            resent += 1
+        if resent:
+            self.message_user(request, f"Activation re-sent for {resent} lead(s).")
 
     resend_activation.short_description = "Resend activation for selected leads"
 

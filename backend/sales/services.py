@@ -41,6 +41,7 @@ from .models import (
     TierUpgradeRequest,
     account_is_activated,
 )
+from .redaction import mask_secret, mask_token_in
 
 logger = logging.getLogger(__name__)
 provisioning_logger = logging.getLogger("sales.provisioning")
@@ -132,18 +133,47 @@ class TierUpgradeDecisionResult:
     new_plan: Plan
 
 
-def mask_secret(secret: str, keep_start: int = 6, keep_end: int = 4) -> str:
-    if not secret:
-        return ""
-    if len(secret) <= keep_start + keep_end:
-        return "*" * len(secret)
-    return f"{secret[:keep_start]}...{secret[-keep_end:]}"
+class OwnerAlreadyActivatedError(ValueError):
+    """The owner has already finished account setup (``account_is_activated``), so an
+    activation link would only be rejected when clicked — refuse to issue/re-show one."""
 
 
 def _log_provisioning_event(event: str, **fields):
     payload = {"event": event}
     payload.update(fields)
     provisioning_logger.info(event, extra={"structured": payload})
+
+
+def _refuse_if_owner_activated(user, tenant) -> None:
+    if account_is_activated(user):
+        raise OwnerAlreadyActivatedError(
+            "The owner has already activated this account, so an activation link would be rejected. "
+            f"Ask them to sign in at {build_signin_url(tenant)} or use \"Forgot password\"."
+        )
+
+
+def _log_owner_links(
+    job: ProvisioningJob,
+    *,
+    token: str,
+    workspace_url: str,
+    signin_url: str,
+    admin_url: str,
+    activation_url: str,
+    whatsapp_link: str,
+) -> None:
+    """Append the owner's links to ``job.log`` with the activation token MASKED.
+
+    The log is persisted and served to the admin console, so the raw token (which
+    the activation URL and the WhatsApp link both embed) must never land in it.
+    """
+    job.append_log(f"Activation token: {mask_secret(token)}")
+    job.append_log(f"Workspace URL: {workspace_url}")
+    job.append_log(f"Sign-in URL: {signin_url}")
+    job.append_log(f"Django admin URL: {admin_url}")
+    job.append_log(f"Activation URL: {mask_token_in(activation_url, token)}")
+    if whatsapp_link:
+        job.append_log(f"WhatsApp link: {mask_token_in(whatsapp_link, token)}")
 
 
 def issue_activation(tenant, user, phone: str = ""):
@@ -620,13 +650,15 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             ) = issue_activation(tenant, user, phone=lead.phone)
 
             job.append_log("Provisioning completed")
-            job.append_log(f"Activation token: {mask_secret(activation.token)}")
-            job.append_log(f"Workspace URL: {workspace_url}")
-            job.append_log(f"Sign-in URL: {signin_url}")
-            job.append_log(f"Django admin URL: {admin_url}")
-            job.append_log(f"Activation URL: {activation_url}")
-            if whatsapp_link:
-                job.append_log(f"WhatsApp link: {whatsapp_link}")
+            _log_owner_links(
+                job,
+                token=activation.token,
+                workspace_url=workspace_url,
+                signin_url=signin_url,
+                admin_url=admin_url,
+                activation_url=activation_url,
+                whatsapp_link=whatsapp_link,
+            )
             job.status = ProvisioningJob.Status.SUCCESS
             job.save(update_fields=["status", "updated_at"])
 
@@ -664,11 +696,17 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
 
 
 def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
+    """Admin resend (platform console + Django admin action) — shared by both.
+
+    Raises ``OwnerAlreadyActivatedError`` (a ``ValueError``) when the owner has
+    already activated: since #457 the link would be rejected on click anyway.
+    """
     with schema_context(get_public_schema_name()):
         with transaction.atomic():
             latest_job = _get_latest_provisioning_job(lead)
             tenant = latest_job.tenant
             user = _get_tenant_owner_user(tenant)
+            _refuse_if_owner_activated(user, tenant)
 
             (
                 activation,
@@ -681,13 +719,15 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
                 whatsapp_message_template,
             ) = issue_activation(tenant, user, phone=lead.phone)
             latest_job.append_log("Activation token resent")
-            latest_job.append_log(f"Activation token: {mask_secret(activation.token)}")
-            latest_job.append_log(f"Workspace URL: {workspace_url}")
-            latest_job.append_log(f"Sign-in URL: {signin_url}")
-            latest_job.append_log(f"Django admin URL: {admin_url}")
-            latest_job.append_log(f"Activation URL: {activation_url}")
-            if whatsapp_link:
-                latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
+            _log_owner_links(
+                latest_job,
+                token=activation.token,
+                workspace_url=workspace_url,
+                signin_url=signin_url,
+                admin_url=admin_url,
+                activation_url=activation_url,
+                whatsapp_link=whatsapp_link,
+            )
             _log_provisioning_event(
                 "lead_activation_resent",
                 lead_id=lead.id,
@@ -847,11 +887,19 @@ def _get_reusable_activation_token(user, tenant):
 
 
 def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> OnboardingPackageResult:
+    """Re-show the owner's onboarding package.
+
+    The still-unused link is rebuilt from the ``ActivationToken`` row (never from the
+    job log, which only ever holds the masked token); a new token is issued when
+    there is none or ``refresh_token`` is set. Raises ``OwnerAlreadyActivatedError``
+    when the owner has already activated (any activation link would be rejected).
+    """
     with schema_context(get_public_schema_name()):
         with transaction.atomic():
             latest_job = _get_latest_provisioning_job(lead)
             tenant = latest_job.tenant
             user = _get_tenant_owner_user(tenant)
+            _refuse_if_owner_activated(user, tenant)
 
             token_obj = None if refresh_token else _get_reusable_activation_token(user, tenant)
             if token_obj is None:
@@ -866,7 +914,6 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
                     whatsapp_message_template,
                 ) = issue_activation(tenant, user, phone=lead.phone)
                 latest_job.append_log("Onboarding package token issued")
-                latest_job.append_log(f"Activation token: {mask_secret(token_obj.token)}")
             else:
                 admin_url = build_admin_url(tenant)
                 workspace_url = build_workspace_url(tenant)
@@ -894,12 +941,15 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
                 )
 
             latest_job.append_log("Onboarding package prepared")
-            latest_job.append_log(f"Workspace URL: {workspace_url}")
-            latest_job.append_log(f"Sign-in URL: {signin_url}")
-            latest_job.append_log(f"Django admin URL: {admin_url}")
-            latest_job.append_log(f"Activation URL: {activation_url}")
-            if whatsapp_link:
-                latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
+            _log_owner_links(
+                latest_job,
+                token=token_obj.token,
+                workspace_url=workspace_url,
+                signin_url=signin_url,
+                admin_url=admin_url,
+                activation_url=activation_url,
+                whatsapp_link=whatsapp_link,
+            )
             _log_provisioning_event(
                 "lead_onboarding_package_prepared",
                 lead_id=lead.id,
