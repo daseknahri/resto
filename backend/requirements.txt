@@ -1,6 +1,6 @@
 Django==5.2.17
 psycopg2==2.9.13
-djangorestframework==3.18.1
+djangorestframework==3.18.3
 # OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
 # generateschema` with drf-spectacular, used by the CI "Export OpenAPI schema"
 # step (`manage.py spectacular --validate`) and by tests/test_openapi_schema.py.
@@ -14,12 +14,12 @@ dj-database-url==2.1.0
 django-cors-headers==4.9.0
 Pillow==12.3.0
 qrcode==7.4.2
-reportlab==5.0.1
+reportlab==5.1.0
 gunicorn==23.0.0
 whitenoise==6.12.0
-sentry-sdk==2.71.0
+sentry-sdk==2.73.0
 django-storages==1.14.6
-boto3==1.43.107
+boto3==1.43.118
 django-redis==5.4.0
 redis==8.1.0
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
