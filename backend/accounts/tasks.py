@@ -633,11 +633,14 @@ def customer_otp_sms(phone, code):
     from accounts.views import _send_otp_sms
     sent = _send_otp_sms(phone, code)
     if not sent:
+        # _send_otp_sms already logged the specific reason (missing setting / Twilio error).
         logger.warning(
-            "OTP delivery failed: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / "
-            "TWILIO_FROM_NUMBER not configured. Phone ...%s did not receive a code.",
+            "OTP delivery failed: phone ...%s did not receive a code (reason logged above).",
             phone[-4:] if len(phone) >= 4 else "****",
         )
+    else:
+        logger.info("OTP SMS accepted by Twilio for phone ...%s",
+                    phone[-4:] if len(phone) >= 4 else "****")
 
 
 @shared_task(name="accounts.tasks.send_transactional_email", **_RETRY)
