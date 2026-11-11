@@ -266,6 +266,17 @@ class TableSection(models.Model):
     )
     position = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # Multi-branch (Phase 3): the location this floor section belongs to
+    # (backfilled to the tenant's default branch; sections are inherently
+    # per-location objects — tables, servers, shifts and waiter calls reach
+    # the branch transitively through their section).
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="table_sections",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -510,6 +521,18 @@ class Order(models.Model):
     fulfillment_type = models.CharField(max_length=20, choices=FulfillmentType.choices, blank=True)
     table_label = models.CharField(max_length=40, blank=True)
     table_slug = models.SlugField(max_length=55, blank=True)
+    # Multi-branch (Phase 3): the location this order belongs to. Stamped
+    # at creation (dine-in via its TableSection's branch, otherwise the
+    # storefront's selected branch or the tenant default); historical orders
+    # were backfilled to the default branch. PROTECT: a branch with orders
+    # can be deactivated but never deleted out from under them.
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="orders",
+    )
     delivery_address = models.TextField(blank=True)
     delivery_location_url = models.URLField(max_length=500, blank=True)
     delivery_lat = models.FloatField(null=True, blank=True)
@@ -1663,3 +1686,110 @@ class CommissionStatementLine(models.Model):
 
     def __str__(self) -> str:
         return f"CommissionStatementLine({self.order_number} {self.total} {self.currency})"
+
+
+# ── Phase 3: multi-branch — one owner, several locations, ONE account ─────
+# DESIGN-PHASE3.md §1 (Option B): the Branch entity lives INSIDE the tenant
+# schema. The account (Tenant, owner user, plan, float, commission
+# statement) stays tenant-level; a branch is one physical location of that
+# account. Menus stay a shared catalogue in v1 — per-branch divergence is
+# availability only (DishBranchState, decision D1). Staff stay tenant users;
+# branch is an assignment (StaffBranch, decision D4), not an identity.
+
+
+class Branch(models.Model):
+    """One physical location of a tenant account. Exactly one branch per
+    tenant is the default (enforced in save()); every tenant got one from
+    the backfill migration, built from its Profile."""
+
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140, unique=True)
+    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    whatsapp = models.CharField(max_length=30, blank=True)
+    # Blank → the account Profile's timezone / hours apply (Profile stays
+    # the account-level fallback; Branch fields override per location).
+    timezone = models.CharField(max_length=64, blank=True)
+    business_hours_schedule = models.JSONField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("sort_order", "name")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            # Exactly one default per tenant: promoting this branch demotes
+            # any other. (Done after save so the row itself is persisted.)
+            Branch.objects.exclude(pk=self.pk).filter(is_default=True).update(
+                is_default=False
+            )
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class DishBranchState(models.Model):
+    """Per-branch dish availability (decision D1: availability only — the
+    catalogue and prices stay shared across branches in v1). Absence of a
+    row means the dish follows its catalogue state at that branch."""
+
+    dish = models.ForeignKey(
+        Dish,
+        on_delete=models.CASCADE,
+        related_name="branch_states",
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="dish_states",
+    )
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("branch", "dish")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dish", "branch"),
+                name="unique_dish_branch_state",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"DishBranchState({self.dish_id} @ {self.branch_id}: {self.is_available})"
+
+
+class StaffBranch(models.Model):
+    """Assignment of a tenant staff member to a branch (decision D4:
+    multi-branch assignment). ``user_id`` is a loose reference to
+    accounts.User (public schema), matching SectionServer.user_id — avoids
+    a tenant→public cross-app FK. Absence of rows = works everywhere
+    (owner + legacy staff unaffected)."""
+
+    user_id = models.IntegerField(db_index=True)
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="staff_assignments",
+    )
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("branch", "user_id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user_id", "branch"),
+                name="unique_staff_branch",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"StaffBranch(user {self.user_id} @ {self.branch_id})"

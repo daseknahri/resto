@@ -5339,6 +5339,16 @@ class MarketplacePlaceOrderView(APIView):
                         else:
                             _mkt_status = _Order.Status.PENDING
 
+                        # Multi-branch (Phase 3): stamp the restaurant's
+                        # branch — payload slug (hub picker) or its default.
+                        # Failure must never block checkout: unstamped.
+                        try:
+                            from menu.order_service import resolve_order_branch as _mkt_resolve_branch
+                            _mkt_order_branch = _mkt_resolve_branch(
+                                branch_slug=(request.data.get("branch") or "")
+                            )
+                        except Exception:
+                            _mkt_order_branch = None
                         order = _Order.objects.create(
                             order_number=order_number,
                             status=_mkt_status,
@@ -5357,6 +5367,7 @@ class MarketplacePlaceOrderView(APIView):
                             delivery_fee=_delivery_fee,
                             currency=currency,
                             source=_Order.Source.MARKETPLACE,
+                            branch=_mkt_order_branch,
                             commission_amount=commission_amount,
                             commission_rate_applied=commission_rate,
                             promotion_discount=_promo_discount,

@@ -396,3 +396,35 @@ def deplete_ingredients(order_items_data, dishes_map):
         _ing_depletion[_rl.ingredient_id] = _ing_depletion.get(_rl.ingredient_id, Decimal("0")) + _delta
     for _ing_pk, _delta in _ing_depletion.items():
         Ingredient.objects.filter(pk=_ing_pk).update(stock_quantity=F("stock_quantity") - _delta)
+
+
+def resolve_order_branch(*, table_slug=None, branch_slug=None):
+    """Multi-branch (Phase 3): decide which Branch a new order belongs to.
+
+    Precedence: the explicit branch slug (storefront picker selection,
+    decision D3) → the dine-in table's section's branch → the tenant's
+    default branch → the first branch (defensive; the backfill guarantees
+    a default exists). Returns None only when the tenant has no branches
+    at all — callers treat None as "unstamped", never as an error, so
+    checkout can never be blocked by branch resolution.
+    """
+    from .models import Branch, TableLink
+
+    if branch_slug:
+        branch = Branch.objects.filter(slug=branch_slug, is_active=True).first()
+        if branch is not None:
+            return branch
+    if table_slug:
+        link = (
+            TableLink.objects.filter(slug=table_slug)
+            .select_related("section__branch")
+            .first()
+        )
+        if link is not None and link.section_id is not None:
+            branch = getattr(link.section, "branch", None)
+            if branch is not None:
+                return branch
+    return (
+        Branch.objects.filter(is_default=True).first()
+        or Branch.objects.order_by("sort_order", "id").first()
+    )
