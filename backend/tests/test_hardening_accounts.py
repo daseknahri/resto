@@ -331,7 +331,11 @@ class PlatformAnalyticsRealizedBasisTests(SimpleTestCase):
         for key in ("total_fees", "total_payouts"):
             expr = agg_kwargs[key]
             self.assertIsInstance(expr, Sum)
-            self.assertEqual(expr.filter, Q(status="delivered"))
+            # Django 6.1 wraps an aggregate's filter= in an AggregateFilter
+            # object; the Q lives on its .condition. Accept both shapes.
+            filt = expr.filter
+            condition = getattr(filt, "condition", filt)
+            self.assertEqual(condition, Q(status="delivered"))
 
 
 # ── Finding 5: marketplace order-status ETA payload ───────────────────────────
