@@ -225,6 +225,7 @@ urlpatterns = [
     path("api/owner/data-export/", OwnerDataExportView.as_view(), name="owner-data-export"),
     path("api/owner/invoice/", OwnerInvoiceView.as_view(), name="owner-invoice"),
     path("api/owner/commission-statement/", OwnerCommissionStatementView.as_view(), name="owner-commission-statement"),
+    path("api/owner/commission-statement/issue/", OwnerCommissionStatementView.as_view(), name="owner-commission-statement-issue"),
     path("api/owner/deletion-request/", OwnerDeletionRequestView.as_view(), name="owner-deletion-request"),
     path("api/table-context/<slug:table_slug>/", TableContextView.as_view(), name="table-context"),
     path("api/tables/bulk-generate/", TableBulkGenerateView.as_view(), name="table-bulk-generate"),

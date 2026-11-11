@@ -1574,3 +1574,92 @@ class DrawerTransaction(models.Model):
 
     def __str__(self) -> str:
         return f"DrawerTransaction({self.kind} {self.amount} @ {self.at:%H:%M})"
+
+
+# ── Phase 3: immutable commission statements ──────────────────────────────
+# The owner commission statement (menu.commission_statement) used to be
+# recomputed from live Order rows on every fetch, so a later void/cancel
+# silently rewrote a prior month's invoiced total. Once a month is ISSUED,
+# these two models hold the frozen snapshot the statement serves instead.
+# Tenant-schema models (menu is a TENANT app): every tenant gets its own
+# statement history. See DESIGN-PHASE3.md §2.
+
+
+class CommissionStatement(models.Model):
+    """One issued (frozen) monthly commission statement — one row per
+    (year, month, revision). Reissuing a month creates revision N+1 and
+    marks revision N ``superseded``; the superseded rows are retained as
+    the audit trail and are never served or mutated again."""
+
+    class Status(models.TextChoices):
+        ISSUED = "issued", "Issued"
+        SUPERSEDED = "superseded", "Superseded"
+
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField()
+    revision = models.PositiveIntegerField(default=1)
+    issued_at = models.DateTimeField(auto_now_add=True)
+    # Platform-level user id (accounts.User lives in the public schema) —
+    # stored as a bare int, service-layer resolved, per the codebase's
+    # cross-schema reference pattern (cf. StaffBranch / CustomerOrderRef).
+    issued_by = models.BigIntegerField(null=True, blank=True)
+    # Required when revision > 1 (enforced by the issue flow): why the
+    # month was reissued.
+    reissue_reason = models.TextField(blank=True, default="")
+    # The timezone the month bucket was computed in (tenant-local).
+    tz_name = models.CharField(max_length=64, blank=True, default="")
+    # The exact summary / per-currency dicts served by the API at issue
+    # time — frozen verbatim so a served statement can never drift.
+    summary = models.JSONField(default=dict)
+    per_currency = models.JSONField(default=list)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ISSUED, db_index=True
+    )
+
+    class Meta:
+        ordering = ("year", "month", "revision")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("year", "month", "revision"),
+                name="unique_commission_statement_revision",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"CommissionStatement({self.year}-{self.month:02d} "
+            f"rev{self.revision} {self.status})"
+        )
+
+
+class CommissionStatementLine(models.Model):
+    """One frozen statement row — a verbatim copy of one served order row
+    at issue time. ``order_id`` is a bare int (not an FK) so the frozen row
+    survives even if the order row is later deleted; money fields are
+    Decimals mirroring the served row shape."""
+
+    statement = models.ForeignKey(
+        CommissionStatement,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    order_number = models.CharField(max_length=20)
+    order_id = models.BigIntegerField(db_index=True)
+    created_at = models.DateTimeField()
+    customer_name = models.CharField(max_length=80, blank=True, default="")
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_rate_applied = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0")
+    )
+    net_payout = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=8, default="MAD")
+    status = models.CharField(max_length=20, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("sort_order", "id")
+
+    def __str__(self) -> str:
+        return f"CommissionStatementLine({self.order_number} {self.total} {self.currency})"
