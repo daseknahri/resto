@@ -33,6 +33,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django.db.models import Count, F, Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
@@ -68,7 +69,7 @@ from tenancy.openstate import is_closure_date, schedule_open_now, tenant_timezon
 from django_tenants.utils import schema_context
 
 from .commission import COMMISSIONABLE_STATUSES
-from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from .models import AnalyticsEvent, Branch, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, effective_unit_price
 from .revenue import split_revenue_for_orders
@@ -1519,6 +1520,14 @@ class OwnerRevenueChartView(APIView):
     ]
 
     def get(self, request, *args, **kwargs):
+        _branch_param = request.query_params.get("branch", "").strip()
+        _branch_kw = {}
+        if _branch_param:
+            try:
+                _branch_kw = {"branch_id": int(_branch_param)}
+            except (TypeError, ValueError):
+                _branch_kw = {}
+
         try:
             period = int(request.query_params.get("period", "14"))
         except (TypeError, ValueError):
@@ -1536,7 +1545,7 @@ class OwnerRevenueChartView(APIView):
 
         rows = (
             Order.objects
-            .filter(status__in=self._COUNTED, created_at__date__gte=since_date)
+            .filter(status__in=self._COUNTED, created_at__date__gte=since_date, **_branch_kw)
             .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(
@@ -1560,7 +1569,7 @@ class OwnerRevenueChartView(APIView):
         # Currency from the most recent order (best-effort)
         currency = (
             Order.objects
-            .filter(status__in=self._COUNTED, created_at__date__gte=since_date)
+            .filter(status__in=self._COUNTED, created_at__date__gte=since_date, **_branch_kw)
             .order_by("-created_at")
             .values_list("currency", flat=True)
             .first()
@@ -3489,6 +3498,18 @@ class PlaceOrderView(APIView):
                     if _initial_fired_course is not None
                     else {}
                 )
+                # Multi-branch (Phase 3): stamp the order's branch — the
+                # payload's branch slug (picker selection) wins, then the
+                # dine-in table's section's branch, then the tenant default.
+                # Resolution failure must never block checkout: unstamped.
+                try:
+                    from .order_service import resolve_order_branch as _resolve_branch
+                    _order_branch = _resolve_branch(
+                        table_slug=table_slug,
+                        branch_slug=(request.data.get("branch") or ""),
+                    )
+                except Exception:
+                    _order_branch = None
                 order = Order.objects.create(
                     order_number=order_number,
                     status=_initial_status,
@@ -3502,6 +3523,7 @@ class PlaceOrderView(APIView):
                     fulfillment_type=fulfillment_type,
                     table_label=table_label,
                     table_slug=table_slug,
+                    branch=_order_branch,
                     delivery_address=validated.get("delivery_address", ""),
                     delivery_location_url=validated.get("delivery_location_url", ""),
                     delivery_lat=validated.get("delivery_lat"),
@@ -7421,6 +7443,16 @@ class OwnerOrderListView(APIView):
             .prefetch_related("items", "rating")
             .order_by("-created_at")
         )
+
+        # Multi-branch (Phase 3): ?branch=<id> narrows every mode (hot,
+        # history, explicit-status) to one location's orders. A non-integer
+        # value is ignored; an unknown id simply matches nothing.
+        _branch_param = request.query_params.get("branch", "").strip()
+        if _branch_param:
+            try:
+                qs = qs.filter(branch_id=int(_branch_param))
+            except (TypeError, ValueError):
+                pass
 
         # ── Route to correct status filter / pagination mode ──────────────────
         # NOTE: date-fence (?from= / ?to=) is intentionally parsed and applied
@@ -14215,3 +14247,99 @@ class DrawerHistoryView(APIView):
             "start": window_start.isoformat(),
             "end": window_end.isoformat(),
         }})
+
+
+# ── Phase 3 multi-branch: owner branch CRUD ───────────────────────────────
+# Branch management for the tenant owner. The account stays tenant-level;
+# branches are its physical locations (DESIGN-PHASE3.md §1). Serializer is
+# defined here next to the views to keep this slice self-contained.
+
+
+class BranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Branch
+        fields = (
+            "id", "name", "slug", "address", "phone", "whatsapp", "timezone",
+            "business_hours_schedule", "is_active", "is_default", "sort_order",
+            "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+def _branch_plan_limit(request):
+    """Plan.max_branches for the request's tenant (0/missing = unlimited —
+    decision D5: the limit is wired but defaulted unlimited)."""
+    try:
+        profile = request.tenant.profile
+    except Exception:
+        return 0
+    plan = getattr(profile, "plan", None)
+    return getattr(plan, "max_branches", 0) or 0
+
+
+class OwnerBranchListCreateView(APIView):
+    """GET/POST /api/owner/branches/ — owner-only."""
+
+    permission_classes = [IsTenantOwner]
+
+    def get(self, request, *args, **kwargs):
+        return Response(BranchSerializer(Branch.objects.all(), many=True).data)
+
+    def post(self, request, *args, **kwargs):
+        limit = _branch_plan_limit(request)
+        if limit and Branch.objects.filter(is_active=True).count() >= limit:
+            return Response(
+                {"detail": "Branch limit reached for the current plan."},
+                status=400,
+            )
+        serializer = BranchSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        branch = serializer.save()
+        return Response(BranchSerializer(branch).data, status=201)
+
+
+class OwnerBranchDetailView(APIView):
+    """GET/PATCH/DELETE /api/owner/branches/<id>/ — owner-only."""
+
+    permission_classes = [IsTenantOwner]
+
+    def _branch(self, pk):
+        return Branch.objects.filter(pk=pk).first()
+
+    def get(self, request, pk, *args, **kwargs):
+        branch = self._branch(pk)
+        if branch is None:
+            return Response({"detail": "Branch not found."}, status=404)
+        return Response(BranchSerializer(branch).data)
+
+    def patch(self, request, pk, *args, **kwargs):
+        branch = self._branch(pk)
+        if branch is None:
+            return Response({"detail": "Branch not found."}, status=404)
+        serializer = BranchSerializer(branch, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        branch = serializer.save()
+        return Response(BranchSerializer(branch).data)
+
+    def delete(self, request, pk, *args, **kwargs):
+        branch = self._branch(pk)
+        if branch is None:
+            return Response({"detail": "Branch not found."}, status=404)
+        if branch.is_default:
+            return Response(
+                {"detail": "The default branch cannot be deleted."},
+                status=400,
+            )
+        try:
+            branch.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "Branch has orders or sections; "
+                    "deactivate it instead of deleting it."
+                },
+                status=400,
+            )
+        return Response(status=204)

@@ -20,6 +20,11 @@ class Plan(models.Model):
         default=0,
         help_text="Maximum number of staff accounts allowed. 0 means unlimited.",
     )
+    # Phase 3 multi-branch: wired but defaulted unlimited (decision D5).
+    max_branches = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum number of branches (locations) allowed. 0 means unlimited.",
+    )
     # Pricing — set by the owner before going live; null = "price TBD" on the marketing page.
     price_monthly = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
