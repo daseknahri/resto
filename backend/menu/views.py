@@ -10590,7 +10590,7 @@ class OwnerInvoiceView(APIView):
 
 class OwnerCommissionStatementView(APIView):
     """
-    GET /api/owner/commission-statement/?year=YYYY&month=M[&format=pdf]
+    GET /api/owner/commission-statement/?year=YYYY&month=M[&format=pdf][&branch=<id>]
     POST /api/owner/commission-statement/issue/  {"year": Y, "month": M[, "reissue": true, "reason": "..."]}
 
     Monthly commission breakdown for marketplace orders.
@@ -10607,6 +10607,13 @@ class OwnerCommissionStatementView(APIView):
     The computation itself lives in menu.commission_statement.compute_statement
     — the ONE helper the preview, the issue flow and the PDF renderer share,
     so they can never drift.
+
+    Run 6 follow-on: ``?branch=<id>`` filters the live PREVIEW to one branch
+    (a branch is the tenant's location/outlet — the vertical-general seam a
+    restaurant, pharmacy or store tenant all share). Statements freeze at
+    ACCOUNT level (CommissionStatement carries no branch scope), so on an
+    issued month the filter is reported as not applied instead of filtering
+    frozen figures, and POST issue refuses a branch outright.
     """
 
     # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
@@ -10651,6 +10658,18 @@ class OwnerCommissionStatementView(APIView):
         if year is None:
             return Response({"detail": "Invalid year/month parameters."}, status=400)
 
+        branch = None
+        branch_raw = request.query_params.get("branch", "").strip()
+        if branch_raw:
+            try:
+                branch_id = int(branch_raw)
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid branch parameter."}, status=400)
+            try:
+                branch = Branch.objects.get(pk=branch_id)
+            except Branch.DoesNotExist:
+                return Response({"detail": "Branch not found."}, status=404)
+
         fmt = request.query_params.get("format", "json").lower()
 
         stmt = get_issued_statement(year, month)
@@ -10667,14 +10686,16 @@ class OwnerCommissionStatementView(APIView):
                 "revision": stmt.revision,
             }
         else:
-            computed = compute_statement(_profile, year, month)
+            computed = compute_statement(
+                _profile, year, month, branch_id=branch.id if branch is not None else None
+            )
             orders_data = computed["orders_data"]
             per_currency = computed["per_currency"]
             summary = computed["summary"]
             issued_meta = {"issued": False, "provisional": True}
 
         if fmt != "pdf":
-            return Response({
+            payload = {
                 "year": year,
                 "month": month,
                 "month_name": month_name[month],
@@ -10682,7 +10703,20 @@ class OwnerCommissionStatementView(APIView):
                 "per_currency": per_currency,
                 "orders": orders_data,
                 **issued_meta,
-            })
+            }
+            if branch is not None:
+                payload["branch_filter"] = {
+                    "branch_id": branch.id,
+                    "branch_slug": branch.slug,
+                    "branch_name": branch.name,
+                    "applied": stmt is None,
+                }
+                if stmt is not None:
+                    payload["branch_filter"]["reason"] = (
+                        "Issued statements are frozen at account level; "
+                        "branch filtering applies to previews only."
+                    )
+            return Response(payload)
 
         # ── PDF ───────────────────────────────────────────────────────────────
         # The renderer consumes the same orders_data / per_currency dicts for a
@@ -10717,6 +10751,18 @@ class OwnerCommissionStatementView(APIView):
         year, month = self._parse_year_month(request, _profile, data=data)
         if year is None:
             return Response({"detail": "Invalid year/month parameters."}, status=400)
+
+        # Statements freeze at ACCOUNT level: a branch-scoped issue would
+        # freeze partial figures under an account-level snapshot. Refuse it
+        # explicitly — branch filtering is a preview-only GET concern.
+        if data.get("branch") not in (None, "", False) or request.query_params.get("branch"):
+            return Response(
+                {
+                    "detail": "Statements are issued at account level; "
+                    "branch filtering is preview-only (GET ?branch=<id>)."
+                },
+                status=400,
+            )
 
         reissue = data.get("reissue") in (True, "true", "True", "1", 1)
         reason = str(data.get("reason") or "").strip()
