@@ -3,6 +3,9 @@
 // completeness against messages-en.js. FR is ASCII-only by convention (avoids
 // mojibake). (messages.js was deleted; no dual source to keep in sync.)
 export default {
+branchPicker: {
+  label: "Point de retrait",
+},
 common: {
   language: "Langue",
   sectionsNav: "Sections",

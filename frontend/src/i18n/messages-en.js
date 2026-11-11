@@ -4,6 +4,9 @@
 // checks every t('...') key exists here). One edit per string per locale — en here,
 // fr in messages-fr.js, ar in messages-ar.js. (messages.js was deleted; no dual source.)
 export default {
+branchPicker: {
+  label: "Pickup location",
+},
 common: {
   language: "Language",
   sectionsNav: "Sections",

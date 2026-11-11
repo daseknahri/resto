@@ -1,4 +1,7 @@
 const arabicMessages = {
+  "branchPicker": {
+    "label": "فرع الاستلام"
+  },
   "common": {
     "language": "اللغة",
     "sectionsNav": "الأقسام",

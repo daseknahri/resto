@@ -1908,6 +1908,54 @@ class OrderHandoffSerializer(serializers.Serializer):
         return attrs
 
 
+class StorefrontBranchListView(PublishAccessMixin, APIView):
+    """GET /api/branches/ — public storefront branch (location) list.
+
+    Phase 3 multi-branch (decision D3, Run 6 follow-on): the storefront
+    location picker consumes this list; the customer's chosen slug rides
+    the place-order payload's ``branch`` field and resolve_order_branch
+    stamps the order (explicit slug wins over the table/default fallback).
+    A branch is the tenant's location/outlet — the vertical-general seam
+    a restaurant, pharmacy or store tenant all share.
+
+    Only ACTIVE branches are listed, in display order. Display fields a
+    branch leaves blank fall back to the tenant Profile (the account-level
+    identity), matching the Branch model's documented fallback. Public
+    like the rest of the storefront surface: same PublishAccessMixin
+    policy gate as TableContextView, no auth.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        blocked = self._enforce_public_menu_policy()
+        if blocked is not None:
+            return blocked
+
+        profile = self._profile()
+        rows = []
+        for b in Branch.objects.filter(is_active=True).order_by("sort_order", "id"):
+            rows.append(
+                {
+                    "id": b.id,
+                    "slug": b.slug,
+                    "name": b.name,
+                    "address": b.address or (getattr(profile, "address", "") or ""),
+                    "phone": b.phone or (getattr(profile, "phone", "") or ""),
+                    "whatsapp": b.whatsapp or (getattr(profile, "whatsapp", "") or ""),
+                    "timezone": b.timezone or (getattr(profile, "timezone", "") or ""),
+                    "business_hours_schedule": (
+                        b.business_hours_schedule
+                        if b.business_hours_schedule is not None
+                        else getattr(profile, "business_hours_schedule", None)
+                    ),
+                    "is_default": b.is_default,
+                }
+            )
+        return Response({"branches": rows})
+
+
 class TableContextView(PublishAccessMixin, APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
