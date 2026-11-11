@@ -79,7 +79,7 @@ def backwards(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("menu", "0078_branch_order_branch_tablesection_branch_and_more"),
+        ("menu", "0079_branch_order_branch_tablesection_branch_and_more"),
     ]
 
     operations = [

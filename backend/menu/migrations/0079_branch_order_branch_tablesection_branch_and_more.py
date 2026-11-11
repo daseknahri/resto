@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('menu', '0077_order_estimated_ready_at'),
+        ('menu', '0078_commissionstatement_commissionstatementline'),
     ]
 
     operations = [
