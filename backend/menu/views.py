@@ -67,7 +67,11 @@ from tenancy.openstate import is_closure_date, schedule_open_now, tenant_timezon
 
 from django_tenants.utils import schema_context
 
-from .commission import COMMISSIONABLE_STATUSES
+# COMMISSIONABLE_STATUSES stays re-exported from menu.views deliberately:
+# test_commission_policy asserts menu.views.COMMISSIONABLE_STATUSES IS
+# menu.commission's object (statement and analytics bill on one set).
+# The computation itself imports it in menu.commission_statement.
+from .commission import COMMISSIONABLE_STATUSES  # noqa: F401
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, effective_unit_price
@@ -10555,6 +10559,7 @@ class OwnerInvoiceView(APIView):
 class OwnerCommissionStatementView(APIView):
     """
     GET /api/owner/commission-statement/?year=YYYY&month=M[&format=pdf]
+    POST /api/owner/commission-statement/issue/  {"year": Y, "month": M[, "reissue": true, "reason": "..."]}
 
     Monthly commission breakdown for marketplace orders.
     Returns JSON by default; add ?format=pdf for a downloadable PDF statement.
@@ -10562,185 +10567,79 @@ class OwnerCommissionStatementView(APIView):
     The statement shows every marketplace order in the requested month with its
     food subtotal, commission charged (at the per-order snapshotted rate), and net
     payout, plus summary totals.
+
+    Phase 3 — point-in-time immutability: once a month is ISSUED (POST), GET
+    serves the frozen snapshot (CommissionStatement + its lines) and later
+    voids/cancels no longer move the issued figures. Before issue, GET serves
+    the live computation, flagged ``"issued": false, "provisional": true``.
+    The computation itself lives in menu.commission_statement.compute_statement
+    — the ONE helper the preview, the issue flow and the PDF renderer share,
+    so they can never drift.
     """
 
     # RISK AUTHZ-1: owner-only (was inline _is_tenant_owner → 403 "Owner access required.").
     permission_classes = [IsTenantOwner]
 
-    def get(self, request, *args, **kwargs):
-
-        from calendar import month_name
-        from datetime import datetime as _dt
-
+    def _profile(self, request):
         # Resolve the tenant profile so we can bucket the month in the tenant's
-        # LOCAL timezone (see below); fall back to None → UTC behaviour.
+        # LOCAL timezone; fall back to None → UTC behaviour.
         try:
-            _profile = request.tenant.profile
+            return request.tenant.profile
         except Exception:
-            _profile = None
+            return None
 
+    def _parse_year_month(self, request, profile, data=None):
         # Parse year/month, defaulting to the current TENANT-LOCAL month (so the
         # default month matches what the owner sees on their wall clock).
-        local_now = _profile_now(_profile) if _profile is not None else timezone.now()
+        local_now = _profile_now(profile) if profile is not None else timezone.now()
+        src = data if data is not None else request.query_params
         try:
-            year = int(request.query_params.get("year", local_now.year))
-            month = int(request.query_params.get("month", local_now.month))
+            year = int(src.get("year", local_now.year))
+            month = int(src.get("month", local_now.month))
             # Bound the year both ways — an unbounded large year (e.g. 99999) passes int() but
-            # overflows _dt(year, ...) below (outside this try) → ValueError → 500.
+            # overflows the month-bucket datetime → ValueError → 500.
             if not (1 <= month <= 12) or not (2000 <= year <= 2100):
                 raise ValueError
         except (TypeError, ValueError):
+            return None, None
+        return year, month
+
+    def get(self, request, *args, **kwargs):
+        from calendar import month_name
+
+        from .commission_statement import (
+            compute_statement,
+            frozen_orders_data,
+            get_issued_statement,
+            render_statement_pdf,
+        )
+
+        _profile = self._profile(request)
+        year, month = self._parse_year_month(request, _profile)
+        if year is None:
             return Response({"detail": "Invalid year/month parameters."}, status=400)
 
         fmt = request.query_params.get("format", "json").lower()
 
-        # A5: bucket by the TENANT-LOCAL month, not UTC. The old
-        # created_at__year/__month filter ran in UTC and mis-bucketed a late-night
-        # month-boundary order for a non-UTC tenant (e.g. an order placed 23:30 on
-        # the 31st local — already next month in UTC — leaked into the wrong
-        # statement). Build the local month's [start, next-month-start) range in the
-        # tenant tz (same tenant-tz approach as the OPS-2 Z-report / service_day_window)
-        # and filter created_at__gte/__lt on it. created_at is stored tz-aware (UTC),
-        # so Django converts these aware bounds correctly for the comparison.
-        try:
-            from zoneinfo import ZoneInfo
-            tz_name = (getattr(_profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
-            _tz = ZoneInfo(tz_name)
-        except Exception:
-            from datetime import timezone as _stdlib_tz
-            _tz = _stdlib_tz.utc
-        month_start = _dt(year, month, 1, 0, 0, 0, tzinfo=_tz)
-        _ny, _nm = (year + 1, 1) if month == 12 else (year, month + 1)
-        next_month_start = _dt(_ny, _nm, 1, 0, 0, 0, tzinfo=_tz)
-
-        # Query marketplace orders for this local month.
-        #
-        # Bill only orders that have EARNED commission: the shared COMMISSIONABLE_STATUSES
-        # (menu.commission) — CONFIRMED / PREPARING / READY / OUT_FOR_DELIVERY / COMPLETED.
-        # Commission is earned once the restaurant confirms the order. PENDING / SCHEDULED
-        # orders can still be cancelled before the kitchen commits, so they are NOT yet
-        # billable; a CANCELLED order had its food revenue fully refunded and never counts
-        # (a fully item-voided order keeps its status but its commission is reduced to 0 at
-        # void time). This is the IDENTICAL status set the owner analytics
-        # (sales.views billable_statuses) bills on, so the two never disagree. The filter is
-        # applied ONCE on the base queryset so the aggregate Sum and the per-order rows agree.
-        qs = (
-            Order.objects
-            .filter(
-                source=Order.Source.MARKETPLACE,
-                created_at__gte=month_start,
-                created_at__lt=next_month_start,
-            )
-            .filter(status__in=COMMISSIONABLE_STATUSES)
-            .order_by("created_at")
-            # Only the columns actually read below (orders_data comprehension) —
-            # this queryset can span a full month of marketplace orders, and Order
-            # has ~50 columns. Verified against every `o.<field>` access in this
-            # view, including ones used only in computation (net_payout math).
-            .only(
-                "order_number", "created_at", "customer_name", "total",
-                "delivery_fee", "commission_amount", "commission_rate_applied",
-                "currency", "status",
-            )
-        )
-
-        # ── Commission BASIS note ─────────────────────────────────────────────
-        # commission_amount is charged on the POST-discount food base (food_subtotal
-        # minus promo + loyalty discounts; see accounts/views.py marketplace checkout
-        # and menu.commission.commissionable_food_base). total_revenue below is the sum
-        # of Order.total, which is also post-discount but is additionally tip-INCLUSIVE.
-        # So net_payout = total_revenue - delivery_fee - total_commission is coherent on
-        # the discount dimension; the only remaining spread is the customer tip, which is
-        # revenue that belongs to staff, not a commission base.
-        orders_data = [
-            {
-                "order_number": o.order_number,
-                "created_at": o.created_at.isoformat(),
-                "customer_name": o.customer_name or "",
-                "total": float(o.total),
-                # Delivery fee is NOT restaurant revenue — it passes through to the driver
-                # (minus platform's delivery commission). net_payout subtracts it so the
-                # restaurant sees only what it actually earns.
-                "delivery_fee": float(o.delivery_fee),
-                "commission_amount": float(o.commission_amount),
-                # A5: surface the snapshotted rate so each row's commission is auditable.
-                "commission_rate_applied": float(o.commission_rate_applied),
-                "net_payout": float((o.total - o.delivery_fee - o.commission_amount).quantize(Decimal("0.01"))),
-                "currency": o.currency,
-                "status": o.status,
-            }
-            for o in qs
-        ]
-
-        # ── A5-followup FIX 3: per-CURRENCY totals ────────────────────────────────
-        # A single marketplace tenant can take orders in more than one ISO currency
-        # (a multi-locale storefront, a tenant that re-priced mid-month, etc.).
-        # Summing Order.total / Order.commission_amount ACROSS currencies produces a
-        # meaningless number (10 MAD + 10 USD ≠ 20 of anything) and the old PDF then
-        # stamped EVERY row with orders_data[0]['currency'], mislabelling foreign-
-        # currency rows. We therefore bucket totals by currency. We aggregate in
-        # Python from the already-materialised rows (one pass, no extra query) using
-        # Decimal so the money math is exact, then expose floats in the JSON to match
-        # the existing row shape. `per_currency` preserves order of first appearance.
-        from collections import OrderedDict
-        _by_cur: "OrderedDict[str, dict]" = OrderedDict()
-        for o in orders_data:
-            cur = o["currency"] or ""
-            bucket = _by_cur.get(cur)
-            if bucket is None:
-                bucket = _by_cur[cur] = {
-                    "currency": cur,
-                    "order_count": 0,
-                    "_revenue": Decimal("0"),
-                    "_delivery_fees": Decimal("0"),
-                    "_commission": Decimal("0"),
-                }
-            bucket["order_count"] += 1
-            bucket["_revenue"] += Decimal(str(o["total"]))
-            bucket["_delivery_fees"] += Decimal(str(o["delivery_fee"]))
-            bucket["_commission"] += Decimal(str(o["commission_amount"]))
-
-        per_currency = []
-        for bucket in _by_cur.values():
-            rev = bucket["_revenue"]
-            del_fees = bucket["_delivery_fees"]
-            com = bucket["_commission"]
-            per_currency.append({
-                "currency": bucket["currency"],
-                "order_count": bucket["order_count"],
-                "total_revenue": float(rev),
-                "total_delivery_fees": float(del_fees),
-                "total_commission": float(com),
-                # net_payout is what the restaurant actually earns: gross revenue minus
-                # delivery pass-through (driver's) and the platform food commission.
-                "net_payout": float((rev - del_fees - com).quantize(Decimal("0.01"))),
-            })
-
-        order_count = len(orders_data)
-
-        # Single-currency case (the common case): keep the historical top-level
-        # `summary` shape so existing JSON consumers are unchanged. Mixed-currency
-        # months get a summary with currency="" and zeroed cross-currency money to
-        # signal that the meaningful breakdown lives in `per_currency` (we refuse to
-        # publish a cross-currency sum). `per_currency` is ALWAYS present.
-        if len(per_currency) == 1:
-            _single = per_currency[0]
-            summary = {
-                "order_count": order_count,
-                "total_revenue": _single["total_revenue"],
-                "total_commission": _single["total_commission"],
-                "net_payout": _single["net_payout"],
-                "currency": _single["currency"],
+        stmt = get_issued_statement(year, month)
+        if stmt is not None:
+            # Issued month: serve the FROZEN snapshot. Post-issue voids/cancels
+            # recompute live order state, but they can never move these figures.
+            orders_data = frozen_orders_data(stmt)
+            per_currency = stmt.per_currency
+            summary = stmt.summary
+            issued_meta = {
+                "issued": True,
+                "provisional": False,
+                "issued_at": stmt.issued_at.isoformat() if stmt.issued_at else None,
+                "revision": stmt.revision,
             }
         else:
-            summary = {
-                "order_count": order_count,
-                "total_revenue": 0.0,
-                "total_commission": 0.0,
-                "net_payout": 0.0,
-                "currency": "",
-                "mixed_currency": True,
-            }
+            computed = compute_statement(_profile, year, month)
+            orders_data = computed["orders_data"]
+            per_currency = computed["per_currency"]
+            summary = computed["summary"]
+            issued_meta = {"issued": False, "provisional": True}
 
         if fmt != "pdf":
             return Response({
@@ -10750,153 +10649,83 @@ class OwnerCommissionStatementView(APIView):
                 "summary": summary,
                 "per_currency": per_currency,
                 "orders": orders_data,
+                **issued_meta,
             })
 
         # ── PDF ───────────────────────────────────────────────────────────────
-        # A5-followup FIX 3: render the summary + totals PER CURRENCY, each labelled
-        # with ITS OWN currency code — never orders_data[0]['currency'] for every
-        # line (which mislabelled foreign-currency money on a mixed-currency month).
-
-        # Derive the commission label from the per-order snapshotted rates rather
-        # than a hardcoded "10%": the platform can set a non-default rate per
-        # tenant (Profile.marketplace_commission_pct), so a literal would misstate
-        # the rate on an official money document. Show the exact rate only when
-        # every order in the month carries the same snapshotted rate; otherwise
-        # drop the percentage (mixed rates can't be summarised by one number).
-        _distinct_rates = {o["commission_rate_applied"] for o in orders_data}
-        if len(_distinct_rates) == 1:
-            _pct = next(iter(_distinct_rates)) * 100
-            # Trim trailing zeros so 10.00 → "10%" and 12.50 → "12.5%".
-            _pct_str = f"{_pct:.2f}".rstrip("0").rstrip(".")
-            commission_label = f"Platform commission ({_pct_str}%):"
-        else:
-            commission_label = "Platform commission:"
-
-        buffer = BytesIO()
-        doc = canvas.Canvas(buffer, pagesize=A4)
-        page_w, page_h = A4
-        margin = 20 * mm
-
-        # Header bar
-        doc.setFillColorRGB(0.059, 0.059, 0.314)  # deep indigo
-        doc.rect(0, page_h - 38 * mm, page_w, 38 * mm, fill=1, stroke=0)
-
-        doc.setFillColorRGB(1, 1, 1)
-        doc.setFont("Helvetica-Bold", 18)
-        doc.drawString(margin, page_h - 18 * mm, "Marketplace Commission Statement")
-        doc.setFont("Helvetica", 10)
-        doc.drawString(margin, page_h - 29 * mm, f"{month_name[month]} {year}")
-
-        y = page_h - 50 * mm
-
-        # Summary box — one sub-block per currency (each labelled with its own code).
-        # Height scales with the number of currencies: a header line (order count)
-        # plus 4 money lines per currency (gross, delivery pass-through, commission, net),
-        # with a blank separator between currencies.
-        _n_cur = max(1, len(per_currency))
-        _box_h = (3 + _n_cur * 5) * 5 * mm  # rough: count line + 4 money lines × N + spacing
-        doc.setFillColorRGB(0.94, 0.95, 0.98)
-        doc.rect(margin, y - _box_h, page_w - 2 * margin, _box_h, fill=1, stroke=0)
-        doc.setFillColorRGB(0, 0, 0)
-
-        sy = y - 8 * mm
-        doc.setFont("Helvetica", 9)
-        doc.drawString(margin + 4 * mm, sy, "Orders placed via marketplace:")
-        doc.setFont("Helvetica-Bold", 9)
-        doc.drawRightString(page_w - margin - 4 * mm, sy, str(order_count))
-        sy -= 7 * mm
-
-        for _pc in per_currency:
-            _cur = _pc["currency"]
-            summary_items = [
-                ("Gross order revenue:", f"{_cur} {_pc['total_revenue']:,.2f}"),
-                ("  Delivery pass-through:", f"- {_cur} {_pc['total_delivery_fees']:,.2f}"),
-                (commission_label, f"- {_cur} {_pc['total_commission']:,.2f}"),
-                ("Net payout to restaurant:", f"{_cur} {_pc['net_payout']:,.2f}"),
-            ]
-            for label, value in summary_items:
-                doc.setFont("Helvetica", 9)
-                doc.drawString(margin + 4 * mm, sy, label)
-                doc.setFont("Helvetica-Bold", 9)
-                doc.drawRightString(page_w - margin - 4 * mm, sy, value)
-                sy -= 5 * mm
-            sy -= 2 * mm  # gap between currency blocks
-
-        y -= _box_h + 7 * mm
-
-        # Table header
-        col_widths = [45 * mm, 32 * mm, 35 * mm, 30 * mm, 30 * mm]
-        col_labels = ["Order #", "Date", "Revenue", "Commission", "Net Payout"]
-        col_x = [margin]
-        for w in col_widths[:-1]:
-            col_x.append(col_x[-1] + w)
-
-        doc.setFillColorRGB(0.2, 0.2, 0.4)
-        doc.rect(margin, y - 7 * mm, page_w - 2 * margin, 7 * mm, fill=1, stroke=0)
-        doc.setFillColorRGB(1, 1, 1)
-        doc.setFont("Helvetica-Bold", 8)
-        for i, label in enumerate(col_labels):
-            if i < 2:
-                doc.drawString(col_x[i] + 2 * mm, y - 5 * mm, label)
-            else:
-                doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 5 * mm, label)
-        y -= 7 * mm
-
-        # Table rows
-        doc.setFillColorRGB(0, 0, 0)
-        row_h = 6 * mm
-        for idx, o in enumerate(orders_data):
-            if y < 25 * mm:  # new page
-                doc.showPage()
-                y = page_h - 20 * mm
-            bg = 0.97 if idx % 2 == 0 else 1.0
-            doc.setFillColorRGB(bg, bg, bg)
-            doc.rect(margin, y - row_h, page_w - 2 * margin, row_h, fill=1, stroke=0)
-            doc.setFillColorRGB(0, 0, 0)
-            doc.setFont("Helvetica", 8)
-            date_str = o["created_at"][:10]
-            row_vals = [o["order_number"], date_str,
-                        f"{o['currency']} {o['total']:,.2f}",
-                        f"{o['currency']} {o['commission_amount']:,.2f}",
-                        f"{o['currency']} {o['net_payout']:,.2f}"]
-            for i, val in enumerate(row_vals):
-                if i < 2:
-                    doc.drawString(col_x[i] + 2 * mm, y - 4.5 * mm, val)
-                else:
-                    doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 4.5 * mm, val)
-            y -= row_h
-
-        # Totals row(s) — one per currency, each labelled with its own code so a
-        # mixed-currency month never sums dissimilar currencies into one figure.
-        y -= 2 * mm
-        doc.line(margin, y, page_w - margin, y)
-        y -= 5 * mm
-        for _pc in per_currency:
-            if y < 20 * mm:  # spill the totals onto a new page if we ran out of room
-                doc.showPage()
-                y = page_h - 20 * mm
-            _cur = _pc["currency"]
-            _label = "TOTALS" if len(per_currency) == 1 else f"TOTALS ({_cur})"
-            doc.setFont("Helvetica-Bold", 9)
-            doc.drawString(margin + 2 * mm, y, _label)
-            doc.drawRightString(col_x[2] + col_widths[2] - 2 * mm, y, f"{_cur} {_pc['total_revenue']:,.2f}")
-            doc.drawRightString(col_x[3] + col_widths[3] - 2 * mm, y, f"{_cur} {_pc['total_commission']:,.2f}")
-            doc.drawRightString(col_x[4] + col_widths[4] - 2 * mm, y, f"{_cur} {_pc['net_payout']:,.2f}")
-            y -= 5 * mm
-
-        # Footer
-        doc.setFont("Helvetica", 7)
-        doc.setFillColorRGB(0.55, 0.55, 0.55)
-        doc.drawCentredString(page_w / 2, 12 * mm, "This statement is auto-generated. Contact support for billing queries.")
-
-        doc.save()
-        pdf_bytes = buffer.getvalue()
-        buffer.close()
+        # The renderer consumes the same orders_data / per_currency dicts for a
+        # live preview and for a frozen snapshot, so the two PDFs are identical
+        # for identical figures.
+        pdf_bytes = render_statement_pdf(year, month, orders_data, per_currency)
 
         filename = f"commission-{year}-{month:02d}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+    def post(self, request, *args, **kwargs):
+        """Issue (freeze) the statement for a month.
+
+        First issue persists revision 1. Re-issuing an already-issued month
+        requires {"reissue": true, "reason": "..."} and creates revision N+1;
+        revision N is retained as superseded. Returns the frozen payload
+        (the same envelope GET serves from now on) with status 201.
+        """
+        from calendar import month_name
+
+        from .commission_statement import (
+            StatementAlreadyIssued,
+            StatementReissueReasonRequired,
+            frozen_orders_data,
+            issue_statement,
+        )
+
+        _profile = self._profile(request)
+        data = request.data if isinstance(request.data, dict) else {}
+        year, month = self._parse_year_month(request, _profile, data=data)
+        if year is None:
+            return Response({"detail": "Invalid year/month parameters."}, status=400)
+
+        reissue = data.get("reissue") in (True, "true", "True", "1", 1)
+        reason = str(data.get("reason") or "").strip()
+        try:
+            stmt = issue_statement(
+                _profile,
+                year,
+                month,
+                issued_by=getattr(request.user, "id", None),
+                reissue=reissue,
+                reason=reason,
+            )
+        except StatementAlreadyIssued:
+            return Response(
+                {
+                    "detail": "Statement already issued for this month. "
+                    "Pass reissue=true with a reason to issue a new revision."
+                },
+                status=409,
+            )
+        except StatementReissueReasonRequired:
+            return Response(
+                {"detail": "A reason is required when reissuing a statement."},
+                status=400,
+            )
+
+        return Response(
+            {
+                "year": year,
+                "month": month,
+                "month_name": month_name[month],
+                "summary": stmt.summary,
+                "per_currency": stmt.per_currency,
+                "orders": frozen_orders_data(stmt),
+                "issued": True,
+                "provisional": False,
+                "issued_at": stmt.issued_at.isoformat() if stmt.issued_at else None,
+                "revision": stmt.revision,
+            },
+            status=201,
+        )
 
 
 class OwnerDataExportView(APIView):
