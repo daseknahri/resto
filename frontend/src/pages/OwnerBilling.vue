@@ -407,6 +407,13 @@
             <option v-for="m in 12" :key="m" :value="m" :disabled="isFutureCommissionMonth(m)">{{ commissionMonthName(m) }}</option>
           </select>
         </div>
+        <div v-if="branchStore.hasChoice" class="space-y-1">
+          <label for="commission-branch" class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionBranch') }}</label>
+          <select id="commission-branch" v-model="statementBranchId" class="ui-input text-sm">
+            <option value="">{{ t('ownerBilling.commissionBranchAll') }}</option>
+            <option v-for="b in branchStore.branches" :key="b.id" :value="String(b.id)">{{ b.name }}</option>
+          </select>
+        </div>
         <button
           type="button"
           class="ui-btn-outline inline-flex gap-2 px-4 py-2 text-sm disabled:opacity-60"
@@ -423,6 +430,7 @@
           {{ commissionDownloading ? t('ownerBilling.commissionDownloading') : t('ownerBilling.commissionDownload') }}
         </button>
       </div>
+      <p v-if="branchStore.hasChoice" class="ui-subtle text-xs">{{ t('ownerBilling.commissionBranchHint') }}</p>
     </section>
 
     <!-- ── Close account ────────────────────────────────────────────────── -->
@@ -496,12 +504,14 @@ import api from '../lib/api'
 import { useI18n } from '../composables/useI18n'
 import { useVocabulary } from '../composables/useVocabulary'
 import { useTenantStore } from '../stores/tenant'
+import { useBranchStore } from '../stores/branch'
 import { useToastStore } from '../stores/toast'
 import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache'
 
 const { t, formatDateTime, currentLocale } = useI18n()
 const { itemPlural } = useVocabulary()
 const tenant = useTenantStore()
+const branchStore = useBranchStore()
 const toast = useToastStore()
 
 const BILLING_CACHE_KEY = 'owner.billing'
@@ -515,6 +525,11 @@ const requestingDeletion = ref(false)
 const commissionDownloading = ref(false)
 const commissionYear = ref(new Date().getFullYear())
 const commissionMonth = ref(new Date().getMonth() + 1)
+// Statement branch filter (Run 7 step 6): '' = all locations (account level).
+// The branch LIST is shared with the storefront picker via useBranchStore,
+// but the selection is local — the store's persisted storefront choice must
+// never leak into an owner's statement. Shown only when there is a real choice.
+const statementBranchId = ref('')
 const showDeletionConfirm = ref(false)
 const deletionReason = ref('')
 const targets = ref([])
@@ -815,8 +830,12 @@ const downloadCommissionPdf = async () => {
   }
   commissionDownloading.value = true
   try {
+    const params = { year: commissionYear.value, month: commissionMonth.value, format: 'pdf' }
+    // Preview-only filter (FO1): a chosen branch narrows the live preview;
+    // issued months serve the frozen account-level snapshot and ignore it.
+    if (statementBranchId.value) params.branch = statementBranchId.value
     const res = await api.get('/owner/commission-statement/', {
-      params: { year: commissionYear.value, month: commissionMonth.value, format: 'pdf' },
+      params,
       responseType: 'blob',
     })
     const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
@@ -835,7 +854,12 @@ const downloadCommissionPdf = async () => {
   }
 }
 
-onMounted(() => fetchAll())
+onMounted(() => {
+  fetchAll()
+  // Branch list for the statement filter (cached by the store; a failed
+  // fetch just leaves the filter hidden — the download stays account-level).
+  branchStore.load()
+})
 </script>
 
 <style scoped>
