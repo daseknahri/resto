@@ -12,6 +12,7 @@ Pins the two policy facts that used to live (and drift) inline at three call sit
 Pure SimpleTestCase / unit level — no DB, no schema switch.
 """
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
@@ -93,3 +94,58 @@ class CommissionableStatusSetTests(SimpleTestCase):
         so the status set they bill on can never drift apart."""
         self.assertIs(menu.views.COMMISSIONABLE_STATUSES, menu.commission.COMMISSIONABLE_STATUSES)
         self.assertIs(sales.views.COMMISSIONABLE_STATUSES, menu.commission.COMMISSIONABLE_STATUSES)
+
+
+class RecomputeMarketplaceCommissionTests(SimpleTestCase):
+    """D-02: _recompute_marketplace_commission (menu.views) — the shared
+    void/comp recompute — bills on the DECIDED post-discount basis:
+    commissionable_food_base(remaining food, promo, loyalty) × snapshotted
+    rate, floored at zero. Direct orders and zero-rate orders are untouched."""
+
+    def _order(self, *, source="marketplace", rate="0.15", promo="0",
+               loyalty="0", amount="0.00"):
+        return SimpleNamespace(
+            source=source,
+            commission_rate_applied=Decimal(rate),
+            promotion_discount=Decimal(promo),
+            loyalty_discount=Decimal(loyalty),
+            commission_amount=Decimal(amount),
+        )
+
+    def test_post_discount_base_nets_out_promo_and_loyalty(self):
+        # Remaining food 20.00, promo 5.00, loyalty 3.00 → base 12.00.
+        o = self._order(promo="5.00", loyalty="3.00", amount="6.00")
+        self.assertTrue(
+            menu.views._recompute_marketplace_commission(o, Decimal("20.00"))
+        )
+        self.assertEqual(o.commission_amount, Decimal("1.80"))
+
+    def test_no_discount_base_is_remaining_food(self):
+        o = self._order(amount="6.00")
+        self.assertTrue(
+            menu.views._recompute_marketplace_commission(o, Decimal("20.00"))
+        )
+        self.assertEqual(o.commission_amount, Decimal("3.00"))
+
+    def test_base_floors_at_zero_when_discounts_exceed_remaining_food(self):
+        o = self._order(promo="5.00", amount="6.00")
+        self.assertTrue(
+            menu.views._recompute_marketplace_commission(o, Decimal("4.00"))
+        )
+        self.assertEqual(o.commission_amount, Decimal("0.00"))
+
+    def test_direct_order_untouched(self):
+        from menu.models import Order
+
+        o = self._order(source=Order.Source.DIRECT, amount="6.00")
+        self.assertFalse(
+            menu.views._recompute_marketplace_commission(o, Decimal("20.00"))
+        )
+        self.assertEqual(o.commission_amount, Decimal("6.00"))
+
+    def test_zero_rate_untouched(self):
+        o = self._order(rate="0.00", amount="6.00")
+        self.assertFalse(
+            menu.views._recompute_marketplace_commission(o, Decimal("20.00"))
+        )
+        self.assertEqual(o.commission_amount, Decimal("6.00"))

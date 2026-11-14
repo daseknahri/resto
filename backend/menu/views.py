@@ -72,7 +72,10 @@ from django_tenants.utils import schema_context
 # test_commission_policy asserts menu.views.COMMISSIONABLE_STATUSES IS
 # menu.commission's object (statement and analytics bill on one set).
 # The computation itself imports it in menu.commission_statement.
-from .commission import COMMISSIONABLE_STATUSES  # noqa: F401
+from .commission import (  # noqa: F401
+    COMMISSIONABLE_STATUSES,
+    commissionable_food_base,
+)
 from .models import AnalyticsEvent, Branch, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, DrawerSession, DrawerTransaction, HappyHour, Ingredient, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, RecipeLine, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .pricing import get_active_happy_hours, effective_unit_price
@@ -5087,6 +5090,42 @@ def _recompute_order_totals(order):
     order.total = total
 
 
+def _recompute_marketplace_commission(order, remaining_food_subtotal):
+    """Recompute Order.commission_amount after a void/comp, on the DECIDED
+    post-discount basis (Run 8 D-02).
+
+    Checkout bills commission on commissionable_food_base = food subtotal −
+    promo − loyalty (menu.commission; owner decision G2, post-discount). The
+    void/comp paths used to recompute from the PRE-discount line sum, so a
+    discounted order that was later partly voided/comped over-stated
+    commission. The order-level promo/loyalty discounts are stored on the
+    order and kept whole by _recompute_order_totals, so the post-void base
+    is simply commissionable_food_base(remaining food, promo, loyalty) —
+    the same formula checkout uses, applied to the remaining lines. Delivery
+    fee and tip never enter the base (food only).
+
+    Returns True when the commission was recomputed (marketplace order with
+    a positive snapshotted rate — the caller then persists commission_amount);
+    False for direct orders / zero rate (untouched). Never negative.
+    Does NOT save — caller must call order.save(update_fields=...).
+    """
+    if order.source != Order.Source.MARKETPLACE:
+        return False
+    _rate = Decimal(str(order.commission_rate_applied or "0"))
+    if _rate <= Decimal("0"):
+        return False
+    _base = commissionable_food_base(
+        Decimal(str(remaining_food_subtotal)),
+        Decimal(str(order.promotion_discount or "0")),
+        Decimal(str(order.loyalty_discount or "0")),
+    )
+    _new_commission = (_base * _rate).quantize(Decimal("0.01"))
+    order.commission_amount = (
+        _new_commission if _new_commission > Decimal("0") else Decimal("0")
+    )
+    return True
+
+
 class StaffAppendOrderItemsView(APIView):
     """POST /api/staff/orders/<order_id>/items/
 
@@ -5655,35 +5694,20 @@ class StaffVoidOrderItemView(APIView):
             # the current non-voided lines). Direct orders carry no rate
             # (commission_rate_applied == 0) and are left untouched. Clamped at >= 0.
             #
-            # KNOWN FOLLOW-UP (owner decision pending): this recompute uses the
-            # PRE-discount line-sum basis (sum of non-voided item.subtotal). Marketplace
-            # *checkout* now bills commission POST-discount (commissionable_food_base =
-            # food - promo - loyalty; menu/commission.py + accounts/views.py). For a
-            # DISCOUNTED order later partly voided, the two diverge — this can slightly
-            # over-state commission because it does not net out the order-level
-            # promo/loyalty. Aligning them needs a rule for allocating an order-level
-            # discount across the individual voided lines.
-            # Gate on source FIRST: a direct order never carries commission, so we
-            # skip the recompute (and the rate conversion) entirely for it. Only a
-            # marketplace order with a positive snapshotted rate is recomputed.
+            # D-02 (Run 8): the recompute now uses the DECIDED post-discount basis
+            # (commissionable_food_base — remaining food minus the order-level
+            # promo/loyalty, which _recompute_order_totals keeps whole), the same
+            # basis checkout bills on. Previously it used the pre-discount line
+            # sum and over-stated commission on discounted orders.
             _recompute_commission = False
             if order.source == Order.Source.MARKETPLACE:
-                _commission_rate = Decimal(str(order.commission_rate_applied or "0"))
-                if _commission_rate > Decimal("0"):
-                    _recompute_commission = True
-                    # New PRE-discount food subtotal = sum of the remaining
-                    # (non-voided) line subtotals — the SAME basis
-                    # _recompute_order_totals uses for the food component of
-                    # order.total, and the same basis A5 commission is charged on
-                    # (food only; excludes delivery_fee / tip / discount).
-                    _new_food_subtotal = sum(
-                        (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided),
-                        Decimal("0"),
-                    )
-                    _new_commission = (_new_food_subtotal * _commission_rate).quantize(Decimal("0.01"))
-                    if _new_commission < Decimal("0"):
-                        _new_commission = Decimal("0")
-                    order.commission_amount = _new_commission
+                _new_food_subtotal = sum(
+                    (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided),
+                    Decimal("0"),
+                )
+                _recompute_commission = _recompute_marketplace_commission(
+                    order, _new_food_subtotal
+                )
 
             # ── Loyalty clawback ──────────────────────────────────────────────
             # Proportionally claw back earned loyalty points for the voided item
@@ -5976,19 +6000,17 @@ class StaffCompOrderItemView(APIView):
             _recompute_order_totals(order)
 
             # ── Commission recompute — identical basis to StaffVoidOrderItemView ──
+            # D-02 (Run 8): post-discount basis via the shared helper (see
+            # _recompute_marketplace_commission) — same as the void path.
             _recompute_commission = False
             if order.source == Order.Source.MARKETPLACE:
-                _commission_rate = Decimal(str(order.commission_rate_applied or "0"))
-                if _commission_rate > Decimal("0"):
-                    _recompute_commission = True
-                    _new_food_subtotal = sum(
-                        (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided and not i.is_comped),
-                        Decimal("0"),
-                    )
-                    _new_commission = (_new_food_subtotal * _commission_rate).quantize(Decimal("0.01"))
-                    if _new_commission < Decimal("0"):
-                        _new_commission = Decimal("0")
-                    order.commission_amount = _new_commission
+                _new_food_subtotal = sum(
+                    (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided and not i.is_comped),
+                    Decimal("0"),
+                )
+                _recompute_commission = _recompute_marketplace_commission(
+                    order, _new_food_subtotal
+                )
 
             # Partial wallet refund — identical two-case handling to void.
             _refunded = Decimal("0")

@@ -11,9 +11,12 @@ Three independent money fixes, each unit-tested (SimpleTestCase + mocks — no D
           so the aggregate AND the per-order rows agree.
 
   FIX 2 — StaffVoidOrderItemView RECOMPUTES Order.commission_amount when an item is
-          voided off a MARKETPLACE order, from the new (post-void) pre-discount food
-          subtotal × the order's SNAPSHOTTED commission_rate_applied — the same basis
-          A5 charged at placement. Direct orders (rate == 0) are untouched. Never < 0.
+          voided off a MARKETPLACE order, from the new (post-void) POST-discount food
+          base (remaining food − promo − loyalty, commissionable_food_base) × the
+          order's SNAPSHOTTED commission_rate_applied — the same basis A5 charged at
+          placement (Run 8 D-02 aligned the void/comp paths to it; they used to bill
+          on the pre-discount line sum). Direct orders (rate == 0) are untouched.
+          Never < 0. The comp path shares the same helper.
 
   FIX 3 — OwnerCommissionStatementView reports totals PER ISO CURRENCY (a per_currency
           breakdown) instead of one cross-currency sum, and the PDF labels each
@@ -35,7 +38,11 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from menu.views import OwnerCommissionStatementView, StaffVoidOrderItemView
+from menu.views import (
+    OwnerCommissionStatementView,
+    StaffCompOrderItemView,
+    StaffVoidOrderItemView,
+)
 from menu.models import Order
 from accounts.models import User
 
@@ -323,7 +330,7 @@ def _user(role=User.Roles.TENANT_OWNER, tenant_id=1):
 
 
 def _item(item_id=901, dish_slug="burger", dish_name="Burger", qty=1,
-          subtotal=Decimal("20.00"), is_voided=False):
+          subtotal=Decimal("20.00"), is_voided=False, is_comped=False):
     it = MagicMock()
     it.id = item_id
     it.dish_slug = dish_slug
@@ -335,6 +342,7 @@ def _item(item_id=901, dish_slug="burger", dish_name="Burger", qty=1,
     it.note = ""
     it.is_ready = False
     it.is_voided = is_voided
+    it.is_comped = is_comped
     it.combo_components = []
     it.save = MagicMock()
     return it
@@ -489,16 +497,19 @@ class VoidCommissionRecomputeTests(SimpleTestCase):
         update_fields = locked.save.call_args.kwargs["update_fields"]
         self.assertNotIn("commission_amount", update_fields)
 
-    def test_marketplace_void_uses_pre_discount_food_basis_not_total(self):
-        """Commission recompute uses the pre-discount FOOD subtotal (sum of non-voided
-        line subtotals) — NOT order.total — so delivery_fee / promo_discount on the
-        order do not distort the new commission. Order has a 50.00 promo discount and
-        a 15.00 delivery fee, but commission is still 0.15 × remaining food 20.00."""
+    def test_marketplace_void_uses_post_discount_food_basis_not_total(self):
+        """D-02: commission recompute uses the POST-discount food base (remaining
+        food − promo − loyalty, commissionable_food_base) — NOT order.total and
+        NOT the pre-discount line sum. Order has a 5.00 promo + 3.00 loyalty
+        discount and a 15.00 delivery fee; one 20.00 line is voided off 40.00
+        food, so the base is 20.00 − 5.00 − 3.00 = 12.00 and commission is
+        0.15 × 12.00 = 1.80. Delivery fee / tip never enter the base; the
+        discounts DO net out (the old pre-discount behaviour billed 3.00)."""
         to_void = _item(item_id=901, subtotal=Decimal("20.00"))
-        initial = _order(commission_rate="0.15", commission_amount="6.00",
+        initial = _order(commission_rate="0.15", commission_amount="4.80",
                          total=Decimal("40.00"), items=[to_void])
         locked = _order(
-            commission_rate="0.15", commission_amount="6.00",
+            commission_rate="0.15", commission_amount="4.80",
             total=Decimal("40.00"),
             items=[_item(item_id=901, subtotal=Decimal("20.00"), is_voided=True),
                    _item(item_id=902, dish_slug="fries", subtotal=Decimal("20.00"))],
@@ -506,7 +517,87 @@ class VoidCommissionRecomputeTests(SimpleTestCase):
         # Non-food components that must NOT enter the commission basis.
         locked.delivery_fee = Decimal("15.00")
         locked.promotion_discount = Decimal("5.00")
+        locked.loyalty_discount = Decimal("3.00")
         resp = self._run(initial, locked)
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
-        # 0.15 × 20.00 remaining FOOD = 3.00 (delivery/promo excluded).
-        self.assertEqual(locked.commission_amount, Decimal("3.00"))
+        # 0.15 × (20.00 − 5.00 − 3.00) = 0.15 × 12.00 = 1.80.
+        self.assertEqual(locked.commission_amount, Decimal("1.80"))
+
+    def test_marketplace_void_discount_larger_than_remaining_food_floors_at_zero(self):
+        """D-02 edge: when the kept discounts exceed the remaining food (a 5.00
+        promo on 4.00 of remaining food), the base floors at zero — commission
+        is 0.00, never negative."""
+        to_void = _item(item_id=901, subtotal=Decimal("36.00"))
+        initial = _order(commission_rate="0.15", commission_amount="5.25",
+                         total=Decimal("40.00"), items=[to_void])
+        locked = _order(
+            commission_rate="0.15", commission_amount="5.25",
+            total=Decimal("40.00"),
+            items=[_item(item_id=901, subtotal=Decimal("36.00"), is_voided=True),
+                   _item(item_id=902, dish_slug="fries", subtotal=Decimal("4.00"))],
+        )
+        locked.promotion_discount = Decimal("5.00")
+        resp = self._run(initial, locked)
+        self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        self.assertEqual(locked.commission_amount, Decimal("0.00"))
+
+
+# ── FIX 2 (comp path): same post-discount recompute ──────────────────────────
+
+class CompCommissionRecomputeTests(SimpleTestCase):
+    """D-02, comp side: StaffCompOrderItemView recomputes commission through
+    the SAME shared helper as the void path, so a discounted marketplace
+    order that is partly comped bills on the post-discount base too."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = StaffCompOrderItemView.as_view()
+        _p = patch("menu.views._can_void_order_item", return_value=True)
+        self._void_gate = _p.start()
+        self.addCleanup(_p.stop)
+        _p2 = patch("menu.views._can_access_order", return_value=True)
+        self._access = _p2.start()
+        self.addCleanup(_p2.stop)
+
+    def _post(self, order_id=10, item_id=901):
+        req = self.factory.post(
+            f"/api/staff/orders/{order_id}/items/{item_id}/comp/",
+            {"reason": "goodwill"}, format="json",
+        )
+        force_authenticate(req, user=_user())
+        req.tenant = SimpleNamespace(id=1)
+        return self.view(req, order_id=order_id, item_id=item_id)
+
+    def _run(self, order_initial, order_locked):
+        with patch("menu.views.transaction") as tx_mock, \
+                patch("menu.views.Order.objects") as order_om, \
+                patch("menu.views.OrderItem") as oi_mock, \
+                patch("menu.views._broadcast_order_change"), \
+                patch("menu.views._staff_order_payload", return_value={}):
+            tx_mock.atomic.return_value = _FakeAtomic()
+            order_om.prefetch_related.return_value.filter.return_value.first.return_value = order_initial
+            order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = order_locked
+            # Comp mark is an atomic compare-and-set on OrderItem (rowcount 1 = won).
+            oi_mock.objects.filter.return_value.update.return_value = 1
+            return self._post(order_id=order_initial.id, item_id=901)
+
+    def test_marketplace_comp_recomputes_commission_on_post_discount_base(self):
+        """Comping one 20.00 line off a 40.00-food order with a 5.00 promo
+        leaves base 20.00 − 5.00 = 15.00, so commission is 0.15 × 15.00 =
+        2.25 (down from the 5.25 placement value) — the pre-discount
+        behaviour would have billed 3.00. Persisted in update_fields."""
+        to_comp = _item(item_id=901, subtotal=Decimal("20.00"))
+        initial = _order(commission_rate="0.15", commission_amount="5.25",
+                         total=Decimal("40.00"), items=[to_comp])
+        locked = _order(
+            commission_rate="0.15", commission_amount="5.25",
+            total=Decimal("40.00"),
+            items=[_item(item_id=901, subtotal=Decimal("20.00"), is_comped=True),
+                   _item(item_id=902, dish_slug="fries", subtotal=Decimal("20.00"))],
+        )
+        locked.promotion_discount = Decimal("5.00")
+        resp = self._run(initial, locked)
+        self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        self.assertEqual(locked.commission_amount, Decimal("2.25"))
+        update_fields = locked.save.call_args.kwargs["update_fields"]
+        self.assertIn("commission_amount", update_fields)
