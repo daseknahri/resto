@@ -6,17 +6,19 @@ Covers the refund aggregate query used in OPS-2 (cancel-refund EXISTS check)
 and the OPS-3 financial statement (filter type=REFUND, tenant_id, created_at
 range).  WalletTransaction is in the shared public schema (accounts app).
 """
+from django.contrib.postgres.operations import AddIndexConcurrently
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    atomic = False  # R5 rehearsal conversion: CREATE INDEX CONCURRENTLY cannot run in a transaction.
 
     dependencies = [
         ("accounts", "0042_winbacknudge"),
     ]
 
     operations = [
-        migrations.AddIndex(
+        AddIndexConcurrently(
             model_name="wallettransaction",
             index=models.Index(
                 fields=["tenant_id", "type", "created_at"],
