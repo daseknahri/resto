@@ -9,24 +9,26 @@ These are the only two indexes added in this migration; the WalletTransaction
 composite index (tenant_id, type, created_at) is in the accounts app migration
 0043 to keep app-level boundaries clean.
 """
+from django.contrib.postgres.operations import AddIndexConcurrently
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    atomic = False  # R5 rehearsal conversion: CREATE INDEX CONCURRENTLY cannot run in a transaction.
 
     dependencies = [
         ("menu", "0057_orderpayment_idempotency_key"),
     ]
 
     operations = [
-        migrations.AddIndex(
+        AddIndexConcurrently(
             model_name="order",
             index=models.Index(
                 fields=["customer_phone"],
                 name="order_customer_phone_idx",
             ),
         ),
-        migrations.AddIndex(
+        AddIndexConcurrently(
             model_name="order",
             index=models.Index(
                 fields=["status", "paid_at"],
