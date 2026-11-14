@@ -209,6 +209,34 @@ class StatementImmutabilityTests(TransactionTestCase):
             [o["order_number"] for o in live["orders_data"]], ["ORD-COD"]
         )
 
+    def test_statement_rows_carry_payment_status_and_cod_flag(self):
+        """D-01: every statement row carries payment_status + is_cod, live AND
+        frozen — the owner can tell which billed commission is still
+        uncollected COD cash. A wallet-paid order reads paid / not-COD."""
+        self._order("ORD-COD", total="100.00", commission="10.00",
+                    status_val="confirmed",
+                    payment_status=Order.PaymentStatus.UNPAID)
+        self._order("ORD-PAID", total="200.00", commission="20.00",
+                    status_val="completed",
+                    payment_status=Order.PaymentStatus.PAID)
+        resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        by_number = {o["order_number"]: o for o in resp.data["orders"]}
+        self.assertEqual(by_number["ORD-COD"]["payment_status"], "unpaid")
+        self.assertTrue(by_number["ORD-COD"]["is_cod"])
+        self.assertEqual(by_number["ORD-PAID"]["payment_status"], "paid")
+        self.assertFalse(by_number["ORD-PAID"]["is_cod"])
+
+        # Frozen: the payment state survives the issue freeze verbatim.
+        issued = self._post_issue()
+        self.assertEqual(issued.status_code, status.HTTP_201_CREATED)
+        resp = self._get()
+        by_number = {o["order_number"]: o for o in resp.data["orders"]}
+        self.assertEqual(by_number["ORD-COD"]["payment_status"], "unpaid")
+        self.assertTrue(by_number["ORD-COD"]["is_cod"])
+        self.assertEqual(by_number["ORD-PAID"]["payment_status"], "paid")
+        self.assertFalse(by_number["ORD-PAID"]["is_cod"])
+
     def test_issue_then_void_and_cancel_totals_stay_frozen(self):
         a, b = self._two_orders()
 

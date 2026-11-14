@@ -1679,6 +1679,11 @@ class CommissionStatementLine(models.Model):
     net_payout = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     currency = models.CharField(max_length=8, default="MAD")
     status = models.CharField(max_length=20, blank=True, default="")
+    # D-01 (Run 8): payment state at freeze time — under G1 placement billing
+    # an unpaid COD order is billed like a paid one, so the frozen row must
+    # record which billed rows are still-uncollected cash. "" = frozen before
+    # this column existed (served without a payment marker).
+    payment_status = models.CharField(max_length=12, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:

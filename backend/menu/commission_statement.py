@@ -41,6 +41,11 @@ from reportlab.pdfgen import canvas
 from .commission import COMMISSIONABLE_STATUSES
 from .models import CommissionStatement, CommissionStatementLine
 
+# Order.PaymentStatus.UNPAID ("unpaid") as a literal: this module must never
+# import the Order model itself (see _order_model() — the mock seam), so the
+# value is pinned here instead of read off the enum.
+_PAYMENT_UNPAID = "unpaid"
+
 
 class StatementAlreadyIssued(Exception):
     """Raised when issuing a month that already has an issued revision
@@ -119,7 +124,7 @@ def compute_statement(profile, year, month, *, branch_id=None):
         .only(
             "order_number", "created_at", "customer_name", "total",
             "delivery_fee", "commission_amount", "commission_rate_applied",
-            "currency", "status",
+            "currency", "status", "payment_status",
         )
     )
     if branch_id is not None:
@@ -151,6 +156,16 @@ def compute_statement(profile, year, month, *, branch_id=None):
             "net_payout": float((o.total - o.delivery_fee - o.commission_amount).quantize(Decimal("0.01"))),
             "currency": o.currency,
             "status": o.status,
+            # D-01 (Run 8): payment state. Under G1 placement billing an
+            # unpaid COD order is billed exactly like a paid one, so the
+            # statement must show which billed rows are still-uncollected
+            # cash. Marketplace orders are either wallet-paid (PAID) or
+            # cash-on-handover (UNPAID, settled at handover) — there is no
+            # payment_method column, so UNPAID here IS the COD flag.
+            # getattr: the mock-based suites feed SimpleNamespace rows that
+            # carry no payment_status (they read "" / not-COD).
+            "payment_status": getattr(o, "payment_status", "") or "",
+            "is_cod": (getattr(o, "payment_status", "") or "") == _PAYMENT_UNPAID,
         }
         for o in rows
     ]
@@ -328,8 +343,10 @@ def render_statement_pdf(year, month, orders_data, per_currency):
     y -= _box_h + 7 * mm
 
     # Table header
-    col_widths = [45 * mm, 32 * mm, 35 * mm, 30 * mm, 30 * mm]
-    col_labels = ["Order #", "Date", "Revenue", "Commission", "Net Payout"]
+    # D-01: a "Payment" column — "COD" marks the still-uncollected cash rows
+    # (unpaid cash-on-handover), "Paid" the wallet-settled ones.
+    col_widths = [38 * mm, 26 * mm, 30 * mm, 26 * mm, 26 * mm, 24 * mm]
+    col_labels = ["Order #", "Date", "Revenue", "Commission", "Net Payout", "Payment"]
     col_x = [margin]
     for w in col_widths[:-1]:
         col_x.append(col_x[-1] + w)
@@ -361,7 +378,8 @@ def render_statement_pdf(year, month, orders_data, per_currency):
         row_vals = [o["order_number"], date_str,
                     f"{o['currency']} {o['total']:,.2f}",
                     f"{o['currency']} {o['commission_amount']:,.2f}",
-                    f"{o['currency']} {o['net_payout']:,.2f}"]
+                    f"{o['currency']} {o['net_payout']:,.2f}",
+                    "COD" if o.get("is_cod") else "Paid"]
         for i, val in enumerate(row_vals):
             if i < 2:
                 doc.drawString(col_x[i] + 2 * mm, y - 4.5 * mm, val)
@@ -437,6 +455,10 @@ def frozen_orders_data(stmt):
             "net_payout": float(line.net_payout),
             "currency": line.currency,
             "status": line.status,
+            # D-01: frozen payment state ("" on snapshots issued before the
+            # column existed — they keep serving without a payment marker).
+            "payment_status": getattr(line, "payment_status", "") or "",
+            "is_cod": (getattr(line, "payment_status", "") or "") == _PAYMENT_UNPAID,
         }
         for line in stmt.lines.all()
     ]
@@ -519,6 +541,7 @@ def issue_statement(profile, year, month, *, issued_by, reissue=False, reason=""
                     net_payout=Decimal(str(row["net_payout"])),
                     currency=row["currency"],
                     status=row["status"],
+                    payment_status=row.get("payment_status", "") or "",
                 )
             )
         CommissionStatementLine.objects.bulk_create(lines)

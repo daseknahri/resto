@@ -59,7 +59,7 @@ class _CommissionStatementHarness(SimpleTestCase):
 
     def _order_row(self, *, number="ORD-1", total="20.00", commission="3.00",
                    rate="0.15", currency="MAD", status_val="completed",
-                   delivery_fee="0.00"):
+                   delivery_fee="0.00", payment_status=None):
         return SimpleNamespace(
             order_number=number,
             created_at=datetime(2026, 6, 15, 12, 0, tzinfo=_tz.utc),
@@ -70,6 +70,7 @@ class _CommissionStatementHarness(SimpleTestCase):
             commission_rate_applied=Decimal(rate),
             currency=currency,
             status=status_val,
+            payment_status=payment_status,
         )
 
     def _run_json(self, orders, *, capture_filter=None, capture_status_filter=None):
@@ -286,6 +287,21 @@ class PerCurrencyStatementTests(_CommissionStatementHarness):
         self.assertIn("USD 7.50", text)
         # The USD line must NOT be mislabelled with MAD.
         self.assertNotIn("MAD 7.50", text)
+
+
+    def test_pdf_marks_unpaid_cod_rows(self):
+        """D-01: the PDF's Payment column marks the still-uncollected COD row
+        "COD" and the wallet-settled row "Paid" — the owner can reconcile
+        uncollected cash straight from the printed statement."""
+        text = self._pdf_text([
+            self._order_row(number="ORD-COD", total="100.00", commission="10.00",
+                            rate="0.10", payment_status="unpaid"),
+            self._order_row(number="ORD-PAID", total="200.00", commission="20.00",
+                            rate="0.10", payment_status="paid"),
+        ])
+        self.assertIn("Payment", text)
+        self.assertIn("COD", text)
+        self.assertIn("Paid", text)
 
 
 # ── FIX 2: commission recompute on item void ──────────────────────────────────
