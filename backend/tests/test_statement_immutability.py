@@ -114,12 +114,17 @@ class StatementImmutabilityTests(TransactionTestCase):
     # ── fixtures ──────────────────────────────────────────────────────────
 
     def _order(self, number, *, total, commission, rate="0.10", currency="MAD",
-               status_val="completed", delivery_fee="0.00", day=15):
+               status_val="completed", delivery_fee="0.00", day=15,
+               payment_status=None):
         with schema_context(SCHEMA):
             order = Order.objects.create(
                 order_number=number,
                 source=Order.Source.MARKETPLACE,
                 status=status_val,
+                # COD orders are created UNPAID by design (settled at handover);
+                # the model default is UNPAID too — the parameter only makes the
+                # test's intent explicit.
+                payment_status=payment_status or Order.PaymentStatus.UNPAID,
                 customer_name="Diner",
                 total=Decimal(total),
                 delivery_fee=Decimal(delivery_fee),
@@ -174,6 +179,35 @@ class StatementImmutabilityTests(TransactionTestCase):
         self.assertEqual(resp.data["summary"]["total_revenue"], 300.0)
         self.assertEqual(resp.data["summary"]["total_commission"], 30.0)
         self.assertEqual(resp.data["summary"]["net_payout"], 270.0)
+
+    def test_unpaid_cod_order_in_confirmed_status_is_billed(self):
+        """G1 (owner decision 2026-11-14): COD commission bills AT ORDER
+        PLACEMENT. An UNPAID cash-on-delivery order in CONFIRMED status IS
+        billed — the statement has no payment_status filter — while a
+        PENDING + UNPAID order (kitchen hasn't committed yet) is NOT.
+        This test names the rule: a future payment_status=PAID filter or a
+        collected-basis switch must fail here, not silently pass."""
+        self._order("ORD-COD", total="100.00", commission="10.00",
+                    status_val="confirmed",
+                    payment_status=Order.PaymentStatus.UNPAID)
+        self._order("ORD-PENDING", total="50.00", commission="5.00",
+                    status_val="pending",
+                    payment_status=Order.PaymentStatus.UNPAID)
+        resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["summary"]["order_count"], 1)
+        self.assertEqual(resp.data["summary"]["total_revenue"], 100.0)
+        self.assertEqual(resp.data["summary"]["total_commission"], 10.0)
+        billed = [o["order_number"] for o in resp.data["orders"]]
+        self.assertEqual(billed, ["ORD-COD"])
+        # The same rule at the computation level (not just the view) — inside
+        # the tenant schema, like the other tests' live-computation reads.
+        with schema_context(SCHEMA):
+            live = compute_statement(_tenant_ns().profile, YEAR, MONTH)
+        self.assertEqual(live["summary"]["total_commission"], 10.0)
+        self.assertEqual(
+            [o["order_number"] for o in live["orders_data"]], ["ORD-COD"]
+        )
 
     def test_issue_then_void_and_cancel_totals_stay_frozen(self):
         a, b = self._two_orders()
