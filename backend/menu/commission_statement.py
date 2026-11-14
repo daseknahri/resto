@@ -240,7 +240,9 @@ def compute_statement(profile, year, month, *, branch_id=None):
             "total_commission": 0.0,
             "net_payout": 0.0,
             "currency": "",
-            "mixed_currency": True,
+            # D-07: only a month with MORE THAN ONE currency is mixed. An
+            # empty month (per_currency == []) is not a mixed-currency month.
+            "mixed_currency": len(per_currency) > 1,
         }
 
     return {
@@ -258,7 +260,8 @@ _MONTH_NAMES = [
 ]
 
 
-def render_statement_pdf(year, month, orders_data, per_currency):
+def render_statement_pdf(year, month, orders_data, per_currency, *, issued=False,
+                         revision=None, issued_at=None, tenant_name=None):
     """Render the statement PDF and return its bytes.
 
     Fed the same ``orders_data`` / ``per_currency`` shapes whether they were
@@ -267,6 +270,12 @@ def render_statement_pdf(year, month, orders_data, per_currency):
     the owner downloads can no longer drift. The rendering itself is the
     view's original A5-followup code (per-currency summary blocks, each
     labelled with its own currency code), moved here verbatim.
+
+    D-05 (Run 8): ``issued`` / ``revision`` / ``issued_at`` stamp the header
+    PROVISIONAL vs ISSUED, so a provisional (still-moving) month's PDF can
+    never be filed as if it were the frozen statement. D-06: ``tenant_name``
+    identifies whose statement this is. D-08: the table header repeats on
+    every page and every page is numbered.
     """
     order_count = len(orders_data)
     month_name = _MONTH_NAMES
@@ -294,18 +303,52 @@ def render_statement_pdf(year, month, orders_data, per_currency):
     doc = canvas.Canvas(buffer, pagesize=A4)
     page_w, page_h = A4
     margin = 20 * mm
+    page_num = 1
+
+    def _draw_footer(page):
+        """D-08: footer on EVERY page — the auto-generated line plus the page
+        number, so a multi-page statement stays readable and fileable."""
+        doc.setFont("Helvetica", 7)
+        doc.setFillColorRGB(0.55, 0.55, 0.55)
+        doc.drawCentredString(page_w / 2, 12 * mm, "This statement is auto-generated. Contact support for billing queries.")
+        doc.drawRightString(page_w - margin, 12 * mm, f"Page {page}")
+
+    def _issued_stamp():
+        """D-05: the provisional/issued marker. Provisional months are still
+        moving; issued months are frozen at a revision."""
+        if not issued:
+            return "PROVISIONAL \u2014 not yet issued"
+        _date = ""
+        if issued_at is not None:
+            _date = issued_at.strftime("%Y-%m-%d") if hasattr(issued_at, "strftime") else str(issued_at)[:10]
+        _rev = f"rev {revision}" if revision is not None else "issued"
+        return f"ISSUED {_rev} \u00b7 {_date}" if _date else f"ISSUED {_rev}"
 
     # Header bar
     doc.setFillColorRGB(0.059, 0.059, 0.314)  # deep indigo
-    doc.rect(0, page_h - 38 * mm, page_w, 38 * mm, fill=1, stroke=0)
+    doc.rect(0, page_h - 44 * mm, page_w, 44 * mm, fill=1, stroke=0)
 
     doc.setFillColorRGB(1, 1, 1)
     doc.setFont("Helvetica-Bold", 18)
     doc.drawString(margin, page_h - 18 * mm, "Marketplace Commission Statement")
     doc.setFont("Helvetica", 10)
-    doc.drawString(margin, page_h - 29 * mm, f"{month_name[month]} {year}")
+    # D-06: tenant identity — a restaurant with several tenants (or an admin
+    # collecting statements) can tell whose statement a PDF is.
+    if tenant_name:
+        doc.drawString(margin, page_h - 27 * mm, str(tenant_name))
+    doc.drawString(margin, page_h - 36 * mm, f"{month_name[month]} {year}")
 
-    y = page_h - 50 * mm
+    # D-05: status stamp directly under the header bar, before any figures.
+    y = page_h - 52 * mm
+    doc.setFont("Helvetica-Bold", 10)
+    if issued:
+        doc.setFillColorRGB(0.05, 0.45, 0.20)  # green: frozen
+    else:
+        doc.setFillColorRGB(0.65, 0.30, 0.05)  # amber-red: still moving
+    doc.drawString(margin, y, _issued_stamp())
+    doc.setFillColorRGB(0, 0, 0)
+
+    y = page_h - 60 * mm
 
     # Summary box — one sub-block per currency (each labelled with its own code).
     # Height scales with the number of currencies: a header line (order count)
@@ -351,24 +394,32 @@ def render_statement_pdf(year, month, orders_data, per_currency):
     for w in col_widths[:-1]:
         col_x.append(col_x[-1] + w)
 
-    doc.setFillColorRGB(0.2, 0.2, 0.4)
-    doc.rect(margin, y - 7 * mm, page_w - 2 * margin, 7 * mm, fill=1, stroke=0)
-    doc.setFillColorRGB(1, 1, 1)
-    doc.setFont("Helvetica-Bold", 8)
-    for i, label in enumerate(col_labels):
-        if i < 2:
-            doc.drawString(col_x[i] + 2 * mm, y - 5 * mm, label)
-        else:
-            doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 5 * mm, label)
-    y -= 7 * mm
+    def _draw_table_header(y):
+        """D-08: the column header, factored out so it can be redrawn at the
+        top of EVERY page — pages 2+ used to be bare rows with no headings."""
+        doc.setFillColorRGB(0.2, 0.2, 0.4)
+        doc.rect(margin, y - 7 * mm, page_w - 2 * margin, 7 * mm, fill=1, stroke=0)
+        doc.setFillColorRGB(1, 1, 1)
+        doc.setFont("Helvetica-Bold", 8)
+        for i, label in enumerate(col_labels):
+            if i < 2:
+                doc.drawString(col_x[i] + 2 * mm, y - 5 * mm, label)
+            else:
+                doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 5 * mm, label)
+        return y - 7 * mm
+
+    y = _draw_table_header(y)
 
     # Table rows
     doc.setFillColorRGB(0, 0, 0)
     row_h = 6 * mm
     for idx, o in enumerate(orders_data):
         if y < 25 * mm:  # new page
+            _draw_footer(page_num)
             doc.showPage()
+            page_num += 1
             y = page_h - 20 * mm
+            y = _draw_table_header(y)
         bg = 0.97 if idx % 2 == 0 else 1.0
         doc.setFillColorRGB(bg, bg, bg)
         doc.rect(margin, y - row_h, page_w - 2 * margin, row_h, fill=1, stroke=0)
@@ -394,7 +445,9 @@ def render_statement_pdf(year, month, orders_data, per_currency):
     y -= 5 * mm
     for _pc in per_currency:
         if y < 20 * mm:  # spill the totals onto a new page if we ran out of room
+            _draw_footer(page_num)
             doc.showPage()
+            page_num += 1
             y = page_h - 20 * mm
         _cur = _pc["currency"]
         _label = "TOTALS" if len(per_currency) == 1 else f"TOTALS ({_cur})"
@@ -405,10 +458,8 @@ def render_statement_pdf(year, month, orders_data, per_currency):
         doc.drawRightString(col_x[4] + col_widths[4] - 2 * mm, y, f"{_cur} {_pc['net_payout']:,.2f}")
         y -= 5 * mm
 
-    # Footer
-    doc.setFont("Helvetica", 7)
-    doc.setFillColorRGB(0.55, 0.55, 0.55)
-    doc.drawCentredString(page_w / 2, 12 * mm, "This statement is auto-generated. Contact support for billing queries.")
+    # Footer on the final page (earlier pages got theirs at each page break).
+    _draw_footer(page_num)
 
     doc.save()
     pdf_bytes = buffer.getvalue()

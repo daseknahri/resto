@@ -10697,6 +10697,23 @@ class OwnerCommissionStatementView(APIView):
         except Exception:
             return None
 
+    def _tenant_display_name(self, request):
+        # D-06: restaurant name for the PDF header (slug as fallback; "" when
+        # the request carries neither — the mock suites' tenant namespaces).
+        tenant = getattr(request, "tenant", None)
+        return (getattr(tenant, "name", "") or getattr(tenant, "slug", "") or "").strip()
+
+    def _tenant_slug(self, request):
+        # D-06: filename-safe tenant slug (the Tenant.slug when present, else
+        # a slugified name, else "tenant").
+        tenant = getattr(request, "tenant", None)
+        slug = (getattr(tenant, "slug", "") or "").strip()
+        if slug:
+            return slug
+        name = (getattr(tenant, "name", "") or "").strip().lower()
+        slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+        return slug or "tenant"
+
     def _parse_year_month(self, request, profile, data=None):
         # Parse year/month, defaulting to the current TENANT-LOCAL month (so the
         # default month matches what the owner sees on their wall clock).
@@ -10791,10 +10808,24 @@ class OwnerCommissionStatementView(APIView):
         # ── PDF ───────────────────────────────────────────────────────────────
         # The renderer consumes the same orders_data / per_currency dicts for a
         # live preview and for a frozen snapshot, so the two PDFs are identical
-        # for identical figures.
-        pdf_bytes = render_statement_pdf(year, month, orders_data, per_currency)
+        # for identical figures — except the D-05/D-06 header: provisional vs
+        # issued + tenant identity, which the renderer stamps from these args.
+        pdf_bytes = render_statement_pdf(
+            year, month, orders_data, per_currency,
+            issued=issued_meta["issued"],
+            revision=issued_meta.get("revision"),
+            issued_at=issued_meta.get("issued_at"),
+            tenant_name=self._tenant_display_name(request),
+        )
 
-        filename = f"commission-{year}-{month:02d}.pdf"
+        # D-06: the filename carries the tenant + the revision, so a reissued
+        # rev-2 download never overwrites the rev-1 file under the same name;
+        # a provisional download is labelled provisional, not rev-N.
+        _slug = self._tenant_slug(request)
+        if issued_meta["issued"]:
+            filename = f"commission-{_slug}-{year}-{month:02d}-rev{issued_meta['revision']}.pdf"
+        else:
+            filename = f"commission-{_slug}-{year}-{month:02d}-provisional.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

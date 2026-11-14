@@ -56,9 +56,13 @@ def _owner(tenant_id=1, user_id=42):
 def _tenant_ns(tenant_id=1):
     """Request scaffolding in the house mock style: the view only reads
     request.tenant.id (permission) and request.tenant.profile (timezone
-    bucketing). The DB-real tenant lives behind schema_context."""
+    bucketing). The DB-real tenant lives behind schema_context. Name/slug
+    mirror the real Tenant row (setUpClass) so the D-06 PDF header/filename
+    paths exercise real values instead of the "" / "tenant" fallbacks."""
     profile = SimpleNamespace(timezone="UTC", service_day_cutover_hour=0)
-    return SimpleNamespace(id=tenant_id, profile=profile)
+    return SimpleNamespace(id=tenant_id, profile=profile,
+                            name="Statement Test Tenant",
+                            slug="stmt-immutability-test")
 
 
 @skipUnless(os.environ.get("PYTEST_REQUIRE_DB") == "1", "requires the DB stage")
@@ -289,6 +293,61 @@ class StatementImmutabilityTests(TransactionTestCase):
         text = "".join(page.extract_text() for page in reader.pages)
         self.assertIn("MAD 30.00", text)   # frozen commission total
         self.assertIn("MAD 300.00", text)  # frozen revenue total
+
+    def _pdf(self, user=None):
+        """GET ?format=pdf through the direct-view call (the a5 suites'
+        pattern — dispatching through as_view() dies in DRF content
+        negotiation before get() runs)."""
+        pdf_view = OwnerCommissionStatementView()
+        pdf_view.format_kwarg = None
+        pdf_req = self.factory.get(
+            "/api/owner/commission-statement/",
+            {"year": str(YEAR), "month": str(MONTH), "format": "pdf"},
+        )
+        pdf_req.user = user or _owner()
+        pdf_req.tenant = _tenant_ns()
+        with schema_context(SCHEMA):
+            return pdf_view.get(pdf_view.initialize_request(pdf_req))
+
+    def _pdf_text(self, pdf_resp):
+        from pypdf import PdfReader
+
+        reader = PdfReader(BytesIO(pdf_resp.content))
+        return "".join(page.extract_text() for page in reader.pages)
+
+    def test_pdf_marks_provisional_vs_issued_and_names_tenant(self):
+        """D-05/D-06: the PDF header stamps PROVISIONAL on a live month and
+        ISSUED rev N once frozen, names the tenant, numbers the page — and
+        the filename carries the tenant slug + revision (provisional while
+        unissued), so a rev-2 download never overwrites rev-1."""
+        self._order("ORD-A", total="100.00", commission="10.00")
+
+        live_pdf = self._pdf()
+        self.assertEqual(live_pdf.status_code, status.HTTP_200_OK)
+        live_text = self._pdf_text(live_pdf)
+        self.assertIn("PROVISIONAL", live_text)
+        self.assertNotIn("ISSUED", live_text)
+        self.assertIn("Statement Test Tenant", live_text)
+        self.assertIn("Page 1", live_text)
+        self.assertIn(
+            "commission-stmt-immutability-test-2026-06-provisional.pdf",
+            live_pdf["Content-Disposition"],
+        )
+
+        issued = self._post_issue()
+        self.assertEqual(issued.status_code, status.HTTP_201_CREATED)
+        frozen_pdf = self._pdf()
+        self.assertEqual(frozen_pdf.status_code, status.HTTP_200_OK)
+        frozen_text = self._pdf_text(frozen_pdf)
+        self.assertIn("ISSUED", frozen_text)
+        self.assertIn("rev 1", frozen_text)
+        self.assertNotIn("PROVISIONAL", frozen_text)
+        self.assertIn("Statement Test Tenant", frozen_text)
+        self.assertIn("Page 1", frozen_text)
+        self.assertIn(
+            "commission-stmt-immutability-test-2026-06-rev1.pdf",
+            frozen_pdf["Content-Disposition"],
+        )
 
     def test_double_issue_409_and_reissue_creates_revision_2(self):
         a, _b = self._two_orders()

@@ -296,6 +296,31 @@ class PerCurrencyStatementTests(_CommissionStatementHarness):
         self.assertNotIn("MAD 7.50", text)
 
 
+    def test_empty_month_is_not_mixed_currency(self):
+        """D-07: a month with NO orders is not a mixed-currency month —
+        mixed_currency is True only when more than one currency is present."""
+        resp = self._run_json([])
+        data = resp.data
+        self.assertEqual(data["summary"]["order_count"], 0)
+        self.assertEqual(data["summary"]["total_revenue"], 0.0)
+        self.assertEqual(data["summary"]["total_commission"], 0.0)
+        self.assertFalse(data["summary"].get("mixed_currency"))
+
+    def test_pdf_repeats_header_and_numbers_pages(self):
+        """D-08: a 40-order month spills onto a second page; every page
+        repeats the table header (Order # / Payment columns) and carries its
+        own page number."""
+        rows = [
+            self._order_row(number=f"ORD-{i:02d}", total="10.00",
+                            commission="1.00", rate="0.10")
+            for i in range(40)
+        ]
+        text = self._pdf_text(rows)
+        self.assertIn("Page 1", text)
+        self.assertIn("Page 2", text)
+        self.assertEqual(text.count("Order #"), 2)
+        self.assertEqual(text.count("Payment"), 2)
+
     def test_pdf_marks_unpaid_cod_rows(self):
         """D-01: the PDF's Payment column marks the still-uncollected COD row
         "COD" and the wallet-settled row "Paid" — the owner can reconcile
