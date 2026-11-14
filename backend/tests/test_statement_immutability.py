@@ -401,6 +401,31 @@ class StatementImmutabilityTests(TransactionTestCase):
         self.assertEqual(by_cur["USD"]["total_commission"], 7.5)  # frozen
         self.assertTrue(resp.data["summary"].get("mixed_currency"))
 
+    def test_issue_rejects_future_month(self):
+        """D-09: POST /issue/ for a month that hasn't happened yet is a 400
+        — a mistaken call can never freeze an empty future month as rev 1."""
+        now = datetime.now(_tz.utc)
+        fy, fm = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+        resp = self._post_issue(data={"year": fy, "month": fm})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "future_month")
+        with schema_context(SCHEMA):
+            self.assertEqual(CommissionStatement.objects.count(), 0)
+
+    def test_issue_current_month_requires_explicit_confirmation(self):
+        """D-09: freezing the CURRENT (still-moving) month needs
+        confirm_current=true — without it the API refuses (400) instead of
+        silently stamping partial figures as final."""
+        now = datetime.now(_tz.utc)
+        no_confirm = self._post_issue(data={"year": now.year, "month": now.month})
+        self.assertEqual(no_confirm.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(no_confirm.data.get("code"), "confirm_current_required")
+        confirmed = self._post_issue(
+            data={"year": now.year, "month": now.month, "confirm_current": True}
+        )
+        self.assertEqual(confirmed.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(confirmed.data["revision"], 1)
+
     def test_non_owner_cannot_issue(self):
         self._two_orders()
         outsider = _owner(tenant_id=99)

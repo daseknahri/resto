@@ -10853,6 +10853,27 @@ class OwnerCommissionStatementView(APIView):
         if year is None:
             return Response({"detail": "Invalid year/month parameters."}, status=400)
 
+        # D-09: never freeze a month that hasn't happened yet, and never
+        # SILENTLY freeze the CURRENT (still-moving) month — freezing it
+        # mid-month would stamp partial figures as final. The current month
+        # needs an explicit confirmation from the caller.
+        _now_local = _profile_now(_profile) if _profile is not None else timezone.now()
+        if (year, month) > (_now_local.year, _now_local.month):
+            return Response(
+                {"detail": "Cannot issue a statement for a future month.",
+                 "code": "future_month"},
+                status=400,
+            )
+        if (year, month) == (_now_local.year, _now_local.month):
+            _confirmed = data.get("confirm_current") in (True, "true", "True", "1", 1)
+            if not _confirmed:
+                return Response(
+                    {"detail": "This month is still in progress. Pass "
+                     "confirm_current=true to issue it anyway.",
+                     "code": "confirm_current_required"},
+                    status=400,
+                )
+
         # Statements freeze at ACCOUNT level: a branch-scoped issue would
         # freeze partial figures under an account-level snapshot. Refuse it
         # explicitly — branch filtering is a preview-only GET concern.
