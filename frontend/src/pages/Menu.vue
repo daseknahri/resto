@@ -87,6 +87,10 @@
       </div>
     </header>
 
+    <!-- Phase 3 (D3): storefront branch (location) picker — renders only
+         when the tenant has more than one active branch. -->
+    <BranchPicker class="mx-3 mt-3" />
+
     <!-- ══ Active order tracking strip ══ -->
     <Transition name="ui-fade">
       <RouterLink
@@ -546,6 +550,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon   from '../components/AppIcon.vue'
 import DishCard  from '../components/DishCard.vue'
+import BranchPicker from '../components/BranchPicker.vue'
 import { useI18n } from '../composables/useI18n'
 import { useVocabulary } from '../composables/useVocabulary'
 import { useReorder } from '../composables/useReorder'
@@ -558,11 +563,13 @@ import { useCustomerStore } from '../stores/customer'
 import { useMenuStore }     from '../stores/menu'
 import { useTenantStore }   from '../stores/tenant'
 import { useToastStore }    from '../stores/toast'
+import { useBranchStore }   from '../stores/branch'
 
 const menu           = useMenuStore()
 const tenant         = useTenantStore()
 const cart           = useCartStore()
 const toast          = useToastStore()
+const branchStore    = useBranchStore()
 const customerStore  = useCustomerStore()
 const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
@@ -1009,6 +1016,7 @@ watch(selectedSuperCategorySlug, () => {
 
 onMounted(async () => {
   await resolveTableContext()
+  branchStore.load()  // Phase 3 (D3): branch list for the location picker
   if (!menuCategories.value.length) await menu.fetchCategories()
   fetchLoyaltyConfig()  // non-blocking — teaser fades in when data arrives
   // Server-source reorder history so "Order again" survives a device switch /

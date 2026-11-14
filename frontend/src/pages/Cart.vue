@@ -724,6 +724,10 @@
             <span v-else>{{ t('cartPage.payNowNote') }}</span>
           </p>
 
+          <!-- Phase 3 (D3): storefront branch picker — pickup/delivery only;
+               dine-in (table) orders resolve their branch from the table. -->
+          <BranchPicker v-if="!isTableContextOrder" />
+
           <!-- ── CTA buttons ── -->
           <div class="space-y-2.5">
             <!-- Primary place-order CTA (RISK FE-2). The button is a dumb presentational
@@ -891,6 +895,7 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
+import BranchPicker from '../components/BranchPicker.vue';
 import CartPromoCode from '../components/CartPromoCode.vue';
 import CartHeader from '../components/CartHeader.vue';
 import CartLineItem from '../components/CartLineItem.vue';
@@ -912,6 +917,7 @@ import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
 import { useMenuStore } from '../stores/menu';
 import { useOrderStore } from '../stores/order';
+import { useBranchStore } from '../stores/branch';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import { useCurrencyStore } from '../stores/currency';
@@ -929,6 +935,7 @@ const cart = useCartStore();
 const customerStore = useCustomerStore();
 const menu = useMenuStore();
 const order = useOrderStore();
+const branchStore = useBranchStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
@@ -2074,6 +2081,12 @@ const buildPayload = () => {
   if (tipAmount.value > 0) payload.tip_amount = tipAmount.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
+  // Phase 3 (D3): the picker's branch slug — the backend's
+  // resolve_order_branch honours it first for storefront orders. Table
+  // orders omit it: their branch comes from the table's section.
+  if (!isTableContextOrder.value && branchStore.selectedSlug) {
+    payload.branch = branchStore.selectedSlug;
+  }
   // customer_name: only for table context (optional)
   if (isTableContextOrder.value && cart.customerName) payload.customer_name = cart.customerName;
   // customer_phone: only for table context, and only if the diner chose to provide it —
@@ -2532,6 +2545,7 @@ const applyExpressCheckout = () => {
 
 onMounted(async () => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
+  branchStore.load(); // Phase 3 (D3): branch list for the storefront picker
   fetchSavedAddresses();
   fetchLoyaltyConfig();
   fetchAutoPromos();
