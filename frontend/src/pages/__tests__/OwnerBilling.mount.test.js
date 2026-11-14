@@ -22,6 +22,9 @@
  *     timer leaks — afterEach unmount is plain hygiene.
  *   - onMounted → fetchAll() fires 4 GETs via Promise.allSettled:
  *       /tier-upgrade-targets/  /tier-upgrade-requests/  /dishes/  /owner/staff/
+ *     plus branchStore.load() → GET /branches/ for the statement branch filter
+ *     (Run 7 step 6). Default _routes return { data: {} } → no branches → the
+ *     filter stays hidden, so tests 1–2 are unaffected.
  *     Default: everything resolves empty ({ data: {} }) so the fresh-owner path
  *     renders. Test 2 sets _routes to drive the loaded (plan/usage/upgrade/invoice)
  *     path.
@@ -66,6 +69,7 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import { useTenantStore } from "../../stores/tenant";
+import api from "../../lib/api";
 import OwnerBilling from "../OwnerBilling.vue";
 
 const mountBilling = () =>
@@ -194,5 +198,77 @@ describe("OwnerBilling — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerBilling.upgradeTitle");
     // Approved request with invoice_amount → invoice-download button rendered.
     expect(wrapper.text()).toContain("ownerBilling.invoiceDownload");
+  });
+
+  // ── (3) multi-branch: filter renders, branch choice rides the PDF download ──
+  // The wiring's contract: a chosen branch must reach the backend as
+  // ?branch=<id> on GET /owner/commission-statement/?format=pdf (FO1 filters
+  // the live preview from it); "All locations" sends no branch param.
+  it("shows the branch filter with >1 branch and passes ?branch= on the PDF download", async () => {
+    _routes = {
+      "/branches/": {
+        data: {
+          branches: [
+            { id: 1, slug: "centre", name: "Centre", is_default: true },
+            { id: 2, slug: "nord", name: "Nord" },
+          ],
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountBilling();
+    }).not.toThrow();
+    await flushPromises();
+
+    const select = wrapper.find("#commission-branch");
+    expect(select.exists()).toBe(true);
+    expect(select.text()).toContain("ownerBilling.commissionBranchAll");
+    expect(select.text()).toContain("Centre");
+    expect(select.text()).toContain("Nord");
+    // Preview-only semantics are surfaced, not silent.
+    expect(wrapper.text()).toContain("ownerBilling.commissionBranchHint");
+
+    // jsdom has no URL.createObjectURL — stub it so the download completes.
+    const realCreate = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:fake");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      await select.setValue("2");
+      const downloadBtn = wrapper
+        .findAll("button")
+        .find((b) => b.text() === "ownerBilling.commissionDownload");
+      expect(downloadBtn).toBeTruthy();
+      await downloadBtn.trigger("click");
+      await flushPromises();
+    } finally {
+      URL.createObjectURL = realCreate;
+      URL.revokeObjectURL = realRevoke;
+    }
+
+    const stmtCall = api.get.mock.calls.find(([url]) =>
+      url.includes("commission-statement")
+    );
+    expect(stmtCall).toBeTruthy();
+    expect(stmtCall[1].params.branch).toBe("2");
+    expect(stmtCall[1].params.format).toBe("pdf");
+  });
+
+  // ── (4) single branch: no choice, no filter, download stays account-level ──
+  it("hides the branch filter with a single branch (no real choice)", async () => {
+    _routes = {
+      "/branches/": {
+        data: { branches: [{ id: 1, slug: "centre", name: "Centre", is_default: true }] },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountBilling();
+    }).not.toThrow();
+    await flushPromises();
+
+    expect(wrapper.find("#commission-branch").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("ownerBilling.commissionBranchHint");
   });
 });
