@@ -12,7 +12,7 @@ django-tenants==4.0.0
 python-dotenv==1.2.4
 dj-database-url==2.1.0
 django-cors-headers==4.9.0
-Pillow==12.3.0
+Pillow==13.0.0
 qrcode==7.4.2
 reportlab==5.1.0
 gunicorn==26.2.0
