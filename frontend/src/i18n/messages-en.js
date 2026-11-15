@@ -3269,6 +3269,13 @@ stepDishes: {
   groupMaxLessThanMin: "Max choices must be at least the minimum.",
   groupNameDuplicate: "Duplicate option group name.",
   groupNameRequired: "Option group name is required.",
+  bulkPricePublishedOnly: "Only published dishes are updated - draft dishes are not changed.",
+  comboUnsavedNote: "Unsaved dishes can be added too - they will be saved first when this dish is saved.",
+  csvImportCreatedCategories: "{count} categor(ies) created.",
+  csvImportErrorsTitle: "Rows not imported:",
+  csvImportSkipped: "{count} row(s) skipped (already imported).",
+  unassignedEmptyTitle: "No unassigned dishes",
+  unassignedFilter: "Unassigned ({count})",
 },
 combos: {
   badge: "Combo",

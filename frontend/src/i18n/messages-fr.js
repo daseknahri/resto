@@ -3215,6 +3215,13 @@ stepDishes: {
   groupMaxLessThanMin: "Le maximum de choix doit etre au moins egal au minimum.",
   groupNameDuplicate: "Nom de groupe d'options en double.",
   groupNameRequired: "Le nom du groupe d'options est obligatoire.",
+  bulkPricePublishedOnly: "Seuls les plats publies sont modifies - les brouillons ne changent pas.",
+  comboUnsavedNote: "Les plats non enregistres peuvent aussi etre ajoutes - ils seront enregistres d'abord quand ce plat sera enregistre.",
+  csvImportCreatedCategories: "{count} categorie(s) creee(s).",
+  csvImportErrorsTitle: "Lignes non importees :",
+  csvImportSkipped: "{count} ligne(s) ignoree(s) (deja importee(s)).",
+  unassignedEmptyTitle: "Aucun plat sans categorie",
+  unassignedFilter: "Sans categorie ({count})",
 },
 combos: {
   badge: "Combo",

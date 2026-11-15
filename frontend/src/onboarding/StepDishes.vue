@@ -26,7 +26,7 @@
       <div class="ui-scroll-row">
         <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ itemPlural }}</span>
         <span class="ui-data-strip">{{ sortedCategoryOptions.length }} {{ groupPlural }}</span>
-        <span v-if="unassignedDishCount" class="ui-data-strip text-amber-200">{{ t("stepDishes.unassignedWarning", { count: unassignedDishCount }) }}</span>
+        <button v-if="unassignedDishCount" type="button" class="ui-data-strip text-amber-200 underline" :aria-pressed="unassignedOnly ? 'true' : 'false'" @click="unassignedOnly = true">{{ t("stepDishes.unassignedWarning", { count: unassignedDishCount }) }}</button>
       </div>
     </div>
 
@@ -42,7 +42,7 @@
         <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end">
           <div class="space-y-1">
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
-            <select v-model="activeCategoryId" :aria-label="t('stepDishes.selectCategory')" class="ui-input border-slate-700 bg-slate-950/70">
+            <select v-model="activeCategoryId" :aria-label="t('stepDishes.selectCategory')" class="ui-input border-slate-700 bg-slate-950/70" @change="unassignedOnly = false">
               <option v-for="category in sortedCategoryOptions" :key="category.id" :value="String(category.id)">
                 {{ categoryLabel(category) }} ({{ dishCountForCategory(category.id) }})
               </option>
@@ -74,13 +74,16 @@
           <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs text-rose-400/80 hover:text-rose-300" @click="markAllUnavailableInCategory">
             {{ t("stepDishes.bulkMarkUnavailable") }}
           </button>
+          <button v-if="unassignedDishCount" type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" :aria-pressed="unassignedOnly ? 'true' : 'false'" @click="unassignedOnly = !unassignedOnly">
+            {{ t("stepDishes.unassignedFilter", { count: unassignedDishCount }) }}
+          </button>
         </div>
       </div>
 
       <div class="space-y-1.5 ui-reveal" :style="{ '--ui-delay': '56ms' }">
-        <ul v-if="activeCategoryDishesFiltered.length" class="space-y-1.5">
+        <ul v-if="visibleDishes.length" class="space-y-1.5">
           <li
-            v-for="(dish, index) in activeCategoryDishesFiltered"
+            v-for="(dish, index) in visibleDishes"
             :key="dish.local_id"
             class="ui-surface-lift ui-reveal group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
             :class="[dish.is_published ? '' : 'opacity-70', dragOverId === dish.local_id ? 'border-brand-secondary/60 bg-brand-secondary/5' : '']"
@@ -225,7 +228,7 @@
             </span>
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
-              <h3 class="text-base font-semibold text-white">{{ dishSearch ? `${t("common.search")} — 0` : t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</h3>
+              <h3 class="text-base font-semibold text-white">{{ dishSearch ? `${t("common.search")} — 0` : unassignedOnly ? t("stepDishes.unassignedEmptyTitle") : t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</h3>
               <p v-if="!dishSearch" class="max-w-xl text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
             </div>
           </div>
@@ -294,7 +297,7 @@
                     :placeholder="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-label="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-invalid="rowError(editingDish, 'name') ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-name-error-${editingDish.local_id}`"
+                    :aria-describedby="rowError(editingDish, 'name') ? `step-dishes-name-error-${editingDish.local_id}` : undefined"
                     @input="setLocalizedDishFieldValue(editingDish, 'name', dishFieldLocales.name, $event.target.value)"
                   />
                   <p v-if="rowError(editingDish, 'name')" :id="`step-dishes-name-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "name") }}</p>
@@ -308,7 +311,7 @@
                     class="ui-input"
                     :class="rowError(editingDish, 'category') ? 'border-red-400' : 'border-slate-700'"
                     :aria-invalid="rowError(editingDish, 'category') ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-category-error-${editingDish.local_id}`"
+                    :aria-describedby="rowError(editingDish, 'category') ? `step-dishes-category-error-${editingDish.local_id}` : undefined"
                     @change="clearRowError(editingDish.local_id, 'category')"
                   >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
@@ -329,7 +332,7 @@
                     :placeholder="t('stepDishes.pricePlaceholder')"
                     :aria-label="t('stepDishes.pricePlaceholder')"
                     :aria-invalid="rowError(editingDish, 'price') ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-price-error-${editingDish.local_id}`"
+                    :aria-describedby="rowError(editingDish, 'price') ? `step-dishes-price-error-${editingDish.local_id}` : undefined"
                     @input="clearRowError(editingDish.local_id, 'price')"
                   />
                   <p v-if="rowError(editingDish, 'price')" :id="`step-dishes-price-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "price") }}</p>
@@ -344,7 +347,7 @@
                     :placeholder="t('stepDishes.dishSlug', { item: itemSingular })"
                     :aria-label="t('stepDishes.dishSlug', { item: itemSingular })"
                     :aria-invalid="rowError(editingDish, 'slug') ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-slug-error-${editingDish.local_id}`"
+                    :aria-describedby="rowError(editingDish, 'slug') ? `step-dishes-slug-error-${editingDish.local_id}` : undefined"
                     @input="clearRowError(editingDish.local_id, 'slug')"
                   />
                   <p v-if="rowError(editingDish, 'slug')" :id="`step-dishes-slug-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "slug") }}</p>
@@ -438,7 +441,7 @@
                   :class="rowError(editingDish, 'description') ? 'border-red-400' : 'border-slate-700'"
                   :aria-label="t('common.description')"
                   :aria-invalid="rowError(editingDish, 'description') ? 'true' : undefined"
-                  :aria-describedby="`step-dishes-description-error-${editingDish.local_id}`"
+                  :aria-describedby="rowError(editingDish, 'description') ? `step-dishes-description-error-${editingDish.local_id}` : undefined"
                   :placeholder="t('stepDishes.descriptionPlaceholder')"
                   @input="setLocalizedDishFieldValue(editingDish, 'description', dishFieldLocales.description, $event.target.value)"
                 ></textarea>
@@ -641,7 +644,7 @@
                       :placeholder="t('stepDishes.variantNamePlaceholder')"
                       :aria-label="t('stepDishes.variantNamePlaceholder')"
                       :aria-invalid="rowError(editingDish, optionFieldKey(option, 'name')) ? 'true' : undefined"
-                      :aria-describedby="`step-dishes-opt-name-error-${option.local_id}`"
+                      :aria-describedby="rowError(editingDish, optionFieldKey(option, 'name')) ? `step-dishes-opt-name-error-${option.local_id}` : undefined"
                       @input="setLocalizedVariantNameValue(editingDish, option, dishFieldLocales.variantName, $event.target.value)"
                     />
                   </div>
@@ -655,7 +658,7 @@
                     :placeholder="t('stepDishes.extraPricePlaceholder')"
                     :aria-label="t('stepDishes.extraPricePlaceholder')"
                     :aria-invalid="rowError(editingDish, optionFieldKey(option, 'price_delta')) ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-opt-price-error-${option.local_id}`"
+                    :aria-describedby="rowError(editingDish, optionFieldKey(option, 'price_delta')) ? `step-dishes-opt-price-error-${option.local_id}` : undefined"
                     @input="clearRowError(editingDish.local_id, optionFieldKey(option, 'price_delta'))"
                   />
                   <input
@@ -668,7 +671,7 @@
                     :placeholder="t('stepDishes.maxSelectPlaceholder')"
                     :aria-label="t('stepDishes.maxSelectPlaceholder')"
                     :aria-invalid="rowError(editingDish, optionFieldKey(option, 'max_select')) ? 'true' : undefined"
-                    :aria-describedby="`step-dishes-opt-maxselect-error-${option.local_id}`"
+                    :aria-describedby="rowError(editingDish, optionFieldKey(option, 'max_select')) ? `step-dishes-opt-maxselect-error-${option.local_id}` : undefined"
                     @input="clearRowError(editingDish.local_id, optionFieldKey(option, 'max_select'))"
                   />
                   <button
@@ -862,7 +865,7 @@
                   <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300 select-none">
                     <input
                       type="checkbox"
-                      :checked="editingDish.combo_components?.length > 0"
+                      :checked="isComboBuilderOpen(editingDish)"
                       class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500"
                       @change="toggleComboMode(editingDish, $event.target.checked)"
                     />
@@ -870,7 +873,7 @@
                   </label>
                 </div>
 
-                <template v-if="editingDish.combo_components?.length > 0">
+                <template v-if="isComboBuilderOpen(editingDish)">
                   <!-- Savings hint -->
                   <p v-if="comboSavings(editingDish) > 0" class="text-xs font-semibold text-emerald-400">
                     {{ t("combos.savings", { amount: Number(comboSavings(editingDish)).toFixed(2) }) }}
@@ -880,7 +883,7 @@
                   <ul class="space-y-2">
                     <li
                       v-for="(comp, compIdx) in editingDish.combo_components"
-                      :key="comp.component_id"
+                      :key="comp.component_local_id || comp.component_id"
                       class="flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm"
                     >
                       <span class="min-w-0 flex-1 text-slate-200">{{ comp.name || comp.component_id }}</span>
@@ -918,8 +921,8 @@
                       <option value="">{{ t("combos.addComponent") }}</option>
                       <option
                         v-for="d in availableComboComponents(editingDish)"
-                        :key="d.id"
-                        :value="String(d.id)"
+                        :key="d.local_id"
+                        :value="String(d.local_id)"
                       >{{ d.name }}</option>
                     </select>
                     <button
@@ -927,6 +930,7 @@
                       class="ui-btn-outline px-3 py-2 text-xs"
                       @click="addComboComponent(editingDish)"
                     >{{ t("combos.addComponent") }}</button>
+                    <p v-if="availableComboComponents(editingDish).some((d) => !d.id)" class="w-full text-[11px] text-slate-500">{{ t("stepDishes.comboUnsavedNote") }}</p>
                   </div>
                   <p v-else class="text-[11px] text-slate-500">{{ t("combos.maxComponents") }}</p>
                 </template>
@@ -972,7 +976,7 @@
                     class="ui-input"
                     :class="quickDishErrors.category ? 'border-red-400' : ''"
                     :aria-invalid="quickDishErrors.category ? 'true' : undefined"
-                    aria-describedby="step-dishes-quick-category-error"
+                    :aria-describedby="quickDishErrors.category ? 'step-dishes-quick-category-error' : undefined"
                     @change="quickDishErrors.category = ''"
                   >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
@@ -1014,7 +1018,7 @@
                     :placeholder="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-label="t('stepDishes.dishNamePlaceholder', { item: itemSingular })"
                     :aria-invalid="quickDishErrors.name ? 'true' : undefined"
-                    aria-describedby="step-dishes-quick-name-error"
+                    :aria-describedby="quickDishErrors.name ? 'step-dishes-quick-name-error' : undefined"
                     @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value); quickDishErrors.name = ''"
                   />
                   <p v-if="quickDishErrors.name" id="step-dishes-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickDishErrors.name }}</p>
@@ -1244,6 +1248,7 @@
             <div>
               <h2 class="text-base font-semibold text-white">{{ t("stepDishes.bulkPriceTitle") }}</h2>
               <p class="mt-0.5 text-xs text-slate-400">{{ t("stepDishes.bulkPriceSubtitle") }}</p>
+              <p class="mt-0.5 text-xs text-amber-200/90">{{ t("stepDishes.bulkPricePublishedOnly") }}</p>
             </div>
             <button type="button" class="ui-icon-btn" :aria-label="t('common.close')" @click="closeBulkPriceModal">
               <AppIcon name="x" class="h-4 w-4" aria-hidden="true" />
@@ -1429,6 +1434,14 @@
             </div>
             <p v-if="csvImportError" class="text-xs text-red-400" role="alert">{{ csvImportError }}</p>
             <p v-if="csvImportResult" class="text-xs text-emerald-400" role="status">{{ csvImportResult }}</p>
+            <div v-if="csvImportDetails" class="space-y-1 rounded-xl border border-slate-700 bg-slate-800/50 p-3">
+              <p v-if="csvImportDetails.created_categories" class="text-xs text-slate-300">{{ t("stepDishes.csvImportCreatedCategories", { count: csvImportDetails.created_categories }) }}</p>
+              <p v-if="csvImportDetails.skipped" class="text-xs text-amber-300">{{ t("stepDishes.csvImportSkipped", { count: csvImportDetails.skipped }) }}</p>
+              <div v-if="csvImportDetails.errors.length" class="space-y-0.5" role="alert">
+                <p class="text-xs font-semibold text-amber-300">{{ t("stepDishes.csvImportErrorsTitle") }}</p>
+                <p v-for="(importErr, i) in csvImportDetails.errors" :key="i" class="text-[11px] text-amber-200">&#x2022; {{ importErr }}</p>
+              </div>
+            </div>
             <div class="flex justify-end gap-2 pt-1">
               <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="csvImportOpen = false">
                 {{ t("common.close") }}
@@ -1458,6 +1471,7 @@
       </button>
       <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400">{{ status }}</p>
+      <button v-if="loadFailed" type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="load">{{ t("common.retry") }}</button>
     </div>
   </div>
 </template>
@@ -1466,7 +1480,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useTranslate } from "../composables/useTranslate";
@@ -1487,7 +1501,9 @@ const pendingCleanup = ref([]);
 const globalError = ref("");
 const saving = ref(false);
 const status = ref("");
+const loadFailed = ref(false); // A3-38: load failed — local list kept, retry offered
 const dishSearch = ref("");
+const unassignedOnly = ref(false); // A3-39: show orphan dishes with no category
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
 const tenant = useTenantStore();
@@ -1673,6 +1689,19 @@ const activeCategoryDishesFiltered = computed(() => {
       .some((value) => String(value).toLowerCase().includes(query))
   );
 });
+// A3-39: orphan rows (no category) are invisible in the per-category list,
+// so they get their own filtered view, searchable like the rest.
+const unassignedDishesFiltered = computed(() => {
+  const query = dishSearch.value.trim().toLowerCase();
+  const orphans = dishes.filter((dish) => !dish.category && hasMeaningfulDishContent(dish));
+  if (!query) return orphans;
+  return orphans.filter((dish) =>
+    [dish.name, dish.description, dish.slug, dish.attributes?.sku, dish.attributes?.barcode, dish.attributes?.brand]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+  );
+});
+const visibleDishes = computed(() => (unassignedOnly.value ? unassignedDishesFiltered.value : activeCategoryDishesFiltered.value));
 const hasPreviousCategory = computed(() => activeCategoryIndex.value > 0);
 const hasNextCategory = computed(
   () => activeCategoryIndex.value >= 0 && activeCategoryIndex.value < sortedCategoryOptions.value.length - 1
@@ -2016,7 +2045,10 @@ const WEEKDAYS = [
 const normalizeComboComponents = (list) => {
   if (!Array.isArray(list)) return [];
   return list.map((c) => ({
-    component_id: Number(c.component_id),
+    component_id: c.component_id != null ? Number(c.component_id) : null,
+    // A3-18: keep the local id so a not-yet-saved component can be resolved
+    // to its backend id at save time (persistDish).
+    component_local_id: c.component_local_id || "",
     name: String(c.name || ""),
     qty: Math.max(1, Number(c.qty) || 1),
     position: Number(c.position || 0),
@@ -2511,6 +2543,20 @@ const allowedTranslationLocalesNow = () =>
 // error onto the row. Used by the editor-form Save, quick-add, and the
 // page-level save loop.
 const persistDish = async (dish, allowedTranslationLocales) => {
+  // A3-18: resolve unsaved combo components first — a component picked before
+  // it was saved has a local_id but no backend id yet. Persist it now so the
+  // combo upsert below sends a real component_id. Components are never combos
+  // themselves, so this cannot recurse into another combo.
+  for (const comp of Array.isArray(dish.combo_components) ? dish.combo_components : []) {
+    if (comp.component_id) continue;
+    const local = dishes.find((d) => d.local_id === comp.component_local_id);
+    if (!local || local === dish) continue;
+    if (!local.id) await persistDish(local, allowedTranslationLocales);
+    comp.component_id = local.id ?? null;
+  }
+  // Drop components whose dish vanished mid-save (deleted elsewhere) rather
+  // than sending a null component_id to the server.
+  dish.combo_components = (dish.combo_components || []).filter((c) => c.component_id);
   const rawAttrs = dish.attributes && typeof dish.attributes === "object" ? dish.attributes : {};
   const cleanedAttrs = Object.fromEntries(
     Object.entries(rawAttrs)
@@ -2638,10 +2684,14 @@ const mergeServerDishes = (serverRows) => {
 };
 
 const load = async () => {
+  // A3-38: a failed load must NOT wipe the local list (unsaved rows included)
+  // or clear the dirty snapshots — a transient failure must not look like an
+  // empty menu and invite recreating dishes that already exist on the server.
+  loadFailed.value = false;
   try {
     categoryOptions.value = await categoryApi.list();
   } catch {
-    categoryOptions.value = [];
+    loadFailed.value = true;
   }
   try {
     const data = await dishApi.list();
@@ -2652,9 +2702,7 @@ const load = async () => {
     }
   } catch {
     status.value = t("common.loadFailed");
-    dishes.splice(0, dishes.length);
-    savedSnapshots.clear();
-    savedStockQty.clear();
+    loadFailed.value = true;
   }
   syncActiveCategory();
 };
@@ -2662,6 +2710,7 @@ const load = async () => {
 const setActiveCategory = (categoryId) => {
   activeCategoryId.value = String(categoryId || "");
   dishSearch.value = "";
+  unassignedOnly.value = false;
 };
 
 const goToPreviousCategory = () => {
@@ -2899,14 +2948,18 @@ const cloneDish = (localId) => {
 // ── Combo builder ─────────────────────────────────────────────────────────────
 const comboPicker = reactive({}); // localId -> selected component id string
 
-/** Dishes that are valid as combo components for the given dish (no combos, no self, has id) */
+// A3-18: dishes valid as combo components for the given dish (no combos, no
+// self). Unsaved dishes (no backend id yet) are allowed — they are keyed by
+// local_id here and resolved to a real id in persistDish() before the combo
+// is saved.
 const availableComboComponents = (dish) => {
-  const existingIds = new Set((dish.combo_components || []).map((c) => c.component_id));
+  const existingIds = new Set((dish.combo_components || []).map((c) => c.component_id).filter((id) => id != null));
+  const existingLocalIds = new Set((dish.combo_components || []).map((c) => c.component_local_id).filter(Boolean));
   return dishes.filter(
     (d) =>
-      d.id &&
-      d.id !== dish.id &&
+      d.local_id !== dish.local_id &&
       !existingIds.has(d.id) &&
+      !existingLocalIds.has(d.local_id) &&
       (!Array.isArray(d.combo_components) || d.combo_components.length === 0)
   );
 };
@@ -2915,7 +2968,8 @@ const availableComboComponents = (dish) => {
 const comboComponentsTotal = (dish) => {
   let total = 0;
   for (const comp of dish.combo_components || []) {
-    const found = dishes.find((d) => d.id === comp.component_id);
+    // A3-18: match an unsaved component by local_id as well as by backend id.
+    const found = dishes.find((d) => d.id === comp.component_id || (comp.component_local_id && d.local_id === comp.component_local_id));
     if (found) total += Number(found.price || 0) * comp.qty;
   }
   return total;
@@ -2927,6 +2981,14 @@ const comboSavings = (dish) => {
   const comboPrice = Number(dish.price || 0);
   return componentTotal > comboPrice ? componentTotal - comboPrice : 0;
 };
+
+// The builder body is open when the dish already has components OR the
+// owner just switched combo mode on (toggleComboMode records that by setting
+// comboPicker[local_id]); the old `length > 0` check alone hid the picker for
+// every fresh combo.
+const isComboBuilderOpen = (dish) =>
+  (dish?.combo_components?.length || 0) > 0 ||
+  comboPicker[dish?.local_id] !== undefined;
 
 const toggleComboMode = (dish, enabled) => {
   if (!dish) return;
@@ -2940,10 +3002,11 @@ const toggleComboMode = (dish, enabled) => {
 };
 
 const addComboComponent = (dish) => {
-  const idStr = comboPicker[dish.local_id];
-  if (!idStr) return;
-  const id = Number(idStr);
-  const found = dishes.find((d) => d.id === id);
+  const picked = comboPicker[dish.local_id];
+  if (!picked) return;
+  // A3-18: the picker value is the dish's local_id, so unsaved dishes (UUID
+  // local_id, no backend id) can be picked too; the id is resolved at save.
+  const found = dishes.find((d) => String(d.local_id) === String(picked));
   if (!found) return;
   if (!Array.isArray(dish.combo_components)) dish.combo_components = [];
   if (dish.combo_components.length >= 8) return;
@@ -2951,8 +3014,8 @@ const addComboComponent = (dish) => {
     toast.show(t("combos.nestingError"), "error");
     return;
   }
-  if (dish.combo_components.some((c) => c.component_id === id)) return;
-  dish.combo_components.push({ component_id: id, name: found.name, qty: 1, position: dish.combo_components.length });
+  if (dish.combo_components.some((c) => c.component_id === found.id || (c.component_local_id && c.component_local_id === found.local_id))) return;
+  dish.combo_components.push({ component_id: found.id ?? null, component_local_id: found.local_id, name: found.name, qty: 1, position: dish.combo_components.length });
   comboPicker[dish.local_id] = "";
 };
 
@@ -3157,7 +3220,7 @@ const previewBulkPrice = async () => {
     const { data } = await api.patch("/owner/dishes/bulk-price/", buildBulkPricePayload(true));
     bulkPricePreview.value = data.items || [];
   } catch (err) {
-    bulkPriceError.value = err?.response?.data?.detail || t("stepDishes.bulkPriceError");
+    bulkPriceError.value = extractApiErrorMessage(err, t("stepDishes.bulkPriceError"));
     bulkPricePreview.value = [];
   } finally {
     bulkPriceLoading.value = false;
@@ -3180,7 +3243,7 @@ const applyBulkPrice = async () => {
     // Reload local dish list so prices reflect the update
     await load();
   } catch (err) {
-    bulkPriceError.value = err?.response?.data?.detail || t("stepDishes.bulkPriceError");
+    bulkPriceError.value = extractApiErrorMessage(err, t("stepDishes.bulkPriceError"));
   } finally {
     bulkPriceApplying.value = false;
   }
@@ -3199,11 +3262,14 @@ const csvFileInputRef = ref(null);
 const csvImporting = ref(false);
 const csvImportError = ref("");
 const csvImportResult = ref("");
+// A3-20: the server's import summary — created/skipped counts + per-row errors.
+const csvImportDetails = ref(null);
 
 const onCsvFileChange = (e) => {
   csvFile.value = e.target.files?.[0] || null;
   csvImportError.value = "";
   csvImportResult.value = "";
+  csvImportDetails.value = null;
 };
 
 const downloadCsvTemplate = async () => {
@@ -3226,6 +3292,7 @@ const submitCsvImport = async () => {
   if (!csvFile.value || csvImporting.value) return;
   csvImportError.value = "";
   csvImportResult.value = "";
+  csvImportDetails.value = null;
   csvImporting.value = true;
   try {
     const fd = new FormData();
@@ -3235,13 +3302,21 @@ const submitCsvImport = async () => {
     });
     const count = data?.created_dishes ?? data?.dishes_created ?? 0;
     csvImportResult.value = t("stepDishes.csvImportSuccess", { count });
+    // A3-20: keep the server's skipped count, created categories and per-row
+    // errors (already capped at 20 server-side) — a partial import must not
+    // look fully successful. Same shape as OwnerMenuBuilder's import result.
+    csvImportDetails.value = {
+      created_categories: data?.created_categories ?? 0,
+      created_dishes: count,
+      skipped: data?.skipped ?? 0,
+      errors: Array.isArray(data?.errors) ? data.errors : [],
+    };
     csvFile.value = null;
     if (csvFileInputRef.value) csvFileInputRef.value.value = "";
     // Reload the dishes list so the newly imported items appear
     await load();
   } catch (err) {
-    const msg = err?.response?.data?.detail;
-    csvImportError.value = (typeof msg === "string" && msg) || t("stepDishes.csvImportError");
+    csvImportError.value = extractApiErrorMessage(err, t("stepDishes.csvImportError"));
   } finally {
     csvImporting.value = false;
   }

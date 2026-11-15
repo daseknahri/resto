@@ -645,3 +645,270 @@ describe("StepDishes (owner onboarding) - G4b-I: A3-13 / A3-14 / A3-15 / A3-16 /
     expect(wrapper.html()).toContain("rtl:peer-checked:after:-translate-x-4");
   });
 });
+
+// ── G4b-J: A3-10 / A3-18 / A3-19 / A3-20 / A3-38 / A3-39 ────────────────────
+// Appended by cluster G4b-J (Rostoy Run 8). Base file above is untouched; these
+// tests target the J patches (applied after cluster I's commit) and are run by
+// the coordinator after staging. Same harness + mocks as the S1-G block above.
+describe("StepDishes (owner onboarding) — G4b-J: A3-10 / A3-18 / A3-19 / A3-20 / A3-38 / A3-39", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    categoryListMock.mockResolvedValue([...CATEGORIES]);
+    dishListMock.mockResolvedValue([]);
+    dishUpsertMock.mockImplementation(async (dish) => ({
+      id: dish.id || 99,
+      slug: dish.slug || "dish",
+      stock_qty: dish.stock_qty ?? null,
+      is_available: dish.is_available ?? true,
+    }));
+    optionSyncMock.mockResolvedValue([]);
+    groupSyncMock.mockResolvedValue([]);
+    uploadRemoveMock.mockResolvedValue(undefined);
+    apiPatchMock.mockResolvedValue({ data: {} });
+    apiPostMock.mockResolvedValue({ data: {} });
+    apiGetMock.mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const exactButton = (w, text) =>
+    w.findAll("button").filter((b) => b.text().trim() === text);
+
+  const openEditorFor = async (w, name) => {
+    await w.find(`button[aria-label="common.edit ${name}"]`).trigger("click");
+    await nextTick();
+  };
+
+  const setCsvFile = async (w) => {
+    const fileInput = w.find("#csv-import-file-input");
+    const file = new File(["name,price\nSalad,7"], "menu.csv", { type: "text/csv" });
+    Object.defineProperty(fileInput.element, "files", { value: [file] });
+    await fileInput.trigger("change");
+  };
+
+  // ── A3-10: aria-describedby is conditional on the error ────────────────
+  it("A3-10: editor name input has no aria-describedby until its error appears", async () => {
+    dishListMock.mockResolvedValue([serverDish()]);
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    await openEditorFor(wrapper, "Soup");
+    const nameInput = () =>
+      wrapper.find('input[aria-label^="stepDishes.dishNamePlaceholder"]');
+    expect(nameInput().attributes("aria-describedby")).toBeUndefined();
+
+    // A too-short name trips the row error on editor Save.
+    await nameInput().setValue("x");
+    await exactButton(wrapper, "common.save")[0].trigger("click");
+    await nextTick();
+    expect(nameInput().attributes("aria-describedby")).toContain(
+      "step-dishes-name-error-"
+    );
+  });
+
+  it("A3-10: quick-add name input and category select have no aria-describedby without an error", async () => {
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    await openQuickAdd(wrapper);
+    const nameInput = wrapper.find(
+      'input[aria-label^="stepDishes.dishNamePlaceholder"]'
+    );
+    expect(nameInput.attributes("aria-describedby")).toBeUndefined();
+    // The top category picker has no describedby either; the quick-modal
+    // select must not point at its (absent) error element.
+    for (const select of wrapper.findAll(
+      'select[aria-label="stepDishes.selectCategory"]'
+    )) {
+      expect(select.attributes("aria-describedby")).toBeUndefined();
+    }
+  });
+
+  // ── A3-18: unsaved dishes can be combo components ──────────────────────
+  // Regression: availableComboComponents required d.id, so a dish created in
+  // this session but not yet saved could never be picked; the picker for a
+  // fresh combo never even opened (its v-if needed length > 0).
+  it("A3-18: an unsaved dish is offered as a combo component and saved first", async () => {
+    dishListMock.mockResolvedValue([serverDish()]);
+    dishUpsertMock.mockRejectedValueOnce(new Error("save failed"));
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    // Quick-add a dish whose immediate persist fails — it stays local + unsaved.
+    await openQuickAdd(wrapper);
+    await fillQuickDishName(wrapper, "Local Soup");
+    await submitQuickAdd(wrapper);
+    expect(wrapper.text()).toContain("Local Soup");
+    expect(dishUpsertMock).toHaveBeenCalledTimes(1);
+
+    // Open the saved dish's editor and switch combo mode on.
+    await openEditorFor(wrapper, "Soup");
+    const comboLabel = wrapper
+      .findAll("label")
+      .filter((l) => l.text().includes("combos.badge"))[0];
+    await comboLabel.find("input").setChecked(true);
+    await nextTick();
+
+    // The picker now lists the unsaved dish, with the unsaved note shown.
+    const picker = wrapper.find('select[aria-label="combos.addComponent"]');
+    expect(picker.exists()).toBe(true);
+    expect(picker.findAll("option").map((o) => o.text())).toContain("Local Soup");
+    expect(wrapper.text()).toContain("stepDishes.comboUnsavedNote");
+
+    const localOption = picker
+      .findAll("option")
+      .find((o) => o.text() === "Local Soup");
+    await picker.setValue(localOption.attributes("value"));
+    await buttonsWith(wrapper, "combos.addComponent")[0].trigger("click");
+    await nextTick();
+
+    // Saving the combo persists the component first, then the combo with the
+    // resolved backend id.
+    await exactButton(wrapper, "common.save")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    const calls = dishUpsertMock.mock.calls;
+    expect(calls[1][0].name).toBe("Local Soup");
+    expect(calls[2][0].name).toBe("Soup");
+    expect(calls[2][0].combo_components[0].component_id).toBe(99);
+  });
+
+  // ── A3-19: bulk price scope note + translated error ─────────────────────
+  it("A3-19: bulk-price modal discloses published-only scope and never shows raw backend detail", async () => {
+    dishListMock.mockResolvedValue([serverDish()]);
+    apiPatchMock.mockRejectedValue({
+      response: { data: { detail: "Something exploded on the server" } },
+    });
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    await buttonsWith(wrapper, "stepDishes.bulkPriceAdjust")[0].trigger("click");
+    await nextTick();
+    expect(wrapper.text()).toContain("stepDishes.bulkPricePublishedOnly");
+
+    await wrapper
+      .find('input[aria-label="stepDishes.bulkPriceValue"]')
+      .setValue("10");
+    await buttonsWith(wrapper, "stepDishes.bulkPricePreviewBtn")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+
+    // The shared extractor falls back to the translated generic error.
+    expect(wrapper.text()).toContain("stepDishes.bulkPriceError");
+    expect(wrapper.text()).not.toContain("Something exploded on the server");
+  });
+
+  // ── A3-20: CSV import shows skipped + per-row errors ───────────────────
+  it("A3-20: a partial CSV import shows skipped rows and per-row errors", async () => {
+    dishListMock.mockResolvedValue([
+      serverDish(),
+      serverDish({ id: 8, name: "Salad", price: 7 }),
+    ]);
+    apiPostMock.mockResolvedValue({
+      data: {
+        created_dishes: 1,
+        created_categories: 1,
+        skipped: 2,
+        errors: ["Row 3: duplicate dish name", "Row 5: bad price"],
+      },
+    });
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    await buttonsWith(wrapper, "stepDishes.csvImportBtn")[0].trigger("click");
+    await nextTick();
+    await setCsvFile(wrapper);
+    await buttonsWith(wrapper, "stepDishes.csvImportSubmit")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("stepDishes.csvImportSuccess");
+    expect(wrapper.text()).toContain(
+      'stepDishes.csvImportCreatedCategories({"count":1})'
+    );
+    expect(wrapper.text()).toContain('stepDishes.csvImportSkipped({"count":2})');
+    expect(wrapper.text()).toContain("stepDishes.csvImportErrorsTitle");
+    expect(wrapper.text()).toContain("Row 3: duplicate dish name");
+    expect(wrapper.text()).toContain("Row 5: bad price");
+  });
+
+  // ── A3-38: load failure keeps the local list + retry ───────────────────
+  it("A3-38: a failed reload keeps local dishes and offers a retry", async () => {
+    dishListMock.mockResolvedValue([serverDish()]);
+    dishUpsertMock.mockRejectedValueOnce(new Error("save failed"));
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    await openQuickAdd(wrapper);
+    await fillQuickDishName(wrapper, "New Dish");
+    await submitQuickAdd(wrapper);
+    expect(wrapper.text()).toContain("New Dish");
+
+    // The import succeeds, but the reload it triggers fails (transient).
+    dishListMock.mockRejectedValue(new Error("network down"));
+    apiPostMock.mockResolvedValue({ data: { created_dishes: 1 } });
+    await buttonsWith(wrapper, "stepDishes.csvImportBtn")[0].trigger("click");
+    await nextTick();
+    await setCsvFile(wrapper);
+    await buttonsWith(wrapper, "stepDishes.csvImportSubmit")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("New Dish");
+    expect(wrapper.text()).toContain("Soup");
+    expect(buttonsWith(wrapper, "common.retry").length).toBeGreaterThan(0);
+
+    // Retry with the server back: the list reloads and the retry goes away.
+    dishListMock.mockResolvedValue([serverDish()]);
+    await buttonsWith(wrapper, "common.retry")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Soup");
+    expect(buttonsWith(wrapper, "common.retry").length).toBe(0);
+  });
+
+  // ── A3-39: Unassigned filter chip ───────────────────────────────────────
+  it("A3-39: the unassigned strip opens a filter that renders the orphan row", async () => {
+    dishListMock.mockResolvedValue([
+      serverDish({ id: 8, name: "Orphan Soup", category: "" }),
+    ]);
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("stepDishes.unassignedWarning");
+    expect(wrapper.text()).not.toContain("Orphan Soup");
+
+    await buttonsWith(wrapper, "stepDishes.unassignedWarning")[0].trigger("click");
+    await nextTick();
+    expect(wrapper.text()).toContain("Orphan Soup");
+    expect(wrapper.text()).toContain("stepDishes.unassignedFilter");
+
+    // Toggling the chip off hides the orphan again.
+    await buttonsWith(wrapper, "stepDishes.unassignedFilter")[0].trigger("click");
+    await nextTick();
+    expect(wrapper.text()).not.toContain("Orphan Soup");
+  });
+});

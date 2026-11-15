@@ -479,6 +479,7 @@
       </button>
       <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400" role="status" aria-live="polite">{{ status }}</p>
+      <button v-if="loadFailed" type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="load">{{ t("common.retry") }}</button>
     </div>
   </div>
 </template>
@@ -513,6 +514,7 @@ const globalError = ref("");
 const saving = ref(false);
 const pausingCatId = ref(null);
 const status = ref("");
+const loadFailed = ref(false); // A3-38: load failed — local list kept, retry offered
 const search = ref("");
 const superCategoryOptions = ref([]);
 const activeSuperCategoryId = ref("");
@@ -834,14 +836,17 @@ const moveCategory = (localId, direction) => {
 };
 
 const load = async () => {
+  // A3-38: a failed load must NOT wipe the local categories + groups — a
+  // transient failure must not look like an empty menu and invite recreating
+  // categories that already exist on the server. Keep the list, show a retry.
+  loadFailed.value = false;
   try {
     const [groups, data] = await Promise.all([superCategoryApi.list(), categoryApi.list()]);
     superCategoryOptions.value = Array.isArray(groups) ? groups : [];
     const rows = Array.isArray(data) && data.length ? data.map(normalizeCategory) : [];
     categories.splice(0, categories.length, ...rows);
   } catch {
-    superCategoryOptions.value = [];
-    categories.splice(0, categories.length);
+    loadFailed.value = true;
     status.value = t("common.loadFailed");
   }
   syncActiveSuperCategory();

@@ -2334,6 +2334,13 @@ const arabicMessages = {
     "groupMaxLessThanMin": "يجب أن يكون الحد الأقصى للاختيارات مساويًا للحد الأدنى على الأقل.",
     "groupNameDuplicate": "اسم مجموعة الخيارات مكرر.",
     "groupNameRequired": "اسم مجموعة الخيارات مطلوب.",
+    "bulkPricePublishedOnly": "يتم تحديث الأطباق المنشورة فقط - لا تتغير المسودات.",
+    "comboUnsavedNote": "يمكن إضافة الأطباق غير المحفوظة أيضا - وسيتم حفظها أولا عند حفظ هذا الطبق.",
+    "csvImportCreatedCategories": "تم إنشاء {count} تصنيف (تصنيفات).",
+    "csvImportErrorsTitle": "الصفوف التي لم يتم استيرادها:",
+    "csvImportSkipped": "تم تخطي {count} صف (صفوف) (مستوردة مسبقا).",
+    "unassignedEmptyTitle": "لا توجد أطباق بلا تصنيف",
+    "unassignedFilter": "بلا تصنيف ({count})",
   },
   "combos": {
     "badge": "كومبو",
