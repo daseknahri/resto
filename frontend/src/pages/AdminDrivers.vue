@@ -121,8 +121,31 @@
       <!-- Cap note (A2-08): the list is capped at 200 rows -->
       <p v-if="driversTotal > 200" class="text-xs text-slate-500">{{ t('adminDrivers.showingFirst', { shown: drivers.length, total: driversTotal }) }}</p>
 
+      <!-- A2-21: client-side search (name/phone) + status filter over the loaded
+           list. Server-side search is out of scope for this P2; the 200-cap note
+           (A2-08) above stays visible. -->
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          v-model="searchQuery"
+          type="search"
+          class="ui-input min-w-[200px] flex-1 text-sm"
+          :placeholder="t('adminDrivers.searchPlaceholder')"
+          :aria-label="t('adminDrivers.searchPlaceholder')"
+        />
+        <select v-model="statusFilter" class="ui-input text-sm" :aria-label="t('adminDrivers.filterAll')">
+          <option value="all">{{ t('adminDrivers.filterAll') }}</option>
+          <option value="online">{{ t('adminDrivers.filterOnline') }}</option>
+          <option value="offline">{{ t('adminDrivers.filterOffline') }}</option>
+          <option value="pending">{{ t('adminDrivers.filterPending') }}</option>
+        </select>
+        <span v-if="isFiltering" class="text-xs text-slate-500 tabular-nums">{{ t('adminDrivers.filteredCount', { shown: filteredDrivers.length, total: drivers.length }) }}</span>
+      </div>
+      <div v-if="!filteredDrivers.length" class="ui-empty-state text-center p-8 space-y-1">
+        <p class="text-sm font-semibold text-slate-100">{{ t('adminDrivers.noResults') }}</p>
+      </div>
+
       <!-- Desktop table (hidden on mobile) -->
-      <div class="ui-table-wrap hidden md:block">
+      <div v-if="filteredDrivers.length" class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[640px] text-sm">
           <thead class="bg-slate-800/60 text-xs text-slate-400">
             <tr>
@@ -139,7 +162,7 @@
           </thead>
           <tbody class="divide-y divide-slate-700/40">
             <tr
-              v-for="(d, index) in sortedDrivers"
+              v-for="(d, index) in filteredDrivers"
               :key="d.id"
               class="ui-reveal cursor-pointer hover:bg-slate-800/30 transition-colors"
               :class="{ 'bg-amber-500/5': !d.approved }"
@@ -153,7 +176,8 @@
                 <span v-if="d.email" class="block text-[10px] text-slate-500 truncate">{{ d.email }}</span>
               </td>
               <td class="px-4 py-3 text-slate-400">
-                <a :href="`tel:${d.phone}`" class="hover:text-sky-400">{{ d.phone }}</a>
+                <a v-if="d.phone" :href="`tel:${d.phone}`" class="hover:text-sky-400" @click.stop>{{ d.phone }}</a>
+                <span v-else class="text-slate-600">—</span>
               </td>
               <td class="px-4 py-3 text-center">
                 <span
@@ -179,18 +203,21 @@
                   {{ d.is_online ? t('adminDrivers.statusOnline') : t('adminDrivers.statusOffline') }}
                 </span>
                 <a
-                  v-if="d.is_online && d.driver_lat && d.driver_lng"
+                  v-if="d.is_online && d.driver_lat && d.driver_lng && !isPositionStale(d)"
                   :href="`https://www.google.com/maps/search/?api=1&query=${d.driver_lat},${d.driver_lng}`"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="ms-1 text-[10px] text-sky-400 hover:text-sky-300"
                   :aria-label="t('adminDrivers.viewOnMap')"
+                  @click.stop
                 ><span aria-hidden="true">📍</span></a>
+                <span v-if="d.approved && (d.position_updated_at || d.is_online)" class="mt-1 block text-[10px] text-slate-500 tabular-nums">{{ t('adminDrivers.lastSeen', { when: lastSeenText(d) }) }}</span>
+                <span v-if="d.approved && d.is_online && isPositionStale(d)" class="mt-1 inline-block rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('adminDrivers.staleBadge') }}</span>
               </td>
               <td class="px-4 py-3 text-end tabular-nums text-slate-300">{{ d.total_jobs }}</td>
               <td class="px-4 py-3 text-end tabular-nums text-emerald-400">{{ d.completed_jobs }}</td>
               <td class="px-4 py-3 text-end">
-                <span v-if="d.avg_rating" class="text-amber-300 tabular-nums" :aria-label="t('adminDrivers.ratingLabel', { value: d.avg_rating })"><span aria-hidden="true">★</span> {{ d.avg_rating }}</span>
+                <span v-if="d.avg_rating != null" class="inline-flex items-center gap-1 text-amber-300 tabular-nums" :aria-label="t('adminDrivers.ratingLabel', { value: formatRating(d.avg_rating) })"><svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0"><path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9L10 1.5z" /></svg>{{ formatRating(d.avg_rating) }}</span>
                 <span v-else class="text-slate-600">—</span>
               </td>
               <td class="px-4 py-3 text-end tabular-nums" :class="Number(d.owed) > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'">
@@ -213,9 +240,9 @@
       </div>
 
       <!-- Mobile card list (hidden on md+) -->
-      <ul class="md:hidden space-y-2">
+      <ul v-if="filteredDrivers.length" class="md:hidden space-y-2">
         <li
-          v-for="(d, index) in sortedDrivers"
+          v-for="(d, index) in filteredDrivers"
           :key="d.id"
           class="ui-admin-card ui-reveal ui-surface-lift cursor-pointer"
           :class="{ 'border-amber-500/30 bg-amber-500/5': !d.approved }"
@@ -252,6 +279,7 @@
             </div>
           </div>
           <p class="mt-1.5 text-[10px] text-slate-600 tabular-nums">{{ formatDate(d.created_at) }}</p>
+          <p v-if="d.approved && (d.position_updated_at || d.is_online)" class="mt-0.5 text-[10px] text-slate-500 tabular-nums">{{ t('adminDrivers.lastSeen', { when: lastSeenText(d) }) }}<span v-if="d.is_online && isPositionStale(d)" class="ms-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">{{ t('adminDrivers.staleBadge') }}</span></p>
           <p v-if="showRejected && d.driver_rejection_reason" class="mt-1 text-[11px] text-slate-400">{{ t('adminDrivers.rejectedReason') }}: {{ d.driver_rejection_reason }}</p>
           <button
             v-if="showRejected"
@@ -281,6 +309,7 @@
                   <p class="ui-kicker">{{ t('adminDrivers.detailKicker') }}</p>
                   <h2 class="text-lg font-semibold text-white truncate">{{ selected.name || t('adminDrivers.unnamed') }}</h2>
                   <p class="text-xs text-slate-500 truncate">{{ selected.phone }}</p>
+                  <p v-if="selected.approved && (selected.position_updated_at || selected.is_online)" class="mt-0.5 text-[11px] text-slate-500 tabular-nums">{{ t('adminDrivers.lastSeen', { when: lastSeenText(selected) }) }}<span v-if="selected.is_online && isPositionStale(selected)" class="ms-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('adminDrivers.staleBadge') }}</span></p>
                 </div>
                 <button
                   class="ui-press shrink-0 rounded-full p-1.5 text-slate-500 hover:text-slate-300 ui-touch-target"
@@ -451,6 +480,10 @@
                       <option value="transfer">{{ t('adminDrivers.methodTransfer') }}</option>
                     </select>
                   </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input v-model="payNote" type="text" maxlength="200" class="ui-input text-sm" :placeholder="t('adminDrivers.payoutNote')" :aria-label="t('adminDrivers.payoutNote')" />
+                    <input v-model="payReference" type="text" maxlength="120" class="ui-input text-sm" :placeholder="t('adminDrivers.payoutReference')" :aria-label="t('adminDrivers.payoutReference')" />
+                  </div>
                   <button class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="paying" :aria-busy="paying" @click="submitPayout">
                     <svg v-if="paying" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0">
                       <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
@@ -463,6 +496,7 @@
                 <!-- Recent deliveries -->
                 <div class="space-y-2">
                   <p class="ui-kicker">{{ t('adminDrivers.recentDeliveries') }}</p>
+                  <p v-if="detail.deliveries.length >= historyLimit" class="text-[11px] text-slate-500">{{ t('adminDrivers.historyCapNote', { limit: historyLimit }) }}</p>
                   <p v-if="!detail.deliveries.length" class="py-2 text-center text-xs text-slate-600 italic">{{ t('adminDrivers.noneYet') }}</p>
                   <ul v-else class="space-y-1.5">
                     <li v-for="j in detail.deliveries" :key="j.order_number" class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
@@ -475,11 +509,15 @@
                 <!-- Payout history -->
                 <div class="space-y-2">
                   <p class="ui-kicker">{{ t('adminDrivers.payoutHistory') }}</p>
+                  <p v-if="detail.payouts.length >= historyLimit" class="text-[11px] text-slate-500">{{ t('adminDrivers.historyCapNote', { limit: historyLimit }) }}</p>
                   <p v-if="!detail.payouts.length" class="py-2 text-center text-xs text-slate-600 italic">{{ t('adminDrivers.noneYet') }}</p>
                   <ul v-else class="space-y-1.5">
-                    <li v-for="p in detail.payouts" :key="p.id" class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
-                      <span class="text-slate-400">{{ p.method === 'cash' ? t('adminDrivers.methodCash') : t('adminDrivers.methodTransfer') }} · {{ formatDate(p.created_at) }}</span>
-                      <span class="font-semibold tabular-nums text-slate-300">−{{ fmtMoney(p.amount) }}</span>
+                    <li v-for="p in detail.payouts" :key="p.id" class="rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
+                      <span class="flex items-center justify-between gap-2">
+                        <span class="text-slate-400">{{ p.method === 'cash' ? t('adminDrivers.methodCash') : t('adminDrivers.methodTransfer') }} · {{ formatDate(p.created_at) }}</span>
+                        <span class="font-semibold tabular-nums text-slate-300">−{{ fmtMoney(p.amount) }}</span>
+                      </span>
+                      <span v-if="p.note || p.reference" class="mt-0.5 block text-slate-500">{{ p.reference }}<span v-if="p.reference && p.note"> · </span>{{ p.note }}</span>
                     </li>
                   </ul>
                 </div>
@@ -563,6 +601,13 @@ const payoutCap = computed(() => {
   return Math.max(0, Math.min(ledger, wallet));
 });
 const payMethod = ref('cash');
+// A2-26: the earnings endpoint caps each history at the latest `limit` rows
+// (server-side, see AdminDriverEarningsView.get) — the cap note renders from it.
+const historyLimit = computed(() => Number(detail.value?.limit) || 20);
+// A2-27: note/reference recorded with the settlement (endpoint already accepts
+// both; history already returns both — the form just never sent them).
+const payNote = ref('');
+const payReference = ref('');
 const paying = ref(false);
 const payError = ref('');
 // Idempotency key for the payout POST. Generated once per payout intent and held
@@ -610,6 +655,8 @@ const openDriver = async (d) => {
     const wallet = Number(res.data.wallet_balance ?? res.data.owed);
     payAmount.value = Math.max(0, Math.min(ledger, wallet)).toFixed(2);
     payMethod.value = 'cash';
+    payNote.value = '';
+    payReference.value = '';
   } catch {
     detailError.value = t('adminDrivers.fetchError');
   } finally {
@@ -635,6 +682,8 @@ const submitPayout = async () => {
     const res = await api.post(`/admin/drivers/${selected.value.id}/payout/`, {
       amount: amount.toFixed(2),
       method: payMethod.value,
+      note: payNote.value.trim(),
+      reference: payReference.value.trim(),
       idempotency_key: payoutKey,
     });
     payoutKey = null; // settled — the next payout gets a fresh key
@@ -652,7 +701,17 @@ const submitPayout = async () => {
 
 const setApproval = async (approve) => {
   if (!selected.value || vetting.value) return;
-  if (!approve) {
+  // A2-23: approve confirms like reject does — approving grants job access and
+  // customer addresses, so it is no longer a one-click vetting decision.
+  if (approve) {
+    const okApprove = await confirm({
+      title: t('adminDrivers.approveConfirmTitle'),
+      body: t('adminDrivers.approveConfirmBody', { name: selected.value?.name || t('adminDrivers.thisDriver') }),
+      confirmLabel: t('adminDrivers.approveConfirmCta'),
+      danger: false,
+    });
+    if (!okApprove) return;
+  } else {
     const okReject = await confirm({
       title: t('adminDrivers.rejectConfirmTitle'),
       body: t('adminDrivers.rejectConfirmBody', { name: selected.value?.name || t('adminDrivers.thisDriver') }),
@@ -745,6 +804,23 @@ const sortedDrivers = computed(() =>
   [...drivers.value].sort((a, b) => (a.approved === b.approved ? 0 : a.approved ? 1 : -1))
 );
 
+// A2-21: client-side search (name/phone/email, case-insensitive) + status
+// filter over the loaded list. No pagination: the server caps at 200 rows and
+// the A2-08 cap note stays visible above the table.
+const searchQuery = ref('');
+const statusFilter = ref('all');
+const filteredDrivers = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  return sortedDrivers.value.filter((d) => {
+    if (statusFilter.value === 'online' && !d.is_online) return false;
+    if (statusFilter.value === 'offline' && d.is_online) return false;
+    if (statusFilter.value === 'pending' && d.approved) return false;
+    if (!q) return true;
+    return [d.name, d.phone, d.email].some((v) => String(v || '').toLowerCase().includes(q));
+  });
+});
+const isFiltering = computed(() => searchQuery.value.trim() !== '' || statusFilter.value !== 'all');
+
 const fetchDrivers = async () => {
   loading.value = true;
   fetchError.value = false;
@@ -763,7 +839,47 @@ const fetchDrivers = async () => {
 
 const formatDate = (iso) => {
   if (!iso) return '—';
-  return new Intl.DateTimeFormat(currentLocale.value, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(iso));
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(iso));
+  } catch {
+    return String(iso).slice(0, 10);
+  }
+};
+
+// A2-25: 1 decimal via the shared Intl path (same as fmtMoney/formatDate).
+// Returns '—' for a non-numeric value instead of throwing during render.
+const formatRating = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  try {
+    return new Intl.NumberFormat(currentLocale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return n.toFixed(1);
+  }
+};
+
+// A2-22: dispatch treats a driver position as fresh for 300 s (DriverJobListView
+// in accounts/views.py only shows GPS on offer cards inside that window), so the
+// board uses the same window for its staleness badge. No poll: the badge +
+// "last seen" are the required part; Refresh re-fetches.
+const POSITION_FRESH_MS = 5 * 60 * 1000;
+const positionAgeMs = (d) => {
+  if (!d?.position_updated_at) return null;
+  const ms = Date.now() - new Date(d.position_updated_at).getTime();
+  return Number.isNaN(ms) ? null : ms;
+};
+const isPositionStale = (d) => {
+  if (!d?.is_online) return false;
+  const age = positionAgeMs(d);
+  return age === null || age > POSITION_FRESH_MS;
+};
+const lastSeenText = (d) => {
+  const age = positionAgeMs(d);
+  if (age === null) return t('adminDrivers.lastSeenNever');
+  if (age < 60 * 1000) return t('adminDrivers.lastSeenJustNow');
+  if (age < 60 * 60 * 1000) return t('adminDrivers.lastSeenMins', { count: Math.floor(age / 60000) });
+  if (age < 24 * 60 * 60 * 1000) return t('adminDrivers.lastSeenHours', { count: Math.floor(age / 3600000) });
+  return formatDate(d.position_updated_at);
 };
 
 onMounted(fetchDrivers);

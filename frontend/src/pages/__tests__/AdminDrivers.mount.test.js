@@ -438,3 +438,272 @@ describe("AdminDrivers — car-doc expiries (A2-10)", () => {
     );
   });
 });
+
+/**
+ * MERGE NOTE (Run 8 G3b W7): append this describe block to
+ * frontend/src/pages/__tests__/AdminDrivers.mount.test.js. Reuses the file's
+ * existing URL-routed api mock, mocked useI18n (keys render as `ns.key`), the
+ * `driverRow` / `findButton` / `mountDrivers` helpers, and the A2-09-style
+ * openDriverWithEarnings helper pattern (defined locally here).
+ *
+ * The block also mocks useConfirmModal (hoisted by vitest to the top of the
+ * file, like the existing vi.mock calls): the real confirm waits on a modal
+ * component that is never mounted in these tests, so its promise would never
+ * settle. The mock resolves to the mutable `_confirmResult` so tests can
+ * drive both the accept and the cancel path. It is safe for the earlier
+ * blocks: no earlier test triggers a confirm path (payout submit / approve /
+ * reject / car-reject / re-approve are never clicked there).
+ *
+ * Covers:
+ *   A2-21 — search by name/phone + status filter over the loaded list
+ *   A2-22 — "last seen" + staleness badge (5-min dispatch freshness window);
+ *           the map pin hides when the fix is stale
+ *   A2-23 — approve confirms (cancel = no POST, accept = POST approve)
+ *   A2-24 — tel:/map links stop propagation (row click does not open the
+ *           panel); empty phone renders no tel: link
+ *   A2-25 — rating formats to 1 decimal, no hardcoded ★
+ *   A2-26 — history cap note at 20 rows (limit comes from the server)
+ *   A2-27 — payout note/reference inputs are sent and rendered in history
+ *   A2-28 — formatDate survives an invalid date (guarded formatter)
+ */
+
+// See the note above: hoisted, applies file-wide, resolves to _confirmResult.
+let _confirmResult = true;
+vi.mock("../../composables/useConfirmModal", () => ({
+  useConfirmModal: () => ({ confirm: vi.fn(async () => _confirmResult) }),
+}));
+
+describe("AdminDrivers — Run 8 G3b W7 (A2-21…A2-28)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    _confirmResult = true;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountList = async (rows) => {
+    _routes = {
+      "/admin/drivers/": {
+        data: {
+          results: rows,
+          total: rows.length,
+          limit: 200,
+          stats: { total: rows.length, online: 0, pending: 0, total_deliveries: 0 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    return wrapper;
+  };
+
+  const earningsPayload = (overrides = {}) => ({
+    driver_id: 1,
+    name: "Driver 1",
+    phone: "0612345678",
+    earned: "100.00",
+    paid: "40.00",
+    owed: "100.00",
+    wallet_balance: "100.00",
+    ledger_owed: "60.00",
+    cashout_total: "40.00",
+    limit: 20,
+    deliveries: [],
+    payouts: [],
+    ...overrides,
+  });
+
+  const openDriverWithEarnings = async (row, earnings) => {
+    _routes = {
+      "/admin/drivers/1/earnings/": { data: earnings },
+      "/admin/drivers/": {
+        data: {
+          results: [row],
+          total: 1,
+          limit: 200,
+          stats: { total: 1, online: 0, pending: 0, total_deliveries: 0 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    await wrapper.vm.openDriver(row);
+    await flushPromises();
+    return wrapper;
+  };
+
+  const minutesAgo = (n) => new Date(Date.now() - n * 60 * 1000).toISOString();
+
+  // ── A2-21 ─────────────────────────────────────────────────────────────────
+  it("search filters by name and phone; no match shows the no-results state", async () => {
+    await mountList([
+      driverRow(1, { name: "Mohamed Driver", phone: "0611111111" }),
+      driverRow(2, { name: "Sara Pending", phone: "0622222222", approved: false }),
+    ]);
+    const search = wrapper.find('input[type="search"]');
+    expect(search.exists()).toBe(true);
+    await search.setValue("sara");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Sara Pending");
+    expect(wrapper.text()).not.toContain("Mohamed Driver");
+    expect(wrapper.text()).toContain("adminDrivers.filteredCount");
+    await search.setValue("zzz-no-such-driver");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminDrivers.noResults");
+    expect(wrapper.text()).not.toContain("Sara Pending");
+  });
+
+  it("status filter keeps only online drivers", async () => {
+    await mountList([
+      driverRow(1, { name: "Online One", is_online: true }),
+      driverRow(2, { name: "Offline Two", is_online: false }),
+    ]);
+    await wrapper.find("select").setValue("online");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Online One");
+    expect(wrapper.text()).not.toContain("Offline Two");
+  });
+
+  // ── A2-22 ─────────────────────────────────────────────────────────────────
+  it("stale online driver shows the staleness badge + last seen, and no map pin", async () => {
+    await mountList([
+      driverRow(1, {
+        is_online: true,
+        driver_lat: 33.57,
+        driver_lng: -7.59,
+        position_updated_at: minutesAgo(10),
+      }),
+    ]);
+    const text = wrapper.text();
+    expect(text).toContain("adminDrivers.staleBadge");
+    expect(text).toContain("adminDrivers.lastSeenMins");
+    expect(wrapper.find('a[aria-label="adminDrivers.viewOnMap"]').exists()).toBe(false);
+  });
+
+  it("fresh online driver shows last seen as just now and keeps the map pin", async () => {
+    await mountList([
+      driverRow(1, {
+        is_online: true,
+        driver_lat: 33.57,
+        driver_lng: -7.59,
+        position_updated_at: new Date(Date.now() - 30 * 1000).toISOString(),
+      }),
+    ]);
+    const text = wrapper.text();
+    expect(text).not.toContain("adminDrivers.staleBadge");
+    expect(text).toContain("adminDrivers.lastSeenJustNow");
+    expect(wrapper.find('a[aria-label="adminDrivers.viewOnMap"]').exists()).toBe(true);
+  });
+
+  // ── A2-23 ─────────────────────────────────────────────────────────────────
+  it("approve asks for confirmation: cancel posts nothing, accept posts approve", async () => {
+    const row = driverRow(1, { approved: false });
+    await openDriverWithEarnings(row, earningsPayload());
+    _confirmResult = false;
+    await findButton(wrapper, "adminDrivers.approve").trigger("click");
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+    _confirmResult = true;
+    await findButton(wrapper, "adminDrivers.approve").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/admin/drivers/1/approve/", {});
+  });
+
+  // ── A2-24 ─────────────────────────────────────────────────────────────────
+  it("clicking the tel: link does not open the driver panel", async () => {
+    await mountList([driverRow(1, { phone: "0611111111" })]);
+    const tel = wrapper.find('a[href^="tel:"]');
+    expect(tel.exists()).toBe(true);
+    await tel.trigger("click");
+    await flushPromises();
+    expect(wrapper.vm.selected).toBeNull();
+  });
+
+  it("clicking the map link does not open the driver panel", async () => {
+    await mountList([
+      driverRow(1, {
+        is_online: true,
+        driver_lat: 33.57,
+        driver_lng: -7.59,
+        position_updated_at: new Date(Date.now() - 30 * 1000).toISOString(),
+      }),
+    ]);
+    const pin = wrapper.find('a[aria-label="adminDrivers.viewOnMap"]');
+    expect(pin.exists()).toBe(true);
+    await pin.trigger("click");
+    await flushPromises();
+    expect(wrapper.vm.selected).toBeNull();
+  });
+
+  it("empty phone renders no tel: link", async () => {
+    await mountList([driverRow(1, { phone: "" })]);
+    expect(wrapper.find('a[href^="tel:"]').exists()).toBe(false);
+  });
+
+  // ── A2-25 ─────────────────────────────────────────────────────────────────
+  it("rating renders to 1 decimal with no hardcoded star character", async () => {
+    await mountList([driverRow(1, { avg_rating: 4 })]);
+    const text = wrapper.text();
+    expect(text).toContain("4.0");
+    expect(text).not.toContain("★");
+  });
+
+  // ── A2-28 ─────────────────────────────────────────────────────────────────
+  it("an invalid created_at does not throw during render", async () => {
+    // A mount that throws inside formatDate fails here outright; the guarded
+    // formatter falls back to the raw value's first 10 chars.
+    await mountList([driverRow(1, { created_at: "not-a-date" })]);
+    expect(wrapper.text()).toContain("not-a-date");
+  });
+
+  // ── A2-26 + A2-27 ─────────────────────────────────────────────────────────
+  it("history cap note shows at 20 rows and payout note/reference render", async () => {
+    const deliveries = Array.from({ length: 20 }, (_, i) => ({
+      order_number: `ORD-${i + 1}`,
+      payout: "5.00",
+      delivered_at: "2026-01-01T10:00:00Z",
+    }));
+    const payouts = Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1,
+      amount: "10.00",
+      method: "cash",
+      reference: i === 0 ? "REF-OCT" : "",
+      note: i === 0 ? "October settlement" : "",
+      created_at: "2026-01-02T10:00:00Z",
+    }));
+    await openDriverWithEarnings(
+      driverRow(1),
+      earningsPayload({ deliveries, payouts }),
+    );
+    const text = wrapper.text();
+    expect(text).toContain("adminDrivers.historyCapNote");
+    expect(text).toContain("REF-OCT");
+    expect(text).toContain("October settlement");
+  });
+
+  it("payout submit sends the entered note and reference", async () => {
+    await openDriverWithEarnings(driverRow(1), earningsPayload());
+    await wrapper.find('input[placeholder="adminDrivers.payoutNote"]').setValue("October settlement");
+    await wrapper.find('input[placeholder="adminDrivers.payoutReference"]').setValue("REF-OCT");
+    await findButton(wrapper, "adminDrivers.payOut").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/drivers/1/payout/",
+      expect.objectContaining({
+        amount: "60.00",
+        method: "cash",
+        note: "October settlement",
+        reference: "REF-OCT",
+      }),
+    );
+  });
+});

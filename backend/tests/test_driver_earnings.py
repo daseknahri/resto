@@ -81,7 +81,7 @@ class AdminDriverEarningsPIIAuditThrottleTests(SimpleTestCase):
              patch("accounts.models.DriverPayout") as mock_dp:
             mock_cust.objects.get.return_value = driver
             mock_dj.objects.filter.return_value.order_by.return_value = []
-            mock_dp.objects.filter.return_value = []
+            mock_dp.objects.filter.return_value.order_by.return_value = []
             return self.view(req, driver_id=7)
 
     def _post(self):

@@ -8483,7 +8483,11 @@ class AdminDriverEarningsView(APIView):
             DeliveryJob.objects.filter(driver_id=driver_id, status="delivered")
             .order_by("-delivered_at")[:20]
         )
-        payouts = list(DriverPayout.objects.filter(driver_id=driver_id)[:20])
+        # Run 8 G3b A2-26: payouts had no ordering — newest first, like deliveries.
+        payouts = list(
+            DriverPayout.objects.filter(driver_id=driver_id)
+            .order_by("-created_at")[:20]
+        )
         log_admin_action(
             action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
             request=request,
@@ -8492,6 +8496,9 @@ class AdminDriverEarningsView(APIView):
         )
         return Response({
             "driver_id": driver.id,
+            # Run 8 G3b A2-26: deliveries + payouts are each capped at the latest
+            # `limit` rows; the panel renders the cap note from this value.
+            "limit": 20,
             "name": driver.name or "",
             "phone": driver.phone or "",
             "earned": str(summary["earned"]),
