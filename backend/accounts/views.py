@@ -3170,6 +3170,7 @@ class AdminWalletVoucherView(APIView):
                 "amount": str(v.amount),
                 "note": v.note,
                 "is_used": v.is_used,
+                "is_revoked": v.is_revoked,
                 "used_by_name": str(v.used_by) if v.used_by else None,
                 "used_at": v.used_at.isoformat() if v.used_at else None,
                 "expires_at": v.expires_at.isoformat() if v.expires_at else None,
@@ -3205,6 +3206,8 @@ class AdminWalletVoucherView(APIView):
         # Accept either an ISO datetime string (expires_at) or a day count (expires_days)
         expires_at_raw = request.data.get("expires_at")
         expires_days = request.data.get("expires_days")
+        # Run 8 G3a A-21: a voucher expiring in the past is useless — reject it
+        # instead of minting a dead voucher (previously accepted silently).
         if expires_at_raw:
             from django.utils.dateparse import parse_datetime
             expires_at = parse_datetime(str(expires_at_raw))
@@ -3216,11 +3219,23 @@ class AdminWalletVoucherView(APIView):
                 )
             if _tz.is_naive(expires_at):
                 expires_at = _tz.make_aware(expires_at)
-        elif expires_days:
+            if expires_at <= _tz.now():
+                return Response(
+                    {"detail": "expires_at must be in the future."}, status=status.HTTP_400_BAD_REQUEST
+                )
+        elif expires_days is not None and str(expires_days) != "":
             try:
-                expires_at = _tz.now() + datetime.timedelta(days=int(expires_days))
+                days = int(expires_days)
             except (ValueError, TypeError):
-                pass
+                return Response(
+                    {"detail": "expires_days must be a whole number of days."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if days <= 0:
+                return Response(
+                    {"detail": "expires_days must be at least 1."}, status=status.HTTP_400_BAD_REQUEST
+                )
+            expires_at = _tz.now() + datetime.timedelta(days=days)
 
         # OPS / OWNER-9: voucher batches are real platform money. A flaky network retry
         # or a double-submit must not mint duplicate batches. Dedup has two layers:
@@ -3306,6 +3321,52 @@ class AdminWalletVoucherView(APIView):
             # Warm the cache so an exact replay returns the same codes without a DB hit.
             _idem_cache.set(idem_result_key, payload, ADMIN_VOUCHER_IDEM_TTL)
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class AdminWalletVoucherRevokeView(APIView):
+    """POST /api/admin/wallet/vouchers/<int:voucher_id>/revoke/ — IsPlatformAdmin.
+
+    Run 8 G3a A-20: revoke an unused voucher so it can never be redeemed (e.g.
+    a leaked batch). 404 when missing; 409 when already used or already revoked
+    (a used voucher is spent money — revoking it changes nothing; a revoked one
+    needs no second revoke). Audit-logged with VOUCHER_REVOKED.
+    """
+
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, voucher_id, *args, **kwargs):
+        from sales.audit import log_admin_action
+        from sales.models import AdminAuditLog
+        from .models import WalletVoucher
+
+        try:
+            voucher = WalletVoucher.objects.get(pk=voucher_id)
+        except WalletVoucher.DoesNotExist:
+            return Response({"detail": "Voucher not found.", "code": "not_found"}, status=404)
+        if voucher.is_used:
+            return Response(
+                {"detail": "Voucher has already been used and cannot be revoked.", "code": "already_used"},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if voucher.is_revoked:
+            return Response(
+                {"detail": "Voucher has already been revoked.", "code": "already_revoked"},
+                status=status.HTTP_409_CONFLICT,
+            )
+        voucher.is_revoked = True
+        voucher.save(update_fields=["is_revoked"])
+        log_admin_action(
+            action=AdminAuditLog.Actions.VOUCHER_REVOKED,
+            request=request,
+            target_repr=f"voucher:{voucher.code}",
+            metadata={"amount": str(voucher.amount)},
+        )
+        return Response({
+            "id": voucher.id,
+            "code": voucher.code,
+            "amount": str(voucher.amount),
+            "is_revoked": True,
+        })
 
 
 # OPS-5g: per-actor failed-attempt lockout for voucher redemption. A voucher code is a
@@ -3398,6 +3459,10 @@ class CustomerWalletRedeemVoucherView(APIView):
                 # An invalid (nonexistent) code is the brute-force signal — count it.
                 _record_failure()
                 return Response({"detail": "Invalid voucher code."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Run 8 G3a A-20: a revoked voucher is dead even if never used.
+            if voucher.is_revoked:
+                return Response({"detail": "This voucher has been revoked."}, status=status.HTTP_400_BAD_REQUEST)
 
             if voucher.is_used:
                 # Idempotent replay: if THIS customer already redeemed it (e.g. a

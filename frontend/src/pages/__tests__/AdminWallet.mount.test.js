@@ -79,6 +79,9 @@ vi.mock("../../lib/adminApi", () => ({
   },
 }));
 
+import api from "../../lib/api";
+import adminApi from "../../lib/adminApi";
+import { useConfirmModal } from "../../composables/useConfirmModal";
 import AdminWallet from "../AdminWallet.vue";
 
 const mountWallet = () => shallowMount(AdminWallet);
@@ -170,5 +173,113 @@ describe("AdminWallet — mount smoke", () => {
     expect(text).toContain("125.50");
     // Voucher record rendered from its fetched payload (own-template list v-for + status label).
     expect(text).toContain("ABCD-1234");
+  });
+});
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+const findButtons = (wrapper, text) =>
+  wrapper.findAll("button").filter((b) => b.text() === text);
+
+const voucher = (overrides = {}) => ({
+  id: 1,
+  code: "ABCD-1234",
+  amount: "50.00",
+  note: "",
+  is_used: false,
+  is_revoked: false,
+  used_by_name: null,
+  used_at: null,
+  expires_at: null,
+  created_at: "2026-01-01T00:00:00Z",
+  ...overrides,
+});
+
+describe("AdminWallet — vouchers + settings load (A-19/A-20/A-21)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // Re-apply the default URL-routed implementations (a test below overrides
+    // adminApi.get; clearAllMocks does not restore implementations).
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    adminApi.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountWithVouchers = async (vouchers) => {
+    _routes = { "/admin/wallet/vouchers/": { data: { vouchers } } };
+    wrapper = mountWallet();
+    await flushPromises();
+    return wrapper;
+  };
+
+  // A-20: an expired-unused voucher no longer shows the green "Active" pill, and
+  // a revoked voucher shows "Revoked" with no Revoke button.
+  it("voucher rows show Expired / Revoked / Active states (no fake Active)", async () => {
+    await mountWithVouchers([
+      voucher({ id: 1, code: "EXP-1", expires_at: "2020-01-01T00:00:00Z" }),
+      voucher({ id: 2, code: "REV-1", is_revoked: true }),
+      voucher({ id: 3, code: "ACT-1", expires_at: "2030-01-01T00:00:00Z" }),
+    ]);
+    const text = wrapper.text();
+    expect(text).toContain("adminWallet.voucherExpired");
+    expect(text).toContain("adminWallet.voucherRevoked");
+    expect(text).toContain("adminWallet.voucherActive");
+    // Revoke is offered for the expired + active vouchers, not the revoked one.
+    expect(findButtons(wrapper, "adminWallet.voucherRevoke")).toHaveLength(2);
+  });
+
+  // A-20: Revoke confirms, POSTs to the revoke endpoint, flips the row.
+  it("revoke posts to the revoke endpoint and flips the row to Revoked", async () => {
+    await mountWithVouchers([voucher({ id: 7, code: "ACT-1", expires_at: "2030-01-01T00:00:00Z" })]);
+    api.post.mockResolvedValue({ data: { id: 7, code: "ACT-1", is_revoked: true } });
+    await findButtons(wrapper, "adminWallet.voucherRevoke")[0].trigger("click");
+    const { _settle } = useConfirmModal();
+    _settle(true);
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/admin/wallet/vouchers/7/revoke/", {});
+    expect(wrapper.text()).toContain("adminWallet.voucherRevoked");
+    expect(findButtons(wrapper, "adminWallet.voucherRevoke")).toHaveLength(0);
+  });
+
+  // A-21: a past expiry is rejected client-side before the confirm modal / API.
+  it("past voucher expiry is rejected without calling the API", async () => {
+    await mountWithVouchers([]);
+    wrapper.vm.voucherAmount = "20";
+    wrapper.vm.voucherExpiry = "2020-01-01T10:00";
+    await findButton(wrapper, "adminWallet.voucherGenerate").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminWallet.voucherExpiryPast");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  // A-19: a failed settings load surfaces an inline error + retry (not a blank field).
+  it("settings load failure shows an inline error with a working retry", async () => {
+    adminApi.get.mockImplementation((url) =>
+      url.includes("/admin/settings/")
+        ? Promise.reject(new Error("settings down"))
+        : Promise.resolve(_match(url)),
+    );
+    wrapper = mountWallet();
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminWallet.settingsLoadFailed");
+    expect(findButton(wrapper, "common.retry")).toBeTruthy();
+
+    // Restore success and retry — the banner clears.
+    adminApi.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    _routes["/admin/settings/"] = { data: { wallet_charge_approval_threshold: "500.00" } };
+    await findButton(wrapper, "common.retry").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("adminWallet.settingsLoadFailed");
   });
 });

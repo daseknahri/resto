@@ -545,6 +545,9 @@ class WalletVoucher(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     note = models.CharField(max_length=200, blank=True)
     is_used = models.BooleanField(default=False, db_index=True)
+    # Run 8 G3a A-20: an admin can revoke a voucher (e.g. a leaked batch) so it
+    # can never be redeemed. Revoked is distinct from used/expired.
+    is_revoked = models.BooleanField(default=False, db_index=True)
     used_by = models.ForeignKey(
         Customer,
         on_delete=models.SET_NULL,

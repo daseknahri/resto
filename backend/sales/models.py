@@ -343,6 +343,8 @@ class AdminAuditLog(models.Model):
         TENANT_FLOAT_FUNDED = "tenant_float_funded", "Tenant float funded"
         CUSTOMER_WALLET_CREDITED = "customer_wallet_credited", "Customer wallet credited"
         VOUCHER_ISSUED = "voucher_issued", "Wallet voucher issued"
+        # Run 8 G3a A-20: admin voucher revoke.
+        VOUCHER_REVOKED = "voucher_revoked", "Wallet voucher revoked"
         DRIVER_APPROVED = "driver_approved", "Driver approved"
         DRIVER_REJECTED = "driver_rejected", "Driver rejected"
         DRIVER_PAYOUT_RECORDED = "driver_payout_recorded", "Driver payout recorded"

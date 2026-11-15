@@ -230,15 +230,31 @@
         </div>
         <div v-else-if="!vouchers.length" class="py-3 text-center text-xs text-slate-500 italic">{{ t('adminWallet.voucherListEmpty') }}</div>
         <ul v-else class="divide-y divide-slate-800/70 overflow-hidden rounded-xl border border-slate-700/60">
-          <li v-for="v in vouchers" :key="v.code" class="flex items-center justify-between gap-3 bg-slate-900/40 px-3 py-2 text-xs">
-            <div class="flex min-w-0 items-center gap-2.5">
-              <span class="font-mono text-slate-200">{{ v.code }}</span>
-              <span class="tabular-nums text-emerald-300">{{ fmtBalance(v.amount) }}</span>
+          <li v-for="v in vouchers" :key="v.code" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-slate-900/40 px-3 py-2 text-xs">
+            <div class="flex min-w-0 flex-col gap-0.5">
+              <div class="flex items-center gap-2.5">
+                <span class="font-mono text-slate-200">{{ v.code }}</span>
+                <span class="tabular-nums text-emerald-300">{{ fmtBalance(v.amount) }}</span>
+              </div>
+              <p class="text-[11px] text-slate-500">
+                <span v-if="v.expires_at">{{ t('adminWallet.voucherExpires') }}: {{ fmtDate(v.expires_at) }}</span>
+                <span v-if="v.used_at"> · {{ t('adminWallet.voucherUsedAt') }}: {{ fmtDate(v.used_at) }}</span>
+                <span v-if="!v.expires_at && !v.used_at">{{ t('adminWallet.voucherNoExpiry') }}</span>
+              </p>
             </div>
-            <span
-              class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              :class="v.is_used ? 'bg-slate-700/60 text-slate-400' : 'bg-emerald-500/12 text-emerald-300'"
-            >{{ v.is_used ? t('adminWallet.voucherUsed', { who: v.used_by_name || '' }) : t('adminWallet.voucherActive') }}</span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="voucherPillClass(v)"
+              >{{ voucherStatusLabel(v) }}</span>
+              <button
+                v-if="!v.is_used && !v.is_revoked"
+                type="button"
+                class="rounded-lg border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/10 ui-press disabled:opacity-50"
+                :disabled="revokingVoucherId === v.id"
+                @click="revokeVoucher(v)"
+              >{{ t('adminWallet.voucherRevoke') }}</button>
+            </div>
           </li>
         </ul>
       </div>
@@ -334,6 +350,14 @@
         >{{ settingsSaving ? t('adminWallet.thresholdSaving') : t('adminWallet.thresholdSave') }}</button>
       </div>
       <p class="text-[11px] text-slate-500">{{ t('adminWallet.thresholdHint') }}</p>
+      <div v-if="settingsLoadError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <p class="flex-1 text-sm text-red-300">{{ t('adminWallet.settingsLoadFailed') }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+          @click="fetchSettings"
+        >{{ t('common.retry') }}</button>
+      </div>
       <div v-if="settingsError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ settingsError }}</p>
@@ -467,6 +491,12 @@ const generateVouchers = async () => {
     voucherGenError.value = t('adminWallet.voucherAmountRequired');
     return;
   }
+  // A-21: a past expiry mints a dead voucher — reject it up front (the server
+  // 400s too, but the admin should see the mistake before confirming).
+  if (voucherExpiry.value && new Date(voucherExpiry.value) <= new Date()) {
+    voucherGenError.value = t('adminWallet.voucherExpiryPast');
+    return;
+  }
   const count = Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50);
   const okVouchers = await confirm({
     title: t('adminWallet.voucherConfirmTitle'),
@@ -591,6 +621,62 @@ let searchTimer = null;
 const fmtBalance = (bal) =>
   formatCurrencyString(currentLocale.value, bal, 'MAD', { maximumFractionDigits: 2 });
 
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+  } catch {
+    return String(iso).slice(0, 16);
+  }
+};
+
+// A-20: a voucher's display state — revoked beats used beats expired beats active.
+// An expired-but-unused voucher used to render the green "Active" pill.
+const voucherStatus = (v) => {
+  if (v.is_revoked) return 'revoked';
+  if (v.is_used) return 'used';
+  if (v.expires_at && new Date(v.expires_at) <= new Date()) return 'expired';
+  return 'active';
+};
+
+const voucherStatusLabel = (v) => {
+  const st = voucherStatus(v);
+  if (st === 'revoked') return t('adminWallet.voucherRevoked');
+  if (st === 'used') return t('adminWallet.voucherUsed', { who: v.used_by_name || '' });
+  if (st === 'expired') return t('adminWallet.voucherExpired');
+  return t('adminWallet.voucherActive');
+};
+
+const voucherPillClass = (v) => {
+  const st = voucherStatus(v);
+  if (st === 'used') return 'bg-slate-700/60 text-slate-400';
+  if (st === 'expired') return 'bg-amber-500/12 text-amber-300';
+  if (st === 'revoked') return 'bg-red-500/12 text-red-300';
+  return 'bg-emerald-500/12 text-emerald-300';
+};
+
+const revokingVoucherId = ref(null);
+
+const revokeVoucher = async (v) => {
+  const ok = await confirm({
+    title: t('adminWallet.voucherRevokeTitle', { code: v.code }),
+    body: t('adminWallet.voucherRevokeBody', { amount: fmtBalance(v.amount) }),
+    confirmLabel: t('adminWallet.voucherRevoke'),
+    danger: true,
+  });
+  if (!ok) return;
+  revokingVoucherId.value = v.id;
+  try {
+    await api.post(`/admin/wallet/vouchers/${v.id}/revoke/`, {});
+    v.is_revoked = true;
+    toast.show(t('adminWallet.voucherRevokedDone'), 'success');
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminWallet.voucherRevokeFailed'), 'error');
+  } finally {
+    revokingVoucherId.value = null;
+  }
+};
+
 const fetch = async () => {
   loading.value = true;
   fetchError.value = false;
@@ -671,12 +757,18 @@ const issueBonus = async () => {
 const threshold = ref('');
 const settingsSaving = ref(false);
 const settingsError = ref('');
+const settingsLoadError = ref(false);
 
 const fetchSettings = async () => {
+  // A-19: a failed settings load used to leave the threshold blank (looking
+  // "unset"). Surface it with a retry, like the fares load error on AdminRides.
+  settingsLoadError.value = false;
   try {
     const res = await adminApi.get('/admin/settings/');
     threshold.value = res.data?.wallet_charge_approval_threshold ?? '';
-  } catch { /* non-fatal — leave the field blank */ }
+  } catch {
+    settingsLoadError.value = true;
+  }
 };
 
 const saveSettings = async () => {
