@@ -154,14 +154,15 @@
            who never open a drawer see nothing (default-preserving). -->
       <div
         v-if="drawerLoaded"
-        class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition-colors"
+        class="space-y-3 rounded-2xl border px-4 py-3 transition-colors"
         :class="drawerOpen
           ? 'border-emerald-500/30 bg-emerald-500/5'
           : 'border-slate-700/50 bg-slate-950/30'"
         role="region"
         :aria-label="t('cashDrawer.cardTitle')"
       >
-        <div class="min-w-0 space-y-0.5">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0 space-y-0.5">
           <p class="text-xs font-semibold" :class="drawerOpen ? 'text-emerald-200' : 'text-slate-400'">
             {{ drawerOpen ? t('cashDrawer.statusOpen') : t('cashDrawer.statusClosed') }}
           </p>
@@ -190,6 +191,26 @@
             {{ openingDrawer ? t('common.loading') : t('cashDrawer.openDrawer') }}
           </button>
         </div>
+        </div>
+        <!-- B-02: opening float is entered here (was hardcoded "0.00" in the
+             POST). Prefilled with the last session's float; the hint shows the
+             recommended float (same source — see recommendedFloat). -->
+        <div v-if="!drawerOpen" class="space-y-1 border-t border-slate-800/70 pt-3">
+          <label for="drawer-opening-float" class="block text-xs font-semibold text-slate-400">{{ t('cashDrawer.openingFloat') }}</label>
+          <input
+            id="drawer-opening-float"
+            v-model="openingFloatInput"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            :aria-label="t('cashDrawer.openingFloat')"
+            :disabled="openingDrawer"
+            class="ui-input w-40 text-sm tabular-nums"
+            @keyup.enter="handleOpenDrawer"
+          />
+          <p v-if="recommendedFloat !== null" class="text-[11px] text-slate-500 tabular-nums">{{ t('cashDrawer.recommendedFloatHint', { amount: fmtDrawerMoney(recommendedFloat) }) }}</p>
+        </div>
       </div>
 
       <!-- Today's snapshot — realized figures from the /owner/dashboard/ aggregate ─ -->
@@ -200,6 +221,20 @@
           <div class="h-7 w-20 rounded-lg bg-slate-700/40" />
         </div>
       </div>
+
+      <!-- B-03: a failed /owner/dashboard/ shows Retry instead of a false
+           0 / MAD 0 day (same tileError button as the ratings/reservations
+           tiles). The v-else strip below is unchanged, so a genuinely empty
+           day still renders exactly as before. -->
+      <button
+        v-else-if="revenueSummaryError"
+        type="button"
+        class="flex w-full items-center gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/5 px-4 py-3 text-start transition hover:bg-red-500/10"
+        @click="fetchDashboardSummary"
+      >
+        <AppIcon name="info" class="h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <span class="text-xs font-semibold text-red-300">{{ t('ownerHome.tileError') }}</span>
+      </button>
 
       <!-- Today's snapshot — unified stat strip with hairline dividers -->
       <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" role="region" :aria-label="t('ownerHome.todayOrders')">
@@ -731,15 +766,22 @@ const fetchTodayReservations = async () => {
 // (incl. COMPLETED) — the exact same aggregate OwnerAnalytics reads.
 const revenueSummary = ref(null);
 const revenueSummaryLoading = ref(true);
+// B-03: flag a failed /owner/dashboard/ instead of rendering a real-looking
+// zero-revenue day — mirrors ratingsError / reservationsError above.
+const revenueSummaryError = ref(false);
 
 const fetchDashboardSummary = async () => {
+  revenueSummaryError.value = false;
+  revenueSummaryLoading.value = true;
   try {
     // days:7 comfortably spans today + yesterday in any tenant timezone and
     // matches OwnerAnalytics' default period window.
     const { data } = await api.get("/owner/dashboard/", { params: { days: 7 }, timeout: 8000 });
     if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
   } catch {
-    // Leave revenueSummary as-is → the KPI tiles fall back to 0 / — gracefully.
+    // Leave revenueSummary as-is; the snapshot strip shows the Retry tile
+    // instead of the stale/zero figures.
+    revenueSummaryError.value = true;
   } finally {
     revenueSummaryLoading.value = false;
   }
@@ -1145,6 +1187,19 @@ const drawerLoaded = ref(false);
 const drawerOpen = ref(false);
 const drawerSession = ref(null);
 const openingDrawer = ref(false);
+// B-02: the opening float the owner types (was hardcoded "0.00" in the POST).
+const openingFloatInput = ref("0.00");
+// Most recent session's opening float, from /owner/drawer/history/ (today's
+// sessions, newest first). Null until that best-effort fetch returns one.
+const lastFloat = ref(null);
+// Recommended float for the hint: the drawer endpoints expose no separate
+// `expected_float` field (_drawer_session_dict carries opening_float /
+// expected_total / counted_total only), so the recommendation IS the last
+// session's opening float — reuse what the drawer ran on before.
+const recommendedFloat = computed(() => {
+  const v = Number(lastFloat.value);
+  return Number.isFinite(v) && v >= 0 ? v : null;
+});
 
 const fmtDrawerMoney = (val) => {
   const curr = order.orders.find((o) => o.currency)?.currency || "MAD";
@@ -1164,13 +1219,37 @@ const fetchDrawerState = async () => {
   } catch {
     // Silently ignore — the drawer card simply won't appear (no regression).
   }
+  // B-02 (best-effort, non-fatal): prefill the opening-float input with the
+  // last session's float so a new day starts from what the drawer ran on.
+  // History is today's sessions newest-first; a failure leaves the "0.00"
+  // default untouched. A value the owner already typed is never overwritten.
+  try {
+    const { data } = await api.get("/owner/drawer/history/", { timeout: 5000 });
+    const last = data?.sessions?.[0];
+    const v = Number(last?.opening_float);
+    if (Number.isFinite(v) && v >= 0) {
+      lastFloat.value = v;
+      if (openingFloatInput.value === "0.00") openingFloatInput.value = v.toFixed(2);
+    }
+  } catch {
+    // Non-fatal: the input keeps its default and no hint is shown.
+  }
 };
 
 const handleOpenDrawer = async () => {
   if (openingDrawer.value) return;
+  // B-02: post the float the owner entered (was hardcoded "0.00"). A
+  // non-numeric / negative value is refused client-side — the backend 400s
+  // it too — instead of posting a wrong float. Everything else below is
+  // unchanged.
+  const floatVal = Number(openingFloatInput.value);
+  if (!Number.isFinite(floatVal) || floatVal < 0) {
+    toast.show(t("cashDrawer.openFloatInvalid"), "error");
+    return;
+  }
   openingDrawer.value = true;
   try {
-    const { data } = await api.post("/owner/drawer/open/", { opening_float: "0.00" });
+    const { data } = await api.post("/owner/drawer/open/", { opening_float: floatVal.toFixed(2) });
     drawerOpen.value = true;
     drawerSession.value = data;
     drawerLoaded.value = true;

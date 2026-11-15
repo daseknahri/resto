@@ -6356,6 +6356,8 @@ cashDrawer: {
   alreadyOpen: "A drawer session is already open.",
   reasonPlaceholder: "e.g. Milk supplier, Petty cash…",
   noteLabel: "Note (optional)",
+  openFloatInvalid: "Enter a valid opening float (0 or more).",
+  recommendedFloatHint: "Recommended float: {amount}",
 },
 shiftClose: {
   navLabel: "Shift close",

@@ -6452,6 +6452,8 @@ Object.assign(arabicMessages, {
     alreadyOpen: "\u062c\u0644\u0633\u0629 \u062f\u0631\u062c \u0645\u0641\u062a\u0648\u062d\u0629 \u0628\u0627\u0644\u0641\u0639\u0644.",
     reasonPlaceholder: "\u0645\u062b\u0644: \u0645\u0648\u0631\u062f \u0627\u0644\u062d\u0644\u064a\u0628\u060c \u0645\u0635\u0631\u0648\u0641\u0627\u062a \u0635\u063a\u064a\u0631\u0629\u2026",
     noteLabel: "\u0645\u0644\u0627\u062d\u0638\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
+    "openFloatInvalid": "أدخل رصيد بداية صحيحًا (0 أو أكثر).",
+    "recommendedFloatHint": "الرصيد الموصى به: {amount}",
   },
   shiftClose: {
     navLabel: "\u0625\u063a\u0644\u0627\u0642 \u0627\u0644\u0648\u0631\u062f\u064a\u0629",

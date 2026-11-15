@@ -6343,6 +6343,8 @@ cashDrawer: {
   alreadyOpen: "Une session de caisse est deja ouverte.",
   reasonPlaceholder: "ex. Fournisseur lait, Petite caisse...",
   noteLabel: "Note (optionnel)",
+  openFloatInvalid: "Saisissez un fonds de caisse valide (0 ou plus).",
+  recommendedFloatHint: "Fonds recommande : {amount}",
 },
 shiftClose: {
   navLabel: "Cloture de service",

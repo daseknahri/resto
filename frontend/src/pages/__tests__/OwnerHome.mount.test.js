@@ -272,3 +272,190 @@ describe("OwnerHome — mount smoke", () => {
     expect(text).toContain("1111.11"); // marketplace net (revenue − commission)
   });
 });
+
+// ── S1-B (Run 8 G4a): B-02 drawer float input + B-03 revenue error tile ─────
+// Appended — the four tests above are untouched. Imports below are hoisted by
+// ESM, so `api` (the mocked lib/api) is usable here despite sitting at the
+// end of the file.
+import api from "../../lib/api";
+
+describe("OwnerHome — S1-B: drawer float (B-02) + revenue error (B-03)", () => {
+  let wrapper;
+
+  // Closed-session drawer state: /current/ returns a session object (so the
+  // card renders: drawerLoaded requires open || session) with the drawer
+  // closed, plus a history whose newest session opened with a 120.00 float.
+  const drawerRoutes = () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/owner/drawer/current/": {
+        data: { open: false, session: { id: 7, status: "closed", opening_float: "120.00" } },
+      },
+      "/owner/drawer/history/": {
+        data: { sessions: [{ id: 7, status: "closed", opening_float: "120.00" }] },
+      },
+    };
+  };
+
+  const openDrawerButton = () =>
+    wrapper.findAll("button").find((b) => b.text().includes("cashDrawer.openDrawer"));
+
+  const errorTileButton = () =>
+    wrapper.findAll("button").find((b) => b.text().includes("ownerHome.tileError"));
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // Restore the URL-routed default get (a B-03 test below overrides it).
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  // ── B-02 ─────────────────────────────────────────────────────────────────
+  it("prefills the opening-float input with the last float + shows the recommended-float hint", async () => {
+    drawerRoutes();
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises(); // drain the nextTick-deferred drawer/history batch
+    await flushPromises();
+
+    const input = wrapper.find("#drawer-opening-float");
+    expect(input.exists()).toBe(true);
+    // Number() — a type="number" input may normalise "120.00" to "120".
+    expect(Number(input.element.value)).toBe(120);
+    // t() is mocked to echo the key (+ params), so assert the key + the
+    // formatted recommended amount render together.
+    expect(wrapper.text()).toContain("cashDrawer.recommendedFloatHint");
+    expect(wrapper.text()).toContain("120");
+  });
+
+  it("posts the entered float when opening the drawer (not hardcoded 0.00)", async () => {
+    drawerRoutes();
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    // setValue on the input (awaits a tick) — never set wrapper.vm state and
+    // click a :disabled-bound button in the same tick (G3b lesson).
+    await wrapper.find("#drawer-opening-float").setValue("75.50");
+    await openDrawerButton().trigger("click");
+    await flushPromises();
+
+    const openCall = api.post.mock.calls.find(([url]) => url.includes("/owner/drawer/open/"));
+    expect(openCall).toBeDefined();
+    expect(openCall[1]).toEqual({ opening_float: "75.50" });
+  });
+
+  it("refuses a negative float client-side and posts nothing", async () => {
+    drawerRoutes();
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    await wrapper.find("#drawer-opening-float").setValue("-5");
+    await openDrawerButton().trigger("click");
+    await flushPromises();
+
+    expect(api.post.mock.calls.filter(([url]) => url.includes("/owner/drawer/open/"))).toHaveLength(0);
+  });
+
+  // ── B-03 ─────────────────────────────────────────────────────────────────
+  it("shows the Retry tile (not a false 0 / MAD 0 strip) when /owner/dashboard/ fails", async () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+    };
+    api.get.mockImplementation((url) =>
+      url.includes("/owner/dashboard/")
+        ? Promise.reject(new Error("dashboard down"))
+        : Promise.resolve(_match(url)),
+    );
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises(); // drain the nextTick-deferred dashboard batch
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("ownerHome.tileError");
+    expect(errorTileButton().exists()).toBe(true);
+    // The snapshot strip is replaced by the error tile — no revenue tile.
+    expect(text).not.toContain("ownerHome.todayRevenue");
+  });
+
+  it("retries the dashboard from the error tile and renders the strip on success", async () => {
+    const tz = "Africa/Casablanca";
+    const dayStr = (d) =>
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    const now = new Date();
+    const yst = new Date();
+    yst.setDate(yst.getDate() - 1);
+
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true, timezone: tz } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+    };
+    api.get.mockImplementation((url) =>
+      url.includes("/owner/dashboard/")
+        ? Promise.reject(new Error("dashboard down"))
+        : Promise.resolve(_match(url)),
+    );
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.text()).toContain("ownerHome.tileError");
+
+    // Retry with the dashboard healthy again.
+    _routes["/owner/dashboard/"] = {
+      data: {
+        revenue_summary: {
+          currency: "MAD",
+          daily: [
+            { date: dayStr(yst), revenue: 50000, orders: 40 },
+            { date: dayStr(now), revenue: 98765, orders: 42 },
+          ],
+        },
+      },
+    };
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    await errorTileButton().trigger("click");
+    await flushPromises();
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).not.toContain("ownerHome.tileError");
+    expect(text).toContain("ownerHome.todayRevenue");
+    expect(text).toContain("98765");
+    expect(text).toContain("42");
+  });
+
+  it("renders the strip (no error tile) when the dashboard succeeds with no figures", async () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/owner/dashboard/": { data: {} },
+    };
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("ownerHome.todayRevenue");
+    expect(text).not.toContain("ownerHome.tileError");
+  });
+});
