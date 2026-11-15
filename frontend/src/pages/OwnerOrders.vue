@@ -1994,8 +1994,8 @@ const formatTime = (iso) => {
   const now = new Date();
   const diffMin = Math.floor((now - d) / 60000);
   if (diffMin < 1) return t("ownerOrders.justNow");
-  if (diffMin < 60) return `${diffMin}m`;
-  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+  if (diffMin < 60) return t("ownerOrders.minutesShort", { n: diffMin });
+  if (diffMin < 1440) return t("ownerOrders.hoursMinutes", { h: Math.floor(diffMin / 60), m: diffMin % 60 });
   return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short" }).format(d);
 };
 
