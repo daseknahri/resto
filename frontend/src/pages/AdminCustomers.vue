@@ -341,6 +341,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
@@ -353,6 +354,7 @@ import { useToastStore } from '../stores/toast';
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const toast = useToastStore();
+const route = useRoute(); // A-22: ?customer=<id> deep-link auto-opens the detail slide-over
 
 const loading = ref(true);
 const fetchError = ref(false);
@@ -583,5 +585,19 @@ const toggleDriver = async () => {
   }
 };
 
-onMounted(fetchCustomers);
+// A-22: deep-link from AdminWallet (?customer=<id>) auto-opens that customer's
+// detail slide-over. The id is validated; an unknown id still opens the panel
+// (openDetail fetches by id, so a stale link shows the fetch error, not a crash).
+const openFromQuery = () => {
+  const raw = route.query?.customer;
+  const id = Number(Array.isArray(raw) ? raw[0] : raw);
+  if (!raw || !Number.isInteger(id) || id <= 0) return;
+  const row = customers.value.find((c) => c.id === id);
+  openDetail(row || { id });
+};
+
+onMounted(async () => {
+  await fetchCustomers();
+  openFromQuery();
+});
 </script>

@@ -4471,6 +4471,10 @@ Object.assign(arabicMessages, {
   voucherRevokedDone: "تم إلغاء القسيمة.",
   voucherRevokeFailed: "تعذّر إلغاء القسيمة.",
   settingsLoadFailed: "تعذّر تحميل الإعدادات.",
+    "fundTenantsTruncated": "يتم عرض أول 200 مطعم.",
+    "viewDetails": "عرض التفاصيل",
+    "voucherCopyFailed": "تعذّر نسخ الرموز. انسخها يدويًا.",
+    "voucherQtyClamped": "تم تعديل الكمية من {requested} إلى {count}؛ الحد الأقصى من 1 إلى 50 قسيمة لكل دفعة.",
   },
   ownerCustomers: {
     kicker: "\u062f\u0644\u064a\u0644 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",

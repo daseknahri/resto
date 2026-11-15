@@ -23,9 +23,8 @@
  *      module, one URL-routed matcher. onMounted GETs /admin/customers/ (with a
  *      `{ params }` arg the matcher ignores). Default `{ data: {} }` → `results`
  *      undefined → `customers = []` → the empty-state branch renders.
- *   2. The page imports NOTHING from vue-router (`grep "from 'vue-router'"` → no
- *      match) and renders NO <router-link> — so there is no router module to mock and
- *      no vi.hoisted RouterLink stub is needed.
+ *   2. The page imports useRoute from vue-router (A-22 deep-link; mocked in the
+ *      block below) and renders NO <router-link>, so no RouterLink stub is needed.
  *
  * Left REAL (jsdom-safe, and none touched at mount):
  *   - the toast store (real Pinia).
@@ -323,5 +322,82 @@ describe("AdminCustomers — driver toggle + ledger/orders caps + tx labels (A2-
     _settle(true);
     await flushPromises();
     expect(api.patch).toHaveBeenCalledWith("/admin/customers/5/", { is_driver: false });
+  });
+});
+
+/**
+ * MERGE NOTE (Run 8 G3b, W3): append this describe block to
+ * frontend/src/pages/__tests__/AdminCustomers.mount.test.js.
+ * The page now imports `useRoute` from vue-router (A-22 deep-link), so this
+ * block adds a vue-router mock. vi.mock is hoisted, so it applies file-wide:
+ * the base smoke tests above get query {} (no auto-open) and are unaffected.
+ * The mock factory only reads `_routeQuery` from lazy closures (call time),
+ * the same TDZ-safe pattern as the file's existing `_routes` matcher.
+ *
+ * Covers:
+ *   A-22 — ?customer=<id> auto-opens that customer's detail slide-over
+ *           (row from the loaded list); no/invalid query opens nothing.
+ */
+let _routeQuery = {};
+vi.mock("vue-router", () => ({
+  useRoute: () => ({ query: _routeQuery }),
+}));
+
+describe("AdminCustomers — ?customer deep-link auto-open (A-22)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    _routeQuery = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    _routeQuery = {};
+  });
+
+  // Key order matters: _match is substring-first-match, and the list key
+  // "/admin/customers/" is a substring of the detail/orders URLs, so it goes last.
+  const mountWithQuery = async (query, detailOverrides = {}) => {
+    _routeQuery = query;
+    _routes = {
+      "/admin/customers/5/orders/": { data: { results: [], count: 0 } },
+      "/admin/customers/5/": { data: detailPayload({ id: 5, name: "Sara", ...detailOverrides }) },
+      "/admin/customers/": {
+        data: { results: [customer({ id: 5, name: "Sara" })], total: 1 },
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("?customer=5 auto-opens the detail slide-over for the listed customer", async () => {
+    await mountWithQuery({ customer: "5" });
+    expect(api.get).toHaveBeenCalledWith("/admin/customers/5/");
+    const text = wrapper.text();
+    expect(text).toContain("adminCustomers.detailKicker");
+    expect(text).toContain("Sara");
+    expect(text).toContain("120.00"); // detail wallet tile from the detail payload
+  });
+
+  it("no query param opens nothing (plain list mount)", async () => {
+    await mountWithQuery({});
+    expect(wrapper.text()).not.toContain("adminCustomers.detailKicker");
+    const detailCalls = api.get.mock.calls.filter(([url]) => url === "/admin/customers/5/");
+    expect(detailCalls).toHaveLength(0);
+  });
+
+  it("invalid ?customer value opens nothing and fetches no detail", async () => {
+    await mountWithQuery({ customer: "abc" });
+    expect(wrapper.text()).not.toContain("adminCustomers.detailKicker");
+    const detailCalls = api.get.mock.calls.filter(([url]) => url.includes("/admin/customers/abc"));
+    expect(detailCalls).toHaveLength(0);
   });
 });

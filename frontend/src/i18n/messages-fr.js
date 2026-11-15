@@ -2134,6 +2134,10 @@ adminWallet: {
   voucherRevokedDone: "Bon revoque.",
   voucherRevokeFailed: "Impossible de revoquer le bon.",
   settingsLoadFailed: "Impossible de charger les parametres.",
+  fundTenantsTruncated: "Affichage des 200 premiers restaurants.",
+  viewDetails: "Voir le detail",
+  voucherCopyFailed: "Impossible de copier les codes. Copiez-les manuellement.",
+  voucherQtyClamped: "Quantite ajustee de {requested} a {count} ; la limite est de 1 a 50 bons par lot.",
 },
 ownerCustomers: {
   kicker: "Repertoire clients",

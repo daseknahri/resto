@@ -26,7 +26,7 @@
           />
         </div>
         <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
-          <input v-model="showZero" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" @change="fetch" />
+          <input v-model="showZero" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" @change="onShowZeroChange" />
           {{ t('adminWallet.showZero') }}
         </label>
         <button
@@ -77,7 +77,9 @@
     </div>
 
     <!-- Table -->
-    <div v-else class="ui-table-wrap ui-reveal">
+    <template v-else>
+      <!-- Desktop table (hidden on mobile) -->
+      <div class="ui-table-wrap ui-reveal hidden md:block">
       <table class="w-full min-w-[36rem] text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
@@ -104,6 +106,10 @@
               ><span v-if="parseFloat(c.wallet_balance) > 0" aria-hidden="true">+</span>{{ fmtBalance(c.wallet_balance) }}</span>
             </td>
             <td class="px-4 py-3 text-end">
+              <router-link
+                :to="{ name: 'admin-customers', query: { customer: c.id } }"
+                class="ui-press rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] hover:text-teal-300 ui-touch-target"
+              >{{ t('adminWallet.viewDetails') }}</router-link>
               <button
                 class="ui-press rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] hover:text-teal-300 ui-touch-target"
                 @click="openBonus(c)"
@@ -112,7 +118,38 @@
           </tr>
         </tbody>
       </table>
-    </div>
+      </div>
+
+      <!-- Mobile card list (hidden on md+) — mirrors AdminRides.vue (A-23) -->
+      <ul class="md:hidden space-y-2">
+        <li
+          v-for="c in customers"
+          :key="c.id"
+          class="ui-admin-card ui-reveal"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-slate-200 truncate">{{ c.name }}</p>
+              <p class="mt-0.5 text-xs text-slate-500 truncate">{{ c.phone || c.email || '—' }}</p>
+            </div>
+            <p
+              class="shrink-0 font-semibold tabular-nums text-sm"
+              :class="parseFloat(c.wallet_balance) > 0 ? 'text-emerald-400' : 'text-slate-500'"
+            ><span v-if="parseFloat(c.wallet_balance) > 0" aria-hidden="true">+</span>{{ fmtBalance(c.wallet_balance) }}</p>
+          </div>
+          <div class="mt-2 flex items-center gap-3">
+            <router-link
+              :to="{ name: 'admin-customers', query: { customer: c.id } }"
+              class="ui-press rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] hover:text-teal-300 ui-touch-target"
+            >{{ t('adminWallet.viewDetails') }}</router-link>
+            <button
+              class="ui-press rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] hover:text-teal-300 ui-touch-target"
+              @click="openBonus(c)"
+            >{{ t('adminWallet.bonus') }}</button>
+          </div>
+        </li>
+      </ul>
+    </template>
 
     <!-- Pagination -->
     <div v-if="total > pageSize" class="flex items-center justify-between text-xs text-slate-400">
@@ -150,6 +187,7 @@
             max="50"
             class="ui-input"
           />
+          <p v-if="voucherQtyNotice" class="text-[11px] text-amber-300" role="status">{{ voucherQtyNotice }}</p>
         </div>
         <!-- Amount -->
         <div class="space-y-1">
@@ -281,6 +319,7 @@
               {{ ten.name }} — {{ fmtBalance(ten.float_balance) }}
             </option>
           </select>
+          <p v-if="fundTenants.length >= 200" class="text-[11px] text-slate-500">{{ t('adminWallet.fundTenantsTruncated') }}</p>
           <p v-if="fundTenantsError" class="flex items-center gap-2 text-[11px] text-red-300" role="alert">
             {{ t('adminWallet.fundTenantsLoadError') }}
             <button type="button" class="underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 rounded" @click="fetchTenants">{{ t('common.retry') }}</button>
@@ -463,6 +502,7 @@ const voucherExpiry = ref('');
 const voucherNote = ref('');
 const voucherGenerating = ref(false);
 const voucherGenError = ref('');
+const voucherQtyNotice = ref(''); // A-24: set when the requested qty is clamped to 1-50
 const generatedCodes = ref([]);
 const copiedAll = ref(false);
 const vouchers = ref([]);
@@ -497,7 +537,13 @@ const generateVouchers = async () => {
     voucherGenError.value = t('adminWallet.voucherExpiryPast');
     return;
   }
-  const count = Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50);
+  // A-24: the quantity used to clamp silently (60 minted 50 with no notice,
+  // and the confirm body then stated the clamped count as if requested).
+  const requestedQty = parseInt(voucherQty.value, 10) || 1;
+  const count = Math.min(Math.max(requestedQty, 1), 50);
+  voucherQtyNotice.value = requestedQty !== count
+    ? t('adminWallet.voucherQtyClamped', { requested: requestedQty, count })
+    : '';
   const okVouchers = await confirm({
     title: t('adminWallet.voucherConfirmTitle'),
     body: t('adminWallet.voucherConfirmBody', { count, amount: fmtBalance(amount), total: fmtBalance(count * amount) }),
@@ -523,6 +569,7 @@ const generateVouchers = async () => {
     voucherNote.value = '';
     voucherExpiry.value = '';
     voucherQty.value = 1;
+    voucherQtyNotice.value = '';
     voucherKey = null; // confirmed — next batch gets a fresh key
     fetchVouchers(); // refresh the audit list with the new codes
   } catch (err) {
@@ -538,7 +585,10 @@ const copyAllCodes = async () => {
     await navigator.clipboard.writeText(generatedCodes.value.join('\n'));
     copiedAll.value = true;
     setTimeout(() => { copiedAll.value = false; }, 2000);
-  } catch { /* ignore */ }
+  } catch {
+    // A-25: on clipboard denial the button used to give no feedback at all.
+    toast.show(t('adminWallet.voucherCopyFailed'), 'error');
+  }
 };
 
 // Fund a restaurant float
@@ -703,6 +753,13 @@ const onSearch = () => {
     page.value = 1;
     fetch();
   }, 400);
+};
+
+const onShowZeroChange = () => {
+  // A-26: mirror onSearch — toggling the filter on page 3 used to refetch
+  // without resetting the page, yielding an empty table + misleading empty state.
+  page.value = 1;
+  fetch();
 };
 
 const changePage = (p) => {

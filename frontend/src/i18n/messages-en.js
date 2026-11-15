@@ -2136,6 +2136,10 @@ adminWallet: {
   voucherRevokedDone: "Voucher revoked.",
   voucherRevokeFailed: "Could not revoke the voucher.",
   settingsLoadFailed: "Could not load the settings.",
+  fundTenantsTruncated: "Showing the first 200 restaurants.",
+  viewDetails: "View details",
+  voucherCopyFailed: "Could not copy the codes. Copy them manually.",
+  voucherQtyClamped: "Quantity adjusted from {requested} to {count}; vouchers are limited to 1-50 per batch.",
 },
 ownerCustomers: {
   kicker: "Customer directory",
