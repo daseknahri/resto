@@ -80,6 +80,9 @@ vi.mock("../../lib/adminApi", () => ({
   },
 }));
 
+import api from "../../lib/api";
+import adminApi from "../../lib/adminApi";
+import { useConfirmModal } from "../../composables/useConfirmModal";
 import AdminRides from "../AdminRides.vue";
 
 const mountRides = () => shallowMount(AdminRides);
@@ -185,5 +188,143 @@ describe("AdminRides — mount smoke", () => {
     // The driver-less second ride → the "unassigned" label, which renders ONLY inside the rides
     // v-for's `v-else` (never in the header/chips), proving the mixed-row array-render path ran.
     expect(text).toContain("adminRides.unassigned");
+  });
+});
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+const findButtons = (wrapper, text) =>
+  wrapper.findAll("button").filter((b) => b.text() === text);
+
+describe("AdminRides — pagination + refresh + force-resolve (A-07/A-08/A-09/A-10)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // A-08: the list is an envelope now — the chip shows the server total and the
+  // cap note names the window ("latest {count} of {total}").
+  it("reads the envelope total + cap note and paginates with page/page_size params", async () => {
+    _routes = {
+      "/admin/rides/": {
+        data: {
+          results: [ride({ id: 501, status: "completed" }), ride({ id: 502, status: "searching", driver: null })],
+          total: 120,
+          page: 1,
+          page_size: 50,
+        },
+      },
+    };
+    wrapper = mountRides();
+    await flushPromises();
+    expect(wrapper.text()).toContain('adminRides.showingLatest({"count":2,"total":120})');
+    expect(wrapper.text()).toContain('adminRides.pageOf({"page":1,"pages":3})');
+
+    await findButton(wrapper, "adminRides.nextPage").trigger("click");
+    await flushPromises();
+    const lastCall = api.get.mock.calls.at(-1);
+    expect(lastCall[0]).toContain("/admin/rides/");
+    expect(lastCall[1].params).toEqual(expect.objectContaining({ page: 2, page_size: 50 }));
+  });
+
+  // A-07: a background refresh (header Refresh button) must not flash skeletons —
+  // the rows stay rendered while refreshing is true.
+  it("background refresh keeps the loaded rows visible (no skeleton flash)", async () => {
+    _routes = { "/admin/rides/": { data: [ride({ id: 501, status: "completed" })] } };
+    wrapper = mountRides();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Aicha Rider");
+
+    await findButton(wrapper, "common.refresh").trigger("click");
+    // Do NOT flush: the background fetch is in flight, loading stays false.
+    expect(wrapper.text()).toContain("Aicha Rider");
+    expect(wrapper.text()).not.toContain("adminRides.empty");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Aicha Rider");
+  });
+
+  // A-07: a failed background refresh keeps the rows and shows a retry banner,
+  // not the full error panel.
+  it("failed background refresh keeps rows and shows the retry banner", async () => {
+    _routes = { "/admin/rides/": { data: [ride({ id: 501, status: "completed" })] } };
+    wrapper = mountRides();
+    await flushPromises();
+    api.get.mockRejectedValueOnce(new Error("down"));
+    await findButton(wrapper, "common.refresh").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Aicha Rider");
+    expect(wrapper.text()).toContain("adminRides.refreshFailed");
+    expect(wrapper.text()).not.toContain("adminRides.loadFailed");
+  });
+
+  // A-09: only non-terminal rides get a Resolve action; confirming posts to the
+  // existing force-resolve endpoint and flips the row status locally.
+  it("force-resolve: per-row action on non-terminal rides only, POSTs cancel + reason", async () => {
+    _routes = {
+      "/admin/rides/": {
+        data: [
+          ride({ id: 501, status: "completed" }),
+          ride({ id: 502, status: "searching", driver: null }),
+        ],
+      },
+    };
+    wrapper = mountRides();
+    await flushPromises();
+    // One Resolve button per view (table + mobile card) for the single searching
+    // ride; none for the completed ride.
+    expect(findButtons(wrapper, "adminRides.resolve")).toHaveLength(2);
+
+    await findButtons(wrapper, "adminRides.resolve")[0].trigger("click");
+    expect(wrapper.text()).toContain('adminRides.resolveTitle({"id":502})');
+    // A searching ride offers cancel only — complete needs in_progress.
+    expect(wrapper.find("select").findAll("option").map((o) => o.text())).toEqual([
+      "adminRides.resolveCancel",
+    ]);
+
+    const { _settle } = useConfirmModal();
+    await findButton(wrapper, "adminRides.resolveConfirm").trigger("click");
+    _settle(true);
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/rides/502/force-resolve/",
+      { action: "cancel", reason: "" },
+    );
+    expect(wrapper.text()).toContain("adminRides.statusCancelled");
+  });
+
+  // A-09: an in_progress ride offers the complete action too.
+  it("force-resolve: in_progress rides offer complete as well as cancel", async () => {
+    _routes = {
+      "/admin/rides/": { data: [ride({ id: 503, status: "in_progress", driver: { id: 7, name: "Mohamed Driver", phone: "0622334455" } })] },
+    };
+    wrapper = mountRides();
+    await flushPromises();
+    await findButtons(wrapper, "adminRides.resolve")[0].trigger("click");
+    expect(wrapper.find("select").findAll("option").map((o) => o.text())).toEqual([
+      "adminRides.resolveCancel",
+      "adminRides.resolveComplete",
+    ]);
+  });
+
+  // A-10: a failed fares load surfaces an inline error + retry instead of blank inputs.
+  it("fares load failure shows an inline error with retry", async () => {
+    adminApi.get.mockRejectedValueOnce(new Error("settings down"));
+    wrapper = mountRides();
+    await flushPromises();
+    // Open the collapsible fares panel.
+    await wrapper.find("section button").trigger("click");
+    expect(wrapper.text()).toContain("adminRides.faresLoadFailed");
+    expect(findButton(wrapper, "common.retry")).toBeTruthy();
   });
 });

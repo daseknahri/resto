@@ -1592,7 +1592,12 @@ class DriverRideHistoryView(APIView):
 
 
 class AdminRideListView(APIView):
-    """GET /api/admin/rides/ — IsPlatformAdmin; latest 50 rides, optional ?status= filter.
+    """GET /api/admin/rides/ — IsPlatformAdmin; paginated, optional ?status= filter.
+
+    Run 8 G3a A-08: the bare 50-row array hid the cap and made older rides
+    unreachable. The response is now the envelope
+    {results, total, page, page_size}; ?page= (1-based, default 1) and
+    ?page_size= (default 50, clamped to 1..200) page through the full set.
 
     Fields per ride: id, status, fare, payment_method, paid_with_wallet,
                      distance_km, pickup_address, dropoff_address, created_at,
@@ -1628,7 +1633,17 @@ class AdminRideListView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             qs = qs.filter(status=status_filter)
-        rides = qs[:50]
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size", 50))
+        except (TypeError, ValueError):
+            page_size = 50
+        page_size = min(200, max(1, page_size))
+        total = qs.count()
+        rides = qs[(page - 1) * page_size: page * page_size]
 
         data = []
         for ride in rides:
@@ -1661,7 +1676,12 @@ class AdminRideListView(APIView):
                 "rider": rider_data,
                 "driver": driver_data,
             })
-        return Response(data)
+        return Response({
+            "results": data,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        })
 
 
 # ── Admin: car-document approval ──────────────────────────────────────────────────

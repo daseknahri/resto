@@ -10,17 +10,17 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <span v-if="!loading" class="ui-chip tabular-nums">
-            {{ rides.length }}
+            {{ total }}
           </span>
           <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t('common.loading') : '' }}</span>
           <button
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-            :disabled="loading"
-            :aria-busy="loading"
-            @click="fetchRides"
+            :disabled="loading || refreshing"
+            :aria-busy="loading || refreshing"
+            @click="fetchRides({ background: true })"
           >
-            <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ loading ? t('common.loading') : t('common.refresh') }}
+            <svg v-if="loading || refreshing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ (loading || refreshing) ? t('common.loading') : t('common.refresh') }}
           </button>
         </div>
       </div>
@@ -52,6 +52,14 @@
       </button>
       <template v-if="faresOpen">
         <p class="text-[11px] text-slate-500">{{ t('adminRides.faresHint') }}</p>
+        <div v-if="faresLoadError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ t('adminRides.faresLoadFailed') }}</p>
+          <button
+            class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+            @click="fetchFares"
+          >{{ t('common.retry') }}</button>
+        </div>
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <!-- Base fare -->
           <div class="space-y-1">
@@ -140,6 +148,16 @@
       >{{ s === 'all' ? t('adminRides.filterAll') : statusLabel(s) }}</button>
     </div>
 
+    <!-- Background poll failed: keep the last loaded rows, surface a retry (A-07) -->
+    <div v-if="refreshFailed && !loading" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+      <p class="flex-1 text-sm text-amber-300">{{ t('adminRides.refreshFailed') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 ui-press"
+        @click="fetchRides({ background: true })"
+      >{{ t('common.retry') }}</button>
+    </div>
+
     <!-- Loading -->
     <div v-if="loading" class="ui-skeleton overflow-hidden">
       <div v-for="i in 6" :key="i" class="flex items-center gap-4 border-b border-slate-800/60 px-4 py-3">
@@ -178,12 +196,12 @@
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminRides.colFare') }}</th>
               <th scope="col" class="px-4 py-3 text-start">{{ t('adminRides.colStatus') }}</th>
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminRides.colWhen') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminRides.colActions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/40">
+            <template v-for="(r, index) in rides" :key="r.id">
             <tr
-              v-for="(r, index) in rides"
-              :key="r.id"
               class="ui-reveal transition-colors hover:bg-slate-800/30"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
@@ -208,7 +226,43 @@
                 <span class="block">{{ fmtDate(r.created_at) }}</span>
                 <span v-if="r.completed_at" class="block text-slate-600">{{ fmtDate(r.completed_at) }}</span>
               </td>
+              <td class="px-4 py-3 text-end">
+                <button
+                  v-if="!isTerminal(r.status)"
+                  class="rounded-lg border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+                  @click="openResolve(r)"
+                >{{ t('adminRides.resolve') }}</button>
+              </td>
             </tr>
+            <tr v-if="resolveRideId === r.id">
+              <td colspan="8" class="bg-slate-900/60 px-4 py-3">
+                <p class="text-sm font-semibold text-slate-100">{{ t('adminRides.resolveTitle', { id: r.id }) }}</p>
+                <div class="mt-2 flex flex-wrap items-end gap-2">
+                  <label class="space-y-1">
+                    <span class="block text-xs text-slate-400">{{ t('adminRides.resolveAction') }}</span>
+                    <select v-model="resolveAction" class="ui-input w-auto">
+                      <option value="cancel">{{ t('adminRides.resolveCancel') }}</option>
+                      <option v-if="r.status === 'in_progress'" value="complete">{{ t('adminRides.resolveComplete') }}</option>
+                    </select>
+                  </label>
+                  <label class="min-w-[220px] flex-1 space-y-1">
+                    <span class="block text-xs text-slate-400">{{ t('adminRides.resolveReason') }}</span>
+                    <input v-model="resolveReason" type="text" maxlength="300" class="ui-input" />
+                  </label>
+                  <button
+                    class="ui-btn-outline ui-press disabled:opacity-50"
+                    :disabled="resolveSaving"
+                    @click="confirmResolve(r)"
+                  >{{ t('adminRides.resolveConfirm') }}</button>
+                  <button
+                    class="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+                    @click="cancelResolve"
+                  >{{ t('common.cancel') }}</button>
+                </div>
+                <p v-if="resolveError" class="mt-2 text-xs text-red-300" role="alert">{{ resolveError }}</p>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -242,14 +296,63 @@
               <p class="mt-0.5 text-[10px] text-slate-600 tabular-nums">{{ fmtDate(r.created_at) }}</p>
             </div>
           </div>
+          <button
+            v-if="!isTerminal(r.status) && resolveRideId !== r.id"
+            class="mt-2 rounded-lg border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+            @click="openResolve(r)"
+          >{{ t('adminRides.resolve') }}</button>
+          <div v-if="resolveRideId === r.id" class="mt-2 space-y-2 border-t border-slate-800/60 pt-2">
+            <p class="text-sm font-semibold text-slate-100">{{ t('adminRides.resolveTitle', { id: r.id }) }}</p>
+            <label class="block space-y-1">
+              <span class="block text-xs text-slate-400">{{ t('adminRides.resolveAction') }}</span>
+              <select v-model="resolveAction" class="ui-input w-full">
+                <option value="cancel">{{ t('adminRides.resolveCancel') }}</option>
+                <option v-if="r.status === 'in_progress'" value="complete">{{ t('adminRides.resolveComplete') }}</option>
+              </select>
+            </label>
+            <label class="block space-y-1">
+              <span class="block text-xs text-slate-400">{{ t('adminRides.resolveReason') }}</span>
+              <input v-model="resolveReason" type="text" maxlength="300" class="ui-input" />
+            </label>
+            <div class="flex gap-2">
+              <button
+                class="ui-btn-outline ui-press disabled:opacity-50"
+                :disabled="resolveSaving"
+                @click="confirmResolve(r)"
+              >{{ t('adminRides.resolveConfirm') }}</button>
+              <button
+                class="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+                @click="cancelResolve"
+              >{{ t('common.cancel') }}</button>
+            </div>
+            <p v-if="resolveError" class="text-xs text-red-300" role="alert">{{ resolveError }}</p>
+          </div>
         </li>
       </ul>
+
+      <!-- Cap + pagination (A-08): the server total, not rides.length -->
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-slate-500">{{ t('adminRides.showingLatest', { count: rides.length, total }) }}</p>
+        <div v-if="totalPages > 1" class="flex items-center gap-2">
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press disabled:opacity-40"
+            :disabled="page <= 1"
+            @click="prevPage"
+          >{{ t('adminRides.prevPage') }}</button>
+          <span class="text-xs text-slate-400 tabular-nums">{{ t('adminRides.pageOf', { page, pages: totalPages }) }}</span>
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press disabled:opacity-40"
+            :disabled="page >= totalPages"
+            @click="nextPage"
+          >{{ t('adminRides.nextPage') }}</button>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
@@ -263,10 +366,26 @@ const { confirm } = useConfirmModal();
 const toast = useToastStore();
 
 const STATUSES = ['all', 'scheduled', 'searching', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
+const PAGE_SIZE = 50;
+const TERMINAL_STATUSES = ['completed', 'cancelled'];
 const loading = ref(true);
+const refreshing = ref(false);
 const fetchError = ref(false);
+const refreshFailed = ref(false);
 const rides = ref([]);
+const total = ref(0);
+const page = ref(1);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 const statusFilter = ref('all');
+
+// Force-resolve inline panel (A-09)
+const resolveRideId = ref(null);
+const resolveAction = ref('cancel');
+const resolveReason = ref('');
+const resolveError = ref('');
+const resolveSaving = ref(false);
+
+const isTerminal = (status) => TERMINAL_STATUSES.includes(status);
 
 const STATUS_LABELS = {
   searching: 'adminRides.statusSearching',
@@ -319,24 +438,87 @@ const fmtDate = (iso) => {
   }
 };
 
-const fetchRides = async () => {
-  loading.value = true;
+const fetchRides = async ({ background = false } = {}) => {
+  // A-07: background polls (20s timer, tab-visible) must not flash the skeleton
+  // board — they only flip `refreshing`, and a failed poll keeps the last loaded
+  // rows with a retry banner instead of swapping in the full error panel.
+  if (background) refreshing.value = true;
+  else loading.value = true;
   fetchError.value = false;
   try {
-    const params = {};
+    const params = { page: page.value, page_size: PAGE_SIZE };
     if (statusFilter.value !== 'all') params.status = statusFilter.value;
     const res = await api.get('/admin/rides/', { params });
     rides.value = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+    // A-08: the envelope total is the count chip + cap note; a bare array has no
+    // total, so fall back to the rows actually returned.
+    total.value = typeof res.data?.total === 'number' ? res.data.total : rides.value.length;
+    refreshFailed.value = false;
   } catch {
-    fetchError.value = true;
+    if (background) refreshFailed.value = true;
+    else fetchError.value = true;
   } finally {
     loading.value = false;
+    refreshing.value = false;
   }
 };
 
 const setFilter = (s) => {
   statusFilter.value = s;
+  page.value = 1;
   fetchRides();
+};
+
+const prevPage = () => {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  fetchRides();
+};
+
+const nextPage = () => {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  fetchRides();
+};
+
+const openResolve = (ride) => {
+  resolveRideId.value = ride.id;
+  resolveAction.value = 'cancel';
+  resolveReason.value = '';
+  resolveError.value = '';
+};
+
+const cancelResolve = () => {
+  resolveRideId.value = null;
+  resolveReason.value = '';
+  resolveError.value = '';
+};
+
+const confirmResolve = async (ride) => {
+  const action = resolveAction.value === 'complete' ? 'complete' : 'cancel';
+  const ok = await confirm({
+    title: t('adminRides.resolveConfirmTitle', { id: ride.id }),
+    body: t('adminRides.resolveConfirmBody'),
+    confirmLabel: t('adminRides.resolveConfirm'),
+    danger: true,
+  });
+  if (!ok) return;
+  resolveSaving.value = true;
+  resolveError.value = '';
+  try {
+    await api.post(`/admin/rides/${ride.id}/force-resolve/`, {
+      action,
+      reason: resolveReason.value.trim(),
+    });
+    ride.status = action === 'complete' ? 'completed' : 'cancelled';
+    if (action === 'complete') ride.completed_at = new Date().toISOString();
+    cancelResolve();
+    toast.show(t('adminRides.resolveDone'), 'success');
+  } catch (err) {
+    resolveError.value = err?.response?.data?.detail || t('adminRides.resolveFailed');
+  } finally {
+    resolveSaving.value = false;
+  }
 };
 
 // ── Ride fares ────────────────────────────────────────────────────────────────
@@ -352,15 +534,21 @@ const fares = ref({
 const _faresSnapshot = ref({});
 const faresSaving = ref(false);
 const faresSaveError = ref('');
+const faresLoadError = ref(false);
 
 const fetchFares = async () => {
+  // A-10: a failed fares load used to leave the inputs blank (looking "unset").
+  // Surface it with a retry, like faresSaveError.
+  faresLoadError.value = false;
   try {
     const res = await adminApi.get('/admin/settings/');
     for (const k of FARE_FIELDS) {
       fares.value[k] = res.data?.[k] ?? '';
     }
     _faresSnapshot.value = { ...fares.value };
-  } catch { /* non-fatal */ }
+  } catch {
+    faresLoadError.value = true;
+  }
 };
 
 const saveFares = async () => {
@@ -408,14 +596,14 @@ let pollTimer = null;
 
 const onVisibilityChange = () => {
   if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-    fetchRides();
+    fetchRides({ background: true });
   }
 };
 
 onMounted(() => {
   fetchRides();
   fetchFares();
-  pollTimer = setInterval(fetchRides, POLL_MS);
+  pollTimer = setInterval(() => fetchRides({ background: true }), POLL_MS);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange);
   }
