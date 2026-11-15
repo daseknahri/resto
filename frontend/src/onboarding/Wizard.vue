@@ -24,11 +24,13 @@
             <span class="ui-data-strip">
               {{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}
             </span>
-            <!-- Escape hatch: progress persists (the current step is saved), so this
-                 leaves to the dashboard without the unsaved-changes prompt. -->
+            <!-- Escape hatch: saveAndExit persists the active step's edits first
+                 (then the step index), so this leaves to the dashboard without
+                 the unsaved-changes prompt. -->
             <button
               type="button"
               class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs"
+              :disabled="savingExit"
               @click="saveAndExit"
             >
               {{ t("onboardingWizard.saveAndExit") }}
@@ -117,7 +119,7 @@
           <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ stepAnnouncement }}</span>
           <div ref="stepPanelRef" tabindex="-1" class="ui-panel p-4 focus:outline-none">
             <KeepAlive>
-              <component :is="currentComponent" @next="next" @back="back" @publish="publish" @can-publish="onCanPublish" />
+              <component :is="currentComponent" ref="stepRef" @next="next" @back="back" @publish="publish" @can-publish="onCanPublish" />
             </KeepAlive>
           </div>
           <!-- Footer hint -->
@@ -146,6 +148,12 @@ import StepPublish from "./StepPublish.vue";
 import { useTenantStore } from "../stores/tenant";
 
 const current = ref(1);
+// Ref to the active step component (inside KeepAlive) — "Save & exit" calls the
+// step's own saver through it before leaving (A3-07).
+const stepRef = ref(null);
+// In-flight "Save & exit" — the button is disabled while the step save runs so
+// a double-click cannot navigate away twice.
+const savingExit = ref(false);
 // Highest step the user has legitimately reached (advanced into via `next` or a
 // restored session). Forward jumps past `highestCompleted + 1` are blocked; going
 // back to any already-reached step stays free.
@@ -267,16 +275,53 @@ const persistStep = () => {
   window.localStorage.setItem(stepStorageKey.value, String(current.value));
 };
 
-// Friendly exit to the owner dashboard. The current step is persisted (also via
-// the `current` watcher), so no leave prompt is needed — the guard is skipped
-// through `exitingToDashboard`.
+// Friendly exit to the owner dashboard. The active step's edits are saved FIRST
+// (A3-07): persistStep() only writes the step number to localStorage, so the
+// old saveAndExit lost every unsaved edit when the wizard unmounted even though
+// the label promised a save. Steps expose their saver for this — saveAll / save
+// (boolean: false = validation/API failure, stay put) or saveAndNext (which
+// signals success by emitting "next" and advancing the step; a validation
+// failure returns early without advancing). Steps that expose no saver
+// (StepStart has nothing to save) keep the old persist-and-leave behaviour.
+// The route-leave guard is skipped through `exitingToDashboard` only once the
+// save has succeeded.
+const saveCurrentStep = async () => {
+  const step = stepRef.value;
+  if (!step) return true;
+  const saver = step.saveAll || step.save;
+  if (typeof saver === "function") {
+    const result = await saver();
+    return result !== false;
+  }
+  const advancer = step.saveAndNext;
+  if (typeof advancer === "function") {
+    const before = current.value;
+    await advancer();
+    return current.value !== before;
+  }
+  return true;
+};
+
 const saveAndExit = async () => {
-  persistStep();
-  exitingToDashboard.value = true;
+  if (savingExit.value) return;
+  savingExit.value = true;
   try {
-    await router.push({ name: "owner-home" });
+    let saved = true;
+    try {
+      saved = await saveCurrentStep();
+    } catch {
+      saved = false;
+    }
+    if (!saved) return;
+    persistStep();
+    exitingToDashboard.value = true;
+    try {
+      await router.push({ name: "owner-home" });
+    } finally {
+      exitingToDashboard.value = false;
+    }
   } finally {
-    exitingToDashboard.value = false;
+    savingExit.value = false;
   }
 };
 

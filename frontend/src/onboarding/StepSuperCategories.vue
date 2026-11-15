@@ -127,7 +127,7 @@
           <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
         </button>
 
-        <!-- Actions: edit · delete (delete blocked while it still holds categories) -->
+        <!-- Actions: edit · delete (delete asks first: the backend cascade-deletes the group's categories and dishes) -->
         <div class="flex shrink-0 items-center gap-1.5">
           <button
             class="ui-press flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
@@ -138,9 +138,9 @@
           <button
             class="ui-press flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
-            :disabled="Number(row.category_count || 0) > 0"
-            :title="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
-            :aria-label="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
+            :disabled="deletingLocalId === row.local_id"
+            :title="t('common.remove')"
+            :aria-label="t('common.remove')"
             @click="removeByLocalId(row.local_id)"
           >
             <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
@@ -410,7 +410,8 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import { superCategoryApi } from "../lib/onboardingApi";
+import { categoryApi, dishApi, superCategoryApi } from "../lib/onboardingApi";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
@@ -418,10 +419,13 @@ import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
 const rows = reactive([]);
-const removedIds = ref([]);
 const rowErrors = reactive({});
 const globalError = ref("");
 const saving = ref(false);
+// Local id of the group whose delete is in flight (count fetch / confirm / API
+// delete) — the delete button is disabled while set so a double-click cannot
+// queue the same destructive delete twice.
+const deletingLocalId = ref("");
 const status = ref("");
 const search = ref("");
 const quickModalOpen = ref(false);
@@ -435,6 +439,7 @@ useFocusTrap(quickDialogRef, quickModalOpen);
 const editorLocalId = ref("");
 const tenant = useTenantStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const { t } = useI18n();
 const router = useRouter();
 
@@ -683,14 +688,71 @@ const quickAdd = () => {
   closeQuickModal();
 };
 
+// A3-05: delete is confirmed with LIVE counts and executed immediately — the old
+// code spliced the row with no confirm and only fired the DELETE later, inside
+// saveAll, while the only guard (load-time category_count) went stale the moment
+// a category was added elsewhere. The backend cascade-deletes the group's
+// categories AND their dishes, so a single unconfirmed click could wipe a whole
+// menu section. Live counts come from the category/dish lists (not the stale
+// row.category_count); a failed count fetch cancels the delete instead of
+// asking on stale numbers. Like StepCategories, the API delete runs BEFORE the
+// local splice so a protected-delete 409 (a combo still uses a dish in this
+// group) leaves the row in place.
 const removeByLocalId = async (localId) => {
   const index = rows.findIndex((row) => row.local_id === localId);
-  if (index < 0) return;
-  const [row] = rows.splice(index, 1);
-  if (row?.id) removedIds.value.push(row.id);
-  if (String(editorLocalId.value) === String(localId)) closeEditor();
-  delete rowErrors[localId];
-  renumberRows(orderedRows.value);
+  if (index < 0 || deletingLocalId.value) return;
+  deletingLocalId.value = String(localId);
+  try {
+    const row = rows[index];
+    const rowName = row?.name?.trim() || t("stepSuperCategories.cardLabel", { index: index + 1 });
+    let categoryCount = 0;
+    let dishCount = 0;
+    if (row?.id) {
+      try {
+        const [categories, dishes] = await Promise.all([categoryApi.list(), dishApi.list()]);
+        const ownedIds = new Set(
+          (Array.isArray(categories) ? categories : [])
+            .filter((cat) => Number(cat.super_category) === Number(row.id))
+            .map((cat) => Number(cat.id))
+        );
+        categoryCount = ownedIds.size;
+        dishCount = (Array.isArray(dishes) ? dishes : [])
+          .filter((dish) => ownedIds.has(Number(dish.category))).length;
+      } catch {
+        toast.show(t("stepSuperCategories.deleteCountsFailed"), "error");
+        return;
+      }
+    }
+    const body =
+      categoryCount > 0 || dishCount > 0
+        ? t("stepSuperCategories.removeConfirmBody", { categories: categoryCount, dishes: dishCount })
+        : t("stepSuperCategories.removeConfirmEmpty");
+    const ok = await confirm({
+      title: t("stepSuperCategories.removeConfirm", { name: rowName }),
+      body,
+      confirmLabel: t("common.remove"),
+      danger: true,
+    });
+    if (!ok) return;
+    if (row?.id) {
+      try {
+        await superCategoryApi.remove(row.id);
+      } catch (error) {
+        if (error?.status === 409 || error?.response?.status === 409) {
+          toast.show(t("stepSuperCategories.comboProtectedDelete"), "error");
+          return;
+        }
+        toast.show(error?.message || t("common.saveFailed"), "error");
+        return;
+      }
+    }
+    rows.splice(index, 1);
+    if (String(editorLocalId.value) === String(localId)) closeEditor();
+    delete rowErrors[localId];
+    renumberRows(orderedRows.value);
+  } finally {
+    deletingLocalId.value = "";
+  }
 };
 
 const mapServerErrorsToRow = (localId, fieldErrors = {}) => {
@@ -703,7 +765,7 @@ const saveAll = async () => {
   if (!validateClient()) {
     status.value = t("stepSuperCategories.fixValidation");
     saving.value = false;
-    return;
+    return false;
   }
   try {
     const validRows = rows.filter((row) => row.name?.trim());
@@ -714,30 +776,44 @@ const saveAll = async () => {
           ...row,
           position: Number(row.position) || 0,
           name_i18n: pickI18nMap(row.name_i18n, allowedTranslationLocales),
+          // A3-04: description / description_i18n / image_url are editable in the
+          // editor and were silently dropped by superCategoryApi.upsert's
+          // whitelist — pass them explicitly (translations filtered to allowed
+          // locales, like name_i18n) so the save actually persists them.
+          description: String(row.description || "").trim(),
+          description_i18n: pickI18nMap(row.description_i18n, allowedTranslationLocales),
+          image_url: String(row.image_url || "").trim(),
           disabled_note: String(row.disabled_note || "").trim(),
         });
         row.id = saved.id;
         row.slug = saved.slug;
+        row.description = saved.description ?? row.description;
+        row.image_url = saved.image_url ?? row.image_url;
         row.category_count = Number(saved.category_count || row.category_count || 0);
       } catch (error) {
         mapServerErrorsToRow(row.local_id, error?.fieldErrors || {});
         throw error;
       }
     }
-    for (const id of removedIds.value) {
-      await superCategoryApi.remove(id);
-    }
-    removedIds.value = [];
+    // No deferred-delete loop: deletes are immediate (see removeByLocalId) —
+    // the old removedIds queue fired the DELETE inside saveAll, minutes after
+    // the click, with no confirm.
     status.value = t("common.saved");
     toast.show(t("stepSuperCategories.savedToast"), "success");
+    return true;
   } catch (error) {
     status.value = t("common.saveFailed");
     globalError.value = error?.message || t("stepSuperCategories.saveFailed");
     toast.show(globalError.value, "error");
+    return false;
   } finally {
     saving.value = false;
   }
 };
+
+// Exposed so a parent (e.g. the onboarding Wizard's "Save & exit") can persist
+// this step's edits before navigating away. Returns saveAll's boolean.
+defineExpose({ saveAll });
 
 const onModalEscape = (e) => {
   if (e.key !== "Escape") return;

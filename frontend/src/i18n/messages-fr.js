@@ -2912,6 +2912,8 @@ stepPublish: {
   priceZeroWarningTitle: "Certains plats ont un prix de 0",
   priceZeroWarningBody: "Certains articles publies n'ont pas de prix defini ; les clients pourraient donc les ajouter gratuitement a leur panier. Verifiez vos prix avant la mise en ligne.",
   priceZeroDismiss: "Ignorer",
+  publishBrandDisabledHint: "Ajoutez un slogan ou des coordonnees avant de pouvoir publier.",
+  publishBrandRequirement: "Ajoutez un slogan ou des coordonnees avant de publier, sinon votre menu sera en ligne sans marque sur la vitrine.",
 },
 closureDates: {
   addDate: "Ajouter une date de fermeture",
@@ -5836,7 +5838,12 @@ stepSuperCategories: {
   savedToast: "Groupes de menu enregistres",
   saveFailed: "Echec de l'enregistrement des groupes de menu",
   fixValidation: "Corrigez les erreurs de validation",
-  deleteBlockedHasCategories: "Suppression impossible : le groupe contient des categories"
+  deleteBlockedHasCategories: "Suppression impossible : le groupe contient des categories",
+  comboProtectedDelete: "Suppression impossible : un menu compose utilise encore un plat de ce groupe. Retirez-le du menu compose d'abord.",
+  deleteCountsFailed: "Impossible de verifier le contenu de ce groupe, la suppression a ete annulee. Reessayez.",
+  removeConfirm: "Supprimer \"{name}\" ? Ses categories et ses plats seront aussi supprimes.",
+  removeConfirmBody: "Cela supprimera aussi {categories} categorie(s) et {dishes} plat(s) dans ce groupe. Cette action est definitive.",
+  removeConfirmEmpty: "Ce groupe est vide. La suppression est definitive.",
 },
 orderStatus: {
   kicker: "Suivi de commande",

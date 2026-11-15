@@ -168,6 +168,14 @@ export const superCategoryApi = {
     const payload = {
       name: group.name || "",
       name_i18n: normalizeI18nMap(group.name_i18n),
+      // A3-04: description / description_i18n / image_url are editable in the
+      // StepSuperCategories editor and accepted by the backend, but this
+      // whitelist dropped them — edits were silently discarded on save and
+      // reverted on reload. (Mirrors categoryApi.upsert, which includes all
+      // three.)
+      description: group.description || "",
+      description_i18n: normalizeI18nMap(group.description_i18n),
+      image_url: normalizeOptionalUrl(group.image_url),
       position: Number(group.position) || 0,
       is_published: group.is_published ?? true,
       is_temporarily_disabled: group.is_temporarily_disabled === true,

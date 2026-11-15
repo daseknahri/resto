@@ -2048,7 +2048,9 @@ const arabicMessages = {
     "codMinOrdersUnit": "طلبات مكتملة ومدفوعة",
     "priceZeroWarningTitle": "بعض الأطباق سعرها 0",
     "priceZeroWarningBody": "بعض العناصر المنشورة ليس لها سعر محدد، لذا قد يضيفها العملاء إلى سلتهم مجاناً. راجع أسعارك قبل النشر.",
-    "priceZeroDismiss": "تجاهل"
+    "priceZeroDismiss": "تجاهل",
+    "publishBrandDisabledHint": "أضف شعارًا أو بيانات اتصال قبل أن تتمكن من النشر.",
+    "publishBrandRequirement": "أضف شعارًا أو بيانات اتصال قبل النشر — وإلا فستظهر قائمتك على المتجر دون أي هوية.",
   },
   "stepCategories": {
     "title": "التصنيفات",
@@ -3342,7 +3344,12 @@ Object.assign(arabicMessages, {
     imageUrlLabel: "\u0631\u0627\u0628\u0637 \u0635\u0648\u0631\u0629 \u0627\u0644\u063a\u0644\u0627\u0641",
     imageUrlHint: "\u0627\u062e\u062a\u064a\u0627\u0631\u064a. \u062a\u0638\u0647\u0631 \u0643\u062e\u0644\u0641\u064a\u0629 \u0627\u0644\u0628\u0637\u0627\u0642\u0629 \u0641\u064a \u0634\u0627\u0634\u0629 \u0627\u062e\u062a\u064a\u0627\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.",
     imageUrlPlaceholder: "https://...",
-    deleteBlockedHasCategories: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062d\u0630\u0641: \u0644\u0627 \u062a\u0632\u0627\u0644 \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629 \u062a\u062d\u062a\u0648\u064a \u0639\u0644\u0649 \u062a\u0635\u0646\u064a\u0641\u0627\u062a"
+    deleteBlockedHasCategories: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062d\u0630\u0641: \u0644\u0627 \u062a\u0632\u0627\u0644 \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629 \u062a\u062d\u062a\u0648\u064a \u0639\u0644\u0649 \u062a\u0635\u0646\u064a\u0641\u0627\u062a",
+    "comboProtectedDelete": "تعذّر الحذف — ما زال طبق من هذه المجموعة مستخدمًا في وجبة مركّبة. أزله من الوجبة المركّبة أولًا.",
+    "deleteCountsFailed": "تعذّر التحقق من محتوى هذه المجموعة، لذا تم إلغاء الحذف. حاول مرة أخرى.",
+    "removeConfirm": "حذف \"{name}\"؟ سيتم أيضًا حذف الفئات والأطباق التابعة لها.",
+    "removeConfirmBody": "سيؤدي هذا أيضًا إلى حذف {categories} فئة و{dishes} طبقًا في هذه المجموعة. لا يمكن التراجع عن هذا الإجراء.",
+    "removeConfirmEmpty": "هذه المجموعة فارغة. لا يمكن التراجع عن الحذف.",
   },
   stepCategories: {
     ...arabicMessages.stepCategories,

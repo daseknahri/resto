@@ -176,16 +176,30 @@ describe("Wizard (owner onboarding) — mount smoke", () => {
 // the three mocks below are hoisted by vitest, so they apply file-wide, but
 // none of them touches a module the shell tests use (Wizard imports neither
 // onboardingApi, useTranslate nor templateCatalog).
-vi.mock("../../lib/onboardingApi", () => ({
-  profileApi: {
-    get: vi.fn(),
-    save: vi.fn(() => Promise.resolve({})),
-  },
-  uploadApi: {
-    image: vi.fn(() => Promise.resolve({ url: "" })),
-    removeImage: vi.fn(() => Promise.resolve({})),
-  },
-}));
+// Partial mock (coordinator merge fix): S1-F needs profileApi/uploadApi stubbed,
+// but S1-H's tests need the REAL superCategoryApi/categoryApi/dishApi — they drive
+// them through the mocked lib/api per test. Spreading the real module keeps both;
+// a whole-module stub (profileApi/uploadApi only) left superCategoryApi undefined
+// and broke all 8 S1-H tests.
+vi.mock("../../lib/onboardingApi", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    profileApi: {
+      // Delegate to the REAL get by default: S1-H's A3-09 tests seed the profile
+      // through the mocked lib/api (api.get "/profile/"), and StepPublish loads
+      // via profileApi.get(). A bare vi.fn() returns undefined, so the seeded
+      // tagline never reached the component. S1-F's tests override this per test
+      // with mockResolvedValue/mockRejectedValueOnce as before.
+      get: vi.fn((...args) => actual.profileApi.get(...args)),
+      save: vi.fn(() => Promise.resolve({})),
+    },
+    uploadApi: {
+      image: vi.fn(() => Promise.resolve({ url: "" })),
+      removeImage: vi.fn(() => Promise.resolve({})),
+    },
+  };
+});
 
 // StepBrand destructures { translating, translateError, translateField } from
 // useTranslate(); the real composable POSTs /translate/ — mocked out, the
@@ -352,5 +366,426 @@ describe("StepBrand / StepTheme — S1-F (A3-01 load-fail guard, A3-08 overnight
     expect(payload.primary_color).toBe("#123456");
     expect(payload.secondary_color).toBe("#654321");
     expect(useThemeStore().primary).toBe("#123456");
+  });
+});
+
+
+// ── Run 8 S1-H (A3-04, A3-05, A3-07, A3-09) — appended 2026-11-15 ──────────
+// The two base Wizard mount-smoke tests above are untouched; everything below
+// this line is new. 10 tests: A3-04 upsert payload (2), A3-05 delete + A3-04
+// component round-trip (4), A3-07 save-and-exit (2), A3-09 publish gate (2).
+//
+// Mock notes — every vi.mock below is hoisted by Vitest, so it applies
+// file-wide. Each factory is either DISJOINT from the base file's factories
+// (new paths only) or a SUPERSET of one, so the base tests keep passing:
+// - ../../lib/slug, ../../i18n/translate, ../../lib/staleCache: the real
+//   lib/onboardingApi's imports, mocked so the A3-04 unit tests can assert on
+//   the exact payload superCategoryApi.upsert sends (and so mounting
+//   StepSuperCategories / StepPublish stays hermetic).
+// - ../../lib/menuVisibility, ../../lib/analytics: StepPublish's imports.
+// - ../../composables/useFocusTrap, ../../i18n/config: StepSuperCategories'
+//   imports (the mock keeps the exact shape the component reads).
+// - ../../composables/useVocabulary: RE-MOCKED as a superset of the base
+//   factory — the same groupSingular / itemSingular / catalog values the
+//   Wizard needs, plus the isShop / groupPlural / itemPlural StepPublish
+//   reads. Vitest applies the LAST factory registered for a path; if that
+//   ever changed, the StepPublish tests below would fail on the missing keys
+//   while the base tests still pass — split them into a second file then
+//   (they are one delimited block).
+// - ../../lib/api is NOT re-mocked: the base factory stands, and each test
+//   below assigns api.get / post / put / delete per-test onto the mocked
+//   default export (the object is shared and mutable).
+// - The base useConfirmModal mock (confirm resolves true) stands: the delete
+//   tests exercise the proceed path. The cancel path (confirm resolves false)
+//   cannot be flipped through that mock, so it is covered by code inspection
+//   only — see REPORT.md.
+
+vi.mock("../../lib/slug", () => ({
+  slugify: (v) =>
+    String(v || "item").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item",
+}));
+vi.mock("../../i18n/translate", () => ({ translate: (k, fallback) => fallback || k }));
+vi.mock("../../lib/staleCache", () => ({ bustCache: vi.fn() }));
+vi.mock("../../lib/menuVisibility", () => ({
+  countCustomerVisible: () => ({ categories: 2, dishes: 5 }),
+}));
+vi.mock("../../lib/analytics", () => ({ trackEvent: vi.fn() }));
+vi.mock("../../composables/useFocusTrap", () => ({ useFocusTrap: vi.fn() }));
+vi.mock("../../i18n/config", () => ({
+  DEFAULT_LOCALE: "en",
+  LOCALE_OPTIONS: [
+    { code: "en", label: "English", nativeLabel: "EN", dir: "ltr" },
+    { code: "fr", label: "French", nativeLabel: "FR", dir: "ltr" },
+    { code: "ar", label: "Arabic", nativeLabel: "AR", dir: "rtl" },
+  ],
+  normalizeLocale: (v) => {
+    const p = String(v || "en").trim().toLowerCase().split(/[-_]/)[0];
+    return ["en", "fr", "ar"].includes(p) ? p : "en";
+  },
+  getLocaleOption: () => ({ code: "en", label: "English", nativeLabel: "EN", dir: "ltr" }),
+  getLocaleDirection: () => "ltr",
+  detectBrowserLocale: () => "en",
+}));
+// Real refs (coordinator merge fix): StepPublish's template calls
+// groupPlural.toLowerCase() / itemPlural.toLowerCase() and v-if="!isShop",
+// which rely on <script setup> ref auto-unwrapping. Plain { value } objects
+// are NOT unwrapped in templates, so the mock returned an object with no
+// toLowerCase and both A3-09 tests crashed. The Wizard reads .value in script,
+// which real refs also satisfy.
+vi.mock("../../composables/useVocabulary", async () => {
+  const { ref } = await import("vue");
+  return {
+    useVocabulary: () => ({
+      catalog: {},
+      groupSingular: ref("category"),
+      itemSingular: ref("dish"),
+      isShop: ref(false),
+      groupPlural: ref("Categories"),
+      itemPlural: ref("Dishes"),
+    }),
+  };
+});
+
+import api from "../../lib/api";
+import { superCategoryApi } from "../../lib/onboardingApi";
+import StepSuperCategories from "../StepSuperCategories.vue";
+import StepPublish from "../StepPublish.vue";
+
+// ── A3-04 — superCategoryApi.upsert keeps description + cover image ─────────
+// Before the fix the whitelist payload had no description / description_i18n /
+// image_url, so editor edits were silently discarded on save and reverted on
+// reload. These tests assert on the exact payload the API layer sends.
+describe("S1-H A3-04 — superCategoryApi.upsert keeps description + image", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    api.get = vi.fn(() => Promise.resolve({ data: {} }));
+    api.post = vi.fn((url, payload) =>
+      Promise.resolve({ data: { id: 9, slug: "mains", category_count: 0, ...payload } })
+    );
+    api.put = vi.fn((url, payload) =>
+      Promise.resolve({ data: { id: 7, slug: "mains", category_count: 0, ...payload } })
+    );
+    api.delete = vi.fn(() => Promise.resolve({ data: {} }));
+  });
+
+  const group = (overrides = {}) => ({
+    name: "Mains",
+    name_i18n: { fr: "Plats" },
+    description: "Hearty mains, served all day",
+    description_i18n: { fr: "Plats copieux" },
+    image_url: "example.com/cover.jpg",
+    position: 0,
+    is_published: true,
+    is_temporarily_disabled: false,
+    disabled_note: "",
+    ...overrides,
+  });
+
+  it("POSTs description, description_i18n and image_url when creating", async () => {
+    await superCategoryApi.upsert(group());
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [, payload] = api.post.mock.calls[0];
+    expect(payload.name).toBe("Mains");
+    expect(payload.description).toBe("Hearty mains, served all day");
+    expect(payload.description_i18n).toEqual({ fr: "Plats copieux" });
+    expect(payload.image_url).toBe("https://example.com/cover.jpg");
+  });
+
+  it("PUTs description, description_i18n and image_url when updating", async () => {
+    await superCategoryApi.upsert(group({ id: 7, slug: "mains" }));
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][0]).toBe("/super-categories/7/");
+    const [, payload] = api.put.mock.calls[0];
+    expect(payload.description).toBe("Hearty mains, served all day");
+    expect(payload.description_i18n).toEqual({ fr: "Plats copieux" });
+    expect(payload.image_url).toBe("https://example.com/cover.jpg");
+  });
+});
+
+// ── A3-05 — super-category delete: live counts, confirm, immediate ──────────
+// Before the fix removeByLocalId spliced the row with no confirm and only
+// queued the DELETE for saveAll, guarded only by the load-time category_count
+// (stale the moment a category is added elsewhere) — while the backend
+// cascade-deletes the group's categories AND their dishes.
+describe("S1-H A3-05 — super-category delete confirms live counts, deletes now", () => {
+  let wrapper;
+
+  const groupRow = (overrides = {}) => ({
+    id: 7,
+    name: "Mains",
+    name_i18n: {},
+    slug: "mains",
+    description: "",
+    description_i18n: {},
+    image_url: "",
+    position: 0,
+    is_published: true,
+    is_temporarily_disabled: false,
+    disabled_note: "",
+    category_count: 0,
+    ...overrides,
+  });
+
+  // The group loads with a STALE category_count of 0, but a category + dish
+  // were added elsewhere since — the delete must count live, not trust the row.
+  const stubApi = ({ deleteImpl } = {}) => {
+    api.get = vi.fn((url) => {
+      if (url.includes("/super-categories/")) return Promise.resolve({ data: [groupRow()] });
+      if (url.includes("/categories/")) {
+        return Promise.resolve({ data: [{ id: 11, name: "Soups", super_category: 7 }] });
+      }
+      if (url.includes("/dishes/")) {
+        return Promise.resolve({ data: [{ id: 21, name: "Soup", category: 11 }] });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    api.post = vi.fn((url, payload) =>
+      Promise.resolve({ data: { id: 9, slug: "x", category_count: 0, ...payload } })
+    );
+    api.put = vi.fn((url, payload) =>
+      Promise.resolve({ data: { id: 7, slug: "mains", category_count: 0, ...payload } })
+    );
+    api.delete = deleteImpl || vi.fn(() => Promise.resolve({ data: {} }));
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    stubApi();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountGroups = () =>
+    shallowMount(StepSuperCategories, {
+      global: { stubs: { Teleport: { template: "<slot />" } } },
+    });
+
+  const loadGroups = async () => {
+    wrapper = mountGroups();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Mains");
+  };
+
+  const clickDelete = async () => {
+    const btn = wrapper.find('button[aria-label="common.remove"]');
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+  };
+
+  const clickSave = async () => {
+    const saveBtn = wrapper.findAll("button").find((b) => b.text().trim() === "common.save");
+    expect(saveBtn.exists()).toBe(true);
+    await saveBtn.trigger("click");
+    await flushPromises();
+    await flushPromises();
+  };
+
+  it("fetches live category/dish counts and DELETEs immediately on confirm", async () => {
+    await loadGroups();
+    await clickDelete();
+    // Live counts were read before the confirm — not the stale load-time 0.
+    expect(api.get).toHaveBeenCalledWith("/categories/");
+    expect(api.get).toHaveBeenCalledWith("/dishes/");
+    // …and the DELETE fired immediately, not queued for Save.
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.delete).toHaveBeenCalledWith("/super-categories/7/");
+    expect(wrapper.text()).not.toContain("Mains");
+  });
+
+  it("does not fire the delete again when the (now empty) list is saved", async () => {
+    await loadGroups();
+    await clickDelete();
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    await clickSave();
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("keeps the row when the server refuses the delete (combo-protected 409)", async () => {
+    stubApi({
+      deleteImpl: vi.fn(() => {
+        const err = new Error("Cannot delete — a combo still uses a dish");
+        err.status = 409;
+        return Promise.reject(err);
+      }),
+    });
+    await loadGroups();
+    await clickDelete();
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("Mains");
+    expect(useToastStore().message).toBe("stepSuperCategories.comboProtectedDelete");
+  });
+
+  it("persists an edited description + cover image through Save (A3-04, component level)", async () => {
+    await loadGroups();
+    // Open the REAL list row's editor (the panel header renders the row name).
+    const editBtn = wrapper.find('button[aria-label="common.edit"]');
+    expect(editBtn.exists()).toBe(true);
+    await editBtn.trigger("click");
+    await flushPromises();
+    const descInput = wrapper.find('input[aria-label="stepSuperCategories.descriptionLabel"]');
+    expect(descInput.exists()).toBe(true);
+    await descInput.setValue("Hearty mains, served all day");
+    const imageInput = wrapper.find('input[aria-label="stepSuperCategories.imageUrlLabel"]');
+    expect(imageInput.exists()).toBe(true);
+    await imageInput.setValue("https://example.com/cover.jpg");
+    // Close the editor (its footer button reads common.close), then Save.
+    const closeBtn = wrapper.findAll("button").find((b) => b.text().trim() === "common.close");
+    expect(closeBtn.exists()).toBe(true);
+    await closeBtn.trigger("click");
+    await flushPromises();
+    await clickSave();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][0]).toBe("/super-categories/7/");
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.description).toBe("Hearty mains, served all day");
+    expect(payload.image_url).toBe("https://example.com/cover.jpg");
+  });
+});
+
+// ── A3-07 — "Save & exit" saves the active step first ───────────────────────
+// Before the fix saveAndExit only wrote the step number to localStorage, so
+// unsaved step edits were lost when the wizard unmounted. The Wizard now calls
+// the active step's exposed saver through its step ref and stays put when the
+// save reports failure. The live step is stubbed with a saver here so the exit
+// path can be driven without a real step; router.push itself is the base
+// file's un-spied mock, so the tests assert the observable side effects — the
+// saver ran, and the step index was persisted only after a successful save
+// (vs. not persisted at all when the save reports failure).
+describe("S1-H A3-07 — saveAndExit saves the active step first", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountWizardWithStepSaver = (saveImpl) => {
+    const saveAllSpy = vi.fn(saveImpl);
+    wrapper = mount(Wizard, {
+      global: {
+        stubs: {
+          KeepAlive: { template: "<slot />" },
+          StepStart: { template: "<div />", methods: { saveAll: saveAllSpy } },
+        },
+      },
+    });
+    return saveAllSpy;
+  };
+
+  const mountUnpublished = async (saveImpl) => {
+    const tenant = useTenantStore();
+    tenant.$patch({ meta: { slug: "demo", profile: { is_menu_published: false } } });
+    const spy = mountWizardWithStepSaver(saveImpl);
+    await flushPromises();
+    await flushPromises();
+    return spy;
+  };
+
+  const clickSaveAndExit = async () => {
+    const btn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("onboardingWizard.saveAndExit"));
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+    await flushPromises();
+  };
+
+  it("calls the step's save before persisting the step index", async () => {
+    const spy = await mountUnpublished(() => Promise.resolve(true));
+    await clickSaveAndExit();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("resto:onboarding-step:v2:demo")).toBe("1");
+  });
+
+  it("does not persist or leave when the step save reports failure", async () => {
+    const spy = await mountUnpublished(() => Promise.resolve(false));
+    await clickSaveAndExit();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("resto:onboarding-step:v2:demo")).toBeNull();
+  });
+});
+
+// ── A3-09 — publish gate requires the brand check ───────────────────────────
+// Before the fix canPublish was menu-only (categories + dishes) while the
+// readiness list showed brand "missing" in amber and the Publish button stayed
+// enabled — a menu could go live with no tagline, no contact details, no logo.
+// The gate now also requires hasBrand (the same definition the list shows).
+describe("S1-H A3-09 — publish gate requires the brand check", () => {
+  let wrapper;
+  let profileData;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    // S1-F's tests above leave a mockResolvedValue on profileApi.get (clearAllMocks
+    // does not remove implementations). Restore the delegating default so this
+    // describe's api.get "/profile/" seed actually reaches StepPublish.
+    profileApi.get.mockRestore();
+    profileData = { is_menu_published: false, tagline: "", phone: "", whatsapp: "", is_open: true };
+    api.get = vi.fn((url) => {
+      if (url.includes("/profile/")) return Promise.resolve({ data: profileData });
+      if (url.includes("/super-categories/")) return Promise.resolve({ data: [] });
+      if (url.includes("/categories/")) return Promise.resolve({ data: [] });
+      if (url.includes("/dishes/")) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: {} });
+    });
+    api.post = vi.fn(() => Promise.resolve({ data: {} }));
+    api.put = vi.fn(() => Promise.resolve({ data: {} }));
+    api.delete = vi.fn(() => Promise.resolve({ data: {} }));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountPublish = async () => {
+    wrapper = shallowMount(StepPublish, {
+      global: { stubs: { RouterLink: { template: "<slot />" } } },
+    });
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+  };
+
+  const publishButton = () =>
+    wrapper.findAll("button").find((b) => b.text().includes("stepPublish.publishMenu"));
+
+  it("disables Publish and names the brand when the menu is ready but the brand is missing", async () => {
+    await mountPublish();
+    expect(wrapper.text()).toContain("stepPublish.publishBrandRequirement");
+    expect(wrapper.text()).not.toContain("stepPublish.publishRequirement");
+    const btn = publishButton();
+    expect(btn.exists()).toBe(true);
+    expect(btn.attributes("disabled")).not.toBeUndefined();
+  });
+
+  it("enables Publish once a tagline is set (same menu, brand present)", async () => {
+    profileData = { ...profileData, tagline: "Great food, honest prices" };
+    await mountPublish();
+    expect(wrapper.text()).not.toContain("stepPublish.publishBrandRequirement");
+    const btn = publishButton();
+    expect(btn.exists()).toBe(true);
+    expect(btn.attributes("disabled")).toBeUndefined();
   });
 });

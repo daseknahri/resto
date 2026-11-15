@@ -93,9 +93,16 @@
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
       </div>
 
-      <div v-if="!canPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+      <!-- A3-09: the readiness list above can show brand "missing" while the
+           Publish button stays enabled — the brand gate below disables it, and
+           the v-else-if block says why instead of the menu requirement. -->
+      <div v-if="!menuReady" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
+      </div>
+      <div v-else-if="!hasBrand" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishBrandRequirement") }}</p>
       </div>
 
       <!-- Price-0 warning (non-blocking) -->
@@ -123,7 +130,7 @@
         <button
           class="ui-btn-primary w-full justify-center sm:w-auto disabled:opacity-60"
           :disabled="publishing || !canPublish"
-          :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
+          :title="publishDisabledTitle"
           @click="publish"
         >
           {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog }) }}
@@ -738,13 +745,20 @@ const canWhatsappOrder = computed(() => tenant.entitlements?.can_whatsapp_order 
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const sectionPanelClass = computed(() => "ui-panel space-y-4 p-5");
 
-const checks = computed(() => {
+// Brand readiness — the same definition the readiness list shows (tagline OR any
+// contact counts as "brand"; see A3-46 for why that check itself stays weak).
+// Extracted so the publish gate and the list can never disagree again (A3-09).
+const hasBrand = computed(() => {
   const p = profileSnapshot.value || {};
   const hasContact = Boolean((p.phone || "").trim() || (p.whatsapp || "").trim());
-  const hasBrand = Boolean((p.tagline || "").trim() || hasContact);
+  return Boolean((p.tagline || "").trim() || hasContact);
+});
+
+const checks = computed(() => {
+  const p = profileSnapshot.value || {};
   const hasTheme = Boolean((p.logo_url || "").trim() || (p.hero_url || "").trim() || p.primary_color || p.secondary_color);
   const items = [
-    { key: "brand", label: t("stepPublish.checkBrandContact"), ok: hasBrand },
+    { key: "brand", label: t("stepPublish.checkBrandContact"), ok: hasBrand.value },
     { key: "categories", label: t("stepPublish.checkCategories", { count: categoriesCount.value, group: groupPlural.value }), ok: categoriesCount.value > 0 },
     { key: "dishes", label: t("stepPublish.checkDishes", { count: dishesCount.value, item: itemPlural.value }), ok: dishesCount.value > 0 },
     { key: "theme", label: t("stepPublish.checkTheme"), ok: hasTheme },
@@ -760,7 +774,19 @@ const checks = computed(() => {
 // Single source of truth for "is the menu ready to publish". Drives the readiness
 // warning, the disabled publish button, and (via the can-publish event) the parent
 // wizard's forward-progression guard on the Publish step.
-const canPublish = computed(() => categoriesCount.value > 0 && dishesCount.value > 0);
+// A3-09: this was menu-only (categories + dishes) even though the wizard comment
+// calls the gate "menu non-empty + brand/profile essentials" — so a menu could go
+// live with no tagline, no contact details, no logo while the readiness list
+// above showed brand "missing". The gate now also requires the brand check, the
+// same definition the list shows, so the button and the list agree.
+const menuReady = computed(() => categoriesCount.value > 0 && dishesCount.value > 0);
+const canPublish = computed(() => menuReady.value && hasBrand.value);
+const publishDisabledTitle = computed(() => {
+  if (canPublish.value) return undefined;
+  return !menuReady.value
+    ? t("stepPublish.publishDisabledHint")
+    : t("stepPublish.publishBrandDisabledHint");
+});
 const standalone = computed(() => props.standalone);
 
 // Keep the parent wizard's forward-progression guard in sync with readiness.
@@ -903,13 +929,21 @@ const saveStatus = async () => {
     form.business_type = saved?.business_type || "restaurant";
     await tenant.fetchMeta();
     toast.show(t("stepPublish.statusSaved"), "success");
+    return true;
   } catch (e) {
     Object.assign(errors, e?.fieldErrors || {});
     toast.show(e?.message || t("stepPublish.statusSaveFailed"), "error");
+    return false;
   } finally {
     savingStatus.value = false;
   }
 };
+
+// Exposed so a parent (e.g. the onboarding Wizard's "Save & exit") can persist
+// this step's edits before navigating away. saveStatus saves the whole step form
+// (availability, settings, theme/layout fields) via saveProfile and returns a
+// boolean so the caller knows whether leaving is safe.
+defineExpose({ save: saveStatus, saveStatus });
 
 const saveDirectory = async () => {
   savingDirectory.value = true;

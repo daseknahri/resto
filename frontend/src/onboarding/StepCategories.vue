@@ -880,7 +880,7 @@ const saveAll = async () => {
   if (!validateClient()) {
     status.value = t("stepCategories.fixValidation");
     saving.value = false;
-    return;
+    return false;
   }
   try {
     const validCats = categories.filter((cat) => cat.name?.trim());
@@ -909,10 +909,12 @@ const saveAll = async () => {
     status.value = t("common.saved");
     toast.show(t("stepCategories.savedToast"), "success");
     if (!props.standalone) emit("next");
+    return true;
   } catch (error) {
     status.value = t("common.saveFailed");
     globalError.value = error?.message || t("stepCategories.saveFailed");
     toast.show(globalError.value, "error");
+    return false;
   } finally {
     saving.value = false;
   }
@@ -927,4 +929,7 @@ onMounted(() => document.addEventListener("keydown", onModalEscape));
 onUnmounted(() => document.removeEventListener("keydown", onModalEscape));
 
 onMounted(load);
+
+// Run 8 S1 (A3-07): expose the saver so Wizard.saveAndExit can save first.
+defineExpose({ saveAll });
 </script>

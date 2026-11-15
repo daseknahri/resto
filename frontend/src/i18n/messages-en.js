@@ -2923,6 +2923,8 @@ stepPublish: {
   priceZeroWarningTitle: "Some dishes have a price of 0",
   priceZeroWarningBody: "Some published items have no price set, so customers could add them to their cart for free. Review your prices before going live.",
   priceZeroDismiss: "Dismiss",
+  publishBrandDisabledHint: "Add a tagline or contact details before you can publish.",
+  publishBrandRequirement: "Add a tagline or contact details before publishing — otherwise your menu goes live with no brand on the storefront.",
 },
 closureDates: {
   addDate: "Add a closure date",
@@ -2973,7 +2975,12 @@ stepSuperCategories: {
   savedToast: "Menu groups saved",
   saveFailed: "Menu groups save failed",
   fixValidation: "Fix validation errors",
-  deleteBlockedHasCategories: "Cannot delete: group still has categories"
+  deleteBlockedHasCategories: "Cannot delete: group still has categories",
+  comboProtectedDelete: "Cannot delete — a combo still uses a dish in this group. Remove it from the combo first.",
+  deleteCountsFailed: "Could not check what this group contains, so the delete was cancelled. Try again.",
+  removeConfirm: "Remove \"{name}\"? Its categories and dishes will also be removed.",
+  removeConfirmBody: "This will also delete {categories} categor(ies) and {dishes} dish(es) in this group. This cannot be undone.",
+  removeConfirmEmpty: "This group is empty. Deleting it cannot be undone.",
 },
 stepCategories: {
   title: "Categories",
