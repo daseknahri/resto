@@ -70,10 +70,21 @@ vi.mock("../../lib/api", () => ({
     patch: vi.fn(() => Promise.resolve({ data: {} })),
     delete: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // Run 8 G3b W9 (A2-36): the page imports extractApiErrorMessage from
+  // lib/api — detail string, else joined field errors, else fallback.
+  extractApiErrorMessage: vi.fn((err, fallback) => {
+    const data = err?.response?.data;
+    if (typeof data?.detail === "string") return data.detail;
+    if (data && typeof data === "object") {
+      const parts = Object.values(data).flat().filter(Boolean);
+      if (parts.length) return parts.join(" ");
+    }
+    return err?.message || fallback;
+  }),
 }));
 
 import AdminDeliveryZones from "../AdminDeliveryZones.vue";
-import api from "../../lib/api";
+import api, { extractApiErrorMessage } from "../../lib/api";
 
 const mountPage = () =>
   shallowMount(AdminDeliveryZones, {
@@ -271,5 +282,195 @@ describe("AdminDeliveryZones — fee tier validation (A2-11)", () => {
       "/admin/delivery-zones/",
       expect.objectContaining({ fee_tiers: [{ km_up_to: 3, fee: 2.5 }, { fee: 6 }] }),
     );
+  });
+});
+/**
+ * MERGE NOTE (Run 8 G3b W9): appended describe blocks — radius/polygon
+ * validation (A2-34/A2-35), polygon preview (A2-32) and save-error/Cancel
+ * behaviour (A2-36). Reuses the file's mountPage / _routes / api mock /
+ * mocked useI18n (keys echo as `ns.key` / `ns.key({json})`) and the G3a
+ * findButton helper. The api mock also gains extractApiErrorMessage (a
+ * faithful mini-implementation, wrapped in vi.fn) because the page now
+ * imports it — see the mock factory above.
+ */
+
+describe("AdminDeliveryZones — radius/polygon validation + preview (A2-32/A2-34/A2-35)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // Opens the create form with a valid Casablanca polygon + radius 5; the
+  // caller then overrides individual fields before saving.
+  const openForm = async (overrides = {}) => {
+    _routes = { "/admin/delivery-zones/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    await findButton(wrapper, "adminZones.newZone").trigger("click");
+    await flushPromises();
+    await wrapper.find("#az-name").setValue("Downtown");
+    await wrapper.find("#az-city").setValue("Casablanca");
+    await wrapper.find("#az-polygon").setValue(
+      overrides.polygon
+        ?? '[{"lat":33.57,"lng":-7.59},{"lat":33.58,"lng":-7.58},{"lat":33.56,"lng":-7.60}]',
+    );
+    if (overrides.radius !== undefined) {
+      await wrapper.find("#az-radius").setValue(overrides.radius);
+    }
+    if (overrides.lat !== undefined) {
+      await wrapper.find("#az-lat").setValue(overrides.lat);
+    }
+    if (overrides.lng !== undefined) {
+      await wrapper.find("#az-lng").setValue(overrides.lng);
+    }
+    return wrapper;
+  };
+
+  const clickSave = async () => {
+    await findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+  };
+
+  it("radius 0 blocks the save with radiusError (no POST)", async () => {
+    await openForm({ radius: 0 });
+    await clickSave();
+    expect(wrapper.text()).toContain("adminZones.radiusError");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("radius over 100 blocks the save with radiusError (no POST)", async () => {
+    await openForm({ radius: 150 });
+    await clickSave();
+    expect(wrapper.text()).toContain("adminZones.radiusError");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("radius 100 submits (POST carries the radius)", async () => {
+    await openForm({ radius: 100 });
+    api.post.mockResolvedValue({ data: { id: 1, name: "Downtown", polygon: [] } });
+    await clickSave();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/delivery-zones/",
+      expect.objectContaining({ approx_radius_km: 100 }),
+    );
+  });
+
+  it("polygon lat 999 blocks the save with polygonRangeError (no POST)", async () => {
+    await openForm({ polygon: '[{"lat":999,"lng":-7.59},{"lat":33.58,"lng":-7.58},{"lat":33.56,"lng":-7.60}]' });
+    await clickSave();
+    expect(wrapper.text()).toContain("adminZones.polygonRangeError");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("polygon lng -5000 blocks the save with polygonRangeError (no POST)", async () => {
+    await openForm({ polygon: '[{"lat":33.57,"lng":-5000},{"lat":33.58,"lng":-7.58},{"lat":33.56,"lng":-7.60}]' });
+    await clickSave();
+    expect(wrapper.text()).toContain("adminZones.polygonRangeError");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("centre lat 100 blocks the save with centerRangeError (no POST)", async () => {
+    await openForm({ lat: 100 });
+    await clickSave();
+    expect(wrapper.text()).toContain("adminZones.centerRangeError");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("valid polygon renders the preview: points list + centroid + SVG plot", async () => {
+    await openForm();
+    const text = wrapper.text();
+    expect(text).toContain("adminZones.polygonPreviewTitle");
+    // Centroid of the three Casablanca points: (33.57, -7.59).
+    expect(text).toContain('adminZones.polygonPreviewCentroid({"lat":"33.5700","lng":"-7.5900"})');
+    // Points list renders each point's coordinates (not just the textarea value).
+    expect(text).toContain("33.57");
+    expect(text).toContain("-7.59");
+    expect(wrapper.find('svg[role="img"]').exists()).toBe(true);
+  });
+
+  it("[lat, lng] pair polygon is normalised to {lat, lng} objects on POST", async () => {
+    await openForm({ polygon: "[[33.5,-7.5],[33.6,-7.5],[33.6,-7.6]]" });
+    api.post.mockResolvedValue({ data: { id: 1, name: "Downtown", polygon: [] } });
+    await clickSave();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/delivery-zones/",
+      expect.objectContaining({
+        polygon: [
+          { lat: 33.5, lng: -7.5 },
+          { lat: 33.6, lng: -7.5 },
+          { lat: 33.6, lng: -7.6 },
+        ],
+      }),
+    );
+  });
+});
+
+describe("AdminDeliveryZones — save error + Cancel while saving (A2-36)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openValidForm = async () => {
+    _routes = { "/admin/delivery-zones/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    await findButton(wrapper, "adminZones.newZone").trigger("click");
+    await flushPromises();
+    await wrapper.find("#az-name").setValue("Downtown");
+    await wrapper.find("#az-city").setValue("Casablanca");
+    await wrapper.find("#az-polygon").setValue(
+      '[{"lat":33.57,"lng":-7.59},{"lat":33.58,"lng":-7.58},{"lat":33.56,"lng":-7.60}]',
+    );
+    return wrapper;
+  };
+
+  it("field-error dict routes through extractApiErrorMessage (not the generic message)", async () => {
+    await openValidForm();
+    const fieldError = { response: { data: { approx_radius_km: ["Must be greater than 0."] } } };
+    api.post.mockRejectedValueOnce(fieldError);
+    await findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+    expect(extractApiErrorMessage).toHaveBeenCalledWith(
+      fieldError,
+      "adminZones.saveFailed",
+    );
+    expect(api.post).toHaveBeenCalled();
+  });
+
+  it("Cancel is disabled while saving and the form closes once the save lands", async () => {
+    await openValidForm();
+    let resolvePost;
+    api.post.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePost = resolve; }),
+    );
+    // Do NOT await the click: the handler awaits the still-pending POST.
+    findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+    const cancel = findButton(wrapper, "adminZones.cancelBtn");
+    expect(cancel.attributes("disabled")).toBeDefined();
+    resolvePost({ data: { id: 1, name: "Downtown", polygon: [] } });
+    await flushPromises();
+    expect(wrapper.find("#az-name").exists()).toBe(false);
   });
 });

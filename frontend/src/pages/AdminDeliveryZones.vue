@@ -269,7 +269,9 @@
                     type="number"
                     step="0.0001"
                     class="ui-input"
-                    placeholder="48.8566"
+                    :placeholder="t('adminZones.centerLatPlaceholder')"
+                    :aria-invalid="centerError ? 'true' : undefined"
+                    aria-describedby="admin-zones-center-error"
                   />
                 </div>
                 <div>
@@ -282,10 +284,18 @@
                     type="number"
                     step="0.0001"
                     class="ui-input"
-                    placeholder="2.3522"
+                    :placeholder="t('adminZones.centerLngPlaceholder')"
+                    :aria-invalid="centerError ? 'true' : undefined"
+                    aria-describedby="admin-zones-center-error"
                   />
                 </div>
               </div>
+              <p
+                v-if="centerError"
+                id="admin-zones-center-error"
+                class="mt-1 text-xs text-red-400"
+                role="alert"
+              >{{ centerError }}</p>
               <!-- Approx radius -->
               <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1" for="az-radius">
@@ -297,9 +307,18 @@
                   type="number"
                   step="0.5"
                   min="0.5"
+                  max="100"
                   class="ui-input"
-                  placeholder="5"
+                  :placeholder="t('adminZones.radiusPlaceholder')"
+                  :aria-invalid="radiusError ? 'true' : undefined"
+                  aria-describedby="admin-zones-radius-error"
                 />
+                <p
+                  v-if="radiusError"
+                  id="admin-zones-radius-error"
+                  class="mt-1 text-xs text-red-400"
+                  role="alert"
+                >{{ radiusError }}</p>
               </div>
               <!-- Polygon JSON -->
               <div>
@@ -312,7 +331,7 @@
                   v-model="polygonJson"
                   rows="5"
                   class="ui-textarea font-mono text-[11px] resize-y"
-                  :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
+                  :placeholder="t('adminZones.polygonPlaceholder')"'
                   :aria-invalid="polygonError ? 'true' : undefined"
                   aria-describedby="admin-zones-polygon-error"
                 />
@@ -322,6 +341,54 @@
                   class="mt-1 text-xs text-red-400"
                   role="alert"
                 >{{ polygonError }}</p>
+                <!-- A2-32: polygon preview — points list + centroid + an inline
+                     SVG plot of the shape (no map library). Renders from the
+                     parsed textarea; nothing shows while it is invalid. -->
+                <div
+                  v-if="polygonPreview.points.length"
+                  class="mt-2 rounded-xl border border-slate-700/60 bg-slate-800/40 p-3"
+                >
+                  <p class="text-xs font-medium text-slate-300">{{ t('adminZones.polygonPreviewTitle') }}</p>
+                  <svg
+                    viewBox="0 0 200 140"
+                    class="mt-2 w-full max-w-[280px]"
+                    role="img"
+                    :aria-label="t('adminZones.polygonPreviewTitle')"
+                  >
+                    <polygon
+                      :points="polygonPreview.svgPoints"
+                      fill="rgba(56, 189, 248, 0.15)"
+                      stroke="#38bdf8"
+                      stroke-width="1.5"
+                    />
+                    <circle
+                      v-for="(pt, i) in polygonPreview.svgCircles"
+                      :key="`pt-${i}`"
+                      :cx="pt.x"
+                      :cy="pt.y"
+                      r="3"
+                      fill="#38bdf8"
+                    />
+                    <circle
+                      :cx="polygonPreview.centroidSvg.x"
+                      :cy="polygonPreview.centroidSvg.y"
+                      r="3.5"
+                      fill="#f59e0b"
+                    />
+                  </svg>
+                  <p class="mt-1 text-[11px] text-slate-400">
+                    {{ t('adminZones.polygonPreviewCentroid', { lat: polygonPreview.centroid.lat.toFixed(4), lng: polygonPreview.centroid.lng.toFixed(4) }) }}
+                  </p>
+                  <ul class="mt-1 space-y-0.5 text-[11px] tabular-nums text-slate-400">
+                    <li v-for="(pt, i) in polygonPreview.points" :key="`li-${i}`">
+                      {{ t('adminZones.polygonPoint', { index: i + 1 }) }} — {{ pt.lat }}, {{ pt.lng }}
+                    </li>
+                  </ul>
+                </div>
+                <p
+                  v-else-if="!polygonError"
+                  class="mt-1 text-[11px] text-slate-500"
+                >{{ t('adminZones.polygonPreviewEmpty') }}</p>
               </div>
               <!-- Fee tiers JSON -->
               <div>
@@ -370,7 +437,8 @@
                 {{ saving ? t('common.loading') : (editing ? t('adminZones.saveBtn') : t('adminZones.createBtn')) }}
               </button>
               <button
-                class="ui-btn-outline px-5 py-2 text-sm"
+                class="ui-btn-outline px-5 py-2 text-sm disabled:opacity-50"
+                :disabled="saving"
                 @click="closeForm"
               >
                 {{ t('adminZones.cancelBtn') }}
@@ -384,10 +452,10 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
-import api from '../lib/api';
+import api, { extractApiErrorMessage } from '../lib/api';
 import { useToastStore } from '../stores/toast';
 
 const { t } = useI18n();
@@ -437,8 +505,14 @@ const { confirm } = useConfirmModal();
 const deletingId = ref(null);
 const polygonJson = ref('[]');
 const polygonError = ref('');
+const radiusError = ref('');
+const centerError = ref('');
 const feeTiersJson = ref('[]');
 const feeTiersError = ref('');
+
+// Run 8 G3b A2-34: approx_radius_km must be > 0 and ≤ 100 km (the server
+// enforces the same bound — see _validate_radius in accounts/views.py).
+const MAX_RADIUS_KM = 100;
 
 const defaultForm = () => ({
   name: '',
@@ -449,6 +523,80 @@ const defaultForm = () => ({
   is_active: true,
 });
 const form = ref(defaultForm());
+
+// Run 8 G3b A2-35: parse + validate a polygon textarea value. Accepts the
+// documented {lat, lng} objects and [lat, lng] pairs (normalised to objects
+// for the API payload); rejects non-numeric / out-of-range coordinates.
+// Returns { points: [{lat, lng}...], error: null | 'polygonError' | 'polygonRangeError' }.
+const parsePolygon = (raw) => {
+  let arr;
+  try {
+    arr = JSON.parse(raw);
+  } catch {
+    return { points: [], error: 'polygonError' };
+  }
+  if (!Array.isArray(arr) || arr.length < 3) return { points: [], error: 'polygonError' };
+  const toNum = (v) => {
+    if (typeof v === 'boolean' || v === null || v === undefined) return NaN;
+    if (typeof v === 'string' && v.trim() === '') return NaN;
+    return Number(v);
+  };
+  const points = [];
+  for (const pt of arr) {
+    let lat;
+    let lng;
+    if (Array.isArray(pt) && pt.length === 2) {
+      [lat, lng] = pt;
+    } else if (pt && typeof pt === 'object') {
+      ({ lat, lng } = pt);
+    } else {
+      return { points: [], error: 'polygonError' };
+    }
+    lat = toNum(lat);
+    lng = toNum(lng);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return { points: [], error: 'polygonError' };
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return { points: [], error: 'polygonRangeError' };
+    points.push({ lat, lng });
+  }
+  return { points, error: null };
+};
+
+// Run 8 G3b A2-32: polygon preview — centroid + an inline SVG plot of the
+// points (no map library). Empty while the textarea does not parse.
+const polygonPreview = computed(() => {
+  const { points } = parsePolygon(polygonJson.value);
+  const empty = { points: [], svgPoints: '', svgCircles: [], centroid: null, centroidSvg: { x: 0, y: 0 } };
+  if (!points.length) return empty;
+  const lats = points.map((p) => p.lat);
+  const lngs = points.map((p) => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const spanLat = Math.max(maxLat - minLat, 1e-6);
+  const spanLng = Math.max(maxLng - minLng, 1e-6);
+  const W = 200;
+  const H = 140;
+  const PAD = 12;
+  const project = (lat, lng) => ({
+    x: PAD + ((lng - minLng) / spanLng) * (W - 2 * PAD),
+    y: PAD + ((maxLat - lat) / spanLat) * (H - 2 * PAD),
+  });
+  const centroid = {
+    lat: lats.reduce((a, b) => a + b, 0) / points.length,
+    lng: lngs.reduce((a, b) => a + b, 0) / points.length,
+  };
+  return {
+    points,
+    svgPoints: points.map((p) => {
+      const q = project(p.lat, p.lng);
+      return `${q.x.toFixed(1)},${q.y.toFixed(1)}`;
+    }).join(' '),
+    svgCircles: points.map((p) => project(p.lat, p.lng)),
+    centroid,
+    centroidSvg: project(centroid.lat, centroid.lng),
+  };
+});
 
 
 const fetchZones = async () => {
@@ -470,6 +618,8 @@ const openCreate = () => {
   form.value = defaultForm();
   polygonJson.value = '[]';
   polygonError.value = '';
+  radiusError.value = '';
+  centerError.value = '';
   feeTiersJson.value = '[]';
   feeTiersError.value = '';
   showForm.value = true;
@@ -488,6 +638,8 @@ const openEdit = (zone) => {
   };
   polygonJson.value = JSON.stringify(zone.polygon, null, 2);
   polygonError.value = '';
+  radiusError.value = '';
+  centerError.value = '';
   feeTiersJson.value = JSON.stringify(zone.fee_tiers || [], null, 2);
   feeTiersError.value = '';
   showForm.value = true;
@@ -499,13 +651,29 @@ const closeForm = () => {
 
 const save = async () => {
   polygonError.value = '';
+  radiusError.value = '';
+  centerError.value = '';
   feeTiersError.value = '';
-  let polygon;
-  try {
-    polygon = JSON.parse(polygonJson.value);
-    if (!Array.isArray(polygon) || polygon.length < 3) throw new Error();
-  } catch {
-    polygonError.value = t('adminZones.polygonError');
+  // A2-35: polygon points must be numeric {lat, lng} (or [lat, lng] pairs)
+  // in range; the payload sends normalised {lat, lng} objects.
+  const parsed = parsePolygon(polygonJson.value);
+  if (parsed.error) {
+    polygonError.value = t(`adminZones.${parsed.error}`);
+    return;
+  }
+  const polygon = parsed.points;
+  // A2-35: centre coordinates are lat/lng too — range-check them when set.
+  const centreBad = (v, lo, hi) => v !== null && v !== '' && v !== undefined
+    && (Number.isNaN(Number(v)) || Number(v) < lo || Number(v) > hi);
+  if (centreBad(form.value.center_lat, -90, 90) || centreBad(form.value.center_lng, -180, 180)) {
+    centerError.value = t('adminZones.centerRangeError');
+    return;
+  }
+  // A2-34: radius must be > 0 and ≤ MAX_RADIUS_KM (server enforces the same bound).
+  const radius = Number(form.value.approx_radius_km);
+  if (form.value.approx_radius_km === null || form.value.approx_radius_km === ''
+    || Number.isNaN(radius) || radius <= 0 || radius > MAX_RADIUS_KM) {
+    radiusError.value = t('adminZones.radiusError');
     return;
   }
   let feeTiers = [];
@@ -549,7 +717,9 @@ const save = async () => {
     }
     closeForm();
   } catch (err) {
-    toast.show(err?.response?.data?.detail || t('adminZones.saveFailed'), 'error');
+    // A2-36: route the error through the shared extractor so field-error
+    // dicts (e.g. {approx_radius_km: [...]}) surface instead of the generic message.
+    toast.show(extractApiErrorMessage(err, t('adminZones.saveFailed')), 'error');
   } finally {
     saving.value = false;
   }

@@ -6915,17 +6915,49 @@ def _validate_fee_tiers(tiers):
     return cleaned, None
 
 
+# Run 8 G3b A2-34: approx_radius_km must be > 0 and at most 100 km — a zone
+# wider than that is a data error, not a delivery zone.
+MAX_ZONE_RADIUS_KM = 100.0
+
+
+def _validate_radius(value):
+    """Validate an approx_radius_km payload — shared by zone POST + PATCH.
+
+    Returns (radius_km, None) or (None, error_detail). Bools are not numbers;
+    NaN/inf fail the range check (0 < radius <= MAX_ZONE_RADIUS_KM).
+    """
+    if isinstance(value, bool):
+        return None, "approx_radius_km must be a number."
+    try:
+        radius = float(value)
+    except (TypeError, ValueError):
+        return None, "approx_radius_km must be a number."
+    if not 0 < radius <= MAX_ZONE_RADIUS_KM:
+        return (
+            None,
+            "approx_radius_km must be greater than 0 and no more than 100 km.",
+        )
+    return radius, None
+
+
 def _valid_polygon(polygon) -> bool:
-    """Each polygon point must be a {lat, lng} dict with numeric coordinates."""
+    """Each polygon point must be a {lat, lng} dict with numeric coordinates
+    in range: lat -90..90, lng -180..180 (Run 8 G3b A2-35). Bools are not
+    numbers; NaN/inf fail the range check."""
     if not isinstance(polygon, list) or len(polygon) < 3:
         return False
     for pt in polygon:
         if not isinstance(pt, dict):
             return False
+        lat, lng = pt.get("lat"), pt.get("lng")
+        if isinstance(lat, bool) or isinstance(lng, bool):
+            return False
         try:
-            float(pt.get("lat"))
-            float(pt.get("lng"))
+            lat = float(lat)
+            lng = float(lng)
         except (TypeError, ValueError):
+            return False
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
             return False
     return True
 
@@ -9275,19 +9307,38 @@ class AdminDeliveryZoneListCreateView(APIView):
         if not name or not city:
             return Response({"detail": "name and city are required."}, status=400)
         if not _valid_polygon(polygon):
-            return Response({"detail": "polygon must be a list of ≥ 3 {lat, lng} points."}, status=400)
+            return Response(
+                {
+                    "detail": "polygon must be a list of ≥ 3 {lat, lng} points "
+                    "with lat in -90..90 and lng in -180..180."
+                },
+                status=400,
+            )
 
         center_lat = data.get("center_lat")
         center_lng = data.get("center_lng")
         try:
-            approx_radius_km = float(data.get("approx_radius_km", 5.0))
             center_lat = float(center_lat) if center_lat is not None else None
             center_lng = float(center_lng) if center_lng is not None else None
         except (TypeError, ValueError):
             return Response(
-                {"detail": "center_lat, center_lng and approx_radius_km must be numbers."},
+                {"detail": "center_lat and center_lng must be numbers."},
                 status=400,
             )
+        # Run 8 G3b A2-35: centre coordinates are lat/lng too — range-check them.
+        if center_lat is not None and not -90 <= center_lat <= 90:
+            return Response(
+                {"detail": "center_lat must be between -90 and 90."}, status=400
+            )
+        if center_lng is not None and not -180 <= center_lng <= 180:
+            return Response(
+                {"detail": "center_lng must be between -180 and 180."}, status=400
+            )
+        approx_radius_km, radius_error = _validate_radius(
+            data.get("approx_radius_km", 5.0)
+        )
+        if radius_error:
+            return Response({"detail": radius_error}, status=400)
 
         fee_tiers, fee_error = _validate_fee_tiers(data.get("fee_tiers") or [])
         if fee_error:
@@ -9360,25 +9411,51 @@ class AdminDeliveryZoneDetailView(APIView):
             if "polygon" in data:
                 if not _valid_polygon(data["polygon"]):
                     return Response(
-                        {"detail": "polygon must be a list of ≥ 3 {lat, lng} points."}, status=400
+                        {
+                            "detail": "polygon must be a list of ≥ 3 {lat, lng} points "
+                            "with lat in -90..90 and lng in -180..180."
+                        },
+                        status=400,
                     )
                 zone.polygon = data["polygon"]
                 update_fields.append("polygon")
+            # Parse the numeric fields into locals first so a rejected value
+            # leaves the in-memory zone untouched; only fields present in the
+            # payload are range-checked (a legacy out-of-range stored value
+            # must not block an unrelated PATCH).
             try:
+                new_lat = zone.center_lat
+                new_lng = zone.center_lng
                 if "center_lat" in data:
-                    zone.center_lat = float(data["center_lat"]) if data["center_lat"] is not None else None
-                    update_fields.append("center_lat")
+                    new_lat = float(data["center_lat"]) if data["center_lat"] is not None else None
                 if "center_lng" in data:
-                    zone.center_lng = float(data["center_lng"]) if data["center_lng"] is not None else None
-                    update_fields.append("center_lng")
-                if "approx_radius_km" in data:
-                    zone.approx_radius_km = float(data["approx_radius_km"])
-                    update_fields.append("approx_radius_km")
+                    new_lng = float(data["center_lng"]) if data["center_lng"] is not None else None
             except (TypeError, ValueError):
                 return Response(
-                    {"detail": "center_lat, center_lng and approx_radius_km must be numbers."},
+                    {"detail": "center_lat and center_lng must be numbers."},
                     status=400,
                 )
+            # Run 8 G3b A2-35: centre coordinates are lat/lng too — range-check them.
+            if "center_lat" in data:
+                if new_lat is not None and not -90 <= new_lat <= 90:
+                    return Response(
+                        {"detail": "center_lat must be between -90 and 90."}, status=400
+                    )
+                zone.center_lat = new_lat
+                update_fields.append("center_lat")
+            if "center_lng" in data:
+                if new_lng is not None and not -180 <= new_lng <= 180:
+                    return Response(
+                        {"detail": "center_lng must be between -180 and 180."}, status=400
+                    )
+                zone.center_lng = new_lng
+                update_fields.append("center_lng")
+            if "approx_radius_km" in data:
+                radius, radius_error = _validate_radius(data["approx_radius_km"])
+                if radius_error:
+                    return Response({"detail": radius_error}, status=400)
+                zone.approx_radius_km = radius
+                update_fields.append("approx_radius_km")
             if "is_active" in data:
                 zone.is_active = bool(data["is_active"])
                 update_fields.append("is_active")
