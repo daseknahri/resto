@@ -2133,7 +2133,13 @@ const arabicMessages = {
     "stationHint": "تستطيع شاشات المطبخ التصفية حسب المحطة — اتركه فارغاً للظهور في كل مكان.",
     "removeConfirm": "هل تريد حذف \"{name}\"؟ سيتم حذف الأطباق في هذا التصنيف أيضاً.",
     "removeConfirmDishCount": "سيؤدي ذلك إلى حذف {count} طبق/أطباق في هذا التصنيف.",
-    "comboProtectedDelete": "تعذّر الحذف — لا يزال أحد الكومبوهات يستخدم طبقاً في هذا التصنيف. أزله من الكومبو أولاً."
+    "comboProtectedDelete": "تعذّر الحذف — لا يزال أحد الكومبوهات يستخدم طبقاً في هذا التصنيف. أزله من الكومبو أولاً.",
+    "discardChanges": "تجاهل التغييرات",
+    "manageSuperCategories": "إدارة مجموعات القائمة",
+    "unassignedHeading": "تصنيفات بلا مجموعة قائمة",
+    "unassignedHint": "هذه التصنيفات بلا مجموعة قائمة، لذلك تبقى مخفية من القائمة. افتح واحدا واختر مجموعة لحفظه.",
+    "unsavedChangesBody": "لديك تغييرات غير محفوظة في هذه التصنيفات. المغادرة الآن ستتجاهلها.",
+    "unsavedChangesTitle": "مغادرة دون حفظ؟",
   },
   "stepDishes": {
     "title": "الأطباق",
@@ -3385,6 +3391,12 @@ Object.assign(arabicMessages, {
     "removeConfirm": "حذف \"{name}\"؟ سيتم أيضًا حذف الفئات والأطباق التابعة لها.",
     "removeConfirmBody": "سيؤدي هذا أيضًا إلى حذف {categories} فئة و{dishes} طبقًا في هذه المجموعة. لا يمكن التراجع عن هذا الإجراء.",
     "removeConfirmEmpty": "هذه المجموعة فارغة. لا يمكن التراجع عن الحذف.",
+    "discardChanges": "تجاهل التغييرات",
+    "doneUnsaved": "تم - لم يُحفظ بعد",
+    "unsavedBadge": "غير محفوظ",
+    "unsavedChangesBody": "لديك تغييرات غير محفوظة في هذه المجموعات. المغادرة الآن ستتجاهلها.",
+    "unsavedChangesTitle": "مغادرة دون حفظ؟",
+    "unsavedHint": "تبقى التغييرات في هذه الصفحة حتى تضغط على حفظ.",
   },
   stepCategories: {
     ...arabicMessages.stepCategories,

@@ -113,6 +113,7 @@
                 aria-hidden="true"
               />
               <h3 class="truncate text-sm font-semibold text-white">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
+              <span v-if="isRowDirty(row)" class="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">{{ t("stepSuperCategories.unsavedBadge") }}</span>
               <span class="ui-route-badge shrink-0">{{ row.slug || 'draft' }}</span>
             </div>
             <div class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
@@ -278,10 +279,11 @@
             </div>
           </div>
 
-          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
-            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor">
+          <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
+            <p v-if="editingRow && isRowDirty(editingRow)" class="me-auto text-xs text-amber-300">{{ t("stepSuperCategories.unsavedHint") }}</p>
+            <button type="button" class="ui-btn-primary ms-auto gap-2 px-4 py-2 text-sm" @click="closeEditor">
               <AppIcon name="check" class="h-4 w-4" aria-hidden="true" />
-              {{ t("common.close") }}
+              {{ editingRow && isRowDirty(editingRow) ? t("stepSuperCategories.doneUnsaved") : t("common.close") }}
             </button>
           </div>
         </div>
@@ -445,11 +447,16 @@ const router = useRouter();
 
 // Clicking a super-category row drills into its categories (the pencil edits it).
 // Unsaved drafts have no id yet — fall back to opening the editor.
-const drillIn = (row) => {
+const drillIn = async (row) => {
   if (!row?.id) {
     openEditor(row.local_id);
     return;
   }
+  // A3-26: the categories tab unmounts this step (OwnerMenuBuilder renders its
+  // tabs with NO KeepAlive), so drilling in with unsaved edits discards them.
+  // Ask first; a "no" keeps the owner on this step with their edits intact.
+  const ok = await confirmDiscardUnsaved();
+  if (!ok) return;
   router.push({ name: "owner-menu-builder", query: { tab: "categories", super: String(row.id) } });
 };
 
@@ -477,6 +484,59 @@ const enabledCount = computed(() => rows.filter((row) => row.is_published && !ro
 const disabledCount = computed(() => rows.filter((row) => row.is_temporarily_disabled).length);
 const categoriesTotal = computed(() => rows.reduce((sum, row) => sum + Number(row.category_count || 0), 0));
 const editingRow = computed(() => rows.find((row) => String(row.local_id) === String(editorLocalId.value)) || null);
+
+// ── Dirty tracking (A3-26 / A3-27) ───────────────────────────────────────────
+// Same snapshot discipline as StepDishes (savedSnapshots map): a row is dirty
+// when it has no backend id yet, or its saved-state fields differ from the last
+// loaded/saved snapshot. Rows loaded from the server are baselined by the
+// watcher below the first time their local_id appears. category_count and slug
+// are excluded — the server owns them, and they change without an owner edit.
+const savedSnapshots = new Map();
+const rowSnapshot = (row) =>
+  JSON.stringify({
+    id: row.id ?? null,
+    name: row.name ?? "",
+    name_i18n: row.name_i18n || {},
+    description: row.description ?? "",
+    description_i18n: row.description_i18n || {},
+    image_url: row.image_url ?? "",
+    position: Number(row.position) || 0,
+    is_published: row.is_published ?? true,
+    is_temporarily_disabled: row.is_temporarily_disabled === true,
+    disabled_note: row.disabled_note ?? "",
+  });
+const rememberSaved = (row) => {
+  savedSnapshots.set(row.local_id, rowSnapshot(row));
+};
+const forgetSaved = (localId) => {
+  savedSnapshots.delete(localId);
+};
+const isRowDirty = (row) => {
+  if (!row.id) return true;
+  const snap = savedSnapshots.get(row.local_id);
+  if (snap === undefined) return false;
+  return snap !== rowSnapshot(row);
+};
+const hasUnsavedChanges = computed(() => rows.some(isRowDirty));
+watch(
+  () => rows.map((row) => row.local_id).join(","),
+  () => {
+    rows.forEach((row) => {
+      if (!savedSnapshots.has(row.local_id)) rememberSaved(row);
+    });
+  }
+);
+// Ask before navigating away with unsaved edits; true = proceed (clean, or the
+// owner confirmed the discard). The confirm modal resolves a boolean.
+const confirmDiscardUnsaved = async () => {
+  if (!hasUnsavedChanges.value) return true;
+  return confirm({
+    title: t("stepSuperCategories.unsavedChangesTitle"),
+    body: t("stepSuperCategories.unsavedChangesBody"),
+    confirmLabel: t("stepSuperCategories.discardChanges"),
+    danger: true,
+  });
+};
 const filteredRows = computed(() => {
   const query = search.value.trim().toLowerCase();
   const source = [...rows].sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || "")));
@@ -749,6 +809,7 @@ const removeByLocalId = async (localId) => {
     rows.splice(index, 1);
     if (String(editorLocalId.value) === String(localId)) closeEditor();
     delete rowErrors[localId];
+    forgetSaved(localId);
     renumberRows(orderedRows.value);
   } finally {
     deletingLocalId.value = "";
@@ -790,6 +851,7 @@ const saveAll = async () => {
         row.description = saved.description ?? row.description;
         row.image_url = saved.image_url ?? row.image_url;
         row.category_count = Number(saved.category_count || row.category_count || 0);
+        rememberSaved(row);
       } catch (error) {
         mapServerErrorsToRow(row.local_id, error?.fieldErrors || {});
         throw error;

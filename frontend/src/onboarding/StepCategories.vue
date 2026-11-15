@@ -34,6 +34,13 @@
           <AppIcon :name="creatingGroup ? 'refresh' : 'plus'" class="h-4 w-4" aria-hidden="true" />
           {{ t("stepSuperCategories.add") }}
         </button>
+        <button
+          type="button"
+          class="ui-btn-outline ui-press relative z-10 shrink-0 gap-2 px-4 py-2 text-sm"
+          @click="goToSuperCategories"
+        >
+          {{ t("stepCategories.manageSuperCategories") }}
+        </button>
       </div>
 
       <template v-else>
@@ -173,6 +180,36 @@
       </li>
     </ul>
 
+    <section v-if="orphanCategories.length" class="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+      <div class="space-y-1">
+        <h3 class="text-sm font-semibold text-amber-200">{{ t("stepCategories.unassignedHeading") }}</h3>
+        <p class="text-xs text-slate-400">{{ t("stepCategories.unassignedHint") }}</p>
+      </div>
+      <ul class="space-y-2 list-none">
+        <li v-for="cat in orphanCategories" :key="cat.local_id">
+          <article class="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
+            <div class="min-w-0 flex-1">
+              <h4 class="truncate text-sm font-semibold text-white">{{ displayName(cat) || t("stepCategories.categoryNamePlaceholder") }}</h4>
+              <p v-if="rowError(cat, 'super_category')" role="alert" class="mt-0.5 text-xs text-red-300">{{ rowError(cat, 'super_category') }}</p>
+              <p v-else-if="rowError(cat, 'name')" role="alert" class="mt-0.5 text-xs text-red-300">{{ rowError(cat, 'name') }}</p>
+            </div>
+            <button
+              class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+              type="button" :aria-label="t('common.edit')" @click="openEditor(cat.local_id)"
+            >
+              <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
+              type="button" :aria-label="t('common.remove')" @click="removeByLocalId(cat.local_id)"
+            >
+              <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </article>
+        </li>
+      </ul>
+    </section>
+
     <Teleport to="body">
       <div
         v-if="editorOpen && editingCategory"
@@ -221,7 +258,7 @@
                   class="ui-input"
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
                   :aria-invalid="rowError(editingCategory, 'name') ? 'true' : undefined"
-                  :aria-describedby="`step-cat-name-error-${editingCategory.local_id}`"
+                  :aria-describedby="rowError(editingCategory, 'name') ? `step-cat-name-error-${editingCategory.local_id}` : undefined"
                   :aria-label="t('stepCategories.categoryNamePlaceholder')"
                   @input="setLocalizedFieldValue(editingCategory, 'name', fieldLocales.name, $event.target.value)"
                 />
@@ -321,7 +358,7 @@
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
               <label class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.selectSuperCategory") }}</span>
-                <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" :aria-invalid="quickAddErrors.superCategory ? 'true' : undefined" aria-describedby="step-cat-quick-supcat-error" @change="quickAddErrors.superCategory = ''">
+                <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" :aria-invalid="quickAddErrors.superCategory ? 'true' : undefined" :aria-describedby="quickAddErrors.superCategory ? 'step-cat-quick-supcat-error' : undefined" @change="quickAddErrors.superCategory = ''">
                   <option v-for="group in sortedSuperCategoryOptions" :key="group.id" :value="Number(group.id)">{{ superCategoryLabel(group) }}</option>
                 </select>
                 <p v-if="quickAddErrors.superCategory" id="step-cat-quick-supcat-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
@@ -353,7 +390,7 @@
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
                   :aria-label="t('stepCategories.categoryNamePlaceholder')"
                   :aria-invalid="quickAddErrors.name ? 'true' : undefined"
-                  aria-describedby="step-cat-quick-name-error"
+                  :aria-describedby="quickAddErrors.name ? 'step-cat-quick-name-error' : undefined"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddErrors.name = ''"
                 />
                 <p v-if="quickAddErrors.name" id="step-cat-quick-name-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
@@ -471,7 +508,6 @@ const toast = useToastStore();
 const { confirm } = useConfirmModal();
 
 const categories = reactive([]);
-const removedIds = ref([]);
 const rowErrors = reactive({});
 const globalError = ref("");
 const saving = ref(false);
@@ -522,6 +558,71 @@ const filteredCategories = computed(() => {
   return source.filter((cat) => [cat.name, cat.description, cat.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
 });
 const editingCategory = computed(() => categories.find((cat) => String(cat.local_id) === String(editorLocalId.value)) || null);
+// Categories whose super_category is empty (or points at a group that no longer
+// exists) render nowhere in the grouped list — A3-24 renders them in an
+// "Unassigned" section below so their row error finally has a display element.
+const orphanCategories = computed(() =>
+  categories.filter(
+    (cat) =>
+      !cat.super_category ||
+      !superCategoryOptions.value.some((group) => String(group.id) === String(cat.super_category))
+  )
+);
+
+// ── Dirty tracking (A3-26) ───────────────────────────────────────────────────
+// Same snapshot discipline as StepDishes (savedSnapshots map): a row is dirty
+// when it has no backend id yet, or its saved-state fields differ from the last
+// loaded/saved snapshot. Rows loaded from the server are baselined by the
+// watcher below the first time their local_id appears (load() itself is
+// untouched — A3-38 belongs to cluster J). is_temporarily_disabled is excluded:
+// togglePause persists it immediately, so it is never unsaved work.
+const savedSnapshots = new Map();
+const categorySnapshot = (cat) =>
+  JSON.stringify({
+    id: cat.id ?? null,
+    super_category: cat.super_category ?? "",
+    name: cat.name ?? "",
+    name_i18n: cat.name_i18n || {},
+    description: cat.description ?? "",
+    description_i18n: cat.description_i18n || {},
+    image_url: cat.image_url ?? "",
+    position: Number(cat.position) || 0,
+    is_published: cat.is_published ?? true,
+    course: Number(cat.course) || 0,
+    station: cat.station ?? "",
+  });
+const rememberSaved = (cat) => {
+  savedSnapshots.set(cat.local_id, categorySnapshot(cat));
+};
+const forgetSaved = (localId) => {
+  savedSnapshots.delete(localId);
+};
+const isCategoryDirty = (cat) => {
+  if (!cat.id) return true;
+  const snap = savedSnapshots.get(cat.local_id);
+  if (snap === undefined) return false;
+  return snap !== categorySnapshot(cat);
+};
+const hasUnsavedChanges = computed(() => categories.some(isCategoryDirty));
+watch(
+  () => categories.map((cat) => cat.local_id).join(","),
+  () => {
+    categories.forEach((cat) => {
+      if (!savedSnapshots.has(cat.local_id)) rememberSaved(cat);
+    });
+  }
+);
+// Ask before navigating away with unsaved edits; true = proceed (clean, or the
+// owner confirmed the discard). The confirm modal resolves a boolean.
+const confirmDiscardUnsaved = async () => {
+  if (!hasUnsavedChanges.value) return true;
+  return confirm({
+    title: t("stepCategories.unsavedChangesTitle"),
+    body: t("stepCategories.unsavedChangesBody"),
+    confirmLabel: t("stepCategories.discardChanges"),
+    danger: true,
+  });
+};
 const orderedActiveCategories = computed(() => [...activeCategories.value].sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || ""))));
 
 const syncFieldLocales = () => {
@@ -604,6 +705,23 @@ const localizedFieldValue = (cat, field, localeCode) => {
   if (!map || typeof map !== "object") return "";
   return String(map[locale] || "");
 };
+// A3-23: a category named only in a translation map still HAS a name — the
+// first filled translation counts as its display name, so it is no longer
+// silently dropped from validateClient / saveAll.
+const displayName = (cat) => {
+  const base = String(cat?.name || "").trim();
+  if (base) return base;
+  const map = cat?.name_i18n;
+  if (map && typeof map === "object") {
+    for (const value of Object.values(map)) {
+      const text = String(value || "").trim();
+      if (text) return text;
+    }
+  }
+  return "";
+};
+const hasAnyName = (cat) => displayName(cat).length > 0;
+
 const setLocalizedFieldValue = (cat, field, localeCode, value) => {
   if (!cat) return;
   const locale = normalizeLocale(localeCode || defaultLocale.value);
@@ -656,7 +774,7 @@ const clearAllErrors = () => {
 
 const validateClient = () => {
   clearAllErrors();
-  const filled = categories.filter((cat) => cat.name?.trim());
+  const filled = categories.filter(hasAnyName);
   if (!filled.length) {
     globalError.value = t("stepCategories.addAtLeastOne");
     return false;
@@ -664,7 +782,7 @@ const validateClient = () => {
   const namesByGroup = new Map();
   let valid = true;
   for (const cat of filled) {
-    const name = String(cat.name || "").trim();
+    const name = displayName(cat);
     if (name.length < 2) {
       setRowError(cat.local_id, "name", t("stepCategories.nameMin"));
       valid = false;
@@ -749,6 +867,16 @@ const createFirstGroup = async () => {
   }
 };
 
+// A3-25: the wizard has no super-category management step — link through to
+// the menu-builder's super-categories tab, where groups can be created,
+// renamed and deleted. Dirty-checked like drillIn (A3-26): the tab switch
+// unmounts this step, so unsaved category edits would otherwise be lost.
+const goToSuperCategories = async () => {
+  const ok = await confirmDiscardUnsaved();
+  if (!ok) return;
+  router.push({ name: "owner-menu-builder", query: { tab: "super-categories" } });
+};
+
 const openEditor = (localId) => {
   editorLocalId.value = String(localId || "");
   editorOpen.value = true;
@@ -757,8 +885,12 @@ const openEditor = (localId) => {
 // In the standalone menu-builder context, clicking the card body navigates to
 // the Dishes tab pre-filtered to this category instead of opening the editor.
 // The pen (pencil) button still opens the editor.
-const goToDishes = (cat) => {
+const goToDishes = async (cat) => {
   if (props.standalone && cat.id) {
+    // A3-26: the dishes tab unmounts this step (no KeepAlive in
+    // OwnerMenuBuilder), so navigating with unsaved edits discards them.
+    const ok = await confirmDiscardUnsaved();
+    if (!ok) return;
     router.replace({ name: "owner-menu-builder", query: { ...route.query, tab: "dishes", category: String(cat.id) } });
   } else {
     openEditor(cat.local_id);
@@ -792,7 +924,9 @@ const closeQuickModal = () => {
 const quickAdd = () => {
   quickAddErrors.name = "";
   quickAddErrors.superCategory = "";
-  const name = String(quickCategory.name || "").trim();
+  // A3-23: a name typed only under a translation tab counts — it becomes the
+  // category's base name on save (see saveAll), instead of being rejected here.
+  const name = displayName(quickCategory);
   if (!quickCategory.super_category) {
     quickAddErrors.superCategory = t("stepCategories.superCategoryRequired");
     return;
@@ -850,6 +984,7 @@ const removeByLocalId = async (localId) => {
   categories.splice(index, 1);
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];
+  forgetSaved(localId);
   renumberCategoriesForGroup(cat.super_category);
 };
 
@@ -883,12 +1018,16 @@ const saveAll = async () => {
     return false;
   }
   try {
-    const validCats = categories.filter((cat) => cat.name?.trim());
+    const validCats = categories.filter(hasAnyName);
     const allowedTranslationLocales = availableContentLocales.value.map((locale) => locale.code).filter((locale) => locale !== defaultLocale.value);
     for (const cat of validCats) {
       try {
+        // A3-23: send the filled translation as the base name when the
+        // default-locale name is empty, so the row is saved instead of dropped.
+        const effectiveName = displayName(cat);
         const saved = await categoryApi.upsert({
           ...cat,
+          name: effectiveName,
           super_category: Number(cat.super_category) || cat.super_category,
           position: Number(cat.position) || 0,
           name_i18n: pickI18nMap(cat.name_i18n, allowedTranslationLocales),
@@ -897,15 +1036,16 @@ const saveAll = async () => {
         });
         cat.id = saved.id;
         cat.slug = saved.slug;
+        cat.name = saved.name ?? effectiveName;
+        rememberSaved(cat);
       } catch (error) {
         mapServerErrorsToRow(cat.local_id, error?.fieldErrors || {});
         throw error;
       }
     }
-    for (const id of removedIds.value) {
-      await categoryApi.remove(id);
-    }
-    removedIds.value = [];
+    // A3-22: the old removedIds loop is gone — deletes already happen
+    // immediately inside removeByLocalId (categoryApi.remove), and nothing ever
+    // pushed into removedIds, so the loop was dead code.
     status.value = t("common.saved");
     toast.show(t("stepCategories.savedToast"), "success");
     if (!props.standalone) emit("next");
