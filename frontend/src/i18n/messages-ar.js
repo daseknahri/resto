@@ -1498,7 +1498,13 @@ const arabicMessages = {
     "waitlistStatusWaiting": "في الانتظار",
     "waitlistStatusNotified": "تم الإخطار",
     "waitlistStatusConverted": "تحوّل إلى حجز",
-    "waitlistStatusExpired": "انتهت الصلاحية"
+    "waitlistStatusExpired": "انتهت الصلاحية",
+    "bulkPreparedWithMissing": "تم تجهيز {prepared} تذكيرات. تعذّر العثور على {missing} من الحجوزات المحددة — حدّث القائمة وأعد المحاولة.",
+    "pendingRemindersRestored": "تمت استعادة {count} تذكيرات مجهزة بانتظار تأكيدك بأنها أُرسلت أو فشلت.",
+    "reconciledAlreadyMarked": "تم تحديث {updated} تذكيرات ({already} منها كانت معلّمة مسبقاً).",
+    "reconciledPartially": "تم تحديث {updated} تذكيرات. ما زال {remaining} بحاجة إلى تأكيد — ستبقى في قائمة الانتظار.",
+    "reminderPrepared": "تم تجهيز التذكير. أرسله في واتساب، ثم علّمه كمفتوح أو فاشل أدناه.",
+    "reminderPreparedCopied": "تم تجهيز التذكير. تم حظر النافذة المنبثقة — تم نسخ الرابط، أرسله في واتساب، ثم علّمه كمفتوح أو فاشل أدناه.",
   },
   "customerLeadPage": {
     "openNow": "مفتوح الآن",

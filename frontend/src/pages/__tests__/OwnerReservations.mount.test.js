@@ -171,3 +171,250 @@ describe("OwnerReservations — mount smoke", () => {
     expect(wrapper.text()).toContain("Youssef Alami");
   });
 });
+
+
+// ── Run 8 S1-D (B-06 / B-07) — reminder preparation + pending reconciliation ──
+// Appended 2026-11-15. Base above untouched: the new tests only ADD coverage.
+//
+// B-06: tapping Reminder must NOT auto-mark the reminder opened/failed from
+// whether the WhatsApp popup opened. The backend records it as prepared
+// (status "sent") and the entry joins the pending list for the owner to
+// confirm the real outcome from the banner.
+// B-07: bulk prepare keeps ALL prepared items pending (no first-item
+// auto-reconcile), the pending list survives reload via localStorage, and
+// reconciling drops only the rows the backend actually updated — rows it
+// could not find stay pending for retry.
+import api from "../../lib/api";
+
+const PENDING_KEY = "owner.reservations.pendingReminders";
+
+const _loadedPayload = (rows) => ({
+  data: {
+    results: rows,
+    pagination: { page: 1, page_size: 20, total: rows.length, pages: 1, has_next: false, has_prev: false },
+    counts: { total: rows.length, new: 1, contacted: 0, won: 0, lost: 0, overdue_new: 0 },
+  },
+});
+
+describe("OwnerReservations — reminders (Run 8 S1-D, B-06/B-07)", () => {
+  let wrapper;
+  let _postHandler;
+  let _openResult;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    _postHandler = () => Promise.resolve({ data: {} });
+    _openResult = { closed: false };
+    api.post.mockImplementation((url, body) => _postHandler(url, body));
+    vi.spyOn(window, "open").mockImplementation(() => _openResult);
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.restoreAllMocks();
+  });
+
+  const _buttonWith = (text) => wrapper.findAll("button").find((b) => b.text().includes(text));
+  const _pendingFromStorage = () => JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+  const _postedUrls = () => api.post.mock.calls.map((c) => c[0]);
+
+  // ── B-06: single reminder ────────────────────────────────────────────────
+
+  it("single reminder prepares without auto-marking opened/failed", async () => {
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    _postHandler = (url) => {
+      if (url.includes("/reminder/") && !url.includes("reminder-result")) {
+        return Promise.resolve({
+          data: { id: 55, status: "sent", whatsapp_link: "https://wa.me/212612345678?text=hi" },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    const btn = _buttonWith("ownerReservations.reminder");
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(_postedUrls()).toContain("/owner/reservations/1/reminder/");
+    // No outcome is inferred from the popup: no reminder-result call at all.
+    expect(_postedUrls().filter((u) => u.includes("reminder-result"))).toEqual([]);
+    // The prepared reminder waits in the pending banner, persisted for retry.
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":1})');
+    expect(_pendingFromStorage()).toEqual([
+      { lead_id: 1, reminder_id: 55, whatsapp_link: "https://wa.me/212612345678?text=hi" },
+    ]);
+  });
+
+  it("single reminder with a blocked popup still queues as prepared, not failed", async () => {
+    _openResult = null; // window.open blocked
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    _postHandler = (url) => {
+      if (url.includes("/reminder/") && !url.includes("reminder-result")) {
+        return Promise.resolve({
+          data: { id: 56, status: "sent", whatsapp_link: "https://wa.me/212612345678?text=hi" },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    await _buttonWith("ownerReservations.reminder").trigger("click");
+    await flushPromises();
+
+    expect(_postedUrls().filter((u) => u.includes("reminder-result"))).toEqual([]);
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":1})');
+    expect(_pendingFromStorage()).toHaveLength(1);
+    expect(_pendingFromStorage()[0].reminder_id).toBe(56);
+  });
+
+  // ── B-07: bulk prepare ───────────────────────────────────────────────────
+
+  it("bulk retry keeps every prepared item pending and never auto-reconciles", async () => {
+    _routes = {
+      "/owner/reservations/": _loadedPayload([
+        reservation(),
+        reservation({ id: 2, name: "Youssef Alami", phone: "+212622222222" }),
+      ]),
+    };
+    _postHandler = (url) => {
+      if (url.includes("/bulk-reminder/") && !url.includes("bulk-reminder-result")) {
+        return Promise.resolve({
+          data: {
+            prepared_count: 2,
+            results: [
+              { lead_id: 1, reminder_id: 11, whatsapp_link: "https://wa.me/111?text=x" },
+              { lead_id: 2, reminder_id: 12, whatsapp_link: "https://wa.me/222?text=x" },
+            ],
+            missing_ids: [99],
+            skipped_no_phone_ids: [],
+            skipped_unavailable_ids: [],
+            skipped_not_failed_ids: [],
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    // Select the two REAL rows (aria-label is the reservation name).
+    await wrapper.find('input[aria-label="Sara Bennani"]').setChecked(true);
+    await wrapper.find('input[aria-label="Youssef Alami"]').setChecked(true);
+    await _buttonWith("ownerReservations.bulkRetryReminders").trigger("click");
+    await flushPromises();
+
+    expect(_postedUrls()).toContain("/owner/reservations/bulk-reminder/");
+    // The old code auto-reconciled the first item here; nothing is reconciled now.
+    expect(_postedUrls().filter((u) => u.includes("bulk-reminder-result"))).toEqual([]);
+    // Both prepared items wait in the banner, persisted across reloads.
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":2})');
+    expect(_pendingFromStorage()).toHaveLength(2);
+  });
+
+  // ── B-07: reconcile per-item outcomes + persistence ──────────────────────
+
+  it("reconcile drops updated rows but keeps the ones the backend could not find", async () => {
+    localStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify([
+        { lead_id: 1, reminder_id: 11, whatsapp_link: "https://wa.me/111?text=x" },
+        { lead_id: 2, reminder_id: 12, whatsapp_link: "https://wa.me/222?text=x" },
+      ])
+    );
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    _postHandler = (url) => {
+      if (url.includes("bulk-reminder-result")) {
+        return Promise.resolve({
+          data: {
+            updated_count: 1,
+            missing_count: 1,
+            updated: [{ lead_id: 1, reminder_id: 11, status: "opened" }],
+            missing: [{ lead_id: 2, reminder_id: 12, reason: "not_found" }],
+            already_reconciled: [],
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    // Restored from localStorage on mount.
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":2})');
+
+    await _buttonWith("ownerReservations.markOpened").trigger("click");
+    await flushPromises();
+
+    const resultCalls = api.post.mock.calls.filter((c) => c[0].includes("bulk-reminder-result"));
+    expect(resultCalls).toHaveLength(1);
+    expect(resultCalls[0][1]).toEqual({
+      items: [
+        { lead_id: 1, reminder_id: 11, status: "opened", error: "" },
+        { lead_id: 2, reminder_id: 12, status: "opened", error: "" },
+      ],
+    });
+    // The missing row stays pending (and persisted) for retry; the updated one leaves.
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":1})');
+    expect(_pendingFromStorage()).toHaveLength(1);
+    expect(_pendingFromStorage()[0].reminder_id).toBe(12);
+  });
+
+  it("pending reminders are restored from storage on mount without any network write", async () => {
+    localStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify([{ lead_id: 1, reminder_id: 11, whatsapp_link: "https://wa.me/111?text=x" }])
+    );
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('ownerReservations.pendingReminderCount({"count":1})');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("rows the backend reports as already reconciled leave the pending list", async () => {
+    localStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify([
+        { lead_id: 1, reminder_id: 11, whatsapp_link: "https://wa.me/111?text=x" },
+        { lead_id: 2, reminder_id: 12, whatsapp_link: "https://wa.me/222?text=x" },
+      ])
+    );
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    _postHandler = (url) => {
+      if (url.includes("bulk-reminder-result")) {
+        return Promise.resolve({
+          data: {
+            updated_count: 0,
+            missing_count: 0,
+            already_reconciled_count: 2,
+            updated: [],
+            missing: [],
+            already_reconciled: [
+              { lead_id: 1, reminder_id: 11, status: "opened" },
+              { lead_id: 2, reminder_id: 12, status: "failed" },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    await _buttonWith("ownerReservations.markOpened").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("ownerReservations.pendingReminderCount");
+    expect(localStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+});

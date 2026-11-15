@@ -149,34 +149,35 @@
             </button>
           </div>
         </div>
-        <div v-if="pendingReminderReconciliation.length" class="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs space-y-2.5">
-          <p class="font-semibold text-amber-200">
-            {{ t("ownerReservations.pendingReminderCount", { count: pendingReminderReconciliation.length }) }}
-          </p>
-          <p class="text-amber-100/80 leading-relaxed">{{ t("ownerReservations.pendingReminderHelp") }}</p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
-              :disabled="bulkReconcileLoading"
-              @click="reconcilePendingReminders('opened')"
-            >
-              {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markOpened") }}
-            </button>
-            <button
-              class="owner-action-btn rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
-              :disabled="bulkReconcileLoading"
-              @click="reconcilePendingReminders('failed')"
-            >
-              {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markFailed") }}
-            </button>
-            <button
-              class="owner-action-btn rounded-full border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
-              :disabled="bulkReconcileLoading"
-              @click="clearPendingReminderReconciliation"
-            >
-              {{ t("ownerReservations.clearPending") }}
-            </button>
-          </div>
+      </div>
+
+      <div v-if="pendingReminderReconciliation.length" class="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs space-y-2.5">
+        <p class="font-semibold text-amber-200">
+          {{ t("ownerReservations.pendingReminderCount", { count: pendingReminderReconciliation.length }) }}
+        </p>
+        <p class="text-amber-100/80 leading-relaxed">{{ t("ownerReservations.pendingReminderHelp") }}</p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
+            :disabled="bulkReconcileLoading"
+            @click="reconcilePendingReminders('opened')"
+          >
+            {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markOpened") }}
+          </button>
+          <button
+            class="owner-action-btn rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
+            :disabled="bulkReconcileLoading"
+            @click="reconcilePendingReminders('failed')"
+          >
+            {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markFailed") }}
+          </button>
+          <button
+            class="owner-action-btn rounded-full border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
+            :disabled="bulkReconcileLoading"
+            @click="clearPendingReminderReconciliation"
+          >
+            {{ t("ownerReservations.clearPending") }}
+          </button>
         </div>
       </div>
 
@@ -377,7 +378,7 @@
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
               @click="sendReminder(reservation)"
             >
-              {{ isReminderSending(reservation.id) ? t("ownerReservations.opening") : t("ownerReservations.reminder") }}
+              {{ isReminderSending(reservation.id) ? t("ownerReservations.preparing") : t("ownerReservations.reminder") }}
             </button>
             <button
               class="owner-action-btn rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
@@ -432,7 +433,7 @@
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
               @click="sendReminder(reservation)"
             >
-              {{ isReminderSending(reservation.id) ? t("ownerReservations.opening") : t("ownerReservations.reminder") }}
+              {{ isReminderSending(reservation.id) ? t("ownerReservations.preparing") : t("ownerReservations.reminder") }}
             </button>
             <button
               class="owner-action-btn rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
@@ -583,6 +584,10 @@ import { useToastStore } from "../stores/toast";
 // itself always hits the network, so the many post-mutation refetches never serve
 // a stale status; they just refresh this cache when the default view is active.
 const RES_CACHE = "owner.reservations";
+// B-07 (Run 8 S1-D): prepared reminders waiting for the owner to confirm the
+// outcome (sent / failed). Persisted so leaving the page or reloading does
+// not drop them — the server only knows them as status "sent" (prepared).
+const PENDING_REMINDERS_CACHE = "owner.reservations.pendingReminders";
 
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
@@ -604,6 +609,39 @@ const bulkReconcileLoading = ref(false);
 const updating = ref({});
 const reminderLoading = ref({});
 const pendingReminderReconciliation = ref([]);
+
+// B-07: the pending set survives navigation/reload via localStorage. A corrupt
+// or blocked store degrades to the in-memory list only — never a crash.
+const persistPendingReminders = () => {
+  try {
+    if (!pendingReminderReconciliation.value.length) {
+      localStorage.removeItem(PENDING_REMINDERS_CACHE);
+      return;
+    }
+    localStorage.setItem(PENDING_REMINDERS_CACHE, JSON.stringify(pendingReminderReconciliation.value));
+  } catch {
+    // Storage may be blocked (private mode); the in-memory list still works.
+  }
+};
+
+const loadPendingReminders = () => {
+  try {
+    const raw = localStorage.getItem(PENDING_REMINDERS_CACHE);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const valid = parsed
+      .filter((item) => item && Number(item.lead_id) > 0 && Number(item.reminder_id) > 0)
+      .map((item) => ({
+        lead_id: Number(item.lead_id),
+        reminder_id: Number(item.reminder_id),
+        whatsapp_link: typeof item.whatsapp_link === "string" ? item.whatsapp_link : "",
+      }));
+    if (valid.length) pendingReminderReconciliation.value = valid;
+  } catch {
+    // Corrupt cache: start with an empty pending list.
+  }
+};
 const selectedIds = ref([]);
 const timelineOpen = ref({});
 const timelineLoading = ref({});
@@ -869,16 +907,21 @@ const sendReminder = async (reservation) => {
     if (link) {
       popup = window.open(link, "_blank", "noopener,noreferrer");
     }
+    // B-06: the backend records the reminder as PREPARED only (status "sent":
+    // the wa.me link was generated and handed to the owner). Whether the popup
+    // opened says nothing about the guest receiving anything, and a blocked
+    // popup says nothing about failure — the link may still be copied and sent.
+    // So no reminder-result is posted here: the entry joins the pending list
+    // and the owner confirms the real outcome from the banner (B-07).
     if (reminderId > 0) {
-      const opened = Boolean(popup);
-      await api.post(`/owner/reservations/${id}/reminder-result/`, {
-        reminder_id: reminderId,
-        status: opened ? "opened" : "failed",
-        error: opened ? "" : t("ownerReservations.reminderBlocked"),
-      });
+      const entry = { lead_id: id, reminder_id: reminderId, whatsapp_link: link };
+      if (!pendingReminderReconciliation.value.some((item) => Number(item.reminder_id) === reminderId)) {
+        pendingReminderReconciliation.value = [...pendingReminderReconciliation.value, entry];
+        persistPendingReminders();
+      }
     }
     if (popup) {
-      toast.show(t("ownerReservations.reminderOpened"), "success");
+      toast.show(t("ownerReservations.reminderPrepared"), "success");
     } else {
       if (link && navigator?.clipboard?.writeText) {
         try {
@@ -887,7 +930,7 @@ const sendReminder = async (reservation) => {
           // Ignore clipboard errors and still show fallback guidance.
         }
       }
-      toast.show(t("ownerReservations.reminderBlocked"), "error");
+      toast.show(t("ownerReservations.reminderPreparedCopied"), "info");
     }
     await fetchReservations();
     if (isTimelineOpen(id)) {
@@ -917,7 +960,18 @@ const bulkRetryReminders = async () => {
     const skippedNotFailed = Array.isArray(payload.skipped_not_failed_ids) ? payload.skipped_not_failed_ids.length : 0;
     const results = Array.isArray(payload.results) ? payload.results : [];
     const links = results.map((item) => safeExternalUrl(item?.whatsapp_link || "")).filter(Boolean);
-    pendingReminderReconciliation.value = results;
+    const missingCount = Array.isArray(payload.missing_ids) ? payload.missing_ids.length : 0;
+    // B-07: every prepared reminder stays pending until the owner confirms its
+    // real outcome from the banner — including the first one. The old code
+    // auto-marked the first item opened/failed from the popup alone (B-06) and
+    // dropped the rest from memory on navigation; the pending list is now
+    // persisted (localStorage) and only shrinks via reconciliation.
+    const seenReminderIds = new Set(pendingReminderReconciliation.value.map((item) => Number(item.reminder_id)));
+    const fresh = results.filter((item) => !seenReminderIds.has(Number(item.reminder_id)));
+    if (fresh.length) {
+      pendingReminderReconciliation.value = [...pendingReminderReconciliation.value, ...fresh];
+      persistPendingReminders();
+    }
 
     let firstPopup = null;
     if (links.length) {
@@ -930,29 +984,6 @@ const bulkRetryReminders = async () => {
         // Ignore clipboard errors and keep summary toast.
       }
     }
-    if (results.length) {
-      const first = results[0];
-      if (first?.lead_id && first?.reminder_id) {
-        try {
-          const res = await api.post("/owner/reservations/bulk-reminder-result/", {
-            items: [
-              {
-                lead_id: first.lead_id,
-                reminder_id: first.reminder_id,
-                status: firstPopup ? "opened" : "failed",
-                error: firstPopup ? "" : t("ownerReservations.reminderBlocked"),
-              },
-            ],
-          });
-          if (Number(res?.data?.updated_count || 0) > 0) {
-            pendingReminderReconciliation.value = pendingReminderReconciliation.value.slice(1);
-          }
-        } catch {
-          // Best effort tracking; do not fail whole operation.
-        }
-      }
-    }
-
     if (!preparedCount) {
       toast.show(t("ownerReservations.noRemindersPrepared"), "info");
     } else if (firstPopup && links.length > 1) {
@@ -963,6 +994,15 @@ const bulkRetryReminders = async () => {
       toast.show(t("ownerReservations.preparedAndOpened", { count: preparedCount }), "success");
     } else {
       toast.show(t("ownerReservations.preparedAndCopied", { count: preparedCount }), "info");
+    }
+
+    if (missingCount) {
+      // Stale selection: some selected reservations no longer exist server-side.
+      // They were NOT prepared — the owner refreshes the list and retries them.
+      toast.show(
+        t("ownerReservations.bulkPreparedWithMissing", { prepared: preparedCount, missing: missingCount }),
+        "info"
+      );
     }
 
     if (skippedNoPhone || skippedUnavailable || skippedNotFailed) {
@@ -1000,6 +1040,7 @@ const clearPendingReminderReconciliation = async () => {
   });
   if (!ok) return;
   pendingReminderReconciliation.value = [];
+  persistPendingReminders();
 };
 
 const reconcilePendingReminders = async (status) => {
@@ -1013,15 +1054,34 @@ const reconcilePendingReminders = async (status) => {
       error: status === "failed" ? t("ownerReservations.markFailed") : "",
     }));
     const res = await api.post("/owner/reservations/bulk-reminder-result/", { items });
-    const updatedCount = Number(res?.data?.updated_count || 0);
-    const missingCount = Number(res?.data?.missing_count || 0);
-    pendingReminderReconciliation.value = [];
-    toast.show(
-      missingCount
-        ? t("ownerReservations.reconciledWithMissing", { updated: updatedCount, missing: missingCount })
-        : t("ownerReservations.reconciled", { updated: updatedCount }),
-      "success"
+    // B-07: reconcile per item. Updated and already-reconciled rows leave the
+    // pending list; rows the backend could not find STAY pending (persisted) so
+    // they can be retried instead of being silently dropped as "reconciled".
+    const updated = Array.isArray(res?.data?.updated) ? res.data.updated : [];
+    const alreadyReconciled = Array.isArray(res?.data?.already_reconciled) ? res.data.already_reconciled : [];
+    const resolved = new Set(
+      [...updated, ...alreadyReconciled].map((item) => `${item.lead_id}:${item.reminder_id}`)
     );
+    pendingReminderReconciliation.value = pendingReminderReconciliation.value.filter(
+      (item) => !resolved.has(`${item.lead_id}:${item.reminder_id}`)
+    );
+    persistPendingReminders();
+    const updatedCount = Number(res?.data?.updated_count || updated.length);
+    const alreadyCount = Number(res?.data?.already_reconciled_count || alreadyReconciled.length);
+    const remainingCount = pendingReminderReconciliation.value.length;
+    if (remainingCount) {
+      toast.show(
+        t("ownerReservations.reconciledPartially", { updated: updatedCount, remaining: remainingCount }),
+        "info"
+      );
+    } else if (alreadyCount) {
+      toast.show(
+        t("ownerReservations.reconciledAlreadyMarked", { updated: updatedCount, already: alreadyCount }),
+        "success"
+      );
+    } else {
+      toast.show(t("ownerReservations.reconciled", { updated: updatedCount }), "success");
+    }
     await fetchReservations();
     for (const reservationId of Object.keys(timelineOpen.value)) {
       const parsed = Number(reservationId);
@@ -1257,6 +1317,14 @@ const fetchWaitlist = async () => {
 };
 
 onMounted(() => {
+  // B-07: resume prepared reminders left pending in a previous visit.
+  loadPendingReminders();
+  if (pendingReminderReconciliation.value.length) {
+    toast.show(
+      t("ownerReservations.pendingRemindersRestored", { count: pendingReminderReconciliation.value.length }),
+      "info"
+    );
+  }
   // Instant first paint from cache (default view only), then revalidate silently.
   const cached = isDefaultReservationView() ? readCache(RES_CACHE) : null;
   if (cached) {

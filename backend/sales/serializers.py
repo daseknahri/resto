@@ -306,7 +306,10 @@ class ReservationReminderResultSerializer(serializers.Serializer):
             ReservationReminder.Statuses.FAILED,
         )
     )
-    error = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    error = serializers.CharField(required=False, allow_blank=True)
+    # No max_length here on purpose: the view truncates to the 255-char
+    # storage limit (ReservationReminder.failure_reason) instead of
+    # rejecting over-long input with a 400 (Run 8 S1-D, B-07).
 
 
 class OwnerReservationBulkReminderResultItemSerializer(serializers.Serializer):
@@ -318,7 +321,10 @@ class OwnerReservationBulkReminderResultItemSerializer(serializers.Serializer):
             ReservationReminder.Statuses.FAILED,
         )
     )
-    error = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    error = serializers.CharField(required=False, allow_blank=True)
+    # No max_length here on purpose: the view truncates to the 255-char
+    # storage limit (ReservationReminder.failure_reason) instead of
+    # rejecting over-long input with a 400 (Run 8 S1-D, B-07).
 
 
 class OwnerReservationBulkReminderResultSerializer(serializers.Serializer):

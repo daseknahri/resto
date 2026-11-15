@@ -4748,6 +4748,12 @@ ownerReservations: {
   waitlistStatusNotified: "Notifie",
   waitlistStatusConverted: "Converti",
   waitlistStatusExpired: "Expire",
+  bulkPreparedWithMissing: "{prepared} rappels prepares. {missing} reservations selectionnees sont introuvables - actualisez la liste et reessayez.",
+  pendingRemindersRestored: "{count} rappels prepares restaures, en attente de votre confirmation d'envoi ou d'echec.",
+  reconciledAlreadyMarked: "{updated} rappels mis a jour ({already} etaient deja marques).",
+  reconciledPartially: "{updated} rappels mis a jour. {remaining} attendent encore une confirmation - ils restent dans la liste en attente.",
+  reminderPrepared: "Rappel prepare. Envoyez-le dans WhatsApp, puis marquez-le ouvert ou en echec ci-dessous.",
+  reminderPreparedCopied: "Rappel prepare. Fenetre bloquee - lien copie, envoyez-le dans WhatsApp, puis marquez-le ouvert ou en echec ci-dessous.",
 },
 reservationCalendar: {
   prevWeek: "Prec.",

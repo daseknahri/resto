@@ -2199,6 +2199,10 @@ class OwnerReservationBulkReminderView(APIView):
                     skipped_no_phone_ids.append(lead.id)
                     continue
 
+                # B-06 (Run 8 S1-D): SENT is the *prepared* state — the wa.me
+                # link was generated and handed to the owner. It is NOT proof the
+                # guest received anything; the outcome is only recorded when the
+                # owner reconciles it (reminder-result / bulk-reminder-result).
                 reminder = ReservationReminder.objects.create(
                     lead_id=lead.id,
                     tenant_id=getattr(tenant, "id", None),
@@ -2214,12 +2218,13 @@ class OwnerReservationBulkReminderView(APIView):
                     tenant=tenant,
                     actor=request.user,
                     action=ReservationTimelineEvent.Actions.NOTE,
-                    note=f"Bulk WhatsApp reminder sent (tracking id: {reminder.id}).",
+                    note=f"Bulk WhatsApp reminder prepared (tracking id: {reminder.id}). Outcome unknown until the owner marks it sent or failed.",
                 )
                 results.append(
                     {
                         "lead_id": lead.id,
                         "reminder_id": reminder.id,
+                        "status": ReservationReminder.Statuses.SENT,
                         "phone": payload["phone"],
                         "whatsapp_link": payload["whatsapp_link"],
                     }
@@ -2321,6 +2326,9 @@ class OwnerReservationReminderView(APIView):
                     {"detail": "Reservation has no valid phone number for WhatsApp reminder."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            # B-06 (Run 8 S1-D): SENT is the *prepared* state — see the bulk
+            # prepare above. The returned whatsapp_link is the server-generated
+            # wa.me URL; nothing is marked opened/failed here.
             reminder = ReservationReminder.objects.create(
                 lead_id=lead.id,
                 tenant_id=getattr(tenant, "id", None),
@@ -2337,7 +2345,7 @@ class OwnerReservationReminderView(APIView):
                 tenant=tenant,
                 actor=request.user,
                 action=ReservationTimelineEvent.Actions.NOTE,
-                note=f"WhatsApp reminder sent (tracking id: {reminder.id}).",
+                note=f"WhatsApp reminder prepared (tracking id: {reminder.id}). Outcome unknown until the owner marks it sent or failed.",
             )
 
         return Response(ReservationReminderSerializer(reminder).data, status=status.HTTP_201_CREATED)
@@ -2371,6 +2379,22 @@ class OwnerReservationReminderResultView(APIView):
                 lead_id=lead.id,
                 tenant_id=tenant.id,
             )
+            if reminder.status in (
+                ReservationReminder.Statuses.OPENED,
+                ReservationReminder.Statuses.FAILED,
+            ):
+                # B-06/B-07 (Run 8 S1-D): a reconciled reminder is terminal. A
+                # stale list (or a double-tap) must not overwrite the outcome
+                # the owner already recorded.
+                return Response(
+                    {
+                        "detail": "Reminder already reconciled.",
+                        "code": "already_reconciled",
+                        "status": reminder.status,
+                        "reminder": ReservationReminderSerializer(reminder).data,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             reminder.status = result_status
             if result_status == ReservationReminder.Statuses.FAILED and result_error:
                 reminder.failure_reason = result_error[:255]
@@ -2406,6 +2430,7 @@ class OwnerReservationBulkReminderResultView(APIView):
 
         updated = []
         missing = []
+        already_reconciled = []
         with schema_context(get_public_schema_name()):
             for item in items:
                 lead_id = item["lead_id"]
@@ -2431,6 +2456,23 @@ class OwnerReservationBulkReminderResultView(APIView):
                         {
                             "lead_id": lead_id,
                             "reminder_id": reminder_id,
+                            "reason": "not_found",
+                        }
+                    )
+                    continue
+
+                if reminder.status in (
+                    ReservationReminder.Statuses.OPENED,
+                    ReservationReminder.Statuses.FAILED,
+                ):
+                    # B-07 (Run 8 S1-D): terminal outcome already recorded —
+                    # report it so the caller drops the row from its retry
+                    # list, but do not overwrite it.
+                    already_reconciled.append(
+                        {
+                            "lead_id": lead.id,
+                            "reminder_id": reminder.id,
+                            "status": reminder.status,
                         }
                     )
                     continue
@@ -2464,8 +2506,10 @@ class OwnerReservationBulkReminderResultView(APIView):
             {
                 "updated_count": len(updated),
                 "missing_count": len(missing),
+                "already_reconciled_count": len(already_reconciled),
                 "updated": updated,
                 "missing": missing,
+                "already_reconciled": already_reconciled,
             }
         )
 

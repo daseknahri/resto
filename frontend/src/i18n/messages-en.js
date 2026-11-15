@@ -4793,6 +4793,12 @@ ownerReservations: {
   waitlistStatusNotified: "Notified",
   waitlistStatusConverted: "Converted",
   waitlistStatusExpired: "Expired",
+  bulkPreparedWithMissing: "Prepared {prepared} reminders. {missing} selected reservations were not found — refresh the list and retry them.",
+  pendingRemindersRestored: "Restored {count} prepared reminders waiting for you to mark them sent or failed.",
+  reconciledAlreadyMarked: "Updated {updated} reminders ({already} were already marked).",
+  reconciledPartially: "Updated {updated} reminders. {remaining} still need marking — they stay in the pending list.",
+  reminderPrepared: "Reminder prepared. Send it in WhatsApp, then mark it opened or failed below.",
+  reminderPreparedCopied: "Reminder prepared. Popup blocked — link copied, send it in WhatsApp, then mark it opened or failed below.",
 },
 reservationCalendar: {
   prevWeek: "Prev",
