@@ -9632,6 +9632,129 @@ class AdminCreateDeliveryJobView(APIView):
         return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_201_CREATED)
 
 
+class AdminDeliveryJobActionView(APIView):
+    """POST /api/admin/delivery-jobs/<job_id>/action/ — platform-admin job action.
+
+    Run 8 G3b A2-19: the owner-side OwnerDeliveryJobActionView (menu/views.py)
+    is tenant-scoped and order-keyed; the admin board had no action endpoint at
+    all, so a failed/stuck job could only be resolved by the restaurant owner.
+    Body: {"action": "redispatch" | "cancel"}.
+
+      - "redispatch" → re-offer a FAILED job to the driver pool. Mirrors the
+        owner redispatch reset field-for-field (same guards: FAILED only, max 3
+        redispatches, never re-dispatch a no-show that was already paid — the
+        NOSHOW_PAID resolution / noshow:{id} wallet-ledger guard), then
+        re-enters the ranked-offer cascade best-effort.
+      - "cancel" → stand a non-terminal job down (status CANCELLED +
+        cancelled_at, offer cleared). Deliberately NOT the owner's
+        refund_cancel: no order cancel, no wallet refund, no loyalty reversal,
+        no restock — money movement stays owner-side (refund_and_cancel_
+        delivery_order runs in the tenant schema). A cancelled job's order is
+        the owner's to refund/cancel.
+
+    Platform admin only. Idempotent per action: redispatch on a non-FAILED job
+    and cancel on a terminal job both 409 (job_changed). Audited with the plain
+    string action "delivery_job_actioned" (log_admin_action takes str; no new
+    AdminAuditLog.Actions member — adding one is a choices-only migration the
+    coordinator can add as a follow-up).
+    """
+
+    permission_classes = [IsPlatformAdmin]
+
+    MAX_REDISPATCH = 3
+
+    def post(self, request, job_id, *args, **kwargs):
+        from django.db import transaction as _tx
+        from django.utils import timezone as _tz
+        from sales.audit import log_admin_action
+        from .models import DeliveryJob as _DJob
+        from .models import WalletTransaction as _WTx
+
+        action = (request.data.get("action") or "").strip()
+        if action not in ("redispatch", "cancel"):
+            return Response({"detail": "Unknown action.", "code": "bad_action"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        with _tx.atomic():
+            try:
+                job = _DJob.objects.select_for_update().get(pk=job_id)
+            except (_DJob.DoesNotExist, ValueError, TypeError):
+                return Response({"detail": "Delivery job not found.", "code": "not_found"},
+                                status=status.HTTP_404_NOT_FOUND)
+
+            if action == "redispatch":
+                if job.status != _DJob.Status.FAILED:
+                    return Response({"detail": "This job isn't awaiting a decision.",
+                                     "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
+                if (job.redispatch_count or 0) >= self.MAX_REDISPATCH:
+                    return Response({"detail": "Re-dispatched too many times — refund instead.",
+                                     "code": "redispatch_limit"}, status=status.HTTP_409_CONFLICT)
+                # A no-show that was already PAID must NOT re-enter dispatch (same
+                # guard as the owner action: paying driver_payout twice for one fee).
+                if (job.resolution == _DJob.Resolution.NOSHOW_PAID
+                        or _WTx.objects.filter(idempotency_key=f"noshow:{job.id}").exists()):
+                    return Response(
+                        {"detail": "This no-show was already paid out; refund/cancel instead.",
+                         "code": "already_paid"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                job.driver = None
+                job.status = _DJob.Status.SEARCHING
+                job.assigned_at = None
+                job.picked_up_at = None
+                job.failed_at = None
+                job.failure_reason = ""
+                job.failure_note = ""
+                job.owner_alerted_at = None
+                job.code_attempts = 0
+                job.code_locked_until = None
+                job.redispatch_count = (job.redispatch_count or 0) + 1
+                job.resolution = _DJob.Resolution.REDISPATCHED
+                # Fresh ranked-offer cascade (any driver eligible again).
+                job.offered_to = None
+                job.offer_expires_at = None
+                job.declined_by = []
+                job.offer_round = 0
+                job.is_open_pool = False
+                job.save(update_fields=[
+                    "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                    "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                    "code_locked_until", "redispatch_count", "resolution",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                ])
+                resolution = _DJob.Resolution.REDISPATCHED
+            else:  # cancel
+                if job.is_terminal:
+                    return Response({"detail": "This job is already finished.",
+                                     "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
+                job.status = _DJob.Status.CANCELLED
+                job.cancelled_at = _tz.now()
+                job.offered_to = None
+                job.offer_expires_at = None
+                job.is_open_pool = False
+                job.save(update_fields=[
+                    "status", "cancelled_at", "offered_to", "offer_expires_at", "is_open_pool",
+                ])
+                resolution = "cancelled"
+
+        if action == "redispatch":
+            try:
+                from accounts.dispatch import offer_to_next_driver
+                offer_to_next_driver(job.id)
+            except Exception:
+                pass
+        log_admin_action(
+            action="delivery_job_actioned",
+            request=request,
+            target_repr=f"job:{job.id}:{job.order_number}",
+            metadata={"job_id": job.id, "action": action, "resolution": str(resolution),
+                      "tenant_id": job.tenant_id, "order_number": job.order_number},
+        )
+        _bt = job.business_type or "restaurant"
+        return Response({"ok": True, "resolution": str(resolution),
+                         "job": _serialize_delivery_job(job, business_type=_bt)})
+
+
 # ── B1-followup: one-click email unsubscribe ────────────────────────────────────
 
 

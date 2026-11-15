@@ -81,6 +81,15 @@ vi.mock("../../lib/api", () => ({
   },
 }));
 
+// useConfirmModal is a vue-ref-only singleton (no DOM), but confirm() returns a
+// promise that only the global ConfirmModal settles — in tests it would hang
+// forever. Mock it with a controllable vi.fn (default: confirmed).
+vi.mock("../../composables/useConfirmModal", () => {
+  const fn = vi.fn(() => Promise.resolve(true));
+  globalThis.__w6ConfirmMock = fn;
+  return { useConfirmModal: () => ({ confirm: fn }) };
+});
+
 import AdminDeliveryJobs from "../AdminDeliveryJobs.vue";
 import api from "../../lib/api";
 
@@ -306,5 +315,205 @@ describe("AdminDeliveryJobs — refresh + pagination (A2-06/A2-07)", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("#A1");
     expect(wrapper.text()).toContain("adminDeliveryJobs.refreshFailed");
+  });
+});
+
+/**
+ * Run 8 G3b W6 — A2-14 / A2-16 / A2-17 / A2-18 / A2-19 / A2-20.
+ * Appended (never overwriting the base + G3a blocks above).
+ */
+const w6job = (overrides = {}) => ({
+  id: 9001,
+  order_number: "1042",
+  tenant_id: 3,
+  tenant_name: "Pizza Palace",
+  driver: { id: 7, name: "Mohamed Driver", phone: "0622334455" },
+  business_type: "restaurant",
+  status: "delivered",
+  driver_payout: "18.50",
+  delivery_fee: "25.00",
+  platform_commission: "6.50",
+  distance_km: 3.2,
+  pickup_address: "12 Rue Test, Casablanca",
+  delivery_address: "8 Ave Client, Casablanca",
+  created_at: "2026-02-01T10:25:00Z",
+  assigned_at: "2026-02-01T10:30:00Z",
+  picked_up_at: null,
+  delivered_at: null,
+  failed_at: null,
+  failure_reason: "",
+  failure_note: "",
+  resolution: "",
+  ...overrides,
+});
+
+describe("AdminDeliveryJobs — W6 gaps (A2-14/A2-16/A2-17/A2-18/A2-19/A2-20)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountWithJobs = async (jobsPayload, tenantsPayload) => {
+    _routes = { "/admin/delivery-jobs/": { data: jobsPayload } };
+    if (tenantsPayload) _routes["/admin-tenants/"] = { data: tenantsPayload };
+    wrapper = mountPage();
+    await flushPromises();
+    return wrapper;
+  };
+
+  const payoutCell = (amount) =>
+    wrapper.findAll("td").find((td) => td.text().includes(amount));
+
+  it("A2-14: an unknown status falls back to the translated unknown label, not Searching", async () => {
+    await mountWithJobs([w6job({ status: "bogus_future" })]);
+    expect(wrapper.text()).toContain("adminDeliveryJobs.statusUnknown");
+  });
+
+  it("A2-16: payout is green only for delivered jobs; other statuses are neutral + labelled if-delivered", async () => {
+    await mountWithJobs([
+      w6job({ id: 9001, status: "delivered", driver_payout: "18.50" }),
+      w6job({ id: 9002, order_number: "1043", status: "failed", driver_payout: "12.00" }),
+    ]);
+    expect(payoutCell("18.50").classes()).toContain("text-emerald-300");
+    expect(payoutCell("12.00").classes()).toContain("text-slate-400");
+    expect(wrapper.text()).toContain("adminDeliveryJobs.payoutIfDelivered");
+  });
+
+  it("A2-16: a delivered-only board never shows the if-delivered label", async () => {
+    await mountWithJobs([w6job({ status: "delivered" })]);
+    expect(wrapper.text()).not.toContain("adminDeliveryJobs.payoutIfDelivered");
+  });
+
+  it("A2-17: a failed job shows its translated failure reason, note and resolution", async () => {
+    await mountWithJobs([
+      w6job({
+        status: "failed",
+        failure_reason: "customer_no_show",
+        failure_note: "No answer at door",
+        resolution: "redispatched",
+      }),
+    ]);
+    const text = wrapper.text();
+    expect(text).toContain(
+      'adminDeliveryJobs.failureReason({"reason":"adminDeliveryJobs.failureCustomerNoShow"})',
+    );
+    expect(text).toContain('adminDeliveryJobs.failureNote({"note":"No answer at door"})');
+    expect(text).toContain(
+      'adminDeliveryJobs.resolutionLine({"resolution":"adminDeliveryJobs.resolutionRedispatched"})',
+    );
+  });
+
+  it("A2-18: tenant filter sends ?tenant_id= to the list endpoint", async () => {
+    await mountWithJobs(
+      { results: [w6job()], total: 1, page: 1, page_size: 100 },
+      { results: [{ id: 3, name: "Pizza Palace" }] },
+    );
+    const select = wrapper.find("#jobs-tenant-filter");
+    expect(select.exists()).toBe(true);
+    expect(select.text()).toContain("Pizza Palace");
+    await select.setValue("3");
+    await flushPromises();
+    expect(api.get).toHaveBeenCalledWith(
+      "/admin/delivery-jobs/",
+      expect.objectContaining({ params: expect.objectContaining({ tenant_id: "3" }) }),
+    );
+  });
+
+  it("A2-18: search filters the loaded page by order / restaurant / driver", async () => {
+    await mountWithJobs([
+      w6job({ id: 9001, order_number: "1042", tenant_name: "Pizza Palace" }),
+      w6job({ id: 9002, order_number: "1043", tenant_name: "Chez Test", driver: { id: 8, name: "Karim" } }),
+    ]);
+    expect(wrapper.text()).toContain("Chez Test");
+    await wrapper.find("#jobs-search").setValue("pizza");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Pizza Palace");
+    expect(wrapper.text()).not.toContain("Chez Test");
+  });
+
+  it("A2-18: Details expands a job with driver, addresses and timeline", async () => {
+    await mountWithJobs([w6job({ status: "assigned" })]);
+    await findButton(wrapper, "adminDeliveryJobs.details").trigger("click");
+    await flushPromises();
+    const text = wrapper.text();
+    expect(text).toContain("adminDeliveryJobs.detailTimeline");
+    expect(text).toContain("12 Rue Test, Casablanca");
+    expect(text).toContain("8 Ave Client, Casablanca");
+  });
+
+  it("A2-19: Re-dispatch on a failed job confirms, POSTs the action and updates the row", async () => {
+    const failed = w6job({
+      status: "failed",
+      failure_reason: "customer_no_show",
+      failure_note: "No answer at door",
+      resolution: "",
+    });
+    await mountWithJobs([failed]);
+    await findButton(wrapper, "adminDeliveryJobs.details").trigger("click");
+    await flushPromises();
+    api.post.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        resolution: "redispatched",
+        job: { ...failed, status: "searching", failure_reason: "", failure_note: "", resolution: "redispatched" },
+      },
+    });
+    await findButton(wrapper, "adminDeliveryJobs.redispatch").trigger("click");
+    await flushPromises();
+    expect(globalThis.__w6ConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "adminDeliveryJobs.redispatchConfirmTitle" }),
+    );
+    expect(api.post).toHaveBeenCalledWith("/admin/delivery-jobs/9001/action/", { action: "redispatch" });
+    // The row re-rendered as searching: the failure-reason line is gone.
+    expect(wrapper.text()).not.toContain("adminDeliveryJobs.failureReason");
+  });
+
+  it("A2-19: Cancel on an active job POSTs cancel and the Cancel button leaves the row", async () => {
+    const active = w6job({ status: "searching" });
+    await mountWithJobs([active]);
+    await findButton(wrapper, "adminDeliveryJobs.details").trigger("click");
+    await flushPromises();
+    api.post.mockResolvedValueOnce({
+      data: { ok: true, resolution: "cancelled", job: { ...active, status: "cancelled" } },
+    });
+    await findButton(wrapper, "adminDeliveryJobs.cancelJob").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/admin/delivery-jobs/9001/action/", { action: "cancel" });
+    expect(findButton(wrapper, "adminDeliveryJobs.cancelJob")).toBeUndefined();
+  });
+
+  it("A2-19: declining the confirm dialog posts nothing", async () => {
+    await mountWithJobs([w6job({ status: "failed", failure_reason: "other" })]);
+    await findButton(wrapper, "adminDeliveryJobs.details").trigger("click");
+    await flushPromises();
+    globalThis.__w6ConfirmMock.mockResolvedValueOnce(false);
+    await findButton(wrapper, "adminDeliveryJobs.redispatch").trigger("click");
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("A2-20: with a status filter the chip shows the filtered count with its filter label", async () => {
+    await mountWithJobs({
+      results: [w6job({ status: "delivered" })],
+      total: 250,
+      page: 1,
+      page_size: 100,
+    });
+    expect(wrapper.text()).toContain('adminDeliveryJobs.totalLabel({"count":250})');
+    await findButton(wrapper, "adminDeliveryJobs.statusDelivered").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain(
+      'adminDeliveryJobs.filteredTotalLabel({"count":250,"filter":"adminDeliveryJobs.statusDelivered"})',
+    );
   });
 });

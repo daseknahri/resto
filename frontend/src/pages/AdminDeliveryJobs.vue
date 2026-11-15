@@ -10,7 +10,7 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <span v-if="!loading" class="ui-chip tabular-nums">
-            {{ t('adminDeliveryJobs.totalLabel', { count: total }) }}
+            {{ countChip }}
           </span>
           <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t('common.loading') : '' }}</span>
           <button
@@ -37,6 +37,34 @@
         :aria-checked="statusFilter === s"
         @click="setFilter(s)"
       >{{ s === 'all' ? t('adminDeliveryJobs.all') : statusLabel(s) }}</button>
+    </div>
+
+    <!-- Tenant filter + search (A2-18): the list endpoint already supports ?tenant_id= -->
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="sr-only" for="jobs-tenant-filter">{{ t('adminDeliveryJobs.tenantFilterLabel') }}</label>
+      <select
+        id="jobs-tenant-filter"
+        class="shrink-0 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-200"
+        :value="tenantFilter"
+        @change="setTenantFilter($event.target.value)"
+      >
+        <option value="all">{{ t('adminDeliveryJobs.tenantAll') }}</option>
+        <option v-for="tn in tenants" :key="tn.id" :value="String(tn.id)">{{ tn.name }}</option>
+      </select>
+      <label class="sr-only" for="jobs-search">{{ t('adminDeliveryJobs.searchLabel') }}</label>
+      <input
+        id="jobs-search"
+        v-model="searchText"
+        type="search"
+        class="min-w-[180px] flex-1 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-200"
+        :placeholder="t('adminDeliveryJobs.searchPlaceholder')"
+      />
+    </div>
+
+    <!-- Job action failed (A2-19): the rows stay, the row buttons retry -->
+    <div v-if="actionError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+      <p class="flex-1 text-sm text-red-300">{{ t('adminDeliveryJobs.actionFailed') }}</p>
     </div>
 
     <!-- Background poll failed: keep the last loaded rows, surface a retry (A2-06) -->
@@ -69,9 +97,9 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!jobs.length" class="ui-empty-state text-center p-8 space-y-1">
-      <p class="text-sm font-semibold text-slate-100">{{ t('adminDeliveryJobs.empty') }}</p>
-      <p class="text-xs text-slate-400">{{ t('adminDeliveryJobs.emptyHint') }}</p>
+    <div v-else-if="!displayedJobs.length" class="ui-empty-state text-center p-8 space-y-1">
+      <p class="text-sm font-semibold text-slate-100">{{ searchText ? t('adminDeliveryJobs.emptySearch') : t('adminDeliveryJobs.empty') }}</p>
+      <p v-if="!searchText" class="text-xs text-slate-400">{{ t('adminDeliveryJobs.emptyHint') }}</p>
     </div>
 
     <!-- Data views: table (md+) + card list (mobile) -->
@@ -87,12 +115,12 @@
               <th scope="col" class="px-4 py-3 text-start">{{ t('adminDeliveryJobs.colStatus') }}</th>
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminDeliveryJobs.colPayout') }}</th>
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminDeliveryJobs.colCreated') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminDeliveryJobs.colDetails') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/40">
+            <template v-for="(j, index) in displayedJobs" :key="j.id">
             <tr
-              v-for="(j, index) in jobs"
-              :key="j.id"
               class="ui-reveal transition-colors hover:bg-slate-800/30"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
@@ -104,10 +132,48 @@
               </td>
               <td class="px-4 py-3">
                 <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status, j.business_type)">{{ statusLabel(j.status, j.business_type) }}</span>
+                <p v-if="j.status === 'failed' && j.failure_reason" class="mt-1 max-w-[220px] text-[11px] leading-snug text-red-300">{{ t('adminDeliveryJobs.failureReason', { reason: failureLabel(j.failure_reason) }) }}</p>
+                <p v-if="j.status === 'failed' && j.failure_note" class="mt-0.5 max-w-[220px] text-[11px] leading-snug text-slate-400">{{ t('adminDeliveryJobs.failureNote', { note: j.failure_note }) }}</p>
+                <p v-if="j.resolution" class="mt-0.5 max-w-[220px] text-[11px] leading-snug text-slate-400">{{ t('adminDeliveryJobs.resolutionLine', { resolution: resolutionLabel(j.resolution) }) }}</p>
               </td>
-              <td class="px-4 py-3 text-end tabular-nums text-emerald-300">{{ fmtMoney(j.driver_payout) }}</td>
+              <td class="px-4 py-3 text-end tabular-nums" :class="j.status === 'delivered' ? 'text-emerald-300' : 'text-slate-400'">{{ fmtMoney(j.driver_payout) }}<span v-if="j.status !== 'delivered'" class="block text-[10px] font-normal text-slate-500">{{ t('adminDeliveryJobs.payoutIfDelivered') }}</span></td>
               <td class="px-4 py-3 text-end text-xs text-slate-500 tabular-nums">{{ fmtDate(j.created_at) }}</td>
+              <td class="px-4 py-3 text-end">
+                <button
+                  class="rounded-lg border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+                  @click="toggleDetails(j.id)"
+                  :aria-expanded="expandedJobId === j.id"
+                >{{ expandedJobId === j.id ? t('adminDeliveryJobs.hideDetails') : t('adminDeliveryJobs.details') }}</button>
+              </td>
             </tr>
+            <tr v-if="expandedJobId === j.id" class="bg-slate-800/30">
+              <td colspan="7" class="px-4 py-3">
+                <div class="grid gap-x-6 gap-y-1 sm:grid-cols-2 text-xs">
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailDriver') }}: </span><span class="text-slate-200">{{ j.driver ? (j.driver.name || j.driver.phone || ('#' + j.driver.id)) : t('adminDeliveryJobs.unassigned') }}</span><span v-if="j.driver && j.driver.name && j.driver.phone" class="text-slate-400"> · {{ j.driver.phone }}</span><span v-if="j.driver && j.driver.vehicle" class="text-slate-400"> · {{ j.driver.vehicle }}</span></p>
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailDistance') }}: </span><span class="text-slate-200 tabular-nums">{{ j.distance_km != null ? j.distance_km + ' km' : '—' }}</span></p>
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailPickup') }}: </span><span class="text-slate-200">{{ j.pickup_address || '—' }}</span></p>
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailDelivery') }}: </span><span class="text-slate-200">{{ j.delivery_address || '—' }}</span></p>
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailFee') }}: </span><span class="text-slate-200 tabular-nums">{{ fmtMoney(j.delivery_fee) }}</span></p>
+                  <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailCommission') }}: </span><span class="text-slate-200 tabular-nums">{{ fmtMoney(j.platform_commission) }}</span></p>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">{{ t('adminDeliveryJobs.detailTimeline') }}: <span class="text-slate-300">{{ timelineText(j) }}</span></p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button
+                    v-if="j.status === 'failed'"
+                    class="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 ui-press disabled:opacity-40"
+                    :disabled="actingJobId === j.id"
+                    @click="doJobAction(j, 'redispatch')"
+                  >{{ t('adminDeliveryJobs.redispatch') }}</button>
+                  <button
+                    v-if="!isTerminal(j.status)"
+                    class="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press disabled:opacity-40"
+                    :disabled="actingJobId === j.id"
+                    @click="doJobAction(j, 'cancel')"
+                  >{{ t('adminDeliveryJobs.cancelJob') }}</button>
+                </div>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -115,7 +181,7 @@
       <!-- Mobile card list (hidden on md+) -->
       <ul class="md:hidden space-y-2">
         <li
-          v-for="(j, index) in jobs"
+          v-for="(j, index) in displayedJobs"
           :key="j.id"
           class="ui-admin-card ui-reveal"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
@@ -133,8 +199,37 @@
               </p>
             </div>
             <div class="shrink-0 text-end">
-              <p class="font-semibold tabular-nums text-sm text-emerald-300">{{ fmtMoney(j.driver_payout) }}</p>
+              <p class="font-semibold tabular-nums text-sm" :class="j.status === 'delivered' ? 'text-emerald-300' : 'text-slate-400'">{{ fmtMoney(j.driver_payout) }}<span v-if="j.status !== 'delivered'" class="block text-[10px] font-normal text-slate-500">{{ t('adminDeliveryJobs.payoutIfDelivered') }}</span></p>
               <p class="mt-0.5 text-[10px] text-slate-600 tabular-nums">{{ fmtDate(j.created_at) }}</p>
+            </div>
+          </div>
+          <p v-if="j.status === 'failed' && j.failure_reason" class="mt-1.5 text-[11px] leading-snug text-red-300">{{ t('adminDeliveryJobs.failureReason', { reason: failureLabel(j.failure_reason) }) }}</p>
+          <p v-if="j.status === 'failed' && j.failure_note" class="mt-0.5 text-[11px] leading-snug text-slate-400">{{ t('adminDeliveryJobs.failureNote', { note: j.failure_note }) }}</p>
+          <p v-if="j.resolution" class="mt-0.5 text-[11px] leading-snug text-slate-400">{{ t('adminDeliveryJobs.resolutionLine', { resolution: resolutionLabel(j.resolution) }) }}</p>
+          <div class="mt-2 flex items-center gap-2">
+            <button
+              class="rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 ui-press"
+              @click="toggleDetails(j.id)"
+              :aria-expanded="expandedJobId === j.id"
+            >{{ expandedJobId === j.id ? t('adminDeliveryJobs.hideDetails') : t('adminDeliveryJobs.details') }}</button>
+          </div>
+          <div v-if="expandedJobId === j.id" class="mt-2 space-y-1 border-t border-slate-700/40 pt-2 text-xs">
+            <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailPickup') }}: </span><span class="text-slate-200">{{ j.pickup_address || '—' }}</span></p>
+            <p><span class="text-slate-500">{{ t('adminDeliveryJobs.detailDelivery') }}: </span><span class="text-slate-200">{{ j.delivery_address || '—' }}</span></p>
+            <p class="text-slate-500">{{ t('adminDeliveryJobs.detailTimeline') }}: <span class="text-slate-300">{{ timelineText(j) }}</span></p>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button
+                v-if="j.status === 'failed'"
+                class="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 ui-press disabled:opacity-40"
+                :disabled="actingJobId === j.id"
+                @click="doJobAction(j, 'redispatch')"
+              >{{ t('adminDeliveryJobs.redispatch') }}</button>
+              <button
+                v-if="!isTerminal(j.status)"
+                class="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press disabled:opacity-40"
+                :disabled="actingJobId === j.id"
+                @click="doJobAction(j, 'cancel')"
+              >{{ t('adminDeliveryJobs.cancelJob') }}</button>
             </div>
           </div>
         </li>
@@ -142,7 +237,7 @@
 
       <!-- Cap + pagination (A2-07): the server total, not jobs.length -->
       <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs text-slate-500">{{ t('adminDeliveryJobs.showingLatest', { count: jobs.length, total }) }}</p>
+        <p class="text-xs text-slate-500">{{ t('adminDeliveryJobs.showingLatest', { count: displayedJobs.length, total }) }}</p>
         <div v-if="totalPages > 1" class="flex items-center gap-2">
           <button
             class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press disabled:opacity-40"
@@ -168,8 +263,10 @@ import api from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
 import AppIcon from '../components/AppIcon.vue';
 import { pickupLabelKey } from '../lib/deliveryVocab';
+import { useConfirmModal } from '../composables/useConfirmModal';
 
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 
 const STATUSES = ['all', 'searching', 'assigned', 'at_restaurant', 'picked_up', 'delivered', 'failed', 'cancelled'];
 const PAGE_SIZE = 100;
@@ -182,6 +279,41 @@ const total = ref(0);
 const page = ref(1);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 const statusFilter = ref('all');
+const tenants = ref([]);
+const tenantFilter = ref('all');
+const searchText = ref('');
+const expandedJobId = ref(null);
+const actingJobId = ref(null);
+const actionError = ref(false);
+
+// A2-20: the chip is the SERVER total for the active server-side filters
+// (status + tenant), labelled with the filter — never the raw row count.
+const activeFilterLabel = computed(() => {
+  const parts = [];
+  if (statusFilter.value !== 'all') parts.push(statusLabel(statusFilter.value));
+  if (tenantFilter.value !== 'all') {
+    const tn = tenants.value.find((x) => String(x.id) === tenantFilter.value);
+    parts.push(tn ? tn.name : ('#' + tenantFilter.value));
+  }
+  return parts.join(' · ');
+});
+const countChip = computed(() => {
+  const f = activeFilterLabel.value;
+  return f
+    ? t('adminDeliveryJobs.filteredTotalLabel', { count: total.value, filter: f })
+    : t('adminDeliveryJobs.totalLabel', { count: total.value });
+});
+
+// A2-18: client-side search over the loaded page (order / restaurant / driver).
+const displayedJobs = computed(() => {
+  const q = searchText.value.trim().toLowerCase();
+  if (!q) return jobs.value;
+  return jobs.value.filter((j) => {
+    const hay = [j.order_number, j.tenant_name, j.driver?.name, j.driver?.phone]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+});
 
 const STATUS_LABELS = {
   searching: 'adminDeliveryJobs.statusSearching',
@@ -195,7 +327,34 @@ const STATUS_LABELS = {
 // For at_restaurant chips, branch on the job's business_type; all others use static map.
 const statusLabel = (s, businessType) => {
   if (s === 'at_restaurant') return t(pickupLabelKey(businessType, 'at'));
-  return t(STATUS_LABELS[s] || 'adminDeliveryJobs.statusSearching');
+  return t(STATUS_LABELS[s] || 'adminDeliveryJobs.statusUnknown');
+};
+
+const FAILURE_REASON_LABELS = {
+  customer_no_show: 'adminDeliveryJobs.failureCustomerNoShow',
+  bad_address: 'adminDeliveryJobs.failureBadAddress',
+  driver_unable: 'adminDeliveryJobs.failureDriverUnable',
+  other: 'adminDeliveryJobs.failureOther',
+};
+const failureLabel = (r) => t(FAILURE_REASON_LABELS[r] || 'adminDeliveryJobs.statusUnknown');
+
+const RESOLUTION_LABELS = {
+  redispatched: 'adminDeliveryJobs.resolutionRedispatched',
+  refunded_cancelled: 'adminDeliveryJobs.resolutionRefundedCancelled',
+  noshow_paid: 'adminDeliveryJobs.resolutionNoshowPaid',
+};
+const resolutionLabel = (r) => t(RESOLUTION_LABELS[r] || 'adminDeliveryJobs.statusUnknown');
+
+const isTerminal = (st) => st === 'delivered' || st === 'failed' || st === 'cancelled';
+
+// A2-18 detail: one line — created + every timestamp the job actually has.
+const timelineText = (j) => {
+  const parts = [`${t('adminDeliveryJobs.colCreated')}: ${fmtDate(j.created_at) || '—'}`];
+  if (j.assigned_at) parts.push(`${t('adminDeliveryJobs.statusAssigned')}: ${fmtDate(j.assigned_at)}`);
+  if (j.picked_up_at) parts.push(`${t('adminDeliveryJobs.statusPickedUp')}: ${fmtDate(j.picked_up_at)}`);
+  if (j.delivered_at) parts.push(`${t('adminDeliveryJobs.statusDelivered')}: ${fmtDate(j.delivered_at)}`);
+  if (j.failed_at) parts.push(`${t('adminDeliveryJobs.statusFailed')}: ${fmtDate(j.failed_at)}`);
+  return parts.join(' · ');
 };
 
 const statusClass = (s) => {
@@ -228,11 +387,14 @@ const fetchJobs = async ({ background = false } = {}) => {
   try {
     const params = { page: page.value, page_size: PAGE_SIZE };
     if (statusFilter.value !== 'all') params.status = statusFilter.value;
+    if (tenantFilter.value !== 'all') params.tenant_id = tenantFilter.value;
     const res = await api.get('/admin/delivery-jobs/', { params });
     jobs.value = Array.isArray(res.data) ? res.data : (res.data?.results || []);
     // A2-07: the envelope total is the count chip + cap note; a bare array has no
     // total, so fall back to the rows actually returned.
     total.value = typeof res.data?.total === 'number' ? res.data.total : jobs.value.length;
+    // A2-18: drop a detail panel whose job left the page (filter/page change).
+    if (expandedJobId.value !== null && !jobs.value.some((x) => x.id === expandedJobId.value)) expandedJobId.value = null;
     refreshFailed.value = false;
   } catch {
     if (background) refreshFailed.value = true;
@@ -261,6 +423,63 @@ const nextPage = () => {
   fetchJobs();
 };
 
+// A2-18: tenant options for the filter (same envelope as AdminConsole reads).
+const fetchTenants = async () => {
+  try {
+    const res = await api.get('/admin-tenants/', { params: { page: 1, page_size: 200 } });
+    const payload = res?.data;
+    tenants.value = Array.isArray(payload) ? payload : (Array.isArray(payload?.results) ? payload.results : []);
+  } catch {
+    tenants.value = [];
+  }
+};
+
+const setTenantFilter = (v) => {
+  tenantFilter.value = v;
+  page.value = 1;
+  fetchJobs();
+};
+
+const toggleDetails = (id) => {
+  expandedJobId.value = expandedJobId.value === id ? null : id;
+};
+
+// A2-19: board actions — POST /admin/delivery-jobs/<id>/action/ (confirm first,
+// house style via useConfirmModal). The row updates in place from the returned
+// job; tenant_name is list-enriched, not serialized, so it is preserved.
+const doJobAction = async (j, action) => {
+  const ok = await confirm({
+    title: action === 'redispatch'
+      ? t('adminDeliveryJobs.redispatchConfirmTitle')
+      : t('adminDeliveryJobs.cancelConfirmTitle'),
+    body: action === 'redispatch'
+      ? t('adminDeliveryJobs.redispatchConfirmBody', { order: j.order_number })
+      : t('adminDeliveryJobs.cancelConfirmBody', { order: j.order_number }),
+    confirmLabel: action === 'redispatch'
+      ? t('adminDeliveryJobs.redispatch')
+      : t('adminDeliveryJobs.cancelJob'),
+    danger: action === 'cancel',
+  });
+  if (!ok) return;
+  actingJobId.value = j.id;
+  actionError.value = false;
+  try {
+    const res = await api.post(`/admin/delivery-jobs/${j.id}/action/`, { action });
+    const updated = res?.data?.job;
+    if (updated) {
+      jobs.value = jobs.value.map((x) => (x.id === j.id
+        ? { ...updated, tenant_name: x.tenant_name }
+        : x));
+    } else {
+      fetchJobs({ background: true });
+    }
+  } catch {
+    actionError.value = true;
+  } finally {
+    actingJobId.value = null;
+  }
+};
+
 // ── Live-ish polling: an ops board left open must not go stale for a whole shift ──
 const POLL_MS = 20000;
 let pollTimer = null;
@@ -273,6 +492,7 @@ const onVisibilityChange = () => {
 
 onMounted(() => {
   fetchJobs();
+  fetchTenants();
   pollTimer = setInterval(() => fetchJobs({ background: true }), POLL_MS);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange);
