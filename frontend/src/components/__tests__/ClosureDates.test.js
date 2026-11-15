@@ -74,3 +74,101 @@ describe("ClosureDates — delete in-flight guard", () => {
     await flushPromises();
   });
 });
+// ── Run 8 G4b-K2 (A3-37) — appended 2026-11-15 ────────────────────────────
+// The 2 base double-tap tests above are untouched; everything below this line
+// is new. 5 tests: mount smoke (empty list) (1), load-failure inline + retry
+// (1), delete confirm cancel / proceed (2), add failure translated (1).
+//
+// Mock note — the hoisted useConfirmModal mock below applies file-wide: the
+// base tests never mocked it, and the real composable's confirm() returns a
+// promise that only settles via the modal UI, so without this mock every base
+// remove-click test would hang at the new confirm step. The mock resolves true
+// by default, preserving both base tests; the cancel path flips it per test.
+const closureConfirmMock = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
+vi.mock("../../composables/useConfirmModal", () => ({
+  useConfirmModal: () => ({ confirm: closureConfirmMock }),
+}));
+
+import api from "../../lib/api";
+
+describe("ClosureDates — G4b-K2 A3-37 (load error, delete confirm, add error)", () => {
+  beforeEach(() => {
+    // The top-level beforeEach resets getMock/deleteMock but not the hoisted
+    // confirm mock — without this, confirm calls from the base double-tap
+    // tests accumulate and the per-test toHaveBeenCalledTimes(1) fails.
+    closureConfirmMock.mockReset();
+    api.post = vi.fn().mockResolvedValue({ data: { id: 11, date: "2099-03-03", label: "" } });
+  });
+
+  const removeButton = (w) => w.get('button[aria-label^="common.remove"]');
+  const addButton = (w) =>
+    w.findAll("button").find((b) => b.text().trim() === "closureDates.add");
+
+  it("mounts with an empty list (empty state, no crash)", async () => {
+    getMock.mockResolvedValue({ data: [] });
+    const w = mount(ClosureDates);
+    await flushPromises();
+    expect(w.exists()).toBe(true);
+    expect(w.text()).toContain("closureDates.emptyTitle");
+  });
+
+  it("load failure shows an inline message with Retry instead of a silently empty list", async () => {
+    getMock.mockRejectedValueOnce(new Error("offline"));
+    const w = mount(ClosureDates);
+    await flushPromises();
+
+    expect(w.text()).toContain("closureDates.loadFailed");
+    const retryBtn = w.findAll("button").find((b) => b.text().includes("common.retry"));
+    expect(retryBtn.exists()).toBe(true);
+
+    getMock.mockResolvedValue({ data: [{ id: 7, date: "2099-01-01", label: "NYE" }] });
+    await retryBtn.trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("NYE");
+    expect(w.text()).not.toContain("closureDates.loadFailed");
+  });
+
+  it("asks for confirmation before deleting, naming the date", async () => {
+    getMock.mockResolvedValue({ data: [{ id: 7, date: "2099-01-01", label: "NYE" }] });
+    const w = mount(ClosureDates);
+    await flushPromises();
+
+    await removeButton(w).trigger("click");
+    await flushPromises();
+
+    expect(closureConfirmMock).toHaveBeenCalledTimes(1);
+    expect(closureConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "closureDates.removeConfirmTitle" }),
+    );
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).toHaveBeenCalledWith("/owner/closure-dates/7/");
+  });
+
+  it("does not DELETE when the delete confirm is declined", async () => {
+    closureConfirmMock.mockResolvedValueOnce(false);
+    getMock.mockResolvedValue({ data: [{ id: 7, date: "2099-01-01", label: "NYE" }] });
+    const w = mount(ClosureDates);
+    await flushPromises();
+
+    await removeButton(w).trigger("click");
+    await flushPromises();
+
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(w.text()).toContain("NYE");
+  });
+
+  it("add failure shows the translated generic message, never the raw backend detail", async () => {
+    getMock.mockResolvedValue({ data: [] });
+    api.post.mockRejectedValueOnce({ response: { data: { detail: "Date already closed" } } });
+    const w = mount(ClosureDates);
+    await flushPromises();
+
+    // setValue on the input (awaits a tick) so the :disabled-bound Add button enables.
+    await w.find("#closure-date").setValue("2099-03-03");
+    await addButton(w).trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("closureDates.addFailed");
+    expect(w.text()).not.toContain("Date already closed");
+  });
+});

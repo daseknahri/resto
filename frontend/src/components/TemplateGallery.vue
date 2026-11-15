@@ -35,6 +35,19 @@
       <div v-for="i in 4" :key="i" class="ui-skeleton h-24" />
     </div>
 
+    <!-- Load failure: inline message + retry (A3-36) — the grid must not stay
+         silently empty with only a toast. -->
+    <div v-else-if="loadError" class="ui-empty-state space-y-2 text-center" role="alert">
+      <p class="text-sm font-semibold text-slate-100">{{ t("ownerTemplates.loadFailed") }}</p>
+      <button
+        type="button"
+        class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs"
+        @click="loadTemplates"
+      >
+        {{ t("common.retry") }}
+      </button>
+    </div>
+
     <!-- Template card grid -->
     <div v-else class="grid gap-3 sm:grid-cols-2">
       <button
@@ -75,6 +88,7 @@
  */
 import { ref, computed, onMounted } from "vue";
 import AppIcon from "./AppIcon.vue";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
@@ -89,11 +103,15 @@ const props = defineProps({
 const emit = defineEmits(["applied", "update:applying"]);
 
 const { t } = useI18n();
+const { confirm } = useConfirmModal();
 const toast = useToastStore();
 const tenant = useTenantStore();
 
 const templates = ref([]);
 const loading = ref(false);
+// A3-36: inline load-error state — a failed catalog fetch must not leave a
+// silently empty grid.
+const loadError = ref(false);
 const applyingKey = ref("");
 const withSampleContent = ref(props.initialWithSample);
 const activeFilter = ref(null);
@@ -113,21 +131,34 @@ const filteredTemplates = computed(() => {
   return templates.value.filter((tpl) => tpl.business_type === activeFilter.value);
 });
 
-onMounted(async () => {
+const loadTemplates = async () => {
   loading.value = true;
+  loadError.value = false;
   try {
     // Cached module-level fetch — the gallery may be remounted on every modal
     // open, but the catalog request only goes out once per page load.
     templates.value = await fetchTemplateSummaries();
   } catch {
+    loadError.value = true;
     toast.show(t("ownerTemplates.loadFailed"), "error");
   } finally {
     loading.value = false;
   }
-});
+};
+
+onMounted(loadTemplates);
 
 const applyTemplate = async (key) => {
   if (applyingKey.value) return;
+  // A3-36: applying overwrites theme + business_type and seeds a sample menu —
+  // confirm before the POST, not after.
+  const ok = await confirm({
+    title: t("ownerTemplates.applyConfirmTitle"),
+    body: t("ownerTemplates.applyConfirmBody", { name: t("ownerTemplates.kinds." + key) }),
+    confirmLabel: t("ownerTemplates.applyConfirmCta"),
+    danger: true,
+  });
+  if (!ok) return;
   applyingKey.value = key;
   emit("update:applying", true);
   try {
@@ -143,8 +174,9 @@ const applyTemplate = async (key) => {
       "success",
     );
     emit("applied", data);
-  } catch (err) {
-    toast.show(err?.response?.data?.detail || t("ownerTemplates.applyFailed"), "error");
+  } catch {
+    // A3-36 / C-06: never surface the raw backend detail — translated generic.
+    toast.show(t("ownerTemplates.applyFailed"), "error");
   } finally {
     applyingKey.value = "";
     emit("update:applying", false);

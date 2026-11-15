@@ -203,3 +203,132 @@ describe("TemplateGallery", () => {
     });
   });
 });
+// ── Run 8 G4b-K2 (A3-35, A3-36) — appended 2026-11-15 ──────────────────────
+// The 5 base tests above are untouched; everything below this line is new.
+// 5 tests: load-failure empty-state + retry (1), apply confirm cancel /
+// proceed (2), apply failure translated (1), A3-35 kind-key passthrough (1).
+//
+// Mock note — the hoisted useConfirmModal mock below applies file-wide: the
+// base tests never mocked it, and the real composable's confirm() returns a
+// promise that only settles via the modal UI, so without this mock every base
+// card-click test would hang at the new confirm step. The mock resolves true
+// by default, preserving all 5 base tests; the cancel path flips it per test.
+const galleryConfirmMock = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
+vi.mock("../../composables/useConfirmModal", () => ({
+  useConfirmModal: () => ({ confirm: galleryConfirmMock }),
+}));
+
+describe("TemplateGallery — G4b-K2 A3-36 (load failure, apply confirm)", () => {
+  const TEMPLATES_PAYLOAD = {
+    templates: [
+      {
+        key: "cafe",
+        business_type: "cafe",
+        theme: { primary_color: "#111111", secondary_color: "#222222" },
+        categories: ["A", "B"],
+        dish_count: 5,
+      },
+      {
+        key: "burger",
+        business_type: "restaurant",
+        theme: { primary_color: "#333333", secondary_color: "#444444" },
+        categories: ["C"],
+        dish_count: 3,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetTemplateCatalog();
+    api.get.mockResolvedValue({ data: TEMPLATES_PAYLOAD });
+    api.post.mockResolvedValue({
+      data: { applied: "burger", created_dishes: 3, created_categories: 1 },
+    });
+    fetchMetaMock.mockResolvedValue();
+  });
+
+  const burgerCard = (wrapper) =>
+    wrapper.findAll("button").find((b) => b.text().includes("ownerTemplates.kinds.burger"));
+
+  it("load failure shows an inline message with Retry instead of a silently empty grid", async () => {
+    api.get.mockRejectedValueOnce(new Error("offline"));
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("ownerTemplates.loadFailed");
+    const retryBtn = wrapper.findAll("button").find((b) => b.text().includes("common.retry"));
+    expect(retryBtn.exists()).toBe(true);
+    expect(wrapper.findAll("button").filter((b) => b.text().includes("ownerTemplates.kinds."))).toHaveLength(0);
+
+    // Retry re-fetches and the cards render.
+    __resetTemplateCatalog();
+    await retryBtn.trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll("button").filter((b) => b.text().includes("ownerTemplates.kinds."))).toHaveLength(2);
+  });
+
+  it("asks for confirmation before applying, naming the template", async () => {
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    await burgerCard(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(galleryConfirmMock).toHaveBeenCalledTimes(1);
+    expect(galleryConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "ownerTemplates.applyConfirmTitle" }),
+    );
+    expect(api.post).toHaveBeenCalledWith("/owner/apply-template/", {
+      template: "burger",
+      with_sample_content: true,
+    });
+  });
+
+  it("does not POST or emit when the apply confirm is declined", async () => {
+    galleryConfirmMock.mockResolvedValueOnce(false);
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    await burgerCard(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(api.post).not.toHaveBeenCalled();
+    expect(wrapper.emitted("applied")).toBeUndefined();
+  });
+
+  it("apply failure shows the translated generic message, never the raw backend detail", async () => {
+    api.post.mockRejectedValueOnce({ response: { data: { detail: "Template exploded" } } });
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    await burgerCard(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(showMock).toHaveBeenCalledWith("ownerTemplates.applyFailed", "error");
+    expect(showMock.mock.calls.flat().join(" ")).not.toContain("Template exploded");
+  });
+
+  it("A3-35: a backend-only kind renders through t() (key passthrough, no raw label)", async () => {
+    __resetTemplateCatalog();
+    api.get.mockResolvedValue({
+      data: {
+        templates: [
+          {
+            key: "patisserie_fine",
+            business_type: "bakery",
+            theme: { primary_color: "#111111", secondary_color: "#222222" },
+            categories: ["X"],
+            dish_count: 2,
+          },
+        ],
+      },
+    });
+    const wrapper = mountGallery();
+    await flushPromises();
+
+    const cards = wrapper.findAll("button").filter((b) => b.text().includes("ownerTemplates.kinds."));
+    expect(cards).toHaveLength(1);
+    expect(cards[0].text()).toContain("ownerTemplates.kinds.patisserie_fine");
+  });
+});

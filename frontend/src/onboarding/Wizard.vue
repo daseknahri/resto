@@ -117,7 +117,9 @@
           <!-- Terse SR announcement on step change; the broad aria-live was
                removed so the whole step isn't re-read on every navigation. -->
           <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ stepAnnouncement }}</span>
-          <div ref="stepPanelRef" tabindex="-1" class="ui-panel p-4 focus:outline-none">
+          <!-- A3-34: input/change inside the step panel marks the wizard dirty, so the
+               leave guards only fire after a real edit (not on a fresh mount). -->
+          <div ref="stepPanelRef" tabindex="-1" class="ui-panel p-4 focus:outline-none" @input="markDirty" @change="markDirty">
             <KeepAlive>
               <component :is="currentComponent" ref="stepRef" @next="next" @back="back" @publish="publish" @can-publish="onCanPublish" />
             </KeepAlive>
@@ -173,6 +175,15 @@ const { catalog, groupSingular, itemSingular } = useVocabulary();
 // Set while intentionally leaving via "Save & exit"; lets the route guard skip
 // the confirm since the step is already persisted.
 const exitingToDashboard = ref(false);
+// A3-34: dirty tracking for the leave guards. Set by input/change events inside
+// the active step panel; cleared whenever the step changes (a new step starts
+// clean) and once the tenant is published. Steps expose no isDirty flag, so
+// this is the shell-level proxy — button-only mutations (e.g. a theme-preset
+// pick) do not mark dirty; see REPORT.md remainder.
+const isDirty = ref(false);
+const markDirty = () => {
+  isDirty.value = true;
+};
 const mapping = {
   1: StepStart,
   2: StepBrand,
@@ -346,6 +357,11 @@ onMounted(async () => {
 });
 
 watch(current, persistStep);
+// A3-34: entering a step starts it clean — edits inside the new step re-mark
+// dirty via the panel's input/change listeners above.
+watch(current, () => {
+  isDirty.value = false;
+});
 // Move keyboard/SR focus to the new step's panel so navigation lands the user
 // at the start of the new content (WCAG 2.4.3) instead of leaving focus behind.
 watch(current, () => {
@@ -357,9 +373,11 @@ watch(stepStorageKey, () => {
 });
 
 // ── Unsaved-changes guard ────────────────────────────────────────────────────
-// Warn before browser tab close / hard navigation.
+// Warn before browser tab close / hard navigation — only when there are unsaved
+// edits (A3-34: the old guard warned on every close while unpublished, even
+// with zero edits).
 const beforeUnloadHandler = (e) => {
-  if (published.value) return; // wizard completed — no need to warn
+  if (published.value || !isDirty.value) return; // wizard completed, or nothing edited — no need to warn
   e.preventDefault();
   e.returnValue = ""; // required for Chrome
 };
@@ -370,8 +388,14 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnloadHandler
 // Warn before in-app (Vue Router) navigation away from the wizard. Uses the app's
 // confirm modal (async guard) instead of a raw window.confirm for a consistent,
 // less alarming prompt. "Save & exit" bypasses this via exitingToDashboard.
-onBeforeRouteLeave(async () => {
+onBeforeRouteLeave(async (to) => {
   if (published.value || exitingToDashboard.value) return true;
+  // A3-34: Preview (/menu) and Launch (/owner/launch) are in-wizard links from
+  // StepPublish — leaving through them needs no prompt.
+  const destPath = to?.path || "";
+  if (to?.name === "owner-launch" || destPath === "/menu" || destPath === "/owner/launch") return true;
+  // A3-34: no edits, no prompt — the old guard confirmed on ANY route leave.
+  if (!isDirty.value) return true;
   return await confirm({
     title: t("onboardingWizard.leaveConfirmTitle"),
     body: t("onboardingWizard.leaveConfirm"),

@@ -81,7 +81,7 @@
               >
                 <span class="inline-block h-2 w-2 shrink-0 rounded-full border border-white/10" :style="{ background: preset.primary }" aria-hidden="true"></span>
                 <span class="inline-block h-2 w-2 shrink-0 rounded-full border border-white/10" :style="{ background: preset.secondary }" aria-hidden="true"></span>
-                {{ preset.label }}
+                {{ preset.labelKey ? t(preset.labelKey) : preset.label }}
               </button>
             </div>
           </div>
@@ -432,7 +432,7 @@ const applyThemePreset = (preset) => {
   form.secondary_color = preset.secondary;
   clearField("primary_color");
   clearField("secondary_color");
-  status.value = t("stepTheme.presetSelected", { preset: preset.label });
+  status.value = t("stepTheme.presetSelected", { preset: preset.labelKey ? t(preset.labelKey) : preset.label });
 };
 
 const isPresetActive = (preset) =>

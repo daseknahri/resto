@@ -1859,6 +1859,12 @@ const arabicMessages = {
     "previewAddCta": "أضف",
     "previewSamplePrice": "85",
     "templateAppliedKeptEdits": "تم تطبيق القالب على الخادم، لكن تم الاحتفاظ بتغييرات الألوان والصور غير المحفوظة. احفظ للاحتفاظ بها، أو أعد تحميل هذه الخطوة لاستخدام ألوان القالب.",
+    presets: {
+      "amberTeal": "كهرماني مخضر",
+      "charcoalRed": "فحمي أحمر",
+      "forestLime": "غابي ليموني",
+      "oceanCoral": "محيطي مرجاني",
+    },
   },
   "ownerTemplates": {
     "button": "القوالب",
@@ -1902,8 +1908,22 @@ const arabicMessages = {
       "breakfast_brunch": "فطور / برانش",
       "vegan": "نباتي / صحي",
       "fried_chicken": "دجاج مقلي",
-      "tea_house": "صالون شاي / حلويات مغربية"
-    }
+      "tea_house": "صالون شاي / حلويات مغربية",
+      "patisserie_fine": "حلويات فاخرة",
+      "viennoiserie": "فيينوازري",
+      "bakery_traditional": "مخبزة تقليدية",
+      "epicerie_fine": "بقالة فاخرة",
+      "organic_market": "سوق عضوي",
+      "convenience_store": "متجر صغير",
+      "fashion_boutique": "بوتيك أزياء",
+      "electronics_store": "متجر إلكترونيات",
+      "home_decor": "ديكور منزلي",
+      "parapharmacie": "باراصيدلية",
+      "herbalist": "عطارة / أعشاب",
+    },
+    "applyConfirmTitle": "تطبيق هذا القالب؟",
+    "applyConfirmBody": "سيؤدي هذا إلى استبدال السمة ونوع النشاط التجاري وإضافة قائمة تجريبية. متابعة؟",
+    "applyConfirmCta": "تطبيق القالب",
   },
   "stepPublish": {
     "title": "النشر",
@@ -5105,6 +5125,8 @@ Object.assign(arabicMessages, {
     removed: "\u062a\u0645 \u062d\u0630\u0641 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
     removeFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0630\u0641 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
     scheduledKicker: "\u0627\u0644\u0625\u063a\u0644\u0627\u0642\u0627\u062a \u0627\u0644\u0645\u062c\u062f\u0648\u0644\u0629",
+    "removeConfirmTitle": "حذف تاريخ الإغلاق هذا؟",
+    "removeConfirmBody": "حذف إغلاق يوم {date}؟ سيتبع نشاطك الجدول الأسبوعي في ذلك اليوم.",
   },
   menuSelect: {
     kicker: "\u0627\u062e\u062a\u0631 \u0642\u0627\u0626\u0645\u0629",

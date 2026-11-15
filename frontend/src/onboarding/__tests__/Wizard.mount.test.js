@@ -780,12 +780,232 @@ describe("S1-H A3-09 — publish gate requires the brand check", () => {
     expect(btn.attributes("disabled")).not.toBeUndefined();
   });
 
-  it("enables Publish once a tagline is set (same menu, brand present)", async () => {
-    profileData = { ...profileData, tagline: "Great food, honest prices" };
+  // A3-46 (G4b-K1, tested in StepPublish.mount.test.js) redefined brand as
+  // tagline AND a contact channel — the S1-H version of this test set only a
+  // tagline, which no longer counts as a brand. Same intent, fixture updated.
+  it("enables Publish once a tagline AND a contact channel are set (same menu, brand present)", async () => {
+    profileData = { ...profileData, tagline: "Great food, honest prices", phone: "0612345678" };
     await mountPublish();
     expect(wrapper.text()).not.toContain("stepPublish.publishBrandRequirement");
     const btn = publishButton();
     expect(btn.exists()).toBe(true);
     expect(btn.attributes("disabled")).toBeUndefined();
+  });
+});
+// ── Run 8 G4b-K2 (A3-30, A3-34, A3-44) — appended 2026-11-15 ──────────────
+// The base shell tests + S1-F/S1-H blocks above are untouched; everything below
+// this line is new. 9 tests: A3-34 leave guards (4), A3-30 preset labels (2),
+// A3-44 StepBrand / StepPublish mount smoke (2), + 1 StepTheme behaviour test
+// counted in the A3-30 pair.
+//
+// Mock notes — every vi.mock below is hoisted by Vitest, so it applies
+// file-wide, and each factory is a SUPERSET of (or disjoint from) the base
+// factories, so the tests above keep passing:
+// - ../../composables/useConfirmModal is RE-MOCKED with a shared spy that
+//   resolves true by default (the base factory created a fresh fn per call,
+//   which no earlier test observes). S1-H's A3-05 delete tests rely on the
+//   confirm resolving true — the spy preserves that — while the A3-34 tests
+//   below can assert confirm was/wasn't called and flip it to false.
+// - vue-router is NOT re-mocked: the base onBeforeRouteLeave vi.fn() stands,
+//   and the guard under test is read back from its mock.calls.
+const confirmSpy = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
+vi.mock("../../composables/useConfirmModal", () => ({
+  useConfirmModal: () => ({ confirm: confirmSpy }),
+}));
+
+import { onBeforeRouteLeave } from "vue-router";
+
+// ── A3-34 — leave guards only fire after a real edit ──────────────────────
+// Before the fix beforeUnload warned whenever the tenant was unpublished (zero
+// edits or not) and onBeforeRouteLeave confirmed on ANY route leave, including
+// the in-wizard Preview (/menu) and Launch (/owner/launch) links. The wizard
+// now tracks dirty state from input/change events in the step panel and
+// exempts the in-wizard destinations.
+describe("G4b-K2 A3-34 — leave guards only fire after a real edit", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountUnpublished = async () => {
+    const tenant = useTenantStore();
+    tenant.$patch({ meta: { slug: "demo", profile: { is_menu_published: false } } });
+    wrapper = mountWizard();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.exists()).toBe(true);
+  };
+
+  // The guard Wizard registered at setup — the last onBeforeRouteLeave call.
+  const lastGuard = () => onBeforeRouteLeave.mock.calls.at(-1)[0];
+  const markDirty = async () => {
+    await wrapper.find(".ui-panel").trigger("input");
+  };
+
+  it("lets a clean wizard leave without prompting (no confirm call)", async () => {
+    await mountUnpublished();
+    const result = await lastGuard()({ name: "owner-home", path: "/owner/home" });
+    expect(result).toBe(true);
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("prompts once the wizard is dirty, and honours a cancel", async () => {
+    await mountUnpublished();
+    await markDirty();
+    const result = await lastGuard()({ name: "owner-home", path: "/owner/home" });
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(result).toBe(true);
+
+    confirmSpy.mockResolvedValueOnce(false);
+    const cancelled = await lastGuard()({ name: "owner-home", path: "/owner/home" });
+    expect(cancelled).toBe(false);
+  });
+
+  it("exempts the in-wizard Preview (/menu) and Launch (/owner/launch) links even when dirty", async () => {
+    await mountUnpublished();
+    await markDirty();
+    expect(await lastGuard()({ name: "owner-launch", path: "/owner/launch" })).toBe(true);
+    expect(await lastGuard()({ path: "/menu" })).toBe(true);
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("beforeunload only fires when dirty", async () => {
+    await mountUnpublished();
+    // Clean: the event is not cancelled.
+    expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(true);
+    // Dirty: the handler prevents the unload.
+    await markDirty();
+    expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(false);
+  });
+});
+
+// ── A3-30 — theme preset labels go through t() ─────────────────────────────
+// Before the fix THEME_PRESETS carried plain English `label` strings rendered
+// verbatim in every locale. They now carry `labelKey` and StepTheme renders
+// t(preset.labelKey) (see StepTheme.vue.patch, applied by the coordinator after
+// G4b-G). The t() mock echoes keys, so the translated keys — not raw English —
+// must appear.
+describe("G4b-K2 A3-30 — theme preset labels go through t()", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    useTenantStore().$patch({ meta: { slug: "demo", profile: { is_menu_published: false } } });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountTheme = async () => {
+    profileApi.get.mockResolvedValue({
+      primary_color: "#0F766E",
+      secondary_color: "#F59E0B",
+      logo_url: "",
+      hero_url: "",
+    });
+    wrapper = mount(StepTheme, {
+      props: { standalone: false },
+      global: { stubs: { TemplatePickerModal: true } },
+    });
+    await flushPromises();
+    await nextTick();
+  };
+
+  it("renders translated preset label keys, not raw English names", async () => {
+    await mountTheme();
+    for (const key of [
+      "stepTheme.presets.amberTeal",
+      "stepTheme.presets.charcoalRed",
+      "stepTheme.presets.forestLime",
+      "stepTheme.presets.oceanCoral",
+    ]) {
+      expect(wrapper.text()).toContain(key);
+    }
+    expect(wrapper.text()).not.toContain("Amber Teal");
+    expect(wrapper.text()).not.toContain("Charcoal Red");
+  });
+
+  it("clicking a preset applies it and names it via the translated label", async () => {
+    await mountTheme();
+    const btn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("stepTheme.presets.amberTeal"));
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await nextTick();
+    expect(btn.attributes("aria-pressed")).toBe("true");
+    expect(wrapper.text()).toContain("stepTheme.presetSelected");
+    expect(wrapper.text()).toContain("stepTheme.presets.amberTeal");
+  });
+});
+
+// ── A3-44 — StepBrand / StepPublish mount smoke (K2 remainder) ─────────────
+// StepBrand and StepTheme already have S1-F tests and StepPublish S1-H tests in
+// this file; these two add the K2 mount-smoke pair so every step component the
+// cluster touches has a named mount test in the K2 block too.
+describe("G4b-K2 A3-44 — StepBrand / StepPublish mount smoke", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    useTenantStore().$patch({ meta: { slug: "demo", profile: { is_menu_published: false } } });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  it("StepBrand mounts with a loaded profile without a setup() crash", async () => {
+    profileApi.get.mockResolvedValue({
+      tagline: "Our place",
+      description: "",
+      business_hours_schedule: {},
+      language: "en",
+    });
+    wrapper = mount(StepBrand, { props: { standalone: false } });
+    await flushPromises();
+    await nextTick();
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("stepBrand.title");
+  });
+
+  it("StepPublish mounts and renders its readiness section", async () => {
+    // S1-F's tests above leave a mockResolvedValue on profileApi.get; restore
+    // the delegating default so this test's api.get "/profile/" seed reaches it.
+    profileApi.get.mockRestore();
+    api.get = vi.fn((url) => {
+      if (url.includes("/profile/")) {
+        return Promise.resolve({
+          data: { is_menu_published: false, tagline: "Great food", phone: "", whatsapp: "", is_open: true },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    api.post = vi.fn(() => Promise.resolve({ data: {} }));
+    api.put = vi.fn(() => Promise.resolve({ data: {} }));
+    api.delete = vi.fn(() => Promise.resolve({ data: {} }));
+    wrapper = shallowMount(StepPublish, {
+      global: { stubs: { RouterLink: { template: "<slot />" } } },
+    });
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("stepPublish.readinessSection");
   });
 });

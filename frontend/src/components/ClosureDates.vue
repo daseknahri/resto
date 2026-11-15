@@ -57,6 +57,17 @@
       </div>
     </div>
 
+    <div v-else-if="loadError && dates.length === 0" class="ui-empty-state text-center space-y-2" role="alert">
+      <p class="text-sm font-semibold text-slate-100">{{ t('closureDates.loadFailed') }}</p>
+      <button
+        type="button"
+        class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs"
+        @click="fetchDates"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+
     <div v-else-if="dates.length === 0" class="ui-empty-state text-center space-y-1">
       <p class="text-sm font-semibold text-slate-100">{{ t('closureDates.emptyTitle') }}</p>
       <p class="text-xs text-slate-400">{{ t('closureDates.emptyBody') }}</p>
@@ -92,7 +103,7 @@
               class="ui-btn-outline ui-press ui-touch-target p-2 shrink-0 hover:border-red-500/50 hover:text-red-400 disabled:opacity-60"
               :disabled="deletingId === closure.id"
               :aria-label="`${t('common.remove')} ${formatDate(closure.date)}`"
-              @click="removeDate(closure.id)"
+              @click="removeDate(closure.id, closure.date)"
             >
               <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
                 <path d="M3 3l10 10M13 3L3 13" />
@@ -108,14 +119,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import api from '../lib/api'
+import { useConfirmModal } from '../composables/useConfirmModal'
 import { useI18n } from '../composables/useI18n'
 import { useToastStore } from '../stores/toast'
 
 const { t, currentLocale } = useI18n()
+const { confirm } = useConfirmModal()
 const toast = useToastStore()
 
 const dates = ref([])
 const loading = ref(false)
+// A3-37: inline load-error state — a failed fetch must not leave a silently
+// empty list.
+const loadError = ref(false)
 const saving = ref(false)
 const newDate = ref('')
 const newLabel = ref('')
@@ -148,10 +164,12 @@ const formatDate = (dateStr) => {
 
 const fetchDates = async () => {
   loading.value = true
+  loadError.value = false
   try {
     const { data } = await api.get('/owner/closure-dates/')
     dates.value = Array.isArray(data) ? data : []
   } catch {
+    loadError.value = true
     toast.show(t('closureDates.loadFailed'), 'error')
   } finally {
     loading.value = false
@@ -171,18 +189,30 @@ const addDate = async () => {
     newDate.value = ''
     newLabel.value = ''
     toast.show(t('closureDates.added'), 'success')
-  } catch (err) {
-    const detail = err?.response?.data?.detail || t('closureDates.addFailed')
-    addError.value = detail
+  } catch {
+    // A3-37 / C-06: never put the raw backend detail into the inline error —
+    // translated generic.
+    addError.value = t('closureDates.addFailed')
   } finally {
     saving.value = false
   }
 }
 
 const deletingId = ref(null)
-const removeDate = async (id) => {
+const removeDate = async (id, dateStr) => {
   if (deletingId.value === id) return // in-flight guard: a double-tap must not fire two DELETEs (the 2nd 404s → spurious toast)
+  // Arm the guard BEFORE the first await: the confirm promise only settles
+  // after user input, so a second tap landing meanwhile would otherwise pass
+  // the guard (deletingId still null) and fire a second confirm + DELETE.
   deletingId.value = id
+  // A3-37: confirm the delete — the in-flight guard is not a user confirm.
+  const ok = await confirm({
+    title: t('closureDates.removeConfirmTitle'),
+    body: t('closureDates.removeConfirmBody', { date: dateStr ? formatDate(dateStr) : '' }),
+    confirmLabel: t('common.remove'),
+    danger: true,
+  })
+  if (!ok) { deletingId.value = null; return } // cancel releases the guard so a later retry works
   try {
     await api.delete(`/owner/closure-dates/${id}/`)
     dates.value = dates.value.filter((d) => d.id !== id)
