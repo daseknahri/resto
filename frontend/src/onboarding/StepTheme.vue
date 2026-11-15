@@ -289,9 +289,10 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <button class="ui-btn-primary ui-touch-target px-5 py-2.5 text-sm" :disabled="saving || uploadingHero || uploadingLogo" @click="saveAndNext">
+        <button class="ui-btn-primary ui-touch-target px-5 py-2.5 text-sm" :disabled="saving || uploadingHero || uploadingLogo || !profileLoaded" @click="saveAndNext">
           {{ saving ? t("common.saving") : standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
+        <button v-if="loadFailed" type="button" class="ui-btn-outline ui-touch-target px-5 py-2.5 text-sm" @click="load">{{ t("common.retry") }}</button>
         <button v-if="!standalone" class="ui-btn-outline ui-touch-target px-5 py-2.5 text-sm" @click="$emit('back')">{{ t("common.previous") }}</button>
         <p class="text-sm text-slate-400">{{ status }}</p>
       </div>
@@ -318,6 +319,11 @@ const form = reactive({
   hero_url: "",
 });
 const saving = ref(false);
+// A3-01: the profile GET runs on mount; until it succeeds the form still holds
+// its defaults (#0F766E / #F59E0B, no logo/hero), so Save stays disabled —
+// saving now would PUT those defaults over the stored theme.
+const profileLoaded = ref(false);
+const loadFailed = ref(false);
 const uploadingHero = ref(false);
 const uploadingLogo = ref(false);
 const heroProgress = ref(0);
@@ -435,15 +441,24 @@ const loadTemplatePalettes = async () => {
 };
 
 const load = async () => {
+  loadFailed.value = false;
+  status.value = "";
   try {
     const data = await profileApi.get();
     if (data) Object.assign(form, data);
+    profileLoaded.value = true;
   } catch {
+    profileLoaded.value = false;
+    loadFailed.value = true;
     status.value = t("common.loadFailed");
   }
 };
 
 const saveAndNext = async () => {
+  // A3-01: never save the untouched default form — the profile GET must have
+  // succeeded first (the button is disabled until then; this guards programmatic
+  // calls too).
+  if (!profileLoaded.value) return;
   saving.value = true;
   status.value = "";
   Object.keys(errors).forEach((k) => delete errors[k]);
@@ -573,5 +588,8 @@ onMounted(() => {
 });
 
 const standalone = computed(() => props.standalone);
+
+// Run 8 S1 (A3-07): expose the saver so Wizard.saveAndExit can save first.
+defineExpose({ saveAndNext });
 </script>
 

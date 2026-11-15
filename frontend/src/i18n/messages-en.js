@@ -2706,7 +2706,8 @@ stepBrand: {
   cutoverHourLabel: "Service-day cutover hour (optional)",
   cutoverHourMidnight: "Midnight (00:00) — day resets at midnight",
   cutoverHourOclock: "{h}:00",
-  cutoverHourHint: "Orders placed after this hour start the next service day. Use 2–4 for late-night venues."
+  cutoverHourHint: "Orders placed after this hour start the next service day. Use 2–4 for late-night venues.",
+  businessHoursTimeEqual: "{day}: opening and closing time can't be the same. To close after midnight, just set an earlier closing time.",
 },
 stepTheme: {
   title: "Theme",

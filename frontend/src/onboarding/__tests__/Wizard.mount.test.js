@@ -168,3 +168,189 @@ describe("Wizard (owner onboarding) — mount smoke", () => {
     expect(wrapper.text()).toContain("onboardingWizard.published");
   });
 });
+// ── S1-F (A3-01 / A3-08): StepBrand + StepTheme mount tests ─────────────────
+// Appended by S1-F; the base file above is untouched. The two step components
+// are mounted for real (mount, not shallowMount) because both gaps live in
+// their own template/script: the Save button's :disabled binding and the hours
+// validation inside saveAndNext. The Wizard shell tests above keep their mocks;
+// the three mocks below are hoisted by vitest, so they apply file-wide, but
+// none of them touches a module the shell tests use (Wizard imports neither
+// onboardingApi, useTranslate nor templateCatalog).
+vi.mock("../../lib/onboardingApi", () => ({
+  profileApi: {
+    get: vi.fn(),
+    save: vi.fn(() => Promise.resolve({})),
+  },
+  uploadApi: {
+    image: vi.fn(() => Promise.resolve({ url: "" })),
+    removeImage: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
+// StepBrand destructures { translating, translateError, translateField } from
+// useTranslate(); the real composable POSTs /translate/ — mocked out, the
+// translate buttons are never clicked here.
+vi.mock("../../composables/useTranslate", () => ({
+  useTranslate: () => ({
+    translating: {},
+    translateError: { value: "" },
+    translateField: vi.fn(() => Promise.resolve(null)),
+  }),
+}));
+
+// StepTheme loads the template-palette catalog on mount; the real fetch hits
+// GET /owner/apply-template/ — resolve the empty list so THEME_PRESETS apply.
+vi.mock("../../lib/templateCatalog", () => ({
+  fetchTemplateSummaries: () => Promise.resolve([]),
+}));
+
+import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
+import StepBrand from "../StepBrand.vue";
+import StepTheme from "../StepTheme.vue";
+import { profileApi } from "../../lib/onboardingApi";
+import { useToastStore } from "../../stores/toast";
+import { useThemeStore } from "../../stores/theme";
+
+// Profile GET fixture: Monday is a bar night (18:00-02:00, overnight window).
+const BRAND_PROFILE = {
+  tagline: "Our place",
+  description: "",
+  business_hours_schedule: {
+    mon: { enabled: true, open: "18:00", close: "02:00" },
+  },
+  language: "en",
+};
+
+// The Save button renders "common.saveAndNext" (identity-t mock) in both steps
+// when not standalone.
+const findSaveButton = (wrapper) =>
+  wrapper.findAll("button").find((b) => b.text().includes("common.saveAndNext"));
+
+describe("StepBrand / StepTheme — S1-F (A3-01 load-fail guard, A3-08 overnight hours)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    useTenantStore().$patch({ meta: { slug: "demo", profile: { is_menu_published: false } } });
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountStepBrand = () => mount(StepBrand, { props: { standalone: false } });
+  const mountStepTheme = () =>
+    mount(StepTheme, {
+      props: { standalone: false },
+      global: { stubs: { TemplatePickerModal: true } },
+    });
+
+  // ── A3-01 StepBrand: failed load ──────────────────────────────────────────
+  // The form keeps its empty defaults after a failed GET; Save must be disabled
+  // and, even if a click is dispatched at the disabled button, the saveAndNext
+  // guard must hold — no PUT of the default form over the stored profile.
+  it("A3-01 StepBrand: a failed profile load disables Save and never saves the default form", async () => {
+    profileApi.get.mockRejectedValueOnce(new Error("offline"));
+    wrapper = mountStepBrand();
+    await flushPromises();
+    await nextTick();
+
+    expect(wrapper.text()).toContain("stepBrand.statusLoadFailed");
+    const saveBtn = findSaveButton(wrapper);
+    expect(saveBtn.attributes("disabled")).toBeDefined();
+    expect(wrapper.findAll("button").some((b) => b.text().includes("common.retry"))).toBe(true);
+    await saveBtn.trigger("click");
+    await flushPromises();
+    expect(profileApi.save).not.toHaveBeenCalled();
+  });
+
+  it("A3-01 StepBrand: Retry re-loads the profile and re-enables Save", async () => {
+    profileApi.get.mockRejectedValueOnce(new Error("offline"));
+    wrapper = mountStepBrand();
+    await flushPromises();
+    await nextTick();
+    expect(findSaveButton(wrapper).attributes("disabled")).toBeDefined();
+
+    profileApi.get.mockResolvedValue({ ...BRAND_PROFILE });
+    const retryBtn = wrapper.findAll("button").find((b) => b.text().includes("common.retry"));
+    await retryBtn.trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(findSaveButton(wrapper).attributes("disabled")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("stepBrand.statusLoadFailed");
+  });
+
+  // ── A3-08 StepBrand: overnight windows ────────────────────────────────────
+  it("A3-08 StepBrand: an overnight window (18:00-02:00) saves", async () => {
+    profileApi.get.mockResolvedValue({ ...BRAND_PROFILE });
+    wrapper = mountStepBrand();
+    await flushPromises();
+    await nextTick();
+
+    expect(findSaveButton(wrapper).attributes("disabled")).toBeUndefined();
+    await findSaveButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).toHaveBeenCalledTimes(1);
+    const payload = profileApi.save.mock.calls[0][0];
+    expect(payload.business_hours_schedule.mon).toEqual({ enabled: true, open: "18:00", close: "02:00" });
+  });
+
+  it("A3-08 StepBrand: open == close (09:00-09:00) is rejected and never saves", async () => {
+    profileApi.get.mockResolvedValue({
+      ...BRAND_PROFILE,
+      business_hours_schedule: { mon: { enabled: true, open: "09:00", close: "09:00" } },
+    });
+    wrapper = mountStepBrand();
+    await flushPromises();
+    await nextTick();
+
+    await findSaveButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).not.toHaveBeenCalled();
+    expect(useToastStore().message).toContain("stepBrand.businessHoursTimeEqual");
+  });
+
+  // ── A3-01 StepTheme: failed load ──────────────────────────────────────────
+  it("A3-01 StepTheme: a failed profile load disables Save and never saves the default theme", async () => {
+    profileApi.get.mockRejectedValueOnce(new Error("offline"));
+    wrapper = mountStepTheme();
+    await flushPromises();
+    await nextTick();
+
+    expect(wrapper.text()).toContain("common.loadFailed");
+    const saveBtn = findSaveButton(wrapper);
+    expect(saveBtn.attributes("disabled")).toBeDefined();
+    await saveBtn.trigger("click");
+    await flushPromises();
+    expect(profileApi.save).not.toHaveBeenCalled();
+  });
+
+  it("A3-01 StepTheme: a loaded profile enables Save and saving persists the theme", async () => {
+    profileApi.get.mockResolvedValue({
+      primary_color: "#123456",
+      secondary_color: "#654321",
+      logo_url: "",
+      hero_url: "",
+    });
+    wrapper = mountStepTheme();
+    await flushPromises();
+    await nextTick();
+
+    expect(findSaveButton(wrapper).attributes("disabled")).toBeUndefined();
+    await findSaveButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).toHaveBeenCalledTimes(1);
+    const payload = profileApi.save.mock.calls[0][0];
+    expect(payload.primary_color).toBe("#123456");
+    expect(payload.secondary_color).toBe("#654321");
+    expect(useThemeStore().primary).toBe("#123456");
+  });
+});

@@ -172,3 +172,76 @@ describe("OwnerProfile — mount smoke", () => {
     expect(wrapper.text()).toContain("orderHandling.hoursTitle");
   });
 });
+// ── S1-F (A3-08): OwnerProfile orders-tab schedule editor ───────────────────
+// Appended by S1-F; the base file above is untouched. OwnerProfile's own inline
+// hours editor (orders tab) already rejects only open == close — the overnight
+// window 18:00-02:00 is valid there, mirroring the backend
+// (tenancy/openstate.schedule_open_now). These tests lock that in against the
+// StepBrand bug (A3-08) it mirrors; the StepBrand fix itself is covered by the
+// StepBrand tests in Wizard.mount.test.js.
+import { profileApi } from "../../lib/onboardingApi";
+import { useToastStore } from "../../stores/toast";
+
+describe("OwnerProfile orders tab — business-hours editor (A3-08)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    routerState.query = { tab: "orders" };
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    routerState.query = {};
+  });
+
+  const mountOrdersTab = (schedule) => {
+    useTenantStore().meta = {
+      name: "Testaurant",
+      profile: {
+        business_type: "restaurant",
+        business_hours_schedule: schedule,
+      },
+    };
+    wrapper = mountProfile();
+    return wrapper;
+  };
+
+  // The hours section's Save is the LAST "common.save" button on the orders tab
+  // (the order-handling Save comes first).
+  const hoursSaveButton = () => {
+    const saves = wrapper.findAll("button").filter((b) => b.text().includes("common.save"));
+    return saves[saves.length - 1];
+  };
+
+  it("saves an overnight window (18:00-02:00) from the orders-tab hours editor", async () => {
+    mountOrdersTab({
+      mon: { enabled: true, open: "18:00", close: "02:00" },
+      tue: { enabled: false, open: null, close: null },
+    });
+    await flushPromises();
+
+    await hoursSaveButton().trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).toHaveBeenCalledTimes(1);
+    const payload = profileApi.save.mock.calls[0][0];
+    expect(payload.business_hours_schedule.mon).toEqual({ enabled: true, open: "18:00", close: "02:00" });
+  });
+
+  it("rejects open == close (09:00-09:00) from the orders-tab hours editor", async () => {
+    mountOrdersTab({
+      mon: { enabled: true, open: "09:00", close: "09:00" },
+    });
+    await flushPromises();
+
+    await hoursSaveButton().trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).not.toHaveBeenCalled();
+    expect(useToastStore().message).toContain("orderHandling.hoursInvalidRange");
+  });
+});

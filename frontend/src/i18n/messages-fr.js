@@ -2695,7 +2695,8 @@ stepBrand: {
   cutoverHourLabel: "Heure de bascule de journee (optionnel)",
   cutoverHourMidnight: "Minuit (00:00) — la journee se renouvelle a minuit",
   cutoverHourOclock: "{h}:00",
-  cutoverHourHint: "Les commandes passees apres cette heure commencent la prochaine journee de service. Utilisez 2–4 pour les etablissements tard le soir."
+  cutoverHourHint: "Les commandes passees apres cette heure commencent la prochaine journee de service. Utilisez 2–4 pour les etablissements tard le soir.",
+  businessHoursTimeEqual: "{day} : l heure d ouverture et de fermeture ne peuvent pas etre identiques. Pour fermer apres minuit, indiquez simplement une heure de fermeture plus tot.",
 },
 stepTheme: {
   title: "Theme",

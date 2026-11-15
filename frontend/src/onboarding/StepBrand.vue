@@ -443,9 +443,10 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
+        <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving || !profileLoaded" @click="saveAndNext">
           {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
+        <button v-if="loadFailed" type="button" class="ui-btn-outline px-4 py-2" @click="load">{{ t("common.retry") }}</button>
         <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
         <p aria-live="polite" aria-atomic="true" class="text-sm text-slate-400">{{ status }}</p>
       </div>
@@ -513,6 +514,11 @@ const form = reactive({
   business_type: "restaurant",
 });
 const saving = ref(false);
+// A3-01: the profile GET runs on mount; until it succeeds the form still holds
+// its empty defaults, so Save stays disabled — saving now would PUT those
+// defaults over the stored tagline / description / address / hours / socials.
+const profileLoaded = ref(false);
+const loadFailed = ref(false);
 const status = ref("");
 const errors = ref({});
 const tenant = useTenantStore();
@@ -750,6 +756,8 @@ const useCurrentLocation = () => {
 const clearLocation = () => { form.lat = null; form.lng = null; locationMsg.value = ""; };
 
 const load = async () => {
+  loadFailed.value = false;
+  status.value = "";
   try {
     const data = await profileApi.get();
     Object.assign(form, data || {});
@@ -759,17 +767,28 @@ const load = async () => {
     form.business_hours_i18n = normalizeI18nMap(data?.business_hours_i18n);
     form.business_hours_schedule = normalizeBusinessHoursSchedule(data?.business_hours_schedule);
     businessHoursEdited.value = false;
+    profileLoaded.value = true;
   } catch {
+    profileLoaded.value = false;
+    loadFailed.value = true;
     status.value = t("stepBrand.statusLoadFailed");
   }
 };
 
 const saveAndNext = async () => {
-  // Validate business hours: closing must be after opening for every enabled day.
+  // A3-01: never save the untouched default form — the profile GET must have
+  // succeeded first (the button is disabled until then; this guards programmatic
+  // calls too). Without it a failed load + Save would PUT empty defaults over
+  // the stored profile.
+  if (!profileLoaded.value) return;
+  // Validate business hours: opening and closing must differ for every enabled
+  // day. A close EARLIER than the open is an overnight window (e.g. a bar open
+  // 18:00-02:00) — the backend (tenancy/openstate.schedule_open_now) evaluates
+  // it as spanning midnight, so only open == close is rejected (A3-08).
   for (const day of WEEKDAY_KEYS) {
     const entry = form.business_hours_schedule?.[day];
-    if (entry?.enabled && entry.open && entry.close && entry.open >= entry.close) {
-      toast.show(t('stepBrand.businessHoursTimeOrder', { day: t(`stepBrand.weekdays.${day}`) }), 'error');
+    if (entry?.enabled && entry.open && entry.close && entry.open === entry.close) {
+      toast.show(t('stepBrand.businessHoursTimeEqual', { day: t(`stepBrand.weekdays.${day}`) }), 'error');
       return;
     }
   }
@@ -810,5 +829,8 @@ const saveAndNext = async () => {
 };
 
 onMounted(load);
+
+// Run 8 S1 (A3-07): expose the saver so Wizard.saveAndExit can save first.
+defineExpose({ saveAndNext });
 </script>
 
