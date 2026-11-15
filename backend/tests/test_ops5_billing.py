@@ -373,6 +373,8 @@ class TestAdminLiveOrdersView(SimpleTestCase):
             mock_aal_cls.objects.create = mock_audit_log_create
             mock_aal_cls.Actions.TENANT_LIVE_ORDERS_VIEWED = AdminAuditLog.Actions.TENANT_LIVE_ORDERS_VIEWED
             mock_order_qs.filter.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = [fake_order]
+            # A2-46: the view now COUNTs active orders for active_order_count/capped.
+            mock_order_qs.filter.return_value.count.return_value = 1
 
             resp = view.get(request, tenant_id=1)
 
@@ -498,6 +500,8 @@ class TestAdminLiveOrdersView(SimpleTestCase):
             mock_aal_cls.objects.create = MagicMock()
             mock_aal_cls.Actions.TENANT_LIVE_ORDERS_VIEWED = "tenant_live_orders_viewed"
             mock_order_qs.filter.return_value.select_related.return_value.order_by.return_value.__getitem__.return_value = []
+            # A2-46: the view now COUNTs active orders for active_order_count/capped.
+            mock_order_qs.filter.return_value.count.return_value = 0
 
             resp = view.get(request, tenant_id=7)
 

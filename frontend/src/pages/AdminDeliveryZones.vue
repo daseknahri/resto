@@ -331,7 +331,7 @@
                   v-model="polygonJson"
                   rows="5"
                   class="ui-textarea font-mono text-[11px] resize-y"
-                  :placeholder="t('adminZones.polygonPlaceholder')"'
+                  :placeholder="t('adminZones.polygonPlaceholder')"
                   :aria-invalid="polygonError ? 'true' : undefined"
                   aria-describedby="admin-zones-polygon-error"
                 />

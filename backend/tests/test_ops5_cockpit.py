@@ -109,16 +109,31 @@ class HealthCheckStructureTests(SimpleTestCase):
     """config/api.py: health_view returns per-check dicts with ok + overall status."""
 
     def _call_health(self, *, db_ok=True, cache_ok=True, celery_ok=True,
-                     channel_ok=True, media_ok=True):
-        """Call health_view with all sub-checks mocked."""
+                     channel_ok=True, media_ok=True, authenticated=False):
+        """Call health_view with all sub-checks mocked.
+
+        Anonymous by default (status/checks stay public). Pass authenticated=True
+        for the schema/tenant assertions — A-49 gates those to authenticated
+        callers only, so an anonymous call has neither key.
+        """
         db_result = {"ok": db_ok, "latency_ms": 1}
         cache_result = {"ok": cache_ok, "latency_ms": 1}
         celery_result = {"ok": celery_ok, "detail": "ok"}
         channel_result = {"ok": channel_ok, "detail": "ok"}
         media_result = {"ok": media_ok, "detail": "/media"}
 
-        request = MagicMock()
+        # Run 8 G3b W5 (A-49): health_view is a DRF @api_view now — a direct call
+        # needs a real HttpRequest (DRF dispatch asserts it). A DRF Response is
+        # unrendered on a direct call, so read .data, not .content.
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        request = APIRequestFactory().get("/api/health/")
         request.tenant = None
+        if authenticated:
+            _admin = MagicMock()
+            _admin.is_authenticated = True
+            _admin.is_active = True
+            force_authenticate(request, user=_admin)
 
         with (
             patch("config.api._check_db", return_value=db_result),
@@ -130,8 +145,7 @@ class HealthCheckStructureTests(SimpleTestCase):
             from config.api import health_view
             response = health_view(request)
 
-        import json
-        data = json.loads(response.content)
+        data = response.data
         return response, data
 
     def test_all_ok_returns_200_and_ok_status(self):
@@ -176,12 +190,12 @@ class HealthCheckStructureTests(SimpleTestCase):
         self.assertEqual(data["status"], "degraded")
 
     def test_response_has_time_and_schema_fields(self):
-        _, data = self._call_health()
+        _, data = self._call_health(authenticated=True)
         self.assertIn("time", data)
         self.assertIn("schema", data)
 
     def test_tenant_null_when_no_tenant_on_request(self):
-        _, data = self._call_health()
+        _, data = self._call_health(authenticated=True)
         self.assertIsNone(data["tenant"])
 
 

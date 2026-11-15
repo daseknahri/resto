@@ -8,7 +8,6 @@ Tests for config utility helpers and tiering feature-flag functions:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -132,9 +131,24 @@ class CheckCacheTests(SimpleTestCase):
 
 
 class HealthViewTests(SimpleTestCase):
-    def _request(self, tenant=None):
-        req = SimpleNamespace(tenant=tenant)
+    def _request(self, tenant=None, user=None):
+        # Run 8 G3b W5 (A-49): health_view is a DRF @api_view now — a direct call
+        # needs a real HttpRequest (DRF dispatch asserts it). Anonymous callers get
+        # the coarse status/checks/time payload; schema + tenant only for
+        # authenticated callers, so the tenant tests pass an authenticated user.
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        req = APIRequestFactory().get("/api/health/")
+        if user is not None:
+            force_authenticate(req, user=user)
+        req.tenant = tenant
         return req
+
+    def _admin_user(self):
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_active = True
+        return user
 
     # OPS-5-B: health_view now has five checks: db, cache, celery, channel_layer, media.
     # Tests that need all-ok must patch all five so env-specific probes don't leak in.
@@ -162,7 +176,7 @@ class HealthViewTests(SimpleTestCase):
         ):
             response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 200)
-        body = json.loads(response.content)
+        body = response.data
         self.assertEqual(body["status"], "ok")
 
     def test_db_down_returns_503(self):
@@ -175,7 +189,7 @@ class HealthViewTests(SimpleTestCase):
         ):
             response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 503)
-        body = json.loads(response.content)
+        body = response.data
         self.assertEqual(body["status"], "down")
 
     def test_cache_down_returns_200_degraded(self):
@@ -188,7 +202,7 @@ class HealthViewTests(SimpleTestCase):
         ):
             response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 200)
-        body = json.loads(response.content)
+        body = response.data
         self.assertEqual(body["status"], "degraded")
 
     def test_response_includes_checks_key(self):
@@ -200,7 +214,7 @@ class HealthViewTests(SimpleTestCase):
             patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
         ):
             response = config_api.health_view(self._request())
-        body = json.loads(response.content)
+        body = response.data
         self.assertIn("db", body["checks"])
         self.assertIn("cache", body["checks"])
 
@@ -213,16 +227,16 @@ class HealthViewTests(SimpleTestCase):
             patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
             patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
         ):
-            response = config_api.health_view(self._request(tenant=tenant))
-        body = json.loads(response.content)
+            response = config_api.health_view(self._request(tenant=tenant, user=self._admin_user()))
+        body = response.data
         self.assertEqual(body["tenant"]["id"], 42)
         self.assertEqual(body["tenant"]["slug"], "demo")
 
     def test_no_tenant_returns_null(self):
         with patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 1}):
             with patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 1}):
-                response = config_api.health_view(self._request(tenant=None))
-        body = json.loads(response.content)
+                response = config_api.health_view(self._request(tenant=None, user=self._admin_user()))
+        body = response.data
         self.assertIsNone(body["tenant"])
 
 

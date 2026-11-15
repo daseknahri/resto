@@ -617,7 +617,12 @@ class AdminPlatformAnalyticsDriverOwedTests(SimpleTestCase):
              patch("accounts.models.RideRequest", Ride), \
              patch("accounts.models.WalletTransaction", WT), \
              patch("accounts.models.DriverPayout", DP):
-            resp = AdminPlatformAnalyticsView().get(MagicMock())
+            # A-15: the view reads request.query_params for period scoping; a bare
+            # MagicMock returns a mock for .get("period"), which fails validation
+            # (400). An empty dict = no params = historic all-time payload.
+            _req = MagicMock()
+            _req.query_params = {}
+            resp = AdminPlatformAnalyticsView().get(_req)
         return resp, Cust, WT, DP
 
     def test_driver_owed_is_direct_wallet_balance_sum(self):
@@ -762,7 +767,9 @@ class AdminPlatformAnalyticsCacheTests(SimpleTestCase):
              patch("accounts.models.RideRequest", Ride), \
              patch("accounts.models.WalletTransaction", WT), \
              patch("accounts.models.DriverPayout", DP):
-            return AdminPlatformAnalyticsView().get(MagicMock())
+            _req = MagicMock()
+            _req.query_params = {}
+            return AdminPlatformAnalyticsView().get(_req)
 
     def test_second_call_hits_cache_and_runs_aggregates_once(self):
         mocks = self._mocks(total_tenants=5)

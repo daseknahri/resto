@@ -15,7 +15,6 @@ and the G3a tests.
 All tests are unit-level (SimpleTestCase + mocks — no real DB), following the
 pattern of test_admin_delivery_views.py.
 """
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase

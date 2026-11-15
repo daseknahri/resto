@@ -316,7 +316,12 @@ class PlatformAnalyticsRealizedBasisTests(SimpleTestCase):
              patch("accounts.models.RideRequest", Ride), \
              patch("accounts.models.WalletTransaction", WT), \
              patch("accounts.models.DriverPayout", DP):
-            resp = AdminPlatformAnalyticsView().get(MagicMock())
+            # A-15: the view reads request.query_params for period scoping; a bare
+            # MagicMock returns a mock for .get("period"), which fails validation
+            # (400). An empty dict = no params = historic all-time payload.
+            _req = MagicMock()
+            _req.query_params = {}
+            resp = AdminPlatformAnalyticsView().get(_req)
         return resp, DJ
 
     def test_cancelled_jobs_excluded_from_active(self):

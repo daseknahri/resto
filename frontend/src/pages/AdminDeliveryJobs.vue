@@ -141,8 +141,8 @@
               <td class="px-4 py-3 text-end">
                 <button
                   class="rounded-lg border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press"
-                  @click="toggleDetails(j.id)"
                   :aria-expanded="expandedJobId === j.id"
+                  @click="toggleDetails(j.id)"
                 >{{ expandedJobId === j.id ? t('adminDeliveryJobs.hideDetails') : t('adminDeliveryJobs.details') }}</button>
               </td>
             </tr>
@@ -209,8 +209,8 @@
           <div class="mt-2 flex items-center gap-2">
             <button
               class="rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 ui-press"
-              @click="toggleDetails(j.id)"
               :aria-expanded="expandedJobId === j.id"
+              @click="toggleDetails(j.id)"
             >{{ expandedJobId === j.id ? t('adminDeliveryJobs.hideDetails') : t('adminDeliveryJobs.details') }}</button>
           </div>
           <div v-if="expandedJobId === j.id" class="mt-2 space-y-1 border-t border-slate-700/40 pt-2 text-xs">

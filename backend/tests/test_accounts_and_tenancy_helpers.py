@@ -170,7 +170,8 @@ class SerializeFlashSaleTests(SimpleTestCase):
 
     def test_discount_value_is_string(self):
         result = _serialize_flash_sale(self._fs())
-        self.assertEqual(result["discount_value"], "10.00")
+        # Run 8 G3b A-04: the serializer strips trailing zeros ("10.00" -> "10").
+        self.assertEqual(result["discount_value"], "10")
 
     def test_opted_in_defaults_false(self):
         result = _serialize_flash_sale(self._fs())
