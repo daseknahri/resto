@@ -114,7 +114,7 @@
                     ? 'border-amber-500/30 text-amber-200'
                     : ''
                 "
-                @change="setStock(dish, $event.target.value)"
+                @change="setStock(dish, $event)"
                 @keydown.enter="$event.target.blur()"
               />
               <span v-if="dish.stock_qty === 0" class="sr-only">{{ t("ownerHome.lowStockSoldOut") }}</span>
@@ -266,11 +266,19 @@ const toggleAvailability = async (dish) => {
   }
 };
 
-const setStock = async (dish, rawValue) => {
+const setStock = async (dish, event) => {
   if (settingStockId.value === dish.id) return;
-  const trimmed = String(rawValue ?? "").trim();
+  const target = event?.target ?? null;
+  const trimmed = String(target?.value ?? "").trim();
   const newQty = trimmed === "" ? null : parseInt(trimmed, 10);
-  if (newQty !== null && (isNaN(newQty) || newQty < 0)) return;
+  if (newQty !== null && (isNaN(newQty) || newQty < 0)) {
+    // B-28: the input is :value-bound (not v-model), so a rejected value would
+    // otherwise stay displayed with no message — toast and revert to the
+    // stored value.
+    toast.show(t("ownerHome.stockInvalid"), "error");
+    if (target) target.value = dish.stock_qty ?? "";
+    return;
+  }
   if (newQty === dish.stock_qty) return;
   settingStockId.value = dish.id;
   try {

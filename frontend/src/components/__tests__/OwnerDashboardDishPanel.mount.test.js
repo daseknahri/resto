@@ -144,3 +144,50 @@ describe("OwnerDashboardDishPanel — S1-A (B-04 scoped reset-all)", () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 });
+
+// ── G4b-D additions ─────────────────────────────────────────────────────────
+import { useToastStore } from "../../stores/toast";
+
+// B-28: invalid stock input errors and reverts instead of being silently ignored.
+describe("OwnerDashboardDishPanel — G4b-D (B-28)", () => {
+  let wrapper;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const openPanel = async () => {
+    wrapper = mountPanel();
+    await wrapper.find("summary").trigger("click");
+    await flushPromises();
+    return wrapper.find("#stock-13");
+  };
+
+  it("B-28: negative stock shows an error, sends no PATCH, and reverts the input", async () => {
+    const input = await openPanel();
+    expect(input.exists()).toBe(true);
+    const show = vi.spyOn(useToastStore(), "show");
+    await input.setValue("-3");
+    await input.trigger("change");
+    await flushPromises();
+    expect(show).toHaveBeenCalledWith("ownerHome.stockInvalid", "error");
+    expect(api.patch).not.toHaveBeenCalled();
+    // The rejected value must not linger in the input.
+    expect(input.element.value).toBe("5");
+  });
+
+  it("B-28 (regression): a valid stock value still PATCHes exactly once", async () => {
+    const input = await openPanel();
+    await input.setValue("8");
+    await input.trigger("change");
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(api.patch).toHaveBeenCalledWith("/dishes/13/", { stock_qty: 8 });
+  });
+});

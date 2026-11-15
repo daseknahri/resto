@@ -3900,6 +3900,14 @@ inventory: {
   recLineFailed: "Could not update recipe.",
   recEmpty: "No recipe lines yet.",
   recNoIngredients: "No ingredients available — add some on the Ingredients tab first.",
+  autoResetDisabled: "Morning auto-reset turned off.",
+  autoResetEnabled: "Morning auto-reset turned on.",
+  catLoadFailed: "Could not load categories.",
+  ingDeleteConfirm: "Delete ingredient \"{name}\"?",
+  ingLoadFailed: "Could not load ingredients.",
+  invalidQty: "Enter a whole number of 0 or more.",
+  recLineDeleteConfirm: "Remove \"{name}\" from this recipe?",
+  recLoadFailed: "Could not load this recipe.",
 },
 busyMode: {
   title: "Busy mode",
@@ -4225,6 +4233,7 @@ ownerHome: {
   nextActionKindSetup: "Setup",
   nextActionFinishSetup: "Finish setup",
   nextActionFinishSetupBody: "Publish your menu to start taking orders.",
+  stockInvalid: "Enter a whole number of 0 or more.",
 },
 revenueChart: {
   kicker: "Analytics",

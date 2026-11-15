@@ -3852,6 +3852,14 @@ inventory: {
   recLineFailed: "Impossible de mettre a jour la recette.",
   recEmpty: "Aucune ligne de recette pour l'instant.",
   recNoIngredients: "Aucun ingredient disponible — ajoutez-en dans l'onglet Ingredients d'abord.",
+  autoResetDisabled: "Reinitialisation matinale desactivee.",
+  autoResetEnabled: "Reinitialisation matinale activee.",
+  catLoadFailed: "Impossible de charger les categories.",
+  ingDeleteConfirm: "Supprimer l'ingredient \"{name}\" ?",
+  ingLoadFailed: "Impossible de charger les ingredients.",
+  invalidQty: "Saisissez un nombre entier de 0 ou plus.",
+  recLineDeleteConfirm: "Retirer \"{name}\" de cette recette ?",
+  recLoadFailed: "Impossible de charger cette recette.",
 },
 busyMode: {
   title: "Mode rush",
@@ -4176,6 +4184,7 @@ ownerHome: {
   nextActionKindSetup: "Configuration",
   nextActionFinishSetup: "Terminer la configuration",
   nextActionFinishSetupBody: "Publiez votre menu pour commencer a recevoir des commandes.",
+  stockInvalid: "Saisissez un nombre entier de 0 ou plus.",
 },
 revenueChart: {
   kicker: "Analytique",

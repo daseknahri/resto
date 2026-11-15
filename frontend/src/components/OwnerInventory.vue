@@ -154,7 +154,7 @@
                         ? 'border-slate-600 text-slate-100'
                         : ''
                     "
-                    @change="commitStock(dish, $event.target.value)"
+                    @change="commitStock(dish, $event)"
                     @keydown.enter="$event.target.blur()"
                   />
                   <button
@@ -182,7 +182,7 @@
                   :placeholder="t('inventory.unlimited')"
                   :disabled="savingId === dish.id"
                   class="ui-input w-16 py-0.5 text-center text-[11px] tabular-nums placeholder-slate-600 disabled:opacity-40"
-                  @change="commitThreshold(dish, $event.target.value)"
+                  @change="commitThreshold(dish, $event)"
                   @keydown.enter="$event.target.blur()"
                 />
               </div>
@@ -738,12 +738,14 @@ import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 
 const { t } = useI18n();
 const tenant = useTenantStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
 const subtabs = [
@@ -844,13 +846,16 @@ const _threshTimers = {};
 const patchDish = async (dish, payload) => {
   if (savingId.value === dish.id) return;
   savingId.value = dish.id;
+  // Single-PATCH shape (B-27): fold the re-enable into the same request as the
+  // stock update, like OwnerDashboardDishPanel.setStock does — the old two-PATCH
+  // sequence could leave stock saved but availability stale behind one toast.
+  const merged = { ...payload };
+  if (merged.stock_qty != null && merged.stock_qty > 0 && !dish.is_available) {
+    merged.is_available = true;
+  }
   try {
-    await api.patch(`/dishes/${dish.id}/`, payload);
-    Object.assign(dish, payload);
-    if (payload.stock_qty != null && payload.stock_qty > 0 && !dish.is_available) {
-      await api.patch(`/dishes/${dish.id}/`, { is_available: true });
-      dish.is_available = true;
-    }
+    await api.patch(`/dishes/${dish.id}/`, merged);
+    Object.assign(dish, merged);
     bustCache("menu.categories");
     toast.show(t("inventory.saved"), "success");
   } catch {
@@ -860,19 +865,33 @@ const patchDish = async (dish, payload) => {
   }
 };
 
-const commitStock = (dish, rawValue) => {
-  const trimmed = String(rawValue ?? "").trim();
+const commitStock = (dish, event) => {
+  const target = event?.target ?? null;
+  const trimmed = String(target?.value ?? "").trim();
   const newQty = trimmed === "" ? null : parseInt(trimmed, 10);
-  if (newQty !== null && (isNaN(newQty) || newQty < 0)) return;
+  if (newQty !== null && (isNaN(newQty) || newQty < 0)) {
+    // B-28: the input is :value-bound (not v-model), so a rejected value would
+    // otherwise stay displayed with no message — toast and revert to the
+    // stored value.
+    toast.show(t("inventory.invalidQty"), "error");
+    if (target) target.value = dish.stock_qty ?? "";
+    return;
+  }
   if (newQty === dish.stock_qty) return;
   clearTimeout(_stockTimers[dish.id]);
   _stockTimers[dish.id] = setTimeout(() => patchDish(dish, { stock_qty: newQty }), 600);
 };
 
-const commitThreshold = (dish, rawValue) => {
-  const trimmed = String(rawValue ?? "").trim();
+const commitThreshold = (dish, event) => {
+  const target = event?.target ?? null;
+  const trimmed = String(target?.value ?? "").trim();
   const newVal = trimmed === "" ? 3 : parseInt(trimmed, 10);
-  if (isNaN(newVal) || newVal < 0) return;
+  if (isNaN(newVal) || newVal < 0) {
+    // B-28: same revert as commitStock — the rejected value must not linger.
+    toast.show(t("inventory.invalidQty"), "error");
+    if (target) target.value = dish.low_stock_threshold ?? "";
+    return;
+  }
   if (newVal === dish.low_stock_threshold) return;
   clearTimeout(_threshTimers[dish.id]);
   _threshTimers[dish.id] = setTimeout(() => patchDish(dish, { low_stock_threshold: newVal }), 600);
@@ -893,6 +912,10 @@ const toggleAutoReset = async () => {
   try {
     await api.patch("/profile/", { auto_reset_availability: newValue });
     tenant.mergeProfile({ auto_reset_availability: newValue });
+    toast.show(
+      t(newValue ? "inventory.autoResetEnabled" : "inventory.autoResetDisabled"),
+      "success"
+    );
   } catch {
     toast.show(t("inventory.saveFailed"), "error");
   } finally {
@@ -933,7 +956,7 @@ const fetchIngredients = async () => {
     const { data } = await api.get("/owner/ingredients/", { timeout: 8000 });
     ingredients.value = Array.isArray(data) ? data : [];
   } catch {
-    toast.show(t("inventory.saveFailed"), "error");
+    toast.show(t("inventory.ingLoadFailed"), "error");
   } finally {
     ingFetching.value = false;
   }
@@ -1012,6 +1035,15 @@ const ingSaveEdit = async (ing) => {
 
 const ingDelete = async (ing) => {
   if (ingSavingId.value === ing.id) return;
+  // B-25: every other delete in the lane confirms; a single tap here used to
+  // delete outright (recipe lines feed stock deduction, so the cost is real).
+  const ok = await confirm({
+    title: t("inventory.ingDeleteConfirm", { name: ing.name }),
+    body: t("confirmModal.defaultBody"),
+    confirmLabel: t("common.delete"),
+    danger: true,
+  });
+  if (!ok) return;
   ingSavingId.value = ing.id;
   try {
     await api.delete(`/owner/ingredients/${ing.id}/`);
@@ -1073,7 +1105,7 @@ const fetchRecipeLines = async (dishId) => {
     const { data } = await api.get(`/owner/dishes/${dishId}/recipe/`, { timeout: 8000 });
     recLines.value = Array.isArray(data) ? data : [];
   } catch {
-    toast.show(t("inventory.ingSaveFailed"), "error");
+    toast.show(t("inventory.recLoadFailed"), "error");
   } finally {
     recLinesFetching.value = false;
   }
@@ -1109,6 +1141,14 @@ const recAddLine = async () => {
 
 const recDeleteLine = async (line) => {
   if (recDeletingLineId.value === line.id) return;
+  // B-25: same confirm as ingDelete — a recipe line feeds stock deduction.
+  const ok = await confirm({
+    title: t("inventory.recLineDeleteConfirm", { name: line.ingredient_name }),
+    body: t("confirmModal.defaultBody"),
+    confirmLabel: t("common.delete"),
+    danger: true,
+  });
+  if (!ok) return;
   recDeletingLineId.value = line.id;
   try {
     await api.delete(`/owner/recipe-lines/${line.id}/`);
@@ -1136,7 +1176,7 @@ const fetchCategories = async () => {
     const { data } = await api.get("/categories/", { timeout: 8000 });
     catList.value = Array.isArray(data) ? data : [];
   } catch {
-    toast.show(t("inventory.catToggleFailed"), "error");
+    toast.show(t("inventory.catLoadFailed"), "error");
   } finally {
     catFetching.value = false;
   }

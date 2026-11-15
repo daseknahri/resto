@@ -597,7 +597,15 @@ const arabicMessages = {
     "recLineDeleted": "تمت إزالة المكوّن من الوصفة.",
     "recLineFailed": "تعذّر تحديث الوصفة.",
     "recEmpty": "لا توجد مكونات في الوصفة بعد.",
-    "recNoIngredients": "لا توجد مكونات متاحة — أضف مكونات من تبويب المكونات أولًا."
+    "recNoIngredients": "لا توجد مكونات متاحة — أضف مكونات من تبويب المكونات أولًا.",
+    "autoResetDisabled": "تم إيقاف إعادة التعيين الصباحية.",
+    "autoResetEnabled": "تم تفعيل إعادة التعيين الصباحية.",
+    "catLoadFailed": "تعذّر تحميل الفئات.",
+    "ingDeleteConfirm": "حذف المكوّن \"{name}\"؟",
+    "ingLoadFailed": "تعذّر تحميل المكونات.",
+    "invalidQty": "أدخل عددًا صحيحًا 0 أو أكثر.",
+    "recLineDeleteConfirm": "إزالة \"{name}\" من هذه الوصفة؟",
+    "recLoadFailed": "تعذّر تحميل هذه الوصفة.",
   },
   "orderFlow": {
     "elapsed": "{m} د",
@@ -900,6 +908,7 @@ const arabicMessages = {
     "goalReached": "تم بلوغ الهدف!",
     "goalSaved": "تم تحديث الهدف اليومي.",
     "goalSaveFailed": "تعذّر حفظ الهدف. حاول مجدداً.",
+    "stockInvalid": "أدخل عددًا صحيحًا 0 أو أكثر.",
   },
   "ownerSections": {
     "kicker": "إدارة القاعة",
