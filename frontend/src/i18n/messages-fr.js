@@ -3210,6 +3210,11 @@ stepDishes: {
   dragToReorder: "Glisser pour reorganiser",
   tapToEditPrice: "Appuyer pour modifier le prix",
   loadKeptUnsavedEdits: "Modifications non enregistrees conservees pour {count} plat(s). Enregistrez pour les garder.",
+  availabilityTimeBothOrNeither: "Renseignez les deux horaires ou aucun des deux.",
+  availabilityTimeInvalid: "Horaire invalide. Utilisez le format HH:MM.",
+  groupMaxLessThanMin: "Le maximum de choix doit etre au moins egal au minimum.",
+  groupNameDuplicate: "Nom de groupe d'options en double.",
+  groupNameRequired: "Le nom du groupe d'options est obligatoire.",
 },
 combos: {
   badge: "Combo",

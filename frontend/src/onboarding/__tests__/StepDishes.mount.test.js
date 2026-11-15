@@ -353,3 +353,295 @@ describe("StepDishes (owner onboarding) — S1-G: A3-02 / A3-03 / A3-06", () => 
     expect(wrapper.text()).toContain("Salad");
   });
 });
+
+describe("StepDishes (owner onboarding) - G4b-I: A3-13 / A3-14 / A3-15 / A3-16 / A3-17 / A3-21 / A3-42", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    categoryListMock.mockResolvedValue([...CATEGORIES]);
+    dishListMock.mockResolvedValue([]);
+    dishUpsertMock.mockImplementation(async (dish) => ({
+      id: dish.id || 99,
+      slug: dish.slug || "dish",
+      stock_qty: dish.stock_qty ?? null,
+      is_available: dish.is_available ?? true,
+    }));
+    optionSyncMock.mockResolvedValue([]);
+    groupSyncMock.mockResolvedValue([]);
+    uploadRemoveMock.mockResolvedValue(undefined);
+    apiPatchMock.mockResolvedValue({ data: {} });
+    apiPostMock.mockResolvedValue({ data: {} });
+    apiGetMock.mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  // The pencil button opens the editor; its aria-label is exactly the echoed
+  // common.edit key (the row-name button carries "common.edit <name>").
+  const openEditor = async (w, idx = 0) => {
+    await w.findAll('button[aria-label="common.edit"]')[idx].trigger("click");
+    await nextTick();
+  };
+
+  // Editor footer Save: text is exactly "common.save" — but the PAGE top bar
+  // (line 10) ALSO reads "common.save" (only the bottom bar reads
+  // "common.saveAndNext"), so an exact text match finds 2 buttons once the
+  // editor is open. Scope to the editor dialog (role="dialog"); the page bar
+  // is outside any dialog.
+  const clickEditorSave = async (w) => {
+    const saveBtn = w
+      .findAll("button")
+      .filter((b) => b.text().trim() === "common.save" && b.element.closest('div[role="dialog"]'));
+    expect(saveBtn.length).toBe(1);
+    await saveBtn[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+  };
+
+  const mountWithDishes = async (rows) => {
+    dishListMock.mockResolvedValue(rows);
+    seedTenant();
+    wrapper = mountDishes();
+    await flushPromises();
+    await flushPromises();
+    return wrapper;
+  };
+
+  const group = (over = {}) => ({
+    name: "Size",
+    name_i18n: {},
+    min_select: 0,
+    max_select: 1,
+    position: 0,
+    options: [{ name: "Small", name_i18n: {}, price_delta: 0, position: 0 }],
+    ...over,
+  });
+
+  const dishWithGroups = (groups) =>
+    serverDish({ option_groups: groups });
+
+  // -- A3-13: option groups are validated client-side --
+  it("A3-13: editor Save blocks a group with options but no name", async () => {
+    await mountWithDishes([
+      dishWithGroups([group({ name: "", options: [{ name: "Large", name_i18n: {}, price_delta: 0, position: 0 }] })]),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.groupNameRequired");
+  });
+
+  it("A3-13: editor Save blocks max_select below min_select", async () => {
+    await mountWithDishes([
+      dishWithGroups([group({ name: "Size", min_select: 2, max_select: 1 })]),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.groupMaxLessThanMin");
+  });
+
+  it("A3-13: editor Save blocks duplicate group names", async () => {
+    await mountWithDishes([
+      dishWithGroups([group({ name: "Size" }), group({ name: "size", position: 1 })]),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.groupNameDuplicate");
+  });
+
+  it("A3-13: editor Save blocks a negative group-option price", async () => {
+    await mountWithDishes([
+      dishWithGroups([
+        group({
+          name: "Extras",
+          options: [{ name: "Cheese", name_i18n: {}, price_delta: -2, position: 0 }],
+        }),
+      ]),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.extraPriceMin");
+  });
+
+  it("A3-13: a valid option group saves through the editor", async () => {
+    await mountWithDishes([
+      dishWithGroups([
+        group({
+          name: "Size",
+          min_select: 0,
+          max_select: 2,
+          options: [
+            { name: "Small", name_i18n: {}, price_delta: 0, position: 0 },
+            { name: "Large", name_i18n: {}, price_delta: 1.5, position: 1 },
+          ],
+        }),
+      ]),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).toHaveBeenCalled();
+  });
+
+  it("A3-13: page Save blocks a dish with an invalid option group", async () => {
+    await mountWithDishes([
+      dishWithGroups([group({ name: "", options: [{ name: "Large", name_i18n: {}, price_delta: 0, position: 0 }] })]),
+    ]);
+    await buttonsWith(wrapper, "common.saveAndNext")[0].trigger("click");
+    await flushPromises();
+    await flushPromises();
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.groupNameRequired");
+  });
+
+  // -- A3-14: availability schedule is validated client-side --
+  it("A3-14: editor Save blocks a schedule with only a start time", async () => {
+    await mountWithDishes([
+      serverDish({ availability_schedule: { days: ["mon"], time_start: "09:00", time_end: "" } }),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.availabilityTimeBothOrNeither");
+  });
+
+  it("A3-14: editor Save blocks non-HH:MM schedule times", async () => {
+    await mountWithDishes([
+      serverDish({ availability_schedule: { days: [], time_start: "25:00", time_end: "26:00" } }),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.availabilityTimeInvalid");
+  });
+
+  it("A3-14: a valid schedule saves through the editor", async () => {
+    await mountWithDishes([
+      serverDish({ availability_schedule: { days: ["mon", "tue"], time_start: "09:00", time_end: "17:00" } }),
+    ]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).toHaveBeenCalled();
+  });
+
+  // -- A3-15: inline price edit shows the error instead of silently reverting --
+  it("A3-15: a negative inline price keeps the old price and shows priceMin", async () => {
+    await mountWithDishes([serverDish({ price: 10 })]);
+
+    await wrapper.find('span[aria-label="stepDishes.tapToEditPrice"]').trigger("click");
+    await nextTick();
+    const input = wrapper.find('input[aria-label="stepDishes.pricePlaceholder"]');
+    await input.setValue(-5);
+    await input.trigger("blur");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("stepDishes.priceMin");
+    expect(wrapper.text()).toContain("10.00");
+    expect(wrapper.vm.dishes[0].price).toBe(10);
+  });
+
+  it("A3-15: a valid inline price commits and clears the error", async () => {
+    await mountWithDishes([serverDish({ price: 10 })]);
+
+    await wrapper.find('span[aria-label="stepDishes.tapToEditPrice"]').trigger("click");
+    await nextTick();
+    const input = wrapper.find('input[aria-label="stepDishes.pricePlaceholder"]');
+    await input.setValue(12.5);
+    await input.trigger("blur");
+    await nextTick();
+
+    expect(wrapper.text()).not.toContain("stepDishes.priceMin");
+    expect(wrapper.text()).toContain("12.50");
+    expect(wrapper.vm.dishes[0].price).toBe(12.5);
+  });
+
+  // -- A3-16: move up/down buttons reorder without dragging --
+  it("A3-16: move-down swaps the two dishes; move-up is disabled on the first row", async () => {
+    await mountWithDishes([
+      serverDish({ id: 7, name: "Soup", price: 10, position: 0 }),
+      serverDish({ id: 8, name: "Salad", price: 7, position: 1 }),
+    ]);
+
+    const moveUp = wrapper.findAll('button[aria-label="common.moveUp"]');
+    const moveDown = wrapper.findAll('button[aria-label="common.moveDown"]');
+    expect(moveUp.length).toBe(2);
+    expect(moveUp[0].element.disabled).toBe(true);
+    expect(moveDown[0].element.disabled).toBe(false);
+
+    await moveDown[0].trigger("click");
+    await nextTick();
+
+    expect(wrapper.findAll("h3")[0].text()).toBe("Salad");
+    expect(wrapper.findAll("h3")[1].text()).toBe("Soup");
+    expect(wrapper.vm.dishes.find((d) => d.id === 8).position).toBe(0);
+    expect(wrapper.vm.dishes.find((d) => d.id === 7).position).toBe(1);
+  });
+
+  // -- A3-17: clone drops translations + stock and is born available --
+  it("A3-17: cloning a sold-out dish clears description_i18n, resets stock, sets available", async () => {
+    await mountWithDishes([
+      serverDish({
+        id: 7,
+        name: "Soup",
+        description: "Tomato soup",
+        description_i18n: { fr: "Soupe de tomate" },
+        stock_qty: 3,
+        is_available: false,
+      }),
+    ]);
+
+    const cloneBtn = wrapper
+      .findAll("button")
+      .filter((b) => (b.attributes("aria-label") || "").startsWith("stepDishes.cloneDish"));
+    expect(cloneBtn.length).toBe(1);
+    await cloneBtn[0].trigger("click");
+    await flushPromises();
+    await nextTick();
+
+    expect(wrapper.vm.dishes.length).toBe(2);
+    const original = wrapper.vm.dishes.find((d) => d.id === 7);
+    const clone = wrapper.vm.dishes.find((d) => d.id === undefined);
+    expect(clone).toBeTruthy();
+    expect(clone.description_i18n).toEqual({});
+    expect(clone.stock_qty).toBeNull();
+    expect(clone.is_available).toBe(true);
+    expect(clone.name).toContain("stepDishes.cloneDishName");
+    // The original is untouched.
+    expect(original.stock_qty).toBe(3);
+    expect(original.is_available).toBe(false);
+    expect(original.description_i18n).toEqual({ fr: "Soupe de tomate" });
+  });
+
+  // -- A3-21: editor Save runs the full validation, not just name + category --
+  it("A3-21: editor Save blocks a negative dish price", async () => {
+    await mountWithDishes([serverDish({ price: -5 })]);
+    await openEditor(wrapper);
+    await clickEditorSave(wrapper);
+
+    expect(dishUpsertMock).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("stepDishes.priceMin");
+  });
+
+  // -- A3-42: RTL availability-toggle knob --
+  it("A3-42: the publish toggle reverses its knob slide in RTL", async () => {
+    await mountWithDishes([serverDish({})]);
+    expect(wrapper.html()).toContain("rtl:peer-checked:after:-translate-x-4");
+  });
+});

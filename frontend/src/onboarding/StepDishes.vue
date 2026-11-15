@@ -92,6 +92,24 @@
             @drop.prevent="onDishDrop(dish.local_id)"
             @dragend="dragOverId = null; draggingDishId = null"
           >
+            <!-- Reorder: up/down buttons (touch/keyboard alternative to drag) -->
+            <div class="flex shrink-0 flex-col">
+              <button
+                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                type="button" :disabled="!canMoveDishUp(dish.local_id)" :aria-label="t('common.moveUp')"
+                @click="moveDish(dish.local_id, -1)"
+              >
+                <AppIcon name="chevronUp" class="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                type="button" :disabled="!canMoveDishDown(dish.local_id)" :aria-label="t('common.moveDown')"
+                @click="moveDish(dish.local_id, 1)"
+              >
+                <AppIcon name="chevronDown" class="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
             <!-- Reorder: drag handle -->
             <div
               class="flex shrink-0 cursor-grab items-center justify-center rounded px-0.5 text-slate-500 transition hover:text-slate-300 active:cursor-grabbing"
@@ -156,6 +174,7 @@
                 <span v-if="dish.is_available === false || dish.stock_qty === 0" class="rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">{{ t("stepDishes.outOfStock") }}</span>
                 <span v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">· {{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(" · ") }}</span>
               </div>
+              <p v-if="rowError(dish, 'price')" class="mt-0.5 text-[11px] text-red-300" role="alert">{{ rowError(dish, "price") }}</p>
             </div>
 
             <!-- Inline actions: publish switch · edit · delete -->
@@ -172,7 +191,7 @@
                   :aria-checked="dish.is_published ? 'true' : 'false'"
                   :aria-label="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
                 />
-                <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:start-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4" />
+                <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:start-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4 rtl:peer-checked:after:-translate-x-4" />
               </label>
               <button
                 class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
@@ -573,6 +592,7 @@
                     </div>
                     <p class="pb-1 text-[10px] text-slate-600">{{ t("stepDishes.availabilityTimeHint") }}</p>
                   </div>
+                  <p v-if="rowError(editingDish, 'availability_schedule')" :id="`step-dishes-availability-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "availability_schedule") }}</p>
                 </div>
               </div>
 
@@ -726,6 +746,7 @@
                           :placeholder="t('stepDishes.groupNamePlaceholder')"
                           @input="setLocalizedGroupNameValue(group, dishFieldLocales.groupName, $event.target.value)"
                         />
+                        <p v-if="rowError(editingDish, groupFieldKey(group, 'name'))" :id="`step-dishes-group-name-error-${group.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, groupFieldKey(group, "name")) }}</p>
                       </div>
                       <div class="flex flex-wrap items-center gap-2">
                         <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
@@ -746,6 +767,7 @@
                             class="ui-input w-16 border-slate-700 text-xs"
                             :aria-label="t('stepDishes.groupMaxSelect')"
                           />
+                          <p v-if="rowError(editingDish, groupFieldKey(group, 'max_select'))" :id="`step-dishes-group-max-error-${group.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, groupFieldKey(group, "max_select")) }}</p>
                         </div>
                         <div class="ms-auto flex items-center gap-1">
                           <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupUp(editingDish, groupIdx)" :aria-label="t('common.moveUp')" @click="moveGroup(editingDish, groupIdx, -1)">↑</button>
@@ -808,11 +830,13 @@
                             type="button"
                             class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
                             :aria-label="`${t('stepDishes.remove')} ${localizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName) || t('stepDishes.variantNamePlaceholder')}`"
-                            @click="removeGroupOption(group, optIdx)"
+                            @click="removeGroupOption(editingDish, group, optIdx)"
                           >
                             {{ t("stepDishes.remove") }}
                           </button>
                         </div>
+                        <p v-if="rowError(editingDish, groupOptionFieldKey(group, opt, 'name'))" :id="`step-dishes-group-opt-name-error-${opt.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, groupOptionFieldKey(group, opt, "name")) }}</p>
+                        <p v-if="rowError(editingDish, groupOptionFieldKey(group, opt, 'price_delta'))" :id="`step-dishes-group-opt-price-error-${opt.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, groupOptionFieldKey(group, opt, "price_delta")) }}</p>
                       </div>
                     </div>
 
@@ -1512,6 +1536,24 @@ const onDishDragStart = (localId, evt) => {
   }
 };
 
+const canMoveDishUp = (localId) =>
+  orderedActiveCategoryDishes.value.findIndex((d) => String(d.local_id) === String(localId)) > 0;
+const canMoveDishDown = (localId) => {
+  const index = orderedActiveCategoryDishes.value.findIndex((d) => String(d.local_id) === String(localId));
+  return index > -1 && index < orderedActiveCategoryDishes.value.length - 1;
+};
+
+// A3-16: touch/keyboard alternative to drag reorder (same swap + renumber
+// pattern as onDishDrop, scoped to the active category's ordered list).
+const moveDish = (localId, direction) => {
+  const ordered = [...orderedActiveCategoryDishes.value];
+  const index = ordered.findIndex((d) => String(d.local_id) === String(localId));
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
+  [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+  ordered.forEach((dish, i) => { dish.position = i; });
+};
+
 const onDishDrop = (targetLocalId) => {
   const sourceId = draggingDishId.value;
   dragOverId.value = null;
@@ -1542,10 +1584,20 @@ const startInlinePriceEdit = async (dish) => {
   }
 };
 
+// A3-15: an invalid / negative inline price is no longer silently reverted —
+// the old price is kept AND the priceMin error is shown (row error in the
+// list + toast), so the owner knows the value was rejected.
 const commitInlinePrice = (dish) => {
   if (inlinePriceEditId.value !== dish.local_id) return;
   const val = parseFloat(inlinePriceValue.value);
-  dish.price = isNaN(val) || val < 0 ? dish.price : val;
+  if (isNaN(val) || val < 0) {
+    setRowError(dish.local_id, "price", t("stepDishes.priceMin"));
+    toast.show(t("stepDishes.priceMin"), "error");
+    inlinePriceEditId.value = null;
+    return;
+  }
+  clearRowError(dish.local_id, "price");
+  dish.price = val;
   inlinePriceEditId.value = null;
 };
 
@@ -2039,6 +2091,36 @@ const normalizeCurrency = (value) => {
 
 const optionFieldKey = (option, field) => `option_${option?.local_id || "new"}_${field}`;
 
+// A3-13: row-error keys for option groups and their options.
+const groupFieldKey = (group, field) => `group_${group?.local_id || "new"}_${field}`;
+const groupOptionFieldKey = (group, option, field) =>
+  `group_${group?.local_id || "new"}_option_${option?.local_id || "new"}_${field}`;
+
+// Effective (display) name of a group / group option: the base name, or any
+// filled translation when the base name is empty (same rule as A3-23 for
+// categories - a name that exists only in a translation still counts).
+const localizedNameValue = (row) => {
+  const base = String(row?.name || "").trim();
+  if (base) return base;
+  const map = row?.name_i18n;
+  if (map && typeof map === "object") {
+    for (const value of Object.values(map)) {
+      const text = String(value || "").trim();
+      if (text) return text;
+    }
+  }
+  return "";
+};
+
+const clearRowErrorsWithPrefix = (localId, prefix) => {
+  const errors = rowErrors[localId];
+  if (!errors) return;
+  Object.keys(errors).forEach((key) => {
+    if (key.startsWith(prefix)) delete errors[key];
+  });
+  if (!Object.keys(errors).length) delete rowErrors[localId];
+};
+
 const addOption = (dish) => {
   if (!Array.isArray(dish.options)) dish.options = [];
   dish.options.push(normalizeOption());
@@ -2061,7 +2143,8 @@ const addGroup = (dish) => {
 
 const removeGroup = (dish, groupIndex) => {
   if (!Array.isArray(dish.option_groups)) return;
-  dish.option_groups.splice(groupIndex, 1);
+  const [group] = dish.option_groups.splice(groupIndex, 1);
+  if (group) clearRowErrorsWithPrefix(dish.local_id, `group_${group.local_id}_`);
 };
 
 const addGroupOption = (group) => {
@@ -2069,9 +2152,15 @@ const addGroupOption = (group) => {
   group.options.push(normalizeGroupOption());
 };
 
-const removeGroupOption = (group, optIdx) => {
+const removeGroupOption = (dish, group, optIdx) => {
   if (!Array.isArray(group.options)) return;
-  group.options.splice(optIdx, 1);
+  const [opt] = group.options.splice(optIdx, 1);
+  if (opt) {
+    clearRowErrorsWithPrefix(
+      dish.local_id,
+      `group_${group.local_id}_option_${opt.local_id}_`
+    );
+  }
 };
 
 const canMoveOptionUp = (dish, optIdx) => optIdx > 0;
@@ -2185,6 +2274,18 @@ const removeQuickGroupOption = (group, optIdx) => {
 };
 
 const rowError = (dish, field) => rowErrors[dish.local_id]?.[field] || "";
+
+// A3-13: the page Save must show WHAT failed, not just "fix validation" — the
+// per-row group/option errors only render inside the editor, so when the page
+// save blocks with the editor closed the user sees nothing actionable.
+// Surface the first per-row error in the page banner (globalError).
+const firstRowErrorMessage = () => {
+  for (const localId of Object.keys(rowErrors)) {
+    const first = Object.values(rowErrors[localId] || {})[0];
+    if (first) return first;
+  }
+  return "";
+};
 const setRowError = (localId, field, message) => {
   rowErrors[localId] = { ...(rowErrors[localId] || {}), [field]: message };
 };
@@ -2200,6 +2301,159 @@ const clearAllErrors = () => {
   globalError.value = "";
 };
 
+// A3-14: HH:MM (an optional :SS tail is accepted - the server may return
+// "09:00:00" - and both-or-neither times, mirroring the server rule in
+// normalizeAvailabilitySchedule / the DishSerializer schedule validation.
+const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+const validateAvailabilitySchedule = (dish) => {
+  const schedule = dish.availability_schedule;
+  if (!schedule || typeof schedule !== "object") return true;
+  const start = String(schedule.time_start || "").trim();
+  const end = String(schedule.time_end || "").trim();
+  if (!start && !end) return true; // empty collapses to null server-side
+  if (!start || !end) {
+    setRowError(dish.local_id, "availability_schedule", t("stepDishes.availabilityTimeBothOrNeither"));
+    return false;
+  }
+  if (!TIME_HH_MM.test(start) || !TIME_HH_MM.test(end)) {
+    setRowError(dish.local_id, "availability_schedule", t("stepDishes.availabilityTimeInvalid"));
+    return false;
+  }
+  return true;
+};
+
+// A3-13: mirror the server's option-group rules (OptionGroupSerializer /
+// DishOptionSerializer) - group-name-required, group-option name/price,
+// duplicates, max_select >= 1 and max >= min. A group with no name and no
+// option data is skipped, like an empty flat-option row.
+const validateOptionGroups = (dish) => {
+  let valid = true;
+  const groupRows = Array.isArray(dish.option_groups) ? dish.option_groups : [];
+  const groupNames = new Set();
+  for (const group of groupRows) {
+    const groupOptions = Array.isArray(group?.options) ? group.options : [];
+    const groupName = localizedNameValue(group);
+    const hasAnyData =
+      groupName.length > 0 ||
+      groupOptions.some(
+        (opt) =>
+          localizedNameValue(opt).length > 0 || Number(opt?.price_delta || 0) !== 0
+      );
+    if (!hasAnyData) continue;
+
+    if (!groupName) {
+      setRowError(dish.local_id, groupFieldKey(group, "name"), t("stepDishes.groupNameRequired"));
+      valid = false;
+    } else {
+      const normalizedGroupName = groupName.toLowerCase();
+      if (groupNames.has(normalizedGroupName)) {
+        setRowError(dish.local_id, groupFieldKey(group, "name"), t("stepDishes.groupNameDuplicate"));
+        valid = false;
+      } else {
+        groupNames.add(normalizedGroupName);
+      }
+    }
+
+    const minSelect = Number(group.min_select ?? 0);
+    const maxSelect = Number(group.max_select ?? 1);
+    if (maxSelect < 1) {
+      setRowError(dish.local_id, groupFieldKey(group, "max_select"), t("stepDishes.maxSelectMin"));
+      valid = false;
+    } else if (maxSelect < minSelect) {
+      setRowError(dish.local_id, groupFieldKey(group, "max_select"), t("stepDishes.groupMaxLessThanMin"));
+      valid = false;
+    }
+
+    const groupOptionNames = new Set();
+    for (const opt of groupOptions) {
+      const optName = localizedNameValue(opt);
+      const optHasData = optName.length > 0 || Number(opt?.price_delta || 0) !== 0;
+      if (!optHasData) continue;
+      if (!optName) {
+        setRowError(dish.local_id, groupOptionFieldKey(group, opt, "name"), t("stepDishes.variantNameRequired"));
+        valid = false;
+        continue;
+      }
+      const normalizedOptName = optName.toLowerCase();
+      if (groupOptionNames.has(normalizedOptName)) {
+        setRowError(dish.local_id, groupOptionFieldKey(group, opt, "name"), t("stepDishes.variantDuplicate"));
+        valid = false;
+      } else {
+        groupOptionNames.add(normalizedOptName);
+      }
+      if (Number(opt.price_delta) < 0) {
+        setRowError(dish.local_id, groupOptionFieldKey(group, opt, "price_delta"), t("stepDishes.extraPriceMin"));
+        valid = false;
+      }
+    }
+  }
+  return valid;
+};
+
+// A3-21: the per-dish half of validateClient, so the editor Save can run the
+// FULL validation for just the open dish (groups, schedule, price) instead of
+// only name + category. Clears this dish's stale errors first, then re-sets
+// the ones that still fail.
+const validateDishClient = (dish) => {
+  if (!dish) return false;
+  delete rowErrors[dish.local_id];
+  let valid = true;
+  const name = String(dish.name || "").trim();
+  if (name.length < 2) {
+    setRowError(dish.local_id, "name", t("stepDishes.nameMin"));
+    valid = false;
+  }
+  if (!dish.category) {
+    setRowError(dish.local_id, "category", t("stepDishes.selectCategoryError"));
+    valid = false;
+  }
+  if (Number(dish.price) < 0) {
+    setRowError(dish.local_id, "price", t("stepDishes.priceMin"));
+    valid = false;
+  }
+  if (!validateAvailabilitySchedule(dish)) valid = false;
+
+  const optionNames = new Set();
+  const optionRows = Array.isArray(dish.options) ? dish.options : [];
+  for (const option of optionRows) {
+    const optionName = String(option?.name || "").trim();
+    const hasAnyData =
+      optionName.length > 0 ||
+      Number(option?.price_delta || 0) !== 0 ||
+      option?.is_required === true ||
+      Number(option?.max_select || 1) !== 1;
+
+    if (!hasAnyData) continue;
+
+    if (!optionName) {
+      setRowError(dish.local_id, optionFieldKey(option, "name"), t("stepDishes.variantNameRequired"));
+      valid = false;
+      continue;
+    }
+
+    const normalizedName = optionName.toLowerCase();
+    if (optionNames.has(normalizedName)) {
+      setRowError(dish.local_id, optionFieldKey(option, "name"), t("stepDishes.variantDuplicate"));
+      valid = false;
+    } else {
+      optionNames.add(normalizedName);
+    }
+
+    if (Number(option.price_delta) < 0) {
+      setRowError(dish.local_id, optionFieldKey(option, "price_delta"), t("stepDishes.extraPriceMin"));
+      valid = false;
+    }
+
+    if (Number(option.max_select || 0) < 1) {
+      setRowError(dish.local_id, optionFieldKey(option, "max_select"), t("stepDishes.maxSelectMin"));
+      valid = false;
+    }
+  }
+
+  if (!validateOptionGroups(dish)) valid = false;
+  return valid;
+};
+
 const validateClient = () => {
   clearAllErrors();
   const filled = dishes.filter((d) => d.name?.trim());
@@ -2210,56 +2464,11 @@ const validateClient = () => {
 
   let valid = true;
   for (const dish of filled) {
-    const name = dish.name.trim();
-    if (name.length < 2) {
-      setRowError(dish.local_id, "name", t("stepDishes.nameMin"));
-      valid = false;
-    }
-    if (!dish.category) {
-      setRowError(dish.local_id, "category", t("stepDishes.selectCategoryError"));
-      valid = false;
-    }
-    if (Number(dish.price) < 0) {
-      setRowError(dish.local_id, "price", t("stepDishes.priceMin"));
-      valid = false;
-    }
-
-    const optionNames = new Set();
-    const optionRows = Array.isArray(dish.options) ? dish.options : [];
-    for (const option of optionRows) {
-      const optionName = String(option?.name || "").trim();
-      const hasAnyData =
-        optionName.length > 0 ||
-        Number(option?.price_delta || 0) !== 0 ||
-        option?.is_required === true ||
-        Number(option?.max_select || 1) !== 1;
-
-      if (!hasAnyData) continue;
-
-      if (!optionName) {
-        setRowError(dish.local_id, optionFieldKey(option, "name"), t("stepDishes.variantNameRequired"));
-        valid = false;
-        continue;
-      }
-
-      const normalizedName = optionName.toLowerCase();
-      if (optionNames.has(normalizedName)) {
-        setRowError(dish.local_id, optionFieldKey(option, "name"), t("stepDishes.variantDuplicate"));
-        valid = false;
-      } else {
-        optionNames.add(normalizedName);
-      }
-
-      if (Number(option.price_delta) < 0) {
-        setRowError(dish.local_id, optionFieldKey(option, "price_delta"), t("stepDishes.extraPriceMin"));
-        valid = false;
-      }
-
-      if (Number(option.max_select || 0) < 1) {
-        setRowError(dish.local_id, optionFieldKey(option, "max_select"), t("stepDishes.maxSelectMin"));
-        valid = false;
-      }
-    }
+    if (!validateDishClient(dish)) valid = false;
+  }
+  if (!valid) {
+    const firstError = firstRowErrorMessage();
+    if (firstError) globalError.value = firstError;
   }
   return valid;
 };
@@ -2482,13 +2691,10 @@ const savingDishNow = ref(false);
 const saveDishNow = async () => {
   const dish = editingDish.value;
   if (!dish || savingDishNow.value) return;
-  if (String(dish.name || "").trim().length < 2) {
-    setRowError(dish.local_id, "name", t("stepDishes.nameMin"));
-    toast.show(t("stepDishes.fixValidation"), "error");
-    return;
-  }
-  if (!dish.category) {
-    setRowError(dish.local_id, "category", t("stepDishes.selectCategoryError"));
+  // A3-21: full per-dish validation (name, category, price, schedule,
+  // flat options AND option groups) - not just name + category - so bad
+  // groups / schedules surface here instead of as server errors on the row.
+  if (!validateDishClient(dish)) {
     toast.show(t("stepDishes.fixValidation"), "error");
     return;
   }
@@ -2670,7 +2876,10 @@ const cloneDish = (localId) => {
     ...original,
     id: undefined,                        // new dish — no backend id yet
     name: t("stepDishes.cloneDishName", { name: original.name || t("stepDishes.dishNamePlaceholder") }),
-    name_i18n: {},                        // don't copy translations — name changed
+    name_i18n: {},                        // don't copy translations - name changed
+    description_i18n: {},                 // A3-17: description translations belong to the original text
+    stock_qty: null,                      // A3-17: never inherit the live stock count
+    is_available: true,                   // A3-17: a clone of a sold-out dish must not be born sold-out
     slug: "",                             // auto-generated on save
     options: original.options.map((o) => ({ ...o, id: undefined, local_id: crypto.randomUUID() })),
     option_groups: original.option_groups.map((g) => ({

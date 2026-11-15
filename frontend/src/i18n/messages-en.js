@@ -3264,6 +3264,11 @@ stepDishes: {
   dragToReorder: "Drag to reorder",
   tapToEditPrice: "Tap to edit price",
   loadKeptUnsavedEdits: "Kept {count} unsaved dish edit(s) — save to keep them.",
+  availabilityTimeBothOrNeither: "Enter both start and end times, or leave both blank.",
+  availabilityTimeInvalid: "Invalid time. Use HH:MM format.",
+  groupMaxLessThanMin: "Max choices must be at least the minimum.",
+  groupNameDuplicate: "Duplicate option group name.",
+  groupNameRequired: "Option group name is required.",
 },
 combos: {
   badge: "Combo",

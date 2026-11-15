@@ -2329,6 +2329,11 @@ const arabicMessages = {
     "dragToReorder": "اسحب لإعادة الترتيب",
     "tapToEditPrice": "اضغط لتعديل السعر",
     "loadKeptUnsavedEdits": "تم الاحتفاظ بـ {count} تعديلات غير محفوظة على الأطباق. احفظها لتبقى.",
+    "availabilityTimeBothOrNeither": "أدخل وقتَي البدء والانتهاء معًا أو اتركهما فارغين.",
+    "availabilityTimeInvalid": "الوقت غير صالح. استخدم الصيغة HH:MM.",
+    "groupMaxLessThanMin": "يجب أن يكون الحد الأقصى للاختيارات مساويًا للحد الأدنى على الأقل.",
+    "groupNameDuplicate": "اسم مجموعة الخيارات مكرر.",
+    "groupNameRequired": "اسم مجموعة الخيارات مطلوب.",
   },
   "combos": {
     "badge": "كومبو",
