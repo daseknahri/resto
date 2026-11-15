@@ -2725,6 +2725,13 @@ stepBrand: {
   cutoverHourOclock: "{h}:00",
   cutoverHourHint: "Orders placed after this hour start the next service day. Use 2–4 for late-night venues.",
   businessHoursTimeEqual: "{day}: opening and closing time can't be the same. To close after midnight, just set an earlier closing time.",
+  languageChangedMoved: "Default language changed from {old}. Your previous text was moved into the {old} translations, so it is not lost.",
+  latLngPair: "Enter both latitude and longitude, or clear both.",
+  latLngZero: "Coordinates 0, 0 are not a real location — enter your actual latitude and longitude.",
+  latRange: "Latitude must be between -90 and 90.",
+  lngRange: "Longitude must be between -180 and 180.",
+  timezoneCustomHint: "Type any IANA timezone, or pick a suggestion from the list.",
+  timezoneInvalid: "Enter a valid IANA timezone, for example Africa/Casablanca.",
 },
 stepTheme: {
   title: "Theme",
@@ -2768,7 +2775,8 @@ stepTheme: {
   previewSampleDish: "Grilled chicken skewers",
   previewSampleDesc: "Smoky, tender, served with lemon.",
   previewAddCta: "Add",
-  previewSamplePrice: "85"
+  previewSamplePrice: "85",
+  templateAppliedKeptEdits: "Template applied on the server, but your unsaved colour and image changes were kept. Save to keep them, or reload this step to use the template colours.",
 },
 stepPublish: {
   title: "Publish",

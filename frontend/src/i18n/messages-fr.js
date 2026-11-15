@@ -2714,6 +2714,13 @@ stepBrand: {
   cutoverHourOclock: "{h}:00",
   cutoverHourHint: "Les commandes passees apres cette heure commencent la prochaine journee de service. Utilisez 2–4 pour les etablissements tard le soir.",
   businessHoursTimeEqual: "{day} : l heure d ouverture et de fermeture ne peuvent pas etre identiques. Pour fermer apres minuit, indiquez simplement une heure de fermeture plus tot.",
+  languageChangedMoved: "Langue par defaut changee depuis {old}. Votre texte precedent a ete deplace dans les traductions {old}, il n'est pas perdu.",
+  latLngPair: "Saisissez la latitude et la longitude, ou effacez les deux.",
+  latLngZero: "Les coordonnees 0, 0 ne correspondent a aucun lieu reel - saisissez votre latitude et votre longitude reelles.",
+  latRange: "La latitude doit etre comprise entre -90 et 90.",
+  lngRange: "La longitude doit etre comprise entre -180 et 180.",
+  timezoneCustomHint: "Saisissez n'importe quel fuseau horaire IANA, ou choisissez une suggestion dans la liste.",
+  timezoneInvalid: "Saisissez un fuseau horaire IANA valide, par exemple Africa/Casablanca.",
 },
 stepTheme: {
   title: "Theme",
@@ -2757,7 +2764,8 @@ stepTheme: {
   previewSampleDish: "Brochettes de poulet grillees",
   previewSampleDesc: "Fumees, tendres, servies avec citron.",
   previewAddCta: "Ajouter",
-  previewSamplePrice: "85"
+  previewSamplePrice: "85",
+  templateAppliedKeptEdits: "Template applique sur le serveur, mais vos modifications de couleurs et d'images non enregistrees ont ete conservees. Enregistrez pour les garder, ou rechargez cette etape pour utiliser les couleurs du template.",
 },
 stepPublish: {
   title: "Publication",

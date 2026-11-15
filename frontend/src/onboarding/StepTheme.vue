@@ -39,7 +39,7 @@
                   type="color"
                   class="ui-touch-target h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
                   :aria-invalid="errors.primary_color ? 'true' : undefined"
-                  aria-describedby="step-theme-primary-error"
+                  :aria-describedby="errors.primary_color ? 'step-theme-primary-error' : undefined"
                   @input="clearField('primary_color')"
                 />
                 <span class="text-xs font-semibold uppercase tracking-[0.2em] tabular-nums text-slate-400">{{ form.primary_color }}</span>
@@ -55,7 +55,7 @@
                   type="color"
                   class="ui-touch-target h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
                   :aria-invalid="errors.secondary_color ? 'true' : undefined"
-                  aria-describedby="step-theme-secondary-error"
+                  :aria-describedby="errors.secondary_color ? 'step-theme-secondary-error' : undefined"
                   @input="clearField('secondary_color')"
                 />
                 <span class="text-xs font-semibold uppercase tracking-[0.2em] tabular-nums text-slate-400">{{ form.secondary_color }}</span>
@@ -178,7 +178,7 @@
                   class="hidden"
                   :disabled="uploadingLogo"
                   :aria-invalid="errors.logo_url ? 'true' : undefined"
-                  aria-describedby="step-theme-logo-error"
+                  :aria-describedby="errors.logo_url ? 'step-theme-logo-error' : undefined"
                   @change="uploadLogo"
                 />
               </label>
@@ -243,7 +243,7 @@
                   class="hidden"
                   :disabled="uploadingHero"
                   :aria-invalid="errors.hero_url ? 'true' : undefined"
-                  aria-describedby="step-theme-hero-error"
+                  :aria-describedby="errors.hero_url ? 'step-theme-hero-error' : undefined"
                   @change="uploadHero"
                 />
               </label>
@@ -303,7 +303,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { profileApi, uploadApi } from "../lib/onboardingApi";
 import { THEME_PRESETS } from "./starterTemplates";
 import { useI18n } from "../composables/useI18n";
@@ -331,6 +331,30 @@ const logoProgress = ref(0);
 const draggingHero = ref(false);
 const draggingLogo = ref(false);
 const pendingCleanup = ref([]);
+// A3-28: last SAVED theme — the dirty baseline. load() and a successful save
+// refresh it; anything the owner changed since then is unsaved work that a
+// template apply must not silently discard.
+const savedTheme = ref({
+  primary_color: "#0F766E",
+  secondary_color: "#F59E0B",
+  logo_url: "",
+  hero_url: "",
+});
+const snapshotTheme = () => {
+  savedTheme.value = {
+    primary_color: form.primary_color,
+    secondary_color: form.secondary_color,
+    logo_url: form.logo_url,
+    hero_url: form.hero_url,
+  };
+};
+const isThemeDirty = computed(
+  () =>
+    form.primary_color !== savedTheme.value.primary_color ||
+    form.secondary_color !== savedTheme.value.secondary_color ||
+    form.logo_url !== savedTheme.value.logo_url ||
+    form.hero_url !== savedTheme.value.hero_url
+);
 const status = ref("");
 const errors = reactive({});
 const theme = useThemeStore();
@@ -446,6 +470,7 @@ const load = async () => {
   try {
     const data = await profileApi.get();
     if (data) Object.assign(form, data);
+    snapshotTheme();
     profileLoaded.value = true;
   } catch {
     profileLoaded.value = false;
@@ -464,6 +489,7 @@ const saveAndNext = async () => {
   Object.keys(errors).forEach((k) => delete errors[k]);
   try {
     await profileApi.save(form);
+    snapshotTheme();
     await flushPendingCleanup();
     theme.apply(form);
     status.value = t("common.saved");
@@ -578,6 +604,15 @@ const clearLogo = async () => {
 
 const onTemplateApplied = async () => {
   showTemplatePicker.value = false;
+  // A3-28: the template was already applied on the server by the picker, but
+  // load() would re-assign the form from the server and discard any unsaved
+  // colour/logo/hero edits made since the last save. When the form is dirty,
+  // keep the local edits and say so — the next save overwrites the template
+  // theme with them; reloading the step takes the template colours instead.
+  if (isThemeDirty.value) {
+    status.value = t("stepTheme.templateAppliedKeptEdits");
+    return;
+  }
   await load();
   theme.apply(form);
 };
@@ -587,9 +622,20 @@ onMounted(() => {
   loadTemplatePalettes();
 });
 
+// A3-29: replaced logo/hero uploads queue in pendingCleanup and were only
+// flushed inside saveAndNext — leaving the step (or wizard) without saving
+// orphaned the files in storage. Flush on unmount too; flushPendingCleanup
+// skips anything still referenced by the form, and cleanup failures are
+// already swallowed inside cleanupManagedUpload, so this is best-effort.
+// (Inside the wizard the steps are KeepAlive'd, so step-to-step moves do not
+// unmount — the flush runs when the wizard / standalone page unmounts.)
+onUnmounted(() => {
+  void flushPendingCleanup();
+});
+
 const standalone = computed(() => props.standalone);
 
 // Run 8 S1 (A3-07): expose the saver so Wizard.saveAndExit can save first.
-defineExpose({ saveAndNext });
+defineExpose({ saveAndNext, onTemplateApplied });
 </script>
 

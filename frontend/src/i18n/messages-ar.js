@@ -1807,6 +1807,13 @@ const arabicMessages = {
       "sun": "الأحد"
     },
     "businessHoursTimeEqual": "{day}: لا يمكن أن يكون وقت الفتح ووقت الإغلاق متطابقين. للإغلاق بعد منتصف الليل، اضبط وقت إغلاق أبكر فقط.",
+    "languageChangedMoved": "تم تغيير اللغة الافتراضية من {old}. تم نقل نصك السابق إلى ترجمات {old}، لذلك لم يضع.",
+    "latLngPair": "أدخل خط العرض وخط الطول معًا، أو امسح كليهما.",
+    "latLngZero": "الإحداثيات 0، 0 ليست موقعًا حقيقيًا — أدخل خط العرض وخط الطول الفعليين.",
+    "latRange": "يجب أن يكون خط العرض بين -90 و 90.",
+    "lngRange": "يجب أن يكون خط الطول بين -180 و 180.",
+    "timezoneCustomHint": "اكتب أي منطقة زمنية IANA، أو اختر اقتراحًا من القائمة.",
+    "timezoneInvalid": "أدخل منطقة زمنية IANA صالحة، مثل Africa/Casablanca.",
   },
   "stepTheme": {
     "title": "الهوية البصرية",
@@ -1850,7 +1857,8 @@ const arabicMessages = {
     "previewSampleDish": "أسياخ الدجاج المشوية",
     "previewSampleDesc": "مدخنة وطرية، تُقدَّم مع الليمون.",
     "previewAddCta": "أضف",
-    "previewSamplePrice": "85"
+    "previewSamplePrice": "85",
+    "templateAppliedKeptEdits": "تم تطبيق القالب على الخادم، لكن تم الاحتفاظ بتغييرات الألوان والصور غير المحفوظة. احفظ للاحتفاظ بها، أو أعد تحميل هذه الخطوة لاستخدام ألوان القالب.",
   },
   "ownerTemplates": {
     "button": "القوالب",

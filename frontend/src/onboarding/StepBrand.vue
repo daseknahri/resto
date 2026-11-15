@@ -77,7 +77,7 @@
             :class="inputClass('tagline')"
             aria-labelledby="step-brand-tagline-label"
             :aria-invalid="fieldError('tagline') ? 'true' : undefined"
-            aria-describedby="step-brand-tagline-error"
+            :aria-describedby="fieldError('tagline') ? 'step-brand-tagline-error' : undefined"
             @input="onLocalizedFieldInput('tagline', fieldLocales.tagline, $event.target.value)"
           />
           <p v-show="fieldError('tagline')" id="step-brand-tagline-error" role="alert" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
@@ -85,12 +85,12 @@
 
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.phone") }}
-          <input v-model="form.phone" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('phone')" :aria-invalid="fieldError('phone') ? 'true' : undefined" aria-describedby="step-brand-phone-error" @input="clearField('phone')" />
+          <input v-model="form.phone" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('phone')" :aria-invalid="fieldError('phone') ? 'true' : undefined" :aria-describedby="fieldError('phone') ? 'step-brand-phone-error' : undefined" @input="clearField('phone')" />
           <p v-if="fieldError('phone')" id="step-brand-phone-error" role="alert" class="text-xs text-red-300">{{ fieldError("phone") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ whatsappLabel }}
-          <input v-model="form.whatsapp" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('whatsapp')" :aria-invalid="fieldError('whatsapp') ? 'true' : undefined" aria-describedby="step-brand-whatsapp-error" @input="clearField('whatsapp')" />
+          <input v-model="form.whatsapp" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('whatsapp')" :aria-invalid="fieldError('whatsapp') ? 'true' : undefined" :aria-describedby="fieldError('whatsapp') ? 'step-brand-whatsapp-error' : undefined" @input="clearField('whatsapp')" />
           <p v-if="fieldError('whatsapp')" id="step-brand-whatsapp-error" role="alert" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
           <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
         </label>
@@ -115,7 +115,7 @@
                 step="0.01"
                 :class="inputClass('vat_rate') + ' pe-10'"
                 :aria-invalid="fieldError('vat_rate') ? 'true' : undefined"
-                aria-describedby="step-brand-vat-rate-error"
+                :aria-describedby="fieldError('vat_rate') ? 'step-brand-vat-rate-error' : undefined"
                 @input="clearField('vat_rate')"
               />
               <span class="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
@@ -132,7 +132,7 @@
               :placeholder="t('stepBrand.vatLabelPlaceholder')"
               :class="inputClass('vat_label') + ' w-24'"
               :aria-invalid="fieldError('vat_label') ? 'true' : undefined"
-              aria-describedby="step-brand-vat-label-error"
+              :aria-describedby="fieldError('vat_label') ? 'step-brand-vat-label-error' : undefined"
             />
             <p v-if="fieldError('vat_label')" id="step-brand-vat-label-error" role="alert" class="text-xs text-red-300">{{ fieldError("vat_label") }}</p>
           </label>
@@ -173,7 +173,7 @@
             :class="inputClass('address')"
             aria-labelledby="step-brand-address-label"
             :aria-invalid="fieldError('address') ? 'true' : undefined"
-            aria-describedby="step-brand-address-error"
+            :aria-describedby="fieldError('address') ? 'step-brand-address-error' : undefined"
             @input="onLocalizedFieldInput('address', fieldLocales.address, $event.target.value)"
           />
           <p v-show="fieldError('address')" id="step-brand-address-error" role="alert" class="text-xs text-red-300">{{ fieldError("address") }}</p>
@@ -215,7 +215,7 @@
           :class="inputClass('description')"
           aria-labelledby="step-brand-description-label"
           :aria-invalid="fieldError('description') ? 'true' : undefined"
-          aria-describedby="step-brand-description-error"
+          :aria-describedby="fieldError('description') ? 'step-brand-description-error' : undefined"
           @input="onLocalizedFieldInput('description', fieldLocales.description, $event.target.value)"
         ></textarea>
         <p v-show="fieldError('description')" id="step-brand-description-error" role="alert" class="text-xs text-red-300">{{ fieldError("description") }}</p>
@@ -318,11 +318,22 @@
 
         <label class="block space-y-1 text-xs font-medium text-slate-400">
           {{ t("stepBrand.timezoneLabel") }}
-          <select v-model="form.timezone" :class="inputClass('timezone')">
-            <option value="">{{ t("stepBrand.timezoneDefault") }}</option>
+          <input
+            v-model="form.timezone"
+            type="text"
+            list="step-brand-timezone-list"
+            :placeholder="t('stepBrand.timezoneDefault')"
+            :class="inputClass('timezone')"
+            :aria-invalid="fieldError('timezone') ? 'true' : undefined"
+            :aria-describedby="fieldError('timezone') ? 'step-brand-timezone-error' : undefined"
+            @input="clearField('timezone')"
+          />
+          <datalist id="step-brand-timezone-list">
             <option v-for="tz in TIMEZONE_OPTIONS" :key="tz" :value="tz">{{ tz }}</option>
-          </select>
+          </datalist>
           <p class="text-[11px] text-slate-500">{{ t("stepBrand.timezoneHint") }}</p>
+          <p class="text-[11px] text-slate-500">{{ t("stepBrand.timezoneCustomHint") }}</p>
+          <p v-if="fieldError('timezone')" id="step-brand-timezone-error" role="alert" class="text-xs text-red-300">{{ fieldError("timezone") }}</p>
         </label>
 
         <!-- Service-day cutover hour (OPS-2 Contract A) -->
@@ -352,7 +363,7 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.googleMapsUrl") }}
-          <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" :aria-invalid="fieldError('google_maps_url') ? 'true' : undefined" aria-describedby="step-brand-maps-error" @input="clearField('google_maps_url')" />
+          <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" :aria-invalid="fieldError('google_maps_url') ? 'true' : undefined" :aria-describedby="fieldError('google_maps_url') ? 'step-brand-maps-error' : undefined" @input="clearField('google_maps_url')" />
           <p v-if="fieldError('google_maps_url')" id="step-brand-maps-error" role="alert" class="text-xs text-red-300">{{ fieldError("google_maps_url") }}</p>
         </label>
 
@@ -379,11 +390,13 @@
           <div class="grid grid-cols-2 gap-2">
             <label class="space-y-1 text-xs text-slate-400">
               {{ t("stepBrand.latitude") }}
-              <input v-model.number="form.lat" type="number" step="any" inputmode="decimal" class="ui-input" />
+              <input v-model.number="form.lat" type="number" step="any" inputmode="decimal" :class="inputClass('lat')" :aria-invalid="fieldError('lat') ? 'true' : undefined" :aria-describedby="fieldError('lat') ? 'step-brand-lat-error' : undefined" @input="clearField('lat')" />
+              <p v-if="fieldError('lat')" id="step-brand-lat-error" role="alert" class="text-xs text-red-300">{{ fieldError("lat") }}</p>
             </label>
             <label class="space-y-1 text-xs text-slate-400">
               {{ t("stepBrand.longitude") }}
-              <input v-model.number="form.lng" type="number" step="any" inputmode="decimal" class="ui-input" />
+              <input v-model.number="form.lng" type="number" step="any" inputmode="decimal" :class="inputClass('lng')" :aria-invalid="fieldError('lng') ? 'true' : undefined" :aria-describedby="fieldError('lng') ? 'step-brand-lng-error' : undefined" @input="clearField('lng')" />
+              <p v-if="fieldError('lng')" id="step-brand-lng-error" role="alert" class="text-xs text-red-300">{{ fieldError("lng") }}</p>
             </label>
           </div>
           <p
@@ -403,29 +416,29 @@
             :class="inputClass('reservation_url')"
             placeholder="https://..."
             :aria-invalid="fieldError('reservation_url') ? 'true' : undefined"
-            aria-describedby="step-brand-reservation-error"
+            :aria-describedby="fieldError('reservation_url') ? 'step-brand-reservation-error' : undefined"
             @input="clearField('reservation_url')"
           />
           <p v-if="fieldError('reservation_url')" id="step-brand-reservation-error" role="alert" class="text-xs text-red-300">{{ fieldError("reservation_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.facebookUrl") }}
-          <input v-model="form.facebook_url" type="url" inputmode="url" :class="inputClass('facebook_url')" :aria-invalid="fieldError('facebook_url') ? 'true' : undefined" aria-describedby="step-brand-facebook-error" @input="clearField('facebook_url')" />
+          <input v-model="form.facebook_url" type="url" inputmode="url" :class="inputClass('facebook_url')" :aria-invalid="fieldError('facebook_url') ? 'true' : undefined" :aria-describedby="fieldError('facebook_url') ? 'step-brand-facebook-error' : undefined" @input="clearField('facebook_url')" />
           <p v-if="fieldError('facebook_url')" id="step-brand-facebook-error" role="alert" class="text-xs text-red-300">{{ fieldError("facebook_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.instagramUrl") }}
-          <input v-model="form.instagram_url" type="url" inputmode="url" :class="inputClass('instagram_url')" :aria-invalid="fieldError('instagram_url') ? 'true' : undefined" aria-describedby="step-brand-instagram-error" @input="clearField('instagram_url')" />
+          <input v-model="form.instagram_url" type="url" inputmode="url" :class="inputClass('instagram_url')" :aria-invalid="fieldError('instagram_url') ? 'true' : undefined" :aria-describedby="fieldError('instagram_url') ? 'step-brand-instagram-error' : undefined" @input="clearField('instagram_url')" />
           <p v-if="fieldError('instagram_url')" id="step-brand-instagram-error" role="alert" class="text-xs text-red-300">{{ fieldError("instagram_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.tiktokUrl") }}
-          <input v-model="form.tiktok_url" type="url" inputmode="url" :class="inputClass('tiktok_url')" :aria-invalid="fieldError('tiktok_url') ? 'true' : undefined" aria-describedby="step-brand-tiktok-error" @input="clearField('tiktok_url')" />
+          <input v-model="form.tiktok_url" type="url" inputmode="url" :class="inputClass('tiktok_url')" :aria-invalid="fieldError('tiktok_url') ? 'true' : undefined" :aria-describedby="fieldError('tiktok_url') ? 'step-brand-tiktok-error' : undefined" @input="clearField('tiktok_url')" />
           <p v-if="fieldError('tiktok_url')" id="step-brand-tiktok-error" role="alert" class="text-xs text-red-300">{{ fieldError("tiktok_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.defaultLanguage") }}
-          <select v-model="form.language" :class="inputClass('language')" :aria-invalid="fieldError('language') ? 'true' : undefined" aria-describedby="step-brand-language-error" @change="clearField('language')">
+          <select v-model="form.language" :class="inputClass('language')" :aria-invalid="fieldError('language') ? 'true' : undefined" :aria-describedby="fieldError('language') ? 'step-brand-language-error' : undefined" @change="onLanguageChange">
             <option v-for="option in localeOptions" :key="option.code" :value="option.code">
               {{ option.label }}
             </option>
@@ -478,7 +491,8 @@ const props = defineProps({
   },
 });
 
-// Curated IANA timezones for the business-hours schedule (owners can request more).
+// Curated IANA timezones offered as quick picks in the timezone datalist
+// (A3-41); the owner may type any other IANA zone, validated via Intl.
 const TIMEZONE_OPTIONS = [
   "Africa/Casablanca", "UTC", "Europe/Paris", "Europe/Madrid", "Europe/London",
   "Africa/Cairo", "Africa/Tunis", "Africa/Algiers", "Asia/Dubai", "America/New_York",
@@ -725,6 +739,7 @@ const locationFromMapsUrl = () => {
       const la = parseFloat(m[1]); const ln = parseFloat(m[2]);
       if (_validLatLng(la, ln)) {
         form.lat = la; form.lng = ln;
+        clearField("lat"); clearField("lng");
         locationMsg.value = t("stepBrand.locationSet");
         return;
       }
@@ -742,6 +757,7 @@ const useCurrentLocation = () => {
       const la = pos.coords.latitude; const ln = pos.coords.longitude;
       if (_validLatLng(la, ln)) {
         form.lat = Number(la.toFixed(6)); form.lng = Number(ln.toFixed(6));
+        clearField("lat"); clearField("lng");
         locationMsg.value = t("stepBrand.locationSet");
       } else {
         locationMsg.value = t("stepBrand.locationParseFailed");
@@ -753,7 +769,76 @@ const useCurrentLocation = () => {
   );
 };
 
-const clearLocation = () => { form.lat = null; form.lng = null; locationMsg.value = ""; };
+const clearLocation = () => { form.lat = null; form.lng = null; locationMsg.value = ""; clearField("lat"); clearField("lng"); };
+
+// ── A3-11: coordinates ────────────────────────────────────────────────
+// The server silently nulls out-of-range or (0,0) coordinates, so validate
+// here and show the error inline instead of letting typed values vanish.
+const coordError = () => {
+  const toNum = (v) => (v === "" || v == null ? null : Number(v));
+  const lat = toNum(form.lat);
+  const lng = toNum(form.lng);
+  if (lat != null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+    return { field: "lat", message: t("stepBrand.latRange") };
+  }
+  if (lng != null && (!Number.isFinite(lng) || lng < -180 || lng > 180)) {
+    return { field: "lng", message: t("stepBrand.lngRange") };
+  }
+  if (lat != null && lng != null && Math.abs(lat) < 1e-6 && Math.abs(lng) < 1e-6) {
+    return { field: "lat", message: t("stepBrand.latLngZero") };
+  }
+  if ((lat == null) !== (lng == null)) {
+    return { field: lat == null ? "lat" : "lng", message: t("stepBrand.latLngPair") };
+  }
+  return null;
+};
+
+// ── A3-41: any IANA zone is valid; Intl is the authority, not the list. ───
+const isValidTimezone = (tz) => {
+  if (!tz) return true;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// ── A3-40: default-language switch ────────────────────────────────────────
+// The base columns hold the default-locale text while *_i18n maps hold the
+// rest, so switching the language would silently re-attribute the existing
+// base text as the new language. On change, move each non-empty base value
+// into the OLD locale's map entry (never overwriting an existing translation
+// there) and promote the NEW locale's map entry — if any — to the base.
+const LOCALIZED_BASE_FIELDS = ["tagline", "description", "address"];
+const prevLanguage = ref("en");
+const onLanguageChange = (event) => {
+  clearField("language");
+  const oldLocale = normalizeLocale(prevLanguage.value || "en");
+  // Read the new value from the event, not form.language: a native @change
+  // handler can run before v-model's own change listener updates the model.
+  const newLocale = normalizeLocale(event?.target?.value || form.language || "en");
+  form.language = newLocale;
+  prevLanguage.value = newLocale;
+  if (oldLocale === newLocale) return;
+  let moved = 0;
+  LOCALIZED_BASE_FIELDS.forEach((field) => {
+    const base = String(form[field] || "").trim();
+    const map = form[i18nFieldName(field)];
+    if (base) {
+      if (map && typeof map === "object" && !String(map[oldLocale] || "").trim()) {
+        map[oldLocale] = base;
+      }
+      moved += 1;
+    }
+    const incoming = map && typeof map === "object" ? String(map[newLocale] || "") : "";
+    form[field] = incoming;
+    if (incoming && map) delete map[newLocale];
+  });
+  if (moved) {
+    status.value = t("stepBrand.languageChangedMoved", { old: oldLocale.toUpperCase() });
+  }
+};
 
 const load = async () => {
   loadFailed.value = false;
@@ -766,6 +851,7 @@ const load = async () => {
     form.description_i18n = normalizeI18nMap(data?.description_i18n);
     form.business_hours_i18n = normalizeI18nMap(data?.business_hours_i18n);
     form.business_hours_schedule = normalizeBusinessHoursSchedule(data?.business_hours_schedule);
+    prevLanguage.value = normalizeLocale(form.language || "en");
     businessHoursEdited.value = false;
     profileLoaded.value = true;
   } catch {
@@ -795,6 +881,23 @@ const saveAndNext = async () => {
   saving.value = true;
   status.value = "";
   errors.value = {};
+  // A3-11: reject bad coordinates here — the server would silently null them.
+  const badCoord = coordError();
+  if (badCoord) {
+    errors.value = { [badCoord.field]: badCoord.message };
+    toast.show(badCoord.message, "error");
+    saving.value = false;
+    return;
+  }
+  // A3-41: a typed zone must be a real IANA zone; blank means platform default.
+  const timezone = String(form.timezone || "").trim();
+  if (timezone && !isValidTimezone(timezone)) {
+    errors.value = { timezone: t("stepBrand.timezoneInvalid") };
+    toast.show(t("stepBrand.timezoneInvalid"), "error");
+    saving.value = false;
+    return;
+  }
+  form.timezone = timezone;
   try {
     const normalizedSchedule = normalizeBusinessHoursSchedule(form.business_hours_schedule);
     const payload = {
