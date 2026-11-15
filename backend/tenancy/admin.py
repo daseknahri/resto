@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib import messages
 
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
@@ -51,13 +52,52 @@ class TenantAdmin(admin.ModelAdmin):
             existing = Tenant.objects.filter(pk=obj.pk).values_list("is_active", "lifecycle_status").first()
             if existing:
                 previous_is_active, previous_lifecycle = existing
-        if obj.is_active and obj.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
-            obj.lifecycle_status = Tenant.LifecycleStatus.ACTIVE
-            obj.suspended_at = None
-            obj.canceled_at = None
-            obj.canceled_reason = ""
-        elif not obj.is_active and obj.lifecycle_status == Tenant.LifecycleStatus.ACTIVE:
-            obj.lifecycle_status = Tenant.LifecycleStatus.SUSPENDED
+        # A-38: the old code silently rewrote lifecycle_status from is_active,
+        # so an admin who deliberately set lifecycle "canceled" while leaving
+        # is_active ticked got rewritten to ACTIVE with no warning. The
+        # lifecycle the admin chose in this save now wins; is_active is
+        # aligned to it (and the admin is told). The lifecycle is derived
+        # from is_active ONLY when the admin did not touch it in this save —
+        # and then only with an admin message explaining the rewrite.
+        lifecycle_changed = (
+            change
+            and previous_lifecycle is not None
+            and obj.lifecycle_status != previous_lifecycle
+        )
+        if lifecycle_changed:
+            if obj.lifecycle_status == Tenant.LifecycleStatus.ACTIVE and not obj.is_active:
+                obj.is_active = True
+                self.message_user(
+                    request,
+                    "Lifecycle set to Active; the tenant was reactivated to match.",
+                    level=messages.WARNING,
+                )
+            elif obj.lifecycle_status != Tenant.LifecycleStatus.ACTIVE and obj.is_active:
+                obj.is_active = False
+                self.message_user(
+                    request,
+                    f"Lifecycle set to {obj.get_lifecycle_status_display()}; "
+                    "the tenant was deactivated to match.",
+                    level=messages.WARNING,
+                )
+        elif change and previous_is_active is not None and obj.is_active != previous_is_active:
+            if obj.is_active and obj.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
+                obj.lifecycle_status = Tenant.LifecycleStatus.ACTIVE
+                obj.suspended_at = None
+                obj.canceled_at = None
+                obj.canceled_reason = ""
+                self.message_user(
+                    request,
+                    "Lifecycle set to Active because the tenant was reactivated.",
+                    level=messages.WARNING,
+                )
+            elif not obj.is_active and obj.lifecycle_status == Tenant.LifecycleStatus.ACTIVE:
+                obj.lifecycle_status = Tenant.LifecycleStatus.SUSPENDED
+                self.message_user(
+                    request,
+                    "Lifecycle set to Suspended because the tenant was deactivated.",
+                    level=messages.WARNING,
+                )
         super().save_model(request, obj, form, change)
 
         if previous_is_active is True and obj.is_active is False:
