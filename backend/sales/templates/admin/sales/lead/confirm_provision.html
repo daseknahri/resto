@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:sales_lead_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% trans 'Confirm provisioning' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<p>
+  {% blocktrans count counter=leads|length %}Provisioning creates a tenant and issues an activation link for the following lead:{% plural %}Provisioning creates a tenant and issues an activation link for each of the following {{ counter }} leads:{% endblocktrans %}
+</p>
+<ul>
+  {% for lead in leads %}
+  <li>{{ lead.name }}{% if lead.email %} &lt;{{ lead.email }}&gt;{% endif %}{% if lead.plan %} — {{ lead.plan }}{% endif %} ({{ lead.get_status_display }})</li>
+  {% endfor %}
+</ul>
+<p>{% trans 'This cannot be undone from the admin. Check the list above before confirming.' %}</p>
+<form action="" method="post">
+  {% csrf_token %}
+  {% for lead in leads %}
+  <input type="hidden" name="{{ action_checkbox_name }}" value="{{ lead.pk }}">
+  {% endfor %}
+  <input type="hidden" name="action" value="confirm_sale">
+  <input type="hidden" name="confirm" value="yes">
+  <div>
+    <input type="submit" value="{% trans 'Yes, provision the selected leads' %}">
+    <a href="#" onclick="window.history.back(); return false;" class="button cancel-link">{% trans 'No, take me back' %}</a>
+  </div>
+</form>
+{% endblock %}
