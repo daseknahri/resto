@@ -1908,6 +1908,9 @@ ownerWallet: {
   topupConfirmCta: "Credit wallet",
   historyTitle: "Transaction history",
   historyEmpty: "No transactions yet.",
+  amountInvalid: "Enter a valid amount, e.g. 10.50 — numbers only, up to 2 decimals.",
+  searchMoreResults: "Showing {shown} of {total} customers — refine your search or show more.",
+  searchShowMore: "Show more",
 },
 adminFlashSales: {
   kicker: "Platform Admin",
@@ -4361,6 +4364,8 @@ ownerBilling: {
   statementReasonPlaceholder: "Why is this month being re-issued?",
   statementConfirmCurrent: "This month is still in progress \u2014 figures will keep changing. Issue it anyway?",
   statementIssueAnyway: "Issue anyway",
+  upgradeConfirmBody: "While a request is pending you can't send another one. We'll confirm and activate your new plan.",
+  upgradeConfirmTitle: "Request an upgrade to {plan}?",
 },
 adminConsole: {
   // Status labels — localized enum tokens for the status pills; the colour stays in the *StatusClass helpers.
@@ -5146,6 +5151,11 @@ ownerOrders: {
   hoursMinutes: "{h} h {m} min",
   minutesAgo: "{n} min ago",
   minutesShort: "{n} min",
+  djActionDone: "Delivery action completed.",
+  enableNotifications: "Enable notifications",
+  exportSuccess: "Orders exported successfully.",
+  notificationsDeniedHint: "Browser notifications are blocked for this site — enable them in your browser's site settings to get new-order alerts.",
+  notificationsEnabled: "Browser notifications enabled — you'll be alerted about new orders.",
 },
 orderHandling: {
   tabLabel: "Orders",
