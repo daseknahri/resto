@@ -137,7 +137,7 @@ class AdminRideListEnvelopeTests(SimpleTestCase):
 
 
 # Run 8 G3a A2-07 — delivery jobs list envelope (same fix class as the rides list).
-from unittest.mock import MagicMock, patch
+# (MagicMock/patch already imported at the top of the file — ruff F811.)
 
 from accounts.views import AdminDeliveryJobListView
 
