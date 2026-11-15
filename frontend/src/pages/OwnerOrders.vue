@@ -1460,10 +1460,30 @@ const orders86Toggle = async (dish) => {
 
 const orders86ResetAll = async () => {
   if (orders86Resetting.value) return;
+  // Count pre-check: only the sold-out dishes actually loaded in this board are
+  // in scope — nothing to do (and nothing to confirm) when the count is zero.
+  const affected = orders86Dishes.value.filter((d) => d.is_published && !d.is_available);
+  if (!affected.length) return;
+  // Bulk, customer-visible action — gate behind a confirm with the count in the
+  // title, like the sibling mark-all-unavailable. B-04: this used to call the bare
+  // reset-availability endpoint (whole menu, no scope) with no confirmation.
+  const ok = await confirm({
+    title: t("ownerHome.resetAvailabilityConfirm", { count: affected.length }),
+    body: t("ownerHome.resetAvailabilityConfirmBody"),
+    confirmLabel: t("ownerHome.alertResetAll"),
+    danger: false,
+  });
+  if (!ok) return;
   orders86Resetting.value = true;
   try {
-    const { data } = await api.post("/owner/dishes/reset-availability/");
+    // Scoped reset: send the explicit ids of the visible sold-out dishes to the
+    // dedicated bulk endpoint instead of the bare whole-menu endpoint.
+    const { data } = await api.post("/owner/dishes/bulk-reset-availability/", {
+      dish_ids: affected.map((d) => d.id),
+    });
+    const restoredIds = new Set(affected.map((d) => d.id));
     orders86Dishes.value.forEach((d) => {
+      if (!restoredIds.has(d.id)) return;
       if (d.is_published && !d.is_available) d.is_available = true;
       if (d.stock_qty === 0) d.stock_qty = null;
     });
@@ -1681,6 +1701,36 @@ const statusTabs = computed(() => {
   ];
 });
 
+// ── Today's realized figures — from the /owner/dashboard/ aggregate ───────────
+// The active-order store only holds NON-terminal orders — a COMPLETED order drops
+// out within ~30s — so count/revenue derived from it decay through service (B-01).
+// The authoritative source is revenue_summary.daily from GET /owner/dashboard/
+// (tenant-tz-bucketed, billable statuses incl. COMPLETED), the same aggregate
+// OwnerHome/OwnerAnalytics read. The client calc stays as the fallback for when
+// the dashboard is unavailable or has no entry for today yet; `pending` — which
+// the billable aggregate excludes — always comes from the live order list.
+const revenueSummary = ref(null);
+
+const fetchTodaySummary = async () => {
+  try {
+    const { data } = await api.get("/owner/dashboard/", { params: { days: 7 }, timeout: 8000 });
+    if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
+  } catch { /* keep the previous figures — todayStats falls back to the client calc */ }
+};
+
+// YYYY-MM-DD for a date in the tenant timezone (device tz when unset) — the same
+// day key the backend emits in revenue_summary.daily (Contract E).
+const _tenantDayIso = (d) => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
+  } catch {
+    return new Date(d).toISOString().slice(0, 10);
+  }
+};
+
+const _dailyEntry = (dateStr) => (revenueSummary.value?.daily || []).find((d) => d.date === dateStr);
+
 // ── Today's stats ─────────────────────────────────────────────────────────────
 // Use tenant timezone so "today" is bucketed in the restaurant's local time,
 // not the owner's device timezone (Contract E: timezone "today" fix).
@@ -1701,8 +1751,20 @@ const todayStats = computed(() => {
     : new Date().toDateString();
   const todayOrders = order.orders.filter((o) => _tenantDateStr(o.created_at) === todayStr);
   const pending = todayOrders.filter((o) => o.status === "pending").length;
+  const currency = order.orders[0]?.currency || revenueSummary.value?.currency || "MAD";
+  // Dashboard first: realized count/revenue for today (incl. completed orders
+  // that already left the active list). Falls back to the client calc when the
+  // dashboard has no entry for today (fetch failed, or nothing billable yet).
+  const entry = _dailyEntry(_tenantDayIso(new Date()));
+  if (entry) {
+    return {
+      count: Number(entry.orders) || 0,
+      revenue: Number(entry.revenue) || 0,
+      pending,
+      currency,
+    };
+  }
   const revenue = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-  const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   return { count: todayOrders.length, revenue, pending, currency };
 });
 
@@ -1779,7 +1841,10 @@ const filteredOrders = computed(() => {
 });
 
 const setFilter = (val) => { activeStatus.value = val; };
-const refresh = () => order.fetchOrders();
+const refresh = () => {
+  order.fetchOrders();
+  void fetchTodaySummary();
+};
 
 // Copy delivery address to clipboard
 const copiedOrderId = ref(null);
@@ -1813,6 +1878,15 @@ const confirmAllPending = async () => {
   if (confirmingAll.value) return;
   const toConfirm = pendingOrdersList.value.slice();
   if (!toConfirm.length) return;
+  // Bulk, customer-visible action — gate behind a confirm with the count in the
+  // title, like the sibling bulk actions (bulkMarkPreparingReady, deliveryAction
+  // no-show). B-04: this used to fire on a single tap with no confirmation.
+  const ok = await confirm({
+    title: t("ownerOrders.confirmAllConfirmTitle", { count: toConfirm.length }),
+    body: t("ownerOrders.confirmAllConfirmBody"),
+    confirmLabel: t("ownerOrders.confirmAllPending", { n: toConfirm.length }),
+  });
+  if (!ok) return;
   confirmingAll.value = true;
   try {
     const res = await api.post("/owner/orders/bulk-status/", {
@@ -2389,6 +2463,9 @@ const polling = ref(false);
 const doPoll = async () => {
   polling.value = true;
   try {
+    // Keep the header's today figures live too — completed orders leave the active
+    // list between polls, so the dashboard aggregate (B-01) needs its own refresh.
+    void fetchTodaySummary();
     // Always fetch all orders (no status filter) — filtering is client-side only.
     // Passing activeStatus to the API would replace the full list with a subset,
     // making other status groups disappear until the next manual refresh.
@@ -2451,6 +2528,10 @@ onMounted(async () => {
   // Seed the 86 board dish list so the floating button shows the correct sold-out count.
   // Non-blocking: runs after initial order fetch so it never delays the order list.
   void seed86Count();
+
+  // Today's realized figures from the dashboard aggregate (B-01) — non-blocking,
+  // same as seed86Count: the header falls back to the client calc until it lands.
+  void fetchTodaySummary();
 
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onPageVisible);

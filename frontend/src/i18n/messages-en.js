@@ -5097,6 +5097,8 @@ ownerOrders: {
   eightySixBoardBtn: "86 Board",
   loadPaymentsFailed: "Couldn't load payments. Tap to try again.",
   dateRangeSwapped: "Start and end dates were swapped so the range is valid.",
+  confirmAllConfirmBody: "All {count} pending orders will be confirmed at once.",
+  confirmAllConfirmTitle: "Confirm {count} pending orders?",
 },
 orderHandling: {
   tabLabel: "Orders",

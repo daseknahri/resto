@@ -9873,6 +9873,62 @@ class DishBulkAvailabilityResetView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class DishBulkResetAvailabilityView(APIView):
+    """POST /api/owner/dishes/bulk-reset-availability/
+
+    Scoped morning-reset: re-enables ONLY the dishes named in the request and
+    clears their auto-zeroed stock counts. This is the B-04 replacement for the
+    bare reset-availability endpoint on the owner boards: the frontend confirms
+    with the affected count and sends the explicit ids of the visible sold-out
+    dishes, so a tap can never silently re-enable dishes the owner did not see.
+    The bare endpoint is kept for the OwnerHome next-action path, which resets
+    the whole menu deliberately.
+
+    Body: { "dish_ids": [12, 27] } (required, non-empty, at most _MAX ids)
+    Response 200: { "restored": N, "stock_cleared": M, "requested": K }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _MAX = 500
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_menu(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        dish_ids = request.data.get("dish_ids")
+        if not isinstance(dish_ids, list) or not dish_ids:
+            return Response({"detail": "'dish_ids' must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(dish_ids) > self._MAX:
+            return Response(
+                {"detail": f"At most {self._MAX} dishes per bulk request."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            dish_ids = [int(i) for i in dish_ids]
+        except (TypeError, ValueError):
+            return Response({"detail": "'dish_ids' must be a list of integers."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Scope strictly to the named ids: published dishes currently sold out.
+        # Unpublished dishes and already-available dishes are untouched, and ids
+        # that do not exist (or are not sold out) simply do not count as restored.
+        restored_count = Dish.objects.filter(
+            id__in=dish_ids, is_published=True, is_available=False
+        ).update(is_available=True, stock_auto_zeroed=False)
+
+        # Only clear auto-zeroed stock for the named dishes (mirrors the bare
+        # endpoint's default branch, scoped to the same ids).
+        stock_cleared_count = Dish.objects.filter(
+            id__in=dish_ids, is_published=True, stock_qty=0
+        ).update(stock_qty=None)
+
+        return Response({
+            "restored": restored_count,
+            "stock_cleared": stock_cleared_count,
+            "requested": len(dish_ids),
+        }, status=status.HTTP_200_OK)
+
+
 class DishBulkMarkUnavailableView(APIView):
     """POST /api/owner/dishes/mark-all-unavailable/
 

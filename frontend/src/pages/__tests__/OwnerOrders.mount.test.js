@@ -208,3 +208,191 @@ describe("OwnerOrders — mount smoke", () => {
     expect(wrapper.text()).not.toContain("ownerOrders.noOrdersYet");
   });
 });
+
+// ── S1-A (B-01 / B-04) — appended by Run 8 Surface 1, cluster S1-A ─────────────
+// Imports are hoisted, so these resolve to the same (mocked api / real
+// useConfirmModal) modules as the imports at the top of the file.
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
+
+// Today's date exactly the way the page buckets it with no tenant timezone set
+// (device-local YYYY-MM-DD, matching _tenantDayIso in OwnerOrders.vue).
+const _todayStr = () =>
+  new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+// The header stats bar renders exactly three `p.text-2xl` cells, in order:
+// [today count, today revenue, today pending]. (The h1 title is an h1, not a p,
+// and the stubbed children render no text-2xl cells.)
+const _statsCells = (w) => w.findAll("p.text-2xl");
+
+describe("OwnerOrders — S1-A (B-01 today figures / B-04 bulk confirms)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── B-01: dashboard aggregate wins over the decaying active list ─────────
+  it("B-01: header today count/revenue come from the dashboard aggregate, not the active list", async () => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({ id: 1, order_number: "A100", status: "confirmed", total: "100.00" }),
+            order({ id: 2, order_number: "A101", status: "pending", total: "65.00", fulfillment_type: "pickup", customer_name: "Omar" }),
+          ],
+          total: 2,
+        },
+      },
+      // A completed order already left the active list, so the dashboard sees 7
+      // orders / 1234.5 revenue while the client calc would see 2 / 165.
+      "/owner/dashboard/": {
+        data: { revenue_summary: { currency: "MAD", daily: [{ date: _todayStr(), revenue: 1234.5, orders: 7 }] } },
+      },
+    };
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises(); // drain the non-blocking fetchTodaySummary() fired on mount
+
+    const stats = _statsCells(wrapper);
+    expect(stats.length).toBe(3);
+    expect(stats[0].text()).toBe("7"); // dashboard orders, not the 2 loaded
+    expect(stats[1].text()).toBe("1234.5"); // dashboard revenue, not 165
+    expect(stats[2].text()).toBe("1"); // pending still comes from the live list
+  });
+
+  it("B-01: falls back to the client calc when the dashboard has no entry for today", async () => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({ id: 1, order_number: "A100", status: "confirmed", total: "100.00" }),
+            order({ id: 2, order_number: "A101", status: "pending", total: "65.00", fulfillment_type: "pickup", customer_name: "Omar" }),
+          ],
+          total: 2,
+        },
+      },
+      "/owner/dashboard/": { data: { revenue_summary: { currency: "MAD", daily: [] } } },
+    };
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    const stats = _statsCells(wrapper);
+    expect(stats.length).toBe(3);
+    expect(stats[0].text()).toBe("2"); // client calc: 2 loaded orders
+    expect(stats[1].text()).toBe("165"); // client calc: 100 + 65
+    expect(stats[2].text()).toBe("1");
+  });
+
+  // ── B-04: confirm-all-pending ────────────────────────────────────────────
+  const _mountTwoPending = async () => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({ id: 1, order_number: "A100", status: "pending" }),
+            order({ id: 2, order_number: "A101", status: "pending", fulfillment_type: "pickup", customer_name: "Omar" }),
+          ],
+          total: 2,
+        },
+      },
+    };
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+    const btn = wrapper.findAll("button").find((b) => b.text().includes("ownerOrders.confirmAllPending"));
+    expect(btn.exists()).toBe(true);
+    return btn;
+  };
+
+  it("B-04: confirm-all-pending asks first and posts the explicit ids only after approval", async () => {
+    const btn = await _mountTwoPending();
+    await btn.trigger("click");
+    await flushPromises();
+    // No POST before the owner approves the confirm dialog.
+    expect(api.post).not.toHaveBeenCalledWith("/owner/orders/bulk-status/", expect.anything());
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/owner/orders/bulk-status/", {
+      order_ids: [1, 2],
+      status: "confirmed",
+    });
+  });
+
+  it("B-04: declining the confirm-all dialog posts nothing", async () => {
+    const btn = await _mountTwoPending();
+    await btn.trigger("click");
+    await flushPromises();
+    useConfirmModal()._settle(false);
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  // ── B-04: 86-board reset-all (via the stubbed board's reset-all event) ────
+  it("B-04: 86 reset-all confirms with the sold-out count and posts the explicit dish ids", async () => {
+    _routes = {
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/dishes/": {
+        data: [
+          { id: 11, name: "Soup", slug: "soup", is_published: true, is_available: false, stock_qty: 0, category_name: "Starters" },
+          { id: 12, name: "Salad", slug: "salad", is_published: true, is_available: false, stock_qty: 0, category_name: "Starters" },
+          { id: 13, name: "Steak", slug: "steak", is_published: true, is_available: true, stock_qty: 5, category_name: "Mains" },
+        ],
+      },
+    };
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises(); // drain the non-blocking seed86Count() fired on mount
+
+    const board = wrapper.findComponent({ name: "OwnerOrders86Board" });
+    expect(board.exists()).toBe(true);
+    api.post.mockResolvedValueOnce({ data: { restored: 2, stock_cleared: 2, requested: 2 } });
+    board.vm.$emit("reset-all");
+    await flushPromises();
+    // No POST before the owner approves the confirm dialog.
+    expect(api.post).not.toHaveBeenCalledWith("/owner/dishes/bulk-reset-availability/", expect.anything());
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/owner/dishes/bulk-reset-availability/", { dish_ids: [11, 12] });
+  });
+
+  it("B-04: declining the 86 reset-all dialog posts nothing", async () => {
+    _routes = {
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/dishes/": {
+        data: [
+          { id: 11, name: "Soup", slug: "soup", is_published: true, is_available: false, stock_qty: 0, category_name: "Starters" },
+        ],
+      },
+    };
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    const board = wrapper.findComponent({ name: "OwnerOrders86Board" });
+    expect(board.exists()).toBe(true);
+    board.vm.$emit("reset-all");
+    await flushPromises();
+    useConfirmModal()._settle(false);
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});

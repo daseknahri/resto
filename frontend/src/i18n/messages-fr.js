@@ -5105,6 +5105,8 @@ ownerOrders: {
   eightySixBoardBtn: "Tableau 86",
   loadPaymentsFailed: "Impossible de charger les paiements. Appuyez pour reessayer.",
   dateRangeSwapped: "Les dates de debut et de fin ont ete inversees pour que la periode soit valide.",
+  confirmAllConfirmBody: "Les {count} commandes en attente seront confirmees en une fois.",
+  confirmAllConfirmTitle: "Confirmer {count} commandes en attente ?",
 },
 orderHandling: {
   tabLabel: "Commandes",

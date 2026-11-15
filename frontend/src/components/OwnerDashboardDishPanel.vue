@@ -154,12 +154,14 @@
 import { computed, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
 
 const { t } = useI18n();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 
 // ── Props from parent: initial sold-out count so summary shows before lazy load ─
 const props = defineProps({
@@ -293,10 +295,30 @@ const setStock = async (dish, rawValue) => {
 
 const resetAll = async () => {
   if (resetting.value) return;
+  // Count pre-check: only the sold-out dishes actually loaded in this panel are
+  // in scope — nothing to do (and nothing to confirm) when the count is zero.
+  const affected = dishes.value.filter((d) => d.is_published && !d.is_available);
+  if (!affected.length) return;
+  // Bulk, customer-visible action — gate behind a confirm with the count in the
+  // title, like the sibling mark-all-unavailable. B-04: this used to call the bare
+  // reset-availability endpoint (whole menu, no scope) with no confirmation.
+  const ok = await confirm({
+    title: t("ownerHome.resetAvailabilityConfirm", { count: affected.length }),
+    body: t("ownerHome.resetAvailabilityConfirmBody"),
+    confirmLabel: t("ownerHome.alertResetAll"),
+    danger: false,
+  });
+  if (!ok) return;
   resetting.value = true;
   try {
-    const { data } = await api.post("/owner/dishes/reset-availability/");
+    // Scoped reset: send the explicit ids of the visible sold-out dishes to the
+    // dedicated bulk endpoint instead of the bare whole-menu endpoint.
+    const { data } = await api.post("/owner/dishes/bulk-reset-availability/", {
+      dish_ids: affected.map((d) => d.id),
+    });
+    const restoredIds = new Set(affected.map((d) => d.id));
     dishes.value.forEach((d) => {
+      if (!restoredIds.has(d.id)) return;
       if (d.is_published && !d.is_available) d.is_available = true;
       if (d.stock_qty === 0) d.stock_qty = null;
     });

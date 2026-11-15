@@ -3011,6 +3011,8 @@ const arabicMessages = {
     "markAllUnavailableFailed": "تعذّر تعليم العناصر — حاول مجددًا.",
     "loadPaymentsFailed": "تعذّر تحميل المدفوعات. اضغط للمحاولة مرة أخرى.",
     "dateRangeSwapped": "تم تبديل تاريخي البداية والنهاية ليكون النطاق صحيحًا.",
+    "confirmAllConfirmBody": "سيتم تأكيد جميع الطلبات المعلّقة ({count}) دفعة واحدة.",
+    "confirmAllConfirmTitle": "تأكيد {count} طلبات معلّقة؟",
   },
   "orderHandling": {
     "tabLabel": "الطلبات",
