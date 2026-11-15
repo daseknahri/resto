@@ -431,6 +431,185 @@
         </button>
       </div>
       <p v-if="branchStore.hasChoice" class="ui-subtle text-xs">{{ t('ownerBilling.commissionBranchHint') }}</p>
+
+      <!-- On-screen statement preview (D-03) + issue actions (D-04) ─────── -->
+      <div v-if="statementLoading" class="space-y-2" aria-busy="true">
+        <div class="h-5 w-40 animate-pulse rounded bg-slate-700/60" />
+        <div class="h-24 animate-pulse rounded-xl border border-slate-800 bg-slate-900/40" />
+      </div>
+      <div v-else-if="statementError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <p class="flex-1 text-sm text-red-300">{{ statementError }}</p>
+        <button
+          type="button"
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          @click="fetchStatementPreview"
+        >{{ t('common.retry') }}</button>
+      </div>
+      <div v-else-if="statementPreview" class="space-y-4">
+        <!-- Issued / provisional badge -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            v-if="statementPreview.issued"
+            class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"
+          >
+            {{ t('ownerBilling.statementIssuedBadge', { rev: statementPreview.revision }) }}
+          </span>
+          <span
+            v-else
+            class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300"
+          >
+            {{ t('ownerBilling.statementProvisional') }}
+          </span>
+          <span v-if="statementPreview.issued_at" class="text-xs text-slate-500">{{ formatDateTime(statementPreview.issued_at) }}</span>
+          <span v-if="statementPreview.branch_filter && !statementPreview.branch_filter.applied" class="text-xs text-slate-500">{{ statementPreview.branch_filter.reason }}</span>
+        </div>
+
+        <!-- Summary totals -->
+        <div v-if="statementPreview.summary" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2.5">
+            <p class="text-[11px] text-slate-500">{{ t('ownerBilling.statementOrders') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ statementPreview.summary.order_count }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2.5">
+            <p class="text-[11px] text-slate-500">{{ t('ownerBilling.statementRevenue') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtStatementMoney(statementPreview.summary.total_revenue, statementPreview.summary.currency) }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2.5">
+            <p class="text-[11px] text-slate-500">{{ t('ownerBilling.statementCommission') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtStatementMoney(statementPreview.summary.total_commission, statementPreview.summary.currency) }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2.5">
+            <p class="text-[11px] text-slate-500">{{ t('ownerBilling.statementNetPayout') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtStatementMoney(statementPreview.summary.net_payout, statementPreview.summary.currency) }}</p>
+          </div>
+        </div>
+
+        <!-- Per-currency breakdown (mixed-currency months only) -->
+        <div v-if="(statementPreview.per_currency || []).length > 1" class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-500">
+                <th class="px-3 py-2 font-medium">{{ t('ownerBilling.statementCurrency') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementOrders') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementRevenue') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementCommission') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementNetPayout') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="pc in statementPreview.per_currency" :key="pc.currency" class="border-b border-slate-800/60 last:border-0">
+                <td class="px-3 py-2 font-medium text-slate-200">{{ pc.currency }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ pc.order_count }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(pc.total_revenue, pc.currency) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(pc.total_commission, pc.currency) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(pc.net_payout, pc.currency) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Per-order rows -->
+        <div v-if="(statementPreview.orders || []).length" class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-500">
+                <th class="px-3 py-2 font-medium">{{ t('ownerBilling.statementOrderNumber') }}</th>
+                <th class="px-3 py-2 font-medium">{{ t('ownerBilling.statementDate') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementRevenue') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementCommission') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementNetPayout') }}</th>
+                <th class="px-3 py-2 text-right font-medium">{{ t('ownerBilling.statementPayment') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="o in statementPreview.orders" :key="o.order_number" class="border-b border-slate-800/60 last:border-0">
+                <td class="px-3 py-2 font-medium text-slate-200">{{ o.order_number }}</td>
+                <td class="px-3 py-2 text-slate-400">{{ (o.created_at || '').slice(0, 10) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(o.total, o.currency) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(o.commission_amount, o.currency) }}</td>
+                <td class="px-3 py-2 text-right tabular-nums text-slate-300">{{ fmtStatementMoney(o.net_payout, o.currency) }}</td>
+                <td class="px-3 py-2 text-right">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    :class="o.is_cod ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'"
+                  >{{ o.is_cod ? t('ownerBilling.statementCod') : t('ownerBilling.statementPaid') }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="text-sm text-slate-500">{{ t('ownerBilling.statementNoOrders') }}</p>
+
+        <!-- Issue / re-issue (D-04) -->
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            v-if="!statementPreview.issued"
+            type="button"
+            class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
+            :disabled="statementIssuing"
+            @click="onIssueClick"
+          >
+            {{ statementIssuing ? t('ownerBilling.statementIssuing') : t('ownerBilling.statementIssue') }}
+          </button>
+          <button
+            v-else
+            type="button"
+            class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-60"
+            :disabled="statementIssuing"
+            @click="showReissueForm = !showReissueForm"
+          >
+            {{ t('ownerBilling.statementReissue') }}
+          </button>
+          <span v-if="statementPreview.issued" class="text-xs text-slate-500">{{ t('ownerBilling.statementIssuedHint') }}</span>
+        </div>
+
+        <!-- Current-month confirm strip (D-09: the backend refuses a silent
+             mid-month freeze; the owner confirms explicitly here). -->
+        <div v-if="issueConfirming" class="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-4" role="alert">
+          <p class="text-sm text-amber-200">{{ t('ownerBilling.statementConfirmCurrent') }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-sm text-amber-200 transition-colors hover:bg-amber-500/25 disabled:opacity-60"
+              :disabled="statementIssuing"
+              @click="issueStatement(false, true)"
+            >
+              {{ t('ownerBilling.statementIssueAnyway') }}
+            </button>
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" :disabled="statementIssuing" @click="issueConfirming = false">
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Re-issue form (reason required by the API) -->
+        <div v-if="showReissueForm" class="space-y-3 rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+          <label class="block space-y-1">
+            <span class="text-xs font-medium text-slate-400">{{ t('ownerBilling.statementReasonLabel') }}</span>
+            <textarea
+              v-model="reissueReason"
+              rows="2"
+              maxlength="500"
+              :aria-label="t('ownerBilling.statementReasonLabel')"
+              :placeholder="t('ownerBilling.statementReasonPlaceholder')"
+              class="ui-textarea w-full resize-none text-sm"
+            />
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60"
+              :disabled="statementIssuing"
+              @click="issueStatement(true)"
+            >
+              {{ statementIssuing ? t('ownerBilling.statementIssuing') : t('ownerBilling.statementReissue') }}
+            </button>
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" :disabled="statementIssuing" @click="showReissueForm = false">
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ── Close account ────────────────────────────────────────────────── -->
@@ -523,6 +702,14 @@ const exporting = ref(false)
 const downloadingInvoice = ref(null)
 const requestingDeletion = ref(false)
 const commissionDownloading = ref(false)
+// ── Statement preview (D-03) + issue (D-04) ────────────────────────────────
+const statementPreview = ref(null)
+const statementLoading = ref(false)
+const statementError = ref('')
+const statementIssuing = ref(false)
+const showReissueForm = ref(false)
+const reissueReason = ref('')
+const issueConfirming = ref(false)
 const commissionYear = ref(new Date().getFullYear())
 const commissionMonth = ref(new Date().getMonth() + 1)
 // Statement branch filter (Run 7 step 6): '' = all locations (account level).
@@ -822,6 +1009,12 @@ watch(commissionYear, () => {
   if (isFutureCommissionMonth(commissionMonth.value)) commissionMonth.value = currentMonth
 })
 
+// D-03: the preview follows the same selects (year / month / branch) as the
+// PDF download, so what the owner sees on screen is the month they'd freeze.
+watch([commissionYear, commissionMonth, statementBranchId], () => {
+  fetchStatementPreview()
+})
+
 const downloadCommissionPdf = async () => {
   if (commissionDownloading.value) return
   if (isFutureCommissionMonth(commissionMonth.value)) {
@@ -854,11 +1047,97 @@ const downloadCommissionPdf = async () => {
   }
 }
 
+// ── Statement preview (D-03) ───────────────────────────────────────────────
+
+const fmtStatementMoney = (value, currency) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return currency ? `${currency} ${n.toFixed(2)}` : n.toFixed(2)
+}
+
+const isCurrentCommissionMonth = () =>
+  commissionYear.value === currentYear && commissionMonth.value === currentMonth
+
+const fetchStatementPreview = async () => {
+  if (statementLoading.value) return
+  statementLoading.value = true
+  statementError.value = ''
+  try {
+    const params = { year: commissionYear.value, month: commissionMonth.value }
+    // Preview-only filter (FO1): a chosen branch narrows the live preview;
+    // issued months serve the frozen account-level snapshot and ignore it.
+    if (statementBranchId.value) params.branch = statementBranchId.value
+    const { data } = await api.get('/owner/commission-statement/', { params })
+    statementPreview.value = data || null
+    // A newly selected month starts un-issued: hide the stale re-issue form.
+    showReissueForm.value = false
+    reissueReason.value = ''
+    issueConfirming.value = false
+  } catch {
+    statementPreview.value = null
+    statementError.value = t('ownerBilling.statementLoadFailed')
+  } finally {
+    statementLoading.value = false
+  }
+}
+
+// ── Statement issue / re-issue (D-04) ──────────────────────────────────────
+
+const onIssueClick = () => {
+  if (statementIssuing.value) return
+  // The backend refuses a silent mid-month freeze (D-09): the owner
+  // confirms explicitly in the inline strip below instead.
+  if (isCurrentCommissionMonth()) {
+    issueConfirming.value = true
+    return
+  }
+  issueStatement(false)
+}
+
+const issueStatement = async (isReissue, confirmCurrent = false) => {
+  if (statementIssuing.value) return
+  if (isReissue && !reissueReason.value.trim()) {
+    toast.show(t('ownerBilling.statementReasonRequired'), 'error')
+    return
+  }
+  statementIssuing.value = true
+  try {
+    const payload = { year: commissionYear.value, month: commissionMonth.value }
+    if (isReissue) {
+      payload.reissue = true
+      payload.reason = reissueReason.value.trim()
+    }
+    if (isCurrentCommissionMonth() || confirmCurrent) payload.confirm_current = true
+    const { data } = await api.post('/owner/commission-statement/issue/', payload)
+    // POST returns the frozen payload in the same envelope as GET.
+    statementPreview.value = data || null
+    showReissueForm.value = false
+    reissueReason.value = ''
+    issueConfirming.value = false
+    toast.show(t('ownerBilling.statementIssued'), 'success')
+  } catch (err) {
+    const status = err?.response?.status
+    const code = err?.response?.data?.code
+    const detail = err?.response?.data?.detail
+    if (status === 409) {
+      toast.show(detail || t('ownerBilling.statementAlreadyIssued'), 'error')
+    } else if (code === 'confirm_current_required') {
+      issueConfirming.value = true
+      toast.show(t('ownerBilling.statementConfirmCurrent'), 'error')
+    } else {
+      toast.show(detail || t('ownerBilling.statementIssueFailed'), 'error')
+    }
+  } finally {
+    statementIssuing.value = false
+  }
+}
+
 onMounted(() => {
   fetchAll()
   // Branch list for the statement filter (cached by the store; a failed
   // fetch just leaves the filter hidden — the download stays account-level).
   branchStore.load()
+  fetchStatementPreview()
 })
 </script>
 

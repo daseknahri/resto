@@ -226,4 +226,49 @@ describe("OwnerHome — mount smoke", () => {
     // The live-queue pending tile still reflects the store's pending order.
     expect(text).toContain("ownerOrders.todayPending");
   });
+
+  // ── (4) marketplace commission card (D-10) ─────────────────────────────────
+  // The dashboard aggregate already ships revenue_summary.marketplace /
+  // .statement; the card must render them (7-day window, days=7 fetch) instead
+  // of throwing them away. formatNumber is mocked to String(v), so the raw
+  // figures render verbatim: revenue 1234.56, commission 123.45, net 1111.11.
+  it("renders the marketplace commission card from the dashboard aggregate", async () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/owner/dashboard/": {
+        data: {
+          revenue_summary: {
+            currency: "MAD",
+            marketplace: { order_count: 13, revenue: "1234.56", commission_total: "123.45" },
+            statement: {
+              gross: "1234.56",
+              promo_discounts: "0.00",
+              loyalty_discounts: "0.00",
+              tips: "0.00",
+              commission: "123.45",
+              net: "1111.11",
+              refunds_issued: "0.00",
+            },
+          },
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountHome();
+    }).not.toThrow();
+
+    await flushPromises();
+    await flushPromises(); // drain the nextTick-deferred batch (incl. /owner/dashboard/)
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("ownerHome.marketplaceTitle");
+    expect(text).toContain("ownerHome.marketplacePeriod");
+    expect(text).toContain("13"); // marketplace order count
+    expect(text).toContain("1234.56"); // marketplace revenue
+    expect(text).toContain("123.45"); // marketplace commission
+    expect(text).toContain("1111.11"); // marketplace net (revenue − commission)
+  });
 });

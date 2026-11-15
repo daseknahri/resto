@@ -247,12 +247,198 @@ describe("OwnerBilling — mount smoke", () => {
       URL.revokeObjectURL = realRevoke;
     }
 
-    const stmtCall = api.get.mock.calls.find(([url]) =>
-      url.includes("commission-statement")
+    // D-03: the mount-time preview GET (no format param) also hits
+    // commission-statement, so the PDF call must be picked by its param.
+    const stmtCall = api.get.mock.calls.find(
+      ([url, cfg]) =>
+        url.includes("commission-statement") && cfg?.params?.format === "pdf"
     );
     expect(stmtCall).toBeTruthy();
     expect(stmtCall[1].params.branch).toBe("2");
     expect(stmtCall[1].params.format).toBe("pdf");
+  });
+
+  // ── (5) statement preview (D-03): provisional summary + orders + COD pill ─
+  // The preview GET fires on mount; the mocked t returns keys verbatim, so the
+  // assertions target keys + the raw money strings fmtStatementMoney builds
+  // ("MAD 120.00" — currency + 2dp). The single-currency payload keeps the
+  // per-currency table hidden; the two orders exercise both Payment pills.
+  it("renders the statement preview (provisional badge + summary + orders + COD/Paid pills)", async () => {
+    _routes = {
+      "commission-statement": {
+        data: {
+          issued: false,
+          year: 2026,
+          month: 6,
+          branch_filter: { applied: true },
+          // Field names are the real GET envelope (menu/views.py
+          // OwnerCommissionStatementView.get): summary total_revenue /
+          // total_commission, orders total / commission_amount / created_at.
+          summary: {
+            order_count: 2,
+            total_revenue: "120.00",
+            total_commission: "12.00",
+            net_payout: "108.00",
+            currency: "MAD",
+          },
+          per_currency: [
+            {
+              currency: "MAD",
+              order_count: 2,
+              total_revenue: "120.00",
+              total_commission: "12.00",
+              net_payout: "108.00",
+            },
+          ],
+          orders: [
+            {
+              order_number: "ORD-1",
+              created_at: "2026-06-15T10:00:00Z",
+              total: "100.00",
+              commission_amount: "10.00",
+              net_payout: "90.00",
+              currency: "MAD",
+              payment_status: "unpaid",
+              is_cod: true,
+            },
+            {
+              order_number: "ORD-2",
+              created_at: "2026-06-16T10:00:00Z",
+              total: "20.00",
+              commission_amount: "2.00",
+              net_payout: "18.00",
+              currency: "MAD",
+              payment_status: "paid",
+              is_cod: false,
+            },
+          ],
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountBilling();
+    }).not.toThrow();
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("ownerBilling.statementProvisional");
+    expect(text).toContain("MAD 120.00");
+    expect(text).toContain("MAD 12.00");
+    expect(text).toContain("MAD 108.00");
+    expect(text).toContain("ORD-1");
+    expect(text).toContain("ORD-2");
+    expect(text).toContain("2026-06-15"); // created_at sliced to the date
+    expect(text).toContain("ownerBilling.statementCod");
+    expect(text).toContain("ownerBilling.statementPaid");
+    // Not issued yet → the Issue action is offered.
+    expect(
+      wrapper.findAll("button").some((b) => b.text() === "ownerBilling.statementIssue")
+    ).toBe(true);
+  });
+
+  // ── (6) issue flow (D-04): past month → POST /issue/ → issued badge ──────
+  it("issues a past month from the preview (POST /issue/ → issued badge + rev)", async () => {
+    const year = new Date().getFullYear();
+    _routes = {
+      "commission-statement": {
+        data: {
+          issued: false,
+          year,
+          month: 6,
+          branch_filter: { applied: true },
+          summary: { order_count: 1, total_revenue: "50.00", total_commission: "5.00", net_payout: "45.00", currency: "MAD" },
+          per_currency: [],
+          orders: [],
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountBilling();
+    }).not.toThrow();
+    await flushPromises();
+
+    // Move off the current month (the default) so the issue goes straight
+    // through — the current month needs the inline confirm instead (test 7).
+    await wrapper.find("#commission-month").setValue("6");
+    await flushPromises();
+
+    api.post.mockResolvedValueOnce({
+      data: {
+        issued: true,
+        revision: 1,
+        issued_at: "2026-07-01T10:00:00Z",
+        year,
+        month: 6,
+        branch_filter: { applied: true },
+        summary: { order_count: 1, total_revenue: "50.00", total_commission: "5.00", net_payout: "45.00", currency: "MAD" },
+        per_currency: [],
+        orders: [],
+      },
+    });
+
+    const issueBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerBilling.statementIssue");
+    expect(issueBtn).toBeTruthy();
+    await issueBtn.trigger("click");
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith("/owner/commission-statement/issue/", {
+      year,
+      month: 6,
+    });
+    expect(wrapper.text()).toContain('ownerBilling.statementIssuedBadge({"rev":1})');
+    expect(wrapper.text()).not.toContain("ownerBilling.statementProvisional");
+  });
+
+  // ── (7) current month (D-04 + D-09): inline confirm, then confirm_current ─
+  it("asks for inline confirmation on the current month and sends confirm_current", async () => {
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    _routes = {
+      "commission-statement": {
+        data: {
+          issued: false,
+          year,
+          month,
+          branch_filter: { applied: true },
+          summary: { order_count: 0, total_revenue: "0.00", total_commission: "0.00", net_payout: "0.00", currency: "MAD" },
+          per_currency: [],
+          orders: [],
+        },
+      },
+    };
+
+    expect(() => {
+      wrapper = mountBilling();
+    }).not.toThrow();
+    await flushPromises();
+
+    const issueBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerBilling.statementIssue");
+    expect(issueBtn).toBeTruthy();
+    await issueBtn.trigger("click");
+    await flushPromises();
+
+    // No POST yet — the inline confirm strip is shown instead.
+    expect(api.post).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("ownerBilling.statementConfirmCurrent");
+
+    const anywayBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerBilling.statementIssueAnyway");
+    expect(anywayBtn).toBeTruthy();
+    await anywayBtn.trigger("click");
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith("/owner/commission-statement/issue/", {
+      year,
+      month,
+      confirm_current: true,
+    });
   });
 
   // ── (4) single branch: no choice, no filter, download stays account-level ──

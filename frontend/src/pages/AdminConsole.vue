@@ -2260,6 +2260,11 @@ const deliveryForm = ref({
   delivery_radius_km_raw: "",
   delivery_zone_description: "",
   delivery_commission_pct: 0,
+  // D-11: the form holds PERCENT (0-100) like delivery_commission_pct; the
+  // backend stores marketplace_commission_pct as a FRACTION (0-1) — the
+  // load/save sites convert (x100 / /100). Whole percents survive the
+  // backend's 0.01 quantize exactly; fractional percents are rounded by it.
+  marketplace_commission_pct: 0,
   platform_delivery_enabled: false,
 });
 
@@ -2277,6 +2282,9 @@ const openDeliveryModal = async (tenant) => {
     delivery_radius_km_raw: "",
     delivery_zone_description: "",
     delivery_commission_pct: 0,
+    // D-11: reset with the rest so the drawer input never binds undefined
+    // while the GET is in flight (the load assignment below overwrites it).
+    marketplace_commission_pct: 0,
     platform_delivery_enabled: false,
   };
   try {
@@ -2291,6 +2299,8 @@ const openDeliveryModal = async (tenant) => {
       delivery_radius_km_raw: d.delivery_radius_km != null ? String(d.delivery_radius_km) : "",
       delivery_zone_description: d.delivery_zone_description ?? "",
       delivery_commission_pct: Number(d.delivery_commission_pct ?? 0),
+      // GET returns the stored fraction ("0.10") — show it as percent.
+      marketplace_commission_pct: Math.round(Number(d.marketplace_commission_pct ?? 0) * 10000) / 100,
       platform_delivery_enabled: !!d.platform_delivery_enabled,
     };
   } catch {
@@ -2328,6 +2338,11 @@ const validateDeliveryForm = (f) => {
   if (Number.isNaN(commission) || commission < 0 || commission > 100) {
     return t("adminConsole.delivery.invalidValue", { field: t("adminConsole.delivery.commissionPct") });
   }
+  // D-11: marketplace take-rate, same 0-100 percent range as delivery commission.
+  const marketplaceRate = Number(f.marketplace_commission_pct);
+  if (Number.isNaN(marketplaceRate) || marketplaceRate < 0 || marketplaceRate > 100) {
+    return t("adminConsole.delivery.invalidValue", { field: t("adminConsole.delivery.marketplaceRate") });
+  }
   if (f.delivery_radius_km_raw !== "" && f.delivery_radius_km_raw !== null) {
     const radius = Number(f.delivery_radius_km_raw);
     if (Number.isNaN(radius) || radius < 0) {
@@ -2358,6 +2373,8 @@ const saveDeliveryPricing = async () => {
       : null,
     delivery_zone_description: f.delivery_zone_description,
     delivery_commission_pct: f.delivery_commission_pct,
+    // Form holds percent; the API takes the 0-1 fraction (D-11).
+    marketplace_commission_pct: f.marketplace_commission_pct / 100,
     platform_delivery_enabled: f.platform_delivery_enabled,
   };
   try {

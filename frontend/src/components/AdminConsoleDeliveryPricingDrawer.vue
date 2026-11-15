@@ -122,6 +122,18 @@
               />
               <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.commissionHint") }}</span>
             </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.marketplaceRate") }}</span>
+              <input
+                v-model.number="form.marketplace_commission_pct"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+              <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.marketplaceRateHint") }}</span>
+            </label>
             <label class="flex cursor-pointer items-start gap-3">
               <input
                 v-model="form.platform_delivery_enabled"

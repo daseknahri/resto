@@ -73,6 +73,7 @@ vi.mock("../../lib/adminApi", () => ({
 const RouterLinkStub = { name: "RouterLink", props: ["to"], template: "<a><slot /></a>" };
 
 import AdminConsole from "../AdminConsole.vue";
+import adminApi from "../../lib/adminApi";
 
 const mountConsole = () =>
   shallowMount(AdminConsole, {
@@ -178,5 +179,73 @@ describe("AdminConsole — mount smoke", () => {
     expect(text).toContain("Test Lead");
     // Tier-upgrade request rendered from its fetched payload (own-template card/table).
     expect(text).toContain("chez-test");
+  });
+
+  // ── (3) delivery modal (D-11): marketplace rate fraction ↔ percent ────────
+  // The backend stores marketplace_commission_pct as a FRACTION (0–1) while the
+  // form holds PERCENT like delivery_commission_pct: the GET "0.15" must load as
+  // 15 in the drawer form, and saving must PATCH 0.15 back (15 / 100).
+  // _match picks the FIRST fragment that matches, so the specific delivery URL
+  // is listed before the bare /admin-tenants/ list URL.
+  it("loads the marketplace rate as percent and saves it back as a fraction", async () => {
+    _routes = {
+      "/admin-tenants/7/delivery/": {
+        // Real GET envelope (sales/views.py): { tenant, delivery: {...} } —
+        // openDeliveryModal reads res.data.delivery, not res.data.
+        data: {
+          tenant: { id: 7, slug: "chez-test", name: "Chez Test" },
+          delivery: {
+            delivery_fee: "20.00",
+            delivery_base_fee: "5.00",
+            delivery_per_km: "1.00",
+            delivery_free_over: "0",
+            delivery_minimum_order: "0",
+            delivery_radius_km: null,
+            delivery_zone_description: "",
+            delivery_commission_pct: "10",
+            marketplace_commission_pct: "0.15",
+            platform_delivery_enabled: false,
+          },
+        },
+      },
+      "/admin-tenants/": {
+        data: [{ id: 7, name: "Chez Test", slug: "chez-test" }],
+      },
+    };
+
+    expect(() => {
+      wrapper = mountConsole();
+    }).not.toThrow();
+    await flushPromises();
+
+    // Switch to the tenants view (nav pill renders the mocked key verbatim).
+    const tenantsBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "adminConsole.tenantLifecycleControls");
+    expect(tenantsBtn).toBeTruthy();
+    await tenantsBtn.trigger("click");
+    await flushPromises();
+
+    const deliveryBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "adminConsole.delivery.button");
+    expect(deliveryBtn).toBeTruthy();
+    await deliveryBtn.trigger("click");
+    await flushPromises();
+
+    const drawer = wrapper.findComponent({ name: "AdminConsoleDeliveryPricingDrawer" });
+    expect(drawer.exists()).toBe(true);
+    expect(drawer.props("form").marketplace_commission_pct).toBe(15);
+    expect(drawer.props("form").delivery_commission_pct).toBe(10);
+
+    await drawer.vm.$emit("submit");
+    await flushPromises();
+
+    const patchCall = adminApi.patch.mock.calls.find(([url]) =>
+      url.includes("/admin-tenants/7/delivery/")
+    );
+    expect(patchCall).toBeTruthy();
+    expect(patchCall[1].marketplace_commission_pct).toBe(0.15);
+    expect(patchCall[1].delivery_commission_pct).toBe(10);
   });
 });

@@ -258,6 +258,35 @@
         </div>
       </div>
 
+      <!-- Marketplace commission (D-10) — the dashboard aggregate already
+           ships revenue_summary.marketplace / .statement on every load; render
+           them instead of throwing them away. 7-day window (days=7 fetch). -->
+      <div v-if="marketplaceStats" class="rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-stat-label">{{ t('ownerHome.marketplaceTitle') }}</p>
+          <span class="text-[11px] text-slate-500">{{ t('ownerHome.marketplacePeriod') }}</span>
+        </div>
+        <div class="grid grid-cols-4 gap-3">
+          <div>
+            <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceOrders') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ marketplaceStats.order_count }}</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceRevenue') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtMarketplaceMoney(marketplaceStats.revenue) }}</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceCommission') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtMarketplaceMoney(marketplaceStats.commission_total) }}</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceNet') }}</p>
+            <p class="text-base font-semibold tabular-nums text-slate-100">{{ fmtMarketplaceMoney(marketplaceNet) }}</p>
+          </div>
+        </div>
+        <p v-if="!marketplaceStats.order_count" class="text-xs text-slate-500">{{ t('ownerHome.marketplaceEmpty') }}</p>
+      </div>
+
       <!-- Daily revenue goal -->
       <div v-if="goalValue > 0 || editingGoal" class="rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 space-y-2">
         <div class="flex items-center justify-between gap-2">
@@ -886,6 +915,28 @@ const avgTicketLabel = computed(() => {
   try { return formatNumber(avg, { style: "currency", currency, maximumFractionDigits: 0 }); }
   catch { return `${currency} ${Math.round(avg)}`; }
 });
+
+// ── Marketplace commission (D-10) ───────────────────────────────────────────
+// The dashboard aggregate already ships revenue_summary.marketplace
+// (order_count / revenue / commission_total — marketplace-only, same billable
+// statuses as the owner statement) and revenue_summary.statement (gross /
+// tips / commission / net). Render the marketplace figures instead of
+// fetching anything new; the net is marketplace revenue minus commission.
+const marketplaceStats = computed(() => revenueSummary.value?.marketplace || null)
+const marketplaceNet = computed(() => {
+  const m = marketplaceStats.value
+  if (!m) return 0
+  return (Number(m.revenue) || 0) - (Number(m.commission_total) || 0)
+})
+const fmtMarketplaceMoney = (val) => {
+  const curr = revenueSummary.value?.currency || 'MAD'
+  const n = Number(val) || 0
+  try {
+    return formatNumber(n, { style: 'currency', currency: curr, maximumFractionDigits: 2 })
+  } catch {
+    return `${curr} ${n.toFixed(2)}`
+  }
+}
 
 const yesterdayStats = computed(() => {
   const yesterday = new Date();
