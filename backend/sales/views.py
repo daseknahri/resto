@@ -644,6 +644,15 @@ def _log_reservation_timeline_event(
     )
 
 
+# Kept as the tested digit-strip utility (backend/tests/test_sales_view_helpers.py
+# pins it: "+33 6-00 00 00 01" -> "33600000001", "0600000001" unchanged).
+# The reminder builder below no longer uses it (B-15: normalize_e164 instead —
+# a raw-digits "06…" link is dead on wa.me), but deleting it broke the full BE
+# gate at collection (ImportError), which the targeted S1-I run never saw.
+def _reservation_phone_digits(phone_value: str) -> str:
+    return "".join(ch for ch in str(phone_value or "") if ch.isdigit())
+
+
 def _build_whatsapp_reservation_reminder(*, lead, tenant):
     # B-15: normalize via accounts.phone.normalize_e164 (same rule as the wallet
     # transfers) instead of stripping to raw digits — a national "06…" lead used
