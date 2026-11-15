@@ -1010,7 +1010,11 @@ const arabicMessages = {
     "moreActions": "المزيد من الإجراءات",
     "generateConfirm": "إنشاء {count} طاولة بالبادئة \"{prefix}\"؟",
     "qrGenerateFailed": "فشل إنشاء رمز QR.",
-    "printSingle": "طباعة هذه الطاولة"
+    "printSingle": "طباعة هذه الطاولة",
+    "bulkCountMaxExceeded": "إنشاء الجداول دفعة واحدة محدود بـ {max} جدولًا في المرة الواحدة.",
+    "countMax": "(الحد الأقصى {max})",
+    "deleteLiveOrdersWarning": "قد يؤثر حذف هذه الطاولة على الطلبات الجارية الخاصة بها. تحقق من الطلبات المفتوحة على هذه الطاولة قبل الحذف.",
+    "printPopupBlocked": "تم حظر نافذة الطباعة. اسمح بالنوافذ المنبثقة لهذا الموقع ثم حاول مجددًا.",
   },
   "ownerLaunchSuccess": {
     "launch": "إطلاق القائمة",
@@ -1505,6 +1509,9 @@ const arabicMessages = {
     "reconciledPartially": "تم تحديث {updated} تذكيرات. ما زال {remaining} بحاجة إلى تأكيد — ستبقى في قائمة الانتظار.",
     "reminderPrepared": "تم تجهيز التذكير. أرسله في واتساب، ثم علّمه كمفتوح أو فاشل أدناه.",
     "reminderPreparedCopied": "تم تجهيز التذكير. تم حظر النافذة المنبثقة — تم نسخ الرابط، أرسله في واتساب، ثم علّمه كمفتوح أو فاشل أدناه.",
+    "dateRangeSwapped": "تم تبديل تاريخي البداية والنهاية ليكون النطاق صحيحًا.",
+    "loadMoreTimeline": "عرض المزيد من إدخالات السجل",
+    "timelineMaxReached": "يتم عرض أحدث 200 إدخال. الإدخالات الأقدم غير متوفرة.",
   },
   "customerLeadPage": {
     "openNow": "مفتوح الآن",

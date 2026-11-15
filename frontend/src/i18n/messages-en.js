@@ -1345,6 +1345,10 @@ ownerTables: {
   generateConfirm: "Generate {count} table(s) with prefix \"{prefix}\"?",
   qrGenerateFailed: "QR code generation failed.",
   printSingle: "Print this table",
+  bulkCountMaxExceeded: "Bulk generation is limited to {max} tables at a time.",
+  countMax: "(max {max})",
+  deleteLiveOrdersWarning: "Deleting this table may affect live orders placed for it. Check for open orders on this table before deleting.",
+  printPopupBlocked: "Print popup was blocked. Allow popups for this site and try again.",
 },
 staffChat: {
   title: "Staff chat",
@@ -4810,6 +4814,9 @@ ownerReservations: {
   reconciledPartially: "Updated {updated} reminders. {remaining} still need marking — they stay in the pending list.",
   reminderPrepared: "Reminder prepared. Send it in WhatsApp, then mark it opened or failed below.",
   reminderPreparedCopied: "Reminder prepared. Popup blocked — link copied, send it in WhatsApp, then mark it opened or failed below.",
+  dateRangeSwapped: "Start and end dates were swapped so the range is valid.",
+  loadMoreTimeline: "Load more timeline entries",
+  timelineMaxReached: "Showing the 200 most recent entries. Older entries are not available.",
 },
 reservationCalendar: {
   prevWeek: "Prev",

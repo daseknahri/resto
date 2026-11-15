@@ -504,6 +504,17 @@
               </li>
               <li v-if="!timelineFor(reservation.id).length" class="text-slate-500 py-1">{{ t("ownerReservations.noTimelineEntries") }}</li>
             </ul>
+            <div v-if="!isTimelineLoading(reservation.id) && timelineFor(reservation.id).length" class="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                v-if="hasMoreTimeline(reservation.id)"
+                class="ui-btn-outline px-3 py-1.5 text-xs"
+                :disabled="isTimelineLoading(reservation.id)"
+                @click="loadMoreTimeline(reservation.id)"
+              >
+                {{ t("ownerReservations.loadMoreTimeline") }}
+              </button>
+              <p v-else-if="isTimelineAtMax(reservation.id)" class="text-[11px] text-slate-500">{{ t("ownerReservations.timelineMaxReached") }}</p>
+            </div>
 
             <div class="space-y-1.5 pt-0.5 border-t border-slate-800/60">
               <div class="flex flex-wrap items-start gap-2 pt-2">
@@ -647,6 +658,13 @@ const selectedIds = ref([]);
 const timelineOpen = ref({});
 const timelineLoading = ref({});
 const timelineItems = ref({});
+// B-19: the timeline endpoint accepts `limit` only (default 50, max 200 —
+// sales/views.py OwnerReservationTimelineView) — no offset/page. Load-more
+// therefore raises the limit in steps of 80 up to the 200 cap; entries older
+// than the newest 200 stay unreachable until the endpoint gains offset.
+const TIMELINE_PAGE_SIZE = 80;
+const TIMELINE_MAX_LIMIT = 200;
+const timelineLimit = ref({});
 const timelineNote = ref({});
 const timelineNoteError = ref({});
 const timelineSubmitting = ref({});
@@ -1170,11 +1188,13 @@ const onSearchInput = () => {
 };
 
 const applyFilters = async () => {
-  // Silently swap inverted date range so the filter always makes sense
+  // Swap an inverted date range so the filter always makes sense, and say so
+  // (B-18: matches OwnerOrders' dateRangeSwapped toast).
   if (dateFrom.value && dateTo.value && dateTo.value < dateFrom.value) {
     const tmp = dateFrom.value;
     dateFrom.value = dateTo.value;
     dateTo.value = tmp;
+    toast.show(t("ownerReservations.dateRangeSwapped"), "info");
   }
   page.value = 1;
   await fetchReservations();
@@ -1207,11 +1227,16 @@ const goNextPage = async () => {
   await fetchReservations();
 };
 
-const fetchTimeline = async (reservationId) => {
+const fetchTimeline = async (reservationId, { more = false } = {}) => {
+  const currentLimit = timelineLimit.value[reservationId] || TIMELINE_PAGE_SIZE;
+  const limit = more
+    ? Math.min(currentLimit + TIMELINE_PAGE_SIZE, TIMELINE_MAX_LIMIT)
+    : currentLimit;
+  timelineLimit.value = { ...timelineLimit.value, [reservationId]: limit };
   timelineLoading.value = { ...timelineLoading.value, [reservationId]: true };
   try {
     const res = await api.get(`/owner/reservations/${reservationId}/timeline/`, {
-      params: { limit: 80 },
+      params: { limit },
     });
     timelineItems.value = {
       ...timelineItems.value,
@@ -1224,6 +1249,22 @@ const fetchTimeline = async (reservationId) => {
     delete clone[reservationId];
     timelineLoading.value = clone;
   }
+};
+
+const loadMoreTimeline = async (reservationId) => {
+  await fetchTimeline(reservationId, { more: true });
+};
+
+// More entries may exist when the server filled the whole requested limit and
+// the 200 cap has not been reached yet.
+const hasMoreTimeline = (reservationId) => {
+  const limit = timelineLimit.value[reservationId] || TIMELINE_PAGE_SIZE;
+  return limit < TIMELINE_MAX_LIMIT && timelineFor(reservationId).length >= limit;
+};
+
+const isTimelineAtMax = (reservationId) => {
+  const limit = timelineLimit.value[reservationId] || TIMELINE_PAGE_SIZE;
+  return limit >= TIMELINE_MAX_LIMIT && timelineFor(reservationId).length >= TIMELINE_MAX_LIMIT;
 };
 
 const toggleTimeline = async (reservationId) => {

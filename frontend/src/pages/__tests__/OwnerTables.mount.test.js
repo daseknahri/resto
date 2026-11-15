@@ -155,3 +155,126 @@ describe("OwnerTables — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerTables.disabledState");
   });
 });
+
+// ── Run 8 G4b-A (B-29 / B-30 / B-17-tables) ──────────────────────────────────
+// Appended 2026-11-15. Base above untouched: the new tests only ADD coverage.
+//
+// B-29: bulk-generate shows the 120 cap and rejects counts above it before any
+// request; a blocked print popup toasts instead of failing silently.
+// B-30: the delete confirm warns about live orders (the /tables/ list carries
+// no live-order data, so it warns rather than blocks).
+// B-17 (tables part): the delete confirm passes danger: true.
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
+import { useToastStore } from "../../stores/toast";
+
+describe("OwnerTables — G4b-A (B-29 bulk cap + print popup / B-30 delete warning / B-17 danger)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.restoreAllMocks();
+  });
+
+  const _buttonWith = (text) => wrapper.findAll("button").find((b) => b.text().includes(text));
+  const _buttonExact = (text) =>
+    wrapper.findAll("button").find((b) => b.text().trim() === text);
+
+  // Header "Create" opens the setup dialog; the Bulk tab switches the form.
+  const _openBulk = async () => {
+    await _buttonExact("ownerTables.create").trigger("click");
+    await flushPromises();
+    await _buttonExact("ownerTables.bulkGenerate").trigger("click");
+    await flushPromises();
+  };
+
+  // Bulk form number inputs, in DOM order: start, count, position_start.
+  const _countInput = () => wrapper.findAll('input[type="number"]')[1];
+
+  const _mountOneTable = async () => {
+    _routes = { "/tables/": { data: [makeTable()] } };
+    wrapper = mountTables();
+    await flushPromises();
+    await flushPromises(); // drain applyTables -> generateQrBatch (async qrcode import)
+  };
+
+  // ── B-29: bulk-generate cap ──────────────────────────────────────────────
+
+  it("bulk form shows the 120 cap and a count of 500 is rejected before any request (B-29)", async () => {
+    await _mountOneTable();
+    await _openBulk();
+
+    expect(wrapper.text()).toContain('ownerTables.countMax({"max":120})');
+
+    await _countInput().setValue(500);
+    await _buttonExact("ownerTables.generate").trigger("click");
+    await flushPromises();
+
+    expect(api.post).not.toHaveBeenCalledWith("/tables/bulk-generate/", expect.anything());
+    expect(wrapper.text()).toContain('ownerTables.bulkCountMaxExceeded({"max":120})');
+    expect(useToastStore().message).toContain("ownerTables.bulkCountMaxExceeded");
+  });
+
+  it("a count within the cap still generates after the confirm is approved (B-29)", async () => {
+    await _mountOneTable();
+    await _openBulk();
+
+    await _countInput().setValue(12);
+    await _buttonExact("ownerTables.generate").trigger("click");
+    await flushPromises();
+    // No POST before the owner approves the confirm dialog.
+    expect(api.post).not.toHaveBeenCalledWith("/tables/bulk-generate/", expect.anything());
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/tables/bulk-generate/",
+      expect.objectContaining({ count: 12 })
+    );
+  });
+
+  // ── B-29: blocked print popup ────────────────────────────────────────────
+
+  it("a blocked print popup toasts instead of failing silently (B-29)", async () => {
+    await _mountOneTable();
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+
+    await _buttonWith("ownerTables.printSingle").trigger("click");
+    await flushPromises();
+
+    expect(openSpy).toHaveBeenCalled();
+    expect(useToastStore().message).toContain("ownerTables.printPopupBlocked");
+  });
+
+  // ── B-30 + B-17: delete confirm ──────────────────────────────────────────
+
+  it("delete confirm warns about live orders, is danger-styled, and deletes only after approval (B-30, B-17)", async () => {
+    await _mountOneTable();
+
+    await _buttonWith("ownerTables.delete").trigger("click");
+    await flushPromises();
+
+    const opts = useConfirmModal().options.value;
+    expect(opts.title).toContain("ownerTables.deleteConfirm");
+    expect(opts.body).toContain("confirmModal.defaultBody");
+    expect(opts.body).toContain("ownerTables.deleteLiveOrdersWarning");
+    expect(opts.danger).toBe(true);
+    // No DELETE before the owner approves the confirm dialog.
+    expect(api.delete).not.toHaveBeenCalled();
+
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+    expect(api.delete).toHaveBeenCalledWith("/tables/1/");
+  });
+});

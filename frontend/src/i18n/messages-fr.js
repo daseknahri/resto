@@ -1343,6 +1343,10 @@ ownerTables: {
   generateConfirm: "Generer {count} table(s) avec le prefixe \"{prefix}\" ?",
   qrGenerateFailed: "Echec de la generation du QR code.",
   printSingle: "Imprimer cette table",
+  bulkCountMaxExceeded: "La generation en serie est limitee a {max} tables a la fois.",
+  countMax: "(max {max})",
+  deleteLiveOrdersWarning: "La suppression de cette table peut affecter les commandes en cours passees pour elle. Verifiez les commandes ouvertes sur cette table avant de supprimer.",
+  printPopupBlocked: "La fenetre d impression a ete bloquee. Autorisez les fenetres contextuelles pour ce site puis reessayez.",
 },
 staffChat: {
   title: "Messagerie equipe",
@@ -4760,6 +4764,9 @@ ownerReservations: {
   reconciledPartially: "{updated} rappels mis a jour. {remaining} attendent encore une confirmation - ils restent dans la liste en attente.",
   reminderPrepared: "Rappel prepare. Envoyez-le dans WhatsApp, puis marquez-le ouvert ou en echec ci-dessous.",
   reminderPreparedCopied: "Rappel prepare. Fenetre bloquee - lien copie, envoyez-le dans WhatsApp, puis marquez-le ouvert ou en echec ci-dessous.",
+  dateRangeSwapped: "Les dates de debut et de fin ont ete inversees pour que la periode soit valide.",
+  loadMoreTimeline: "Afficher plus d entrees de la chronologie",
+  timelineMaxReached: "Les 200 entrees les plus recentes sont affichees. Les entrees plus anciennes ne sont pas disponibles.",
 },
 reservationCalendar: {
   prevWeek: "Prec.",

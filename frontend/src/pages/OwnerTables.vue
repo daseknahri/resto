@@ -435,7 +435,7 @@
                     <input v-model.number="bulk.start" type="number" min="1" class="ui-input" />
                   </label>
                   <label class="space-y-1.5 text-sm font-medium text-slate-300">
-                    <span>{{ t("ownerTables.count") }}</span>
+                    <span>{{ t("ownerTables.count") }} <span class="font-normal text-slate-500">{{ t("ownerTables.countMax", { max: 120 }) }}</span></span>
                     <input v-model.number="bulk.count" type="number" min="1" max="120" class="ui-input" />
                   </label>
                   <label class="space-y-1.5 text-sm font-medium text-slate-300">
@@ -665,6 +665,14 @@ const generateTables = async () => {
     return;
   }
   const count = Number(bulk.count) || 1;
+  // B-29: the backend caps bulk generation at 120 (TableBulkGenerateInputSerializer
+  // max_value=120 in menu/views.py); reject larger counts here with the cap named
+  // instead of letting the request fail with a generic 400.
+  if (count > 120) {
+    error.value = t("ownerTables.bulkCountMaxExceeded", { max: 120 });
+    toast.show(error.value, "error");
+    return;
+  }
   const ok = await confirm({
     title: t("ownerTables.generateConfirm", { count, prefix: bulk.prefix.trim() }),
     confirmLabel: t("ownerTables.generate"),
@@ -720,8 +728,13 @@ const removeTable = async (table) => {
   if (deletingId.value === table.id) return;
   const ok = await confirm({
     title: t("ownerTables.deleteConfirm", { label: table.label }),
-    body: t("confirmModal.defaultBody"),
+    // B-30: the /tables/ list carries no live-order data (TableLinkSerializer
+    // has no active-order count, and this page never fetches orders), so the
+    // confirm warns rather than blocks — per-table live counts need a backend
+    // field first (see REPORT.md).
+    body: `${t("confirmModal.defaultBody")} ${t("ownerTables.deleteLiveOrdersWarning")}`,
     confirmLabel: t("ownerTables.delete"),
+    danger: true,
   });
   if (!ok) return;
   deletingId.value = table.id;
@@ -998,7 +1011,10 @@ const printSingleTable = async (table) => {
     "</body></html>",
   ].join("\n");
   const w = window.open("", "_blank", "width=400,height=600");
-  if (!w) return;
+  if (!w) {
+    toast.show(t("ownerTables.printPopupBlocked"), "error");
+    return;
+  }
   w.document.open();
   w.document.write(html);
   w.document.close();

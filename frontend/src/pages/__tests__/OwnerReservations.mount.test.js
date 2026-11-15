@@ -471,3 +471,152 @@ describe("OwnerReservations — S1-I B-15 wa.me links", () => {
     expect(html).not.toContain("wa.me/612345678");
   });
 });
+
+// ── Run 8 G4b-A (B-18 / B-19) — inverted date range toast + timeline load-more ──
+// Appended 2026-11-15. Base above untouched: the new tests only ADD coverage.
+//
+// B-18: applying an inverted date range still swaps the dates (as before) but
+// now toasts ownerReservations.dateRangeSwapped, matching OwnerOrders.
+// B-19: the timeline endpoint takes `limit` only (max 200, no offset —
+// sales/views.py OwnerReservationTimelineView), so load-more raises the limit
+// 80 -> 160 -> 200; at the 200 cap the max note shows instead of the button.
+import { useToastStore } from "../../stores/toast";
+
+describe("OwnerReservations — G4b-A (B-18 date-range toast / B-19 timeline load-more)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // Restore the factory default GET implementation (a later test overrides it).
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  const _buttonWith = (text) => wrapper.findAll("button").find((b) => b.text().includes(text));
+  const _timelineCalls = () => api.get.mock.calls.filter((c) => c[0].includes("/timeline/"));
+  const _timelineEntries = (n) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: i + 1,
+      action: "NOTE",
+      note: `Note ${i + 1}`,
+      created_at: "2026-09-05T12:00:00Z",
+    }));
+
+  // ── B-18 ─────────────────────────────────────────────────────────────────
+
+  it("inverted date range is swapped AND toasted (B-18)", async () => {
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    wrapper = mountPage();
+    await flushPromises();
+
+    const dates = wrapper.findAll('input[type="date"]');
+    expect(dates).toHaveLength(2);
+    await dates[0].setValue("2026-09-10");
+    await dates[1].setValue("2026-09-01");
+    await _buttonWith("common.apply").trigger("click");
+    await flushPromises();
+
+    // The swap is announced instead of silent.
+    expect(useToastStore().message).toContain("ownerReservations.dateRangeSwapped");
+    // And the refetch that follows carries the corrected range.
+    const listCalls = api.get.mock.calls.filter(
+      (c) => c[0].includes("/owner/reservations/") && !c[0].includes("timeline") && !c[0].includes("waitlist")
+    );
+    const lastParams = listCalls[listCalls.length - 1][1]?.params || {};
+    expect(lastParams.from).toBe("2026-09-01");
+    expect(lastParams.to).toBe("2026-09-10");
+  });
+
+  it("a valid date range applies without the swap toast (B-18)", async () => {
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    wrapper = mountPage();
+    await flushPromises();
+
+    const dates = wrapper.findAll('input[type="date"]');
+    await dates[0].setValue("2026-09-01");
+    await dates[1].setValue("2026-09-10");
+    await _buttonWith("common.apply").trigger("click");
+    await flushPromises();
+
+    expect(useToastStore().message || "").not.toContain("ownerReservations.dateRangeSwapped");
+  });
+
+  // ── B-19 ─────────────────────────────────────────────────────────────────
+
+  const _openTimeline = async () => {
+    await _buttonWith("ownerReservations.timeline").trigger("click");
+    await flushPromises();
+  };
+
+  it("timeline loads 80 first, shows Load more, and load-more refetches with limit 160 (B-19)", async () => {
+    _routes = {
+      "/owner/reservations/1/timeline/": { data: _timelineEntries(80) },
+      "/owner/reservations/": _loadedPayload([reservation()]),
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    await _openTimeline();
+    expect(_timelineCalls()).toHaveLength(1);
+    expect(_timelineCalls()[0][1]?.params?.limit).toBe(80);
+    // The server filled the whole requested limit, so more may exist.
+    expect(wrapper.text()).toContain("ownerReservations.loadMoreTimeline");
+
+    await _buttonWith("ownerReservations.loadMoreTimeline").trigger("click");
+    await flushPromises();
+    expect(_timelineCalls()).toHaveLength(2);
+    expect(_timelineCalls()[1][1]?.params?.limit).toBe(160);
+    // The mock still returns 80 rows, fewer than the 160 requested: no more.
+    expect(wrapper.text()).not.toContain("ownerReservations.loadMoreTimeline");
+  });
+
+  it("timeline at the 200 cap shows the max note instead of Load more (B-19)", async () => {
+    const all = _timelineEntries(250);
+    _routes = { "/owner/reservations/": _loadedPayload([reservation()]) };
+    api.get.mockImplementation((url, cfg) => {
+      if (url.includes("/timeline/")) {
+        return Promise.resolve({ data: all.slice(0, cfg?.params?.limit ?? 80) });
+      }
+      return Promise.resolve(_match(url));
+    });
+    wrapper = mountPage();
+    await flushPromises();
+
+    await _openTimeline();
+    expect(_timelineCalls()[0][1]?.params?.limit).toBe(80);
+    expect(wrapper.text()).toContain("ownerReservations.loadMoreTimeline");
+
+    await _buttonWith("ownerReservations.loadMoreTimeline").trigger("click");
+    await flushPromises();
+    expect(_timelineCalls()[1][1]?.params?.limit).toBe(160);
+
+    await _buttonWith("ownerReservations.loadMoreTimeline").trigger("click");
+    await flushPromises();
+    expect(_timelineCalls()[2][1]?.params?.limit).toBe(200);
+    // Cap reached with a full page: no Load more, and the limit is named.
+    expect(wrapper.text()).not.toContain("ownerReservations.loadMoreTimeline");
+    expect(wrapper.text()).toContain("ownerReservations.timelineMaxReached");
+  });
+
+  it("timeline shorter than the limit shows neither Load more nor the max note (B-19)", async () => {
+    _routes = {
+      "/owner/reservations/1/timeline/": { data: _timelineEntries(3) },
+      "/owner/reservations/": _loadedPayload([reservation()]),
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    await _openTimeline();
+    expect(wrapper.text()).not.toContain("ownerReservations.loadMoreTimeline");
+    expect(wrapper.text()).not.toContain("ownerReservations.timelineMaxReached");
+  });
+});
