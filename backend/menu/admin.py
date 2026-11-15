@@ -1,4 +1,4 @@
-﻿from django.contrib import admin
+from django.contrib import admin
 from django.contrib import messages
 
 from .models import AnalyticsEvent, Category, ClosureDate, CurrencyRate, Dish, DishOption, OptionGroup, SuperCategory, TableLink, WaitlistEntry
@@ -23,6 +23,8 @@ class CategoryAdmin(admin.ModelAdmin):
     list_filter = ("super_category", "is_published", "is_temporarily_disabled")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("super_category", "position", "name")
+    # A-44: finding a category by name required paging.
+    search_fields = ("name", "slug")
 
 
 @admin.register(Dish)
@@ -31,6 +33,8 @@ class DishAdmin(admin.ModelAdmin):
     list_filter = ("category", "is_published")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("category", "position")
+    # A-44: finding a dish by name required paging.
+    search_fields = ("name", "slug")
 
 
 class DishOptionInline(admin.TabularInline):
@@ -69,6 +73,11 @@ class AnalyticsEventAdmin(admin.ModelAdmin):
         "created_at",
     )
 
+    # A-48: analytics rows are evidence — all fields readonly was not enough,
+    # deletion from the panel would still erase them.
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(TableLink)
 class TableLinkAdmin(admin.ModelAdmin):
@@ -97,7 +106,9 @@ class WaitlistEntryAdmin(admin.ModelAdmin):
 @admin.register(CurrencyRate)
 class CurrencyRateAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "symbol", "mad_per_unit", "is_active", "updated_at")
-    list_editable = ("mad_per_unit", "is_active")
+    # A-45: the FX rate was inline-editable from the changelist with no audit
+    # trail. Rates now change only via the edit form (which still leaves no
+    # audit row, but at least requires opening the record deliberately).
     readonly_fields = ("updated_at",)
     ordering = ("code",)
     actions = ["fetch_latest_rates"]
