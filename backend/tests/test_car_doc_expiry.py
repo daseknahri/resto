@@ -343,6 +343,81 @@ class TestAdminCarApprovalViewExpiryDates(SimpleTestCase):
         self.assertNotIn("driver_licence_expiry", saved_fields)
 
 
+    # Run 8 G3a A2-10: approval must never bless expired docs — the effective
+    # expiry (supplied, else stored) is rejected with 400 when it is past.
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("accounts.throttles.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.Customer")
+    def test_past_supplied_expiry_returns_400(self, mock_cust_cls, mock_throttle, mock_perm):
+        driver = MagicMock(
+            id=11, is_driver=True, driver_car_approved=False,
+            driver_licence_expiry=None, driver_insurance_expiry=None,
+            driver_licence_url="https://cdn/lic.jpg",
+            driver_insurance_url="https://cdn/ins.jpg",
+            name="", phone="",
+        )
+        mock_cust_cls.objects.get.return_value = driver
+
+        req = self.factory.post(
+            "/api/admin/drivers/11/car-approve/",
+            {"licence_expiry": "2020-01-01", "insurance_expiry": "2027-12-31"},
+            format="json",
+        )
+        resp = self._view()(req, driver_id=11)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("licence_expiry", resp.data["detail"])
+        driver.save.assert_not_called()
+
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("accounts.throttles.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.Customer")
+    def test_stored_past_expiry_blocks_approval_without_new_date(
+        self, mock_cust_cls, mock_throttle, mock_perm
+    ):
+        driver = MagicMock(
+            id=11, is_driver=True, driver_car_approved=False,
+            driver_licence_expiry=datetime.date(2020, 1, 1),
+            driver_insurance_expiry=datetime.date(2027, 12, 31),
+            driver_licence_url="https://cdn/lic.jpg",
+            driver_insurance_url="https://cdn/ins.jpg",
+            name="", phone="",
+        )
+        mock_cust_cls.objects.get.return_value = driver
+
+        req = self.factory.post("/api/admin/drivers/11/car-approve/", {}, format="json")
+        resp = self._view()(req, driver_id=11)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("licence_expiry", resp.data["detail"])
+        driver.save.assert_not_called()
+
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    @patch("accounts.throttles.AdminPIIThrottle.allow_request", return_value=True)
+    @patch("sales.audit.log_admin_action")
+    @patch("accounts.ride_views.Customer")
+    def test_new_future_date_overrides_stored_past_expiry(
+        self, mock_cust_cls, mock_log, mock_throttle, mock_perm
+    ):
+        driver = MagicMock(
+            id=11, is_driver=True, driver_car_approved=False,
+            driver_licence_expiry=datetime.date(2020, 1, 1),
+            driver_insurance_expiry=datetime.date(2027, 12, 31),
+            driver_licence_url="https://cdn/lic.jpg",
+            driver_insurance_url="https://cdn/ins.jpg",
+            name="", phone="",
+        )
+        mock_cust_cls.objects.get.return_value = driver
+
+        req = self.factory.post(
+            "/api/admin/drivers/11/car-approve/",
+            {"licence_expiry": "2027-06-01"},
+            format="json",
+        )
+        resp = self._view()(req, driver_id=11)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(driver.driver_licence_expiry, datetime.date(2027, 6, 1))
+        self.assertTrue(driver.driver_car_approved)
+
+
 # ── DriverDocUploadView clears expiry on re-upload ───────────────────────────
 
 class TestDriverDocUploadClearsExpiry(SimpleTestCase):

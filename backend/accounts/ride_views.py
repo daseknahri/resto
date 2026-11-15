@@ -1714,8 +1714,12 @@ class AdminCarApprovalView(APIView):
         update_fields = ["driver_car_approved", "updated_at"]
 
         # Accept optional expiry dates (ISO YYYY-MM-DD) when approving.
+        # Run 8 G3a A2-10: an approval must never bless expired docs — the
+        # EFFECTIVE expiry (the date just supplied, else the stored one) is
+        # rejected with 400 when it is in the past.
         if approve:
             import datetime
+            today = datetime.date.today()
             for field, key in (
                 ("driver_licence_expiry", "licence_expiry"),
                 ("driver_insurance_expiry", "insurance_expiry"),
@@ -1723,11 +1727,24 @@ class AdminCarApprovalView(APIView):
                 raw = (request.data.get(key) or "").strip()
                 if raw:
                     try:
-                        setattr(driver, field, datetime.date.fromisoformat(raw))
-                        update_fields.append(field)
+                        parsed = datetime.date.fromisoformat(raw)
                     except ValueError:
                         return Response(
                             {"detail": f"Invalid date for {key}: {raw!r}. Use YYYY-MM-DD."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    if parsed < today:
+                        return Response(
+                            {"detail": f"{key} is in the past — expired documents cannot be approved."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    setattr(driver, field, parsed)
+                    update_fields.append(field)
+                else:
+                    stored = getattr(driver, field)
+                    if stored is not None and stored < today:
+                        return Response(
+                            {"detail": f"The stored {key} has expired — upload a renewed document first."},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
 

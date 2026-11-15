@@ -67,6 +67,14 @@ def driver_earnings_summary(driver_id) -> dict:
 
     earned = _money(earned)
     paid = _money(paid)
+    # Run 8 G3a A2-09: the cash-out total explains why earned − paid can exceed
+    # the wallet balance — self-service cash-outs write no DriverPayout row.
+    # (CASHOUT rows store the positive magnitude; the ledger renders the sign.)
+    cashout_total = (
+        WalletTransaction.objects
+        .filter(customer_id=driver_id, type=WalletTransaction.Type.CASHOUT)
+        .aggregate(s=Sum("amount"))["s"]
+    ) or Decimal("0")
     # wallet_balance is the driver's REAL extractable amount: delivery earnings are credited
     # to the wallet on DELIVERED and leave it via cash-out (or a direct settlement — see
     # record_driver_payout). It — not `earned - paid`, which ignores cash-outs — is the true
@@ -90,6 +98,13 @@ def driver_earnings_summary(driver_id) -> dict:
         # ledger guard) is deliberately separate and unchanged.
         "owed": _money(wallet_balance),
         "wallet_balance": _money(wallet_balance),
+        # Run 8 G3a A2-09: ledger_owed is the delivery-ledger cap (earned − paid)
+        # that record_driver_payout enforces — the figure the admin payout form
+        # must prefill/cap on. cashout_total is what the driver already took out
+        # via self-service cash-outs (invisible to `paid`), so the tiles reconcile:
+        # earned − paid − cashout_total ≈ wallet_balance (modulo ride/tip credits).
+        "ledger_owed": _owed(driver_id),
+        "cashout_total": _money(cashout_total),
         "ride_earned": _money(ride_earned_raw),
         "rides_completed": rides_completed,
         "earned_today": _money(earned_today_raw),

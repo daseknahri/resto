@@ -82,6 +82,7 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import AdminDeliveryJobs from "../AdminDeliveryJobs.vue";
+import api from "../../lib/api";
 
 const mountPage = () => shallowMount(AdminDeliveryJobs);
 
@@ -204,5 +205,106 @@ describe("AdminDeliveryJobs — mount smoke", () => {
     // The at_restaurant + pharmacy job → statusLabel delegates to the real
     // pickupLabelKey helper → deliveryVocab.atPickupPharmacy, proving that branch ran.
     expect(text).toContain("deliveryVocab.atPickupPharmacy");
+  });
+});
+
+/**
+ * MERGE NOTE (Run 8 G3a): append this describe block to
+ * frontend/src/pages/__tests__/AdminDeliveryJobs.mount.test.js (after pulling it),
+ * adapting the _routes / mount helper names to that file's existing ones.
+ * Assumes the file's existing URL-routed api mock + mocked useI18n (keys render
+ * as `ns.key` / `ns.key({json})`, as in AdminRides.mount.test.js).
+ *
+ * Covers:
+ *   A2-06 — background refresh keeps rows (no skeleton flash); a failed
+ *           background refresh keeps rows and shows the retry banner.
+ *   A2-07 — envelope total + cap note + pagination sends page/page_size.
+ */
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+const jobRow = (id, order_number) => ({
+  id,
+  order_number,
+  tenant_id: 7,
+  tenant_name: "Chez Test",
+  driver: null,
+  status: "searching",
+  driver_payout: "25.00",
+  created_at: "2026-11-01T10:00:00Z",
+  business_type: "restaurant",
+});
+
+describe("AdminDeliveryJobs — refresh + pagination (A2-06/A2-07)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountWith = async (jobsPayload) => {
+    _routes = { "/admin/delivery-jobs/": { data: jobsPayload } };
+    wrapper = mountPage();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("shows the server total and the cap note; Next sends page 2 (A2-07)", async () => {
+    await mountWith({
+      results: [jobRow(1, "A1"), jobRow(2, "A2")],
+      total: 250,
+      page: 1,
+      page_size: 100,
+    });
+    expect(wrapper.text()).toContain('adminDeliveryJobs.totalLabel({"count":250})');
+    expect(wrapper.text()).toContain('adminDeliveryJobs.showingLatest({"count":2,"total":250})');
+    expect(wrapper.text()).toContain('adminDeliveryJobs.pageOf({"page":1,"pages":3})');
+    await findButton(wrapper, "adminDeliveryJobs.nextPage").trigger("click");
+    await flushPromises();
+    expect(api.get).toHaveBeenCalledWith(
+      "/admin/delivery-jobs/",
+      expect.objectContaining({ params: expect.objectContaining({ page: 2, page_size: 100 }) }),
+    );
+  });
+
+  it("background refresh keeps the loaded rows visible (A2-06)", async () => {
+    await mountWith({
+      results: [jobRow(1, "A1")],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    });
+    expect(wrapper.text()).toContain("#A1");
+    const pending = new Promise(() => {});
+    api.get.mockReturnValueOnce(pending);
+    await findButton(wrapper, "adminDeliveryJobs.refresh").trigger("click");
+    await flushPromises();
+    // Rows stay rendered while the background refresh is in flight — no skeletons.
+    expect(wrapper.text()).toContain("#A1");
+    expect(wrapper.find(".ui-skeleton").exists()).toBe(false);
+  });
+
+  it("failed background refresh keeps rows and shows the retry banner (A2-06)", async () => {
+    await mountWith({
+      results: [jobRow(1, "A1")],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    });
+    api.get.mockRejectedValueOnce(new Error("poll down"));
+    await findButton(wrapper, "adminDeliveryJobs.refresh").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("#A1");
+    expect(wrapper.text()).toContain("adminDeliveryJobs.refreshFailed");
   });
 });

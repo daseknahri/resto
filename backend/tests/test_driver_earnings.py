@@ -64,6 +64,8 @@ class AdminDriverEarningsPIIAuditThrottleTests(SimpleTestCase):
         return {
             "earned": Decimal("100"), "paid": Decimal("40"),
             "owed": Decimal("60"), "wallet_balance": Decimal("60"),
+            # Run 8 G3a A2-09: the delivery-ledger cap + cash-out total.
+            "ledger_owed": Decimal("60"), "cashout_total": Decimal("0"),
         }
 
     def _get(self):
@@ -93,6 +95,21 @@ class AdminDriverEarningsPIIAuditThrottleTests(SimpleTestCase):
              patch("accounts.driver_service.driver_earnings_summary", return_value=self._summary()):
             mock_cust.objects.filter.return_value.exists.return_value = True
             return self.view(req, driver_id=7)
+
+    def test_get_includes_ledger_owed_and_cashout_total(self):
+        # Run 8 G3a A2-09: the payout form caps on the delivery-ledger cap, so the
+        # GET must expose ledger_owed + cashout_total (not just wallet_balance).
+        resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["ledger_owed"], "60")
+        self.assertEqual(resp.data["cashout_total"], "0")
+        self.assertEqual(resp.data["owed"], "60")
+
+    def test_post_includes_ledger_owed_and_cashout_total(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["ledger_owed"], "60")
+        self.assertEqual(resp.data["cashout_total"], "0")
 
     def test_get_writes_pii_viewed_audit_without_pii(self):
         resp = self._get()

@@ -80,8 +80,20 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import AdminCustomers from "../AdminCustomers.vue";
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
 
-const mountPage = () => shallowMount(AdminCustomers);
+const mountPage = () =>
+  shallowMount(AdminCustomers, {
+    global: {
+      stubs: {
+        // The detail slide-over is a <Teleport>/<Transition> to body; render it
+        // inline so wrapper.text()/find() can see it (mirrors AdminDrivers).
+        Transition: { template: "<slot />" },
+        Teleport: { template: "<slot />" },
+      },
+    },
+  });
 
 // A realistic customer row with the fields the page's own list template reads:
 // id, name, phone/email, phone_verified, wallet_balance (STRING, as the API ships it),
@@ -185,5 +197,131 @@ describe("AdminCustomers — mount smoke", () => {
     // Customer rows rendered from the fetched payload (own-template v-for, not a stubbed child).
     expect(text).toContain("Aicha Benali");
     expect(text).toContain("Youssef Alami");
+  });
+});
+
+/**
+ * MERGE NOTE (Run 8 G3a): append this describe block to
+ * frontend/src/pages/__tests__/AdminCustomers.mount.test.js (after pulling it),
+ * and add the api + useConfirmModal imports if the file lacks them:
+ *   import api from "../../lib/api";
+ *   import { useConfirmModal } from "../../composables/useConfirmModal";
+ * The block assumes the file's existing _routes / mountCustomers / beforeEach
+ * (localStorage.clear + real pinia + vi.clearAllMocks). It drives the detail
+ * slide-over through wrapper.vm.openDetail (the row-click path is covered by the
+ * file's existing smoke tests).
+ *
+ * Covers:
+ *   A2-01 — Remove driver confirms first; PATCH is skipped on cancel.
+ *   A2-03 — ledger shows "latest 50 of N" + per-row balance_after.
+ *   A2-04 — orders show "latest 50 of N" from the backend count.
+ *   A2-05 — cashout renders as outflow (red, −) with a real label; earning has one.
+ */
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+const detailPayload = (overrides = {}) => ({
+  id: 5,
+  name: "Sara",
+  phone: "0611223344",
+  phone_verified: true,
+  email: "",
+  email_verified: false,
+  has_google: false,
+  wallet_balance: "120.00",
+  loyalty_points: 10,
+  is_driver: false,
+  is_driver_online: false,
+  created_at: "2026-01-01T10:00:00Z",
+  trust: { avg_score: null, count: 0 },
+  delivery_jobs: 0,
+  transactions_total: 2,
+  transactions: [],
+  ...overrides,
+});
+
+describe("AdminCustomers — driver toggle + ledger/orders caps + tx labels (A2-01/A2-03/A2-04/A2-05)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openDetailFor = async (detail, ordersPayload = { results: [], count: 0 }) => {
+    _routes = {
+      // Orders first: _match is substring-first-match, and the detail key
+      // "/admin/customers/5/" would shadow "/admin/customers/5/orders/".
+      "/admin/customers/5/orders/": { data: ordersPayload },
+      "/admin/customers/5/": { data: detail },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.vm.openDetail({ id: 5, name: "Sara" });
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("ledger shows the cap note and per-row balance_after (A2-03)", async () => {
+    await openDetailFor(detailPayload({
+      transactions_total: 73,
+      transactions: [
+        { id: 1, type: "topup", amount: "50.00", balance_after: "120.00", tenant_id: null, tenant_name: "", reference: "TOP-1", note: "", created_at: "2026-02-01T10:00:00Z" },
+        { id: 2, type: "payment", amount: "20.00", balance_after: "70.00", tenant_id: null, tenant_name: "", reference: "ORD-1", note: "", created_at: "2026-02-02T10:00:00Z" },
+      ],
+    }));
+    expect(wrapper.text()).toContain('adminCustomers.ledgerCapped({"shown":2,"total":73})');
+    expect(wrapper.text()).toContain("120.00");
+  });
+
+  it("orders show the cap note from the backend count (A2-04)", async () => {
+    await openDetailFor(detailPayload(), {
+      results: [
+        { order_number: "A1", restaurant: "Chez Test", status: "completed", fulfillment_type: "", total: "45.00", currency: "MAD", created_at: "2026-02-01T10:00:00Z" },
+        { order_number: "A2", restaurant: "Chez Test", status: "completed", fulfillment_type: "", total: "30.00", currency: "MAD", created_at: "2026-02-02T10:00:00Z" },
+      ],
+      count: 120,
+      scanned_restaurants: 1,
+    });
+    expect(wrapper.text()).toContain('adminCustomers.ordersCapped({"shown":2,"total":120})');
+  });
+
+  it("cashout renders as outflow with a real label; earning has a real label (A2-05)", async () => {
+    await openDetailFor(detailPayload({
+      transactions: [
+        { id: 1, type: "cashout", amount: "100.00", balance_after: "20.00", tenant_id: null, tenant_name: "", reference: "CO-1", note: "", created_at: "2026-02-01T10:00:00Z" },
+        { id: 2, type: "earning", amount: "45.00", balance_after: "120.00", tenant_id: null, tenant_name: "", reference: "JOB-1", note: "", created_at: "2026-02-02T10:00:00Z" },
+      ],
+    }));
+    const text = wrapper.text();
+    expect(text).toContain("customerAccount.walletTxCashout");
+    expect(text).toContain("customerAccount.walletTxEarning");
+    expect(text).not.toContain("customerAccount.walletTxFallback");
+    // The cashout row is an outflow: red amount with a minus sign.
+    expect(text).toContain("−");
+  });
+
+  it("Remove driver confirms first; cancelling skips the PATCH (A2-01)", async () => {
+    await openDetailFor(detailPayload({ is_driver: true, delivery_jobs: 3 }));
+    await findButton(wrapper, "adminCustomers.removeDriver").trigger("click");
+    const { _settle } = useConfirmModal();
+    _settle(false);
+    await flushPromises();
+    expect(api.patch).not.toHaveBeenCalled();
+
+    api.patch.mockResolvedValue({ data: { id: 5, is_driver: false, is_driver_online: false, reopened_deliveries: 2 } });
+    await findButton(wrapper, "adminCustomers.removeDriver").trigger("click");
+    _settle(true);
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledWith("/admin/customers/5/", { is_driver: false });
   });
 });

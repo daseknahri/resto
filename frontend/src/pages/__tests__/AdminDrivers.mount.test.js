@@ -75,6 +75,7 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import AdminDrivers from "../AdminDrivers.vue";
+import api from "../../lib/api";
 
 const mountDrivers = () =>
   shallowMount(AdminDrivers, {
@@ -202,5 +203,238 @@ describe("AdminDrivers — mount smoke", () => {
     // Pending driver → the !approved badge (pendingCount label), proving the mixed-state
     // sort/branch rendered too.
     expect(text).toContain("adminDrivers.pendingCount");
+  });
+});
+
+/**
+ * MERGE NOTE (Run 8 G3a): append this describe block to
+ * frontend/src/pages/__tests__/AdminDrivers.mount.test.js (after pulling it),
+ * adapting the _routes / mount helper names to that file's existing ones.
+ * Assumes the file's existing URL-routed api mock + mocked useI18n (keys render
+ * as `ns.key` / `ns.key({json})`, as in AdminRides.mount.test.js).
+ *
+ * Covers:
+ *   A2-08 — stats bar uses the server stats (full set, not the capped rows)
+ *           and the "showing first 200 of N" note appears when total > 200.
+ */
+
+const driverRow = (id, overrides = {}) => ({
+  id,
+  name: `Driver ${id}`,
+  phone: "0612345678",
+  email: "",
+  approved: true,
+  vehicle: "Scooter",
+  driver_vehicle_type: "scooter",
+  driver_licence_url: "",
+  driver_insurance_url: "",
+  driver_car_approved: false,
+  driver_licence_expiry: null,
+  driver_insurance_expiry: null,
+  is_online: false,
+  driver_lat: null,
+  driver_lng: null,
+  position_updated_at: null,
+  total_jobs: 10,
+  completed_jobs: 8,
+  avg_rating: 4.5,
+  earned: "200.00",
+  paid: "100.00",
+  owed: "100.00",
+  driver_rejected_at: null,
+  driver_rejection_reason: "",
+  created_at: "2026-01-01T00:00:00Z",
+  ...overrides,
+});
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+describe("AdminDrivers — server stats + cap note (A2-08)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  it("stats bar uses server stats and the cap note shows when total > 200", async () => {
+    _routes = {
+      "/admin/drivers/": {
+        data: {
+          results: [driverRow(1), driverRow(2, { is_online: true, approved: false, completed_jobs: 5 })],
+          total: 250,
+          limit: 200,
+          stats: { total: 250, online: 90, pending: 12, total_deliveries: 1234 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    const text = wrapper.text();
+    // Server stats (full set), not the 2 loaded rows: 250 drivers, 90 online,
+    // 12 pending, 1234 deliveries.
+    expect(text).toContain("250");
+    expect(text).toContain("90");
+    expect(text).toContain("12");
+    expect(text).toContain("1234");
+    expect(text).toContain('adminDrivers.showingFirst({"shown":2,"total":250})');
+  });
+
+  it("no cap note when the list fits under 200", async () => {
+    _routes = {
+      "/admin/drivers/": {
+        data: {
+          results: [driverRow(1)],
+          total: 1,
+          limit: 200,
+          stats: { total: 1, online: 0, pending: 0, total_deliveries: 8 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("adminDrivers.showingFirst");
+  });
+});
+
+describe("AdminDrivers — payout cap on the delivery ledger (A2-09)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openDriverWithEarnings = async (earnings) => {
+    _routes = {
+      // Earnings first: _match is substring-first-match, and the list key
+      // "/admin/drivers/" would shadow "/admin/drivers/1/earnings/".
+      "/admin/drivers/1/earnings/": { data: earnings },
+      "/admin/drivers/": {
+        data: {
+          results: [driverRow(1)],
+          total: 1,
+          limit: 200,
+          stats: { total: 1, online: 0, pending: 0, total_deliveries: 8 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    await wrapper.vm.openDriver(driverRow(1));
+    await flushPromises();
+    return wrapper;
+  };
+
+  const earningsPayload = (overrides = {}) => ({
+    driver_id: 1,
+    name: "Driver 1",
+    phone: "0612345678",
+    earned: "100.00",
+    paid: "40.00",
+    owed: "100.00",
+    wallet_balance: "100.00",
+    ledger_owed: "60.00",
+    cashout_total: "40.00",
+    deliveries: [],
+    payouts: [],
+    ...overrides,
+  });
+
+  it("prefills the payout amount on min(ledger_owed, wallet_balance) and shows the cap note", async () => {
+    await openDriverWithEarnings(earningsPayload());
+    const input = wrapper.find('input[type="number"]');
+    expect(input.element.value).toBe("60.00");
+    expect(input.attributes("max")).toBe("60");
+    expect(wrapper.text()).toContain("adminDrivers.payoutCapNote");
+  });
+
+  it("hides the payout form when the ledger cap is 0 even if the wallet holds cash", async () => {
+    await openDriverWithEarnings(earningsPayload({ ledger_owed: "0.00", cashout_total: "60.00" }));
+    expect(wrapper.text()).not.toContain("adminDrivers.recordPayout");
+  });
+});
+
+describe("AdminDrivers — car-doc expiries (A2-10)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const carDriver = (overrides = {}) => driverRow(3, {
+    driver_vehicle_type: "car",
+    driver_licence_url: "https://cdn/lic.jpg",
+    driver_insurance_url: "https://cdn/ins.jpg",
+    driver_licence_expiry: "2027-06-01",
+    driver_insurance_expiry: "2027-12-31",
+    ...overrides,
+  });
+
+  const openCarDriver = async (row) => {
+    _routes = {
+      // Earnings first: _match is substring-first-match (see above).
+      "/admin/drivers/3/earnings/": {
+        data: { driver_id: 3, name: "Driver 3", phone: "", earned: "0", paid: "0", owed: "0", wallet_balance: "0", ledger_owed: "0", cashout_total: "0", deliveries: [], payouts: [] },
+      },
+      "/admin/drivers/": {
+        data: {
+          results: [row],
+          total: 1,
+          limit: 200,
+          stats: { total: 1, online: 0, pending: 0, total_deliveries: 0 },
+        },
+      },
+    };
+    wrapper = mountDrivers();
+    await flushPromises();
+    await wrapper.vm.openDriver(row);
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("flags an expired licence and blocks the approve click (no POST)", async () => {
+    await openCarDriver(carDriver({ driver_licence_expiry: "2020-01-01" }));
+    expect(wrapper.text()).toContain("adminConsole.expiryExpired");
+    await findButton(wrapper, "adminConsole.carApprove").trigger("click");
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("approve sends the entered expiry dates", async () => {
+    await openCarDriver(carDriver());
+    api.post.mockResolvedValue({ data: { driver_car_approved: true, driver_licence_expiry: "2027-06-01", driver_insurance_expiry: "2027-12-31" } });
+    await findButton(wrapper, "adminConsole.carApprove").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/drivers/3/car-approve/",
+      { licence_expiry: "2027-06-01", insurance_expiry: "2027-12-31" },
+    );
   });
 });

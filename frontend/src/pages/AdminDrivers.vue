@@ -20,6 +20,26 @@
       </div>
     </header>
 
+    <!-- Active / Rejected toggle (A2-02): rejected drivers are no longer invisible -->
+    <div class="flex gap-2" role="tablist" :aria-label="t('adminDrivers.title')">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="!showRejected"
+        class="ui-state-chip ui-press"
+        :data-active="!showRejected ? 'true' : 'false'"
+        @click="setRejected(false)"
+      >{{ t('adminDrivers.showActive') }}</button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="showRejected"
+        class="ui-state-chip ui-press"
+        :data-active="showRejected ? 'true' : 'false'"
+        @click="setRejected(true)"
+      >{{ t('adminDrivers.showRejected') }}</button>
+    </div>
+
     <!-- Loading: skeleton stats + table -->
     <template v-if="loading">
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -70,15 +90,15 @@
 
     <!-- Empty -->
     <div v-else-if="!drivers.length" class="ui-empty-state text-center p-8 space-y-1">
-      <p class="text-sm font-semibold text-slate-100">{{ t('adminDrivers.empty') }}</p>
-      <p class="text-xs text-slate-400">{{ t('adminDrivers.emptyHint') }}</p>
+      <p class="text-sm font-semibold text-slate-100">{{ showRejected ? t('adminDrivers.rejectedEmpty') : t('adminDrivers.empty') }}</p>
+      <p v-if="!showRejected" class="text-xs text-slate-400">{{ t('adminDrivers.emptyHint') }}</p>
     </div>
 
     <template v-else>
-      <!-- Stats bar -->
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <!-- Stats bar (active drivers only; hidden for the rejected list) -->
+      <div v-if="!showRejected" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div class="ui-panel p-4 text-center">
-          <p class="text-2xl font-bold tabular-nums text-white">{{ drivers.length }}</p>
+          <p class="text-2xl font-bold tabular-nums text-white">{{ totalDrivers }}</p>
           <p class="ui-stat-label mt-0.5">{{ t('adminDrivers.totalDrivers') }}</p>
         </div>
         <div class="ui-panel p-4 text-center">
@@ -93,10 +113,13 @@
           <p class="ui-stat-label mt-0.5">{{ t('adminDrivers.pendingCount') }}</p>
         </div>
         <div class="ui-panel p-4 text-center">
-          <p class="text-2xl font-bold tabular-nums text-white">{{ totalDeliveries }}</p>
+          <p class="text-2xl font-bold tabular-nums text-white">{{ serverTotalDeliveries }}</p>
           <p class="ui-stat-label mt-0.5">{{ t('adminDrivers.totalDeliveries') }}</p>
         </div>
       </div>
+
+      <!-- Cap note (A2-08): the list is capped at 200 rows -->
+      <p v-if="driversTotal > 200" class="text-xs text-slate-500">{{ t('adminDrivers.showingFirst', { shown: drivers.length, total: driversTotal }) }}</p>
 
       <!-- Desktop table (hidden on mobile) -->
       <div class="ui-table-wrap hidden md:block">
@@ -134,7 +157,14 @@
               </td>
               <td class="px-4 py-3 text-center">
                 <span
-                  v-if="!d.approved"
+                  v-if="showRejected"
+                  class="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300"
+                  :title="d.driver_rejection_reason || ''"
+                >
+                  {{ t('adminDrivers.rejected') }}
+                </span>
+                <span
+                  v-else-if="!d.approved"
                   class="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
                 >
                   {{ t('adminDrivers.pendingCount') }}
@@ -167,7 +197,16 @@
                 {{ fmtMoney(d.owed) }}
               </td>
               <td class="px-4 py-3 text-end text-slate-500 text-xs tabular-nums">{{ formatDate(d.created_at) }}</td>
-              <td class="px-4 py-3 text-end text-slate-600 rtl:scale-x-[-1]" aria-hidden="true">›</td>
+              <td class="px-4 py-3 text-end">
+                <button
+                  v-if="showRejected"
+                  type="button"
+                  class="rounded-lg border border-emerald-500/40 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 ui-press disabled:opacity-50"
+                  :disabled="reapprovingId === d.id"
+                  @click.stop="reapproveDriver(d)"
+                >{{ t('adminDrivers.reapprove') }}</button>
+                <span v-else class="text-slate-600 rtl:scale-x-[-1]" aria-hidden="true">›</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -190,7 +229,11 @@
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-medium text-slate-200 truncate">{{ d.name || t('adminDrivers.unnamed') }}</span>
                 <span
-                  v-if="!d.approved"
+                  v-if="showRejected"
+                  class="shrink-0 rounded-full border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-300"
+                >{{ t('adminDrivers.rejected') }}</span>
+                <span
+                  v-else-if="!d.approved"
                   class="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300"
                 >{{ t('adminDrivers.pendingCount') }}</span>
                 <span
@@ -209,6 +252,14 @@
             </div>
           </div>
           <p class="mt-1.5 text-[10px] text-slate-600 tabular-nums">{{ formatDate(d.created_at) }}</p>
+          <p v-if="showRejected && d.driver_rejection_reason" class="mt-1 text-[11px] text-slate-400">{{ t('adminDrivers.rejectedReason') }}: {{ d.driver_rejection_reason }}</p>
+          <button
+            v-if="showRejected"
+            type="button"
+            class="mt-2 rounded-lg border border-emerald-500/40 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 ui-press disabled:opacity-50"
+            :disabled="reapprovingId === d.id"
+            @click.stop="reapproveDriver(d)"
+          >{{ t('adminDrivers.reapprove') }}</button>
         </li>
       </ul>
     </template>
@@ -349,6 +400,28 @@
                       class="text-sky-400 hover:text-sky-300 underline underline-offset-2"
                     >{{ t('adminConsole.insuranceLink') }}</a>
                   </div>
+                  <!-- A2-10: show the stored expiries with expired/soon flags -->
+                  <div v-if="selected.driver_licence_expiry || selected.driver_insurance_expiry" class="space-y-1 text-xs">
+                    <p v-if="selected.driver_licence_expiry" class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-slate-400">{{ t('adminConsole.licenceExpiry') }}: {{ formatDate(selected.driver_licence_expiry) }}</span>
+                      <span v-if="expiryState(selected.driver_licence_expiry) === 'expired'" class="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">{{ t('adminConsole.expiryExpired') }}</span>
+                      <span v-else-if="expiryState(selected.driver_licence_expiry) === 'soon'" class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('adminConsole.expirySoon') }}</span>
+                    </p>
+                    <p v-if="selected.driver_insurance_expiry" class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-slate-400">{{ t('adminConsole.insuranceExpiry') }}: {{ formatDate(selected.driver_insurance_expiry) }}</span>
+                      <span v-if="expiryState(selected.driver_insurance_expiry) === 'expired'" class="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">{{ t('adminConsole.expiryExpired') }}</span>
+                      <span v-else-if="expiryState(selected.driver_insurance_expiry) === 'soon'" class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('adminConsole.expirySoon') }}</span>
+                    </p>
+                  </div>
+                  <!-- A2-10: expiry date inputs on approve (prefilled from the stored values) -->
+                  <div v-if="!selected.driver_car_approved && selected.driver_licence_url && selected.driver_insurance_url" class="grid grid-cols-2 gap-2">
+                    <label class="space-y-1 text-xs text-slate-400">{{ t('adminConsole.licenceExpiry') }}
+                      <input v-model="licenceExpiryInput" type="date" class="ui-input w-full text-sm" :aria-label="t('adminConsole.licenceExpiry')" />
+                    </label>
+                    <label class="space-y-1 text-xs text-slate-400">{{ t('adminConsole.insuranceExpiry') }}
+                      <input v-model="insuranceExpiryInput" type="date" class="ui-input w-full text-sm" :aria-label="t('adminConsole.insuranceExpiry')" />
+                    </label>
+                  </div>
                   <div v-if="selected.driver_licence_url && selected.driver_insurance_url" class="flex gap-2">
                     <button
                       v-if="!selected.driver_car_approved"
@@ -365,11 +438,14 @@
                   </div>
                 </div>
 
-                <!-- Payout form -->
-                <div v-if="Number(detail.owed) > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
+                <!-- Payout form (A2-09): prefill + cap on the DELIVERY-ledger cap
+                     (earned − paid), not the wallet balance — the wallet also holds
+                     ride/tip credits the ledger must not pay out. -->
+                <div v-if="payoutCap > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
                   <p class="text-sm font-semibold text-slate-200">{{ t('adminDrivers.recordPayout') }}</p>
+                  <p class="text-[11px] text-slate-500">{{ t('adminDrivers.payoutCapNote', { ledger: fmtMoney(detail.ledger_owed), cashout: fmtMoney(detail.cashout_total), wallet: fmtMoney(detail.wallet_balance) }) }}</p>
                   <div class="flex gap-2">
-                    <input v-model="payAmount" type="number" step="0.01" min="0.01" :max="detail.owed" class="ui-input flex-1 text-sm" :placeholder="t('adminDrivers.amount')" :aria-label="t('adminDrivers.amount')" />
+                    <input v-model="payAmount" type="number" step="0.01" min="0.01" :max="payoutCap" class="ui-input flex-1 text-sm" :placeholder="t('adminDrivers.amount')" :aria-label="t('adminDrivers.amount')" />
                     <select v-model="payMethod" class="ui-input text-sm" :aria-label="t('adminDrivers.payMethod')">
                       <option value="cash">{{ t('adminDrivers.methodCash') }}</option>
                       <option value="transfer">{{ t('adminDrivers.methodTransfer') }}</option>
@@ -433,6 +509,36 @@ const toast = useToastStore();
 const loading = ref(true);
 const fetchError = ref(false);
 const drivers = ref([]);
+const showRejected = ref(false);
+const reapprovingId = ref(null);
+
+const setRejected = (value) => {
+  if (showRejected.value === value) return;
+  showRejected.value = value;
+  fetchDrivers();
+};
+
+// A2-02: re-approve a rejected driver from the rejected list (no slide-over —
+// the earnings detail 404s for a non-driver). Confirm, POST approve, drop the row.
+const reapproveDriver = async (d) => {
+  const ok = await confirm({
+    title: t('adminDrivers.reapproveConfirmTitle', { name: d.name || t('adminDrivers.unnamed') }),
+    body: t('adminDrivers.reapproveConfirmBody', { name: d.name || t('adminDrivers.unnamed') }),
+    confirmLabel: t('adminDrivers.reapprove'),
+    danger: false,
+  });
+  if (!ok) return;
+  reapprovingId.value = d.id;
+  try {
+    await api.post(`/admin/drivers/${d.id}/approve/`, {});
+    drivers.value = drivers.value.filter((x) => x.id !== d.id);
+    toast.show(t('adminDrivers.reapproveDone'), 'success');
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminDrivers.actionFailed'), 'error');
+  } finally {
+    reapprovingId.value = null;
+  }
+};
 
 const fmtMoney = (v) =>
   formatCurrencyString(currentLocale.value, v, 'MAD', { maximumFractionDigits: 2 });
@@ -446,6 +552,16 @@ useFocusTrap(slideOverRef, computed(() => !!selected.value));
 const detail = ref(null);
 const loadingDetail = ref(false);
 const payAmount = ref('');
+// A2-09: the payout cap is min(ledger_owed, wallet_balance) — the delivery
+// ledger cap record_driver_payout enforces, bounded by the cash actually in
+// the wallet. Falls back to `owed` when the envelope lacks the new fields.
+const payoutCap = computed(() => {
+  if (!detail.value) return 0;
+  const ledger = Number(detail.value.ledger_owed ?? detail.value.owed);
+  const wallet = Number(detail.value.wallet_balance ?? detail.value.owed);
+  if (!Number.isFinite(ledger) || !Number.isFinite(wallet)) return 0;
+  return Math.max(0, Math.min(ledger, wallet));
+});
 const payMethod = ref('cash');
 const paying = ref(false);
 const payError = ref('');
@@ -459,9 +575,27 @@ const detailError = ref(''); // panel-level fetch error (distinct from payError 
 const vetting = ref(false);
 const vettingCar = ref(false);
 const rejectReason = ref(''); // optional reason posted with a reject; server-truncated to 300 chars
+// A2-10: expiry date inputs on car approval, prefilled from the stored values.
+const licenceExpiryInput = ref('');
+const insuranceExpiryInput = ref('');
+// 'expired' when the date is past, 'soon' when it expires within 30 days.
+const expiryState = (iso) => {
+  if (!iso) return '';
+  const d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (d < today) return 'expired';
+  const soon = new Date(today);
+  soon.setDate(soon.getDate() + 30);
+  return d <= soon ? 'soon' : '';
+};
 
 const openDriver = async (d) => {
   selected.value = d;
+  // A2-10: prefill the expiry inputs from the stored values (date inputs take YYYY-MM-DD).
+  licenceExpiryInput.value = String(d.driver_licence_expiry || '').slice(0, 10);
+  insuranceExpiryInput.value = String(d.driver_insurance_expiry || '').slice(0, 10);
   detail.value = null;
   payError.value = '';
   detailError.value = '';
@@ -471,7 +605,10 @@ const openDriver = async (d) => {
   try {
     const res = await api.get(`/admin/drivers/${d.id}/earnings/`);
     detail.value = res.data;
-    payAmount.value = res.data.owed;
+    // A2-09: prefill on the ledger cap (min with the wallet balance).
+    const ledger = Number(res.data.ledger_owed ?? res.data.owed);
+    const wallet = Number(res.data.wallet_balance ?? res.data.owed);
+    payAmount.value = Math.max(0, Math.min(ledger, wallet)).toFixed(2);
     payMethod.value = 'cash';
   } catch {
     detailError.value = t('adminDrivers.fetchError');
@@ -484,7 +621,7 @@ const submitPayout = async () => {
   payError.value = '';
   const amount = parseFloat(payAmount.value);
   if (!amount || amount <= 0) { payError.value = t('adminDrivers.payoutInvalid'); return; }
-  if (amount > Number(detail.value.owed)) { payError.value = t('adminDrivers.payoutInvalid'); return; }
+  if (amount > payoutCap.value) { payError.value = t('adminDrivers.payoutInvalid'); return; }
   const okPay = await confirm({
     title: t('adminDrivers.payoutConfirmTitle'),
     body: t('adminDrivers.payoutConfirmBody', { amount: fmtMoney(amount), name: selected.value?.name || t('adminDrivers.thisDriver') }),
@@ -547,6 +684,17 @@ const setApproval = async (approve) => {
 
 const setCarApproval = async (approve) => {
   if (!selected.value || vettingCar.value) return;
+  // A2-10: block approval when an effective expiry (entered or stored) is past —
+  // the server enforces the same check, this stops the click before the round trip.
+  if (approve) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const effLicence = (licenceExpiryInput.value || selected.value.driver_licence_expiry || '').slice(0, 10);
+    const effInsurance = (insuranceExpiryInput.value || selected.value.driver_insurance_expiry || '').slice(0, 10);
+    if ((effLicence && effLicence < todayStr) || (effInsurance && effInsurance < todayStr)) {
+      toast.show(t('adminConsole.carExpiryPast'), 'error');
+      return;
+    }
+  }
   if (!approve) {
     const okCarReject = await confirm({
       title: t('adminConsole.carRejectConfirmTitle'),
@@ -558,11 +706,24 @@ const setCarApproval = async (approve) => {
   }
   vettingCar.value = true;
   try {
-    await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'car-approve' : 'car-reject'}/`, {});
+    const body = approve
+      ? {
+          licence_expiry: licenceExpiryInput.value || undefined,
+          insurance_expiry: insuranceExpiryInput.value || undefined,
+        }
+      : {};
+    const res = await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'car-approve' : 'car-reject'}/`, body);
     toast.show(approve ? t('adminConsole.carApproved') : t('adminConsole.carReject'), 'success');
     selected.value.driver_car_approved = approve;
+    // The server echoes the (possibly updated) expiries — sync them.
+    if (res.data?.driver_licence_expiry !== undefined) selected.value.driver_licence_expiry = res.data.driver_licence_expiry;
+    if (res.data?.driver_insurance_expiry !== undefined) selected.value.driver_insurance_expiry = res.data.driver_insurance_expiry;
     const row = drivers.value.find((d) => d.id === selected.value.id);
-    if (row) row.driver_car_approved = approve;
+    if (row) {
+      row.driver_car_approved = approve;
+      if (res.data?.driver_licence_expiry !== undefined) row.driver_licence_expiry = res.data.driver_licence_expiry;
+      if (res.data?.driver_insurance_expiry !== undefined) row.driver_insurance_expiry = res.data.driver_insurance_expiry;
+    }
   } catch (err) {
     toast.show(err?.response?.data?.detail || t('adminDrivers.actionFailed'), 'error');
   } finally {
@@ -570,20 +731,29 @@ const setCarApproval = async (approve) => {
   }
 };
 
-const onlineCount = computed(() => drivers.value.filter(d => d.is_online).length);
-const pendingCount = computed(() => drivers.value.filter(d => !d.approved).length);
+// A2-08: the server returns {results, total, limit, stats} — stats are computed
+// over the FULL driver set, not the capped 200 rows. Fall back to client-side
+// computation when the envelope is absent (older response shape).
+const serverStats = ref(null);
+const driversTotal = ref(0);
+const onlineCount = computed(() => serverStats.value?.online ?? drivers.value.filter(d => d.is_online).length);
+const pendingCount = computed(() => serverStats.value?.pending ?? drivers.value.filter(d => !d.approved).length);
+const totalDrivers = computed(() => serverStats.value?.total ?? drivers.value.length);
+const serverTotalDeliveries = computed(() => serverStats.value?.total_deliveries ?? drivers.value.reduce((sum, d) => sum + d.completed_jobs, 0));
 // Surface pending applications first so admins review them promptly.
 const sortedDrivers = computed(() =>
   [...drivers.value].sort((a, b) => (a.approved === b.approved ? 0 : a.approved ? 1 : -1))
 );
-const totalDeliveries = computed(() => drivers.value.reduce((sum, d) => sum + d.completed_jobs, 0));
 
 const fetchDrivers = async () => {
   loading.value = true;
   fetchError.value = false;
   try {
-    const res = await api.get('/admin/drivers/');
-    drivers.value = res.data;
+    const params = showRejected.value ? { rejected: 1 } : {};
+    const res = await api.get('/admin/drivers/', { params });
+    drivers.value = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+    driversTotal.value = typeof res.data?.total === 'number' ? res.data.total : drivers.value.length;
+    serverStats.value = res.data?.stats || null;
   } catch {
     fetchError.value = true;
   } finally {

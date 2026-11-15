@@ -519,6 +519,20 @@ const save = async () => {
       return;
     }
   }
+  // A2-11: validate tier CONTENTS, not just JSON shape — a missing fee used to
+  // silently become a 0.00 charge, a non-numeric fee a 500 at job creation.
+  // Numeric strings are fine (the server coerces them); bools are not numbers.
+  const badTier = feeTiers.find((tier) => {
+    if (!tier || typeof tier !== 'object' || Array.isArray(tier)) return true;
+    const km = tier.km_up_to;
+    if (km !== undefined && km !== null && (typeof km === 'boolean' || Number.isNaN(Number(km)) || Number(km) <= 0)) return true;
+    const fee = tier.fee;
+    return fee === undefined || fee === null || fee === '' || typeof fee === 'boolean' || Number.isNaN(Number(fee)) || Number(fee) < 0;
+  });
+  if (badTier) {
+    feeTiersError.value = t('adminZones.feeTiersInvalid');
+    return;
+  }
 
   saving.value = true;
   try {

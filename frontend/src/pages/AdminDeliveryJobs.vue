@@ -10,17 +10,17 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <span v-if="!loading" class="ui-chip tabular-nums">
-            {{ t('adminDeliveryJobs.totalLabel', { count: jobs.length }) }}
+            {{ t('adminDeliveryJobs.totalLabel', { count: total }) }}
           </span>
           <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t('common.loading') : '' }}</span>
           <button
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
-            :disabled="loading"
-            :aria-busy="loading"
-            @click="fetchJobs"
+            :disabled="loading || refreshing"
+            :aria-busy="loading || refreshing"
+            @click="fetchJobs({ background: true })"
           >
-            <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-            {{ loading ? t('common.loading') : t('adminDeliveryJobs.refresh') }}
+            <svg v-if="loading || refreshing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ (loading || refreshing) ? t('common.loading') : t('adminDeliveryJobs.refresh') }}
           </button>
         </div>
       </div>
@@ -37,6 +37,16 @@
         :aria-checked="statusFilter === s"
         @click="setFilter(s)"
       >{{ s === 'all' ? t('adminDeliveryJobs.all') : statusLabel(s) }}</button>
+    </div>
+
+    <!-- Background poll failed: keep the last loaded rows, surface a retry (A2-06) -->
+    <div v-if="refreshFailed && !loading" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+      <p class="flex-1 text-sm text-amber-300">{{ t('adminDeliveryJobs.refreshFailed') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 ui-press"
+        @click="fetchJobs({ background: true })"
+      >{{ t('common.retry') }}</button>
     </div>
 
     <!-- Loading -->
@@ -129,12 +139,30 @@
           </div>
         </li>
       </ul>
+
+      <!-- Cap + pagination (A2-07): the server total, not jobs.length -->
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-slate-500">{{ t('adminDeliveryJobs.showingLatest', { count: jobs.length, total }) }}</p>
+        <div v-if="totalPages > 1" class="flex items-center gap-2">
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press disabled:opacity-40"
+            :disabled="page <= 1"
+            @click="prevPage"
+          >{{ t('adminDeliveryJobs.prevPage') }}</button>
+          <span class="text-xs text-slate-400 tabular-nums">{{ t('adminDeliveryJobs.pageOf', { page, pages: totalPages }) }}</span>
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 ui-press disabled:opacity-40"
+            :disabled="page >= totalPages"
+            @click="nextPage"
+          >{{ t('adminDeliveryJobs.nextPage') }}</button>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
@@ -144,9 +172,15 @@ import { pickupLabelKey } from '../lib/deliveryVocab';
 const { t, currentLocale } = useI18n();
 
 const STATUSES = ['all', 'searching', 'assigned', 'at_restaurant', 'picked_up', 'delivered', 'failed', 'cancelled'];
+const PAGE_SIZE = 100;
 const loading = ref(true);
+const refreshing = ref(false);
 const fetchError = ref(false);
+const refreshFailed = ref(false);
 const jobs = ref([]);
+const total = ref(0);
+const page = ref(1);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 const statusFilter = ref('all');
 
 const STATUS_LABELS = {
@@ -184,23 +218,46 @@ const fmtDate = (iso) => {
   }
 };
 
-const fetchJobs = async () => {
-  loading.value = true;
+const fetchJobs = async ({ background = false } = {}) => {
+  // A2-06: background polls (20s timer, tab-visible) must not flash the skeleton
+  // board — they only flip `refreshing`, and a failed poll keeps the last loaded
+  // rows with a retry banner instead of swapping in the full error panel.
+  if (background) refreshing.value = true;
+  else loading.value = true;
   fetchError.value = false;
   try {
-    const params = {};
+    const params = { page: page.value, page_size: PAGE_SIZE };
     if (statusFilter.value !== 'all') params.status = statusFilter.value;
     const res = await api.get('/admin/delivery-jobs/', { params });
     jobs.value = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+    // A2-07: the envelope total is the count chip + cap note; a bare array has no
+    // total, so fall back to the rows actually returned.
+    total.value = typeof res.data?.total === 'number' ? res.data.total : jobs.value.length;
+    refreshFailed.value = false;
   } catch {
-    fetchError.value = true;
+    if (background) refreshFailed.value = true;
+    else fetchError.value = true;
   } finally {
     loading.value = false;
+    refreshing.value = false;
   }
 };
 
 const setFilter = (s) => {
   statusFilter.value = s;
+  page.value = 1;
+  fetchJobs();
+};
+
+const prevPage = () => {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  fetchJobs();
+};
+
+const nextPage = () => {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
   fetchJobs();
 };
 
@@ -210,13 +267,13 @@ let pollTimer = null;
 
 const onVisibilityChange = () => {
   if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-    fetchJobs();
+    fetchJobs({ background: true });
   }
 };
 
 onMounted(() => {
   fetchJobs();
-  pollTimer = setInterval(fetchJobs, POLL_MS);
+  pollTimer = setInterval(() => fetchJobs({ background: true }), POLL_MS);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange);
   }

@@ -276,6 +276,7 @@
                 <!-- Orders across all restaurants -->
                 <div class="space-y-2">
                   <p class="ui-kicker">{{ t('adminCustomers.ordersTitle') }}</p>
+                  <p v-if="ordersTotal > 50" class="text-[11px] text-slate-500">{{ t('adminCustomers.ordersCapped', { shown: orders.length, total: ordersTotal }) }}</p>
                   <div v-if="loadingOrders" class="space-y-1.5">
                     <div v-for="i in 3" :key="i" class="ui-skeleton h-9" />
                   </div>
@@ -301,6 +302,7 @@
                 <div class="space-y-2">
                   <div class="flex items-center justify-between gap-2">
                     <p class="ui-kicker">{{ t('adminCustomers.ledgerTitle') }}</p>
+                    <p v-if="detail.transactions_total > 50" class="text-[11px] text-slate-500">{{ t('adminCustomers.ledgerCapped', { shown: detail.transactions.length, total: detail.transactions_total }) }}</p>
                     <button
                       v-if="ledgerStale"
                       type="button"
@@ -320,7 +322,7 @@
                         <p class="font-medium truncate" :class="isOutflow(tx.type) ? 'text-red-300' : 'text-slate-200'">
                           {{ txLabel(tx.type) }}<span v-if="tx.tenant_name" class="text-slate-500"> · {{ tx.tenant_name }}</span>
                         </p>
-                        <p class="text-[10px] text-slate-500">{{ tx.reference || '' }} {{ fmtDate(tx.created_at) }}</p>
+                        <p class="text-[10px] text-slate-500">{{ tx.reference || '' }} {{ fmtDate(tx.created_at) }}<span v-if="tx.balance_after != null"> · {{ t('adminCustomers.balanceAfter') }}: {{ fmtMoney(tx.balance_after) }}</span></p>
                       </div>
                       <span class="shrink-0 font-semibold tabular-nums" :class="isOutflow(tx.type) ? 'text-red-400' : 'text-emerald-400'">
                         {{ isOutflow(tx.type) ? '−' : '+' }}{{ fmtMoney(tx.amount) }}
@@ -422,6 +424,7 @@ const detailError = ref(''); // panel-level fetch error (distinct from creditErr
 let creditKey = null;
 const togglingDriver = ref(false);
 const orders = ref([]);
+const ordersTotal = ref(0);
 const loadingOrders = ref(false);
 const ordersError = ref(''); // cross-restaurant orders fetch failed (vs genuinely empty)
 const ordersScanned = ref(0);
@@ -439,14 +442,18 @@ const orderStatusLabel = (s) => t(ORDER_STATUS_KEY[s] || 'orderStatus.statusPend
 
 const fetchOrders = async (id) => {
   orders.value = [];
+  ordersTotal.value = 0;
   ordersError.value = '';
   loadingOrders.value = true;
   try {
     const res = await api.get(`/admin/customers/${id}/orders/`);
     orders.value = res.data?.results || [];
+    // A2-04: the backend returns the total count — surface it (latest 50 of N).
+    ordersTotal.value = res.data?.count || 0;
     ordersScanned.value = res.data?.scanned_restaurants || 0;
   } catch {
     orders.value = [];
+    ordersTotal.value = 0;
     ordersError.value = t('adminCustomers.ordersError');
   } finally {
     loadingOrders.value = false;
@@ -462,9 +469,13 @@ const TX_KEY = {
   transfer_in: 'customerAccount.walletTxTransferIn',
   transfer_out: 'customerAccount.walletTxTransferOut',
   adjustment: 'adminCustomers.txAdjustment',
+  // A2-05: earning + cashout had no label (generic "Transaction") and cashout
+  // rendered as an inflow (+, green). Earning is driver pay for a delivered job.
+  earning: 'customerAccount.walletTxEarning',
+  cashout: 'customerAccount.walletTxCashout',
 };
 const txLabel = (type) => t(TX_KEY[type] || 'customerAccount.walletTxFallback');
-const isOutflow = (type) => type === 'payment' || type === 'transfer_out';
+const isOutflow = (type) => type === 'payment' || type === 'transfer_out' || type === 'cashout';
 
 const refreshLedger = () => {
   if (!selected.value) return;
@@ -539,11 +550,32 @@ const creditWallet = async () => {
 };
 
 const toggleDriver = async () => {
+  const removing = detail.value.is_driver;
+  if (removing) {
+    // A2-01: removing a driver re-opens their in-flight delivery jobs to
+    // dispatch — confirm first, like every other destructive admin action.
+    const ok = await confirm({
+      title: t('adminCustomers.removeDriverConfirmTitle', { name: detail.value.name || '' }),
+      body: t('adminCustomers.removeDriverConfirmBody', { count: detail.value.delivery_jobs || 0 }),
+      confirmLabel: t('adminCustomers.removeDriver'),
+      danger: true,
+    });
+    if (!ok) return;
+  }
   togglingDriver.value = true;
   try {
     const res = await api.patch(`/admin/customers/${selected.value.id}/`, { is_driver: !detail.value.is_driver });
     if (detail.value) detail.value.is_driver = res.data.is_driver;
     syncRow({ is_driver: res.data.is_driver });
+    if (removing) {
+      const reopened = res.data.reopened_deliveries || 0;
+      toast.show(
+        reopened
+          ? t('adminCustomers.driverRemovedReopened', { count: reopened })
+          : t('adminCustomers.driverRemoved'),
+        'success',
+      );
+    }
   } catch {
     toast.show(t('common.saveFailed'), 'error');
   } finally {

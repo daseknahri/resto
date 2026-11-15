@@ -73,8 +73,19 @@ vi.mock("../../lib/api", () => ({
 }));
 
 import AdminDeliveryZones from "../AdminDeliveryZones.vue";
+import api from "../../lib/api";
 
-const mountPage = () => shallowMount(AdminDeliveryZones);
+const mountPage = () =>
+  shallowMount(AdminDeliveryZones, {
+    global: {
+      stubs: {
+        // The create/edit form is a <Teleport>/<Transition> dialog to body;
+        // render it inline so wrapper.find() can see its inputs.
+        Transition: { template: "<slot />" },
+        Teleport: { template: "<slot />" },
+      },
+    },
+  });
 
 // A realistic zone row with the fields the page's own template v-for reads: id, name, city,
 // approx_radius_km, is_active, and — CRITICALLY — `polygon` as an ARRAY (the template renders
@@ -182,5 +193,83 @@ describe("AdminDeliveryZones — mount smoke", () => {
     expect(text).toContain("Maarif");
     // City cell from the same v-for confirms the loaded row body rendered (not just the name).
     expect(text).toContain("Casablanca");
+  });
+});
+
+/**
+ * MERGE NOTE (Run 8 G3a): append this describe block to
+ * frontend/src/pages/__tests__/AdminDeliveryZones.mount.test.js (after pulling it),
+ * adapting the _routes / mount helper names to that file's existing ones.
+ * Assumes the file's existing URL-routed api mock + mocked useI18n (keys render
+ * as `ns.key` / `ns.key({json})`, as in AdminRides.mount.test.js) and a mocked
+ * toast (toast.show asserted via the mock) if the file has one.
+ *
+ * Covers:
+ *   A2-11 — save() rejects a tier with a missing fee / non-numeric fee without
+ *           calling the API, and shows the feeTiersInvalid error.
+ */
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+describe("AdminDeliveryZones — fee tier validation (A2-11)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openFormWithTiers = async (tiersJson) => {
+    _routes = { "/admin/delivery-zones/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    // Open the create form and fill the minimum fields.
+    await findButton(wrapper, "adminZones.newZone").trigger("click");
+    await flushPromises();
+    await wrapper.find('#az-name').setValue("Downtown");
+    await wrapper.find('#az-city').setValue("Casablanca");
+    // save() validates the polygon FIRST (array of >= 3 points) and returns on
+    // polygonError before ever reaching the fee-tier checks — the A2-11 tier
+    // cases need a valid polygon or they test the polygon gate instead.
+    await wrapper.find('#az-polygon').setValue('[[33.5,-7.5],[33.6,-7.5],[33.6,-7.6]]');
+    const tiers = wrapper.find('#az-fee-tiers');
+    await tiers.setValue(tiersJson);
+    return wrapper;
+  };
+
+  it("missing fee blocks the save with feeTiersInvalid (no POST)", async () => {
+    await openFormWithTiers('[{"km_up_to": 3}]');
+    await findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminZones.feeTiersInvalid");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("non-numeric fee blocks the save with feeTiersInvalid (no POST)", async () => {
+    await openFormWithTiers('[{"km_up_to": 3, "fee": "abc"}]');
+    await findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminZones.feeTiersInvalid");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("valid tiers submit (POST carries the tiers)", async () => {
+    await openFormWithTiers('[{"km_up_to": 3, "fee": 2.5}, {"fee": 6}]');
+    api.post.mockResolvedValue({ data: { id: 1, name: "Downtown", city: "Casablanca", polygon: [], fee_tiers: [{ km_up_to: 3, fee: 2.5 }, { fee: 6 }] } });
+    await findButton(wrapper, "adminZones.createBtn").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/delivery-zones/",
+      expect.objectContaining({ fee_tiers: [{ km_up_to: 3, fee: 2.5 }, { fee: 6 }] }),
+    );
   });
 });

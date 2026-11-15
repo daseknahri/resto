@@ -875,12 +875,28 @@ class DeliveryZone(models.Model):
         """Return the delivery fee for a given distance using this zone's fee_tiers."""
         if not self.fee_tiers:
             return 0.0
-        for tier in sorted(
-            self.fee_tiers,
-            key=lambda t: t.get("km_up_to") if t.get("km_up_to") is not None else float("inf"),
+        # Run 8 G3a A2-11: skip malformed tiers instead of raising — a legacy
+        # zone row with a bad tier (missing/non-numeric fee) must not 500 the
+        # fee lookup at admin job creation. New tiers are validated at write
+        # time by _validate_fee_tiers; this is the read-side belt.
+        valid = []
+        for tier in self.fee_tiers:
+            if not isinstance(tier, dict):
+                continue
+            try:
+                km_up_to = tier.get("km_up_to")
+                km_up_to = None if km_up_to is None else float(km_up_to)
+                fee = float(tier.get("fee"))
+            except (TypeError, ValueError):
+                continue
+            if (km_up_to is not None and km_up_to <= 0) or fee < 0:
+                continue
+            valid.append((km_up_to, fee))
+        for km_up_to, fee in sorted(
+            valid, key=lambda t: t[0] if t[0] is not None else float("inf")
         ):
-            if tier.get("km_up_to") is None or distance_km <= float(tier["km_up_to"]):
-                return float(tier.get("fee", 0))
+            if km_up_to is None or distance_km <= km_up_to:
+                return fee
         return 0.0
 
 

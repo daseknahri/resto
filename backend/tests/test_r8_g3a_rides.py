@@ -134,3 +134,65 @@ class AdminRideListEnvelopeTests(SimpleTestCase):
     def test_invalid_status_still_400(self):
         resp = self._call("status=bogus")
         self.assertEqual(resp.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+
+# Run 8 G3a A2-07 — delivery jobs list envelope (same fix class as the rides list).
+from unittest.mock import MagicMock, patch
+
+from accounts.views import AdminDeliveryJobListView
+
+
+class AdminDeliveryJobListEnvelopeTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminDeliveryJobListView.as_view()
+
+    def _get(self, query=""):
+        req = self.factory.get("/api/admin/delivery-jobs/" + query)
+        req.user = _admin()
+        return self.view(req)
+
+    @patch("accounts.views.log_admin_action")
+    @patch("accounts.views._batch_restaurant_phones", return_value={})
+    @patch("accounts.views._batch_business_types", return_value={})
+    @patch("accounts.views._serialize_delivery_job")
+    @patch("accounts.models.DeliveryJob.objects")
+    def test_envelope_and_total(self, mock_objs, mock_ser, mock_biz, mock_phones, mock_log):
+        qs = MagicMock()
+        qs.filter.return_value = qs
+        qs.count.return_value = 250
+        job = MagicMock()
+        job.tenant_id = 7
+        job.driver_id = None
+        qs.__getitem__.return_value = [job]
+        mock_objs.select_related.return_value.order_by.return_value = qs
+        mock_ser.return_value = {"id": 1, "tenant_id": 7}
+        with patch("tenancy.models.Tenant.objects") as mock_tenant_objs:
+            mock_tenant_objs.filter.return_value.values_list.return_value = [(7, "Chez Test")]
+            resp = self._get()
+        self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
+        self.assertEqual(resp.data["total"], 250)
+        self.assertEqual(resp.data["page"], 1)
+        self.assertEqual(resp.data["page_size"], 100)
+        self.assertEqual(resp.data["results"][0]["tenant_name"], "Chez Test")
+
+    @patch("accounts.views.log_admin_action")
+    @patch("accounts.views._batch_restaurant_phones", return_value={})
+    @patch("accounts.views._batch_business_types", return_value={})
+    @patch("accounts.views._serialize_delivery_job", return_value={"id": 2})
+    @patch("accounts.models.DeliveryJob.objects")
+    def test_page_2_slices_the_queryset(self, mock_objs, mock_ser, mock_biz, mock_phones, mock_log):
+        qs = MagicMock()
+        qs.filter.return_value = qs
+        qs.count.return_value = 250
+        job = MagicMock()
+        job.tenant_id = 7
+        job.driver_id = None
+        qs.__getitem__.return_value = [job]
+        mock_objs.select_related.return_value.order_by.return_value = qs
+        with patch("tenancy.models.Tenant.objects") as mock_tenant_objs:
+            mock_tenant_objs.filter.return_value.values_list.return_value = [(7, "Chez Test")]
+            resp = self._get("?page=2&page_size=10")
+        self.assertEqual(resp.data["page"], 2)
+        self.assertEqual(resp.data["page_size"], 10)
+        qs.__getitem__.assert_called_with(slice(10, 20))

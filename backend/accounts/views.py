@@ -3006,6 +3006,9 @@ class AdminCustomerDetailView(APIView):
                 "count": ratings["count"] or 0,
             },
             "delivery_jobs": delivery_jobs,
+            # Run 8 G3a A2-03: the ledger is capped at 50 rows — surface the total
+            # so the UI can say "latest 50 of N" instead of silently truncating.
+            "transactions_total": WalletTransaction.objects.filter(customer=c).count(),
             "transactions": [
                 {
                     "id": t.id,
@@ -3028,21 +3031,36 @@ class AdminCustomerDetailView(APIView):
             c = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        reopened_deliveries = 0
         if "is_driver" in request.data:
             new_value = bool(request.data["is_driver"])
+            was_driver = c.is_driver
             c.is_driver = new_value
             fields = ["is_driver", "updated_at"]
             if not c.is_driver and c.is_driver_online:
                 c.is_driver_online = False
                 fields.append("is_driver_online")
             c.save(update_fields=fields)
+            # Run 8 G3a A2-01: removing a driver must not strand their in-flight
+            # jobs — run the same OWNER-8 re-open cascade as the reject path.
+            if was_driver and not new_value:
+                reopened_deliveries = len(_reopen_driver_delivery_jobs(c))
             log_admin_action(
                 action=AdminAuditLog.Actions.CUSTOMER_DRIVER_TOGGLED,
                 request=request,
                 target_repr=f"customer:{customer_id}",
-                metadata={"customer_id": customer_id, "is_driver": new_value},
+                metadata={
+                    "customer_id": customer_id,
+                    "is_driver": new_value,
+                    "reopened_deliveries": reopened_deliveries,
+                },
             )
-        return Response({"id": c.id, "is_driver": c.is_driver, "is_driver_online": c.is_driver_online})
+        return Response({
+            "id": c.id,
+            "is_driver": c.is_driver,
+            "is_driver_online": c.is_driver_online,
+            "reopened_deliveries": reopened_deliveries,
+        })
 
 
 class AdminCustomerCreditView(APIView):
@@ -6744,6 +6762,55 @@ def _serialize_driver_active_job(job, business_type: str = "restaurant") -> dict
     return d
 
 
+def _validate_fee_tiers(tiers):
+    """Validate a fee_tiers payload — shared by zone POST + PATCH (Run 8 G3a A2-11).
+
+    Each tier must be a dict; `km_up_to` absent/null or a number > 0 (null = the
+    catch-all tier); `fee` is REQUIRED and must be a number >= 0. Numeric strings
+    ("10") are coerced — the audit tests and the frontend both send them. Extra
+    keys (e.g. legacy `min_km`) are ignored. Bools are not numbers.
+
+    Returns (cleaned_tiers, None) or (None, error_detail).
+    A missing fee used to silently become a 0.00 charge; a non-numeric fee raised
+    a 500 in compute_fee at admin job creation. Both are 400s now.
+    """
+    if not isinstance(tiers, list):
+        return None, "fee_tiers must be a list of {km_up_to, fee} tiers."
+
+    def _num(value):
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value.strip())
+            except ValueError:
+                return None
+        return None
+
+    cleaned = []
+    for i, tier in enumerate(tiers):
+        if not isinstance(tier, dict):
+            return None, f"fee_tiers[{i}] must be an object with km_up_to and fee."
+        km_up_to = tier.get("km_up_to")
+        if km_up_to is not None:
+            km_up_to = _num(km_up_to)
+            if km_up_to is None:
+                return None, f"fee_tiers[{i}].km_up_to must be a number or null."
+            if km_up_to <= 0:
+                return None, f"fee_tiers[{i}].km_up_to must be greater than 0."
+        if "fee" not in tier or tier.get("fee") is None or str(tier.get("fee")).strip() == "":
+            return None, f"fee_tiers[{i}].fee is required."
+        fee = _num(tier["fee"])
+        if fee is None:
+            return None, f"fee_tiers[{i}].fee must be a number."
+        if fee < 0:
+            return None, f"fee_tiers[{i}].fee must be 0 or more."
+        cleaned.append({"km_up_to": km_up_to, "fee": fee})
+    return cleaned, None
+
+
 def _valid_polygon(polygon) -> bool:
     """Each polygon point must be a {lat, lng} dict with numeric coordinates."""
     if not isinstance(polygon, list) or len(polygon) < 3:
@@ -8102,10 +8169,28 @@ class AdminDriverListView(APIView):
         from .models import Customer, DeliveryJob
         from django.db.models import Avg, Count, Q
 
-        drivers = list(
-            Customer.objects.filter(is_driver=True)
-            .order_by("-driver_position_updated_at", "-id")[:200]
-        )
+        # Run 8 G3a A2-02: ?rejected=1 lists rejected drivers (is_driver=False
+        # with a rejection stamp) so a reject is no longer one-way on this screen.
+        # Run 8 G3a A2-08: the bare [:200] array hid the cap and the stats bar was
+        # computed over the capped rows. The response is now the envelope
+        # {results, total, limit, stats} with stats computed over the FULL
+        # queryset (subquery counts — no 200-row materialisation).
+        if request.query_params.get("rejected") == "1":
+            base_qs = Customer.objects.filter(is_driver=False, driver_rejected_at__isnull=False)
+            order_by = ("-driver_rejected_at", "-id")
+        else:
+            base_qs = Customer.objects.filter(is_driver=True)
+            order_by = ("-driver_position_updated_at", "-id")
+        total = base_qs.count()
+        drivers = list(base_qs.order_by(*order_by)[:200])
+        stats = {
+            "total": total,
+            "online": base_qs.filter(is_driver_online=True).count(),
+            "pending": base_qs.filter(driver_approved=False).count(),
+            "total_deliveries": DeliveryJob.objects.filter(
+                driver_id__in=base_qs.values("id"), status="delivered"
+            ).count(),
+        }
 
         # Batch job stats per driver
         stats_map = {}
@@ -8177,6 +8262,11 @@ class AdminDriverListView(APIView):
                 # overstates a driver who has already cashed out. Mirrors driver_earnings_summary
                 # and the #290 platform-liability definition (Σ driver wallet balances).
                 "owed": str(d.wallet_balance),
+                "driver_rejected_at": (
+                    d.driver_rejected_at.isoformat()
+                    if d.driver_rejected_at else None
+                ),
+                "driver_rejection_reason": d.driver_rejection_reason or "",
                 "created_at": d.created_at.isoformat(),
             })
         log_admin_action(
@@ -8185,7 +8275,74 @@ class AdminDriverListView(APIView):
             target_repr="admin:driver_list",
             metadata={"count": len(result)},
         )
-        return Response(result)
+        return Response({"results": result, "total": total, "limit": 200, "stats": stats})
+
+
+def _reopen_driver_delivery_jobs(driver):
+    """OWNER-8: re-open a revoked driver's in-flight DELIVERY jobs to dispatch.
+
+    A revoked driver can no longer advance a job — the DELIVERED and no-show
+    credit paths re-check driver_approved and the driver views gate on it — so
+    any job they were actively holding (assigned/at_restaurant/picked_up) would
+    be STRANDED: the customer's order pinned to a driver who can't move it, with
+    no sweep or owner action to recover it. Re-open each active job to dispatch,
+    MIRRORING OwnerDeliveryJobActionView's redispatch reset, so a fresh driver
+    picks it up. Terminal jobs (delivered/failed/cancelled) are never touched.
+    (Delivery analog of the revoked-driver ride unstick shipped in #276.)
+
+    Shared by the AdminDrivers reject path and the AdminCustomers "Remove driver"
+    toggle (Run 8 G3a A2-01) — the two ways a driver loses driver status.
+    Returns the list of re-opened DeliveryJob ids.
+    """
+    from django.db import transaction as _tx
+    from .models import DeliveryJob as _DJob
+
+    reopened_ids = []
+    with _tx.atomic():
+        active_jobs = list(
+            _DJob.objects.select_for_update().filter(
+                driver_id=driver.id, status__in=_DJob.ACTIVE_STATUSES
+            )
+        )
+        for job in active_jobs:
+            job.driver = None
+            job.status = _DJob.Status.SEARCHING
+            job.assigned_at = None
+            job.picked_up_at = None
+            job.failed_at = None
+            job.failure_reason = ""
+            job.failure_note = ""
+            job.owner_alerted_at = None
+            job.code_attempts = 0
+            job.code_locked_until = None
+            job.redispatch_count = (job.redispatch_count or 0) + 1
+            job.resolution = _DJob.Resolution.REDISPATCHED
+            # Fresh ranked-offer cascade (any driver eligible again).
+            job.offered_to = None
+            job.offer_expires_at = None
+            job.declined_by = []
+            job.offer_round = 0
+            job.is_open_pool = False
+            job.save(update_fields=[
+                "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                "code_locked_until", "redispatch_count", "resolution",
+                "offered_to", "offer_expires_at", "declined_by", "offer_round",
+                "is_open_pool",
+            ])
+            reopened_ids.append(job.id)
+
+    # Re-enter the ranked-offer cascade for each re-opened job (nearest free
+    # driver first, then the open pool) — this is what notifies drivers, exactly
+    # as the owner's redispatch action does. Best-effort: a dispatch hiccup must
+    # not fail the revoke itself.
+    for _jid in reopened_ids:
+        try:
+            from accounts.dispatch import offer_to_next_driver
+            offer_to_next_driver(_jid)
+        except Exception:
+            pass
+    return reopened_ids
 
 
 class AdminDriverApprovalView(APIView):
@@ -8201,18 +8358,29 @@ class AdminDriverApprovalView(APIView):
         from .models import Customer
         approve = request.path.rstrip("/").endswith("approve")
         try:
-            driver = Customer.objects.get(pk=driver_id, is_driver=True)
+            driver = Customer.objects.get(pk=driver_id)
         except Customer.DoesNotExist:
+            return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
+        # Run 8 G3a A2-02: approve also re-approves a REJECTED driver (is_driver
+        # False + rejection stamp) — the reject path is no longer one-way. A
+        # customer who was never a driver has nothing to approve; reject still
+        # requires an active driver.
+        if approve:
+            if not driver.is_driver and not driver.driver_rejected_at:
+                return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
+        elif not driver.is_driver:
             return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
 
         reopened_ids = []  # OWNER-8: DeliveryJobs re-opened by a revoke (see else branch)
         if approve:
+            driver.is_driver = True
             driver.driver_approved = True
             # A re-approval supersedes any earlier rejection — clear its trace.
             driver.driver_rejection_reason = ""
             driver.driver_rejected_at = None
             driver.save(update_fields=[
-                "driver_approved", "driver_rejection_reason", "driver_rejected_at", "updated_at",
+                "is_driver", "driver_approved", "driver_rejection_reason",
+                "driver_rejected_at", "updated_at",
             ])
         else:
             # Decline: revoke the application, force offline, and record why.
@@ -8226,61 +8394,10 @@ class AdminDriverApprovalView(APIView):
                 "driver_rejection_reason", "driver_rejected_at", "updated_at",
             ])
 
-            # OWNER-8: cascade the revocation to the driver's in-flight DELIVERY jobs.
-            # A revoked driver can no longer advance a job — the DELIVERED and no-show
-            # credit paths re-check driver_approved and the driver views gate on it — so
-            # any job they were actively holding (assigned/at_restaurant/picked_up) would
-            # be STRANDED: the customer's order pinned to a driver who can't move it, with
-            # no sweep or owner action to recover it. Re-open each active job to dispatch,
-            # MIRRORING OwnerDeliveryJobActionView's redispatch reset, so a fresh driver
-            # picks it up. Terminal jobs (delivered/failed/cancelled) are never touched.
-            # (Delivery analog of the revoked-driver ride unstick shipped in #276.)
-            from django.db import transaction as _tx
-            from .models import DeliveryJob as _DJob
-            with _tx.atomic():
-                active_jobs = list(
-                    _DJob.objects.select_for_update().filter(
-                        driver_id=driver.id, status__in=_DJob.ACTIVE_STATUSES
-                    )
-                )
-                for job in active_jobs:
-                    job.driver = None
-                    job.status = _DJob.Status.SEARCHING
-                    job.assigned_at = None
-                    job.picked_up_at = None
-                    job.failed_at = None
-                    job.failure_reason = ""
-                    job.failure_note = ""
-                    job.owner_alerted_at = None
-                    job.code_attempts = 0
-                    job.code_locked_until = None
-                    job.redispatch_count = (job.redispatch_count or 0) + 1
-                    job.resolution = _DJob.Resolution.REDISPATCHED
-                    # Fresh ranked-offer cascade (any driver eligible again).
-                    job.offered_to = None
-                    job.offer_expires_at = None
-                    job.declined_by = []
-                    job.offer_round = 0
-                    job.is_open_pool = False
-                    job.save(update_fields=[
-                        "driver", "status", "assigned_at", "picked_up_at", "failed_at",
-                        "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
-                        "code_locked_until", "redispatch_count", "resolution",
-                        "offered_to", "offer_expires_at", "declined_by", "offer_round",
-                        "is_open_pool",
-                    ])
-                    reopened_ids.append(job.id)
-
-            # Re-enter the ranked-offer cascade for each re-opened job (nearest free
-            # driver first, then the open pool) — this is what notifies drivers, exactly
-            # as the owner's redispatch action does. Best-effort: a dispatch hiccup must
-            # not fail the revoke itself.
-            for _jid in reopened_ids:
-                try:
-                    from accounts.dispatch import offer_to_next_driver
-                    offer_to_next_driver(_jid)
-                except Exception:
-                    pass
+            # OWNER-8: cascade the revocation to the driver's in-flight DELIVERY
+            # jobs (shared helper — also used by the AdminCustomers remove-driver
+            # toggle, Run 8 G3a A2-01).
+            reopened_ids = _reopen_driver_delivery_jobs(driver)
 
         log_admin_action(
             action=(AdminAuditLog.Actions.DRIVER_APPROVED if approve
@@ -8352,10 +8469,13 @@ class AdminDriverEarningsView(APIView):
             "paid": str(summary["paid"]),
             "owed": str(summary["owed"]),
             # wallet_balance = the driver's real extractable cash (delivery earnings still in
-            # the wallet, net of any cash-outs). The admin payout form should cap on THIS, not
-            # `owed` — a driver who already cashed out shows 0 claimable, so the UI doesn't
-            # invite a settlement the backend would (correctly) reject as InsufficientFunds.
+            # the wallet, net of any cash-outs). ledger_owed is the DELIVERY-ledger cap
+            # (earned − paid) record_driver_payout enforces — the admin payout form caps
+            # on min(ledger_owed, wallet_balance); cashout_total explains the gap
+            # between earned − paid and the wallet balance (Run 8 G3a A2-09).
             "wallet_balance": str(summary["wallet_balance"]),
+            "ledger_owed": str(summary["ledger_owed"]),
+            "cashout_total": str(summary["cashout_total"]),
             "deliveries": [
                 {
                     "order_number": j.order_number,
@@ -8413,6 +8533,8 @@ class AdminDriverEarningsView(APIView):
             "owed": str(summary["owed"]),
             "paid": str(summary["paid"]),
             "wallet_balance": str(summary["wallet_balance"]),
+            "ledger_owed": str(summary["ledger_owed"]),
+            "cashout_total": str(summary["cashout_total"]),
         })
 
 
@@ -8927,9 +9049,9 @@ class AdminDeliveryZoneListCreateView(APIView):
                 status=400,
             )
 
-        fee_tiers = data.get("fee_tiers") or []
-        if not isinstance(fee_tiers, list):
-            fee_tiers = []
+        fee_tiers, fee_error = _validate_fee_tiers(data.get("fee_tiers") or [])
+        if fee_error:
+            return Response({"detail": fee_error}, status=400)
 
         with schema_context("public"):
             zone = DeliveryZone.objects.create(
@@ -9021,7 +9143,10 @@ class AdminDeliveryZoneDetailView(APIView):
                 zone.is_active = bool(data["is_active"])
                 update_fields.append("is_active")
             if "fee_tiers" in data:
-                zone.fee_tiers = data["fee_tiers"] if isinstance(data["fee_tiers"], list) else []
+                fee_tiers, fee_error = _validate_fee_tiers(data["fee_tiers"])
+                if fee_error:
+                    return Response({"detail": fee_error}, status=400)
+                zone.fee_tiers = fee_tiers
                 update_fields.append("fee_tiers")
 
             if update_fields:
@@ -9167,7 +9292,21 @@ class AdminDeliveryJobListView(APIView):
             except (TypeError, ValueError):
                 return Response({"detail": "Invalid tenant_id."}, status=status.HTTP_400_BAD_REQUEST)
 
-        jobs = list(qs[:100])
+        # Run 8 G3a A2-07: the bare [:100] array hid the cap and made older jobs
+        # unreachable. The response is now the envelope {results, total, page,
+        # page_size}; ?page= (1-based, default 1) and ?page_size= (default 100,
+        # clamped to 1..200) page through the full set.
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size", 100))
+        except (TypeError, ValueError):
+            page_size = 100
+        page_size = min(200, max(1, page_size))
+        total = qs.count()
+        jobs = list(qs[(page - 1) * page_size: page * page_size])
         # Batch-fetch business_type + merchant phone for all jobs (one query each —
         # no per-row N+1 across the ×100 page).
         all_tenant_ids = {j.tenant_id for j in jobs}
@@ -9205,7 +9344,12 @@ class AdminDeliveryJobListView(APIView):
             names = dict(Tenant.objects.filter(id__in=tenant_ids).values_list("id", "name"))
             for d in data:
                 d["tenant_name"] = names.get(d["tenant_id"], "")
-        return Response(data)
+        return Response({
+            "results": data,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        })
 
 
 class AdminCreateDeliveryJobView(APIView):

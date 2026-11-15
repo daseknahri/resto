@@ -346,10 +346,18 @@ class AdminDriverListViewTests(SimpleTestCase):
     def test_returns_empty_list_when_no_drivers(self):
         with patch("accounts.models.Customer") as mock_cust:
             mock_cust.objects.filter.return_value.order_by.return_value = []
+            mock_cust.objects.filter.return_value.count.return_value = 0
+            # A2-08 stats chain a second .filter() off the mocked queryset.
+            mock_cust.objects.filter.return_value.filter.return_value.count.return_value = 0
             with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.filter.return_value.count.return_value = 0
                 resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data, [])
+        # Run 8 G3a A2-08: the list is the envelope {results, total, limit, stats}.
+        self.assertEqual(resp.data["results"], [])
+        self.assertEqual(resp.data["total"], 0)
+        self.assertEqual(resp.data["limit"], 200)
+        self.assertEqual(resp.data["stats"], {"total": 0, "online": 0, "pending": 0, "total_deliveries": 0})
 
     def test_returns_driver_list(self):
         driver = MagicMock()
@@ -366,15 +374,20 @@ class AdminDriverListViewTests(SimpleTestCase):
 
         with patch("accounts.models.Customer") as mock_cust:
             mock_cust.objects.filter.return_value.order_by.return_value = [driver]
+            mock_cust.objects.filter.return_value.count.return_value = 1
             with patch("accounts.models.DeliveryJob") as mock_dj, \
                  patch("accounts.models.DriverPayout") as mock_dp:
                 mock_dj.objects.filter.return_value.values.return_value.annotate.return_value = []
+                mock_dj.objects.filter.return_value.count.return_value = 0
                 mock_dp.objects.filter.return_value.values.return_value.annotate.return_value = []
                 resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]["name"], "Ali")
+        # Run 8 G3a A2-08: the list is the envelope {results, total, limit, stats}.
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["name"], "Ali")
+        self.assertEqual(resp.data["total"], 1)
+        self.assertEqual(resp.data["limit"], 200)
 
     def test_response_shape(self):
         driver = MagicMock()
@@ -391,14 +404,18 @@ class AdminDriverListViewTests(SimpleTestCase):
 
         with patch("accounts.models.Customer") as mock_cust:
             mock_cust.objects.filter.return_value.order_by.return_value = [driver]
+            mock_cust.objects.filter.return_value.count.return_value = 1
             with patch("accounts.models.DeliveryJob") as mock_dj, \
                  patch("accounts.models.DriverPayout") as mock_dp:
                 mock_dj.objects.filter.return_value.values.return_value.annotate.return_value = []
+                mock_dj.objects.filter.return_value.count.return_value = 0
                 mock_dp.objects.filter.return_value.values.return_value.annotate.return_value = []
                 resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        d = resp.data[0]
+        # Run 8 G3a A2-08: rows live in results; stats are computed over the full set.
+        d = resp.data["results"][0]
+        self.assertEqual(set(resp.data["stats"]), {"total", "online", "pending", "total_deliveries"})
         for field in ("id", "name", "phone", "email", "is_online", "driver_lat", "driver_lng",
                       "total_jobs", "completed_jobs", "avg_rating"):
             self.assertIn(field, d, f"Missing field: {field}")
