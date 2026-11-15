@@ -85,9 +85,6 @@ const mountConsole = () =>
     },
   });
 
-const findButton = (wrapper, text) =>
-  wrapper.findAll("button").find((b) => b.text().includes(text));
-
 describe("AdminConsole — mount smoke", () => {
   let wrapper;
 
