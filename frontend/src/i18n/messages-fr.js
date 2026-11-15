@@ -2269,6 +2269,11 @@ ownerCustomers: {
   searching: "Recherche...",
   exportError: "Echec de l'export. Veuillez reessayer.",
   loadMoreError: "Impossible de charger plus de clients. Veuillez reessayer.",
+  grantPointsConfirmDeduct: "Retirer les points",
+  grantPointsConfirmDeductBody: "Cela retire {points} points a {name}. Le solde ne peut pas passer sous zero.",
+  grantPointsConfirmDeductTitle: "Retirer des points de fidelite ?",
+  grantPointsZero: "Le nombre de points ne peut pas etre zero : saisissez un nombre positif pour octroyer des points, ou negatif pour en retirer.",
+  tierCountsNote: "Les compteurs de niveau ne couvrent que les clients charges.",
 },
 ownerStaff: {
   confirmRemoveBody: "Ceci retire definitivement {name} de votre equipe.",

@@ -101,6 +101,7 @@
           :class="activeTier === tier.value ? 'text-[var(--color-secondary)]/70' : 'text-slate-600'"
         >({{ tier.count }})</span>
       </button>
+      <span class="shrink-0 text-[11px] text-slate-500">{{ t('ownerCustomers.tierCountsNote') }}</span>
     </div>
 
     <!-- ── Segment filter chips ─────────────────────────────────────────────── -->
@@ -449,6 +450,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
@@ -457,6 +459,7 @@ import { toWaPhone } from "../lib/phone";
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(true);          // initial / reset load
@@ -564,7 +567,11 @@ const segments = computed(() => [
 ]);
 
 // ── Tiers ─────────────────────────────────────────────────────────────────────
-// Tier is still client-side — computed from order_count on loaded rows
+// Tier is still client-side — computed from order_count on loaded rows, so the
+// tab counts cover only the loaded page (B-22). The server summary carries
+// segment counts only (total/new/returning/at_risk), no tier counts, so there
+// is no server tier total to prefer; the tabs are labelled as loaded-page
+// counts (ownerCustomers.tierCountsNote) instead of pretending to be global.
 const _tierKey = (c) => c.order_count >= 10 ? "vip" : c.order_count >= 3 ? "regular" : "new";
 
 const customerTierLabel = (c) => {
@@ -717,10 +724,28 @@ const closeGrantModal = () => {
 };
 const submitGrantPoints = async () => {
   if (grantModal.loading) return;
-  const delta = parseInt(grantModal.delta, 10);
-  if (Number.isNaN(delta)) {
+  // B-23: strict whole-number validation — parseInt("10abc") silently yields
+  // 10, so the raw input must match an integer exactly. Zero is rejected
+  // (the backend treats it as a no-op); a negative delta deducts points, so
+  // it needs an explicit confirm naming the customer and the amount.
+  const raw = String(grantModal.delta ?? "").trim();
+  if (!/^-?\d+$/.test(raw)) {
     grantModal.error = t("ownerCustomers.grantPointsInvalid");
     return;
+  }
+  const delta = Number(raw);
+  if (delta === 0) {
+    grantModal.error = t("ownerCustomers.grantPointsZero");
+    return;
+  }
+  if (delta < 0) {
+    const ok = await confirm({
+      title: t("ownerCustomers.grantPointsConfirmDeductTitle"),
+      body: t("ownerCustomers.grantPointsConfirmDeductBody", { name: grantModal.customerName, points: Math.abs(delta) }),
+      confirmLabel: t("ownerCustomers.grantPointsConfirmDeduct"),
+      danger: true,
+    });
+    if (!ok) return;
   }
   grantModal.loading = true;
   grantModal.error = "";

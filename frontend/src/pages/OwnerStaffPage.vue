@@ -322,6 +322,7 @@
 import { ref, onActivated, onMounted, reactive, computed } from "vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
+import { useNowTicker } from "../composables/useNowTicker";
 import { useVocabulary } from "../composables/useVocabulary";
 import api from "../lib/api";
 import { formatCurrencyString } from "../lib/intlFormatters";
@@ -407,9 +408,15 @@ const fmtTime = (iso) => {
   }
 };
 
+// B-36: "last active" must advance while the page is open — read the shared
+// 30s ticker (same pattern as OwnerHome/OwnerOrders) instead of a frozen
+// Date.now(). The template re-renders on each tick because fmtRelative reads
+// the reactive ticker value during render.
+const { now: tickerNow } = useNowTicker();
+
 const fmtRelative = (iso) => {
   if (!iso) return "—";
-  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  const mins = Math.round((tickerNow.value - new Date(iso).getTime()) / 60000);
   if (mins < 1) return t("ownerStaff.justNow");
   if (mins < 60) return t("ownerStaff.minsAgo", { n: mins });
   const hrs = Math.round(mins / 60);
@@ -544,6 +551,7 @@ const removeStaff = async (member) => {
     title: t("ownerStaff.confirmRemove"),
     body: t("ownerStaff.confirmRemoveBody", { name: member.name }),
     confirmLabel: t("ownerStaff.remove"),
+    danger: true,
   });
   if (!ok) return;
   removingId.value = member.id;

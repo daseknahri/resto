@@ -2271,6 +2271,11 @@ ownerCustomers: {
   searching: "Searching…",
   exportError: "Export failed. Please try again.",
   loadMoreError: "Could not load more customers. Please try again.",
+  grantPointsConfirmDeduct: "Deduct points",
+  grantPointsConfirmDeductBody: "This removes {points} points from {name}. The balance cannot go below zero.",
+  grantPointsConfirmDeductTitle: "Deduct loyalty points?",
+  grantPointsZero: "Points must not be zero - enter a positive number to grant points, or a negative number to deduct them.",
+  tierCountsNote: "Tier counts cover loaded customers only.",
 },
 ownerStaff: {
   confirmRemoveBody: "This permanently removes {name} from your staff.",

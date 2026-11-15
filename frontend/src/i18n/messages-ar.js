@@ -4668,6 +4668,11 @@ Object.assign(arabicMessages, {
     searching: "\u062c\u0627\u0631\u064d \u0627\u0644\u0628\u062d\u062b\u2026",
     exportError: "\u0641\u0634\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.",
     "loadMoreError": "تعذّر تحميل المزيد من العملاء. يرجى المحاولة مرة أخرى.",
+    "grantPointsConfirmDeduct": "خصم النقاط",
+    "grantPointsConfirmDeductBody": "سيؤدي هذا إلى خصم {points} نقطة من {name}. لا يمكن أن ينخفض الرصيد عن صفر.",
+    "grantPointsConfirmDeductTitle": "خصم نقاط الولاء؟",
+    "grantPointsZero": "يجب ألا تكون النقاط صفرًا — أدخل رقمًا موجبًا للمنح أو سالبًا للخصم.",
+    "tierCountsNote": "أعداد المستويات تشمل العملاء المحمّلين فقط.",
   },
   ownerStaff: {
     "confirmRemoveBody": "هذا يزيل {name} نهائيًا من فريقك.",

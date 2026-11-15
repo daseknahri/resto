@@ -167,3 +167,91 @@ describe("OwnerStaffPage — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerStaff.clockedIn");
   });
 });
+
+// ── G4b-C (B-36 ticker / B-17 danger flag) — appended ───────────────────────
+// Imports are hoisted, so these resolve to the same (mocked api / real
+// useConfirmModal) modules as the imports at the top of the file. useNowTicker
+// is left REAL, matching OwnerHome/OwnerOrders: its 30s interval is armed at
+// mount and cleared on unmount, so the fake-timer test below advances it.
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
+import { nextTick } from "vue";
+
+const findButtonByText = (w, text) =>
+  w.findAll("button").find((b) => b.text().includes(text));
+
+describe("OwnerStaffPage — G4b-C (B-36 / B-17)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.useRealTimers();
+  });
+
+  // Expand Sara's card (the "Last active" cell only renders in the panel).
+  const _mountAndExpand = async (memberOverrides = {}) => {
+    _routes = {
+      "/owner/staff/": {
+        data: {
+          results: [staff(memberOverrides)],
+          stats_days: 7,
+          currency: "MAD",
+        },
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Sara Alami");
+    await findButtonByText(wrapper, "ownerStaff.manage").trigger("click");
+    await flushPromises();
+    return wrapper;
+  };
+
+  // ── B-36: "last active" advances on the shared 30s ticker, no refetch ────
+  it("B-36: last-active relative time advances after one 30s tick without a refetch", async () => {
+    vi.useFakeTimers();
+    try {
+      // 329s ago rounds to 5m; one 30s tick takes it to 359s, which rounds to 6m.
+      const lastActive = new Date(Date.now() - 329000).toISOString();
+      await _mountAndExpand({
+        stats: { orders_handled: 12, revenue: "450.00", last_active: lastActive },
+      });
+      expect(wrapper.text()).toContain('ownerStaff.minsAgo({"n":5})');
+      await vi.advanceTimersByTimeAsync(30000);
+      await nextTick();
+      await flushPromises();
+      expect(wrapper.text()).toContain('ownerStaff.minsAgo({"n":6})');
+      // The text moved with no refetch: still exactly the one mount-time GET.
+      expect(api.get).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ── B-17: remove-staff confirm carries danger: true ──────────────────────
+  it("B-17: the remove-staff confirm is flagged danger and deletes only after approval", async () => {
+    await _mountAndExpand();
+    const removeBtn = findButtonByText(wrapper, "ownerStaff.remove");
+    expect(removeBtn.exists()).toBe(true);
+    await removeBtn.trigger("click");
+    await flushPromises();
+    // The confirm dialog for a destructive remove must carry the danger flag
+    // (read off the real useConfirmModal's shared options ref).
+    expect(useConfirmModal().options.value.danger).toBe(true);
+    expect(api.delete).not.toHaveBeenCalled();
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+    expect(api.delete).toHaveBeenCalledWith("/owner/staff/1/");
+    expect(wrapper.text()).not.toContain("Sara Alami");
+  });
+});
