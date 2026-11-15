@@ -71,6 +71,33 @@
     <!-- Data -->
     <template v-else-if="data">
       <p class="sr-only" aria-live="polite" aria-atomic="true">{{ t('adminAnalytics.loaded') }}</p>
+      <!-- Platform health (A-50): live subsystem status from /api/health/.
+           The page calls it authenticated, so it sees the full payload. A health
+           failure never flips the page-level error — it renders inline here. -->
+      <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '14ms' }">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="ui-kicker">{{ t('adminAnalytics.sectionHealth') }}</h2>
+          <button
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-3 py-1 text-xs disabled:opacity-50"
+            :disabled="healthLoading"
+            @click="fetchHealth"
+          >{{ t('adminAnalytics.healthRefresh') }}</button>
+        </div>
+        <div v-if="healthError" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+          <p class="text-sm text-red-300">{{ t('adminAnalytics.healthError') }}</p>
+        </div>
+        <div v-else-if="health" class="space-y-3">
+          <p class="text-sm text-slate-200">{{ t('adminAnalytics.healthOverall') }}: <span class="font-semibold">{{ healthStatusLabel }}</span></p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StatCard :value="checkLabel(health.checks?.db)" :label="t('adminAnalytics.healthDb')" :color="checkColor(health.checks?.db)" icon="table" />
+            <StatCard :value="checkLabel(health.checks?.cache)" :label="t('adminAnalytics.healthCache')" :color="checkColor(health.checks?.cache)" icon="refresh" />
+            <StatCard :value="checkLabel(health.checks?.celery)" :label="t('adminAnalytics.healthCelery')" :color="checkColor(health.checks?.celery)" icon="clock" />
+            <StatCard :value="checkLabel(health.checks?.channel_layer)" :label="t('adminAnalytics.healthChannel')" :color="checkColor(health.checks?.channel_layer)" icon="link" />
+            <StatCard :value="checkLabel(health.checks?.media)" :label="t('adminAnalytics.healthMedia')" :color="checkColor(health.checks?.media)" icon="camera" />
+          </div>
+        </div>
+      </section>
+
       <!-- Money model: outstanding liabilities -->
       <section v-if="data.financials" class="ui-reveal space-y-3">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionFinancials') }}</h2>
@@ -237,7 +264,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
@@ -247,6 +274,49 @@ const loading = ref(false);
 const fetchError = ref(false);
 const data = ref(null);
 const refreshedAt = ref('');
+
+// A-50: platform health from /api/health/ (authenticated call → full payload).
+// Kept separate from the analytics fetch: a health failure renders inline in
+// its own section and never flips the page-level fetchError.
+const health = ref(null);
+const healthLoading = ref(false);
+const healthError = ref(false);
+
+const healthStatusLabel = computed(() => {
+  if (!health.value) return '—';
+  if (health.value.status === 'ok') return t('adminAnalytics.healthOk');
+  if (health.value.status === 'degraded') return t('adminAnalytics.healthDegraded');
+  if (health.value.status === 'down') return t('adminAnalytics.healthDown');
+  return '—';
+});
+
+const checkLabel = (check) => {
+  if (!check) return '—';
+  return check.ok ? t('adminAnalytics.healthOk') : t('adminAnalytics.healthDegraded');
+};
+
+const checkColor = (check) => {
+  if (!check) return 'sky';
+  return check.ok ? 'emerald' : 'red';
+};
+
+const fetchHealth = async () => {
+  healthLoading.value = true;
+  healthError.value = false;
+  try {
+    const res = await api.get('/api/health/');
+    if (!res.data || typeof res.data.status !== 'string') {
+      healthError.value = true;
+      return;
+    }
+    health.value = res.data;
+  } catch {
+    healthError.value = true;
+  } finally {
+    healthLoading.value = false;
+  }
+};
+
 // A-15: period presets; "all" is the historic all-time default.
 const period = ref('all');
 const periods = [
@@ -300,6 +370,9 @@ const refresh = async () => {
   } finally {
     loading.value = false;
   }
+  // Health refreshes with the dashboard but stays independent: its own
+  // loading/error state, and a failure here never hides the analytics data.
+  await fetchHealth();
 };
 
 onMounted(refresh);

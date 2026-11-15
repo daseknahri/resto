@@ -182,7 +182,7 @@ describe("AdminPlatformAnalytics — mount smoke", () => {
             active: 50,
             searching: 10,
             failed: 40,
-            avg_driver_rating: 4.7, // exercises the one-decimal formatRating path
+            avg_driver_rating: 4.7, // exercises the `+ ' ★'` branch (evaluated in parent render)
             total_fees: 123456.5,
             total_driver_payouts: 98765.25,
           },
@@ -314,6 +314,11 @@ describe("AdminPlatformAnalytics — R8 G3b W2 (A-14…A-18)", () => {
     return null;
   };
 
+  // W5 (A-50): refresh() also GETs /api/health/, so total api.get counts no
+  // longer describe the analytics fetch — filter to the analytics URL.
+  const analyticsCalls = () =>
+    api.get.mock.calls.filter(([url]) => url.includes("/admin/platform-analytics/"));
+
   // ── A-15: default mount still GETs with no params ────────────────────────
   it("default mount GETs /admin/platform-analytics/ with no params (all-time default unchanged)", async () => {
     _routes = { "/admin/platform-analytics/": { data: skeleton() } };
@@ -321,9 +326,9 @@ describe("AdminPlatformAnalytics — R8 G3b W2 (A-14…A-18)", () => {
     wrapper = mountPage();
     await flushPromises();
 
-    expect(api.get).toHaveBeenCalledTimes(1);
-    expect(api.get.mock.calls[0][0]).toContain("/admin/platform-analytics/");
-    expect(api.get.mock.calls[0].length).toBe(1); // no params object
+    expect(analyticsCalls().length).toBe(1);
+    expect(analyticsCalls()[0][0]).toContain("/admin/platform-analytics/");
+    expect(analyticsCalls()[0].length).toBe(1); // no params object
   });
 
   // ── A-15: period selector sends the preset ───────────────────────────────
@@ -338,8 +343,8 @@ describe("AdminPlatformAnalytics — R8 G3b W2 (A-14…A-18)", () => {
     await btn.trigger("click");
     await flushPromises();
 
-    expect(api.get).toHaveBeenCalledTimes(2);
-    expect(api.get.mock.calls[1][1]).toEqual({ params: { period: "7d" } });
+    expect(analyticsCalls().length).toBe(2);
+    expect(analyticsCalls()[1][1]).toEqual({ params: { period: "7d" } });
     // The selector itself renders all three presets.
     expect(wrapper.text()).toContain("adminAnalytics.periodAll");
     expect(wrapper.text()).toContain("adminAnalytics.period30d");
@@ -417,5 +422,106 @@ describe("AdminPlatformAnalytics — R8 G3b W2 (A-14…A-18)", () => {
     for (let i = 0; i < cards.length; i++) {
       expect(String(cards.at(i).props("value"))).not.toContain("★");
     }
+  });
+});
+
+// ── A-50 (RUN8 G3b) — platform health section ───────────────────────────────
+// The health section is page-own DOM (heading + overall-status line + inline
+// error); the per-check StatCards are stubbed by shallowMount, so assertions
+// target the page-own text, never a stubbed StatCard value. The health GET
+// (/api/health/) runs after the analytics GET inside refresh(), so the same
+// URL-routed _routes matcher serves both. Base tests above are untouched;
+// a missing/invalid health payload renders the inline health error, never
+// the page-level error — test (3) proves the dashboard stays visible.
+
+describe("AdminPlatformAnalytics — platform health section (A-50)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const healthOk = () => ({
+    status: "ok",
+    checks: {
+      db: { ok: true, latency_ms: 3 },
+      cache: { ok: true, latency_ms: 1 },
+      celery: { ok: true, detail: "beat_ok: last_heartbeat=2026-11-15T16:00:00+00:00" },
+      channel_layer: { ok: true, detail: "ok" },
+      media: { ok: true, detail: true },
+    },
+    time: "2026-11-15T16:00:00+00:00",
+  });
+
+  const mountWithHealth = async (healthPayload) => {
+    _routes = {
+      "/admin/platform-analytics/": { data: skeleton() },
+      "/api/health/": { data: healthPayload },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    return wrapper;
+  };
+
+  const healthCalls = () =>
+    api.get.mock.calls.filter(([url]) => url.includes("/api/health/")).length;
+
+  // ── (1) all checks green → section + overall OK ──────────────────────────
+  it("shows the health section with overall OK when every check passes", async () => {
+    await mountWithHealth(healthOk());
+
+    const text = wrapper.text();
+    expect(text).toContain("adminAnalytics.sectionHealth");
+    expect(text).toContain("adminAnalytics.healthOverall");
+    expect(text).toContain("adminAnalytics.healthOk");
+  });
+
+  // ── (2) a non-critical check fails → overall Degraded ────────────────────
+  it("shows Degraded overall when a non-critical check fails", async () => {
+    const degraded = healthOk();
+    degraded.status = "degraded";
+    degraded.checks.celery = { ok: false, detail: "beat_stale: last_heartbeat=2026-11-15T15:00:00+00:00 age=3600s (beat/worker down?)" };
+
+    await mountWithHealth(degraded);
+
+    const text = wrapper.text();
+    expect(text).toContain("adminAnalytics.sectionHealth");
+    expect(text).toContain("adminAnalytics.healthDegraded");
+  });
+
+  // ── (3) health payload invalid → inline error, dashboard stays visible ───
+  it("shows an inline health error (not the page error) when the health payload is unusable", async () => {
+    await mountWithHealth(null);
+
+    const text = wrapper.text();
+    expect(text).toContain("adminAnalytics.healthError");
+    // The analytics dashboard itself still renders — a health failure never
+    // flips the page-level fetchError.
+    expect(text).toContain("adminAnalytics.sectionTenants");
+    expect(text).not.toContain("adminAnalytics.fetchError");
+  });
+
+  // ── (4) health refresh button refetches /api/health/ ─────────────────────
+  it("refetches /api/health/ when the health refresh button is clicked", async () => {
+    await mountWithHealth(healthOk());
+    expect(healthCalls()).toBe(1);
+
+    const btn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("adminAnalytics.healthRefresh"));
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(healthCalls()).toBe(2);
   });
 });

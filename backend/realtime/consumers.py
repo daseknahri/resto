@@ -5,6 +5,13 @@ low-sensitivity "something changed" pings (e.g. ``order.new``); the client react
 by refetching over the authenticated HTTP API, so no customer PII ever crosses
 the socket. Authorisation mirrors menu.permissions.IsTenantEditorOrReadOnly so a
 logged-in *customer* on the same host can never join the owner channel.
+
+AdminConsumer (A-51, RUN8 G3b) is the platform-admin channel (``ws/admin``). It
+is NOT tenant-scoped — platform admins span tenants — and is gated on
+IsPlatformAdmin (authenticated AND superuser / platform_superadmin), mirroring
+sales.permissions.IsPlatformAdmin. Same low-sensitivity ping contract: the
+socket carries ids + statuses only, never customer PII; clients refetch details
+over the authenticated HTTP API.
 """
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -29,6 +36,59 @@ class OwnerConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4403)  # unauthorized / wrong tenant
             return
         self.group = tenant_group(tenant.schema_name, "owner")
+        await self.channel_layer.group_add(self.group, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, code):
+        group = getattr(self, "group", None)
+        if group:
+            await self.channel_layer.group_discard(group, self.channel_name)
+
+    async def broadcast_message(self, message):
+        # Group → socket. Only forward the server-authored event + payload.
+        await self.send_json({"event": message.get("event"), "payload": message.get("payload", {})})
+
+    async def receive_json(self, content, **kwargs):
+        # Client → server is not trusted for fan-out; ignore (sockets are receive-only).
+        return
+
+
+# A-51 (RUN8 G3b): the platform-admin group. A fixed name, deliberately NOT
+# tenant-scoped via tenant_group() — platform admins span tenants, and the
+# group is only joinable through the IsPlatformAdmin gate in AdminConsumer.
+ADMIN_GROUP = "platform.admin"
+
+
+@database_sync_to_async
+def _is_platform_admin(user):
+    # Same rule as sales.permissions.IsPlatformAdmin — one source of truth via
+    # the User flags, so socket auth can never drift from API auth. (DB access:
+    # scope["user"] is lazy, so this runs in a thread like _is_tenant_staff.)
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return bool(user.is_superuser or getattr(user, "is_platform_admin", False))
+
+
+class AdminConsumer(AsyncJsonWebsocketConsumer):
+    """Platform-admin channel (``ws/admin``) — live updates for admin boards.
+
+    Gate: IsPlatformAdmin (authenticated AND superuser / platform_superadmin).
+    No tenant requirement: the socket is opened from the admin console on the
+    public host, where TenantScopeMiddleware may resolve no tenant at all.
+    Rejection closes with 4403, mirroring OwnerConsumer.
+
+    Payloads are low-sensitivity pings (ids + statuses, no customer PII), sent
+    via realtime.broadcast.broadcast_admin_event; clients refetch details over
+    the authenticated HTTP API. Client → server messages are ignored
+    (receive-only sockets).
+    """
+
+    async def connect(self):
+        user = self.scope.get("user")
+        if not await _is_platform_admin(user):
+            await self.close(code=4403)  # unauthorized / not a platform admin
+            return
+        self.group = ADMIN_GROUP
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
 

@@ -33,6 +33,9 @@ REST_FRAMEWORK = {
         "checkout_intent": "60/hour",
         "place_order": "60/hour",
         "order_status": "300/hour",
+        # A-49 (RUN8 G3b): public /api/health/ — generous per-IP cap; monitors poll
+        # every 30-60s and the admin health section refreshes on demand.
+        "health": "60/min",
         "auth_login_burst": "8/min",
         "auth_login_sustained": "50/day",
         "auth_activation": "20/hour",

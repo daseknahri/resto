@@ -7,7 +7,7 @@ Responds to GET /api/health/ with a JSON payload indicating the status of
 each critical subsystem.  Used by uptime monitors (e.g. UptimeRobot, Coolify
 health checks) and internal probes.
 
-Response schema
+Response schema (authenticated callers — see A-49 note below)
   {
     "status": "ok" | "degraded" | "down",
     "checks": {
@@ -21,6 +21,15 @@ Response schema
     "schema": "<db schema name>",
     "tenant": {...} | null
   }
+
+A-49 (RUN8 G3b): the endpoint stays public (uptime monitors / Coolify health
+checks call it without credentials) but no longer leaks tenant identity or the
+DB schema name to anonymous probers — ``schema`` and ``tenant`` are included
+only when the caller is authenticated (session auth). Unauthenticated callers
+still get the coarse ``status`` / ``checks`` / ``time`` payload and the same
+200/503 policy, so existing health checks keep working unchanged. The view is
+also throttled per client IP (HealthThrottle, scope "health", 60/min) so it
+cannot be used as an amplification / scraping surface.
 
 HTTP status policy
   200 — db + cache pass  (status "ok" or "degraded" for non-critical subsystems)
@@ -58,8 +67,12 @@ import time
 
 from django.core.cache import cache
 from django.db import connection
-from django.http import JsonResponse
 from django.utils.timezone import now
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+from accounts.throttles import HealthThrottle
 
 # Process start (monotonic). Used as the health "start_period" grace: right after a fresh
 # deploy the beat may not have written its first heartbeat yet, so a missing key during the
@@ -245,7 +258,16 @@ def _check_media() -> dict:
         return {"ok": False, "detail": f"error: {type(exc).__name__}"}
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([HealthThrottle])
 def health_view(request):
+    # NOTE: @api_view wraps the plain HttpRequest in a DRF Request. The default
+    # authentication classes (SessionAuthentication) run, so request.user is the
+    # logged-in user when a session cookie is present; AllowAny keeps the endpoint
+    # public for uptime monitors (no credentials).
+    # request.tenant proxies through to the underlying HttpRequest (set by the
+    # tenant middleware on tenant hosts; None on the public host).
     db = _check_db()
     cache_check = _check_cache()
     celery_check = _check_celery()
@@ -261,28 +283,35 @@ def health_view(request):
     else:
         overall = "ok"
 
-    tenant = getattr(request, "tenant", None)
     http_status = 503 if overall == "down" else 200
 
-    return JsonResponse(
-        {
-            "status": overall,
-            "checks": {
-                "db": db,
-                "cache": cache_check,
-                "celery": celery_check,
-                "channel_layer": channel_check,
-                "media": media_check,
-            },
-            "time": now().isoformat(),
-            "schema": getattr(connection, "schema_name", "unknown"),
-            "tenant": {
-                "id":   getattr(tenant, "id",   None),
+    # A-49: tenant identity + DB schema name go only to authenticated callers.
+    # Unauthenticated callers (uptime monitors, anonymous probers) get the coarse
+    # status/checks/time payload only — same shape otherwise, same 200/503 policy,
+    # so existing health checks keep working unchanged.
+    payload = {
+        "status": overall,
+        "checks": {
+            "db": db,
+            "cache": cache_check,
+            "celery": celery_check,
+            "channel_layer": channel_check,
+            "media": media_check,
+        },
+        "time": now().isoformat(),
+    }
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        tenant = getattr(request, "tenant", None)
+        payload["schema"] = getattr(connection, "schema_name", "unknown")
+        payload["tenant"] = (
+            {
+                "id": getattr(tenant, "id", None),
                 "slug": getattr(tenant, "slug", None),
                 "name": getattr(tenant, "name", None),
             }
             if tenant
-            else None,
-        },
-        status=http_status,
-    )
+            else None
+        )
+
+    return Response(payload, status=http_status)

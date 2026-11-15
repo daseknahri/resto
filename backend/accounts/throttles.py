@@ -20,6 +20,19 @@ class _IPThrottle(SimpleRateThrottle):
         }
 
 
+class HealthThrottle(_IPThrottle):
+    """A-49 (RUN8 G3b): light per-IP throttle on the public /api/health/ endpoint.
+
+    The endpoint is AllowAny (uptime monitors / Coolify health checks call it
+    without credentials) and each hit runs DB + cache + channel-layer probes, so
+    an uncapped prober could use it for scraping/amplification. Keyed on the
+    trusted-proxy-aware client IP (via _IPThrottle, like the other public
+    endpoints) — generous on purpose: real monitors poll every 30-60s and the
+    admin health section refreshes on demand, far below 60/min.
+    """
+    scope = "health"
+
+
 class LoginBurstThrottle(_IPThrottle):
     scope = "auth_login_burst"
 

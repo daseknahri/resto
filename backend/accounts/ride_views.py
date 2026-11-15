@@ -1886,4 +1886,23 @@ class AdminRideForceResolveView(APIView):
             metadata={"action": action, "resolved": resolved, "reason": reason},
         )
 
+        # A-51 (RUN8 G3b): live-update the platform-admin board (ws/admin) so the
+        # AdminRides board can refresh without its 20 s poll. Best-effort — the
+        # broadcast helper never raises, and this guard keeps realtime from ever
+        # breaking the HTTP response. Payload is ids + statuses only (no PII).
+        try:
+            from realtime.broadcast import broadcast_admin_event
+
+            broadcast_admin_event(
+                "ride.updated",
+                {
+                    "ride_id": ride.id,
+                    "status": ride.status,
+                    "resolved": resolved,
+                    "action": action,
+                },
+            )
+        except Exception:
+            pass
+
         return Response({"id": ride.id, "status": ride.status, "resolved": resolved})
