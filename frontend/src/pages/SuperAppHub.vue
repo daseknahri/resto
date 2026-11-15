@@ -33,14 +33,8 @@
                 :to="{ name: 'customer-account' }"
                 class="ui-btn-primary ui-touch-target inline-flex items-center gap-2"
               >
-                <span aria-hidden="true">👤</span>
+                <AppIcon name="user" class="h-4 w-4" aria-hidden="true" />
                 {{ t('superAppHub.signInGreeting', { name: customerStore.displayName }) }}
-              </RouterLink>
-              <RouterLink
-                :to="{ name: 'customer-account' }"
-                class="ui-btn-outline ui-touch-target text-sm"
-              >
-                {{ t('superAppHub.myAccount') }}
               </RouterLink>
             </template>
             <template v-else>
@@ -49,7 +43,7 @@
                 class="ui-btn-primary ui-touch-target inline-flex items-center gap-2"
                 @click="showAuthModal = true"
               >
-                <span aria-hidden="true">🔑</span>
+                <AppIcon name="key" class="h-4 w-4" aria-hidden="true" />
                 {{ t('superAppHub.signInCta') }}
               </button>
             </template>
@@ -75,7 +69,7 @@
       class="flex items-center gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/6 px-4 py-3"
       role="status"
     >
-      <span class="text-lg shrink-0" aria-hidden="true">🔔</span>
+      <AppIcon name="bell" class="h-5 w-5 shrink-0 text-sky-300" aria-hidden="true" />
       <p class="flex-1 text-xs text-sky-200">{{ t('superAppHub.pushPrompt') }}</p>
       <div class="flex shrink-0 items-center gap-2">
         <button
@@ -88,8 +82,8 @@
           type="button"
           class="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-300 focus-visible:outline-none"
           :aria-label="t('common.dismiss')"
-          @click="pushBannerDismissed = true"
-        >✕</button>
+          @click="dismissPushBanner"
+        ><AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" /></button>
       </div>
     </div>
 
@@ -107,7 +101,14 @@
       aria-labelledby="resume-heading"
       class="ui-reveal space-y-3"
     >
-      <h2 id="resume-heading" class="ui-kicker">{{ t('superAppHub.resumeTitle') }}</h2>
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 id="resume-heading" class="ui-kicker">{{ t('superAppHub.resumeTitle') }}</h2>
+        <RouterLink
+          v-if="hasMoreResumeCards"
+          :to="{ name: 'customer-account' }"
+          class="ui-top-link shrink-0 text-xs font-semibold"
+        >{{ t('superAppHub.resumeViewAll') }}</RouterLink>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <RouterLink
           v-for="card in resumeCards"
@@ -116,10 +117,10 @@
           class="ui-glass ui-press flex items-center gap-3.5 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
         >
           <div
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
             :class="ACCENT_CLASSES[card.accent]?.tile ?? 'border border-slate-600/40 bg-slate-700/20'"
             aria-hidden="true"
-          >{{ card.icon }}</div>
+          ><AppIcon :name="card.icon" class="h-5 w-5" aria-hidden="true" /></div>
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-semibold text-white">{{ card.title }}</p>
             <p class="truncate text-xs text-slate-400">{{ card.subtitle }}</p>
@@ -161,7 +162,7 @@
           class="ui-press flex shrink-0 flex-col items-start gap-1 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5 transition hover:bg-slate-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
           style="min-width: 140px; max-width: 180px"
         >
-          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60 text-xl" aria-hidden="true">🍽</span>
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60" aria-hidden="true"><AppIcon name="food" class="h-5 w-5 text-slate-300" aria-hidden="true" /></span>
           <p class="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-white">{{ r.restaurant_name }}</p>
           <p class="text-[10px] text-slate-500">{{ t('superAppHub.orderAgainCta') }}</p>
         </RouterLink>
@@ -203,7 +204,7 @@
             :to="{ name: 'marketplace-menu', params: { slug: b.restaurant_slug } }"
             class="ui-press flex flex-col items-start gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
           >
-            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60 text-xl" aria-hidden="true">🍽</span>
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-700/60" aria-hidden="true"><AppIcon name="food" class="h-5 w-5 text-slate-300" aria-hidden="true" /></span>
             <p class="mt-0.5 line-clamp-2 pe-6 text-sm font-semibold leading-snug text-white">{{ b.restaurant_name }}</p>
             <p class="text-[10px] text-slate-500">
               {{ b.order_count ? t('superAppHub.myBusinessesOrders', { count: b.order_count }) : t('superAppHub.myBusinessesFollowing') }}
@@ -270,10 +271,10 @@
           >
             <!-- Icon tile -->
             <div
-              class="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl"
+              class="flex h-12 w-12 items-center justify-center rounded-2xl"
               :class="ACCENT_CLASSES[svc.accent]?.tile ?? 'border border-slate-600/40 bg-slate-700/20'"
               aria-hidden="true"
-            >{{ svc.icon }}</div>
+            ><AppIcon :name="svc.icon" class="h-6 w-6" aria-hidden="true" /></div>
 
             <!-- Text -->
             <div class="flex-1 space-y-1.5">
@@ -320,8 +321,8 @@
 
         <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
           <!-- Icon -->
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/10 text-2xl" aria-hidden="true">
-            🏪
+          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/10" aria-hidden="true">
+            <AppIcon name="shop" class="h-7 w-7 text-violet-300" aria-hidden="true" />
           </div>
 
           <!-- Text -->
@@ -362,12 +363,14 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useCustomerActivity } from '../composables/useCustomerActivity';
 import { useCustomerStore } from '../stores/customer';
+import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { getServices } from '../lib/services';
 import { PLATFORM_NAME } from '../lib/brand';
 
 const { t } = useI18n();
 const customerStore = useCustomerStore();
+const toast = useToastStore();
 const showAuthModal = ref(false);
 const platformName = PLATFORM_NAME;
 
@@ -396,7 +399,30 @@ const {
   subscribe: subscribePush,
   autoRestore: pushAutoRestore,
 } = useCustomerPush();
-const pushBannerDismissed = ref(false);
+// A-30: the push-banner dismissal persists across visits (localStorage +
+// 7-day expiry) instead of living only for the current page session.
+const PUSH_BANNER_DISMISS_KEY = 'rostoy:push-banner-dismissed';
+const PUSH_BANNER_DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const readPushBannerDismissed = () => {
+  try {
+    const raw = localStorage.getItem(PUSH_BANNER_DISMISS_KEY);
+    if (!raw) return false;
+    const dismissedAt = Number(raw);
+    if (!Number.isFinite(dismissedAt)) return false;
+    return Date.now() - dismissedAt < PUSH_BANNER_DISMISS_TTL_MS;
+  } catch {
+    return false; // storage unavailable (private mode) — show the banner
+  }
+};
+const pushBannerDismissed = ref(readPushBannerDismissed());
+const dismissPushBanner = () => {
+  pushBannerDismissed.value = true;
+  try {
+    localStorage.setItem(PUSH_BANNER_DISMISS_KEY, String(Date.now()));
+  } catch {
+    /* storage unavailable — the dismissal stays session-only */
+  }
+};
 
 // Status-adjust the service grid by the platform's enabled_verticals (P0), then
 // float the verticals the customer actually uses to the top (usage order desc),
@@ -435,13 +461,13 @@ const RIDE_ACTIVE_LABEL = {
 };
 const rideStatusLabel = (s) => (RIDE_ACTIVE_LABEL[s] ? t(RIDE_ACTIVE_LABEL[s]) : s);
 
-const resumeCards = computed(() => {
+const resumeAllCards = computed(() => {
   const cards = [];
   for (const o of activeItems.value.orders || []) {
     cards.push({
       key: 'order-' + o.order_number,
       kind: 'order',
-      icon: '🍽️',
+      icon: 'food',
       accent: 'amber',
       title: t('superAppHub.resumeOrderTitle', { name: o.restaurant_name || '' }),
       subtitle: t('superAppHub.resumeOrderSub', { number: o.order_number }),
@@ -455,7 +481,7 @@ const resumeCards = computed(() => {
     cards.push({
       key: 'ride-' + ride.id,
       kind: 'ride',
-      icon: '🚕',
+      icon: 'taxi',
       accent: 'emerald',
       title: t('superAppHub.resumeRideTitle'),
       subtitle: ride.dropoff_address || rideStatusLabel(ride.status),
@@ -467,15 +493,20 @@ const resumeCards = computed(() => {
     cards.push({
       key: 'pkg-' + pkg.id,
       kind: 'package',
-      icon: '📦',
+      icon: 'package',
       accent: 'sky',
       title: t('superAppHub.resumePackageTitle'),
       subtitle: pkg.dropoff_address || rideStatusLabel(pkg.status),
       to: { name: 'send-package' },
     });
   }
-  return cards.slice(0, 3);
+  return cards;
 });
+
+// A-32: the rail shows the first 3 cards; the "view all" link in the section
+// header covers the rest instead of silently hiding them.
+const resumeCards = computed(() => resumeAllCards.value.slice(0, 3));
+const hasMoreResumeCards = computed(() => resumeAllCards.value.length > resumeCards.value.length);
 
 const recentRestaurants = ref([]);
 const recentRestaurantsError = ref(false);
@@ -520,7 +551,11 @@ const toggleFollow = async (b) => {
       await api.delete('/customer/businesses/follow/', { params: { restaurant: b.restaurant_slug } });
     }
     b.is_favorite = next;
-  } catch { /* best-effort — leave the toggle state unchanged on failure */ }
+  } catch (err) {
+    // A-33: leave the toggle state unchanged on failure, but tell the user
+    // the tap did nothing instead of failing silently.
+    toast.show(err?.response?.data?.detail || t('superAppHub.followFailed'), 'error');
+  }
   finally {
     const s = new Set(followBusy.value);
     s.delete(b.tenant_id);

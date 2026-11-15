@@ -3386,6 +3386,8 @@ Object.assign(arabicMessages, {
   servicesLoadFailed: "تعذّر تحميل استخدامك — تُعرض الخدمات بالترتيب الافتراضي.",
   orderAgainLoadFailed: "تعذّر تحميل طلباتك الأخيرة.",
   businessesLoadFailed: "تعذّر تحميل متاجرك.",
+    "followFailed": "تعذّر تحديث المتابعة. يُرجى المحاولة مجددًا.",
+    "resumeViewAll": "عرض الكل",
   },
   marketplace: {
     kicker: "\u0627\u0637\u0644\u0628 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a",

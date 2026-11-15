@@ -501,6 +501,8 @@ superAppHub: {
   servicesLoadFailed: "Could not load your usage — services are shown in default order.",
   orderAgainLoadFailed: "Could not load your recent orders.",
   businessesLoadFailed: "Could not load your businesses.",
+  followFailed: "Could not update your follow. Please try again.",
+  resumeViewAll: "View all",
 },
 marketplace: {
   kicker: "Order online",

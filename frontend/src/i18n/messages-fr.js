@@ -499,6 +499,8 @@ superAppHub: {
   servicesLoadFailed: "Impossible de charger votre utilisation — les services sont affiches dans l'ordre par defaut.",
   orderAgainLoadFailed: "Impossible de charger vos commandes recentes.",
   businessesLoadFailed: "Impossible de charger vos etablissements.",
+  followFailed: "Impossible de mettre a jour votre suivi. Veuillez reessayer.",
+  resumeViewAll: "Tout voir",
 },
 marketplace: {
   kicker: "Commander en ligne",

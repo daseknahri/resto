@@ -14,7 +14,7 @@
  *
  * Entry shape:
  *   id          {string}  unique key; drives i18n lookup
- *   icon        {string}  emoji shown in the tile
+ *   icon        {string}  AppIcon name shown in the tile (A-31: no emoji)
  *   status      {'live'|'coming_soon'}
  *   kind        {'lens'|'route'}  only present when status === 'live'
  *   lens        {string}  marketplace ?type= value  (kind === 'lens')
@@ -31,12 +31,12 @@
 import { FOOD, SHOPS, PHARMACY, RIDES, COURIER, DRIVER } from './verticals';
 
 const _DEFINITIONS = [
-  { id: FOOD,     icon: '🍽️', kind: 'lens',  lens: 'food',  accent: 'amber'   },
-  { id: SHOPS,    icon: '🛍️', kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
-  { id: RIDES,    icon: '🚕', kind: 'route', routeName: 'ride', accent: 'emerald' },
-  { id: PHARMACY, icon: '💊', kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
-  { id: COURIER,  icon: '📦', kind: 'route', routeName: 'send-package', accent: 'sky'     },
-  { id: DRIVER,   icon: '🏍️', kind: 'route', routeName: 'driver',       accent: 'violet'  },
+  { id: FOOD,     icon: 'food', kind: 'lens',  lens: 'food',  accent: 'amber'   },
+  { id: SHOPS,    icon: 'bag', kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
+  { id: RIDES,    icon: 'taxi', kind: 'route', routeName: 'ride', accent: 'emerald' },
+  { id: PHARMACY, icon: 'pill', kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
+  { id: COURIER,  icon: 'package', kind: 'route', routeName: 'send-package', accent: 'sky'     },
+  { id: DRIVER,   icon: 'bike', kind: 'route', routeName: 'driver',       accent: 'violet'  },
 ];
 
 // Verticals that are always live regardless of the platform gate

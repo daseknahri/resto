@@ -12,9 +12,10 @@
  *   - useI18n mocked to return deterministic keys
  *   - vue-router mocked (the page imports { RouterLink })
  *
- * The customer-activity + customer-push composables are intentionally left REAL:
- * they are best-effort and jsdom-safe (every fetch is try/caught, push is gated
- * behind unsupported navigator APIs), so running them exercises more real setup.
+ * The customer-activity composable is intentionally left REAL: it is best-effort
+ * and jsdom-safe (every fetch is try/caught), so running it exercises more real
+ * setup. useCustomerPush is MOCKED (see the mock below): it freezes `supported`
+ * to false at import time in jsdom, so the push banner could never render.
  * lib/services (getServices) is left REAL so the service-launcher v-for actually
  * indexes the page's ACCENT_CLASSES map for all six real accents — the classic
  * "undefined map key" crash path this guard exists to catch.
@@ -22,6 +23,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { shallowMount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import { ref } from "vue";
 
 vi.mock("../../composables/useI18n", () => ({
   useI18n: () => ({
@@ -60,6 +62,34 @@ vi.mock("vue-router", () => ({
   RouterLink: RouterLinkStub,
   useRoute: () => ({ params: {}, query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+// useCustomerPush is mocked, not left real: it computes `supported` and the
+// initial `permission` ONCE at module import (module-level consts), so in
+// jsdom they freeze to false/'denied' before any test can stub the window
+// globals — stubbing PushManager/Notification/serviceWorker before mount
+// cannot turn the banner on. The A-30 tests exercise the BANNER logic
+// (dismissal persistence + 7-day expiry), not the composable's feature
+// detection, so the mock stands in for it. Default: unsupported (banner
+// hidden), exactly like the real composable in jsdom — the base smoke +
+// A-28 tests are unaffected. A-30 tests flip _pushState.supported on per
+// test; the W4 beforeEach resets it.
+const _pushState = vi.hoisted(() => ({
+  supported: false,
+  permission: "default",
+  subscribed: false,
+}));
+vi.mock("../../composables/useCustomerPush", () => ({
+  useCustomerPush: () => ({
+    supported: _pushState.supported,
+    permission: ref(_pushState.permission),
+    subscribed: ref(_pushState.subscribed),
+    loading: ref(false),
+    subscribe: vi.fn(() => Promise.resolve()),
+    unsubscribe: vi.fn(() => Promise.resolve()),
+    autoRestore: vi.fn(() => Promise.resolve()),
+    checkEnabled: vi.fn(() => Promise.resolve(false)),
+  }),
 }));
 
 import api from "../../lib/api";
@@ -265,6 +295,222 @@ describe("SuperAppHub — activity rails fail loudly + retry (A-28)", () => {
     await findButton(wrapper, "common.retry").trigger("click");
     await flushPromises();
     expect(wrapper.text()).not.toContain("superAppHub.orderAgainLoadFailed");
+    wrapper.unmount();
+  });
+});
+
+// ── W4 P2 gaps (A-29…A-33) — appended 2026-11-15 ─────────────────────────────
+import { getServices } from "../../lib/services";
+import { useToastStore } from "../../stores/toast";
+
+describe("SuperAppHub — W4 P2 gaps (A-29…A-33)", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    window.localStorage.clear();
+    _pushState.supported = false;
+    _pushState.permission = "default";
+    _pushState.subscribed = false;
+  });
+
+  afterEach(() => {
+    _routes = {};
+    window.localStorage.clear();
+  });
+
+  const auth = () => useCustomerStore().setCustomer({ id: 1, name: "Sara", phone: "0600000000" });
+
+  const order = (n) => ({ order_number: n, restaurant_name: "Chez Test", restaurant_slug: "chez-test" });
+
+  const activeRoutes = (orders) => ({
+    "/customer/active/": {
+      data: {
+        orders,
+        ride: { id: 7, status: "in_progress", dropoff_address: "12 Rue Test" },
+        package: { id: 9, status: "searching", dropoff_address: "5 Ave Test" },
+      },
+    },
+    "/customer/orders/all/": { data: { orders: [] } },
+    "/customer/businesses/": { data: { businesses: [] } },
+  });
+
+  const businessesRoutes = (businesses) => ({
+    "/customer/active/": { data: { orders: [], ride: null, package: null } },
+    "/customer/orders/all/": { data: { orders: [] } },
+    "/customer/businesses/": { data: { businesses } },
+  });
+
+  // ── A-29: exactly one link to customer-account in the hero ────────────────
+  it("hero links to customer-account exactly once (no duplicate 'My account' button)", async () => {
+    auth();
+    const wrapper = mountHub();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("superAppHub.signInGreeting");
+    expect(wrapper.text()).not.toContain("superAppHub.myAccount");
+    const accountLinks = wrapper
+      .findAllComponents(RouterLinkStub)
+      .filter((c) => c.props("to")?.name === "customer-account");
+    expect(accountLinks.length).toBe(1);
+    wrapper.unmount();
+  });
+
+  // A-30: the banner renders only when the (mocked) useCustomerPush reports
+  // push as supported — the A-30 tests flip _pushState.supported on per test.
+  const dismissButton = (wrapper) => wrapper.find('button[aria-label="common.dismiss"]');
+
+  // ── A-30: push-banner dismissal persists 7 days in localStorage ───────────
+  it("dismissing the push banner persists it; a remount stays dismissed", async () => {
+    _pushState.supported = true;
+    auth();
+    const wrapper = mountHub();
+    await flushPromises();
+    expect(dismissButton(wrapper).exists()).toBe(true);
+
+    await dismissButton(wrapper).trigger("click");
+    await flushPromises();
+    expect(dismissButton(wrapper).exists()).toBe(false);
+
+    const raw = window.localStorage.getItem("rostoy:push-banner-dismissed");
+    expect(raw).not.toBeNull();
+    expect(Number(raw)).toBeGreaterThan(Date.now() - 60_000);
+    wrapper.unmount();
+
+    // Fresh mount, same localStorage: the dismissal survives the remount.
+    const wrapper2 = mountHub();
+    await flushPromises();
+    expect(dismissButton(wrapper2).exists()).toBe(false);
+    wrapper2.unmount();
+  });
+
+  it("a fresh (unexpired) dismissal hides the banner on first mount", async () => {
+    _pushState.supported = true;
+    auth();
+    window.localStorage.setItem("rostoy:push-banner-dismissed", String(Date.now()));
+    const wrapper = mountHub();
+    await flushPromises();
+    expect(dismissButton(wrapper).exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("an expired dismissal (older than 7 days) shows the banner again", async () => {
+    _pushState.supported = true;
+    auth();
+    window.localStorage.setItem(
+      "rostoy:push-banner-dismissed",
+      String(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    );
+    const wrapper = mountHub();
+    await flushPromises();
+    expect(dismissButton(wrapper).exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  // ── A-31: no emoji anywhere; services carry AppIcon names ─────────────────
+  it("renders no emoji on the hub (hero, rails, service grid, partner strip)", async () => {
+    auth();
+    _routes = {
+      "/customer/active/": {
+        data: {
+          orders: [order("A123")],
+          ride: { id: 7, status: "in_progress", dropoff_address: "12 Rue Test" },
+          package: { id: 9, status: "searching", dropoff_address: "5 Ave Test" },
+        },
+      },
+      "/customer/orders/all/": {
+        data: {
+          orders: [{ order_number: "A122", restaurant_slug: "chez-test", restaurant_name: "Chez Test", status: "completed" }],
+        },
+      },
+      "/customer/businesses/": {
+        data: {
+          businesses: [{ tenant_id: 1, restaurant_slug: "chez-test", restaurant_name: "Chez Test", order_count: 3, is_favorite: true }],
+        },
+      },
+    };
+    const wrapper = mountHub();
+    await flushPromises();
+    for (const e of ["👤", "🔑", "🔔", "🍽", "🛍", "🚕", "💊", "📦", "🏍", "🏪"]) {
+      expect(wrapper.text()).not.toContain(e);
+    }
+    wrapper.unmount();
+  });
+
+  it("lib/services exposes AppIcon names, not emoji", () => {
+    expect(getServices().map((s) => s.icon)).toEqual(["food", "bag", "taxi", "pill", "package", "bike"]);
+  });
+
+  // ── A-32: resume rail caps at 3 with a "view all" link ────────────────────
+  it("caps the resume rail at 3 cards and shows a 'view all' link when more exist", async () => {
+    auth();
+    _routes = activeRoutes([order("A123"), order("A124")]); // 2 orders + ride + package = 4 cards
+    const wrapper = mountHub();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("superAppHub.resumeViewAll");
+    const section = wrapper.find('section[aria-labelledby="resume-heading"]');
+    expect(section.findAll("a").length).toBe(4); // 3 cards + the view-all link
+    const viewAll = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((c) => c.text().includes("superAppHub.resumeViewAll"));
+    expect(viewAll.props("to")).toEqual({ name: "customer-account" });
+    wrapper.unmount();
+  });
+
+  it("shows no 'view all' link when the resume rail fits in 3 cards", async () => {
+    auth();
+    _routes = activeRoutes([order("A123")]); // 1 order + ride + package = 3 cards
+    const wrapper = mountHub();
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("superAppHub.resumeViewAll");
+    const section = wrapper.find('section[aria-labelledby="resume-heading"]');
+    expect(section.findAll("a").length).toBe(3);
+    wrapper.unmount();
+  });
+
+  // ── A-33: follow toggle toasts an error on failure, state unchanged ───────
+  it("toasts an error and leaves the toggle unchanged when unfollow fails", async () => {
+    auth();
+    _routes = businessesRoutes([
+      { tenant_id: 1, restaurant_slug: "chez-test", restaurant_name: "Chez Test", order_count: 3, is_favorite: true },
+    ]);
+    const wrapper = mountHub();
+    await flushPromises();
+
+    const toast = useToastStore();
+    const showSpy = vi.spyOn(toast, "show");
+    api.delete.mockRejectedValueOnce(new Error("down"));
+    const btn = wrapper.find('button[aria-label^="superAppHub.unfollowAria"]');
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(showSpy).toHaveBeenCalledWith("superAppHub.followFailed", "error");
+    // Toggle state unchanged: still the unfollow button, not the follow one.
+    expect(wrapper.find('button[aria-label^="superAppHub.unfollowAria"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("flips the toggle on success without an error toast", async () => {
+    auth();
+    _routes = businessesRoutes([
+      { tenant_id: 1, restaurant_slug: "chez-test", restaurant_name: "Chez Test", order_count: 0, is_favorite: false },
+    ]);
+    const wrapper = mountHub();
+    await flushPromises();
+
+    const toast = useToastStore();
+    const showSpy = vi.spyOn(toast, "show");
+    const btn = wrapper.find('button[aria-label^="superAppHub.followAria"]');
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(showSpy).not.toHaveBeenCalled();
+    expect(wrapper.find('button[aria-label^="superAppHub.unfollowAria"]').exists()).toBe(true);
     wrapper.unmount();
   });
 });
