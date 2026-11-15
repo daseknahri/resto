@@ -2948,8 +2948,9 @@ stepPublish: {
   priceZeroWarningTitle: "Some dishes have a price of 0",
   priceZeroWarningBody: "Some published items have no price set, so customers could add them to their cart for free. Review your prices before going live.",
   priceZeroDismiss: "Dismiss",
-  publishBrandDisabledHint: "Add a tagline or contact details before you can publish.",
-  publishBrandRequirement: "Add a tagline or contact details before publishing — otherwise your menu goes live with no brand on the storefront.",
+  publishBrandDisabledHint: "Add a tagline and contact details before you can publish.",
+  publishBrandRequirement: "Add a tagline and contact details before publishing — otherwise your menu goes live with no brand on the storefront.",
+  republishMenu: "Re-publish {catalog}",
 },
 closureDates: {
   addDate: "Add a closure date",

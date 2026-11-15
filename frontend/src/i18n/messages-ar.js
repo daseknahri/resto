@@ -2075,8 +2075,9 @@ const arabicMessages = {
     "priceZeroWarningTitle": "بعض الأطباق سعرها 0",
     "priceZeroWarningBody": "بعض العناصر المنشورة ليس لها سعر محدد، لذا قد يضيفها العملاء إلى سلتهم مجاناً. راجع أسعارك قبل النشر.",
     "priceZeroDismiss": "تجاهل",
-    "publishBrandDisabledHint": "أضف شعارًا أو بيانات اتصال قبل أن تتمكن من النشر.",
-    "publishBrandRequirement": "أضف شعارًا أو بيانات اتصال قبل النشر — وإلا فستظهر قائمتك على المتجر دون أي هوية.",
+    "publishBrandDisabledHint": "أضف شعارًا وبيانات اتصال قبل أن تتمكن من النشر.",
+    "publishBrandRequirement": "أضف شعارًا وبيانات اتصال قبل النشر — وإلا فستظهر قائمتك على المتجر دون أي هوية.",
+    "republishMenu": "إعادة نشر {catalog}",
   },
   "stepCategories": {
     "title": "التصنيفات",

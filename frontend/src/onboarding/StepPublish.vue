@@ -133,9 +133,9 @@
           :title="publishDisabledTitle"
           @click="publish"
         >
-          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu", { catalog }) }}
+          {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.republishMenu", { catalog }) : t("stepPublish.publishMenu", { catalog }) }}
         </button>
-        <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
+        <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks()">
           {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
         </button>
         <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
@@ -389,7 +389,12 @@
                 maxlength="80"
                 :placeholder="t('stepPublish.cityPlaceholder')"
                 class="w-full ui-input"
+                :class="errors.city ? 'border-red-400' : ''"
+                :aria-invalid="errors.city ? 'true' : undefined"
+                :aria-describedby="errors.city ? 'step-publish-city-error' : undefined"
+                @input="clearError('city')"
               />
+              <p v-if="errors.city" id="step-publish-city-error" class="text-xs text-red-300" role="alert">{{ errors.city }}</p>
             </div>
           </div>
 
@@ -410,7 +415,7 @@
                 :aria-label="t(`stepPublish.priceTier${tier}`)"
                 @click="form.price_tier = tier"
               >
-                {{ '€'.repeat(tier) }}
+                {{ '●'.repeat(tier) }}
               </button>
             </div>
           </div>
@@ -462,7 +467,12 @@
                   step="0.0001"
                   :placeholder="t('stepPublish.latPlaceholder')"
                   class="w-full ui-input tabular-nums"
+                  :class="errors.lat ? 'border-red-400' : ''"
+                  :aria-invalid="errors.lat ? 'true' : undefined"
+                  :aria-describedby="errors.lat ? 'step-publish-lat-error' : undefined"
+                  @input="clearError('lat')"
                 />
+                <p v-if="errors.lat" id="step-publish-lat-error" class="text-xs text-red-300" role="alert">{{ errors.lat }}</p>
               </div>
               <div class="space-y-0.5">
                 <label for="sp-lng" class="text-[10px] text-slate-500">{{ t("stepPublish.lngLabel") }}</label>
@@ -473,7 +483,12 @@
                   step="0.0001"
                   :placeholder="t('stepPublish.lngPlaceholder')"
                   class="w-full ui-input tabular-nums"
+                  :class="errors.lng ? 'border-red-400' : ''"
+                  :aria-invalid="errors.lng ? 'true' : undefined"
+                  :aria-describedby="errors.lng ? 'step-publish-lng-error' : undefined"
+                  @input="clearError('lng')"
                 />
+                <p v-if="errors.lng" id="step-publish-lng-error" class="text-xs text-red-300" role="alert">{{ errors.lng }}</p>
               </div>
             </div>
           </div>
@@ -745,18 +760,22 @@ const canWhatsappOrder = computed(() => tenant.entitlements?.can_whatsapp_order 
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const sectionPanelClass = computed(() => "ui-panel space-y-4 p-5");
 
-// Brand readiness — the same definition the readiness list shows (tagline OR any
-// contact counts as "brand"; see A3-46 for why that check itself stays weak).
-// Extracted so the publish gate and the list can never disagree again (A3-09).
+// Brand readiness — the same definition the readiness list shows (A3-46: tagline
+// AND a contact channel; tagline alone is a nameless listing, contact alone is
+// an unbranded one). Extracted so the publish gate and the list can never
+// disagree again (A3-09).
 const hasBrand = computed(() => {
   const p = profileSnapshot.value || {};
   const hasContact = Boolean((p.phone || "").trim() || (p.whatsapp || "").trim());
-  return Boolean((p.tagline || "").trim() || hasContact);
+  return Boolean((p.tagline || "").trim() && hasContact);
 });
 
 const checks = computed(() => {
   const p = profileSnapshot.value || {};
-  const hasTheme = Boolean((p.logo_url || "").trim() || (p.hero_url || "").trim() || p.primary_color || p.secondary_color);
+  // A3-46: colours alone must not pass — primary/secondary always carry model
+  // defaults, so they made this check true for every tenant from birth. Only a
+  // real logo or hero image counts as a configured theme.
+  const hasTheme = Boolean((p.logo_url || "").trim() || (p.hero_url || "").trim());
   const items = [
     { key: "brand", label: t("stepPublish.checkBrandContact"), ok: hasBrand.value },
     { key: "categories", label: t("stepPublish.checkCategories", { count: categoriesCount.value, group: groupPlural.value }), ok: categoriesCount.value > 0 },
@@ -792,6 +811,15 @@ const standalone = computed(() => props.standalone);
 // Keep the parent wizard's forward-progression guard in sync with readiness.
 watch(canPublish, (value) => emit("can-publish", value), { immediate: true });
 
+// A3-33: 0 is a valid, meaningful value ("always auto-confirm regardless of
+// timing", tenancy/models.py) — Number(...) || 24 silently turned it into 24.
+// Only null/undefined/blank/non-numeric fall back to the 24h default.
+const normalizeAutoConfirmHours = (value) => {
+  if (value === null || value === undefined || value === "") return 24;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 24;
+};
+
 const clearErrors = () => {
   Object.keys(errors).forEach((key) => delete errors[key]);
 };
@@ -814,7 +842,7 @@ const load = async () => {
     form.cod_enabled = data?.cod_enabled === true;
     form.cod_min_paid_orders = Number(data?.cod_min_paid_orders ?? 3) || 3;
     form.auto_confirm_reservations = data?.auto_confirm_reservations === true;
-    form.auto_confirm_min_hours = Number(data?.auto_confirm_min_hours ?? 24) || 24;
+    form.auto_confirm_min_hours = normalizeAutoConfirmHours(data?.auto_confirm_min_hours);
     form.reservation_reminders_enabled = data?.reservation_reminders_enabled === true;
     form.menu_card_layout = data?.menu_card_layout || "row";
     form.delivery_enabled = data?.delivery_enabled !== false;
@@ -836,16 +864,21 @@ const load = async () => {
     form.lng = data?.lng ?? null;
     form.price_tier = Number(data?.price_tier ?? 2) || 2;
     form.tags = Array.isArray(data?.tags) ? [...data.tags] : [];
+    return data || {};
   } catch {
     toast.show(t("stepPublish.loadFailed"), "error");
+    return null;
   }
 };
 
-const refreshChecks = async () => {
+// A3-45: accepts a profile already fetched by load() so the initial refresh
+// does not issue a second profile GET. The Refresh button (no argument) and a
+// failed load (null) still fetch fresh.
+const refreshChecks = async (existingProfile = null) => {
   loadingChecks.value = true;
   try {
     const [profile, superCategories, categories, dishes] = await Promise.all([
-      profileApi.get(),
+      existingProfile ?? profileApi.get(),
       superCategoryApi.list(),
       categoryApi.list(),
       dishApi.list(),
@@ -876,7 +909,7 @@ const saveProfile = async (publishFlag = null) => {
     cod_enabled: Boolean(form.cod_enabled),
     cod_min_paid_orders: Math.max(1, Number(form.cod_min_paid_orders) || 3),
     auto_confirm_reservations: form.auto_confirm_reservations,
-    auto_confirm_min_hours: Number(form.auto_confirm_min_hours) || 24,
+    auto_confirm_min_hours: normalizeAutoConfirmHours(form.auto_confirm_min_hours),
     reservation_reminders_enabled: form.reservation_reminders_enabled,
     menu_card_layout: form.menu_card_layout,
     business_type: form.business_type,
@@ -911,8 +944,12 @@ const saveStatus = async () => {
     form.receipt_message = saved?.receipt_message || "";
     form.menu_theme = saved?.menu_theme || "dark";
     form.sms_notifications_enabled = saved?.sms_notifications_enabled === true;
+    // A3-31: re-sync the COD fields too — saveProfile clamps a typed 0 to 3, so
+    // without this the UI kept showing the pre-save 0 until reload.
+    form.cod_enabled = saved?.cod_enabled === true;
+    form.cod_min_paid_orders = Math.max(1, Number(saved?.cod_min_paid_orders ?? 3) || 3);
     form.auto_confirm_reservations = saved?.auto_confirm_reservations === true;
-    form.auto_confirm_min_hours = Number(saved?.auto_confirm_min_hours ?? 24) || 24;
+    form.auto_confirm_min_hours = normalizeAutoConfirmHours(saved?.auto_confirm_min_hours);
     form.reservation_reminders_enabled = saved?.reservation_reminders_enabled === true;
     form.menu_card_layout = saved?.menu_card_layout || "row";
     form.delivery_enabled = saved?.delivery_enabled !== false;
@@ -947,6 +984,7 @@ defineExpose({ save: saveStatus, saveStatus });
 
 const saveDirectory = async () => {
   savingDirectory.value = true;
+  clearErrors();
   try {
     const saved = await profileApi.save({
       directory_opt_in: form.directory_opt_in,
@@ -965,8 +1003,12 @@ const saveDirectory = async () => {
     form.price_tier = Number(saved?.price_tier ?? 2) || 2;
     form.tags = Array.isArray(saved?.tags) ? [...saved.tags] : [];
     toast.show(t("stepPublish.directorySaved"), "success");
-  } catch {
-    toast.show(t("stepPublish.directorySaveFailed"), "error");
+  } catch (e) {
+    // A3-12: the server 400s the directory OFF->ON transition when city/coords
+    // are missing — surface the field errors like saveStatus does instead of
+    // swallowing them behind the generic toast.
+    Object.assign(errors, e?.fieldErrors || {});
+    toast.show(e?.message || t("stepPublish.directorySaveFailed"), "error");
   } finally {
     savingDirectory.value = false;
   }
@@ -1045,8 +1087,12 @@ const publish = async () => {
     form.receipt_message = saved?.receipt_message || "";
     form.menu_theme = saved?.menu_theme || "dark";
     form.sms_notifications_enabled = saved?.sms_notifications_enabled === true;
+    // A3-31: re-sync the COD fields too — saveProfile clamps a typed 0 to 3, so
+    // without this the UI kept showing the pre-save 0 until reload.
+    form.cod_enabled = saved?.cod_enabled === true;
+    form.cod_min_paid_orders = Math.max(1, Number(saved?.cod_min_paid_orders ?? 3) || 3);
     form.auto_confirm_reservations = saved?.auto_confirm_reservations === true;
-    form.auto_confirm_min_hours = Number(saved?.auto_confirm_min_hours ?? 24) || 24;
+    form.auto_confirm_min_hours = normalizeAutoConfirmHours(saved?.auto_confirm_min_hours);
     form.reservation_reminders_enabled = saved?.reservation_reminders_enabled === true;
     form.menu_card_layout = saved?.menu_card_layout || "row";
     form.delivery_enabled = saved?.delivery_enabled !== false;
@@ -1089,7 +1135,7 @@ const copyMenuUrl = async () => {
 };
 
 onMounted(async () => {
-  await load();
-  await refreshChecks();
+  const profile = await load();
+  await refreshChecks(profile);
 });
 </script>

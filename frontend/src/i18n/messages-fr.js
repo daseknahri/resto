@@ -2937,8 +2937,9 @@ stepPublish: {
   priceZeroWarningTitle: "Certains plats ont un prix de 0",
   priceZeroWarningBody: "Certains articles publies n'ont pas de prix defini ; les clients pourraient donc les ajouter gratuitement a leur panier. Verifiez vos prix avant la mise en ligne.",
   priceZeroDismiss: "Ignorer",
-  publishBrandDisabledHint: "Ajoutez un slogan ou des coordonnees avant de pouvoir publier.",
-  publishBrandRequirement: "Ajoutez un slogan ou des coordonnees avant de publier, sinon votre menu sera en ligne sans marque sur la vitrine.",
+  publishBrandDisabledHint: "Ajoutez un slogan et des coordonnees avant de pouvoir publier.",
+  publishBrandRequirement: "Ajoutez un slogan et des coordonnees avant de publier, sinon votre menu sera en ligne sans marque sur la vitrine.",
+  republishMenu: "Republier {catalog}",
 },
 closureDates: {
   addDate: "Ajouter une date de fermeture",
