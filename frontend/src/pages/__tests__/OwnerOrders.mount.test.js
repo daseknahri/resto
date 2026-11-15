@@ -471,3 +471,170 @@ describe("OwnerOrders — S1-I B-15 wa.me links + B-16 MAD fallback", () => {
     expect(wrapper.text()).not.toContain("187.5");
   });
 });
+// ── G4b-F (B-42 / B-43) — appended by Run 8 G4b, cluster F ───────────────────
+// Imports are hoisted, so these resolve to the same (mocked api) modules as the
+// imports at the top of the file.
+import { useToastStore } from "../../stores/toast";
+
+describe("OwnerOrders — G4b-F (B-42 export toast + djAction keys / B-43 notification ask)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const _mountOneOrder = async () => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [order({ id: 1, order_number: "A100", status: "confirmed" })],
+          total: 1,
+        },
+      },
+    };
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises(); // drain the non-blocking seed86Count() fired after the order fetch
+    expect(wrapper.text()).toContain("A100");
+  };
+
+  // B-42: export success was silent, unlike every other export in the lane.
+  it("B-42: CSV export shows a success toast (not just the silent download)", async () => {
+    await _mountOneOrder();
+    const showSpy = vi.spyOn(useToastStore(), "show");
+
+    const realCreate = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:fake");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      const exportBtn = wrapper
+        .findAll("button")
+        .find((b) => b.text() === "ownerOrders.exportCsv");
+      expect(exportBtn).toBeTruthy();
+      await exportBtn.trigger("click");
+      await flushPromises();
+    } finally {
+      URL.createObjectURL = realCreate;
+      URL.revokeObjectURL = realRevoke;
+    }
+
+    expect(api.get).toHaveBeenCalledWith(
+      "/owner/orders/export/",
+      expect.objectContaining({ responseType: "blob" })
+    );
+    expect(showSpy).toHaveBeenCalledWith("ownerOrders.exportSuccess", "success");
+  });
+
+  // B-42: the delivery-action toast key comes from a fixed lookup, never from a
+  // raw backend value — an unknown future resolution falls back to the generic
+  // done toast instead of rendering the raw key.
+  it("B-42: unknown delivery resolution falls back to djActionDone, never a raw key", async () => {
+    await _mountOneOrder();
+    const showSpy = vi.spyOn(useToastStore(), "show");
+
+    api.post.mockResolvedValueOnce({ data: { resolution: "__future_unknown__" } });
+    await wrapper.vm.deliveryAction({ id: 1 }, "redispatch");
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith("/owner/orders/1/delivery-action/", {
+      action: "redispatch",
+    });
+    expect(showSpy).toHaveBeenCalledWith("ownerOrders.djActionDone", "success");
+    expect(showSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("__future_unknown__"),
+      expect.anything()
+    );
+  });
+
+  it("B-42: known resolutions still map to their djAction_* toasts", async () => {
+    await _mountOneOrder();
+    const showSpy = vi.spyOn(useToastStore(), "show");
+
+    api.post.mockResolvedValueOnce({ data: { resolution: "redispatched" } });
+    await wrapper.vm.deliveryAction({ id: 1 }, "redispatch");
+    await flushPromises();
+    expect(showSpy).toHaveBeenCalledWith("ownerOrders.djAction_redispatched", "success");
+
+    api.post.mockResolvedValueOnce({ data: { resolution: "noshow_paid" } });
+    // confirm_noshow is a money-out action, so it asks first: the POST must
+    // not fire until the owner approves the dialog.
+    const pending = wrapper.vm.deliveryAction({ id: 1 }, "confirm_noshow");
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalledWith("/owner/orders/1/delivery-action/", {
+      action: "confirm_noshow",
+    });
+    useConfirmModal()._settle(true);
+    await pending;
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/owner/orders/1/delivery-action/", {
+      action: "confirm_noshow",
+    });
+    expect(showSpy).toHaveBeenCalledWith("ownerOrders.djAction_noshow_paid", "success");
+  });
+
+  // ── B-43: the permission prompt must NOT fire on mount ────────────────────
+  // jsdom has no Notification; these tests install a stub before mounting.
+  const _origNotification = window.Notification;
+  const _installNotification = (permission, requestPermission) => {
+    window.Notification = { permission, requestPermission };
+  };
+  afterEach(() => {
+    if (_origNotification === undefined) delete window.Notification;
+    else window.Notification = _origNotification;
+  });
+
+  it("B-43: mount does NOT request notification permission; the header button asks in context", async () => {
+    const requestPermission = vi.fn(async () => {
+      window.Notification.permission = "granted";
+      return "granted";
+    });
+    _installNotification("default", requestPermission);
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+
+    // Mount only reads the permission — the prompt never fires on first visit.
+    expect(requestPermission).not.toHaveBeenCalled();
+    const enableBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("ownerOrders.enableNotifications"));
+    expect(enableBtn).toBeTruthy();
+
+    const showSpy = vi.spyOn(useToastStore(), "show");
+    await enableBtn.trigger("click");
+    await flushPromises();
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(showSpy).toHaveBeenCalledWith("ownerOrders.notificationsEnabled", "success");
+    // Granted → the ask disappears (no re-ask for an already-granted permission).
+    expect(
+      wrapper.findAll("button").some((b) => b.text().includes("ownerOrders.enableNotifications"))
+    ).toBe(false);
+  });
+
+  it("B-43: denied permission shows the re-enable hint and never prompts", async () => {
+    const requestPermission = vi.fn(() => Promise.resolve("denied"));
+    _installNotification("denied", requestPermission);
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("ownerOrders.notificationsDeniedHint");
+    expect(
+      wrapper.findAll("button").some((b) => b.text().includes("ownerOrders.enableNotifications"))
+    ).toBe(false);
+  });
+});

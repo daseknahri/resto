@@ -220,9 +220,14 @@ const { t, formatNumber } = useI18n();
 
 const PERIOD_OPTIONS = [1, 7, 14, 30, 90];
 const LS_PERIOD_KEY = "owner.analytics.period";
-const _storedPeriod = Number(localStorage.getItem(LS_PERIOD_KEY));
+// B-47: OwnerHome wraps its equivalent reads in try/catch — this one threw
+// during setup in a storage-blocked context and whitescreened the page.
+const _storedPeriod = (() => {
+  try { return Number(localStorage.getItem(LS_PERIOD_KEY)); }
+  catch { return NaN; }
+})();
 const insightsPeriod = ref(PERIOD_OPTIONS.includes(_storedPeriod) ? _storedPeriod : 7);
-watch(insightsPeriod, (val) => { localStorage.setItem(LS_PERIOD_KEY, String(val)); });
+watch(insightsPeriod, (val) => { try { localStorage.setItem(LS_PERIOD_KEY, String(val)); } catch { /* ignore */ } });
 const insightsLoading = ref(true);
 const insightsUpdating = ref(false);
 const revenueSummary = ref(null);

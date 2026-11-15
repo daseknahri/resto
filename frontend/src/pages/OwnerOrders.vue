@@ -27,6 +27,18 @@
           >
             <span aria-hidden="true">{{ soundEnabled ? "🔔" : "🔕" }}</span>
           </button>
+          <!-- B-43: the notification ask lives here (and on the new-order banner),
+               not on mount — the owner taps it knowing it enables new-order alerts. -->
+          <button
+            v-if="notificationPermission === 'default'"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            :aria-label="t('ownerOrders.enableNotifications')"
+            @click="requestNotificationPermission"
+          >
+            <span aria-hidden="true">🔔</span>
+            {{ t('ownerOrders.enableNotifications') }}
+          </button>
+          <p v-else-if="notificationPermission === 'denied'" class="max-w-56 text-[11px] leading-snug text-slate-500">{{ t('ownerOrders.notificationsDeniedHint') }}</p>
           <button
             class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
             :disabled="exporting || !order.orders.length"
@@ -166,16 +178,28 @@
 
       <!-- New-order sticky banner — appears when new orders arrive while owner is on the page -->
       <Transition name="ui-fade">
-        <button
+        <div
           v-if="newOrderBannerCount > 0"
-          type="button"
-          class="ui-press flex w-full items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-start text-sm font-semibold text-amber-300"
-          @click="activeTab = 'active'; activeStatus = 'pending'; newOrderBannerCount = 0"
+          class="flex w-full flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300"
         >
-          <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
-          {{ t('ownerOrders.newOrderBanner', { count: newOrderBannerCount }) }}
-          <span class="ms-auto text-xs font-normal text-amber-400/70">{{ t('ownerOrders.newOrderBannerTap') }}</span>
-        </button>
+          <button
+            type="button"
+            class="ui-press flex min-w-0 flex-1 items-center gap-2 text-start"
+            @click="activeTab = 'active'; activeStatus = 'pending'; newOrderBannerCount = 0"
+          >
+            <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
+            {{ t('ownerOrders.newOrderBanner', { count: newOrderBannerCount }) }}
+            <span class="ms-auto text-xs font-normal text-amber-400/70">{{ t('ownerOrders.newOrderBannerTap') }}</span>
+          </button>
+          <!-- B-43: the permission ask, in context — a new order just arrived, so
+               the value of browser notifications is visible right here. -->
+          <button
+            v-if="notificationPermission === 'default'"
+            type="button"
+            class="ui-press shrink-0 rounded-full border border-amber-500/50 px-2.5 py-1 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/10"
+            @click="requestNotificationPermission"
+          >{{ t('ownerOrders.enableNotifications') }}</button>
+        </div>
       </Transition>
 
       <!-- Active filter summary -->
@@ -2236,6 +2260,17 @@ const submitJobRating = async (o) => {
 };
 
 // ── Failed-delivery resolution ──────────────────────────────────────────────────
+// B-42: the toast key must never be built from an unchecked backend value — a
+// resolution with no matching key would render the raw key. Verified against
+// menu/views.py OwnerDeliveryJobActionView + DeliveryJob.Resolution: the owner
+// endpoint returns exactly three resolutions (redispatched, refunded_cancelled,
+// noshow_paid), each with a djAction_* key in EN/FR/AR. Anything else falls
+// back to the generic done toast.
+const DJ_ACTION_TOASTS = {
+  redispatched: "ownerOrders.djAction_redispatched",
+  refunded_cancelled: "ownerOrders.djAction_refunded_cancelled",
+  noshow_paid: "ownerOrders.djAction_noshow_paid",
+};
 const deliveryActing = ref(null);  // order id currently being resolved
 const djConfirmId = ref(null);     // order id awaiting refund_cancel inline confirm
 const deliveryAction = async (o, action) => {
@@ -2257,7 +2292,7 @@ const deliveryAction = async (o, action) => {
   deliveryActing.value = o.id;
   try {
     const { data } = await api.post(`/owner/orders/${o.id}/delivery-action/`, { action });
-    toast.show(t(`ownerOrders.djAction_${data.resolution || action}`), 'success');
+    toast.show(t(DJ_ACTION_TOASTS[data.resolution] || "ownerOrders.djActionDone"), 'success');
     djConfirmId.value = null;
     await order.fetchOrders();
   } catch (err) {
@@ -2384,6 +2419,8 @@ const exportCsv = async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    // B-42: success was silent, unlike every other export in the lane.
+    toast.show(t("ownerOrders.exportSuccess"), "success");
   } catch {
     toast.show(t("ownerOrders.exportFailed"), "error");
   } finally {
@@ -2457,9 +2494,32 @@ const checkForNewOrders = (freshOrders) => {
   }
 };
 
+// ── Browser notifications (B-43) ──────────────────────────────────────────────
+// The permission prompt is NEVER fired on mount: a bare prompt on first visit
+// is likely denied, and a denial leaves no re-ask path. The permission is only
+// READ here (no prompt); the owner asks for it from the new-order banner or
+// the header bell, where the reason (new-order alerts) is visible. When it is
+// denied, a hint explains how to re-enable it in the browser's site settings.
+const notificationPermission = ref(
+  typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
+);
+const refreshNotificationPermission = () => {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    notificationPermission.value = "unsupported";
+    return;
+  }
+  notificationPermission.value = Notification.permission;
+};
+
 const requestNotificationPermission = async () => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
-  if (Notification.permission === "default") await Notification.requestPermission();
+  if (Notification.permission === "default") {
+    await Notification.requestPermission();
+    refreshNotificationPermission();
+    if (Notification.permission === "granted") {
+      toast.show(t("ownerOrders.notificationsEnabled"), "success");
+    }
+  }
 };
 
 // ── Polling (visibility-aware) ────────────────────────────────────────────────
@@ -2527,7 +2587,9 @@ onMounted(async () => {
   // Pre-populate search from ?q= query param (e.g. deep-linked from Ratings page)
   if (route.query.q) searchQuery.value = String(route.query.q);
 
-  await requestNotificationPermission();
+  // B-43: mount only READS the permission (no prompt) — the ask lives on the
+  // new-order banner / header bell instead.
+  refreshNotificationPermission();
   const initial = await order.fetchOrders();
   checkForNewOrders(Array.isArray(initial) ? initial : order.orders);
 

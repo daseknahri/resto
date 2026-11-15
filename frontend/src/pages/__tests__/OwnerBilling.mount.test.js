@@ -458,3 +458,113 @@ describe("OwnerBilling — mount smoke", () => {
     expect(wrapper.text()).not.toContain("ownerBilling.commissionBranchHint");
   });
 });
+// ── G4b-F (B-40) — appended by Run 8 G4b, cluster F ──────────────────────────
+// Imports are hoisted, so these resolve to the same (mocked api / real
+// useConfirmModal) modules as the imports at the top of the file.
+import { useConfirmModal } from "../../composables/useConfirmModal";
+
+describe("OwnerBilling — G4b-F (B-40 upgrade confirm / statement years)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // One requestable upgrade target; the request form appears after selecting it.
+  const _mountWithTarget = async () => {
+    _routes = {
+      "tier-upgrade-targets": {
+        data: {
+          targets: [
+            {
+              code: "premium",
+              name: "Premium",
+              can_request: true,
+              is_active: true,
+              can_checkout: true,
+              can_whatsapp_order: true,
+              max_languages: 5,
+            },
+          ],
+          current_tier_code: "pro",
+          current_tier_name: "Pro",
+          has_pending_request: false,
+        },
+      },
+    };
+    wrapper = mountBilling();
+    await flushPromises();
+
+    const targetBtn = wrapper.find('button[aria-label="Premium"]');
+    expect(targetBtn.exists()).toBe(true);
+    await targetBtn.trigger("click");
+    await flushPromises();
+
+    const submitBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerBilling.submitRequest");
+    expect(submitBtn).toBeTruthy();
+    return submitBtn;
+  };
+
+  // B-40: the upgrade request must confirm first — a pending request blocks
+  // further requests, so a one-tap POST was too easy to fire by mistake.
+  it("B-40: upgrade request asks for confirmation (plan named, not danger) and posts only after approval", async () => {
+    const submitBtn = await _mountWithTarget();
+    await submitBtn.trigger("click");
+    await flushPromises();
+
+    // No POST before the owner approves the confirm dialog.
+    expect(api.post).not.toHaveBeenCalledWith("/tier-upgrade-requests/", expect.anything());
+    expect(useConfirmModal().visible.value).toBe(true);
+    const opts = useConfirmModal().options.value;
+    expect(opts.title).toContain("ownerBilling.upgradeConfirmTitle");
+    expect(opts.title).toContain("Premium");
+    expect(opts.danger).toBe(false);
+
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith("/tier-upgrade-requests/", {
+      target_plan_code: "premium",
+      customer_note: "",
+    });
+  });
+
+  it("B-40: declining the upgrade confirm posts nothing", async () => {
+    const submitBtn = await _mountWithTarget();
+    await submitBtn.trigger("click");
+    await flushPromises();
+
+    useConfirmModal()._settle(false);
+    await flushPromises();
+
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  // B-40: the statement year select used to go back only 3 years, so older
+  // statements were unreachable. It now reaches back 10 years.
+  it("B-40: commission year select reaches back 10 years", async () => {
+    wrapper = mountBilling();
+    await flushPromises();
+
+    const year = new Date().getFullYear();
+    const options = wrapper
+      .find("#commission-year")
+      .findAll("option")
+      .map((o) => o.text());
+    expect(options).toContain(String(year));
+    expect(options).toContain(String(year - 10));
+    expect(options).not.toContain(String(year - 11));
+  });
+});

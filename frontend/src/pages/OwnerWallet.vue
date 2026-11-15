@@ -160,9 +160,10 @@
             <div class="h-4 w-16 rounded bg-slate-700/50" />
           </div>
         </div>
-        <ul v-else-if="searchResults.length" class="space-y-1.5">
+        <template v-else-if="searchResults.length">
+        <ul class="space-y-1.5">
           <li
-            v-for="(c, index) in searchResults"
+            v-for="(c, index) in visibleSearchResults"
             :key="c.id"
           >
             <button
@@ -182,6 +183,15 @@
             </button>
           </li>
         </ul>
+        <p v-if="searchResults.length > visibleSearchResults.length" class="flex flex-wrap items-center gap-2 pt-2 text-xs text-slate-400">
+          <span>{{ t('ownerWallet.searchMoreResults', { shown: visibleSearchResults.length, total: searchResults.length }) }}</span>
+          <button
+            type="button"
+            class="ui-press rounded-full border border-slate-700 px-2.5 py-1 font-semibold text-slate-300 transition-colors hover:text-slate-100"
+            @click="searchLimit += SEARCH_PAGE_SIZE"
+          >{{ t('ownerWallet.searchShowMore') }}</button>
+        </p>
+        </template>
         <div v-else-if="searchError" role="alert" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
           <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
           <p id="wallet-search-error" class="flex-1 text-sm text-red-300">{{ t('ownerWallet.floatError') }}</p>
@@ -330,7 +340,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
@@ -348,6 +358,12 @@ const route = useRoute();
 const searchQuery = ref('');
 const searchResults = ref([]);
 const searching = ref(false);
+// B-41: the search used to slice(0, 10) silently — older matches were
+// unreachable with no note. Keep the full list; the template shows the first
+// page and a "showing X of N" note with a show-more button.
+const SEARCH_PAGE_SIZE = 10;
+const searchLimit = ref(SEARCH_PAGE_SIZE);
+const visibleSearchResults = computed(() => searchResults.value.slice(0, searchLimit.value));
 // Distinguish a failed lookup from a genuine no-match: without this, a network/server
 // error rendered the "No customers found" empty state, telling the owner the customer
 // doesn't exist when the search actually errored.
@@ -486,9 +502,9 @@ const runSearch = async (q) => {
     const res = await api.get('/owner/customers/', { params: { search: q } });
     // The owner/customers/ API returns { summary: {...}, customers: [...] }
     const raw = res.data?.customers || [];
+    searchLimit.value = SEARCH_PAGE_SIZE; // a fresh search starts on page 1
     searchResults.value = raw
       .filter((c) => c.customer_id)
-      .slice(0, 10)
       .map((c) => ({
         id: c.customer_id,
         name: c.name || t('ownerWallet.customerFallbackName', { id: c.customer_id }),
@@ -596,11 +612,24 @@ const fetchHistory = async (customerId) => {
   }
 };
 
+// B-41: bare parseFloat accepted "10abc" as 10 (same junk-input issue as
+// B-23). Only a plain decimal with up to 2 places is a valid money amount.
+const parseStrictAmount = (raw) => {
+  const str = String(raw ?? '').trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(str)) return null;
+  const n = Number(str);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 const doTopup = async () => {
   topupError.value = '';
-  const amount = parseFloat(topupAmount.value);
-  if (!amount || amount <= 0) {
+  if (!String(topupAmount.value ?? '').trim()) {
     topupError.value = t('ownerWallet.amountRequired');
+    return;
+  }
+  const amount = parseStrictAmount(topupAmount.value);
+  if (amount === null) {
+    topupError.value = t('ownerWallet.amountInvalid');
     return;
   }
   const projected = parseFloat(selected.value.wallet_balance || 0) + amount;
@@ -608,7 +637,8 @@ const doTopup = async () => {
     title: t('ownerWallet.topupConfirmTitle'),
     body: t('ownerWallet.topupConfirmBody', { amount: fmtBalance(amount), name: selected.value.name, balance: fmtBalance(projected) }),
     confirmLabel: t('ownerWallet.topupConfirmCta'),
-    danger: true,
+    // B-41: a money-IN top-up is not destructive — no red danger styling.
+    danger: false,
   });
   if (!okTopup) return;
   saving.value = true;

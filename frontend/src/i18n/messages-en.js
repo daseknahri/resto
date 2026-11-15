@@ -1254,6 +1254,7 @@ ownerSections: {
   deleteConfirm: "Delete section \"{name}\"? Its tables become unassigned.",
   deleteYes: "Yes, delete",
   deleteError: "Could not delete the section.",
+  loadError: "Could not load sections or staff. Check your connection and retry.",
 },
 ownerTables: {
   kicker: "Owner workspace",
@@ -1907,6 +1908,9 @@ ownerWallet: {
   topupConfirmCta: "Credit wallet",
   historyTitle: "Transaction history",
   historyEmpty: "No transactions yet.",
+  amountInvalid: "Enter a valid amount, e.g. 10.50 — numbers only, up to 2 decimals.",
+  searchMoreResults: "Showing {shown} of {total} customers — refine your search or show more.",
+  searchShowMore: "Show more",
 },
 adminFlashSales: {
   kicker: "Platform Admin",
@@ -2402,8 +2406,8 @@ waiterPage: {
   staffNote: "Staff note",
   eta: "ETA {minutes} min",
   justNow: "just now",
-  minutesAgo: "{n}m ago",
-  hoursAgo: "{n}h ago",
+  minutesAgo: "{n} min ago",
+  hoursAgo: "{n} hours ago",
   tabShift: "Shift",
   tabRecent: "Recent",
   settleTitle: "How was it paid?",
@@ -2634,6 +2638,8 @@ waiterPage: {
   compReasonOtherPlaceholder: "Reason…",
   compReasonRequired: "Choose a reason before comping.",
   tableStatusStale: "Table statuses may be out of date — retrying automatically.",
+  shiftElapsedHours: "{h} h {m} min",
+  shiftElapsedMinutes: "{m} min",
 },
 repeatAnalytics: {
   title: "Repeat Business",
@@ -4234,6 +4240,7 @@ ownerHome: {
   nextActionFinishSetup: "Finish setup",
   nextActionFinishSetupBody: "Publish your menu to start taking orders.",
   stockInvalid: "Enter a whole number of 0 or more.",
+  readinessLoadError: "Could not load the launch checklist. Check your connection and retry.",
 },
 revenueChart: {
   kicker: "Analytics",
@@ -4357,6 +4364,8 @@ ownerBilling: {
   statementReasonPlaceholder: "Why is this month being re-issued?",
   statementConfirmCurrent: "This month is still in progress \u2014 figures will keep changing. Issue it anyway?",
   statementIssueAnyway: "Issue anyway",
+  upgradeConfirmBody: "While a request is pending you can't send another one. We'll confirm and activate your new plan.",
+  upgradeConfirmTitle: "Request an upgrade to {plan}?",
 },
 adminConsole: {
   // Status labels — localized enum tokens for the status pills; the colour stays in the *StatusClass helpers.
@@ -5138,6 +5147,15 @@ ownerOrders: {
   dateRangeSwapped: "Start and end dates were swapped so the range is valid.",
   confirmAllConfirmBody: "All {count} pending orders will be confirmed at once.",
   confirmAllConfirmTitle: "Confirm {count} pending orders?",
+  hoursAgo: "{n} hours ago",
+  hoursMinutes: "{h} h {m} min",
+  minutesAgo: "{n} min ago",
+  minutesShort: "{n} min",
+  djActionDone: "Delivery action completed.",
+  enableNotifications: "Enable notifications",
+  exportSuccess: "Orders exported successfully.",
+  notificationsDeniedHint: "Browser notifications are blocked for this site — enable them in your browser's site settings to get new-order alerts.",
+  notificationsEnabled: "Browser notifications enabled — you'll be alerted about new orders.",
 },
 orderHandling: {
   tabLabel: "Orders",

@@ -207,3 +207,73 @@ describe("OwnerAnalytics — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerHome.viewAllOrders");
   });
 });
+// ── G4b-F (B-47) — appended by Run 8 G4b, cluster F ──────────────────────────
+describe("OwnerAnalytics — G4b-F (B-47 guarded localStorage period read)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // The period is observable through the :period prop the page passes to the
+  // stubbed <OwnerDashboardInsights> child.
+  const _insightsPeriod = () =>
+    wrapper.findComponent(OwnerDashboardInsights).props("period");
+
+  // B-47: in a storage-blocked context localStorage.getItem throws during
+  // setup() and used to whitescreen the page. Mount must not throw and the
+  // period must fall back to the 7-day default.
+  it("B-47: mounts without a crash when localStorage.getItem throws, period defaults to 7", async () => {
+    const realGet = Storage.prototype.getItem;
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (key) {
+      if (key === "owner.analytics.period") throw new Error("storage blocked");
+      return realGet.call(this, key);
+    });
+    try {
+      expect(() => {
+        wrapper = mountPage();
+      }).not.toThrow();
+      await flushPromises();
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("ownerAnalytics.title");
+    expect(_insightsPeriod()).toBe(7);
+  });
+
+  // Garbage in the stored value (not a number) also falls back to 7.
+  it("B-47: non-numeric stored period falls back to 7", async () => {
+    localStorage.setItem("owner.analytics.period", "banana");
+
+    expect(() => {
+      wrapper = mountPage();
+    }).not.toThrow();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(_insightsPeriod()).toBe(7);
+  });
+
+  // The read still works when storage is healthy — a stored 30 stays 30
+  // (guards against over-correcting the fix into always-default).
+  it("B-47: stored period 30 is still honoured when storage works", async () => {
+    localStorage.setItem("owner.analytics.period", "30");
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(_insightsPeriod()).toBe(30);
+  });
+});

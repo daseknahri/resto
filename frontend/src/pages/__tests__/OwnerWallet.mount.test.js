@@ -248,3 +248,135 @@ describe("OwnerWallet — S1-I B-16 tenant currency", () => {
     expect(wrapper.text()).not.toContain("€");
   });
 });
+// ── G4b-F (B-41) — appended by Run 8 G4b, cluster F ──────────────────────────
+// Imports are hoisted, so these resolve to the same (mocked api / real
+// useConfirmModal) modules as the imports at the top of the file.
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
+
+describe("OwnerWallet — G4b-F (B-41 search cap / top-up confirm / amount)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    routeState.query = {};
+    routeState.params = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const _customers = (n) =>
+    Array.from({ length: n }, (_, i) => ({
+      customer_id: i + 1,
+      name: `Cust ${String(i + 1).padStart(2, "0")}`,
+      phone: "0600000000",
+      email: "",
+      wallet_balance: "10.00",
+    }));
+
+  // Mount with one searchable customer selected, so the top-up form renders.
+  const _mountSelected = async () => {
+    routeState.query = { q: "sara" };
+    _routes = {
+      "/owner/customers/": {
+        data: { customers: [{ customer_id: 5, name: "Sara K", phone: "0600000000", email: "", wallet_balance: "88.50" }] },
+      },
+      "/owner/wallet/history/5/": { data: { transactions: [] } },
+    };
+    wrapper = mountWallet();
+    await flushPromises(); // drain fetchFloat + runSearch
+    const resultBtn = wrapper.findAll("button").find((b) => b.text().includes("Sara K"));
+    expect(resultBtn).toBeTruthy();
+    await resultBtn.trigger("click");
+    await flushPromises(); // drain fetchHistory
+    expect(wrapper.text()).toContain("Sara K");
+    return wrapper.find("#topup-amount");
+  };
+
+  // B-41: the search used to slice(0, 10) silently — matches 11+ were
+  // unreachable with no note. The list now shows the first 10, a
+  // "showing X of N" note, and a show-more button that reveals the rest.
+  it("B-41: 12 matches show 10 + a more-results note, and show-more reveals all 12", async () => {
+    routeState.query = { q: "cust" };
+    _routes = {
+      "/owner/customers/": { data: { customers: _customers(12) } },
+    };
+
+    wrapper = mountWallet();
+    await flushPromises(); // drain fetchFloat + runSearch
+
+    expect(wrapper.text()).toContain("Cust 01");
+    expect(wrapper.text()).toContain("Cust 10");
+    expect(wrapper.text()).not.toContain("Cust 11");
+    expect(wrapper.text()).not.toContain("Cust 12");
+    expect(wrapper.text()).toContain('ownerWallet.searchMoreResults({"shown":10,"total":12})');
+
+    const showMore = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerWallet.searchShowMore");
+    expect(showMore).toBeTruthy();
+    await showMore.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Cust 11");
+    expect(wrapper.text()).toContain("Cust 12");
+    expect(wrapper.text()).not.toContain("ownerWallet.searchMoreResults");
+  });
+
+  // B-41: bare parseFloat accepted "10abc" as 10. Junk amounts must now be
+  // rejected with an inline error and no POST. (The ref is set directly and a
+  // tick awaited first — the FE-test lesson: never set a ref then immediately
+  // click a :disabled-bound button.)
+  it("B-41: junk top-up amounts (10abc / 10.005 / -5 / 0) are rejected, no POST", async () => {
+    const amountInput = await _mountSelected();
+    expect(amountInput.exists()).toBe(true);
+
+    for (const junk of ["10abc", "10.005", "-5", "0"]) {
+      wrapper.vm.topupAmount = junk;
+      await wrapper.vm.$nextTick();
+      const topupBtn = wrapper
+        .findAll("button")
+        .find((b) => b.text() === "ownerWallet.topupBtn");
+      expect(topupBtn).toBeTruthy();
+      await topupBtn.trigger("click");
+      await flushPromises();
+      expect(wrapper.text()).toContain("ownerWallet.amountInvalid");
+    }
+    expect(api.post).not.toHaveBeenCalledWith("/owner/wallet/topup/", expect.anything());
+  });
+
+  // B-41: a valid top-up confirms WITHOUT danger styling (money-in is not
+  // destructive) and posts the strict 2dp amount only after approval.
+  it("B-41: valid top-up confirms with danger:false and posts 25.50 after approval", async () => {
+    const amountInput = await _mountSelected();
+    await amountInput.setValue("25.50");
+
+    const topupBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerWallet.topupBtn");
+    expect(topupBtn).toBeTruthy();
+    await topupBtn.trigger("click");
+    await flushPromises();
+
+    // No POST before the owner approves the confirm dialog.
+    expect(api.post).not.toHaveBeenCalledWith("/owner/wallet/topup/", expect.anything());
+    expect(useConfirmModal().visible.value).toBe(true);
+    expect(useConfirmModal().options.value.danger).toBe(false);
+
+    useConfirmModal()._settle(true);
+    await flushPromises();
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/owner/wallet/topup/",
+      expect.objectContaining({ customer_id: 5, amount: "25.50" })
+    );
+  });
+});

@@ -685,6 +685,7 @@ import { useVocabulary } from '../composables/useVocabulary'
 import { useTenantStore } from '../stores/tenant'
 import { useBranchStore } from '../stores/branch'
 import { useToastStore } from '../stores/toast'
+import { useConfirmModal } from '../composables/useConfirmModal'
 import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache'
 
 const { t, formatDateTime, currentLocale } = useI18n()
@@ -692,6 +693,7 @@ const { itemPlural } = useVocabulary()
 const tenant = useTenantStore()
 const branchStore = useBranchStore()
 const toast = useToastStore()
+const { confirm } = useConfirmModal()
 
 const BILLING_CACHE_KEY = 'owner.billing'
 const BILLING_TTL_MS = 5 * 60 * 1000 // 5 min
@@ -895,6 +897,15 @@ const fetchAll = async (force = false) => {
 
 const submitRequest = async () => {
   if (!selectedCode.value || submitting.value) return
+  // B-40: a pending request blocks further requests, so the owner gets one
+  // explicit confirm (target plan named) before the POST fires.
+  const ok = await confirm({
+    title: t('ownerBilling.upgradeConfirmTitle', { plan: selectedPlanName.value }),
+    body: t('ownerBilling.upgradeConfirmBody'),
+    confirmLabel: t('ownerBilling.submitRequest'),
+    danger: false,
+  })
+  if (!ok) return
   submitError.value = ''
   submitting.value = true
   try {
@@ -988,9 +999,11 @@ const downloadDataExport = async () => {
 // ── Commission statement ──────────────────────────────────────────────────────
 
 const currentYear = new Date().getFullYear()
+// B-40: 3 years back hid older statements. No first-statement year is exposed
+// by the API, so a fixed 10-year window is the minimal slice.
 const commissionYears = computed(() => {
   const years = []
-  for (let y = currentYear; y >= currentYear - 3; y--) years.push(y)
+  for (let y = currentYear; y >= currentYear - 10; y--) years.push(y)
   return years
 })
 
