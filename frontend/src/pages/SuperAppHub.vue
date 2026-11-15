@@ -93,6 +93,14 @@
       </div>
     </div>
 
+    <!-- ── LOADING SKELETONS — while the activity sources load (A-28) ─────── -->
+    <div v-if="customerStore.isAuthenticated && activityLoading" class="space-y-3" aria-hidden="true">
+      <div class="h-24 animate-pulse rounded-2xl bg-slate-800/50" />
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="i in 6" :key="i" class="h-32 animate-pulse rounded-2xl bg-slate-800/50" />
+      </div>
+    </div>
+
     <!-- ── RESUME RAIL — "Continue where you left off" ──────────────────── -->
     <section
       v-if="customerStore.isAuthenticated && hasResumable"
@@ -121,6 +129,23 @@
       </div>
     </section>
 
+    <!-- ── RESUME LOAD ERROR — per-rail error + retry (A-28) ─────────────── -->
+    <section
+      v-if="customerStore.isAuthenticated && activityErrors.active && !activityLoading"
+      aria-labelledby="resume-error-heading"
+      class="ui-reveal"
+    >
+      <h2 id="resume-error-heading" class="sr-only">{{ t('superAppHub.resumeTitle') }}</h2>
+      <div class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <p class="flex-1 text-sm text-red-300">{{ t('superAppHub.resumeLoadFailed') }}</p>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+          @click="retryActivity"
+        >{{ t('common.retry') }}</button>
+      </div>
+    </section>
+
     <!-- ── ORDER AGAIN RAIL — recent restaurants from completed orders ──── -->
     <section
       v-if="customerStore.isAuthenticated && recentRestaurants.length"
@@ -140,6 +165,23 @@
           <p class="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-white">{{ r.restaurant_name }}</p>
           <p class="text-[10px] text-slate-500">{{ t('superAppHub.orderAgainCta') }}</p>
         </RouterLink>
+      </div>
+    </section>
+
+    <!-- ── ORDER AGAIN LOAD ERROR — per-rail error + retry (A-28) ────────── -->
+    <section
+      v-if="customerStore.isAuthenticated && recentRestaurantsError && !recentRestaurants.length"
+      aria-labelledby="reorder-error-heading"
+      class="ui-reveal"
+    >
+      <h2 id="reorder-error-heading" class="sr-only">{{ t('superAppHub.orderAgainTitle') }}</h2>
+      <div class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <p class="flex-1 text-sm text-red-300">{{ t('superAppHub.orderAgainLoadFailed') }}</p>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+          @click="fetchRecentRestaurants"
+        >{{ t('common.retry') }}</button>
       </div>
     </section>
 
@@ -184,10 +226,39 @@
       </div>
     </section>
 
+    <!-- ── MY BUSINESSES LOAD ERROR — per-rail error + retry (A-28) ──────── -->
+    <section
+      v-if="customerStore.isAuthenticated && myBusinessesError && !myBusinesses.length"
+      aria-labelledby="my-businesses-error-heading"
+      class="ui-reveal"
+    >
+      <h2 id="my-businesses-error-heading" class="sr-only">{{ t('superAppHub.myBusinessesTitle') }}</h2>
+      <div class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <p class="flex-1 text-sm text-red-300">{{ t('superAppHub.businessesLoadFailed') }}</p>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+          @click="fetchMyBusinesses"
+        >{{ t('common.retry') }}</button>
+      </div>
+    </section>
+
     <!-- ── SERVICE LAUNCHER GRID ─────────────────────────────────────────── -->
     <section aria-labelledby="services-heading">
       <h2 id="services-heading" class="sr-only">{{ t('home.verticalsTitle') }}</h2>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div
+        v-if="activityErrors.services && !activityLoading"
+        class="mb-3 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+        role="alert"
+      >
+        <p class="flex-1 text-sm text-red-300">{{ t('superAppHub.servicesLoadFailed') }}</p>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+          @click="retryActivity"
+        >{{ t('common.retry') }}</button>
+      </div>
+      <div v-if="!activityLoading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <template v-for="(svc, idx) in services" :key="svc.id">
           <component
             :is="svc.status === 'live' ? 'RouterLink' : 'div'"
@@ -307,8 +378,14 @@ const {
   activeItems,
   topVerticals,
   hasResumable,
+  loading: activityLoading,
+  errors: activityErrors,
   load: loadActivity,
 } = useCustomerActivity();
+
+// A-28: retry the activity sources (force reload — a total failure never marks
+// loaded, so this is also the recovery path for a fully failed first load).
+const retryActivity = () => loadActivity({ force: true });
 
 // ── Push notification soft prompt ────────────────────────────────────────────
 const {
@@ -401,9 +478,36 @@ const resumeCards = computed(() => {
 });
 
 const recentRestaurants = ref([]);
+const recentRestaurantsError = ref(false);
+
+const fetchRecentRestaurants = async () => {
+  // A-28: the "Order again" rail used to fail silently (empty rail, no retry).
+  recentRestaurantsError.value = false;
+  try {
+    const { data } = await api.get('/customer/orders/all/?page=1');
+    const seen = new Set();
+    recentRestaurants.value = (data.orders || [])
+      .filter((o) => o.restaurant_slug && o.status === 'completed' && !seen.has(o.restaurant_slug) && seen.add(o.restaurant_slug))
+      .slice(0, 3);
+  } catch {
+    recentRestaurantsError.value = true;
+  }
+};
 
 // ── My businesses (flywheel) — ordered-from + explicitly followed ─────────────
 const myBusinesses = ref([]);
+const myBusinessesError = ref(false);
+
+const fetchMyBusinesses = async () => {
+  // A-28: same as the "Order again" rail — surface the failure with a retry.
+  myBusinessesError.value = false;
+  try {
+    const { data } = await api.get('/customer/businesses/');
+    myBusinesses.value = data.businesses || [];
+  } catch {
+    myBusinessesError.value = true;
+  }
+};
 const followBusy = ref(new Set());
 const toggleFollow = async (b) => {
   if (followBusy.value.has(b.tenant_id)) return;
@@ -430,18 +534,9 @@ onMounted(async () => {
   await loadActivity();
   pushAutoRestore();
   // Fetch recent cross-restaurant order history to surface "Order again" shortcuts.
-  try {
-    const { data } = await api.get('/customer/orders/all/?page=1');
-    const seen = new Set();
-    recentRestaurants.value = (data.orders || [])
-      .filter((o) => o.restaurant_slug && o.status === 'completed' && !seen.has(o.restaurant_slug) && seen.add(o.restaurant_slug))
-      .slice(0, 3);
-  } catch { /* best-effort */ }
+  await fetchRecentRestaurants();
   // "My businesses" — the durable relationship rail (ordered-from + explicitly followed).
-  try {
-    const { data } = await api.get('/customer/businesses/');
-    myBusinesses.value = data.businesses || [];
-  } catch { /* best-effort */ }
+  await fetchMyBusinesses();
 });
 
 // Full literal Tailwind class strings per accent — never computed by string concat

@@ -16,6 +16,10 @@
  *   serviceActivity {ref}  raw { vertical: { count, last_activity, enabled } } map.
  *   hasResumable {computed}  true when there's anything to show in the resume rail.
  *   loading      {ref}  true while the initial load is in flight.
+ *   errors       {ref}  per-source failure ({ services, active, ride, orders } — null
+ *                       when that source loaded; set on failure so the hub can show
+ *                       a per-rail error + retry instead of a silent empty rail).
+ *   loadFailed   {computed}  true when EVERY source failed (total failure).
  *   load         {fn}   idempotent loader (best-effort; silent-fails per source).
  *
  * Every fetch is best-effort and isolated: a failure in one source never blocks
@@ -30,6 +34,11 @@ export function useCustomerActivity() {
   const lastRide = ref(null);
   const recentOrders = ref([]); // recent orders (any status), newest first
   const loading = ref(false);
+  // Run 8 G3a A-28: per-source errors so a failed rail can say so + retry.
+  const errors = ref({ services: null, active: null, ride: null, orders: null });
+  const loadFailed = computed(() =>
+    Object.values(errors.value).every((e) => e !== null),
+  );
   let loaded = false;
 
   /** Vertical ids sorted by most-recent activity desc; verticals with no
@@ -61,8 +70,11 @@ export function useCustomerActivity() {
     try {
       const { data } = await api.get("/customer/services/");
       serviceActivity.value = data.services || {};
-    } catch {
-      // best-effort personalization — ignore
+      errors.value.services = null;
+      return true;
+    } catch (err) {
+      errors.value.services = err?.message || "load failed";
+      return false;
     }
   }
 
@@ -74,8 +86,11 @@ export function useCustomerActivity() {
         ride: data.ride || null,
         package: data.package || null,
       };
-    } catch {
-      // silent — resume rail just stays empty
+      errors.value.active = null;
+      return true;
+    } catch (err) {
+      errors.value.active = err?.message || "load failed";
+      return false;
     }
   }
 
@@ -84,8 +99,11 @@ export function useCustomerActivity() {
       const { data } = await api.get("/rides/history/");
       const rides = Array.isArray(data) ? data : [];
       lastRide.value = rides[0] || null;
-    } catch {
-      // silent
+      errors.value.ride = null;
+      return true;
+    } catch (err) {
+      errors.value.ride = err?.message || "load failed";
+      return false;
     }
   }
 
@@ -93,8 +111,11 @@ export function useCustomerActivity() {
     try {
       const { data } = await api.get("/customer/orders/?page=1");
       recentOrders.value = data.orders || [];
-    } catch {
-      // silent
+      errors.value.orders = null;
+      return true;
+    } catch (err) {
+      errors.value.orders = err?.message || "load failed";
+      return false;
     }
   }
 
@@ -106,13 +127,15 @@ export function useCustomerActivity() {
     if (loaded && !force) return;
     loading.value = true;
     try {
-      await Promise.all([
+      const results = await Promise.all([
         _fetchServices(),
         _fetchActive(),
         _fetchLastRide(),
         _fetchRecentOrders(),
       ]);
-      loaded = true;
+      // A-28: only a load with at least one working source counts as loaded —
+      // a total failure stays retryable instead of silently marking done.
+      if (results.some(Boolean)) loaded = true;
     } finally {
       loading.value = false;
     }
@@ -127,6 +150,8 @@ export function useCustomerActivity() {
     topVerticals,
     hasResumable,
     loading,
+    errors,
+    loadFailed,
     load,
   };
 }

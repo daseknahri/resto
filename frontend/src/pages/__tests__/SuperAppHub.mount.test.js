@@ -62,6 +62,7 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+import api from "../../lib/api";
 import { useCustomerStore } from "../../stores/customer";
 import SuperAppHub from "../SuperAppHub.vue";
 
@@ -172,5 +173,98 @@ describe("SuperAppHub — mount smoke", () => {
     expect(wrapper.text()).not.toContain("superAppHub.orderAgainTitle");
     // The service grid still renders for a signed-in customer.
     expect(wrapper.text()).toContain("home.verticalsTitle");
+  });
+});
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+};
+
+describe("SuperAppHub — activity rails fail loudly + retry (A-28)", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+  });
+
+  afterEach(() => {
+    _routes = {};
+  });
+
+  const auth = () => useCustomerStore().setCustomer({ id: 1, name: "Sara", phone: "0600000000" });
+
+  it("shows skeletons while activity loads, then the service grid", async () => {
+    auth();
+    const gate = deferred();
+    api.get.mockImplementation((url) =>
+      url.includes("/customer/active/") ? gate.promise : Promise.resolve(_match(url)),
+    );
+    const wrapper = mountHub();
+    await flushPromises();
+    // The active fetch is still pending → loading skeletons render, grid waits.
+    expect(wrapper.findAll(".animate-pulse").length).toBeGreaterThan(0);
+    expect(wrapper.text()).not.toContain("superAppHub.resumeTitle");
+
+    gate.resolve({ data: { orders: [], ride: null, package: null } });
+    await flushPromises();
+    expect(wrapper.findAll(".animate-pulse").length).toBe(0);
+    expect(wrapper.text()).toContain("home.verticalsTitle");
+    wrapper.unmount();
+  });
+
+  it("failed resume + services sources show per-rail errors with a retry that clears them", async () => {
+    auth();
+    api.get.mockImplementation((url) => {
+      if (url.includes("/customer/active/") || url.includes("/customer/services/")) {
+        return Promise.reject(new Error("down"));
+      }
+      return Promise.resolve(_match(url));
+    });
+    const wrapper = mountHub();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("superAppHub.resumeLoadFailed");
+    expect(wrapper.text()).toContain("superAppHub.servicesLoadFailed");
+    // The resume rail itself is absent on failure — assert on its heading id,
+    // not the title text: the error banner carries the same title as an sr-only
+    // heading (a11y label), so the text is present in the error state by design.
+    expect(wrapper.find("#resume-heading").exists()).toBe(false);
+
+    // Retry with the sources healthy again — both banners clear.
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    await findButton(wrapper, "common.retry").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("superAppHub.resumeLoadFailed");
+    expect(wrapper.text()).not.toContain("superAppHub.servicesLoadFailed");
+    wrapper.unmount();
+  });
+
+  it("failed order-again + businesses sources show per-rail errors with retry", async () => {
+    auth();
+    api.get.mockImplementation((url) => {
+      if (url.includes("/customer/orders/all/") || url.includes("/customer/businesses/")) {
+        return Promise.reject(new Error("down"));
+      }
+      return Promise.resolve(_match(url));
+    });
+    const wrapper = mountHub();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("superAppHub.orderAgainLoadFailed");
+    expect(wrapper.text()).toContain("superAppHub.businessesLoadFailed");
+    // Same sr-only-heading note as the resume rail above: assert on the rail id.
+    expect(wrapper.find("#reorder-heading").exists()).toBe(false);
+
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    await findButton(wrapper, "common.retry").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("superAppHub.orderAgainLoadFailed");
+    wrapper.unmount();
   });
 });

@@ -120,4 +120,73 @@ describe("useCustomerActivity", () => {
     await a.load({ force: true });
     expect(api.get.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
+
+  // ── A-28: per-source errors + total-failure retry ──────────────────────────
+  it("records per-source errors and loadFailed is false on a partial failure", async () => {
+    routeGet({
+      "/customer/services/": () => Promise.reject(new Error("boom")),
+      "/customer/active/": {
+        data: { orders: [], ride: { id: 2, status: "searching" }, package: null },
+      },
+      "/rides/history/": { data: [] },
+      "/customer/orders/": { data: { orders: [] } },
+    });
+
+    const a = useCustomerActivity();
+    await a.load();
+
+    expect(a.errors.value.services).toBe("boom");
+    expect(a.errors.value.active).toBeNull();
+    expect(a.errors.value.ride).toBeNull();
+    expect(a.errors.value.orders).toBeNull();
+    expect(a.loadFailed.value).toBe(false);
+  });
+
+  it("total failure sets loadFailed and stays retryable (not marked loaded)", async () => {
+    routeGet({
+      "/customer/services/": () => Promise.reject(new Error("boom")),
+      "/customer/active/": () => Promise.reject(new Error("boom")),
+      "/rides/history/": () => Promise.reject(new Error("boom")),
+      "/customer/orders/": () => Promise.reject(new Error("boom")),
+    });
+
+    const a = useCustomerActivity();
+    await a.load();
+
+    expect(a.loadFailed.value).toBe(true);
+    expect(a.errors.value).toEqual({
+      services: "boom",
+      active: "boom",
+      ride: "boom",
+      orders: "boom",
+    });
+    // Not marked loaded: a plain second load() re-runs the fetches (retry path).
+    const callsAfterFirst = api.get.mock.calls.length;
+    await a.load();
+    expect(api.get.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+
+  it("a successful retry after total failure clears the errors", async () => {
+    routeGet({
+      "/customer/services/": () => Promise.reject(new Error("boom")),
+      "/customer/active/": () => Promise.reject(new Error("boom")),
+      "/rides/history/": () => Promise.reject(new Error("boom")),
+      "/customer/orders/": () => Promise.reject(new Error("boom")),
+    });
+
+    const a = useCustomerActivity();
+    await a.load();
+    expect(a.loadFailed.value).toBe(true);
+
+    routeGet({
+      "/customer/services/": { data: { services: {} } },
+      "/customer/active/": { data: { orders: [], ride: null, package: null } },
+      "/rides/history/": { data: [] },
+      "/customer/orders/": { data: { orders: [] } },
+    });
+    await a.load({ force: true });
+
+    expect(a.loadFailed.value).toBe(false);
+    expect(a.errors.value).toEqual({ services: null, active: null, ride: null, orders: null });
+  });
 });
