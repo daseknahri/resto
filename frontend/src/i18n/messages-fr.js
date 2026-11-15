@@ -3176,6 +3176,7 @@ stepDishes: {
   csvImportFormatHint: "Accepte : .csv — max 500 lignes. La premiere ligne doit etre l'en-tete.",
   dragToReorder: "Glisser pour reorganiser",
   tapToEditPrice: "Appuyer pour modifier le prix",
+  loadKeptUnsavedEdits: "Modifications non enregistrees conservees pour {count} plat(s). Enregistrez pour les garder.",
 },
 combos: {
   badge: "Combo",

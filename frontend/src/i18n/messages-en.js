@@ -3219,6 +3219,7 @@ stepDishes: {
   csvImportFormatHint: "Accepted: .csv — max 500 rows. First row must be the header.",
   dragToReorder: "Drag to reorder",
   tapToEditPrice: "Tap to edit price",
+  loadKeptUnsavedEdits: "Kept {count} unsaved dish edit(s) — save to keep them.",
 },
 combos: {
   badge: "Combo",

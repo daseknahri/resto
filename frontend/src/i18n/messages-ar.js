@@ -2293,7 +2293,8 @@ const arabicMessages = {
     "csvImportError": "فشل الاستيراد. تحقق من تنسيق الملف وحاول مرة أخرى.",
     "csvImportFormatHint": "الامتداد المقبول: .csv — بحد أقصى 500 صف. يجب أن يكون الصف الأول عنوان الأعمدة.",
     "dragToReorder": "اسحب لإعادة الترتيب",
-    "tapToEditPrice": "اضغط لتعديل السعر"
+    "tapToEditPrice": "اضغط لتعديل السعر",
+    "loadKeptUnsavedEdits": "تم الاحتفاظ بـ {count} تعديلات غير محفوظة على الأطباق. احفظها لتبقى.",
   },
   "combos": {
     "badge": "كومبو",

@@ -308,6 +308,12 @@ export const dishApi = {
       attributes: dish.attributes && typeof dish.attributes === 'object' ? dish.attributes : {},
       availability_schedule: normalizeAvailabilitySchedule(dish.availability_schedule),
       ...(sendStock && { stock_qty: stockQty }),
+      // A3-03: availability is an explicit owner choice (bulk mark
+      // available/unavailable, sold-out badge) — always send it, including
+      // `false`. It used to appear only in the restock branch below, so "mark
+      // unavailable" never reached the server and the badge could not survive
+      // a reload (normalize() also dropped it — fixed in StepDishes.vue).
+      is_available: dish.is_available ?? true,
       // A restock re-enables a dish the checkout auto-zeroed to "sold out" (same rule as
       // OwnerInventory) — otherwise it would keep stock yet stay unorderable.
       ...(sendStock && stockQty !== null && stockQty > 0 && { is_available: true }),

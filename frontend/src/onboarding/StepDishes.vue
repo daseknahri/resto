@@ -1985,6 +1985,10 @@ const normalize = (dish = {}) => ({
   description_i18n: dish.description_i18n && typeof dish.description_i18n === "object" ? { ...dish.description_i18n } : {},
   position: dish.position ?? dishes.length,
   is_published: dish.is_published ?? true,
+  // A3-03: keep the server availability — dropping it hid the sold-out badge
+  // after reload and let a local "mark unavailable" look saved while the
+  // server still sold the dish.
+  is_available: dish.is_available ?? true,
   stock_qty: dish.stock_qty != null ? parseInt(dish.stock_qty, 10) : null,
   availability_schedule: dish.availability_schedule || null,
   options: Array.isArray(dish.options) ? dish.options.map((option) => normalizeOption(option)) : [],
@@ -2318,6 +2322,11 @@ const persistDish = async (dish, allowedTranslationLocales) => {
   if (saved && "stock_qty" in saved) {
     dish.stock_qty = saved.stock_qty != null ? parseInt(saved.stock_qty, 10) : null;
   }
+  // A3-03: the server may flip availability (a restock re-enables a sold-out
+  // dish) — take the stored value so the local row never disagrees with it.
+  if (saved && "is_available" in saved) {
+    dish.is_available = saved.is_available ?? true;
+  }
   const desiredOptions = Array.isArray(dish.options) ? dish.options : [];
   const savedOptions = await dishOptionApi.syncForDish(
     dish.id,
@@ -2359,6 +2368,61 @@ const showDishSaveError = (err) => {
   return false;
 };
 
+// A3-06: merge server rows into the local list instead of replacing it, so
+// unsaved dish edits survive a bulk-price apply or CSV import (both reload the
+// list on success). Dirty rows are kept verbatim; clean rows are refreshed from
+// the server; new server rows are appended. Returns the number of dirty rows kept.
+const mergeServerDishes = (serverRows) => {
+  const removed = new Set((removedIds.value || []).map((id) => Number(id)));
+  const serverById = new Map();
+  for (const row of serverRows) {
+    if (row.id != null && !removed.has(Number(row.id))) serverById.set(Number(row.id), row);
+  }
+  let keptDirty = 0;
+  const next = [];
+  for (const local of dishes) {
+    if (local.id == null) {
+      // Never-saved local row (e.g. a quick-add whose persist failed): keep as-is.
+      next.push(local);
+      continue;
+    }
+    const serverRow = serverById.get(Number(local.id));
+    if (!serverRow) {
+      // Gone from the server. A dirty row is unsaved work — keep it; a clean row
+      // was deleted elsewhere — drop it (with its snapshots / row errors).
+      if (isDishDirty(local)) {
+        keptDirty += 1;
+        next.push(local);
+      } else {
+        savedSnapshots.delete(local.local_id);
+        savedStockQty.delete(local.local_id);
+        delete rowErrors[local.local_id];
+        if (String(dishEditorLocalId.value) === String(local.local_id)) closeDishEditor();
+      }
+      continue;
+    }
+    serverById.delete(Number(local.id));
+    if (isDishDirty(local)) {
+      keptDirty += 1;
+      next.push(local);
+    } else {
+      // Keep the local_id so the open editor, row errors and snapshots stay
+      // attached to the refreshed row.
+      serverRow.local_id = local.local_id;
+      delete rowErrors[local.local_id];
+      next.push(serverRow);
+      rememberSaved(serverRow);
+    }
+  }
+  // Server rows with no local row (e.g. freshly CSV-imported dishes): append.
+  for (const row of serverById.values()) {
+    next.push(row);
+    rememberSaved(row);
+  }
+  dishes.splice(0, dishes.length, ...next);
+  return keptDirty;
+};
+
 const load = async () => {
   try {
     categoryOptions.value = await categoryApi.list();
@@ -2368,10 +2432,10 @@ const load = async () => {
   try {
     const data = await dishApi.list();
     const rows = data.length ? data.map(normalize) : [];
-    dishes.splice(0, dishes.length, ...rows);
-    savedSnapshots.clear();
-    savedStockQty.clear();
-    rows.forEach(rememberSaved);
+    const keptDirty = mergeServerDishes(rows);
+    if (keptDirty > 0) {
+      toast.show(t("stepDishes.loadKeptUnsavedEdits", { count: keptDirty }), "info");
+    }
   } catch {
     status.value = t("common.loadFailed");
     dishes.splice(0, dishes.length);
@@ -2492,11 +2556,16 @@ const openQuickDishModal = (categoryId = activeCategoryId.value) => {
   nextTick(() => quickDishNameInputRef.value?.focus());
 };
 
-const closeQuickDishModal = () => {
-  if (quickDish.image_url && isManagedUpload(quickDish.image_url)) {
+// A3-02: the add path keeps the uploaded image — closing the modal deletes a
+// managed upload by default, so quickAddDish passes the kept URL to skip
+// cleanup for it. The discard path (X / backdrop / Escape, no argument) still
+// deletes the upload.
+const closeQuickDishModal = (keepImageUrl = "") => {
+  const kept = String(keepImageUrl || "").trim();
+  if (quickDish.image_url && isManagedUpload(quickDish.image_url) && quickDish.image_url !== kept) {
     cleanupManagedUpload(quickDish.image_url);
-    quickDish.image_url = "";
   }
+  quickDish.image_url = "";
   quickDishModalOpen.value = false;
 };
 
@@ -2555,7 +2624,9 @@ const quickAddDish = async () => {
   dishes.push(row);
   setActiveCategory(category);
   renumberDishesForCategory(category);
-  closeQuickDishModal();
+  // A3-02: snapshot the kept image BEFORE closing — closeQuickDishModal()
+  // deletes a managed upload, and the row above already points at this file.
+  closeQuickDishModal(String(quickDish.image_url || "").trim());
   // Persist the new dish immediately (form-level save). On failure the row
   // stays local and dirty — the page-level Save will retry it.
   try {
@@ -2965,6 +3036,9 @@ const submitCsvImport = async () => {
 onMounted(load);
 onMounted(() => document.addEventListener("keydown", onModalEscape));
 onUnmounted(() => document.removeEventListener("keydown", onModalEscape));
+
+// Run 8 S1 (A3-07): expose the saver so Wizard.saveAndExit can save first.
+defineExpose({ saveAndNext });
 </script>
 
 
