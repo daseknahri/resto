@@ -182,7 +182,7 @@ describe("AdminPlatformAnalytics — mount smoke", () => {
             active: 50,
             searching: 10,
             failed: 40,
-            avg_driver_rating: 4.7, // exercises the `+ ' ★'` branch (evaluated in parent render)
+            avg_driver_rating: 4.7, // exercises the one-decimal formatRating path
             total_fees: 123456.5,
             total_driver_payouts: 98765.25,
           },
@@ -225,5 +225,197 @@ describe("AdminPlatformAnalytics — mount smoke", () => {
     // proving the revenue-table v-for rendered numeric page-own cells. 8842 is distinctive
     // (chosen to not collide with any t-param-echoed number).
     expect(text).toContain("8842");
+  });
+});
+
+/**
+ * R8 G3b W2 (A-14…A-18) — appended, base tests above untouched.
+ *
+ * A-14: every StatCard icon is an AppIcon name (no emoji literal).
+ * A-15: period presets; the default mount still GETs with no params.
+ * A-16: the "last refreshed" stamp shows the server generated_at.
+ * A-17: every StatCard drills down to its admin list (a `to` route).
+ * A-18: avg driver rating is formatted to 1 decimal with no hardcoded star.
+ *
+ * StatCard is auto-stubbed by shallowMount (see file header), so these tests
+ * assert on the stubbed cards' props — icon / to / value / label — never on
+ * StatCard internals (AppIcon / RouterLink render inside the stubbed child).
+ * The page template itself renders no <router-link>, so no RouterLink stub is
+ * needed here (unlike AdminConsole.mount.test.js).
+ */
+import api from "../../lib/api";
+
+describe("AdminPlatformAnalytics — R8 G3b W2 (A-14…A-18)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // Full-shape payload incl. the optional sections + server generated_at.
+  // avg_driver_rating 4.72 (unrounded) proves the FE formats to 1 decimal
+  // itself rather than echoing the backend's already-rounded value.
+  const richPayload = () => ({
+    ...skeleton(),
+    tenants: { total: 42, active: 40, suspended: 1, canceled: 1 },
+    customers: { total: 5000, drivers_total: 120, drivers_online: 33 },
+    deliveries: {
+      total_jobs: 9000,
+      delivered: 8500,
+      active: 50,
+      searching: 10,
+      failed: 40,
+      avg_driver_rating: 4.72,
+      total_fees: 123456.5,
+      total_driver_payouts: 98765.25,
+    },
+    financials: {
+      customer_wallet_liability: 25000,
+      restaurant_float_outstanding: 8000,
+      driver_owed: 3200,
+    },
+    rides: {
+      total: 300,
+      completed: 280,
+      active: 5,
+      cancelled: 15,
+      fare_gmv: 15000,
+      wallet_paid: 30,
+      cash_paid: 12,
+    },
+    revenue_by_vertical: [{ vertical: "food", total: 500000, count: 8842 }],
+    generated_at: "2026-11-02T08:15:00.000Z",
+  });
+
+  const statCards = () => wrapper.findAllComponents({ name: "StatCard" });
+
+  const cardByLabel = (label) => {
+    const cards = statCards();
+    for (let i = 0; i < cards.length; i++) {
+      if (cards.at(i).props("label") === label) return cards.at(i);
+    }
+    return null;
+  };
+
+  const periodButton = (key) => {
+    const buttons = wrapper.findAll("button");
+    for (let i = 0; i < buttons.length; i++) {
+      if (buttons.at(i).text().includes(key)) return buttons.at(i);
+    }
+    return null;
+  };
+
+  // ── A-15: default mount still GETs with no params ────────────────────────
+  it("default mount GETs /admin/platform-analytics/ with no params (all-time default unchanged)", async () => {
+    _routes = { "/admin/platform-analytics/": { data: skeleton() } };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get.mock.calls[0][0]).toContain("/admin/platform-analytics/");
+    expect(api.get.mock.calls[0].length).toBe(1); // no params object
+  });
+
+  // ── A-15: period selector sends the preset ───────────────────────────────
+  it("period selector re-fetches with ?period=7d on click", async () => {
+    _routes = { "/admin/platform-analytics/": { data: skeleton() } };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    const btn = periodButton("adminAnalytics.period7d");
+    expect(btn).not.toBeNull();
+    await btn.trigger("click");
+    await flushPromises();
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(api.get.mock.calls[1][1]).toEqual({ params: { period: "7d" } });
+    // The selector itself renders all three presets.
+    expect(wrapper.text()).toContain("adminAnalytics.periodAll");
+    expect(wrapper.text()).toContain("adminAnalytics.period30d");
+  });
+
+  // ── A-16: server generated_at is displayed ───────────────────────────────
+  it("displays the server generated_at, not the client fetch clock", async () => {
+    _routes = { "/admin/platform-analytics/": { data: richPayload() } };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    // Same Intl call the page makes (mocked locale "en"); the fixed past stamp
+    // can never coincide with the client clock at test time.
+    const expected = new Intl.DateTimeFormat("en", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(new Date("2026-11-02T08:15:00.000Z"));
+    expect(wrapper.text()).toContain("adminAnalytics.lastRefreshed");
+    expect(wrapper.text()).toContain(expected);
+  });
+
+  // ── A-14 + A-17: AppIcon names + drill-down on every card ────────────────
+  it("every StatCard uses an AppIcon name (no emoji) and drills down to an admin list", async () => {
+    _routes = { "/admin/platform-analytics/": { data: richPayload() } };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    const cards = statCards();
+    expect(cards.length).toBe(32);
+    const knownRoutes = new Set([
+      "admin-console",
+      "admin-wallets",
+      "admin-customers",
+      "admin-drivers",
+      "admin-delivery-jobs",
+      "admin-rides",
+      "admin-delivery-zones",
+      "admin-flash-sales",
+    ]);
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards.at(i);
+      // AppIcon names are plain ASCII identifiers — never an emoji literal.
+      expect(card.props("icon")).toMatch(/^[a-z][a-zA-Z-]*$/);
+      expect(card.props("to")).toBeTruthy();
+      expect(knownRoutes.has(card.props("to").name)).toBe(true);
+    }
+    // Spot checks: suspended tenants → console, failed jobs → delivery jobs,
+    // driver-owed money → wallets.
+    expect(cardByLabel("adminAnalytics.suspendedTenants").props("to")).toEqual({
+      name: "admin-console",
+    });
+    expect(cardByLabel("adminAnalytics.failedJobs").props("to")).toEqual({
+      name: "admin-delivery-jobs",
+    });
+    expect(cardByLabel("adminAnalytics.driverOwed").props("to")).toEqual({
+      name: "admin-wallets",
+    });
+  });
+
+  // ── A-18: rating formatted to 1 decimal, no star ─────────────────────────
+  it("formats avg driver rating to 1 decimal with no hardcoded star", async () => {
+    _routes = { "/admin/platform-analytics/": { data: richPayload() } };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    const rating = cardByLabel("adminAnalytics.avgDriverRating");
+    expect(rating).not.toBeNull();
+    expect(rating.props("value")).toBe("4.7");
+    expect(String(rating.props("value"))).not.toContain("★");
+    // No card value anywhere carries a star character.
+    const cards = statCards();
+    for (let i = 0; i < cards.length; i++) {
+      expect(String(cards.at(i).props("value"))).not.toContain("★");
+    }
   });
 });

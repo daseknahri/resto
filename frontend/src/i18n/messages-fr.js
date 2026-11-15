@@ -5441,6 +5441,10 @@ adminAnalytics: {
   vertical_rides: "Courses",
   vertical_courier: "Livraison",
   vertical_driver: "Livreur",
+  period30d: "30 derniers jours",
+  period7d: "7 derniers jours",
+  periodAll: "Tout l'historique",
+  periodLabel: "Période",
 },
 zReport: {
   navLabel: "Cloture journee",

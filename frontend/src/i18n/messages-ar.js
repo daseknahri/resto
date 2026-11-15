@@ -5480,6 +5480,10 @@ Object.assign(arabicMessages, {
     vertical_rides: "\u0627\u0644\u0631\u062d\u0644\u0627\u062a",
     vertical_courier: "\u0627\u0644\u062a\u0648\u0635\u064a\u0644",
     vertical_driver: "\u0627\u0644\u0633\u0627\u0626\u0642",
+    "period30d": "آخر 30 يومًا",
+    "period7d": "آخر 7 أيام",
+    "periodAll": "كل الأوقات",
+    "periodLabel": "الفترة",
   },
   zReport: {
     navLabel: "\u0625\u063a\u0644\u0627\u0642 \u0627\u0644\u064a\u0648\u0645",

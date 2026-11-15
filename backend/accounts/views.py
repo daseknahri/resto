@@ -8799,41 +8799,145 @@ class DriverDeliveriesView(APIView):
         return Response({"results": results, "has_more": has_more, "page": page})
 
 
+def _parse_analytics_bound(raw, is_end):
+    """Parse one ?from= / ?to= value: 'YYYY-MM-DD' or an ISO-8601 datetime.
+
+    Date-only values cover the whole day (00:00:00 -> 23:59:59.999999, UTC).
+    Naive datetimes are read as UTC. Raises ValueError on bad input.
+    """
+    from datetime import date as _date
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timezone as _tz
+
+    text = (raw or "").strip()
+    if not text:
+        raise ValueError("empty date bound")
+    try:
+        if "T" not in text and " " not in text:
+            day = _date.fromisoformat(text)
+            bound = _dt.combine(day, _time.max if is_end else _time.min)
+            return bound.replace(tzinfo=_tz.utc)
+        parsed = _dt.fromisoformat(
+            text[:-1] + "+00:00" if text.endswith(("Z", "z")) else text
+        )
+    except ValueError:
+        raise ValueError(
+            f"invalid date: {raw!r} (expected YYYY-MM-DD or ISO-8601)"
+        ) from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_tz.utc)
+    return parsed
+
+
+def _parse_analytics_scope(request, now=None):
+    """Parse optional period scoping for GET /api/admin/platform-analytics/.
+
+    Query params (all optional):
+      - ?period=7d|30d|all  (default "all" = historic all-time behaviour)
+      - ?from=YYYY-MM-DD|ISO-8601 & ?to=...  (a custom range; conflicts with
+        ?period=7d|30d, and ?from= without ?to= (or vice versa) is rejected)
+    Returns (period, start, end): period is "all" | "7d" | "30d" | "custom";
+    start/end are aware datetimes bounding created_at, or None for all-time.
+    Raises ValueError on invalid input (the view maps it to HTTP 400).
+    """
+    from datetime import timedelta as _td
+
+    from django.utils import timezone
+
+    params = request.query_params
+    period = (params.get("period") or "all").strip().lower()
+    raw_from = (params.get("from") or "").strip()
+    raw_to = (params.get("to") or "").strip()
+    if period not in ("all", "7d", "30d"):
+        raise ValueError(f"invalid period: {period!r} (expected all, 7d or 30d)")
+    if (raw_from and not raw_to) or (raw_to and not raw_from):
+        raise ValueError("from and to must be given together")
+    if raw_from and period in ("7d", "30d"):
+        raise ValueError("period and from/to conflict — use one or the other")
+    if raw_from:
+        start = _parse_analytics_bound(raw_from, is_end=False)
+        end = _parse_analytics_bound(raw_to, is_end=True)
+        if start > end:
+            raise ValueError("from must not be after to")
+        return ("custom", start, end)
+    if period == "all":
+        return ("all", None, None)
+    end = now if now is not None else timezone.now()
+    days = 7 if period == "7d" else 30
+    return (period, end - _td(days=days), end)
+
+
 class AdminPlatformAnalyticsView(APIView):
-    """GET /api/admin/platform-analytics/ — cross-platform aggregate stats (platform admin only)."""
+    """GET /api/admin/platform-analytics/ — cross-platform aggregate stats (platform admin only).
+
+    Optional scoping (A-15): ?period=7d|30d|all (default all) or ?from=&to=
+    (YYYY-MM-DD or ISO-8601). No params = the historic all-time payload.
+    """
 
     permission_classes = [IsPlatformAdmin]
 
     # PERF: the dashboard runs ~15 full-table aggregates on the shared/public-schema tables on
-    # EVERY load, degrading as the core tables grow. The build takes NO request inputs — no query
-    # params, no date range, and no tenant scoping (every model it queries is a SHARED_APPS model,
-    # i.e. a single physical table in the public schema, so the aggregate is identical for every
-    # platform admin and every subdomain). A single global cache key is therefore collision-free;
-    # a short TTL bounds staleness, and single-flight collapses the rebuild under concurrency.
-    # Time-relative figures (the flash-sale "live" count) stay correct because `now` is captured
-    # INSIDE the build, so each rebuild re-evaluates them.
+    # EVERY load, degrading as the core tables grow. The build takes no tenant scoping (every
+    # model it queries is a SHARED_APPS model, i.e. a single physical table in the public schema,
+    # so the aggregate is identical for every platform admin and every subdomain). Each period
+    # scope gets its own cache key (see get()); a short TTL bounds staleness, and single-flight
+    # collapses the rebuild under concurrency. Time-relative figures (the flash-sale "live"
+    # count) stay correct because `now` is captured INSIDE the build, so each rebuild
+    # re-evaluates them.
     _CACHE_KEY = "admin_platform_analytics:v1"
     _CACHE_TTL = 45  # seconds — an admin dashboard tolerates a few seconds of staleness
 
     def get(self, request, *args, **kwargs):
         # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
+        try:
+            period, start, end = _parse_analytics_scope(request)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        # A-15: a scoped build gets its own cache key — the historic single global
+        # key would serve an all-time payload for a 7d request (and vice versa).
+        # The default (no params) keeps the exact historic key.
+        cache_key = self._CACHE_KEY
+        scope = None
+        if period != "all":
+            scope = (period, start, end)
+            cache_key = f"{self._CACHE_KEY}:{period}"
+            if period == "custom":
+                cache_key += f":{start.isoformat()}:{end.isoformat()}"
         payload = get_or_build_single_flight(
-            self._CACHE_KEY, self._build_analytics, ttl=self._CACHE_TTL,
+            cache_key, lambda: self._build_analytics(scope), ttl=self._CACHE_TTL,
         )
         return Response(payload)
 
     @staticmethod
-    def _build_analytics():
-        """Compute the platform-analytics payload (the ~15 aggregates). Pure of request inputs
-        (see the cache-key note above), so its output depends only on current DB state — safe to
-        cache under one global key. Returns the plain response dict (byte-identical to the former
-        inline computation); the caller wraps it in a Response."""
+    def _build_analytics(scope=None):
+        """Compute the platform-analytics payload (the ~15 aggregates).
+
+        scope is None (all-time, the historic behaviour) or (period, start, end)
+        from _parse_analytics_scope. Only flow figures are period-scoped (see the
+        per-block notes); point-in-time figures stay current by design. The caller
+        wraps the returned dict in a Response.
+        """
         from django.db.models import Avg, Count, Q, Sum
         from django.utils import timezone
         from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, RideRequest, WalletTransaction
         from tenancy.models import Tenant
 
         now = timezone.now()
+        # A-15: optional period scoping. scope is None (all-time, the historic
+        # behaviour) or (period, start, end). Only flow figures are scoped (see
+        # the per-block notes); point-in-time figures — tenant lifecycle counts,
+        # zones, drivers-online, flash-sale "live", wallet/float balances — stay
+        # all-time/current by design and are marked as such below.
+        period, start, end = scope if scope is not None else ("all", None, None)
+        _created = (
+            {"created_at__gte": start, "created_at__lte": end}
+            if start is not None
+            else {}
+        )
+
+        def _scoped(qs):
+            return qs.filter(**_created) if _created else qs
 
         # ── Tenants ───────────────────────────────────────────────────────────
         tenant_qs = Tenant.objects.all()
@@ -8843,16 +8947,23 @@ class AdminPlatformAnalyticsView(APIView):
         canceled_tenants = tenant_qs.filter(lifecycle_status="canceled").count()
 
         # ── Customers & drivers ───────────────────────────────────────────────
-        total_customers = Customer.objects.count()
-        driver_stats = Customer.objects.filter(is_driver=True).aggregate(
-            total=Count("id"),
-            online=Count("id", filter=Q(is_driver_online=True)),
+        # Flow counts (total customers, registered drivers) are period-scoped;
+        # "drivers online now" is a live current-state figure and stays unscoped.
+        cust_qs = _scoped(Customer.objects)
+        total_customers = cust_qs.count()
+        total_drivers = (
+            cust_qs.filter(is_driver=True).aggregate(total=Count("id"))["total"] or 0
         )
-        total_drivers = driver_stats["total"] or 0
-        drivers_online = driver_stats["online"] or 0
+        drivers_online = (
+            Customer.objects.filter(is_driver=True).aggregate(
+                online=Count("id", filter=Q(is_driver_online=True))
+            )["online"]
+            or 0
+        )
 
         # ── Delivery jobs ─────────────────────────────────────────────────────
-        job_agg = DeliveryJob.objects.aggregate(
+        job_qs = _scoped(DeliveryJob.objects)
+        job_agg = job_qs.aggregate(
             total=Count("id"),
             delivered=Count("id", filter=Q(status="delivered")),
             failed=Count("id", filter=Q(status="failed")),
@@ -8871,7 +8982,7 @@ class AdminPlatformAnalyticsView(APIView):
         # "active deliveries" KPI grows monotonically and never returns to 0. Parity with the
         # rides active metric and DeliveryJob.is_terminal.
         active_jobs = (
-            DeliveryJob.objects.exclude(status__in=["delivered", "failed", "cancelled"]).count()
+            job_qs.exclude(status__in=["delivered", "failed", "cancelled"]).count()
         )
 
         # ── Delivery zones ────────────────────────────────────────────────────
@@ -8881,29 +8992,41 @@ class AdminPlatformAnalyticsView(APIView):
         )
 
         # ── Flash sales ───────────────────────────────────────────────────────
-        fs_agg = PlatformFlashSale.objects.aggregate(
+        # Total + redemptions are flow figures (period-scoped by created_at); the
+        # "live now" count is a live current-state figure and stays unscoped.
+        fs_qs = _scoped(PlatformFlashSale.objects)
+        fs_agg = fs_qs.aggregate(
             total=Count("id"),
-            active=Count("id", filter=Q(is_active=True, active_from__lte=now, active_until__gte=now)),
             total_redemptions=Sum("redemption_count"),
+        )
+        fs_live = (
+            PlatformFlashSale.objects.aggregate(
+                active=Count("id", filter=Q(is_active=True, active_from__lte=now, active_until__gte=now)),
+            )["active"]
+            or 0
         )
 
         # ── Ride-hailing ──────────────────────────────────────────────────────
-        ride_agg = RideRequest.objects.aggregate(
+        ride_qs = _scoped(RideRequest.objects)
+        ride_agg = ride_qs.aggregate(
             total=Count("id"),
             completed=Count("id", filter=Q(status="completed")),
             cancelled=Count("id", filter=Q(status="cancelled")),
             wallet_paid=Count("id", filter=Q(status="completed", paid_with_wallet=True)),
             fare_gmv=Sum("fare", filter=Q(status="completed")),
         )
-        ride_active = RideRequest.objects.exclude(
+        ride_active = ride_qs.exclude(
             status__in=["completed", "cancelled"]
         ).count()
 
         # ── Wallet ────────────────────────────────────────────────────────────
+        # Total balance is a current-state figure and stays unscoped; the
+        # transaction counts/sums are flows and are period-scoped.
         wallet_agg = Customer.objects.aggregate(
             total_balance=Sum("wallet_balance"),
         )
-        txn_agg = WalletTransaction.objects.aggregate(
+        txn_qs = _scoped(WalletTransaction.objects)
+        txn_agg = txn_qs.aggregate(
             total=Count("id"),
             total_bonus=Sum("amount", filter=Q(type="bonus")),
             total_payments=Sum("amount", filter=Q(type="payment")),
@@ -8930,13 +9053,13 @@ class AdminPlatformAnalyticsView(APIView):
         #              summed only DriverPayout — missing self-service cash-outs; and
         #              DriverPayout.sum + CASHOUT.sum would instead double-count every direct payout.)
         driver_earned = (
-            DeliveryJob.objects.filter(status="delivered").aggregate(s=Sum("driver_payout"))["s"] or _Dec("0")
+            job_qs.filter(status="delivered").aggregate(s=Sum("driver_payout"))["s"] or _Dec("0")
         )
         driver_owed = (
             Customer.objects.filter(is_driver=True).aggregate(s=Sum("wallet_balance"))["s"] or _Dec("0")
         )
         driver_paid = (
-            WalletTransaction.objects.filter(type=WalletTransaction.Type.CASHOUT)
+            txn_qs.filter(type=WalletTransaction.Type.CASHOUT)
             .aggregate(s=Sum("amount"))["s"]
             or _Dec("0")
         )
@@ -8957,7 +9080,7 @@ class AdminPlatformAnalyticsView(APIView):
         from .verticals import ALL_VERTICALS
 
         vertical_rows = (
-            WalletTransaction.objects.filter(type="payment", vertical__isnull=False)
+            txn_qs.filter(type="payment", vertical__isnull=False)
             .values("vertical")
             .annotate(total=Sum("amount"), count=Count("id"))
         )
@@ -8999,7 +9122,7 @@ class AdminPlatformAnalyticsView(APIView):
             },
             "flash_sales": {
                 "total": fs_agg["total"] or 0,
-                "live": fs_agg["active"] or 0,
+                "live": fs_live,
                 "total_redemptions": fs_agg["total_redemptions"] or 0,
             },
             "wallet": {
@@ -9030,6 +9153,12 @@ class AdminPlatformAnalyticsView(APIView):
                 # data, but an admin data correction must not show a negative.
                 "cash_paid": max(0, (ride_agg["completed"] or 0) - (ride_agg["wallet_paid"] or 0)),
             },
+            # A-16: server generation time — the payload is cached 45 s server-side,
+            # so the page must display when the data was built, not when it fetched it.
+            "generated_at": now.isoformat(),
+            "period": period,
+            "from": start.isoformat() if start is not None else None,
+            "to": end.isoformat() if end is not None else None,
         }
 
 

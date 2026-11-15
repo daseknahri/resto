@@ -5433,6 +5433,10 @@ adminAnalytics: {
   vertical_rides: "Rides",
   vertical_courier: "Courier",
   vertical_driver: "Driver",
+  period30d: "Last 30 days",
+  period7d: "Last 7 days",
+  periodAll: "All time",
+  periodLabel: "Period",
 },
 zReport: {
   navLabel: "Day close",

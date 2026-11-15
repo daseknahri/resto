@@ -36,6 +36,21 @@
       </div>
     </header>
 
+    <!-- Period selector (A-15): presets scope the flow figures; "All time" is the historic default -->
+    <div class="flex flex-wrap items-center gap-2" role="group" :aria-label="t('adminAnalytics.periodLabel')">
+      <span class="text-xs text-slate-400">{{ t('adminAnalytics.periodLabel') }}</span>
+      <button
+        v-for="p in periods"
+        :key="p.value"
+        type="button"
+        class="ui-btn-outline ui-press px-3 py-1 text-xs"
+        :class="period === p.value ? 'border-white/40 bg-white/10 text-white' : ''"
+        :aria-pressed="period === p.value ? 'true' : 'false'"
+        :disabled="loading"
+        @click="setPeriod(p.value)"
+      >{{ t(p.labelKey) }}</button>
+    </div>
+
     <!-- Loading skeleton -->
     <div v-if="loading && !data" aria-busy="true" :aria-label="t('common.loading')" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       <div v-for="i in 12" :key="i" class="ui-skeleton h-24" />
@@ -60,9 +75,9 @@
       <section v-if="data.financials" class="ui-reveal space-y-3">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionFinancials') }}</h2>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard :value="currency(data.financials.customer_wallet_liability)" :label="t('adminAnalytics.walletLiability')" color="violet" icon="👛" />
-          <StatCard :value="currency(data.financials.restaurant_float_outstanding)" :label="t('adminAnalytics.floatOutstanding')" color="sky" icon="🏪" />
-          <StatCard :value="currency(data.financials.driver_owed)" :label="t('adminAnalytics.driverOwed')" color="emerald" icon="🛵" />
+          <StatCard :value="currency(data.financials.customer_wallet_liability)" :label="t('adminAnalytics.walletLiability')" color="violet" icon="wallet" :to="{ name: 'admin-wallets' }" />
+          <StatCard :value="currency(data.financials.restaurant_float_outstanding)" :label="t('adminAnalytics.floatOutstanding')" color="sky" icon="receipt" :to="{ name: 'admin-console' }" />
+          <StatCard :value="currency(data.financials.driver_owed)" :label="t('adminAnalytics.driverOwed')" color="emerald" icon="truck" :to="{ name: 'admin-wallets' }" />
         </div>
         <p class="text-[11px] text-slate-500">{{ t('adminAnalytics.financialsHint') }}</p>
       </section>
@@ -71,10 +86,10 @@
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '28ms' }">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionTenants') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard :value="data.tenants.total" :label="t('adminAnalytics.totalTenants')" color="sky" icon="🏪" />
-          <StatCard :value="data.tenants.active" :label="t('adminAnalytics.activeTenants')" color="emerald" icon="✅" />
-          <StatCard :value="data.tenants.suspended" :label="t('adminAnalytics.suspendedTenants')" color="amber" icon="⏸" />
-          <StatCard :value="data.tenants.canceled" :label="t('adminAnalytics.canceledTenants')" color="red" icon="✗" />
+          <StatCard :value="data.tenants.total" :label="t('adminAnalytics.totalTenants')" color="sky" icon="location" :to="{ name: 'admin-console' }" />
+          <StatCard :value="data.tenants.active" :label="t('adminAnalytics.activeTenants')" color="emerald" icon="location" :to="{ name: 'admin-console' }" />
+          <StatCard :value="data.tenants.suspended" :label="t('adminAnalytics.suspendedTenants')" color="amber" icon="location" :to="{ name: 'admin-console' }" />
+          <StatCard :value="data.tenants.canceled" :label="t('adminAnalytics.canceledTenants')" color="red" icon="close" :to="{ name: 'admin-console' }" />
         </div>
       </section>
 
@@ -82,9 +97,9 @@
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '56ms' }">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionCustomers') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <StatCard :value="data.customers.total" :label="t('adminAnalytics.totalCustomers')" color="violet" icon="👤" />
-          <StatCard :value="data.customers.drivers_total" :label="t('adminAnalytics.totalDrivers')" color="sky" icon="🛵" />
-          <StatCard :value="data.customers.drivers_online" :label="t('adminAnalytics.driversOnline')" color="emerald" icon="🟢" />
+          <StatCard :value="data.customers.total" :label="t('adminAnalytics.totalCustomers')" color="violet" icon="users" :to="{ name: 'admin-customers' }" />
+          <StatCard :value="data.customers.drivers_total" :label="t('adminAnalytics.totalDrivers')" color="sky" icon="user" :to="{ name: 'admin-drivers' }" />
+          <StatCard :value="data.customers.drivers_online" :label="t('adminAnalytics.driversOnline')" color="emerald" icon="user" :to="{ name: 'admin-drivers' }" />
         </div>
       </section>
 
@@ -92,28 +107,28 @@
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '84ms' }">
         <h2 class="ui-kicker">{{ t('adminAnalytics.sectionDeliveries') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          <StatCard :value="data.deliveries.total_jobs" :label="t('adminAnalytics.totalJobs')" color="sky" icon="📦" />
-          <StatCard :value="data.deliveries.delivered" :label="t('adminAnalytics.deliveredJobs')" color="emerald" icon="✔" />
-          <StatCard :value="data.deliveries.active" :label="t('adminAnalytics.activeJobs')" color="amber" icon="🔄" />
-          <StatCard :value="data.deliveries.searching" :label="t('adminAnalytics.searchingJobs')" color="sky" icon="🔍" />
-          <StatCard :value="data.deliveries.failed" :label="t('adminAnalytics.failedJobs')" color="red" icon="✗" />
+          <StatCard :value="data.deliveries.total_jobs" :label="t('adminAnalytics.totalJobs')" color="sky" icon="receipt" :to="{ name: 'admin-delivery-jobs' }" />
+          <StatCard :value="data.deliveries.delivered" :label="t('adminAnalytics.deliveredJobs')" color="emerald" icon="truck" :to="{ name: 'admin-delivery-jobs' }" />
+          <StatCard :value="data.deliveries.active" :label="t('adminAnalytics.activeJobs')" color="amber" icon="refresh" :to="{ name: 'admin-delivery-jobs' }" />
+          <StatCard :value="data.deliveries.searching" :label="t('adminAnalytics.searchingJobs')" color="sky" icon="search" :to="{ name: 'admin-delivery-jobs' }" />
+          <StatCard :value="data.deliveries.failed" :label="t('adminAnalytics.failedJobs')" color="red" icon="close" :to="{ name: 'admin-delivery-jobs' }" />
           <StatCard
-            :value="data.deliveries.avg_driver_rating != null ? data.deliveries.avg_driver_rating + ' ★' : '—'"
+            :value="data.deliveries.avg_driver_rating != null ? formatRating(data.deliveries.avg_driver_rating) : '—'"
             :label="t('adminAnalytics.avgDriverRating')"
             color="amber"
-            icon="⭐"
+            icon="sparkles" :to="{ name: 'admin-drivers' }"
           />
           <StatCard
             :value="data.deliveries.total_fees != null ? currency(data.deliveries.total_fees) : '—'"
             :label="t('adminAnalytics.totalFees')"
             color="sky"
-            icon="💰"
+            icon="receipt" :to="{ name: 'admin-delivery-jobs' }"
           />
           <StatCard
             :value="data.deliveries.total_driver_payouts != null ? currency(data.deliveries.total_driver_payouts) : '—'"
             :label="t('adminAnalytics.totalPayouts')"
             color="violet"
-            icon="💸"
+            icon="wallet" :to="{ name: 'admin-delivery-jobs' }"
           />
         </div>
       </section>
@@ -122,17 +137,17 @@
       <section v-if="data.rides" class="ui-reveal space-y-3" :style="{ '--ui-delay': '98ms' }">
         <h2 class="ui-kicker">{{ t('adminAnalytics.ridesTitle') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard :value="data.rides.total" :label="t('adminAnalytics.ridesTotal')" color="sky" icon="🚗" />
-          <StatCard :value="data.rides.completed" :label="t('adminAnalytics.ridesCompleted')" color="emerald" icon="✔" />
-          <StatCard :value="data.rides.active" :label="t('adminAnalytics.ridesActive')" color="amber" icon="🔄" />
-          <StatCard :value="data.rides.cancelled" :label="t('adminAnalytics.ridesCancelled')" color="red" icon="✗" />
+          <StatCard :value="data.rides.total" :label="t('adminAnalytics.ridesTotal')" color="sky" icon="truck" :to="{ name: 'admin-rides' }" />
+          <StatCard :value="data.rides.completed" :label="t('adminAnalytics.ridesCompleted')" color="emerald" icon="truck" :to="{ name: 'admin-rides' }" />
+          <StatCard :value="data.rides.active" :label="t('adminAnalytics.ridesActive')" color="amber" icon="refresh" :to="{ name: 'admin-rides' }" />
+          <StatCard :value="data.rides.cancelled" :label="t('adminAnalytics.ridesCancelled')" color="red" icon="close" :to="{ name: 'admin-rides' }" />
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard
             :value="data.rides.fare_gmv != null ? currency(data.rides.fare_gmv) : '—'"
             :label="t('adminAnalytics.ridesGmv')"
             color="violet"
-            icon="💰"
+            icon="wallet" :to="{ name: 'admin-rides' }"
           />
           <div class="ui-card px-4 py-3 flex flex-col justify-center space-y-0.5">
             <p class="ui-stat-label">{{ t('adminAnalytics.ridesPayment') }}</p>
@@ -149,8 +164,8 @@
         <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
           <h2 class="ui-kicker">{{ t('adminAnalytics.sectionZones') }}</h2>
           <div class="grid grid-cols-2 gap-4">
-            <StatCard :value="data.zones.total" :label="t('adminAnalytics.totalZones')" color="sky" icon="🗺" />
-            <StatCard :value="data.zones.active" :label="t('adminAnalytics.activeZones')" color="emerald" icon="✅" />
+            <StatCard :value="data.zones.total" :label="t('adminAnalytics.totalZones')" color="sky" icon="location" :to="{ name: 'admin-delivery-zones' }" />
+            <StatCard :value="data.zones.active" :label="t('adminAnalytics.activeZones')" color="emerald" icon="location" :to="{ name: 'admin-delivery-zones' }" />
           </div>
         </section>
 
@@ -158,9 +173,9 @@
         <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
           <h2 class="ui-kicker">{{ t('adminAnalytics.sectionFlashSales') }}</h2>
           <div class="grid grid-cols-3 gap-4">
-            <StatCard :value="data.flash_sales.total" :label="t('adminAnalytics.totalSales')" color="sky" icon="⚡" />
-            <StatCard :value="data.flash_sales.live" :label="t('adminAnalytics.liveSales')" color="emerald" icon="🔴" />
-            <StatCard :value="data.flash_sales.total_redemptions" :label="t('adminAnalytics.redemptions')" color="amber" icon="🎟" />
+            <StatCard :value="data.flash_sales.total" :label="t('adminAnalytics.totalSales')" color="sky" icon="sparkles" :to="{ name: 'admin-flash-sales' }" />
+            <StatCard :value="data.flash_sales.live" :label="t('adminAnalytics.liveSales')" color="emerald" icon="sparkles" :to="{ name: 'admin-flash-sales' }" />
+            <StatCard :value="data.flash_sales.total_redemptions" :label="t('adminAnalytics.redemptions')" color="amber" icon="receipt" :to="{ name: 'admin-flash-sales' }" />
           </div>
         </section>
       </div>
@@ -197,20 +212,20 @@
             :value="data.wallet.total_balance != null ? currency(data.wallet.total_balance) : '—'"
             :label="t('adminAnalytics.totalBalance')"
             color="emerald"
-            icon="👛"
+            icon="wallet" :to="{ name: 'admin-wallets' }"
           />
-          <StatCard :value="data.wallet.total_transactions" :label="t('adminAnalytics.totalTxns')" color="sky" icon="🔁" />
+          <StatCard :value="data.wallet.total_transactions" :label="t('adminAnalytics.totalTxns')" color="sky" icon="receipt" :to="{ name: 'admin-wallets' }" />
           <StatCard
             :value="data.wallet.total_bonus_issued != null ? currency(data.wallet.total_bonus_issued) : '—'"
             :label="t('adminAnalytics.bonusIssued')"
             color="amber"
-            icon="🎁"
+            icon="sparkles" :to="{ name: 'admin-wallets' }"
           />
           <StatCard
             :value="data.wallet.total_payments != null ? currency(data.wallet.total_payments) : '—'"
             :label="t('adminAnalytics.payments')"
             color="violet"
-            icon="💳"
+            icon="wallet" :to="{ name: 'admin-wallets' }"
           />
         </div>
       </section>
@@ -232,6 +247,26 @@ const loading = ref(false);
 const fetchError = ref(false);
 const data = ref(null);
 const refreshedAt = ref('');
+// A-15: period presets; "all" is the historic all-time default.
+const period = ref('all');
+const periods = [
+  { value: 'all', labelKey: 'adminAnalytics.periodAll' },
+  { value: '7d', labelKey: 'adminAnalytics.period7d' },
+  { value: '30d', labelKey: 'adminAnalytics.period30d' },
+];
+
+const setPeriod = (p) => {
+  if (period.value === p || loading.value) return;
+  period.value = p;
+  refresh();
+};
+
+// A-18: 1 decimal (the backend already rounds via _f(..., 1)); the star is the
+// card's AppIcon now, not a hardcoded character in the value.
+const formatRating = (val) => {
+  const n = Number(val);
+  return Number.isFinite(n) ? n.toFixed(1) : '—';
+};
 
 const currency = (val) => {
   if (val == null) return '—';
@@ -242,7 +277,10 @@ const refresh = async () => {
   loading.value = true;
   fetchError.value = false;
   try {
-    const res = await api.get('/admin/platform-analytics/');
+    // A-15: all-time sends no params, so the default request is unchanged.
+    const res = period.value === 'all'
+      ? await api.get('/admin/platform-analytics/')
+      : await api.get('/admin/platform-analytics/', { params: { period: period.value } });
     data.value = res.data;
     // NOTE: dateStyle/timeStyle cannot be combined with timeZoneName — the Intl spec
     // mandates a TypeError for that combination (in every compliant engine, browsers
@@ -250,7 +288,13 @@ const refresh = async () => {
     // so the catch below flipped fetchError=true and the dashboard always showed its
     // error state instead of the fetched data. Keep the short date+time; drop the
     // (invalid) timeZoneName. Regression guard: __tests__/AdminPlatformAnalytics.mount.test.js.
-    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    // A-16: display the SERVER generation time (res.data.generated_at) — the payload
+    // is cached 45 s server-side, so the client fetch clock would overstate freshness.
+    // Fall back to the client clock only when the payload predates the field (a stale
+    // cached entry served from before this field shipped).
+    const generatedAt = res.data?.generated_at ? new Date(res.data.generated_at) : null;
+    const stamp = generatedAt && !Number.isNaN(generatedAt.getTime()) ? generatedAt : new Date();
+    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(stamp);
   } catch {
     fetchError.value = true;
   } finally {
@@ -268,6 +312,8 @@ onMounted(refresh);
    page-level component. */
 // Inline StatCard component — no separate file needed for this single-page use
 import { defineComponent, h } from 'vue';
+import { RouterLink } from 'vue-router';
+import AppIcon from '../components/AppIcon.vue';
 
 const colorMap = {
   sky: 'bg-sky-500/10 border-sky-500/20 text-sky-300',
@@ -282,21 +328,40 @@ const StatCard = defineComponent({
   props: {
     value: { type: [String, Number], default: '—' },
     label: { type: String, required: true },
+    // A-14: an AppIcon name (see ../components/AppIcon.vue) — never an emoji literal.
     icon: { type: String, default: '' },
     color: { type: String, default: 'sky' },
+    // A-17: optional drill-down target (a vue-router location) for the admin list
+    // behind this stat; cards without one stay plain display tiles.
+    to: { type: [String, Object], default: null },
   },
   setup(props) {
-    return () => h(
-      'div',
-      { class: `rounded-2xl border p-4 flex flex-col gap-1 ${colorMap[props.color] || colorMap.sky}`, role: 'group', 'aria-label': props.label },
-      [
+    return () => {
+      const inner = [
         h('div', { class: 'flex items-center gap-2' }, [
-          props.icon ? h('span', { class: 'text-lg leading-none', 'aria-hidden': 'true' }, props.icon) : null,
+          props.icon ? h(AppIcon, { name: props.icon, class: 'h-5 w-5 shrink-0', 'aria-hidden': 'true' }) : null,
           h('span', { class: 'text-2xl font-bold tabular-nums' }, String(props.value ?? '—')),
         ]),
         h('p', { class: 'text-xs opacity-70 leading-snug' }, props.label),
-      ],
-    );
+      ];
+      const cardClass = `rounded-2xl border p-4 flex flex-col gap-1 ${colorMap[props.color] || colorMap.sky}`;
+      if (props.to) {
+        return h(
+          RouterLink,
+          {
+            to: props.to,
+            class: `${cardClass} ui-press transition hover:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60`,
+            'aria-label': props.label,
+          },
+          () => inner,
+        );
+      }
+      return h(
+        'div',
+        { class: cardClass, role: 'group', 'aria-label': props.label },
+        inner,
+      );
+    };
   },
 });
 
