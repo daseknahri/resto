@@ -2936,6 +2936,7 @@ class AdminCustomerListView(APIView):
                 "wallet_balance": str(c.wallet_balance),
                 "loyalty_points": c.loyalty_points or 0,
                 "is_driver": c.is_driver,
+                "is_suspended": bool(c.is_suspended),
                 "created_at": c.created_at.isoformat(),
             }
             for c in rows
@@ -2949,12 +2950,34 @@ class AdminCustomerListView(APIView):
         return Response({"total": total, "page": page, "page_size": page_size, "results": results})
 
 
+def _audit_customer_action(action_name, request, customer_id, metadata):
+    """Log a customer admin action — but only if the enum member exists.
+
+    AdminAuditLog.Actions lives in sales/models.py, which is outside the G3b
+    customers pull: CUSTOMER_SUSPENDED / CUSTOMER_PROFILE_UPDATED do not exist
+    there yet. Referencing a missing member would raise AttributeError and 500
+    an otherwise-saved PATCH, so the call is getattr-guarded: the coordinator
+    adds the two members to sales/models.py and the audit rows start flowing
+    with no further code change. Never let auditing break the write itself.
+    """
+    action = getattr(AdminAuditLog.Actions, action_name, None)
+    if action is None:
+        return
+    log_admin_action(
+        action=action,
+        request=request,
+        target_repr=f"customer:{customer_id}",
+        metadata=metadata,
+    )
+
+
 class AdminCustomerDetailView(APIView):
     """GET/PATCH /api/admin/customers/<id>/ — a single platform customer.
 
     GET returns the full profile + cross-restaurant wallet ledger (each payment shows
     which restaurant it was at), trust score, loyalty and driver status. PATCH toggles
-    is_driver (admin can register/unregister a delivery driver).
+    is_driver (admin can register/unregister a delivery driver), sets is_suspended
+    (Run 8 G3b A2-31), and edits name / phone / email (A2-31).
 
     OPS-5b: IsPlatformAdmin gate (drops is_staff), per-admin throttle, PII read + write audits.
     """
@@ -3000,6 +3023,7 @@ class AdminCustomerDetailView(APIView):
             "loyalty_points": c.loyalty_points or 0,
             "is_driver": c.is_driver,
             "is_driver_online": c.is_driver_online,
+            "is_suspended": bool(c.is_suspended),
             "created_at": c.created_at.isoformat(),
             "trust": {
                 "avg_score": round(float(ratings["avg"]), 2) if ratings["avg"] is not None else None,
@@ -3032,6 +3056,53 @@ class AdminCustomerDetailView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
         reopened_deliveries = 0
+        # Run 8 G3b A2-31: suspend/reactivate + profile edit. The same PATCH route
+        # already toggles is_driver — no new URL. Suspending an online driver also
+        # takes them offline (mirrors the remove-driver path). NOTE: suspension is
+        # an admin flag only; login / ordering do NOT yet enforce is_suspended.
+        if "is_suspended" in request.data:
+            new_value = bool(request.data["is_suspended"])
+            c.is_suspended = new_value
+            _fields = ["is_suspended", "updated_at"]
+            if new_value and c.is_driver_online:
+                c.is_driver_online = False
+                _fields.append("is_driver_online")
+            c.save(update_fields=_fields)
+            _audit_customer_action(
+                "CUSTOMER_SUSPENDED", request, customer_id,
+                {"customer_id": customer_id, "is_suspended": new_value},
+            )
+        if any(k in request.data for k in ("name", "phone", "email")):
+            _profile = {}
+            if "name" in request.data:
+                _name = str(request.data["name"] or "").strip()
+                if len(_name) > 80:
+                    return Response({"detail": "Name must be 80 characters or fewer."}, status=status.HTTP_400_BAD_REQUEST)
+                _profile["name"] = _name
+            if "phone" in request.data:
+                _phone = str(request.data["phone"] or "").strip()
+                if len(_phone) > 30:
+                    return Response({"detail": "Phone must be 30 characters or fewer."}, status=status.HTTP_400_BAD_REQUEST)
+                if _phone and Customer.objects.filter(phone=_phone).exclude(pk=c.pk).exists():
+                    return Response({"detail": "Phone is already used by another customer."}, status=status.HTTP_400_BAD_REQUEST)
+                _profile["phone"] = _phone
+            if "email" in request.data:
+                _email = str(request.data["email"] or "").strip()
+                if len(_email) > 254 or (_email and "@" not in _email):
+                    return Response({"detail": "Enter a valid email address."}, status=status.HTTP_400_BAD_REQUEST)
+                _profile["email"] = _email
+            for _k, _v in _profile.items():
+                setattr(c, _k, _v)
+            # save() recomputes phone_digits from phone — include it or the
+            # digits index goes stale under update_fields.
+            _pfields = list(_profile.keys()) + ["updated_at"]
+            if "phone" in _profile:
+                _pfields.append("phone_digits")
+            c.save(update_fields=_pfields)
+            _audit_customer_action(
+                "CUSTOMER_PROFILE_UPDATED", request, customer_id,
+                {"customer_id": customer_id, "fields": sorted(_profile.keys())},
+            )
         if "is_driver" in request.data:
             new_value = bool(request.data["is_driver"])
             was_driver = c.is_driver
@@ -3057,8 +3128,12 @@ class AdminCustomerDetailView(APIView):
             )
         return Response({
             "id": c.id,
+            "name": c.name or "",
+            "phone": c.phone or "",
+            "email": c.email or "",
             "is_driver": c.is_driver,
             "is_driver_online": c.is_driver_online,
+            "is_suspended": bool(c.is_suspended),
             "reopened_deliveries": reopened_deliveries,
         })
 

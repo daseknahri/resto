@@ -24,7 +24,7 @@
  *      `{ params }` arg the matcher ignores). Default `{ data: {} }` → `results`
  *      undefined → `customers = []` → the empty-state branch renders.
  *   2. The page imports useRoute from vue-router (A-22 deep-link; mocked in the
- *      block below) and renders NO <router-link>, so no RouterLink stub is needed.
+ *      W3 block below) and renders NO <router-link>, so no RouterLink stub is needed.
  *
  * Left REAL (jsdom-safe, and none touched at mount):
  *   - the toast store (real Pinia).
@@ -76,6 +76,10 @@ vi.mock("../../lib/api", () => ({
     patch: vi.fn(() => Promise.resolve({ data: {} })),
     delete: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // Run 8 G3b W8 (A2-29): the page imports the shared extractor as a named
+  // export. Test-double mirrors the detail-or-fallback contract the page
+  // relies on (server detail when present, translated fallback otherwise).
+  extractApiErrorMessage: (err, fallback) => err?.response?.data?.detail || fallback,
 }));
 
 import AdminCustomers from "../AdminCustomers.vue";
@@ -333,6 +337,8 @@ describe("AdminCustomers — driver toggle + ledger/orders caps + tx labels (A2-
  * the base smoke tests above get query {} (no auto-open) and are unaffected.
  * The mock factory only reads `_routeQuery` from lazy closures (call time),
  * the same TDZ-safe pattern as the file's existing `_routes` matcher.
+ * NOTE for the coordinator: the file header comment ("imports NOTHING from
+ * vue-router") is stale after this change — update it at merge time.
  *
  * Covers:
  *   A-22 — ?customer=<id> auto-opens that customer's detail slide-over
@@ -399,5 +405,164 @@ describe("AdminCustomers — ?customer deep-link auto-open (A-22)", () => {
     expect(wrapper.text()).not.toContain("adminCustomers.detailKicker");
     const detailCalls = api.get.mock.calls.filter(([url]) => url.includes("/admin/customers/abc"));
     expect(detailCalls).toHaveLength(0);
+  });
+});
+/**
+ * Run 8 G3b W8 — appended describe (base tests above untouched).
+ * Reuses the file's module-level helpers: mountPage, _routes, customer,
+ * detailPayload, findButton, api, useConfirmModal.
+ *
+ * Covers:
+ *   A2-15 — unknown order status renders orderStatus.statusUnknown (never
+ *            "Pending"); scheduled maps to statusScheduled.
+ *   A2-29 — credit above the 100,000 server cap is blocked client-side
+ *            (no confirm, no POST); a credit failure with no server detail
+ *            shows the translated creditFailed fallback via
+ *            extractApiErrorMessage.
+ *   A2-30 — ledger rows render the per-row balance_after label (already in
+ *            the base page; locked in here so it cannot regress silently).
+ *   A2-31 — suspend confirms first then PATCHes { is_suspended: true };
+ *            cancelling skips the PATCH; profile edit PATCHes name/phone/
+ *            email; suspended customers show a chip on the list.
+ */
+describe("AdminCustomers — Run 8 G3b W8 (A2-15/A2-29/A2-30/A2-31)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // clearAllMocks drops call history, not implementations — re-assert the
+    // default resolve so a mockResolvedValue set by an earlier test cannot leak.
+    api.patch.mockResolvedValue({ data: {} });
+    api.post.mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openDetailFor = async (detail, ordersPayload = { results: [], count: 0 }) => {
+    _routes = {
+      // Orders first: _match is substring-first-match, and the detail key
+      // "/admin/customers/5/" would shadow "/admin/customers/5/orders/".
+      "/admin/customers/5/orders/": { data: ordersPayload },
+      "/admin/customers/5/": { data: detail },
+      // List LAST: "/admin/customers/" is a substring of every detail URL, so it
+      // must not shadow them. STAGING FIX (G3b W8): the detail opens for the REAL
+      // list row, not a fresh literal — saveProfile updates detail.* + syncRow(),
+      // and the panel header renders selected.name; with a literal, selected never
+      // sees the save and the header keeps the old name ("Sara" vs "Sara New").
+      "/admin/customers/": {
+        data: { results: [customer({ id: 5, name: "Sara" })], total: 1 },
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.vm.openDetail(wrapper.vm.customers[0]);
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("A2-15: unknown order status renders Unknown, never Pending", async () => {
+    await openDetailFor(detailPayload(), {
+      results: [
+        { order_number: "X1", restaurant: "Chez Test", status: "refunded_later", fulfillment_type: "", total: "10.00", currency: "MAD", created_at: "2026-02-01T10:00:00Z" },
+      ],
+      count: 1,
+      scanned_restaurants: 1,
+    });
+    const text = wrapper.text();
+    expect(text).toContain("orderStatus.statusUnknown");
+    expect(text).not.toContain("orderStatus.statusPending");
+  });
+
+  it("A2-15: scheduled order status maps to its own label", async () => {
+    await openDetailFor(detailPayload(), {
+      results: [
+        { order_number: "X2", restaurant: "Chez Test", status: "scheduled", fulfillment_type: "", total: "10.00", currency: "MAD", created_at: "2026-02-01T10:00:00Z" },
+      ],
+      count: 1,
+      scanned_restaurants: 1,
+    });
+    expect(wrapper.text()).toContain("orderStatus.statusScheduled");
+  });
+
+  it("A2-29: credit above 100000 is blocked client-side — no confirm, no POST", async () => {
+    await openDetailFor(detailPayload());
+    await wrapper.find('input[aria-label="adminCustomers.creditAmount"]').setValue("150000");
+    await findButton(wrapper, "adminCustomers.creditBtn").trigger("click");
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("adminCustomers.creditMax");
+  });
+
+  it("A2-29: credit failure with no server detail shows the translated fallback", async () => {
+    await openDetailFor(detailPayload());
+    api.post.mockRejectedValueOnce({});
+    await wrapper.find('input[aria-label="adminCustomers.creditAmount"]').setValue("10");
+    await findButton(wrapper, "adminCustomers.creditBtn").trigger("click");
+    const { _settle } = useConfirmModal();
+    _settle(true);
+    await flushPromises();
+    expect(api.post).toHaveBeenCalled();
+    expect(wrapper.text()).toContain("adminCustomers.creditFailed");
+  });
+
+  it("A2-30: ledger rows render the per-row balance_after label", async () => {
+    await openDetailFor(detailPayload({
+      transactions: [
+        { id: 1, type: "topup", amount: "50.00", balance_after: "120.00", tenant_id: null, tenant_name: "", reference: "TOP-1", note: "", created_at: "2026-02-01T10:00:00Z" },
+      ],
+    }));
+    const text = wrapper.text();
+    expect(text).toContain("adminCustomers.balanceAfter");
+    expect(text).toContain("120.00");
+  });
+
+  it("A2-31: suspend confirms first, then PATCHes is_suspended true; button flips", async () => {
+    api.patch.mockResolvedValue({ data: { id: 5, is_driver: false, is_driver_online: false, is_suspended: true, reopened_deliveries: 0 } });
+    await openDetailFor(detailPayload({ is_suspended: false }));
+    await findButton(wrapper, "adminCustomers.suspend").trigger("click");
+    const { _settle } = useConfirmModal();
+    _settle(true);
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledWith("/admin/customers/5/", { is_suspended: true });
+    expect(wrapper.text()).toContain("adminCustomers.reactivate");
+    expect(wrapper.text()).toContain("adminCustomers.suspended");
+  });
+
+  it("A2-31: suspend cancelled at the confirm skips the PATCH", async () => {
+    await openDetailFor(detailPayload({ is_suspended: false }));
+    await findButton(wrapper, "adminCustomers.suspend").trigger("click");
+    const { _settle } = useConfirmModal();
+    _settle(false);
+    await flushPromises();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("A2-31: profile edit PATCHes name/phone/email", async () => {
+    api.patch.mockResolvedValue({ data: { id: 5, name: "Sara New", phone: "0611223344", email: "", is_driver: false, is_driver_online: false, is_suspended: false, reopened_deliveries: 0 } });
+    await openDetailFor(detailPayload());
+    await findButton(wrapper, "common.edit").trigger("click");
+    await wrapper.find('input[aria-label="adminCustomers.editName"]').setValue("Sara New");
+    await findButton(wrapper, "common.save").trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledWith("/admin/customers/5/", { name: "Sara New", phone: "0611223344", email: "" });
+    expect(wrapper.text()).toContain("Sara New");
+  });
+
+  it("A2-31: suspended customers show a chip on the list", async () => {
+    _routes = {
+      "/admin/customers/": {
+        data: { results: [customer({ is_suspended: true })], total: 1 },
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminCustomers.suspended");
   });
 });

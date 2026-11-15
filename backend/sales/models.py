@@ -374,6 +374,9 @@ class AdminAuditLog(models.Model):
         # A tenant's delivery pricing + the platform's own revenue share
         # (delivery_commission_pct / marketplace_commission_pct) — admin-only writes.
         TENANT_DELIVERY_PRICING_UPDATED = "tenant_delivery_pricing_updated", "Tenant delivery pricing updated"
+        # Run 8 G3b A2-31: admin customer suspend/reactivate + profile edit.
+        CUSTOMER_SUSPENDED = "customer_suspended", "Customer suspended"
+        CUSTOMER_PROFILE_UPDATED = "customer_profile_updated", "Customer profile updated"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

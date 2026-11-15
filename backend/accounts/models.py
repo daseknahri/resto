@@ -84,6 +84,15 @@ class Customer(models.Model):
         ),
     )
     is_driver_online = models.BooleanField(default=False)
+    # Run 8 G3b A2-31: admin suspension flag. No active/suspended flag existed
+    # on Customer before this — the admin panel had no way to suspend a customer.
+    # MIGRATION: generate on the laptop at staging with makemigrations (do NOT
+    # hand-write the migration file). NOTE: this is a flag only — customer login
+    # and order placement do NOT yet enforce it; enforcement is a follow-up.
+    is_suspended = models.BooleanField(
+        default=False, db_index=True,
+        help_text="Suspended by a platform admin (fraud/abuse). Flagged in the admin panel; not yet enforced at login / ordering.",
+    )
     driver_lat = models.FloatField(null=True, blank=True)
     driver_lng = models.FloatField(null=True, blank=True)
     driver_position_updated_at = models.DateTimeField(null=True, blank=True)

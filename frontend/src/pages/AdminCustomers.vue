@@ -102,6 +102,7 @@
                 <div class="flex items-center gap-2">
                   <span class="font-medium text-slate-200 truncate">{{ c.name || t('adminCustomers.unnamed') }}</span>
                   <span v-if="c.is_driver" class="ui-chip text-[10px] shrink-0 border-emerald-500/40 text-emerald-300">{{ t('adminCustomers.driver') }}</span>
+                  <span v-if="c.is_suspended" class="ui-chip text-[10px] shrink-0 border-red-500/40 text-red-300">{{ t('adminCustomers.suspended') }}</span>
                 </div>
               </td>
               <td class="px-4 py-3">
@@ -144,6 +145,7 @@
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-medium text-slate-200 truncate">{{ c.name || t('adminCustomers.unnamed') }}</span>
                 <span v-if="c.is_driver" class="ui-chip text-[10px] shrink-0 border-emerald-500/40 text-emerald-300">{{ t('adminCustomers.driver') }}</span>
+                <span v-if="c.is_suspended" class="ui-chip text-[10px] shrink-0 border-red-500/40 text-red-300">{{ t('adminCustomers.suspended') }}</span>
               </div>
               <p class="mt-0.5 text-xs text-slate-500 truncate">{{ c.phone || c.email || '' }}</p>
             </div>
@@ -232,7 +234,7 @@
                   <div class="ui-stat-tile p-3">
                     <p class="ui-stat-label">{{ t('adminCustomers.trust') }}</p>
                     <p class="ui-stat-value text-lg tabular-nums">
-                      {{ detail.trust.avg_score != null ? detail.trust.avg_score + ' ★' : t('adminCustomers.trustNone') }}
+                      <span v-if="detail.trust.avg_score != null" class="inline-flex items-center gap-1 text-amber-300"><AppIcon name="star" class="h-4 w-4 shrink-0" aria-hidden="true" />{{ formatRating(detail.trust.avg_score) }}</span><span v-else>{{ t('adminCustomers.trustNone') }}</span>
                       <span v-if="detail.trust.count" class="text-xs font-normal text-slate-500">({{ detail.trust.count }})</span>
                     </p>
                   </div>
@@ -244,6 +246,7 @@
                   >{{ detail.phone_verified ? t('adminCustomers.verified') : t('adminCustomers.unverified') }}</span>
                   <span class="ui-chip text-[11px]">{{ t('adminCustomers.colLoyalty') }}: <span class="tabular-nums">{{ detail.loyalty_points }}</span></span>
                   <span v-if="detail.is_driver" class="ui-chip text-[11px] border-sky-500/40 text-sky-300">{{ t('adminCustomers.driver') }} · <span class="tabular-nums">{{ detail.delivery_jobs }}</span></span>
+                  <span v-if="detail.is_suspended" class="ui-chip text-[11px] border-red-500/40 text-red-300">{{ t('adminCustomers.suspended') }}</span>
                 </div>
 
                 <!-- Driver toggle -->
@@ -254,11 +257,49 @@
                   @click="toggleDriver"
                 >{{ detail.is_driver ? t('adminCustomers.removeDriver') : t('adminCustomers.makeDriver') }}</button>
 
+                <!-- A2-31: suspend / reactivate (admin flag; see backend note — no login/order enforcement yet) -->
+                <button
+                  class="ui-btn-outline ui-press w-full py-2 text-sm disabled:opacity-50"
+                  :class="detail.is_suspended ? 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400/70' : 'border-red-500/40 text-red-300 hover:border-red-400/70'"
+                  :disabled="togglingSuspend"
+                  @click="toggleSuspend"
+                >{{ detail.is_suspended ? t('adminCustomers.reactivate') : t('adminCustomers.suspend') }}</button>
+
+                <!-- A2-31: profile edit (name / phone / email) -->
+                <div class="ui-admin-card space-y-2.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="ui-kicker">{{ t('adminCustomers.editProfile') }}</p>
+                    <button
+                      v-if="!editingProfile"
+                      class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
+                      @click="startEdit"
+                    >{{ t('common.edit') }}</button>
+                  </div>
+                  <div v-if="editingProfile" class="space-y-2">
+                    <input v-model="editName" type="text" maxlength="80" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.editName')" :aria-label="t('adminCustomers.editName')" />
+                    <input v-model="editPhone" type="tel" maxlength="30" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.editPhone')" :aria-label="t('adminCustomers.editPhone')" />
+                    <input v-model="editEmail" type="email" maxlength="254" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.editEmail')" :aria-label="t('adminCustomers.editEmail')" />
+                    <p v-if="editError" class="text-xs text-red-300" role="alert">{{ editError }}</p>
+                    <div class="flex gap-2">
+                      <button
+                        class="ui-btn-primary ui-press flex-1 py-2 text-sm disabled:opacity-50"
+                        :disabled="savingProfile"
+                        @click="saveProfile"
+                      >{{ savingProfile ? t('common.loading') : t('common.save') }}</button>
+                      <button
+                        class="ui-btn-outline ui-press px-4 py-2 text-sm disabled:opacity-50"
+                        :disabled="savingProfile"
+                        @click="editingProfile = false"
+                      >{{ t('common.cancel') }}</button>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Credit wallet -->
                 <div class="ui-admin-card space-y-2.5">
                   <p class="ui-kicker">{{ t('adminCustomers.creditTitle') }}</p>
                   <div class="flex gap-2">
-                    <input v-model="creditAmount" type="number" step="0.01" min="0.01" class="ui-input flex-1 text-sm" :placeholder="t('adminCustomers.creditAmount')" :aria-label="t('adminCustomers.creditAmount')" />
+                    <input v-model="creditAmount" type="number" step="0.01" min="0.01" max="100000" class="ui-input flex-1 text-sm" :placeholder="t('adminCustomers.creditAmount')" :aria-label="t('adminCustomers.creditAmount')" />
                     <button
                       class="ui-btn-primary ui-press inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
                       :disabled="crediting || !creditAmount"
@@ -341,20 +382,21 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
+import { extractApiErrorMessage } from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
+const route = useRoute(); // A-22: ?customer=<id> deep-link auto-opens the detail slide-over
 const { confirm } = useConfirmModal();
 const toast = useToastStore();
-const route = useRoute(); // A-22: ?customer=<id> deep-link auto-opens the detail slide-over
 
 const loading = ref(true);
 const fetchError = ref(false);
@@ -366,6 +408,18 @@ const search = ref('');
 const verifiedOnly = ref(false);
 const driversOnly = ref(false);
 let searchTimer = null;
+
+// A2-25 (coordinator): trust rating, 1 decimal via the shared Intl path (same as
+// fmtMoney/formatDate in this file and formatRating in AdminDrivers.vue).
+const formatRating = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  try {
+    return new Intl.NumberFormat(currentLocale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return n.toFixed(1);
+  }
+};
 
 const fmtMoney = (v, currency = 'MAD') =>
   formatCurrencyString(currentLocale.value, v, currency, { maximumFractionDigits: 2 });
@@ -425,6 +479,13 @@ const creditError = ref('');
 const detailError = ref(''); // panel-level fetch error (distinct from creditError = the credit-form error inside the panel)
 let creditKey = null;
 const togglingDriver = ref(false);
+const togglingSuspend = ref(false);
+const editingProfile = ref(false);
+const editName = ref('');
+const editPhone = ref('');
+const editEmail = ref('');
+const savingProfile = ref(false);
+const editError = ref('');
 const orders = ref([]);
 const ordersTotal = ref(0);
 const loadingOrders = ref(false);
@@ -432,6 +493,7 @@ const ordersError = ref(''); // cross-restaurant orders fetch failed (vs genuine
 const ordersScanned = ref(0);
 const ledgerStale = ref(false);
 
+const CREDIT_MAX = 100000; // mirrors the server cap (AdminCustomerCreditView: amount > 100000 -> 400)
 const ORDER_STATUS_KEY = {
   pending: 'orderStatus.statusPending',
   confirmed: 'orderStatus.statusConfirmed',
@@ -439,8 +501,10 @@ const ORDER_STATUS_KEY = {
   ready: 'orderStatus.statusReady',
   completed: 'orderStatus.statusCompleted',
   cancelled: 'orderStatus.statusCancelled',
+  scheduled: 'orderStatus.statusScheduled',
 };
-const orderStatusLabel = (s) => t(ORDER_STATUS_KEY[s] || 'orderStatus.statusPending');
+// A2-15: an unknown/future status is labelled "Unknown", never mislabelled "Pending".
+const orderStatusLabel = (s) => t(ORDER_STATUS_KEY[s] || 'orderStatus.statusUnknown');
 
 const fetchOrders = async (id) => {
   orders.value = [];
@@ -497,6 +561,8 @@ const openDetail = async (c) => {
   creditError.value = '';
   detailError.value = '';
   creditKey = null;
+  editingProfile.value = false;
+  editError.value = '';
   ledgerStale.value = false;
   loadingDetail.value = true;
   try {
@@ -519,6 +585,8 @@ const creditWallet = async () => {
   creditError.value = '';
   const amount = parseFloat(creditAmount.value);
   if (!amount || amount <= 0) { creditError.value = t('adminCustomers.creditFailed'); return; }
+  // A2-29: the server rejects amount > 100000 — fail here, before the confirm modal.
+  if (amount > CREDIT_MAX) { creditError.value = t('adminCustomers.creditMax'); return; }
   const projected = parseFloat(detail.value?.wallet_balance || 0) + amount;
   const okCredit = await confirm({
     title: t('adminCustomers.creditConfirmTitle'),
@@ -545,9 +613,67 @@ const creditWallet = async () => {
       detail.value = r.data;
     }).catch(() => refreshLedger());
   } catch (err) {
-    creditError.value = err?.response?.data?.detail || t('adminCustomers.creditFailed');
+    // A2-29: shared extractor + translated fallback — the raw backend English
+    // detail must not reach the admin (same class as C-06).
+    creditError.value = extractApiErrorMessage(err, t('adminCustomers.creditFailed'));
   } finally {
     crediting.value = false;
+  }
+};
+
+const toggleSuspend = async () => {
+  const suspending = !detail.value.is_suspended;
+  const ok = await confirm({
+    title: t(suspending ? 'adminCustomers.suspendConfirmTitle' : 'adminCustomers.reactivateConfirmTitle', { name: detail.value.name || '' }),
+    body: t(suspending ? 'adminCustomers.suspendConfirmBody' : 'adminCustomers.reactivateConfirmBody'),
+    confirmLabel: t(suspending ? 'adminCustomers.suspend' : 'adminCustomers.reactivate'),
+    danger: suspending,
+  });
+  if (!ok) return;
+  togglingSuspend.value = true;
+  try {
+    const res = await api.patch(`/admin/customers/${selected.value.id}/`, { is_suspended: suspending });
+    if (detail.value) detail.value.is_suspended = res.data.is_suspended;
+    syncRow({ is_suspended: res.data.is_suspended });
+  } catch (err) {
+    toast.show(extractApiErrorMessage(err, t('adminCustomers.suspendFailed')), 'error');
+  } finally {
+    togglingSuspend.value = false;
+  }
+};
+
+const startEdit = () => {
+  editName.value = detail.value.name || '';
+  editPhone.value = detail.value.phone || '';
+  editEmail.value = detail.value.email || '';
+  editError.value = '';
+  editingProfile.value = true;
+};
+
+const saveProfile = async () => {
+  editError.value = '';
+  const name = editName.value.trim();
+  const phone = editPhone.value.trim();
+  const email = editEmail.value.trim();
+  if (name.length > 80 || phone.length > 30 || (email && (!email.includes('@') || email.length > 254))) {
+    editError.value = t('adminCustomers.profileInvalid');
+    return;
+  }
+  savingProfile.value = true;
+  try {
+    const res = await api.patch(`/admin/customers/${selected.value.id}/`, { name, phone, email });
+    if (detail.value) {
+      detail.value.name = res.data.name;
+      detail.value.phone = res.data.phone;
+      detail.value.email = res.data.email;
+    }
+    syncRow({ name: res.data.name, phone: res.data.phone, email: res.data.email });
+    editingProfile.value = false;
+    toast.show(t('adminCustomers.profileSaved'), 'success');
+  } catch (err) {
+    editError.value = extractApiErrorMessage(err, t('common.saveFailed'));
+  } finally {
+    savingProfile.value = false;
   }
 };
 
