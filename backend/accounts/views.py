@@ -5969,6 +5969,34 @@ def _serialize_flash_sale(fs, opted_in: bool = False):
 
 
 _FLASH_SALE_DISCOUNT_ERROR = "discount_value must be a number between 0 and 100."
+_FLASH_SALE_MAX_REDEMPTIONS_ERROR = (
+    "max_redemptions must be a positive integer, or omitted for unlimited."
+)
+# Sentinel: "present but not a positive integer" (distinct from None = unlimited).
+_FLASH_SALE_MAX_REDEMPTIONS_INVALID = object()
+
+
+def _parse_flash_sale_max_redemptions(raw):
+    """Parse max_redemptions: omitted/empty → None (unlimited); a positive integer
+    → int; anything else (0, negative, fractional, non-numeric, bool) → the
+    _INVALID sentinel. Shared by POST and PATCH so both reject the values that
+    used to hit the PositiveIntegerField DB constraint (500) or silently become
+    unlimited (0 is falsy → None)."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool):
+        return _FLASH_SALE_MAX_REDEMPTIONS_INVALID
+    if isinstance(raw, float):
+        if not raw.is_integer():
+            return _FLASH_SALE_MAX_REDEMPTIONS_INVALID
+        raw = int(raw)
+    try:
+        value = int(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return _FLASH_SALE_MAX_REDEMPTIONS_INVALID
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+        return value
+    return _FLASH_SALE_MAX_REDEMPTIONS_INVALID
 
 
 def _parse_flash_sale_discount(raw):
@@ -6027,6 +6055,10 @@ class AdminFlashSaleListCreateView(APIView):
         if active_from >= active_until:
             return Response({"detail": "active_from must be before active_until."}, status=400)
 
+        max_redemptions = _parse_flash_sale_max_redemptions(data.get("max_redemptions"))
+        if max_redemptions is _FLASH_SALE_MAX_REDEMPTIONS_INVALID:
+            return Response({"detail": _FLASH_SALE_MAX_REDEMPTIONS_ERROR}, status=400)
+
         with schema_context("public"):
             fs = PlatformFlashSale.objects.create(
                 name=data["name"],
@@ -6035,7 +6067,7 @@ class AdminFlashSaleListCreateView(APIView):
                 active_from=active_from,
                 active_until=active_until,
                 is_active=bool(data.get("is_active", True)),
-                max_redemptions=data.get("max_redemptions") or None,
+                max_redemptions=max_redemptions,
             )
         # A flash sale sets a platform-wide discount % — audit who created it.
         log_admin_action(
@@ -6134,7 +6166,10 @@ class AdminFlashSaleDetailView(APIView):
                 fs.is_active = bool(data["is_active"])
                 update_fields.append("is_active")
             if "max_redemptions" in data:
-                fs.max_redemptions = data["max_redemptions"] or None
+                parsed_max = _parse_flash_sale_max_redemptions(data["max_redemptions"])
+                if parsed_max is _FLASH_SALE_MAX_REDEMPTIONS_INVALID:
+                    return Response({"detail": _FLASH_SALE_MAX_REDEMPTIONS_ERROR}, status=400)
+                fs.max_redemptions = parsed_max
                 update_fields.append("max_redemptions")
 
             if update_fields:

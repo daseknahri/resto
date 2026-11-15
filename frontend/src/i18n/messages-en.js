@@ -1914,6 +1914,13 @@ adminFlashSales: {
   discountRange: "Discount must be between 1% and 100%.",
   activeUntilBeforeFrom: "End date must be after the start date.",
   activeUntilInPast: "End date must be in the future.",
+  edit: "Edit",
+  editTitle: "Edit flash sale",
+  editSave: "Save changes",
+  editSaving: "Saving…",
+  cancelEdit: "Cancel edit",
+  updated: "Flash sale updated.",
+  maxRedemptionsInvalid: "Max redemptions must be a whole number of 1 or more, or left empty for unlimited.",
 },
 adminDeliveryJobs: {
   kicker: "Platform Admin",

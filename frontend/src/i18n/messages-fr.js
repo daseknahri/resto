@@ -1912,6 +1912,13 @@ adminFlashSales: {
   discountRange: "La remise doit etre comprise entre 1 % et 100 %.",
   activeUntilBeforeFrom: "La date de fin doit etre posterieure a la date de debut.",
   activeUntilInPast: "La date de fin doit etre dans le futur.",
+  edit: "Modifier",
+  editTitle: "Modifier la vente flash",
+  editSave: "Enregistrer",
+  editSaving: "Enregistrement...",
+  cancelEdit: "Annuler la modification",
+  updated: "Vente flash mise a jour.",
+  maxRedemptionsInvalid: "Le nombre max doit etre un entier de 1 ou plus, ou vide pour illimite.",
 },
 adminDeliveryJobs: {
   kicker: "Admin plateforme",

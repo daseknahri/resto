@@ -76,6 +76,7 @@ vi.mock("../../lib/api", () => ({
   },
 }));
 
+import api from "../../lib/api";
 import AdminFlashSales from "../AdminFlashSales.vue";
 
 const mountPage = () => shallowMount(AdminFlashSales);
@@ -185,5 +186,119 @@ describe("AdminFlashSales — mount smoke", () => {
     // Their presence proves the mixed-state sales array-render path ran clean.
     expect(text).toContain("adminFlashSales.live");
     expect(text).toContain("adminFlashSales.paused");
+  });
+});
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
+
+describe("AdminFlashSales — edit (A-01) + max_redemptions validation (A-02)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  it("shows an Edit button per sale", async () => {
+    _routes = { "/admin/flash-sales/": { data: [flashSale()] } };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Weekend 15% off");
+    expect(findButton(wrapper, "adminFlashSales.edit")).toBeTruthy();
+  });
+
+  it("Edit prefills the form and submitting PATCHes the sale", async () => {
+    // Sale dates must be in the future: the edit form re-validates (end in future).
+    _routes = {
+      "/admin/flash-sales/": {
+        data: [
+          flashSale({
+            active_from: "2026-12-01T00:00:00Z",
+            active_until: "2026-12-31T00:00:00Z",
+          }),
+        ],
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    api.patch.mockResolvedValue({
+      data: flashSale({ name: "Weekend 20% off", max_redemptions: 20 }),
+    });
+
+    await findButton(wrapper, "adminFlashSales.edit").trigger("click");
+    // Form is prefilled from the row (name + cap) and the heading switches to edit mode.
+    expect(wrapper.vm.form.name).toBe("Weekend 15% off");
+    expect(String(wrapper.vm.form.max_redemptions)).toBe("500");
+    expect(wrapper.text()).toContain("adminFlashSales.editTitle");
+
+    wrapper.vm.form.name = "Weekend 20% off";
+    wrapper.vm.form.max_redemptions = "20";
+    await findButton(wrapper, "adminFlashSales.editSave").trigger("click");
+    await flushPromises();
+
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(api.patch).toHaveBeenCalledWith(
+      "/admin/flash-sales/1/",
+      expect.objectContaining({ name: "Weekend 20% off", max_redemptions: 20 }),
+    );
+    expect(api.post).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Weekend 20% off");
+  });
+
+  it("Cancel edit clears the form back to create mode", async () => {
+    _routes = { "/admin/flash-sales/": { data: [flashSale()] } };
+    wrapper = mountPage();
+    await flushPromises();
+    await findButton(wrapper, "adminFlashSales.edit").trigger("click");
+    expect(wrapper.vm.form.name).toBe("Weekend 15% off");
+    await findButton(wrapper, "adminFlashSales.cancelEdit").trigger("click");
+    expect(wrapper.vm.form.name).toBe("");
+    expect(wrapper.text()).toContain("adminFlashSales.createTitle");
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it.each(["0", "-3", "1.5", "abc"])(
+    "rejects max_redemptions=%s on create without calling the API",
+    async (bad) => {
+      _routes = { "/admin/flash-sales/": { data: [] } };
+      wrapper = mountPage();
+      await flushPromises();
+      wrapper.vm.form.name = "Sale";
+      wrapper.vm.form.discount_value = "10";
+      wrapper.vm.form.active_from = "2026-06-01T10:00";
+      wrapper.vm.form.active_until = "2027-06-30T10:00";
+      wrapper.vm.form.max_redemptions = bad;
+      await findButton(wrapper, "adminFlashSales.create").trigger("click");
+      await flushPromises();
+      expect(wrapper.text()).toContain("adminFlashSales.maxRedemptionsInvalid");
+      expect(api.post).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts a valid max_redemptions on create and sends it as a number", async () => {
+    _routes = { "/admin/flash-sales/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    api.post.mockResolvedValue({ data: flashSale({ id: 8, name: "New Sale", max_redemptions: 5 }) });
+    wrapper.vm.form.name = "New Sale";
+    wrapper.vm.form.discount_value = "10";
+    wrapper.vm.form.active_from = "2026-06-01T10:00";
+    wrapper.vm.form.active_until = "2027-06-30T10:00";
+    wrapper.vm.form.max_redemptions = "5";
+    await findButton(wrapper, "adminFlashSales.create").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/flash-sales/",
+      expect.objectContaining({ max_redemptions: 5 }),
+    );
   });
 });

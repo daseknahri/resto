@@ -26,7 +26,7 @@
     <div class="ui-panel p-5 space-y-4">
       <div class="space-y-0.5">
         <p class="ui-kicker">{{ t('adminFlashSales.createKicker') }}</p>
-        <h2 class="ui-display text-base font-semibold text-white">{{ t('adminFlashSales.createTitle') }}</h2>
+        <h2 class="ui-display text-base font-semibold text-white">{{ editingId ? t('adminFlashSales.editTitle') : t('adminFlashSales.createTitle') }}</h2>
       </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label class="block text-xs text-slate-400">
@@ -58,11 +58,19 @@
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ createError }}</p>
       </div>
-      <button
-        class="ui-btn-primary ui-press ui-touch-target px-5 py-2 text-sm disabled:opacity-50"
-        :disabled="creating"
-        @click="createSale"
-      >{{ creating ? t('adminFlashSales.creating') : t('adminFlashSales.create') }}</button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          class="ui-btn-primary ui-press ui-touch-target px-5 py-2 text-sm disabled:opacity-50"
+          :disabled="creating"
+          @click="submitForm"
+        >{{ creating ? (editingId ? t('adminFlashSales.editSaving') : t('adminFlashSales.creating')) : (editingId ? t('adminFlashSales.editSave') : t('adminFlashSales.create')) }}</button>
+        <button
+          v-if="editingId"
+          class="ui-btn-outline ui-press ui-touch-target px-4 py-2 text-sm disabled:opacity-50"
+          :disabled="creating"
+          @click="cancelEdit"
+        >{{ t('adminFlashSales.cancelEdit') }}</button>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -112,6 +120,12 @@
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            <button
+              class="ui-btn-outline ui-press ui-touch-target px-3 py-1 text-xs font-semibold text-sky-300 hover:border-sky-400/60 disabled:opacity-50"
+              :disabled="busyId === fs.id"
+              :aria-label="t('adminFlashSales.edit') + ' ' + fs.name"
+              @click="startEdit(fs)"
+            >{{ t('adminFlashSales.edit') }}</button>
             <button
               class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold disabled:opacity-50"
               :class="fs.is_active ? 'text-slate-300 hover:border-amber-400/50 hover:text-amber-300' : 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400/70'"
@@ -205,29 +219,100 @@ const fetchSales = async () => {
   }
 };
 
-const createSale = async () => {
+const editingId = ref(null);
+
+const resetForm = () => {
+  form.name = ''; form.discount_value = ''; form.active_from = ''; form.active_until = '';
+  form.max_redemptions = ''; form.description = '';
+};
+
+// datetime-local inputs hold LOCAL time; the API returns UTC ISO — convert so the
+// prefilled edit form shows the same wall-clock time the admin originally entered.
+const toLocalInput = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const startEdit = (fs) => {
+  editingId.value = fs.id;
   createError.value = '';
+  form.name = fs.name || '';
+  form.discount_value = fs.discount_value ?? '';
+  form.active_from = toLocalInput(fs.active_from);
+  form.active_until = toLocalInput(fs.active_until);
+  form.max_redemptions = fs.max_redemptions ?? '';
+  form.description = fs.description || '';
+};
+
+const cancelEdit = () => {
+  editingId.value = null;
+  createError.value = '';
+  resetForm();
+};
+
+// Shared by create + edit: the same field rules, so an edit cannot save what a
+// create would reject (incl. max_redemptions — a negative/fractional value used to
+// reach the DB constraint and 500, and 0 silently became "unlimited").
+const validateForm = () => {
   if (!form.name.trim() || !form.discount_value || !form.active_from || !form.active_until) {
-    createError.value = t('adminFlashSales.requiredFields');
-    return;
+    return t('adminFlashSales.requiredFields');
   }
   const discountValue = Number(form.discount_value);
   if (!(discountValue > 0) || discountValue > 100) {
-    createError.value = t('adminFlashSales.discountRange');
-    return;
+    return t('adminFlashSales.discountRange');
   }
   const fromDate = new Date(form.active_from);
   const untilDate = new Date(form.active_until);
   if (untilDate <= fromDate) {
-    createError.value = t('adminFlashSales.activeUntilBeforeFrom');
-    return;
+    return t('adminFlashSales.activeUntilBeforeFrom');
   }
   if (untilDate <= new Date()) {
-    createError.value = t('adminFlashSales.activeUntilInPast');
+    return t('adminFlashSales.activeUntilInPast');
+  }
+  if (form.max_redemptions !== '' && form.max_redemptions !== null && form.max_redemptions !== undefined) {
+    const raw = String(form.max_redemptions).trim();
+    if (raw !== '' && (!/^\d+$/.test(raw) || Number(raw) < 1)) {
+      return t('adminFlashSales.maxRedemptionsInvalid');
+    }
+  }
+  return '';
+};
+
+const submitForm = async () => {
+  createError.value = '';
+  const error = validateForm();
+  if (error) {
+    createError.value = error;
     return;
   }
+  const discountValue = Number(form.discount_value);
+  const fromDate = new Date(form.active_from);
+  const untilDate = new Date(form.active_until);
+  const maxRaw = String(form.max_redemptions ?? '').trim();
   creating.value = true;
   try {
+    if (editingId.value) {
+      // Edit: reuse the existing PATCH — an empty max field clears the cap
+      // (unlimited); a set value is validated above and by the server.
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        discount_value: discountValue,
+        active_from: fromDate.toISOString(),
+        active_until: untilDate.toISOString(),
+        max_redemptions: maxRaw === '' ? null : Number(maxRaw),
+      };
+      const res = await api.patch(`/admin/flash-sales/${editingId.value}/`, payload);
+      const idx = sales.value.findIndex((x) => x.id === editingId.value);
+      if (idx >= 0) sales.value[idx] = res.data;
+      toast.show(t('adminFlashSales.updated'), 'success');
+      editingId.value = null;
+      resetForm();
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -235,12 +320,11 @@ const createSale = async () => {
       active_from: fromDate.toISOString(),
       active_until: untilDate.toISOString(),
     };
-    if (form.max_redemptions) payload.max_redemptions = Number(form.max_redemptions);
+    if (maxRaw !== '') payload.max_redemptions = Number(maxRaw);
     const res = await api.post('/admin/flash-sales/', payload);
     sales.value.unshift(res.data);
     toast.show(t('adminFlashSales.created'), 'success');
-    form.name = ''; form.discount_value = ''; form.active_from = ''; form.active_until = '';
-    form.max_redemptions = ''; form.description = '';
+    resetForm();
   } catch (err) {
     createError.value = err?.response?.data?.detail || t('adminFlashSales.createFailed');
   } finally {
