@@ -144,3 +144,114 @@ describe("OwnerMenuBuilder — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerMenuBuilder.importCsv");
   });
 });
+
+// ── B-12: CSV import refresh (Run 8 S1-E, appended — base tests above untouched)
+// After a successful CSV import the dish list must refresh: runImport now
+// force-refreshes the menu store (fetchCategories(true)) and bumps reloadKey
+// (remounting the active tab, whose onMounted load() refetches). The store
+// refresh is the observable half in this harness — the tab bodies are stubbed
+// by shallowMount, so the remount itself is covered by the same one-line
+// reloadKey pattern onTemplateApplied already uses; the assertions below prove
+// the new success-path block ran (store refetched) and that it is gated on
+// something actually being imported.
+// FE lessons applied: setValue is not used on the file input — files are set
+// via defineProperty + trigger("change"); the :disabled-bound Import button is
+// only clicked after the change tick, never after setting wrapper.vm state.
+describe("OwnerMenuBuilder - CSV import refresh (B-12)", () => {
+  let wrapper;
+  let api;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    api = (await import("../../lib/api")).default;
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const openImport = async () => {
+    wrapper = mountBuilder();
+    await flushPromises();
+    const toolbarBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("ownerMenuBuilder.importCsv"));
+    expect(toolbarBtn?.exists()).toBe(true);
+    await toolbarBtn.trigger("click");
+    await flushPromises();
+  };
+
+  const pickFile = async () => {
+    const input = wrapper.find('input[type="file"]');
+    expect(input.exists()).toBe(true);
+    const file = new File(
+      ["category_name,dish_name,description,price,tags,allergens\nStarters,Tagine,,12,,,"],
+      "menu.csv",
+      { type: "text/csv" }
+    );
+    Object.defineProperty(input.element, "files", { value: [file] });
+    await input.trigger("change");
+    await flushPromises();
+  };
+
+  const clickImportStart = async () => {
+    const btn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("ownerMenuBuilder.importStart"));
+    expect(btn?.exists()).toBe(true);
+    // Guard (FE lesson): never click a :disabled-bound button without a tick
+    // after the state change — the change tick above already ran, so the
+    // button must be enabled here.
+    expect(btn.attributes("disabled")).toBeUndefined();
+    await btn.trigger("click");
+    await flushPromises();
+  };
+
+  it("refreshes the menu store after a successful import (dishes created)", async () => {
+    const menuStore = useMenuStore();
+    menuStore.dishes = {
+      starters: [{ id: 1, name: "Old Dish", is_published: true }],
+    };
+    api.post.mockResolvedValueOnce({
+      data: { created_dishes: 3, created_categories: 1, skipped: 0, errors: [] },
+    });
+
+    await openImport();
+    await pickFile();
+    await clickImportStart();
+
+    // Results panel renders the import outcome.
+    expect(wrapper.text()).toContain("ownerMenuBuilder.resultDishes");
+    // Store was force-refreshed: the mocked GETs return no categories, so the
+    // seeded stale dishes are replaced by the fresh (empty) fetch result.
+    expect(menuStore.dishes).toEqual({});
+    expect(api.get).toHaveBeenCalledWith(
+      "/categories/",
+      expect.objectContaining({ params: { force_locale: 1 } })
+    );
+  });
+
+  it("does not refresh when the import creates nothing", async () => {
+    const menuStore = useMenuStore();
+    menuStore.dishes = {
+      starters: [{ id: 1, name: "Old Dish", is_published: true }],
+    };
+    api.post.mockResolvedValueOnce({
+      data: { created_dishes: 0, created_categories: 0, skipped: 2, errors: [] },
+    });
+
+    await openImport();
+    await pickFile();
+    await clickImportStart();
+
+    expect(wrapper.text()).toContain("ownerMenuBuilder.resultDishes");
+    // No-op import: store untouched, no refetch fired.
+    expect(menuStore.dishes).toEqual({
+      starters: [{ id: 1, name: "Old Dish", is_published: true }],
+    });
+    expect(api.get).not.toHaveBeenCalled();
+  });
+});

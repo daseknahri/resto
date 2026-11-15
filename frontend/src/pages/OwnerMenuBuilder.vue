@@ -415,6 +415,17 @@ const runImport = async () => {
     } else {
       toast.show(t('ownerMenuBuilder.resultNothingImported'), 'error');
     }
+    // B-12: refresh the dish list after a successful import - without this the
+    // tab behind the modal keeps showing the pre-import list until the owner
+    // switches tabs or reloads. Same pattern as onTemplateApplied: bump
+    // reloadKey to remount the active tab (StepDishes re-runs load() on mount)
+    // and force-refresh the shared menu store (force=true bypasses its 2-min
+    // stale cache) so the draft badge updates too. Skipped when nothing was
+    // imported, so a no-op import changes nothing on screen.
+    if (res.data.created_dishes > 0 || res.data.created_categories > 0) {
+      await menuStore.fetchCategories(true);
+      reloadKey.value += 1;
+    }
   } catch (err) {
     importError.value = err?.response?.data?.detail || t('ownerMenuBuilder.importFailed');
   } finally {
