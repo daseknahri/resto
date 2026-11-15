@@ -204,3 +204,47 @@ describe("OwnerWallet — mount smoke", () => {
     expect(wrapper.text()).toContain("12.25");
   });
 });
+
+describe("OwnerWallet — S1-I B-16 tenant currency", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    routeState.query = {};
+    routeState.params = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-16: plan.currency is the SUBSCRIPTION-plan price currency and
+  // profile.currency is never sent by the backend — neither may drive wallet
+  // money. Seed both with hostile values; the MAD tenant default must win.
+  // lib/intlFormatters is NOT mocked, so real Intl output discriminates:
+  // MAD -> "MAD 842.50", USD -> "$842.50", EUR -> "€842.50".
+  it("renders wallet money in MAD even when meta carries a USD plan currency and a EUR profile currency (B-16)", async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    useTenantStore().meta = {
+      plan: { currency: "USD" },
+      profile: { currency: "EUR" },
+    };
+    _routes = {
+      "/owner/wallet/float/": { data: { float_balance: "842.50" } },
+    };
+
+    wrapper = mountWallet();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("842.50");
+    expect(wrapper.text()).toContain("MAD");
+    expect(wrapper.text()).not.toContain("$");
+    expect(wrapper.text()).not.toContain("€");
+  });
+});

@@ -469,7 +469,6 @@ import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useMenuStore } from '../stores/menu';
-import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
@@ -490,7 +489,6 @@ const emit = defineEmits(['close', 'placed', 'appended']);
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const menu = useMenuStore();
-const tenant = useTenantStore();
 const toast = useToastStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -593,11 +591,11 @@ const recentDishes = computed(() => {
 
 // ── Derived ───────────────────────────────────────────────────────────────────
 const categories = computed(() => menu.categories || []);
-const currency = computed(() =>
-  (menu.categories || []).length
-    ? (tenant.resolvedMeta?.plan?.currency || 'MAD')
-    : 'MAD'
-);
+// B-16: plan.currency is the SUBSCRIPTION-plan price currency, not the
+// restaurant's operating currency, and no tenant-level currency setting exists —
+// new-order money uses the MAD tenant default. Per-order amounts use the order's
+// own currency once saved.
+const currency = computed(() => "MAD");
 
 const isSearching = computed(() => search.value.trim().length > 0);
 

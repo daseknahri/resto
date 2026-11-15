@@ -38,6 +38,7 @@ from tenancy.tiering import (
     plan_tier_order,
     is_plan_upgrade,
 )
+from accounts.phone import normalize_e164
 from .messaging import build_onboarding_url, build_owner_checklist, build_public_menu_url
 
 from .audit import log_admin_action
@@ -643,14 +644,16 @@ def _log_reservation_timeline_event(
     )
 
 
-def _reservation_phone_digits(phone_value: str) -> str:
-    return "".join(ch for ch in str(phone_value or "") if ch.isdigit())
-
-
 def _build_whatsapp_reservation_reminder(*, lead, tenant):
-    phone_digits = _reservation_phone_digits(getattr(lead, "phone", "") or "")
-    if not phone_digits:
+    # B-15: normalize via accounts.phone.normalize_e164 (same rule as the wallet
+    # transfers) instead of stripping to raw digits — a national "06…" lead used
+    # to produce a dead wa.me/0612345678 link. Tenant default dial code is 212
+    # (MAD); no per-tenant dial-code setting exists. Bare digits with no leading
+    # 0 / + / 00 are refused (None) rather than guessed at.
+    e164 = normalize_e164(getattr(lead, "phone", "") or "", "212")
+    if not e164:
         return None
+    phone_digits = e164[1:]  # wa.me takes digits without the leading "+"
     guest_name = (str(getattr(lead, "name", "") or "").strip() or "there")
     restaurant_name = (str(getattr(tenant, "name", "") or "").strip() or "our restaurant")
     message = (

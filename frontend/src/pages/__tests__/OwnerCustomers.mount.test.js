@@ -282,3 +282,67 @@ describe("OwnerCustomers — S1-C B-14 load-more failure (appended)", () => {
     expect(wrapper.text()).toContain("ownerCustomers.resultCount");
   });
 });
+
+describe("OwnerCustomers — S1-I B-15 wa.me links", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // The B-14 describe above leaves a mockImplementation on api.get
+    // (clearAllMocks does not remove implementations). Restore the base
+    // URL-routed implementation or this describe renders pageOne() instead
+    // of its own _routes seed (Sara default phone, summary total 3).
+    api.get.mockRestore();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-15: a national-format guest-order phone ("06…") must link to
+  // wa.me/212… — the raw-digits link wa.me/06… is dead. An E.164 phone links
+  // unchanged. Asserted on the rendered href (wrapper.html), not the helper.
+  it("builds wa.me links with the 212 country code for national-format phones (B-15)", async () => {
+    _routes = {
+      "/owner/customers/": {
+        data: {
+          results: [
+            customer({ phone: "0678901234" }),
+            customer({
+              id: 2,
+              customer_id: 102,
+              name: "Youssef Alami",
+              type: "anonymous",
+              segment: "new",
+              order_count: 1,
+              total_spend: 60,
+              avg_order_value: 60,
+              wallet_balance: undefined,
+              loyalty_points: 0,
+              avg_review: null,
+              review_count: 0,
+              trust_score: null,
+              owner_notes: "",
+              phone: "+212612345678",
+            }),
+          ],
+          has_more: false,
+          summary: { total: 2, new: 1, returning: 1, at_risk: 0 },
+        },
+      },
+    };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    const html = wrapper.html();
+    expect(html).toContain("https://wa.me/212678901234");
+    expect(html).not.toContain("wa.me/0678901234");
+    expect(html).toContain("https://wa.me/212612345678");
+  });
+});

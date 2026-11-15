@@ -227,3 +227,47 @@ describe("OwnerZReport — mount smoke", () => {
     expect(text).toContain("Grilled Sea Bass");
   });
 });
+
+describe("OwnerZReport — S1-I B-16 tenant currency", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    window.print = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-16: profile.currency is never sent by the backend (dead read) and
+  // plan.currency is the subscription-price currency — neither may drive
+  // Z-report money. Seed both with hostile values; the MAD default must win.
+  // lib/intlFormatters is NOT mocked, so real Intl output discriminates:
+  // MAD -> "MAD 512.75", USD -> "$512.75", EUR -> "€512.75".
+  it("renders report money in MAD even when meta carries a USD plan currency and a EUR profile currency (B-16)", async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    useTenantStore().meta = {
+      plan: { currency: "USD" },
+      profile: { currency: "EUR" },
+    };
+    _routes = {
+      "/owner/z-report/": { data: zReportPayload },
+      "/owner/drawer/history/": { data: drawerPayload },
+    };
+
+    wrapper = mountReport();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("512.75"); // total collected
+    expect(wrapper.text()).toContain("MAD");
+    expect(wrapper.text()).not.toContain("$");
+    expect(wrapper.text()).not.toContain("€");
+  });
+});

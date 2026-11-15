@@ -576,6 +576,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import api, { extractApiErrorMessage } from "../lib/api";
 import { safeExternalUrl } from "../lib/escape";
+import { toWaPhone } from "../lib/phone";
 import { readCache, writeCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
 
@@ -705,7 +706,6 @@ const parseApiError = extractApiErrorMessage;  // shared canonical extractor (li
 
 const formatDate = (value) => formatDateTime(value) || "-";
 
-const sanitizePhone = (value) => String(value || "").replace(/\D/g, "");
 const sanitizeTel = (value) =>
   String(value || "")
     .replace(/[^\d+]/g, "")
@@ -717,7 +717,11 @@ const telHref = (reservation) => {
 };
 
 const whatsappHref = (reservation) => {
-  const phone = sanitizePhone(reservation?.phone || "");
+  // B-15: national-format numbers ("06…") must get the 212 country code — a raw
+  // wa.me/06… link is dead. toWaPhone() (lib/phone.js, mirrors
+  // backend/accounts/phone.py normalize_e164) refuses bare digits it cannot
+  // resolve, so those return "" and the link stays hidden.
+  const phone = toWaPhone(reservation?.phone || "");
   if (!phone) return "";
   const name = String(reservation?.name || t("ownerReservations.guestFallback")).trim();
   const text = encodeURIComponent(t("ownerReservations.whatsappTemplate", { name }));

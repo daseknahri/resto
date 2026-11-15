@@ -198,3 +198,66 @@ describe("OwnerShiftClose — mount smoke", () => {
     expect(wrapper.text()).toContain("120.00"); // tips total
   });
 });
+
+describe("OwnerShiftClose — S1-I B-16 tenant currency", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    window.print = vi.fn();
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-16: profile.currency is never sent by the backend (dead read) and
+  // plan.currency is the subscription-price currency — neither may drive
+  // drawer money. Seed both with hostile values; the MAD default must win.
+  // lib/intlFormatters is NOT mocked, so real Intl output discriminates:
+  // MAD -> "MAD 200.00", USD -> "$200.00", EUR -> "€200.00".
+  it("renders drawer money in MAD even when meta carries a USD plan currency and a EUR profile currency (B-16)", async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    useTenantStore().meta = {
+      plan: { currency: "USD" },
+      profile: { currency: "EUR" },
+    };
+    _routes = {
+      "/owner/drawer/current/": {
+        data: {
+          session: {
+            status: "closed",
+            opening_float: "200.00",
+            expected_total: "845.00",
+            counted_total: "840.00",
+            over_short: "-5.00",
+          },
+          transactions: [
+            { id: 1, kind: "pay_in", amount: "50.00", reason: "Change fund", at: "2026-09-05T10:00:00Z" },
+          ],
+        },
+      },
+      "/owner/z-report/": {
+        data: {
+          collected: { count: 42, total: "845.00", cash: "600.00", wallet: "245.00" },
+          tips: { total: "120.00" },
+          voids: { count: 2, total: "35.00" },
+        },
+      },
+    };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("200.00"); // opening float
+    expect(wrapper.text()).toContain("MAD");
+    expect(wrapper.text()).not.toContain("$");
+    expect(wrapper.text()).not.toContain("€");
+  });
+});

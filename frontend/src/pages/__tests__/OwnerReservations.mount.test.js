@@ -418,3 +418,56 @@ describe("OwnerReservations — reminders (Run 8 S1-D, B-06/B-07)", () => {
     expect(localStorage.getItem(PENDING_KEY)).toBeNull();
   });
 });
+
+describe("OwnerReservations — S1-I B-15 wa.me links", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-15: national-format lead phone ("06…") links to wa.me/212…; bare digits
+  // with no leading 0 / + / 00 are refused, never guessed — no link renders.
+  it("builds wa.me links with the 212 country code, and hides the link for bare digits (B-15)", async () => {
+    _routes = {
+      "/owner/reservations/": {
+        data: {
+          results: [
+            reservation({ phone: "0678901234" }),
+            reservation({
+              id: 2,
+              name: "Youssef Alami",
+              status: "contacted",
+              sla_state: "overdue",
+              sla_minutes_overdue: 45,
+              last_reminder_status: "failed",
+              last_reminder_failure_reason: "Invalid number",
+              reminder_failed_count: 1,
+              phone: "612345678",
+            }),
+          ],
+          pagination: { page: 1, page_size: 20, total: 2, pages: 1, has_next: false, has_prev: false },
+          counts: { total: 2, new: 1, contacted: 1, won: 0, lost: 0, overdue_new: 1 },
+        },
+      },
+    };
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    const html = wrapper.html();
+    expect(html).toContain("wa.me/212678901234");
+    expect(html).not.toContain("wa.me/0678901234");
+    // Bare digits refused (tel: link still renders — only the wa.me link is gone).
+    expect(html).not.toContain("wa.me/612345678");
+  });
+});

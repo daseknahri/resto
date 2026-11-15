@@ -396,3 +396,78 @@ describe("OwnerOrders — S1-A (B-01 today figures / B-04 bulk confirms)", () =>
     expect(api.post).not.toHaveBeenCalled();
   });
 });
+
+describe("OwnerOrders — S1-I B-15 wa.me links + B-16 MAD fallback", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // B-15: a national-format order phone ("06…") must link to wa.me/212… —
+  // the raw-digits link wa.me/06… is dead. Asserted on the rendered href.
+  it("builds wa.me links with the 212 country code for national-format order phones (B-15)", async () => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({ id: 1, order_number: "A100", status: "confirmed", customer_phone: "0678901234" }),
+            order({ id: 2, order_number: "A101", status: "pending", fulfillment_type: "pickup", customer_name: "Omar", customer_phone: "+212612345678" }),
+          ],
+          total: 2,
+        },
+      },
+    };
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises(); // drain the non-blocking seed86Count() fired after the order fetch
+
+    const html = wrapper.html();
+    expect(html).toContain("https://wa.me/212678901234");
+    expect(html).not.toContain("wa.me/0678901234");
+    expect(html).toContain("https://wa.me/212612345678");
+  });
+
+  // B-16: history-period revenue falls back to MAD (not USD) when history
+  // orders carry no currency.
+  // NOTE: this file's formatNumber mock returns String(amount) and swallows the
+  // currency argument, so the MAD-vs-USD fallback is NOT discriminable through
+  // rendered text here — this test guards the revenue path itself
+  // (currency-less orders still sum; cancelled orders are excluded). The MAD
+  // discrimination for B-16 lives in the OwnerWallet / OwnerShiftClose /
+  // OwnerZReport tests, where the real Intl formatter renders the code.
+  it("sums history-period revenue for currency-less orders, excluding cancelled ones (B-16)", async () => {
+    const { useOrderStore } = await import("../../stores/order");
+    useOrderStore().historyOrders = [
+      order({ id: 3, order_number: "H1", status: "completed", currency: undefined, total: "137.50" }),
+      order({ id: 4, order_number: "H2", status: "cancelled", currency: undefined, total: "50.00" }),
+    ];
+
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+
+    // Open the history tab and set a period (refs, then a tick — the FE-test
+    // lesson: never set a ref and immediately click a :disabled-bound button;
+    // no click follows here, only a render wait).
+    wrapper.vm.activeTab = "history";
+    wrapper.vm.historyFrom = "2026-09-01";
+    wrapper.vm.historyTo = "2026-09-30";
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+
+    // Completed 137.50 counts; cancelled 50.00 is excluded from the sum.
+    expect(wrapper.text()).toContain("137.5");
+    expect(wrapper.text()).not.toContain("187.5");
+  });
+});

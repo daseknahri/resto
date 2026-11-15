@@ -335,7 +335,6 @@ import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
-import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
@@ -343,7 +342,6 @@ import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
-const tenant = useTenantStore();
 const toast = useToastStore();
 const route = useRoute();
 
@@ -444,7 +442,10 @@ const historyError = ref(false);
 
 let searchTimer = null;
 
-const currency = () => tenant.resolvedMeta?.plan?.currency || 'MAD';
+// B-16: plan.currency is the SUBSCRIPTION-plan price currency, not the
+// restaurant's operating currency, and no tenant-level currency setting exists —
+// tenant-aggregate money (float / wallet) uses the MAD tenant default.
+const currency = () => 'MAD';
 
 const fmtBalance = (bal) =>
   formatCurrencyString(currentLocale.value, bal, currency(), { maximumFractionDigits: 2 });

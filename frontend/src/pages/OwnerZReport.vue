@@ -466,7 +466,6 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
-import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
 import { formatCurrencyString } from "../lib/intlFormatters";
 
@@ -475,7 +474,6 @@ defineOptions({ name: "OwnerZReport" });
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const toast = useToastStore();
-const tenant = useTenantStore();
 
 const report = ref(null);
 const loading = ref(false);
@@ -529,7 +527,10 @@ const closeShiftAndPrint = async () => {
 const todayIso = computed(() => new Date().toISOString().slice(0, 10));
 const selectedDate = ref(""); // empty = current service day
 
-const currency = computed(() => tenant.resolvedMeta?.profile?.currency || "MAD");
+// B-16: Profile has no currency field server-side (ProfileSerializer never sends
+// one), so the profile?.currency read was dead and always fell back to MAD —
+// drawer / Z-report aggregates use the MAD tenant default explicitly.
+const currency = computed(() => "MAD");
 
 const fmtMoney = (val) =>
   formatCurrencyString(currentLocale.value, val, currency.value, { minimumFractionDigits: 2 });

@@ -1354,6 +1354,7 @@ import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { isAutoAcceptOn } from "../lib/orderHandling";
 import { bustCache } from "../lib/staleCache";
+import { toWaPhone } from "../lib/phone";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live orders — polls and must mount & unmount normally).
@@ -1558,7 +1559,8 @@ const historyTo = ref("");
 const historyPeriodRevenue = computed(() => {
   const orders = order.historyOrders;
   if (!orders.length) return '';
-  const currency = orders[0]?.currency ?? 'USD';
+  // B-16: MAD is the tenant default — 'USD' here was the only USD fallback in the lane.
+  const currency = orders[0]?.currency ?? 'MAD';
   // Exclude CANCELLED orders — their food revenue was refunded / never collected, so
   // summing their full `total` inflated the reported period revenue (the history list
   // returns COMPLETED *and* CANCELLED, and cancelling never zeroes `total`).
@@ -1984,10 +1986,14 @@ const orderMapUrl = (o) => {
   return null;
 };
 
+// B-15: national-format numbers ("06…") must get the 212 country code — a raw
+// wa.me/06… link is dead. toWaPhone() (lib/phone.js, mirrors
+// backend/accounts/phone.py normalize_e164) refuses bare digits it cannot
+// resolve, so an unresolvable number falls back instead of a dead link.
 const orderWhatsappUrl = (phone) => {
   if (!phone) return "#";
-  const digits = String(phone).replace(/\D/g, "");
-  return `https://wa.me/${digits}`;
+  const digits = toWaPhone(phone);
+  return digits ? `https://wa.me/${digits}` : "#";
 };
 
 // ── Order age ─────────────────────────────────────────────────────────────────

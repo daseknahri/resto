@@ -453,6 +453,7 @@ import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 import { formatCurrencyString } from "../lib/intlFormatters";
+import { toWaPhone } from "../lib/phone";
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
@@ -651,9 +652,13 @@ const formatDate = (iso, full = false) => {
   }
 };
 
+// B-15: national-format numbers ("06…") must get the 212 country code — a raw
+// wa.me/06… link is dead. toWaPhone() (lib/phone.js, mirrors
+// backend/accounts/phone.py normalize_e164) refuses bare digits it cannot
+// resolve, so an unresolvable number falls back instead of a dead link.
 const whatsappUrl = (phone) => {
-  const digits = String(phone).replace(/\D/g, "");
-  return `https://wa.me/${digits}`;
+  const digits = toWaPhone(phone);
+  return digits ? `https://wa.me/${digits}` : "#";
 };
 
 // ── Customer notes ────────────────────────────────────────────────────────────
