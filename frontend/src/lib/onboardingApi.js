@@ -293,13 +293,24 @@ export const dishApi = {
    * undo those decrements. It is therefore sent only when CREATING the dish, or when the
    * owner changed it in this edit session (value differs from the known baseline). An
    * unknown baseline on an update never sends it (fail safe: keep the live stock).
+   *
+   * `baselineIsAvailable` is the same discipline for is_available (A3-03, reconciled
+   * with the pre-existing contract in src/lib/__tests__/onboardingApi.test.js): sending
+   * it on every re-save would let a stale editor value flip availability the owner never
+   * touched, and would force availability when only the stock changed (to null / 0).
+   * Sent on create (default true), or on update when it differs from the known baseline;
+   * an unknown baseline on an update never sends it. The restock rule below still
+   * re-enables a sold-out dish (it spreads after this one, so it wins on a restock).
    */
-  async upsert(dish, { baselineStockQty } = {}) {
+  async upsert(dish, { baselineStockQty, baselineIsAvailable } = {}) {
     const baseSlug = slugify(dish.name || dish.slug || "dish");
     const categoryId = Number(dish.category);
     const stockQty = normalizeStockQty(dish.stock_qty);
     const sendStock = !dish.id
       || (baselineStockQty !== undefined && stockQty !== normalizeStockQty(baselineStockQty));
+    const isAvailable = dish.is_available ?? true;
+    const sendAvailable = !dish.id
+      || (baselineIsAvailable !== undefined && isAvailable !== baselineIsAvailable);
     const payload = {
       category: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : dish.category,
       name: String(dish.name || "").trim(),
@@ -321,7 +332,7 @@ export const dishApi = {
       // `false`. It used to appear only in the restock branch below, so "mark
       // unavailable" never reached the server and the badge could not survive
       // a reload (normalize() also dropped it — fixed in StepDishes.vue).
-      is_available: dish.is_available ?? true,
+      ...(sendAvailable && { is_available: isAvailable }),
       // A restock re-enables a dish the checkout auto-zeroed to "sold out" (same rule as
       // OwnerInventory) — otherwise it would keep stock yet stay unorderable.
       ...(sendStock && stockQty !== null && stockQty > 0 && { is_available: true }),

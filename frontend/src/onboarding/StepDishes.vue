@@ -2273,6 +2273,10 @@ const savedSnapshots = new Map(); // local_id → serialized saved state
 // sends stock_qty when the editor's value differs from this baseline, so a re-save can't
 // reset stock that orders have decremented since the menu was loaded.
 const savedStockQty = new Map();
+// local_id → is_available as last loaded from / saved to the server. dishApi.upsert
+// only sends is_available when the editor's value differs from this baseline (same
+// discipline as stock_qty) — see lib/onboardingApi.js dishApi.upsert.
+const savedIsAvailable = new Map();
 
 const dishSnapshot = (dish) => {
   const { local_id, ...rest } = dish; // eslint-disable-line no-unused-vars
@@ -2282,6 +2286,7 @@ const dishSnapshot = (dish) => {
 const rememberSaved = (dish) => {
   savedSnapshots.set(dish.local_id, dishSnapshot(dish));
   savedStockQty.set(dish.local_id, dish.stock_qty ?? null);
+  savedIsAvailable.set(dish.local_id, dish.is_available ?? true);
 };
 
 const isDishDirty = (dish) =>
@@ -2313,7 +2318,7 @@ const persistDish = async (dish, allowedTranslationLocales) => {
       description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
       attributes: cleanedAttrs,
     },
-    { baselineStockQty: savedStockQty.get(dish.local_id) }
+    { baselineStockQty: savedStockQty.get(dish.local_id), baselineIsAvailable: savedIsAvailable.get(dish.local_id) }
   );
   dish.id = saved.id;
   dish.slug = saved.slug;
