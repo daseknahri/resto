@@ -53,14 +53,29 @@ vi.mock("../../composables/useConfirmModal", () => ({
 // (the real composable returns computeds). `catalog` is only spread into a t() param
 // in the template (never .value'd), but groupSingular/itemSingular ARE read as
 // `.value` in stepTitle() — which runs at mount for the categories & dishes nav
-// items — so those two MUST be ref-like ({ value }).
-vi.mock("../../composables/useVocabulary", () => ({
-  useVocabulary: () => ({
-    catalog: {},
-    groupSingular: { value: "category" },
-    itemSingular: { value: "dish" },
-  }),
-}));
+// items — so those two MUST be ref-like.
+// SINGLE mock for this path (do NOT re-mock it below): StepPublish, mounted by
+// the S1-H block, also reads isShop / groupPlural / itemPlural — its template
+// calls groupPlural.toLowerCase() / itemPlural.toLowerCase() and v-if="!isShop",
+// which rely on <script setup> ref auto-unwrapping. Plain { value } objects
+// are NOT unwrapped in templates, so they MUST be real refs. A duplicate
+// re-mock for this path (the old S1-H superset) made which factory wins
+// depend on async resolution timing: the Wizard file passed alone and in FE
+// gate run 1, then failed FE gate run 2 with groupPlural undefined. One mock,
+// real refs, no race.
+vi.mock("../../composables/useVocabulary", async () => {
+  const { ref } = await import("vue");
+  return {
+    useVocabulary: () => ({
+      catalog: {},
+      groupSingular: ref("category"),
+      itemSingular: ref("dish"),
+      isShop: ref(false),
+      groupPlural: ref("Categories"),
+      itemPlural: ref("Dishes"),
+    }),
+  };
+});
 
 // Wizard imports { onBeforeRouteLeave, useRouter } from vue-router.
 // - onBeforeRouteLeave is CALLED at setup → the mock MUST supply a callable no-op
@@ -385,13 +400,11 @@ describe("StepBrand / StepTheme — S1-F (A3-01 load-fail guard, A3-08 overnight
 // - ../../lib/menuVisibility, ../../lib/analytics: StepPublish's imports.
 // - ../../composables/useFocusTrap, ../../i18n/config: StepSuperCategories'
 //   imports (the mock keeps the exact shape the component reads).
-// - ../../composables/useVocabulary: RE-MOCKED as a superset of the base
-//   factory — the same groupSingular / itemSingular / catalog values the
-//   Wizard needs, plus the isShop / groupPlural / itemPlural StepPublish
-//   reads. Vitest applies the LAST factory registered for a path; if that
-//   ever changed, the StepPublish tests below would fail on the missing keys
-//   while the base tests still pass — split them into a second file then
-//   (they are one delimited block).
+// - ../../composables/useVocabulary: NOT re-mocked here — the single base
+//   factory above already carries the full shape (isShop / groupPlural /
+//   itemPlural as real refs for StepPublish). A duplicate re-mock used to live
+//   here; it made which factory wins depend on async resolution timing and
+//   failed FE gate run 2 with groupPlural undefined (see the base mock note).
 // - ../../lib/api is NOT re-mocked: the base factory stands, and each test
 //   below assigns api.get / post / put / delete per-test onto the mocked
 //   default export (the object is shared and mutable).
@@ -426,26 +439,6 @@ vi.mock("../../i18n/config", () => ({
   getLocaleDirection: () => "ltr",
   detectBrowserLocale: () => "en",
 }));
-// Real refs (coordinator merge fix): StepPublish's template calls
-// groupPlural.toLowerCase() / itemPlural.toLowerCase() and v-if="!isShop",
-// which rely on <script setup> ref auto-unwrapping. Plain { value } objects
-// are NOT unwrapped in templates, so the mock returned an object with no
-// toLowerCase and both A3-09 tests crashed. The Wizard reads .value in script,
-// which real refs also satisfy.
-vi.mock("../../composables/useVocabulary", async () => {
-  const { ref } = await import("vue");
-  return {
-    useVocabulary: () => ({
-      catalog: {},
-      groupSingular: ref("category"),
-      itemSingular: ref("dish"),
-      isShop: ref(false),
-      groupPlural: ref("Categories"),
-      itemPlural: ref("Dishes"),
-    }),
-  };
-});
-
 import api from "../../lib/api";
 import { superCategoryApi } from "../../lib/onboardingApi";
 import StepSuperCategories from "../StepSuperCategories.vue";
