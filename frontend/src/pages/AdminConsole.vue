@@ -1893,9 +1893,23 @@ const checkPreview = async (lead, showToast = true) => {
 };
 
 const provision = async (lead) => {
+  // A2-12: provisioning creates a tenant + domain + owner + subscription on one
+  // click — every sibling destructive action confirms first, so this does too.
+  // The confirm names the lead and the resolved domain (falling back to the
+  // lead name/email when no preview was run yet).
+  const preview = previewFor(lead.id);
+  const okProvision = await confirm({
+    title: t("adminConsole.provisionConfirmTitle"),
+    body: t("adminConsole.provisionConfirmBody", {
+      lead: lead.name || lead.email,
+      domain: preview?.resolved_domain || lead.name || lead.email,
+    }),
+    confirmLabel: t("adminConsole.provision"),
+    danger: true,
+  });
+  if (!okProvision) return;
   provLoading.value = { ...provLoading.value, [lead.id]: true };
   try {
-    const preview = previewFor(lead.id);
     const resolvedSuffix = normalizeSuffix(domainSuffix.value);
     const payload = {
       requested_slug: preview?.input_slug || undefined,

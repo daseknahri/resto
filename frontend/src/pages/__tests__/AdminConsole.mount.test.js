@@ -74,6 +74,7 @@ const RouterLinkStub = { name: "RouterLink", props: ["to"], template: "<a><slot 
 
 import AdminConsole from "../AdminConsole.vue";
 import adminApi from "../../lib/adminApi";
+import { useConfirmModal } from "../../composables/useConfirmModal";
 
 const mountConsole = () =>
   shallowMount(AdminConsole, {
@@ -83,6 +84,9 @@ const mountConsole = () =>
       },
     },
   });
+
+const findButton = (wrapper, text) =>
+  wrapper.findAll("button").find((b) => b.text().includes(text));
 
 describe("AdminConsole — mount smoke", () => {
   let wrapper;
@@ -247,5 +251,66 @@ describe("AdminConsole — mount smoke", () => {
     expect(patchCall).toBeTruthy();
     expect(patchCall[1].marketplace_commission_pct).toBe(0.15);
     expect(patchCall[1].delivery_commission_pct).toBe(10);
+  });
+});
+
+describe("AdminConsole — provision confirms first (A2-12)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // Exact match: the nav has a "provisioningOperations" view button whose
+  // text CONTAINS "adminConsole.provision" as a substring — the shared
+  // substring findButton would click that instead of the lead's provision
+  // button (it comes first in DOM order).
+  const findProvisionButton = () =>
+    wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.provision");
+
+  const mountWithLead = async () => {
+    _routes = {
+      "/leads/": { data: [{ id: 7, name: "Chez Test", email: "owner@example.com", status: "new" }] },
+      "/lead-provision-preview/7/": { data: { resolved_slug: "chez-test", resolved_domain: "chez-test.example.com", input_domain: "chez-test.example.com", collision: false } },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("provision confirms first; cancelling skips the PUT", async () => {
+    await mountWithLead();
+    await findProvisionButton().trigger("click");
+    await flushPromises();
+    // The ConfirmModal itself lives in App.vue, not in this page's tree —
+    // assert the confirm the page actually requested via the real singleton.
+    const modal = useConfirmModal();
+    expect(modal.visible.value).toBe(true);
+    expect(modal.options.value.title).toBe("adminConsole.provisionConfirmTitle");
+    expect(modal.options.value.body).toContain("Chez Test");
+    const { _settle } = useConfirmModal();
+    _settle(false);
+    await flushPromises();
+    expect(adminApi.put).not.toHaveBeenCalled();
+  });
+
+  it("confirming the provision fires the PUT", async () => {
+    await mountWithLead();
+    await findProvisionButton().trigger("click");
+    await flushPromises();
+    const { _settle } = useConfirmModal();
+    adminApi.put.mockResolvedValue({ data: { tenant_url: "https://chez-test.example.com", tenant: { id: 1 } } });
+    _settle(true);
+    await flushPromises();
+    expect(adminApi.put).toHaveBeenCalledWith("/lead-provision/7/", expect.anything());
   });
 });
