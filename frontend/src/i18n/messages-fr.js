@@ -2262,6 +2262,7 @@ ownerCustomers: {
   noMore: "Tous les clients charges.",
   searching: "Recherche...",
   exportError: "Echec de l'export. Veuillez reessayer.",
+  loadMoreError: "Impossible de charger plus de clients. Veuillez reessayer.",
 },
 ownerStaff: {
   confirmRemoveBody: "Ceci retire definitivement {name} de votre equipe.",
@@ -5708,6 +5709,11 @@ ownerRatings: {
   replyAddPrompt: "Repondre a cet avis",
   replyPostedAt: "Repondu le {date}",
   distributionNote: "Repartition des {n} avis les plus recents",
+  allLoaded: "Tous les avis sont charges.",
+  loadMore: "Charger plus d'avis",
+  loadMoreError: "Impossible de charger plus d'avis. Veuillez reessayer.",
+  loadingMore: "Chargement...",
+  showingCount: "Affichage de {loaded} sur {total} avis",
 },
 kitchen: {
   title: "Affichage cuisine",

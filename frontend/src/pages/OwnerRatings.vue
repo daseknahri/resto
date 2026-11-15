@@ -255,6 +255,37 @@
         <AppIcon name="star" class="mx-auto mb-3 h-8 w-8 text-slate-700" aria-hidden="true" />
         <p class="text-sm font-semibold text-slate-100">{{ t("ownerRatings.noMatchFilter") }}</p>
       </div>
+
+      <!-- Pagination footer (B-05): the list endpoint paginates at 50, so say how
+           many of the server total are on screen and offer the next page — the
+           owner must be able to reach ratings beyond the first page. -->
+      <div class="py-2 text-center space-y-2">
+        <p class="text-xs text-slate-500">
+          {{ t("ownerRatings.showingCount", { loaded: ratings.length, total: serverCount ?? ratings.length }) }}
+        </p>
+        <button
+          v-if="hasMore"
+          type="button"
+          class="ui-btn-outline ui-press inline-flex items-center gap-2 px-5 py-2 text-sm"
+          :disabled="loadingMore"
+          :aria-busy="loadingMore"
+          @click="loadMoreRatings"
+        >
+          <span v-if="loadingMore" class="inline-block h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+          {{ loadingMore ? t("ownerRatings.loadingMore") : t("ownerRatings.loadMore") }}
+        </button>
+        <p v-else-if="serverCount != null && serverCount > 0" class="text-xs text-slate-600">
+          {{ t("ownerRatings.allLoaded") }}
+        </p>
+        <div v-if="loadMoreError" class="mx-auto max-w-sm rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2" role="alert">
+          <p class="text-xs text-red-300">{{ t("ownerRatings.loadMoreError") }}</p>
+          <button
+            type="button"
+            class="mt-1.5 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+            @click="loadMoreRatings"
+          >{{ t("common.retry") }}</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -283,6 +314,13 @@ const ratings = ref([]);
 // newest page). Null until the first successful load / cache read.
 const serverCount = ref(null);
 const serverAverage = ref(null);
+// B-05 pagination: the list endpoint paginates (?page=&page_size=, default 50)
+// and returns has_more — page 1 alone must never be presented as the whole set.
+const RATINGS_PAGE_SIZE = 50;
+const currentPage = ref(1);
+const hasMore = ref(false);
+const loadingMore = ref(false);
+const loadMoreError = ref(false);
 const loading = ref(false);
 const updating = ref(false); // silently revalidating stale cache
 const fetchError = ref(false); // first-load failure (no data to show)
@@ -434,10 +472,17 @@ const applyPayload = (payload) => {
     ratings.value = payload;
     serverCount.value = null;
     serverAverage.value = null;
+    currentPage.value = 1;
+    hasMore.value = false;
   } else {
     ratings.value = payload?.ratings ?? [];
     serverCount.value = payload?.count ?? null;
     serverAverage.value = payload?.average ?? null;
+    // Cache entries written before pagination carry no page/has_more: treat
+    // them as a single loaded page with unknown remainder (no Load more until
+    // the next network fetch reports has_more).
+    currentPage.value = payload?.page ?? 1;
+    hasMore.value = payload?.has_more ?? false;
   }
 };
 
@@ -452,12 +497,21 @@ const fetchRatings = async (force = false) => {
     loading.value = true;
   }
   fetchError.value = false;
+  // A (re)load always starts back at page 1 — previously loaded extra pages
+  // are replaced by the fresh first page.
+  currentPage.value = 1;
+  hasMore.value = false;
+  loadMoreError.value = false;
   try {
-    const res = await api.get("/owner/ratings/");
+    const res = await api.get("/owner/ratings/", {
+      params: { page: 1, page_size: RATINGS_PAGE_SIZE },
+    });
     const payload = {
       ratings: res.data?.ratings ?? res.data ?? [],
       count: res.data?.count ?? null,
       average: res.data?.average ?? null,
+      page: res.data?.page ?? 1,
+      has_more: res.data?.has_more ?? false,
     };
     applyPayload(payload);
     writeCache(RATINGS_CACHE_KEY, payload);
@@ -475,6 +529,42 @@ const fetchRatings = async (force = false) => {
   } finally {
     loading.value = false;
     updating.value = false;
+  }
+};
+
+// B-05: fetch the next page and append it. A failure toasts AND keeps the
+// Load more button (plus an inline Retry) — a transient failure must never
+// silently drop the button or lose the already-loaded rows.
+const loadMoreRatings = async () => {
+  if (loadingMore.value || !hasMore.value) return;
+  loadingMore.value = true;
+  loadMoreError.value = false;
+  try {
+    const nextPage = currentPage.value + 1;
+    const res = await api.get("/owner/ratings/", {
+      params: { page: nextPage, page_size: RATINGS_PAGE_SIZE },
+    });
+    const page = res.data?.ratings ?? [];
+    const seen = new Set(ratings.value.map((r) => r.id));
+    ratings.value = [...ratings.value, ...page.filter((r) => !seen.has(r.id))];
+    currentPage.value = res.data?.page ?? nextPage;
+    hasMore.value = Boolean(res.data?.has_more);
+    if (res.data?.count != null) serverCount.value = res.data.count;
+    if (res.data?.average != null) serverAverage.value = res.data.average;
+    // Cache the merged list so a revisit within the TTL still shows every
+    // page the owner already loaded, not just page 1.
+    writeCache(RATINGS_CACHE_KEY, {
+      ratings: ratings.value,
+      count: serverCount.value,
+      average: serverAverage.value,
+      page: currentPage.value,
+      has_more: hasMore.value,
+    });
+  } catch {
+    loadMoreError.value = true;
+    toast.show(t("ownerRatings.loadMoreError"), "error");
+  } finally {
+    loadingMore.value = false;
   }
 };
 

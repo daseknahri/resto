@@ -2264,6 +2264,7 @@ ownerCustomers: {
   noMore: "All customers loaded.",
   searching: "Searching…",
   exportError: "Export failed. Please try again.",
+  loadMoreError: "Could not load more customers. Please try again.",
 },
 ownerStaff: {
   confirmRemoveBody: "This permanently removes {name} from your staff.",
@@ -5700,6 +5701,11 @@ ownerRatings: {
   replyAddPrompt: "Reply to this review",
   replyPostedAt: "Replied {date}",
   distributionNote: "Distribution of the {n} most recent ratings",
+  allLoaded: "All ratings loaded.",
+  loadMore: "Load more ratings",
+  loadMoreError: "Could not load more ratings. Please try again.",
+  loadingMore: "Loading…",
+  showingCount: "Showing {loaded} of {total} ratings",
 },
 kitchen: {
   title: "Kitchen Display",

@@ -185,3 +185,100 @@ describe("OwnerCustomers — mount smoke", () => {
     expect(wrapper.text()).toContain("Youssef Alami");
   });
 });
+
+// ── S1-C / B-14 appended tests ──────────────────────────────────────────────
+// Same page-aware trick as the ratings file: the base api mock ignores call
+// params, so these tests replace api.get's implementation per test (get is a
+// vi.fn; beforeEach's clearAllMocks only clears calls). The import below is
+// hoisted, so it may sit here at the append point.
+import api from "../../lib/api";
+
+const findButtonByText = (w, text) =>
+  w.findAll("button").find((b) => b.text().includes(text));
+
+describe("OwnerCustomers — S1-C B-14 load-more failure (appended)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const pageOne = () => ({
+    data: {
+      results: [
+        customer(),
+        customer({ id: 2, customer_id: 102, name: "Youssef Alami" }),
+      ],
+      has_more: true,
+      summary: { total: 3, new: 1, returning: 1, at_risk: 0 },
+    },
+  });
+
+  // ── (3) append-page failure: error + Retry shown, button kept, rows kept ───
+  it("shows an error + Retry and keeps Load more when the next page fails", async () => {
+    api.get.mockImplementation((url, opts) => {
+      if ((opts?.params?.offset ?? 0) === 0) return Promise.resolve(pageOne());
+      return Promise.reject(new Error("network down"));
+    });
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Sara Bennani");
+    expect(findButtonByText(wrapper, "ownerCustomers.loadMore").exists()).toBe(true);
+
+    await findButtonByText(wrapper, "ownerCustomers.loadMore").trigger("click");
+    await flushPromises();
+
+    // The failure is no longer silent: inline error + explicit Retry, and the
+    // Load more button stays visible for a retry (hasMore was not cleared).
+    expect(wrapper.text()).toContain("ownerCustomers.loadMoreError");
+    expect(findButtonByText(wrapper, "common.retry").exists()).toBe(true);
+    expect(findButtonByText(wrapper, "ownerCustomers.loadMore").exists()).toBe(true);
+    // Already-loaded rows are not lost by the failed append.
+    expect(wrapper.text()).toContain("Sara Bennani");
+    expect(wrapper.text()).toContain("Youssef Alami");
+  });
+
+  // ── (4) append-page success clears the error and ends the list ────────────
+  it("appends the next page on Load more and clears any earlier error", async () => {
+    let calls = 0;
+    api.get.mockImplementation((url, opts) => {
+      if ((opts?.params?.offset ?? 0) === 0) return Promise.resolve(pageOne());
+      calls += 1;
+      if (calls === 1) return Promise.reject(new Error("network down"));
+      return Promise.resolve({
+        data: {
+          results: [customer({ id: 3, customer_id: 103, name: "Khadija Idrissi" })],
+          has_more: false,
+        },
+      });
+    });
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    // First attempt fails → error shown.
+    await findButtonByText(wrapper, "ownerCustomers.loadMore").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ownerCustomers.loadMoreError");
+
+    // Retry via the inline Retry button succeeds → row appended, error gone,
+    // Load more gone (has_more false), end-of-list count shown.
+    await findButtonByText(wrapper, "common.retry").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Khadija Idrissi");
+    expect(wrapper.text()).not.toContain("ownerCustomers.loadMoreError");
+    expect(findButtonByText(wrapper, "ownerCustomers.loadMore")).toBeUndefined();
+    expect(wrapper.text()).toContain("ownerCustomers.resultCount");
+  });
+});

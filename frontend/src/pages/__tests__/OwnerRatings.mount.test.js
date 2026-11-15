@@ -204,3 +204,122 @@ describe("OwnerRatings — mount smoke", () => {
     expect(text).toContain("ownerRatings.distributionNote");
   });
 });
+
+// ── S1-C / B-05 appended tests ──────────────────────────────────────────────
+// The base api mock ignores call params, so these tests drive page-aware
+// behaviour by replacing api.get's implementation per test (the mock's get is
+// a vi.fn; beforeEach's clearAllMocks only clears calls, not an implementation
+// set inside the test body). The import below is hoisted, so it may sit here
+// at the append point.
+import api from "../../lib/api";
+
+const findButtonByText = (w, text) =>
+  w.findAll("button").find((b) => b.text().includes(text));
+
+describe("OwnerRatings — S1-C B-05 pagination (appended)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── (4) Load more appends page 2, updates the visible count, ends the list ──
+  it("loads page 2 on Load more, shows the count, then the all-loaded note", async () => {
+    api.get.mockImplementation((url, opts) => {
+      const page = opts?.params?.page ?? 1;
+      if (page === 1) {
+        return Promise.resolve({
+          data: {
+            count: 120,
+            average: 4.5,
+            page: 1,
+            page_size: 50,
+            has_more: true,
+            ratings: [
+              rating({ id: 1, score: 5, comment: "First page one", customer_name: "Sara Bennani" }),
+              rating({ id: 2, score: 4, comment: "First page two", customer_name: "Omar Alami" }),
+            ],
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          count: 120,
+          average: 4.5,
+          page: 2,
+          page_size: 50,
+          has_more: false,
+          ratings: [
+            rating({ id: 3, score: 3, comment: "Second page one", customer_name: "Youssef Alami" }),
+          ],
+        },
+      });
+    });
+
+    wrapper = mountRatings();
+    await flushPromises();
+
+    // Page 1 on screen + the visible count names the server total (120), not
+    // just the loaded rows — the B-05 disclosure.
+    expect(wrapper.text()).toContain("ownerRatings.showingCount");
+    expect(wrapper.text()).toContain('{"loaded":2,"total":120}');
+    expect(wrapper.text()).toContain("First page one");
+    expect(wrapper.text()).not.toContain("Second page one");
+    const loadMoreBtn = findButtonByText(wrapper, "ownerRatings.loadMore");
+    expect(loadMoreBtn.exists()).toBe(true);
+
+    await loadMoreBtn.trigger("click");
+    await flushPromises();
+
+    // Page 2 appended (page 1 rows kept), count updated, list ended.
+    expect(wrapper.text()).toContain("First page one");
+    expect(wrapper.text()).toContain("Second page one");
+    expect(wrapper.text()).toContain('{"loaded":3,"total":120}');
+    expect(findButtonByText(wrapper, "ownerRatings.loadMore")).toBeUndefined();
+    expect(wrapper.text()).toContain("ownerRatings.allLoaded");
+  });
+
+  // ── (5) Load-more failure toasts + keeps the button for retry ─────────────
+  it("keeps Load more + shows an inline Retry when page 2 fails", async () => {
+    api.get.mockImplementation((url, opts) => {
+      const page = opts?.params?.page ?? 1;
+      if (page === 1) {
+        return Promise.resolve({
+          data: {
+            count: 120,
+            average: 4.5,
+            page: 1,
+            page_size: 50,
+            has_more: true,
+            ratings: [rating({ id: 1, score: 5, comment: "First page one" })],
+          },
+        });
+      }
+      return Promise.reject(new Error("network down"));
+    });
+
+    wrapper = mountRatings();
+    await flushPromises();
+    expect(wrapper.text()).toContain("First page one");
+
+    await findButtonByText(wrapper, "ownerRatings.loadMore").trigger("click");
+    await flushPromises();
+
+    // Failure is surfaced (inline error) and the owner can retry: the Load
+    // more button is still there and an explicit Retry renders too.
+    expect(wrapper.text()).toContain("ownerRatings.loadMoreError");
+    expect(findButtonByText(wrapper, "ownerRatings.loadMore").exists()).toBe(true);
+    expect(findButtonByText(wrapper, "common.retry").exists()).toBe(true);
+    // Already-loaded rows are not lost by the failed append.
+    expect(wrapper.text()).toContain("First page one");
+  });
+});

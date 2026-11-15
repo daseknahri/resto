@@ -4643,6 +4643,7 @@ Object.assign(arabicMessages, {
     noMore: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u062c\u0645\u064a\u0639 \u0627\u0644\u0639\u0645\u0644\u0627\u0621.",
     searching: "\u062c\u0627\u0631\u064d \u0627\u0644\u0628\u062d\u062b\u2026",
     exportError: "\u0641\u0634\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649.",
+    "loadMoreError": "تعذّر تحميل المزيد من العملاء. يرجى المحاولة مرة أخرى.",
   },
   ownerStaff: {
     "confirmRemoveBody": "هذا يزيل {name} نهائيًا من فريقك.",
@@ -5748,6 +5749,11 @@ Object.assign(arabicMessages, {
     replyAddPrompt: "\u0627\u0644\u0631\u062f \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
     replyPostedAt: "\u062a\u0645 \u0627\u0644\u0631\u062f {date}",
     distributionNote: "\u062a\u0648\u0632\u064a\u0639 \u0622\u062e\u0631 {n} \u062a\u0642\u064a\u064a\u0645",
+    "allLoaded": "تم تحميل جميع التقييمات.",
+    "loadMore": "تحميل المزيد من التقييمات",
+    "loadMoreError": "تعذّر تحميل المزيد من التقييمات. يرجى المحاولة مرة أخرى.",
+    "loadingMore": "جارٍ التحميل…",
+    "showingCount": "يتم عرض {loaded} من أصل {total} تقييم",
   },
   busyMode: {
     title: "\u0648\u0636\u0639 \u0627\u0644\u0627\u0646\u0634\u063a\u0627\u0644",

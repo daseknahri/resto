@@ -430,6 +430,18 @@
         {{ t("ownerCustomers.resultCount", { n: filteredCustomers.length }) }}
         <span v-if="!hasMore && currentOffset > filteredCustomers.length" class="ms-1">· {{ t("ownerCustomers.noMore") }}</span>
       </p>
+      <!-- B-14: an append-page failure must not be silent — show the error with
+           a Retry, and keep the Load more button above visible (hasMore stays
+           true on failure) so the owner can retry from either control. -->
+      <div v-if="loadMoreError" class="mx-auto max-w-sm rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2" role="alert">
+        <p class="text-xs text-red-300">{{ t("ownerCustomers.loadMoreError") }}</p>
+        <button
+          type="button"
+          class="mt-1.5 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >{{ t("common.retry") }}</button>
+      </div>
     </div>
   </section>
 </template>
@@ -453,6 +465,7 @@ const exporting = ref(false);
 const customers = ref([]);
 const summary = ref(null);
 const hasMore = ref(false);
+const loadMoreError = ref(false); // B-14: append-page failure (list already shown)
 const currentOffset = ref(0);
 const PAGE_LIMIT = 100;
 
@@ -487,6 +500,7 @@ const loadCustomers = async (reset = false) => {
   if (reset) {
     loading.value = true;
     fetchError.value = false;
+    loadMoreError.value = false;
     currentOffset.value = 0;
     customers.value = [];
     hasMore.value = false;
@@ -508,8 +522,20 @@ const loadCustomers = async (reset = false) => {
     }
     hasMore.value = Boolean(data.has_more);
     currentOffset.value += page.length;
+    // A successful page clears any earlier append failure.
+    loadMoreError.value = false;
   } catch {
-    if (!customers.value.length) fetchError.value = true;
+    if (!customers.value.length) {
+      // First load (or a reset, which clears the list first): nothing to show.
+      fetchError.value = true;
+    } else {
+      // B-14: append-page failure with rows already on screen. hasMore stays
+      // true, so the Load more button remains for retry; surface the failure
+      // with a toast + the inline error/Retry below the list instead of
+      // silently clearing the spinner and leaving a dead button.
+      loadMoreError.value = true;
+      toast.show(t("ownerCustomers.loadMoreError"), "error");
+    }
   } finally {
     loading.value = false;
     loadingMore.value = false;
