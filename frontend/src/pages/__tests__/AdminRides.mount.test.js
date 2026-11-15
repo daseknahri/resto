@@ -328,3 +328,89 @@ describe("AdminRides — pagination + refresh + force-resolve (A-07/A-08/A-09/A-
     expect(findButton(wrapper, "common.retry")).toBeTruthy();
   });
 });
+describe("AdminRides — fares validation + kicker + unknown status (A-11/A-12/A-13)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const openFaresPanel = async () => {
+    await wrapper.find("section button").trigger("click");
+  };
+
+  // A-12: the fares panel has its own kicker now, not the page kicker.
+  it("fares panel uses the dedicated faresKicker key", async () => {
+    _routes = { "/admin/rides/": { data: [] } };
+    wrapper = mountRides();
+    await flushPromises();
+    await openFaresPanel();
+    expect(wrapper.text()).toContain("adminRides.faresKicker");
+  });
+
+  // A-11: a negative fare is rejected before the confirm modal — no confirm,
+  // no PATCH, inline range error instead.
+  it("negative fare is rejected before the confirm modal (no PATCH)", async () => {
+    _routes = { "/admin/rides/": { data: [] } };
+    wrapper = mountRides();
+    await flushPromises();
+    await openFaresPanel();
+    wrapper.vm.fares.ride_base_fare = "-5";
+    await findButton(wrapper, "adminRides.faresSave").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminRides.faresRangeInvalid");
+    expect(adminApi.patch).not.toHaveBeenCalled();
+  });
+
+  // A-11: commission above 100 is rejected the same way (the other fares cap
+  // only at >= 0).
+  it("commission above 100 is rejected before the confirm modal (no PATCH)", async () => {
+    _routes = { "/admin/rides/": { data: [] } };
+    wrapper = mountRides();
+    await flushPromises();
+    await openFaresPanel();
+    wrapper.vm.fares.ride_commission_pct = "150";
+    await findButton(wrapper, "adminRides.faresSave").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminRides.faresRangeInvalid");
+    expect(adminApi.patch).not.toHaveBeenCalled();
+  });
+
+  // A-11 (positive path): a valid fare change still reaches the confirm modal
+  // and, once confirmed, PATCHes the changed field only.
+  it("valid fare change opens the confirm modal and PATCHes on confirm", async () => {
+    _routes = { "/admin/rides/": { data: [] } };
+    wrapper = mountRides();
+    await flushPromises();
+    await openFaresPanel();
+    wrapper.vm.fares.ride_base_fare = "8";
+    await findButton(wrapper, "adminRides.faresSave").trigger("click");
+    expect(wrapper.text()).not.toContain("adminRides.faresRangeInvalid");
+    expect(adminApi.patch).not.toHaveBeenCalled();
+    const { _settle } = useConfirmModal();
+    _settle(true);
+    await flushPromises();
+    expect(adminApi.patch).toHaveBeenCalledWith("/admin/settings/", {
+      ride_base_fare: "8",
+    });
+  });
+
+  // A-13: a status the page has no label for renders the translated "unknown"
+  // label — never the raw snake_case token.
+  it("unknown ride status renders the translated unknown label, not the raw token", async () => {
+    _routes = { "/admin/rides/": { data: [ride({ id: 599, status: "teleporting" })] } };
+    wrapper = mountRides();
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminRides.statusUnknown");
+    expect(wrapper.text()).not.toContain("teleporting");
+  });
+});

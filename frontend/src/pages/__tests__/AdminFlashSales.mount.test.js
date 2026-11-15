@@ -302,3 +302,135 @@ describe("AdminFlashSales — edit (A-01) + max_redemptions validation (A-02)", 
     );
   });
 });
+describe("AdminFlashSales — active on create (A-03) + discount/unlimited i18n (A-04/A-05)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const fillCreateForm = () => {
+    wrapper.vm.form.name = "New Sale";
+    wrapper.vm.form.discount_value = "10";
+    wrapper.vm.form.active_from = "2027-06-01T10:00";
+    wrapper.vm.form.active_until = "2027-06-30T10:00";
+  };
+
+  // A-03: the create form defaults to active — a future-dated sale can still be
+  // created live without an extra pause step, and the checkbox is checked.
+  it("create form defaults to active on (checkbox checked)", async () => {
+    _routes = { "/admin/flash-sales/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.vm.form.is_active).toBe(true);
+    const checkbox = wrapper.find('input[type="checkbox"]');
+    expect(checkbox.exists()).toBe(true);
+    expect(checkbox.element.checked).toBe(true);
+    expect(wrapper.text()).toContain("adminFlashSales.activeOnCreate");
+  });
+
+  // A-03: unchecking the box creates a paused (draft) sale — is_active: false
+  // reaches the POST payload.
+  it("unchecking active-on-create sends is_active false on create", async () => {
+    _routes = { "/admin/flash-sales/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    api.post.mockResolvedValue({ data: flashSale({ id: 9, name: "New Sale", is_active: false }) });
+    fillCreateForm();
+    wrapper.vm.form.is_active = false;
+    await findButton(wrapper, "adminFlashSales.create").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/flash-sales/",
+      expect.objectContaining({ is_active: false }),
+    );
+  });
+
+  // A-03: the default (checked) create still sends is_active: true explicitly,
+  // so the server default is never load-bearing.
+  it("checked active-on-create sends is_active true on create", async () => {
+    _routes = { "/admin/flash-sales/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    api.post.mockResolvedValue({ data: flashSale({ id: 9, name: "New Sale" }) });
+    fillCreateForm();
+    await findButton(wrapper, "adminFlashSales.create").trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/admin/flash-sales/",
+      expect.objectContaining({ is_active: true }),
+    );
+  });
+
+  // A-03: editing a paused sale must NOT reactivate it — the edit PATCH carries
+  // no is_active (toggleActive owns that field), and the checkbox is hidden.
+  it("edit does not send is_active and hides the checkbox", async () => {
+    _routes = {
+      "/admin/flash-sales/": {
+        data: [
+          flashSale({
+            is_active: false,
+            is_live: false,
+            active_from: "2027-06-01T00:00:00Z",
+            active_until: "2027-06-30T00:00:00Z",
+          }),
+        ],
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    api.patch.mockResolvedValue({ data: flashSale({ is_active: false, is_live: false }) });
+    await findButton(wrapper, "adminFlashSales.edit").trigger("click");
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false);
+    await findButton(wrapper, "adminFlashSales.editSave").trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(api.patch.mock.calls[0][1]).not.toHaveProperty("is_active");
+  });
+
+  // A-05: the discount placeholder is an i18n key now, not a hardcoded "15".
+  it("discount input uses the i18n placeholder key, not a hardcoded 15", async () => {
+    _routes = { "/admin/flash-sales/": { data: [] } };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.html()).toContain("adminFlashSales.discountPlaceholder");
+    expect(wrapper.html()).not.toContain('placeholder="15"');
+  });
+
+  // A-05: unlimited redemptions render the translated `unlimited` key, not a
+  // literal ∞ glyph.
+  it("unlimited redemptions render the translated unlimited key, not ∞", async () => {
+    _routes = {
+      "/admin/flash-sales/": {
+        data: [flashSale({ redemption_count: 0, max_redemptions: null })],
+      },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain(
+      'adminFlashSales.redemptions({"count":0,"max":"adminFlashSales.unlimited"})',
+    );
+    expect(wrapper.text()).not.toContain("∞");
+  });
+
+  // A-04: with the server now sending the stripped string ("15"), the chip
+  // renders −15%, never the raw Decimal scale −15.00%.
+  it("renders a stripped string discount as −15% (no raw Decimal scale)", async () => {
+    _routes = {
+      "/admin/flash-sales/": { data: [flashSale({ discount_value: "15" })] },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("−15%");
+    expect(wrapper.text()).not.toContain("15.00%");
+  });
+});

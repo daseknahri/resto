@@ -6034,12 +6034,23 @@ class MarketplaceOrderCancelView(APIView):
 
 # ── Platform Flash Sales ───────────────────────────────────────────────────────
 
+def _format_flash_sale_discount(value):
+    """Render a discount Decimal without trailing zeros ("15.00" -> "15",
+    "12.50" -> "12.5"). Keeps the serializer's string type; plain str() would
+    show the raw Decimal scale in the admin discount chip (A-04)."""
+    from decimal import Decimal
+    try:
+        return format(Decimal(str(value)).normalize(), "f")
+    except Exception:
+        return str(value)
+
+
 def _serialize_flash_sale(fs, opted_in: bool = False):
     return {
         "id": fs.id,
         "name": fs.name,
         "description": fs.description,
-        "discount_value": str(fs.discount_value),
+        "discount_value": _format_flash_sale_discount(fs.discount_value),
         "active_from": fs.active_from.isoformat(),
         "active_until": fs.active_until.isoformat(),
         "is_active": fs.is_active,
@@ -6233,17 +6244,35 @@ class AdminFlashSaleDetailView(APIView):
                     return Response({"detail": _FLASH_SALE_DISCOUNT_ERROR}, status=400)
                 fs.discount_value = discount
                 update_fields.append("discount_value")
+            # A-06: PATCH must enforce the same window ordering as POST — an edit
+            # could otherwise invert the window (from >= until) and silently kill
+            # the sale (is_live() is then never true). Validate the *effective*
+            # window (patched values over the stored ones) before saving; a
+            # TypeError (e.g. naive vs aware datetimes) is a bad window, not a 500.
+            new_from = fs.active_from
+            new_until = fs.active_until
             if "active_from" in data:
                 dt = parse_datetime(data["active_from"])
                 if not dt:
                     return Response({"detail": "Invalid active_from."}, status=400)
-                fs.active_from = dt
-                update_fields.append("active_from")
+                new_from = dt
             if "active_until" in data:
                 dt = parse_datetime(data["active_until"])
                 if not dt:
                     return Response({"detail": "Invalid active_until."}, status=400)
-                fs.active_until = dt
+                new_until = dt
+            if "active_from" in data or "active_until" in data:
+                try:
+                    window_ok = new_from < new_until
+                except TypeError:
+                    window_ok = False
+                if not window_ok:
+                    return Response({"detail": "active_from must be before active_until."}, status=400)
+            if "active_from" in data:
+                fs.active_from = new_from
+                update_fields.append("active_from")
+            if "active_until" in data:
+                fs.active_until = new_until
                 update_fields.append("active_until")
             if "is_active" in data:
                 fs.is_active = bool(data["is_active"])

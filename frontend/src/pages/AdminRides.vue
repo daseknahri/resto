@@ -35,7 +35,7 @@
         @click="faresOpen = !faresOpen"
       >
         <div>
-          <p class="ui-kicker">{{ t('adminRides.kicker') }}</p>
+          <p class="ui-kicker">{{ t('adminRides.faresKicker') }}</p>
           <h2 id="ride-fares-title" class="text-sm font-semibold text-white">{{ t('adminRides.faresTitle') }}</h2>
         </div>
         <svg
@@ -399,7 +399,7 @@ const STATUS_LABELS = {
 const statusLabel = (s) => {
   const key = STATUS_LABELS[s];
   if (key) return t(key);
-  return s;
+  return t('adminRides.statusUnknown');
 };
 
 const statusClass = (s) => {
@@ -567,6 +567,16 @@ const saveFares = async () => {
   if (!Object.keys(changed).length) {
     toast.show(t('adminRides.faresNoChanges'), 'info');
     return;
+  }
+  // A-11: range-check BEFORE the confirm modal — the server enforces the same
+  // bounds, but only after the admin has already confirmed (a wasted round-trip
+  // and a confusing error). Fares must be >= 0; commission must also be <= 100.
+  for (const [k, v] of Object.entries(changed)) {
+    const num = Number(v);
+    if (!Number.isFinite(num) || num < 0 || (k === 'ride_commission_pct' && num > 100)) {
+      faresSaveError.value = t('adminRides.faresRangeInvalid');
+      return;
+    }
   }
   const okFares = await confirm({
     title: t('adminRides.faresConfirmTitle'),

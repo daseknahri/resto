@@ -35,7 +35,7 @@
         </label>
         <label class="block text-xs text-slate-400">
           {{ t('adminFlashSales.discount') }}
-          <input v-model="form.discount_value" type="number" min="1" max="100" step="1" class="ui-input mt-1 w-full text-sm" placeholder="15" />
+          <input v-model="form.discount_value" type="number" min="1" max="100" step="1" class="ui-input mt-1 w-full text-sm" :placeholder="t('adminFlashSales.discountPlaceholder')" />
         </label>
         <label class="block text-xs text-slate-400">
           {{ t('adminFlashSales.activeFrom') }}
@@ -52,6 +52,10 @@
         <label class="block text-xs text-slate-400 sm:col-span-2">
           {{ t('adminFlashSales.description') }}
           <input v-model="form.description" type="text" maxlength="300" class="ui-input mt-1 w-full text-sm" />
+        </label>
+        <label v-if="!editingId" class="flex items-center gap-2 text-xs text-slate-400 sm:col-span-2">
+          <input v-model="form.is_active" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" />
+          {{ t('adminFlashSales.activeOnCreate') }}
         </label>
       </div>
       <div v-if="createError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -116,7 +120,7 @@
             <p v-if="fs.description" class="truncate text-xs text-slate-400" :title="fs.description">{{ fs.description }}</p>
             <p class="text-[11px] tabular-nums text-slate-500">
               {{ fmtDate(fs.active_from) }}<span aria-hidden="true"> → </span><span class="sr-only"> {{ t('adminFlashSales.to') }} </span>{{ fmtDate(fs.active_until) }}
-              · {{ t('adminFlashSales.redemptions', { count: fs.redemption_count, max: fs.max_redemptions || '∞' }) }}
+              · {{ t('adminFlashSales.redemptions', { count: fs.redemption_count, max: fs.max_redemptions || t('adminFlashSales.unlimited') }) }}
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
@@ -195,6 +199,7 @@ const busyId = ref(null);
 
 const form = reactive({
   name: '', discount_value: '', active_from: '', active_until: '', max_redemptions: '', description: '',
+  is_active: true,
 });
 
 const fmtDate = (iso) => {
@@ -223,7 +228,7 @@ const editingId = ref(null);
 
 const resetForm = () => {
   form.name = ''; form.discount_value = ''; form.active_from = ''; form.active_until = '';
-  form.max_redemptions = ''; form.description = '';
+  form.max_redemptions = ''; form.description = ''; form.is_active = true;
 };
 
 // datetime-local inputs hold LOCAL time; the API returns UTC ISO — convert so the
@@ -245,6 +250,7 @@ const startEdit = (fs) => {
   form.active_until = toLocalInput(fs.active_until);
   form.max_redemptions = fs.max_redemptions ?? '';
   form.description = fs.description || '';
+  form.is_active = fs.is_active ?? true;
 };
 
 const cancelEdit = () => {
@@ -319,6 +325,7 @@ const submitForm = async () => {
       discount_value: discountValue,
       active_from: fromDate.toISOString(),
       active_until: untilDate.toISOString(),
+      is_active: form.is_active,
     };
     if (maxRaw !== '') payload.max_redemptions = Number(maxRaw);
     const res = await api.post('/admin/flash-sales/', payload);

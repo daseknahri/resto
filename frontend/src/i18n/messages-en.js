@@ -1806,6 +1806,9 @@ adminRides: {
   resolveConfirmTitle: "Force-resolve ride #{id}?",
   resolveConfirmBody: "This overrides the normal trip lifecycle and is recorded in the audit log.",
   faresLoadFailed: "Could not load the fare settings.",
+  faresKicker: "Pricing",
+  faresRangeInvalid: "Fares must be 0 or more; platform commission must be between 0 and 100.",
+  statusUnknown: "Unknown",
 },
 walletCharge: {
   kicker: "Wallet",
@@ -1943,6 +1946,8 @@ adminFlashSales: {
   cancelEdit: "Cancel edit",
   updated: "Flash sale updated.",
   maxRedemptionsInvalid: "Max redemptions must be a whole number of 1 or more, or left empty for unlimited.",
+  activeOnCreate: "Active on create",
+  discountPlaceholder: "15",
 },
 adminDeliveryJobs: {
   kicker: "Platform Admin",

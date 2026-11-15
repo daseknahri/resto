@@ -4141,6 +4141,9 @@ Object.assign(arabicMessages, {
   resolveConfirmTitle: "حلّ الرحلة رقم {id}؟",
   resolveConfirmBody: "هذا يتجاوز دورة حياة الرحلة العادية ويُسجَّل في سجل التدقيق.",
   faresLoadFailed: "تعذّر تحميل إعدادات الأجرة.",
+    "faresKicker": "التسعير",
+    "faresRangeInvalid": "يجب أن تكون الأجور 0 أو أكثر؛ ويجب أن تكون عمولة المنصة بين 0 و100.",
+    "statusUnknown": "غير معروف",
   },
   walletCharge: {
     kicker: "المحفظة",
@@ -4278,6 +4281,8 @@ Object.assign(arabicMessages, {
   cancelEdit: "إلغاء التعديل",
   updated: "تم تحديث عرض التخفيض.",
   maxRedemptionsInvalid: "يجب أن يكون الحد الأقصى عددًا صحيحًا 1 أو أكثر، أو يُترك فارغًا لغير المحدود.",
+    "activeOnCreate": "نشط عند الإنشاء",
+    "discountPlaceholder": "15",
   },
   adminDeliveryJobs: {
     kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",

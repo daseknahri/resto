@@ -1804,6 +1804,9 @@ adminRides: {
   resolveConfirmTitle: "Resoudre la course #{id} ?",
   resolveConfirmBody: "Cela contourne le cycle normal de la course et est consigne dans le journal d'audit.",
   faresLoadFailed: "Impossible de charger les tarifs.",
+  faresKicker: "Tarification",
+  faresRangeInvalid: "Les tarifs doivent etre de 0 ou plus ; la commission de la plateforme doit etre entre 0 et 100.",
+  statusUnknown: "Inconnu",
 },
 walletCharge: {
   kicker: "Portefeuille",
@@ -1941,6 +1944,8 @@ adminFlashSales: {
   cancelEdit: "Annuler la modification",
   updated: "Vente flash mise a jour.",
   maxRedemptionsInvalid: "Le nombre max doit etre un entier de 1 ou plus, ou vide pour illimite.",
+  activeOnCreate: "Actif des la creation",
+  discountPlaceholder: "15",
 },
 adminDeliveryJobs: {
   kicker: "Admin plateforme",
