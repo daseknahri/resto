@@ -1535,6 +1535,8 @@ ownerLoyalty: {
   birthdayBonusHint: "Awarded when a customer with a birthday on file places an order on their birthday.",
   validationTierThreshold: "Gold tier threshold must be higher than the silver tier threshold.",
   validationTierMultiplier: "Tier multipliers must be at least 1.",
+  validationBirthdayBonus: "Birthday bonus must be 0 or more.",
+  validationFirstOrderBonus: "First-order bonus must be 0 or more.",
 },
 driver: {
   kicker: "Delivery",
@@ -5266,6 +5268,8 @@ happyHour: {
   limitReached: "Maximum of 8 happy-hour rules reached.",
   ended: "Happy hour ended — prices updated",
   overnightHint: "Overnight window: wraps past midnight.",
+  categoriesFetchError: "Could not load categories, so rules cannot be scoped to a category. Retry to load them.",
+  timeWindowInvalid: "Start time and end time must be different.",
 },
 referral: {
   kicker: "Referral programme",

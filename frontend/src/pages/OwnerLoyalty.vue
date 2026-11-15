@@ -494,6 +494,11 @@ const save = async () => {
     if (!(goldThr > silverThr)) { saveError.value = t('ownerLoyalty.validationTierThreshold'); return; }
     if (!(silverMul >= 1) || !(goldMul >= 1)) { saveError.value = t('ownerLoyalty.validationTierMultiplier'); return; }
   }
+  // Bonus points must never be negative: the template min="0" is advisory
+  // only (typed negatives still bind via v-model.number), so guard at save
+  // time. !(n >= 0) also rejects NaN. Zero stays valid (bonus disabled).
+  if (!(Number(form.first_order_bonus_points) >= 0)) { saveError.value = t('ownerLoyalty.validationFirstOrderBonus'); return; }
+  if (!(Number(form.birthday_bonus_points) >= 0)) { saveError.value = t('ownerLoyalty.validationBirthdayBonus'); return; }
   saving.value = true;
   try {
     const res = await api.patch('/owner/loyalty/', {

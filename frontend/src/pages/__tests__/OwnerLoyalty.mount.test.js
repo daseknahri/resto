@@ -159,3 +159,70 @@ describe("OwnerLoyalty — mount smoke", () => {
     expect(wrapper.text()).toContain("37");
   });
 });
+
+// ── G4b-B appended tests (B-24) ──────────────────────────────────────────────
+// Appended by the G4b-B worker; the base smoke tests above are untouched.
+// (ESM import hoists, so this resolves to the same mocked api the page uses.)
+import api from "../../lib/api";
+
+// Save button: the only full-width primary button; its label is the mocked
+// t() key (common.save while idle). Toggle switches are also <button>s but
+// carry no text, so the label lookup is unambiguous.
+const saveButton = (w) =>
+  w.findAll("button").find((b) => b.text() === "common.save");
+
+describe("OwnerLoyalty — G4b-B (B-24)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = { "/owner/loyalty/": { data: loyaltyConfig() } };
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // The loaded config is valid (enabled, bonuses 50/100), so only the bonus
+  // under test can trip validation. setValue (not wrapper.vm assignment) is
+  // used so v-model.number binds the typed value before the click lands.
+  it("B-24 blocks save and shows an error for a negative first-order bonus", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.find("#loyalty-first-order-bonus").setValue("-5");
+    await saveButton(wrapper).trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ownerLoyalty.validationFirstOrderBonus");
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("B-24 blocks save and shows an error for a negative birthday bonus", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.find("#loyalty-birthday-bonus").setValue("-1");
+    await saveButton(wrapper).trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ownerLoyalty.validationBirthdayBonus");
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("B-24 allows save when both bonuses are zero or positive", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.find("#loyalty-first-order-bonus").setValue("0");
+    await wrapper.find("#loyalty-birthday-bonus").setValue("25");
+    await saveButton(wrapper).trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenCalledWith(
+      "/owner/loyalty/",
+      expect.objectContaining({
+        first_order_bonus_points: 0,
+        birthday_bonus_points: 25,
+      }),
+    );
+  });
+});

@@ -1533,6 +1533,8 @@ ownerLoyalty: {
   birthdayBonusHint: "Attribue quand un client avec une date d anniversaire enregistree passe une commande le jour de son anniversaire.",
   validationTierThreshold: "Le seuil du niveau Or doit etre superieur au seuil du niveau Argent.",
   validationTierMultiplier: "Les multiplicateurs de niveau doivent etre d'au moins 1.",
+  validationBirthdayBonus: "Le bonus d anniversaire doit etre superieur ou egal a 0.",
+  validationFirstOrderBonus: "Le bonus de premiere commande doit etre superieur ou egal a 0.",
 },
 driver: {
   kicker: "Livraison",
@@ -5269,6 +5271,8 @@ happyHour: {
   limitReached: "Maximum de 8 regles happy hour atteint.",
   ended: "Happy hour termine — prix mis a jour",
   overnightHint: "Plage nocturne : s'etend apres minuit.",
+  categoriesFetchError: "Impossible de charger les categories : les regles ne peuvent pas etre limitees a une categorie. Reessayez pour les charger.",
+  timeWindowInvalid: "L heure de debut et l heure de fin doivent etre differentes.",
 },
 referral: {
   kicker: "Programme de parrainage",

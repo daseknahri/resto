@@ -130,6 +130,12 @@
         <span class="flex-1">{{ t('happyHour.fetchError') }}</span>
         <button type="button" class="shrink-0 rounded-lg border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/10" @click="fetchHHRules">{{ t('ownerPromotions.retry') }}</button>
       </div>
+      <!-- Category-scope fetch error: the drawer picker would render empty with
+           no hint why a rule cannot be scoped to a category. -->
+      <div v-if="hhCategoriesError" class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-2.5 text-xs text-amber-300">
+        <span class="flex-1">{{ t('happyHour.categoriesFetchError') }}</span>
+        <button type="button" class="shrink-0 rounded-lg border border-amber-500/40 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60" @click="fetchHHCategories">{{ t('ownerPromotions.retry') }}</button>
+      </div>
       <!-- Limit notice -->
       <div v-if="hhRules.length >= 8" class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-2.5 text-xs text-amber-300">
         {{ t('happyHour.limitReached') }}
@@ -463,6 +469,7 @@ const deletePromo = async (promo) => {
     title: t('ownerPromotions.deleteConfirm'),
     body: t('confirmModal.defaultBody'),
     confirmLabel: t('common.delete'),
+    danger: true,
   });
   if (!ok) return;
   deletingId.value = promo.id;
@@ -649,6 +656,7 @@ const hhSubmitting = ref(false);
 const hhDeletingId = ref(null);
 const hhDrawerError = ref('');
 const hhCategories = ref([]);
+const hhCategoriesError = ref(false);
 
 const hhForm = reactive({
   name: '',
@@ -683,7 +691,7 @@ const hhDayLabels = (days) => {
 const openCreateHH = () => {
   hhEditing.value = null;
   resetHHForm();
-  hhDrawerError.value = '';
+  hhDrawerError.value = hhCategoriesError.value ? t('happyHour.categoriesFetchError') : '';
   hhDrawerOpen.value = true;
 };
 
@@ -696,7 +704,7 @@ const openEditHH = (rule) => {
   hhForm.days = [...(rule.days || [])];
   hhForm.category_ids = [...(rule.category_ids || [])];
   hhForm.is_active = rule.is_active;
-  hhDrawerError.value = '';
+  hhDrawerError.value = hhCategoriesError.value ? t('happyHour.categoriesFetchError') : '';
   hhDrawerOpen.value = true;
 };
 
@@ -714,12 +722,17 @@ const fetchHHRules = async () => {
 };
 
 const fetchHHCategories = async () => {
+  hhCategoriesError.value = false;
   try {
     const res = await api.get('/categories/');
     const rows = Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
     hhCategories.value = rows.map((c) => ({ id: c.id, name: c.name }));
   } catch {
-    // non-critical — category scope is optional
+    // Category scope is optional, but a failed load must not fail silently:
+    // the picker in the happy-hour drawer would render empty with no hint
+    // why the owner cannot scope a rule. Surfaced inline in the section
+    // (with Retry) and in the drawer error when it is opened.
+    hhCategoriesError.value = true;
   }
 };
 
@@ -736,6 +749,13 @@ const submitHHForm = async () => {
   }
   if (!hhForm.start_time || !hhForm.end_time) {
     hhDrawerError.value = t('happyHour.timeRequired');
+    return;
+  }
+  // A zero-length window (start == end) is ambiguous — closed all day or open
+  // 24h? — so it is rejected, mirroring OwnerProfile's business-hours editor.
+  // end < start is NOT invalid: it is an overnight window (see isOvernightRule).
+  if (hhForm.start_time === hhForm.end_time) {
+    hhDrawerError.value = t('happyHour.timeWindowInvalid');
     return;
   }
   // The server rejects an empty day list (a rule with no days never applies).
@@ -781,6 +801,7 @@ const deleteHHRule = async (rule) => {
     title: t('happyHour.deleteConfirm'),
     body: t('confirmModal.defaultBody'),
     confirmLabel: t('common.delete'),
+    danger: true,
   });
   if (!ok) return;
   hhDeletingId.value = rule.id;

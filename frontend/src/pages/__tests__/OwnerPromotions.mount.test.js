@@ -189,3 +189,138 @@ describe("OwnerPromotions — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerPromotions.flashKicker");
   });
 });
+
+// ── G4b-B appended tests (B-20, B-21, B-17) ─────────────────────────────────
+// Appended by the G4b-B worker; the base smoke tests above are untouched.
+// The mocked lib/api + useConfirmModal modules are imported here (ESM imports
+// hoist, so these resolve to the same mocked/singleton instances the page uses).
+import api from "../../lib/api";
+import { useConfirmModal } from "../../composables/useConfirmModal";
+
+// The happy-hour drawer is auto-stubbed by shallowMount; its v-model:form prop
+// IS the page's reactive hhForm object, so mutating the prop drives submitHHForm
+// without touching wrapper.vm internals.
+const hhDrawer = (w) => w.findComponent({ name: "OwnerHappyHourFormDrawer" });
+const setHHForm = (w, fields) => Object.assign(hhDrawer(w).props("form"), fields);
+
+describe("OwnerPromotions — G4b-B (B-20, B-21, B-17)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── B-20: zero-length happy-hour window ───────────────────────────────────
+  it("B-20 rejects a zero-length window (start == end) and never posts", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    setHHForm(wrapper, {
+      name: "Lunch deal",
+      percent_off: 20,
+      start_time: "15:00",
+      end_time: "15:00",
+      days: [0],
+    });
+    await hhDrawer(wrapper).vm.$emit("submit");
+    await flushPromises();
+    expect(hhDrawer(wrapper).props("error")).toBe("happyHour.timeWindowInvalid");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("B-20 still allows an overnight window (end before start)", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    setHHForm(wrapper, {
+      name: "Late night",
+      percent_off: 20,
+      start_time: "22:00",
+      end_time: "02:00",
+      days: [0],
+    });
+    await hhDrawer(wrapper).vm.$emit("submit");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/happy-hours/",
+      expect.objectContaining({ start_time: "22:00", end_time: "02:00" }),
+    );
+  });
+
+  // ── B-21: happy-hour category fetch failure ───────────────────────────────
+  it("B-21 shows an inline categories error + surfaces it in the drawer", async () => {
+    // Pre-handled rejection: the catch() marks it handled for jsdom, while the
+    // await inside fetchHHCategories still sees the rejection.
+    const catFail = Promise.reject(new Error("categories down"));
+    catFail.catch(() => {});
+    _routes = { "/categories/": catFail };
+    wrapper = mountPage();
+    await flushPromises();
+    // Inline error in the Happy Hours section (own template, not the drawer).
+    expect(wrapper.text()).toContain("happyHour.categoriesFetchError");
+    // Opening the drawer (where the picker lives) surfaces the same error via
+    // the drawer's existing :error prop.
+    const addBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("happyHour.add"));
+    expect(addBtn.exists()).toBe(true);
+    await addBtn.trigger("click");
+    await flushPromises();
+    expect(hhDrawer(wrapper).props("error")).toBe("happyHour.categoriesFetchError");
+  });
+
+  it("B-21 retry reloads categories and clears the error", async () => {
+    const catFail = Promise.reject(new Error("categories down"));
+    catFail.catch(() => {});
+    _routes = { "/categories/": catFail };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("happyHour.categoriesFetchError");
+    _routes = { "/categories/": { data: [{ id: 1, name: "Drinks" }] } };
+    const retryBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "ownerPromotions.retry");
+    expect(retryBtn.exists()).toBe(true);
+    await retryBtn.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("happyHour.categoriesFetchError");
+    expect(hhDrawer(wrapper).props("categories")).toEqual([{ id: 1, name: "Drinks" }]);
+  });
+
+  // ── B-17: destructive confirms carry danger: true ─────────────────────────
+  it("B-17 delete-promo confirm carries danger: true", async () => {
+    _routes = { "/owner/promotions/": { data: [promo()] } };
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper
+      .findComponent({ name: "OwnerPromotionCard" })
+      .vm.$emit("delete", promo());
+    await flushPromises();
+    expect(useConfirmModal().options.value.danger).toBe(true);
+    // Decline so the pending confirm resolves and nothing is deleted.
+    useConfirmModal()._settle(false);
+    await flushPromises();
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+
+  it("B-17 delete happy-hour rule confirm carries danger: true", async () => {
+    _routes = { "/happy-hours/": { data: [happyHour()] } };
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper
+      .findComponent({ name: "OwnerHappyHourRuleCard" })
+      .vm.$emit("delete", happyHour());
+    await flushPromises();
+    expect(useConfirmModal().options.value.danger).toBe(true);
+    useConfirmModal()._settle(false);
+    await flushPromises();
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+});
