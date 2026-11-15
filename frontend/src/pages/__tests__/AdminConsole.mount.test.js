@@ -311,3 +311,500 @@ describe("AdminConsole — provision confirms first (A2-12)", () => {
     expect(adminApi.put).toHaveBeenCalledWith("/lead-provision/7/", expect.anything());
   });
 });
+
+// usePromptModal is imported here (hoisted) for the A2-40 approve test only:
+// the base tests above never call prompt(). The prompt singleton mirrors
+// useConfirmModal (module-level ref singleton, resolved on user action via
+// _settle); the test resolves it through _settle with a fallback chain and
+// fails loudly if the API differs — see the A2-40 test note.
+import { usePromptModal } from "../../composables/usePromptModal";
+
+describe("AdminConsole — Run 8 G3b W10 (A2-37..A2-53)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.useRealTimers();
+  });
+
+  const leadFixture = (id, name, status) => ({
+    id,
+    name,
+    status,
+    plan_code: "pro",
+    email: `${name.toLowerCase().replace(/ /g, "-")}@example.com`,
+    phone: "0600000000",
+    source: "web",
+    notes: "",
+  });
+
+  const mountWithLeads = async (leads) => {
+    _routes = {
+      "/leads/": { data: leads },
+      "/admin-tier-upgrade-requests/": { data: [] },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    return wrapper;
+  };
+
+  const switchView = async (label) => {
+    const btn = wrapper.findAll("button").find((b) => b.text().trim() === label);
+    expect(btn).toBeTruthy();
+    await btn.trigger("click");
+    await flushPromises();
+  };
+
+  // ── A2-37: leads default to actionable; live leads hidden; status filter sends ?status= ──
+  it("A2-37 defaults to actionable leads and filters live leads out until selected", async () => {
+    await mountWithLeads([
+      leadFixture(1, "Alpha Lead", "new"),
+      leadFixture(2, "Beta Lead", "live"),
+    ]);
+    expect(wrapper.text()).toContain("Alpha Lead");
+    expect(wrapper.text()).not.toContain("Beta Lead");
+    expect(wrapper.text()).toContain("adminConsole.leadsShowing");
+
+    // The leads filter is the first <select> in the operations view.
+    const leadsSelect = wrapper.findAll("select")[0];
+    await leadsSelect.setValue("live");
+    await flushPromises();
+    const leadCall = adminApi.get.mock.calls.find(
+      ([url, cfg]) => url.includes("/leads/") && cfg?.params?.status === "live"
+    );
+    expect(leadCall).toBeTruthy();
+    expect(wrapper.text()).toContain("Beta Lead");
+    expect(wrapper.text()).not.toContain("Alpha Lead");
+  });
+
+  it("A2-37 search narrows the lead list client-side", async () => {
+    await mountWithLeads([leadFixture(1, "Alpha Lead", "new"), leadFixture(2, "Beta Lead", "new")]);
+    wrapper.vm.leadSearch = "beta";
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("Beta Lead");
+    expect(wrapper.text()).not.toContain("Alpha Lead");
+  });
+
+  // ── A2-38 + A2-48: provision refetches leads; the package is stamped with an issue time ──
+  it("A2-38/A2-48 provision refetches the lead list and stamps the package issue time", async () => {
+    await mountWithLeads([leadFixture(7, "Chez Test", "new")]);
+    const findProvisionButton = () =>
+      wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.provision");
+    await findProvisionButton().trigger("click");
+    await flushPromises();
+    const { _settle } = useConfirmModal();
+    adminApi.put.mockResolvedValue({ data: { tenant_url: "https://chez-test.example.com", tenant: "chez-test" } });
+    _settle(true);
+    await flushPromises();
+    expect(adminApi.put).toHaveBeenCalledWith("/lead-provision/7/", expect.anything());
+    // Initial load + the post-provision refetch.
+    const leadCalls = adminApi.get.mock.calls.filter(([url]) => url.includes("/leads/"));
+    expect(leadCalls.length).toBeGreaterThanOrEqual(2);
+    const pkg = wrapper.findComponent({ name: "AdminConsoleOnboardingPackage" });
+    expect(pkg.exists()).toBe(true);
+    expect(pkg.props("provisionedAt")).toBeGreaterThan(0);
+  });
+
+  // ── A2-39: upgrades default to status=pending; 200 rows surface the cap note ──
+  it("A2-39 upgrades default to pending and show the cap note at 200 rows", async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => ({
+      id: 100 + i,
+      requested_at: "2026-01-01T10:00:00Z",
+      status: "pending",
+      tenant_slug: `chez-test-${i}`,
+      current_plan_name: "Free",
+      target_plan_name: "Pro",
+      payment_method: "cash",
+      payment_reference: "",
+      target_plan_is_active: true,
+    }));
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: rows },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    const upCall = adminApi.get.mock.calls.find(
+      ([url, cfg]) => url.includes("/admin-tier-upgrade-requests/") && cfg?.params?.status === "pending"
+    );
+    expect(upCall).toBeTruthy();
+    expect(wrapper.text()).toContain("adminConsole.upgradeCappedNote");
+  });
+
+  // ── A2-40: approve collects an optional invoice amount and sends it ──
+  // NOTE: assumes usePromptModal mirrors useConfirmModal's _settle(value)
+  // resolver (both are module-level ref singletons per this file's header).
+  // If the prompt API differs, this test fails loudly — fix the resolver here.
+  it("A2-40 approve sends the prompted invoice amount", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": {
+        data: [
+          {
+            id: 10,
+            requested_at: "2026-01-01T10:00:00Z",
+            status: "pending",
+            tenant_slug: "chez-test",
+            current_plan_name: "Free",
+            target_plan_name: "Pro",
+            payment_method: "cash",
+            payment_reference: "TXN-1",
+            target_plan_is_active: true,
+          },
+        ],
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    const approveBtn = wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.approve");
+    expect(approveBtn).toBeTruthy();
+    await approveBtn.trigger("click");
+    await flushPromises();
+    const promptModal = usePromptModal();
+    const settlePrompt = promptModal._settle ?? promptModal._resolve ?? promptModal.resolve;
+    expect(typeof settlePrompt).toBe("function");
+    settlePrompt("TXN-9"); // payment reference
+    await flushPromises();
+    settlePrompt("ok"); // admin note
+    await flushPromises();
+    settlePrompt("499.00"); // invoice amount
+    await flushPromises();
+    const putCall = adminApi.put.mock.calls.find(([url]) =>
+      url.includes("/admin-tier-upgrade-requests/10/decision/")
+    );
+    expect(putCall).toBeTruthy();
+    expect(putCall[1]).toEqual(expect.objectContaining({ decision: "approve", invoice_amount: 499 }));
+  });
+
+  // ── A2-41: alerts fetch 200, page at 30, and surface the cap ──
+  it("A2-41 alerts show the count line and the cap note past 200", async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => ({
+      id: 200 + i,
+      name: `Alert Lead ${i}`,
+      status: "new",
+      tenant_slug: "chez-test",
+      phone: "0600000000",
+      email: "a@example.com",
+      reminder_count: 0,
+      created_at: "2026-01-01T10:00:00Z",
+      follow_up_due_at: "2026-01-01T10:30:00Z",
+      sla_state: "overdue",
+    }));
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-reservation-alerts/": {
+        data: {
+          results: rows,
+          counts: { overdue: 250, due_soon: 0, total_alerts: 250 },
+          thresholds: { overdue_minutes: 30, due_soon_minutes: 10 },
+        },
+      },
+      "/provision-jobs/": { data: [] },
+      "/admin-audit-logs/": { data: { results: [], pagination: { page: 1, total: 0, total_pages: 1, has_next: false, has_prev: false } } },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.reservationFollowUpSla");
+    expect(wrapper.text()).toContain("adminConsole.alertsShowing");
+    expect(wrapper.text()).toContain("adminConsole.alertsCappedNote");
+    // Page 1 shows the first 30 of the 200 fetched rows (paging, not a silent cut).
+    expect(wrapper.text()).toContain("Alert Lead 0");
+    expect(wrapper.text()).not.toContain("Alert Lead 199");
+  });
+
+  // ── A2-42: audit filters are sent as ?action= / ?tenant= / ?q= ──
+  it("A2-42 audit filters send action/tenant/q params", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-reservation-alerts/": { data: { results: [], counts: { overdue: 0, due_soon: 0, total_alerts: 0 }, thresholds: {} } },
+      "/provision-jobs/": { data: [] },
+      "/admin-audit-logs/": { data: { results: [], pagination: { page: 1, total: 0, total_pages: 1, has_next: false, has_prev: false } } },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.reservationFollowUpSla");
+    wrapper.vm.adminPanels.audit = true;
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+    const searchInput = wrapper.find('input[placeholder="adminConsole.auditSearchPlaceholder"]');
+    expect(searchInput.exists()).toBe(true);
+    await searchInput.setValue("lead_provisioned");
+    const applyBtn = wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.auditApplyFilters");
+    await applyBtn.trigger("click");
+    await flushPromises();
+    const auditCall = adminApi.get.mock.calls.find(
+      ([url, cfg]) => url.includes("/admin-audit-logs/") && cfg?.params?.q === "lead_provisioned"
+    );
+    expect(auditCall).toBeTruthy();
+  });
+
+  // ── A2-43: tenant search sends ?q= ──
+  it("A2-43 tenant search sends the q param", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-tenants/": {
+        data: [
+          { id: 7, name: "Chez Test", slug: "chez-test", lifecycle_status: "active", plan_name: "Pro", primary_domain: "chez-test.example.com", owner_username: "owner", subscription_end_date: null },
+        ],
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.tenantLifecycleControls");
+    const searchInput = wrapper.find('input[placeholder="adminConsole.tenantSearchPlaceholder"]');
+    expect(searchInput.exists()).toBe(true);
+    await searchInput.setValue("chez");
+    const applyBtn = wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.tenantSearchApply");
+    await applyBtn.trigger("click");
+    await flushPromises();
+    const tenantCall = adminApi.get.mock.calls.find(
+      ([url, cfg]) => url.includes("/admin-tenants/") && cfg?.params?.q === "chez"
+    );
+    expect(tenantCall).toBeTruthy();
+  });
+
+  // ── A2-44 + A2-45: delivery save error surfaces in the drawer; dirty close confirms ──
+  const mountWithDeliveryTenant = async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-tenants/7/delivery/": {
+        data: {
+          tenant: { id: 7, slug: "chez-test", name: "Chez Test" },
+          delivery: {
+            delivery_fee: "20.00",
+            delivery_base_fee: "5.00",
+            delivery_per_km: "1.00",
+            delivery_free_over: "0",
+            delivery_minimum_order: "0",
+            delivery_radius_km: null,
+            delivery_zone_description: "",
+            delivery_commission_pct: "10",
+            marketplace_commission_pct: "0.15",
+            platform_delivery_enabled: false,
+          },
+        },
+      },
+      "/admin-tenants/": {
+        data: [
+          { id: 7, name: "Chez Test", slug: "chez-test", lifecycle_status: "active", plan_name: "Pro", primary_domain: "chez-test.example.com", owner_username: "owner", subscription_end_date: null },
+        ],
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.tenantLifecycleControls");
+    const deliveryBtn = wrapper.findAll("button").find((b) => b.text() === "adminConsole.delivery.button");
+    expect(deliveryBtn).toBeTruthy();
+    await deliveryBtn.trigger("click");
+    await flushPromises();
+    return wrapper.findComponent({ name: "AdminConsoleDeliveryPricingDrawer" });
+  };
+
+  it("A2-44 a failed delivery save surfaces an error on the drawer", async () => {
+    const drawer = await mountWithDeliveryTenant();
+    expect(drawer.exists()).toBe(true);
+    adminApi.patch.mockRejectedValueOnce(new Error("Invalid delivery_commission_pct (0–100)"));
+    await drawer.vm.$emit("submit");
+    await flushPromises();
+    expect(drawer.props("error")).toBeTruthy();
+  });
+
+  it("A2-45 closing the delivery drawer with unsaved edits asks first", async () => {
+    const drawer = await mountWithDeliveryTenant();
+    expect(drawer.exists()).toBe(true);
+    wrapper.vm.deliveryForm.delivery_fee = 99;
+    await wrapper.vm.$nextTick();
+    await drawer.vm.$emit("close");
+    await flushPromises();
+    expect(useConfirmModal().visible.value).toBe(true);
+    const { _settle } = useConfirmModal();
+    _settle(true);
+    await flushPromises();
+    expect(wrapper.vm.deliveryModal.open).toBe(false);
+  });
+
+  // ── A2-46: live orders poll while open; the modal gets the true count + cap ──
+  it("A2-46 live orders poll while open and receive the true count", async () => {
+    vi.useFakeTimers();
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-tenants/": {
+        data: [
+          { id: 7, name: "Chez Test", slug: "chez-test", lifecycle_status: "active", plan_name: "Pro", primary_domain: "chez-test.example.com", owner_username: "owner", subscription_end_date: null },
+        ],
+      },
+      "/admin/tenants/7/live-orders/": {
+        data: {
+          results: [{ order_number: "1", status: "pending", order_type: "delivery", total: "10", currency: "MAD", created_at: "2026-01-01T10:00:00Z", customer_phone: "" }],
+          active_order_count: 250,
+          capped: true,
+          limit: 200,
+        },
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.tenantLifecycleControls");
+    const liveBtn = wrapper.findAll("button").find((b) => b.text().includes("adminConsole.liveOrders.button"));
+    expect(liveBtn).toBeTruthy();
+    await liveBtn.trigger("click");
+    await flushPromises();
+    const modal = wrapper.findComponent({ name: "AdminConsoleLiveOrdersModal" });
+    expect(modal.exists()).toBe(true);
+    expect(modal.props("count")).toBe(250);
+    expect(modal.props("capped")).toBe(true);
+    const callsBefore = adminApi.get.mock.calls.filter(([url]) => url.includes("/live-orders/")).length;
+    await vi.advanceTimersByTimeAsync(30000);
+    await flushPromises();
+    const callsAfter = adminApi.get.mock.calls.filter(([url]) => url.includes("/live-orders/")).length;
+    expect(callsAfter).toBeGreaterThan(callsBefore);
+  });
+
+  // ── A2-47: jobs total header + retry re-runs the provision path ──
+  it("A2-47 jobs receive the true total and retry re-provisions the failed lead", async () => {
+    const failedJob = { id: 5, lead_id: 7, lead_name: "Chez Test", tenant_slug: "", status: "failed", log: "boom", created_at: "2026-01-01T10:00:00Z", updated_at: "2026-01-01T10:00:00Z" };
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-reservation-alerts/": { data: { results: [], counts: { overdue: 0, due_soon: 0, total_alerts: 0 }, thresholds: {} } },
+      "/provision-jobs/": { data: [failedJob], headers: { "x-total-count": "250" } },
+      "/admin-audit-logs/": { data: { results: [], pagination: { page: 1, total: 0, total_pages: 1, has_next: false, has_prev: false } } },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.reservationFollowUpSla");
+    const jobs = wrapper.findComponent({ name: "AdminConsoleProvisioningJobs" });
+    expect(jobs.exists()).toBe(true);
+    expect(jobs.props("total")).toBe(250);
+    await jobs.vm.$emit("retry", failedJob);
+    await flushPromises();
+    expect(useConfirmModal().visible.value).toBe(true);
+    const { _settle } = useConfirmModal();
+    adminApi.put.mockResolvedValue({ data: { tenant_url: "https://chez-test.example.com", tenant: "chez-test" } });
+    _settle(true);
+    await flushPromises();
+    expect(adminApi.put).toHaveBeenCalledWith("/lead-provision/7/", expect.anything());
+  });
+
+  // ── A2-49: dirty plan flags show an inline notice, not the page-top error ──
+  it("A2-49 refreshing plan flags with unsaved changes shows an inline notice", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-plan-feature-flags/": {
+        data: { plans: [{ plan_code: "pro", plan_name: "Pro", plan_is_active: true, feature_flags: [{ key: "x", label: "X", description: "", enabled: false, config: null }] }] },
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.planFeatureFlags");
+    // STAGING FIX (G3b W10): the flags list renders only behind the collapsed
+    // planFlags panel (adminPanels.planFlags starts false) — expand it first,
+    // or no checkbox exists to check.
+    const showFlagsBtn = wrapper.findAll("button").find((b) => b.text().trim() === "adminConsole.show");
+    expect(showFlagsBtn).toBeTruthy();
+    await showFlagsBtn.trigger("click");
+    await flushPromises();
+    const checkbox = wrapper.find('input[type="checkbox"]');
+    expect(checkbox.exists()).toBe(true);
+    await checkbox.setChecked(true);
+    await flushPromises();
+    expect(wrapper.vm.planFlagDirtyKeys.size).toBe(1);
+    const refreshBtn = wrapper.findAll("button").find((b) => b.text().trim() === "common.refresh *");
+    expect(refreshBtn).toBeTruthy();
+    await refreshBtn.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("adminConsole.unsavedFlagChanges");
+    expect(wrapper.vm.error).toBeFalsy();
+  });
+
+  // ── A2-50: monitoring Refresh fetches collapsed panels too ──
+  it("A2-50 monitoring Refresh fetches alerts, jobs and audit even when collapsed", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-reservation-alerts/": { data: { results: [], counts: { overdue: 0, due_soon: 0, total_alerts: 0 }, thresholds: {} } },
+      "/provision-jobs/": { data: [] },
+      "/admin-audit-logs/": { data: { results: [], pagination: { page: 1, total: 0, total_pages: 1, has_next: false, has_prev: false } } },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.reservationFollowUpSla");
+    wrapper.vm.adminPanels.alerts = false;
+    wrapper.vm.adminPanels.jobs = false;
+    wrapper.vm.adminPanels.audit = false;
+    await wrapper.vm.$nextTick();
+    const countCalls = (frag) => adminApi.get.mock.calls.filter(([url]) => url.includes(frag)).length;
+    const before = {
+      alerts: countCalls("/admin-reservation-alerts/"),
+      jobs: countCalls("/provision-jobs/"),
+      audit: countCalls("/admin-audit-logs/"),
+    };
+    const headerRefresh = wrapper.findAll("button").find((b) => b.text().trim() === "common.refresh");
+    expect(headerRefresh).toBeTruthy();
+    await headerRefresh.trigger("click");
+    await flushPromises();
+    expect(countCalls("/admin-reservation-alerts/")).toBeGreaterThan(before.alerts);
+    expect(countCalls("/provision-jobs/")).toBeGreaterThan(before.jobs);
+    expect(countCalls("/admin-audit-logs/")).toBeGreaterThan(before.audit);
+  });
+
+  // ── A2-51: import files over 2 MB are rejected before parsing ──
+  it("A2-51 an oversize import file is rejected before any API call", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-tenants/": {
+        data: [
+          { id: 7, name: "Chez Test", slug: "chez-test", lifecycle_status: "active", plan_name: "Pro", primary_domain: "chez-test.example.com", owner_username: "owner", subscription_end_date: null },
+        ],
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.tenantLifecycleControls");
+    const bigFile = new File([new ArrayBuffer(2 * 1024 * 1024 + 1)], "big.json", { type: "application/json" });
+    await wrapper.vm.handleTenantImportFile(
+      { id: 7, slug: "chez-test" },
+      { target: { files: [bigFile], value: "" } }
+    );
+    await flushPromises();
+    expect(adminApi.post).not.toHaveBeenCalled();
+    expect(wrapper.vm.error).toBeTruthy();
+  });
+
+  // ── A2-53: no emoji on the Live orders button; AppIcon eye is used ──
+  it("A2-53 the Live orders button uses AppIcon eye, not the emoji", async () => {
+    _routes = {
+      "/leads/": { data: [] },
+      "/admin-tier-upgrade-requests/": { data: [] },
+      "/admin-tenants/": {
+        data: [
+          { id: 7, name: "Chez Test", slug: "chez-test", lifecycle_status: "active", plan_name: "Pro", primary_domain: "chez-test.example.com", owner_username: "owner", subscription_end_date: null },
+        ],
+      },
+    };
+    wrapper = mountConsole();
+    await flushPromises();
+    await switchView("adminConsole.tenantLifecycleControls");
+    expect(wrapper.text()).not.toContain("\u{1F441}");
+    const eyeIcons = wrapper
+      .findAllComponents({ name: "AppIcon" })
+      .filter((c) => c.props("name") === "eye");
+    expect(eyeIcons.length).toBeGreaterThanOrEqual(1);
+  });
+});

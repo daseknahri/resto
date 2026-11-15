@@ -13,6 +13,8 @@
       </div>
     </div>
     <template v-if="expanded">
+    <p v-if="total != null && total > jobs.length" class="text-xs text-amber-300">{{ t("adminConsole.jobsCappedNote", { shown: jobs.length, total, limit: 100 }) }}</p>
+    <p v-else-if="total == null && jobs.length >= 100" class="text-xs text-amber-300">{{ t("adminConsole.jobsCappedUnknownTotal", { limit: 100 }) }}</p>
     <div v-if="loading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       <article v-for="n in 3" :key="`job-skeleton-${n}`" class="ui-admin-card space-y-3">
         <div class="flex items-center justify-between gap-3">
@@ -44,6 +46,12 @@
         <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
         <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
         <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
+        <button
+          v-if="job.status === 'failed'"
+          class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-50"
+          :disabled="!job.lead_id || !!busyIds[job.lead_id]"
+          @click="emit('retry', job)"
+        >{{ t("adminConsole.jobsRetry") }}</button>
       </article>
     </div>
 
@@ -57,6 +65,7 @@
             <th scope="col" class="px-4 py-3 text-start">{{ t("common.status") }}</th>
             <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.log") }}</th>
             <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.updated") }}</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.actions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -69,6 +78,14 @@
             </td>
             <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
             <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
+            <td class="px-4 py-3">
+              <button
+                v-if="job.status === 'failed'"
+                class="ui-btn-outline ui-press px-3 py-1 text-xs disabled:opacity-50"
+                :disabled="!job.lead_id || !!busyIds[job.lead_id]"
+                @click="emit('retry', job)"
+              >{{ t("adminConsole.jobsRetry") }}</button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -91,13 +108,17 @@ import { useI18n } from "../composables/useI18n";
 defineProps({
   /** Provisioning job records to render. */
   jobs: { type: Array, default: () => [] },
+  /** True total from the X-Total-Count header (null when the server omits it). */
+  total: { type: Number, default: null },
+  /** Lead ids with a provision in flight (parent's provLoading) — disables Retry. */
+  busyIds: { type: Object, default: () => ({}) },
   /** Whether a fetch is in-flight (drives the skeleton state). */
   loading: { type: Boolean, default: false },
   /** Whether the panel body is expanded (parent-owned show/hide toggle). */
   expanded: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["toggle-expanded", "refresh"]);
+const emit = defineEmits(["toggle-expanded", "refresh", "retry"]);
 
 const { t, currentLocale } = useI18n();
 
@@ -108,7 +129,7 @@ const STATUS_LABELS = {
   success: "adminConsole.statusSuccess",
   failed: "adminConsole.statusFailed",
 };
-const statusLabel = (status) => t(STATUS_LABELS[status] || "adminConsole.statusPending");
+const statusLabel = (status) => t(STATUS_LABELS[status] || "adminConsole.statusUnknown");
 
 const statusClass = (status) => {
   if (status === "success") return "bg-emerald-600/30 text-emerald-200";

@@ -328,13 +328,16 @@ class OwnerReservationBulkReminderResultSerializer(serializers.Serializer):
 class ProvisioningJobSerializer(serializers.ModelSerializer):
     tenant_slug = serializers.CharField(source="tenant.slug", read_only=True)
     lead_name = serializers.CharField(source="lead.name", read_only=True)
+    # A2-47: the lead id the job belongs to — the console's Retry re-runs
+    # provision_lead for this lead (idempotent-safe, see services.py).
+    lead_id = serializers.ReadOnlyField()
     # Logs are masked at write time; this also masks rows written before that
     # (raw activation URLs / WhatsApp links) without rewriting stored data.
     log = serializers.SerializerMethodField()
 
     class Meta:
         model = ProvisioningJob
-        fields = ["id", "lead_name", "tenant_slug", "status", "log", "created_at", "updated_at"]
+        fields = ["id", "lead_id", "lead_name", "tenant_slug", "status", "log", "created_at", "updated_at"]
 
     def get_log(self, obj):
         return redact_tokens(obj.log or "")

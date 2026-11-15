@@ -57,6 +57,8 @@
             </article>
             <template v-else>
               <p class="mb-3 text-xs text-slate-500">{{ t("adminConsole.liveOrders.activeCount", { count }) }}</p>
+              <p class="mb-3 text-xs text-slate-500">{{ t("adminConsole.liveOrders.autoRefresh") }}</p>
+              <p v-if="capped" class="mb-3 text-xs text-amber-300">{{ t("adminConsole.liveOrders.cappedNote", { shown: orders.length, total: count, limit: 200 }) }}</p>
               <!-- Mobile: cards -->
               <div class="space-y-2 md:hidden">
                 <article
@@ -144,6 +146,8 @@ const props = defineProps({
   orders: { type: Array, default: () => [] },
   /** Active order count for the header line (may exceed orders.length). */
   count: { type: Number, default: 0 },
+  /** True when the server capped the list at 200 (count is the true total). */
+  capped: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["close", "refresh"]);
@@ -206,7 +210,7 @@ const LIVE_ORDER_STATUS_I18N = {
   completed: "orderStatus.statusCompleted",
   cancelled: "orderStatus.statusCancelled",
 };
-const liveOrderStatusLabel = (s) => (s ? t(LIVE_ORDER_STATUS_I18N[s] || s) : "-");
+const liveOrderStatusLabel = (s) => (s ? t(LIVE_ORDER_STATUS_I18N[s] || "adminConsole.statusUnknown") : "-");
 
 // Localize the cross-tenant live-order type (same class as status above — don't leak the
 // raw fulfillment enum token to the operator). Unknown/empty falls back to raw / "-".
@@ -215,7 +219,7 @@ const ORDER_TYPE_I18N = {
   delivery: "adminConsole.liveOrders.typeDelivery",
   table: "adminConsole.liveOrders.typeTable",
 };
-const liveOrderTypeLabel = (val) => (val ? t(ORDER_TYPE_I18N[val] || val) : "-");
+const liveOrderTypeLabel = (val) => (val ? t(ORDER_TYPE_I18N[val] || "adminConsole.statusUnknown") : "-");
 
 const formatAge = (value) => {
   if (!value) return "-";

@@ -5,6 +5,7 @@
         <p class="ui-kicker">{{ t("adminConsole.latestProvisioningPackage") }}</p>
         <h3 class="text-xl font-semibold text-white">{{ lastProvision.tenant || "-" }}</h3>
         <p class="text-sm text-slate-400">{{ lastProvision.public_menu_url || lastProvision.tenant_url || "-" }}</p>
+        <p v-if="provisionedAt" class="text-xs text-slate-500">{{ t("adminConsole.packageIssuedAt", { at: formatIssuedAt }) }} &middot; {{ t("adminConsole.packageAutoClears") }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyOnboardingPackage">{{ t("adminConsole.copyPackage") }}</button>
@@ -47,6 +48,8 @@
             <p class="ui-kicker">{{ t("adminConsole.activationToken") }}</p>
             <p class="mt-1 break-all text-sm font-semibold text-white">{{ lastProvision.activation_token || "-" }}</p>
             <button v-if="lastProvision.activation_token" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+            <p v-if="lastProvision.activation_token" class="mt-1 text-[11px] text-slate-500">{{ t("adminConsole.tokenExpiryNote") }}</p>
+            <p v-if="tokenExpired" role="alert" class="mt-1 text-[11px] text-amber-300">{{ t("adminConsole.tokenExpiredNote") }}</p>
           </article>
         </div>
       </div>
@@ -72,6 +75,8 @@
         <p class="ui-stat-label">{{ t("adminConsole.activationToken") }}</p>
         <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.activation_token || "-" }}</p>
         <button v-if="lastProvision.activation_token" class="ui-press mt-3 text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+        <p v-if="lastProvision.activation_token" class="mt-1 text-[11px] text-slate-500">{{ t("adminConsole.tokenExpiryNote") }}</p>
+        <p v-if="tokenExpired" role="alert" class="mt-1 text-[11px] text-amber-300">{{ t("adminConsole.tokenExpiredNote") }}</p>
       </article>
     </div>
 
@@ -86,8 +91,8 @@
             v-for="(step, index) in lastProvision.owner_next_steps"
             :key="step"
             class="ui-checklist-card flex items-start gap-3"
-            :data-complete="index < 1"
-            :data-warning="index >= 1"
+            :data-complete="false"
+            :data-warning="true"
           >
             <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-xs font-semibold text-[var(--color-secondary)]">{{ index + 1 }}</span>
             <span class="leading-6">{{ step }}</span>
@@ -133,12 +138,31 @@ const props = defineProps({
   lastProvision: { type: Object, default: null },
   /** Precomputed "suffix label: value" string shown next to the tenant name. */
   currentDomainSuffixLabel: { type: String, default: "" },
+  /** ms epoch when this package was issued (parent stamps it) — drives the token-expiry note. */
+  provisionedAt: { type: Number, default: null },
 });
 
 const emit = defineEmits(["clear"]);
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const toast = useToastStore();
+
+// A2-48: the activation token is single-use, 24 h from issue (sales/models.py).
+// The package is aged from the parent-stamped issue time and auto-clears at 24 h.
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const tokenExpired = computed(
+  () => props.provisionedAt != null && Date.now() - props.provisionedAt > TOKEN_TTL_MS
+);
+const formatIssuedAt = computed(() => {
+  if (props.provisionedAt == null) return "-";
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(
+      new Date(props.provisionedAt)
+    );
+  } catch {
+    return String(new Date(props.provisionedAt));
+  }
+});
 
 const packageText = computed(() => {
   if (!props.lastProvision) return "";
@@ -151,7 +175,7 @@ const packageText = computed(() => {
     `${t("adminConsole.signInUrl")}: ${p.signin_url || "-"}`,
     `${t("adminConsole.activationUrl")}: ${p.activation_url || "-"}`,
     `${t("adminConsole.publicMenuUrl")}: ${p.public_menu_url || "-"}`,
-    `${t("adminConsole.activationToken")}: ${p.activation_token || "-"}`,
+    `${t("adminConsole.activationToken")}: ${p.activation_token || "-"} (${t("adminConsole.tokenExpiryNote")})`,
     `${t("adminConsole.whatsappLink")}: ${p.whatsapp_link || "-"}`,
     "",
     `${t("adminConsole.ownerNextSteps")}:`,

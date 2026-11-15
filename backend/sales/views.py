@@ -973,9 +973,15 @@ class ProvisioningJobViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             min_value=1,
             max_value=500,
         )
+        # A2-47: the list is capped at `limit` and the console metric showed the
+        # capped length as the total. Keep the bare-array shape, but expose the
+        # true total in a header so the console can say "showing 100 of N".
+        total = self.get_queryset().count()
         queryset = self.get_queryset()[:limit]
         data = self.get_serializer(queryset, many=True).data
-        return Response(data)
+        response = Response(data)
+        response["X-Total-Count"] = str(total)
+        return response
 
 
 class AdminAuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -3309,6 +3315,9 @@ class AdminTenantLiveOrdersView(APIView):
         with transaction.atomic():
             with schema_context(tenant.schema_name):
                 from menu.models import Order as _Order
+                # A2-46: active_order_count was len(results), so past the 200 cap
+                # the count underreported too. One cheap COUNT gives the true total.
+                total_active = _Order.objects.filter(status__in=self._ACTIVE_STATUSES).count()
                 orders = list(
                     _Order.objects.filter(status__in=self._ACTIVE_STATUSES)
                     .select_related("customer")
@@ -3350,7 +3359,9 @@ class AdminTenantLiveOrdersView(APIView):
             {
                 "tenant_id": tenant.id,
                 "tenant_slug": tenant.slug,
-                "active_order_count": len(results),
+                "active_order_count": total_active,
+                "capped": total_active > len(results),
+                "limit": 200,
                 "results": results,
             }
         )

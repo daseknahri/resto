@@ -195,6 +195,26 @@
         </div>
         <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadsLoading" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex min-w-0 flex-1 items-center gap-2">
+          <span class="sr-only">{{ t("adminConsole.leadSearchPlaceholder") }}</span>
+          <input v-model="leadSearch" type="search" class="ui-input min-w-0 flex-1 px-3 py-1.5 text-xs" :placeholder="t('adminConsole.leadSearchPlaceholder')" />
+        </label>
+        <label class="text-xs text-slate-400">
+          {{ t("adminConsole.leadStatusFilterLabel") }}
+          <select v-model="leadStatusFilter" class="ui-input ms-2 px-2 py-1.5 text-xs" @change="onLeadStatusFilterChange">
+            <option value="actionable">{{ t("adminConsole.leadFilterActionable") }}</option>
+            <option value="all">{{ t("adminConsole.leadFilterAll") }}</option>
+            <option v-for="st in LEAD_STATUS_OPTIONS" :key="`lead-filter-${st}`" :value="st">{{ leadStatusLabel(st) }}</option>
+          </select>
+        </label>
+        <p class="text-xs text-slate-500">{{ t("adminConsole.leadsShowing", { from: leadsShowingFrom, to: leadsShowingTo, total: filteredLeads.length }) }}</p>
+      </div>
+      <div v-if="leadTotalPages > 1" class="flex flex-wrap items-center gap-2">
+        <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadPage <= 1" @click="leadPage -= 1">{{ t("common.previous") }}</button>
+        <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: leadPage, pages: leadTotalPages, total: filteredLeads.length }) }}</p>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadPage >= leadTotalPages" @click="leadPage += 1">{{ t("common.next") }}</button>
+      </div>
       <div v-if="leadsLoading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <article v-for="n in 3" :key="`lead-skeleton-${n}`" class="ui-admin-card space-y-3">
           <div class="flex items-center justify-between gap-3">
@@ -216,14 +236,14 @@
           </div>
         </article>
       </div>
-      <article v-else-if="!leads.length" class="ui-empty-state">
+      <article v-else-if="!filteredLeads.length" class="ui-empty-state">
         <p class="ui-kicker">{{ t("adminConsole.incomingLeads") }}</p>
-        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noLeadsPending") }}</h3>
+        <h3 class="text-xl font-semibold text-white">{{ leads.length ? t("adminConsole.noLeadsMatchFilter") : t("adminConsole.noLeadsPending") }}</h3>
         <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
       </article>
       <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <article
-          v-for="(lead, index) in leads"
+          v-for="(lead, index) in pagedLeads"
           :key="lead.id"
           class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
@@ -259,7 +279,8 @@
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               class="ui-btn-primary ui-press w-full px-3 py-2 text-sm sm:col-span-2 disabled:opacity-60"
-              :disabled="provLoading[lead.id]"
+              :disabled="provLoading[lead.id] || lead.status === 'live'"
+              :title="lead.status === 'live' ? t('adminConsole.leadAlreadyLive') : undefined"
               @click="provision(lead)"
             >
               {{ provLoading[lead.id] ? t("adminConsole.provisioning") : t("adminConsole.provision") }}
@@ -320,6 +341,23 @@
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="tenantsLoading" @click="fetchTenants(tenantPage)">{{ t("adminConsole.refreshTenants") }}</button>
         </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex min-w-0 flex-1 items-center gap-2">
+          <span class="sr-only">{{ t("adminConsole.tenantSearchPlaceholder") }}</span>
+          <input v-model="tenantSearch" type="search" class="ui-input min-w-0 flex-1 px-3 py-1.5 text-xs" :placeholder="t('adminConsole.tenantSearchPlaceholder')" @keyup.enter="applyTenantFilters" />
+        </label>
+        <label class="text-xs text-slate-400">
+          {{ t("adminConsole.tenantStatusFilterLabel") }}
+          <select v-model="tenantStatusFilter" class="ui-input ms-2 px-2 py-1.5 text-xs" @change="applyTenantFilters">
+            <option value="all">{{ t("adminConsole.tenantFilterAll") }}</option>
+            <option value="active">{{ t("adminConsole.statusActive") }}</option>
+            <option value="suspended">{{ t("adminConsole.statusSuspended") }}</option>
+            <option value="canceled">{{ t("adminConsole.statusCanceled") }}</option>
+          </select>
+        </label>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="applyTenantFilters">{{ t("adminConsole.tenantSearchApply") }}</button>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="clearTenantFilters">{{ t("adminConsole.tenantSearchClear") }}</button>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
@@ -415,10 +453,10 @@
           </div>
           <div class="mt-1 space-y-2 border-t border-slate-800 pt-3">
           <button
-            class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
+            class="ui-btn-outline ui-press inline-flex w-full items-center justify-center gap-1.5 px-3 py-1.5 text-xs"
             @click="openLiveOrdersModal(tenant)"
           >
-            <span aria-hidden="true">👁</span> {{ t("adminConsole.liveOrders.button") }}
+            <AppIcon name="eye" class="h-4 w-4" aria-hidden="true" /> {{ t("adminConsole.liveOrders.button") }}
           </button>
           <button
             class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
@@ -585,6 +623,8 @@
       <p class="text-xs text-slate-500">
         {{ t("adminConsole.reservationSlaCopy", { overdue: alertThresholds.overdue_minutes, dueSoon: alertThresholds.due_soon_minutes }) }}
       </p>
+      <p class="text-xs text-slate-500">{{ t("adminConsole.alertsShowing", { from: alertsShowingFrom, to: alertsShowingTo, total: alertFilteredTotal }) }}</p>
+      <p v-if="alertsCapped" class="text-xs text-amber-300">{{ t("adminConsole.alertsCappedNote", { limit: ALERT_FETCH_LIMIT, total: alertFilteredTotal }) }}</p>
       <div v-if="alertsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article v-for="n in 3" :key="`alert-skeleton-${n}`" class="ui-admin-card space-y-3">
           <div class="flex items-center justify-between gap-3">
@@ -608,7 +648,7 @@
       </article>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="(lead, index) in reservationAlerts"
+          v-for="(lead, index) in pagedAlerts"
           :key="`alert-${lead.id}`"
           class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
@@ -640,6 +680,11 @@
           </a>
         </article>
       </div>
+      <div v-if="alertTotalPages > 1" class="flex flex-wrap items-center gap-2">
+        <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="alertPage <= 1" @click="alertPage -= 1">{{ t("common.previous") }}</button>
+        <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: alertPage, pages: alertTotalPages, total: reservationAlerts.length }) }}</p>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="alertPage >= alertTotalPages" @click="alertPage += 1">{{ t("common.next") }}</button>
+      </div>
       </template>
     </section>
 
@@ -652,6 +697,19 @@
         <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
           {{ t("common.refresh") }}
         </button>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs text-slate-400">
+          {{ t("adminConsole.upgradeStatusFilterLabel") }}
+          <select v-model="upgradeStatusFilter" class="ui-input ms-2 px-2 py-1.5 text-xs" @change="fetchUpgradeRequests">
+            <option value="pending">{{ t("adminConsole.statusPending") }}</option>
+            <option value="all">{{ t("adminConsole.upgradeFilterAll") }}</option>
+            <option value="approved">{{ t("adminConsole.statusApproved") }}</option>
+            <option value="rejected">{{ t("adminConsole.statusRejected") }}</option>
+            <option value="canceled">{{ t("adminConsole.statusCanceled") }}</option>
+          </select>
+        </label>
+        <p v-if="upgradeRequestsCapped" class="text-xs text-amber-300">{{ t("adminConsole.upgradeCappedNote", { limit: UPGRADE_FETCH_LIMIT }) }}</p>
       </div>
       <div v-if="upgradeLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article v-for="n in 3" :key="`upgrade-skeleton-${n}`" class="ui-admin-card space-y-3">
@@ -779,12 +837,13 @@
             class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50"
             :disabled="planFlagsLoading || !adminPanels.planFlags"
             :title="planFlagDirtyKeys.size > 0 ? t('adminConsole.unsavedFlagChanges') : undefined"
-            @click="planFlagDirtyKeys.size > 0 ? (error = t('adminConsole.unsavedFlagChanges')) : fetchPlanFeatureFlags()"
+            @click="planFlagDirtyKeys.size > 0 ? (planFlagNotice = t('adminConsole.unsavedFlagChanges')) : fetchPlanFeatureFlags()"
           >
             {{ t("common.refresh") }}{{ planFlagDirtyKeys.size > 0 ? ' *' : '' }}
           </button>
         </div>
       </div>
+      <p v-if="planFlagNotice" role="status" class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">{{ planFlagNotice }}</p>
       <template v-if="adminPanels.planFlags">
       <div v-if="planFlagsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article v-for="n in 3" :key="`plan-skeleton-${n}`" class="ui-admin-card space-y-3">
@@ -880,10 +939,13 @@
     <AdminConsoleProvisioningJobs
       v-if="activeAdminView === 'monitoring'"
       :jobs="jobs"
+      :total="jobsTotal"
       :loading="loading"
       :expanded="adminPanels.jobs"
+      :busy-ids="provLoading"
       @toggle-expanded="adminPanels.jobs = !adminPanels.jobs"
       @refresh="fetchJobs"
+      @retry="retryProvisioningJob"
     />
 
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
@@ -920,6 +982,16 @@
           </button>
           <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="auditLoading || !adminPanels.audit" @click="fetchAuditLogs(auditPage)">{{ t("common.refresh") }}</button>
         </div>
+      </div>
+      <div v-if="adminPanels.audit" class="flex flex-wrap items-center gap-2">
+        <label class="flex min-w-0 flex-1 items-center gap-2">
+          <span class="sr-only">{{ t("adminConsole.auditSearchPlaceholder") }}</span>
+          <input v-model="auditSearch" type="search" class="ui-input min-w-0 flex-1 px-3 py-1.5 text-xs" :placeholder="t('adminConsole.auditSearchPlaceholder')" @keyup.enter="applyAuditFilters" />
+        </label>
+        <input v-model="auditActionFilter" type="text" class="ui-input px-3 py-1.5 text-xs" :placeholder="t('adminConsole.auditActionPlaceholder')" :aria-label="t('adminConsole.auditActionFilter')" @keyup.enter="applyAuditFilters" />
+        <input v-model="auditTenantFilter" type="text" class="ui-input px-3 py-1.5 text-xs" :placeholder="t('adminConsole.auditTenantPlaceholder')" :aria-label="t('adminConsole.auditTenantFilter')" @keyup.enter="applyAuditFilters" />
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="applyAuditFilters">{{ t("adminConsole.auditApplyFilters") }}</button>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="clearAuditFilters">{{ t("adminConsole.auditClearFilters") }}</button>
       </div>
       <template v-if="adminPanels.audit">
       <p class="text-xs text-slate-500">
@@ -988,7 +1060,8 @@
       v-if="lastProvision && activeAdminView === 'operations'"
       :last-provision="lastProvision"
       :current-domain-suffix-label="currentDomainSuffixLabel"
-      @clear="lastProvision = null"
+      :provisioned-at="lastProvisionAt"
+      @clear="clearLastProvision"
     />
 
     <nav class="ui-bottom-dock md:hidden" :aria-label="t('adminConsole.navMobile')">
@@ -1037,6 +1110,7 @@
     :error="liveOrdersModal.error"
     :orders="liveOrders"
     :count="liveOrdersCount"
+    :capped="liveOrdersCapped"
     @close="closeLiveOrdersModal"
     @refresh="reloadLiveOrders"
   />
@@ -1062,7 +1136,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import { extractApiErrorMessage } from "../lib/api";
 import AdminConsoleDryRunImportModal from "../components/AdminConsoleDryRunImportModal.vue";
@@ -1078,7 +1152,15 @@ import { useToastStore } from "../stores/toast";
 import { getPrimaryPublicHost } from "../lib/runtimeHost";
 
 const jobs = ref([]);
+const jobsTotal = ref(null); // X-Total-Count from /provision-jobs/ (null when the server omits it)
+const JOBS_FETCH_LIMIT = 100; // ProvisioningJobViewSet default limit
 const leads = ref([]);
+const leadStatusFilter = ref("actionable"); // default: actionable only (A2-37)
+const leadSearch = ref("");
+const leadPage = ref(1);
+const LEAD_PAGE_SIZE = 12;
+const LEAD_STATUS_OPTIONS = ["new", "contacted", "won", "paid", "provisioning", "live", "lost", "no_show"];
+const ACTIONABLE_LEAD_STATUSES = new Set(["new", "contacted", "won", "paid", "provisioning"]);
 const loading = ref(false);
 const leadsLoading = ref(false);
 const auditLoading = ref(false);
@@ -1106,11 +1188,15 @@ const inferDomainSuffix = () => {
 const inferredDomainSuffix = inferDomainSuffix();
 const domainSuffix = ref("");
 const upgradeRequests = ref([]);
+const upgradeStatusFilter = ref("pending"); // backend ?status=, default pending (A2-39)
+const UPGRADE_FETCH_LIMIT = 200; // AdminTierUpgradeRequestListView rows[:200]
+const upgradeRequestsCapped = computed(() => upgradeRequests.value.length >= UPGRADE_FETCH_LIMIT);
 const upgradeLoading = ref(false);
 const decisionLoading = ref({});
 const planFeatureRows = ref([]);
 const planFlagsLoading = ref(false);
 const planFlagDirtyKeys = ref(new Set()); // tracks "planCode:flagKey" pairs with unsaved changes
+const planFlagNotice = ref(""); // A2-49: inline plans-section notice (not the page-top banner)
 const planFlagSaving = ref({});
 const planFlagErrors = ref({}); // keyed by planFlagStateKey; per-flag validation error text
 const adminPanels = ref({
@@ -1120,6 +1206,8 @@ const adminPanels = ref({
   audit: false,
 });
 const tenants = ref([]);
+const tenantSearch = ref("");
+const tenantStatusFilter = ref("all");
 const tenantsLoading = ref(false);
 const tenantPage = ref(1);
 const tenantPageSize = ref(25);
@@ -1145,6 +1233,22 @@ const loadedAdminViews = ref({
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
 const alertState = ref("all");
+const alertPage = ref(1);
+const ALERT_PAGE_SIZE = 30;
+const ALERT_FETCH_LIMIT = 200; // AdminReservationAlertsView max limit
+const alertFilteredTotal = computed(() => {
+  if (alertState.value === "overdue") return alertCounts.value.overdue || 0;
+  if (alertState.value === "due_soon") return alertCounts.value.due_soon || 0;
+  return alertCounts.value.total_alerts || reservationAlerts.value.length;
+});
+const alertTotalPages = computed(() => Math.max(1, Math.ceil(reservationAlerts.value.length / ALERT_PAGE_SIZE)));
+const pagedAlerts = computed(() => {
+  const page = Math.min(Math.max(1, alertPage.value), alertTotalPages.value);
+  return reservationAlerts.value.slice((page - 1) * ALERT_PAGE_SIZE, page * ALERT_PAGE_SIZE);
+});
+const alertsShowingFrom = computed(() => (reservationAlerts.value.length ? (Math.min(alertPage.value, alertTotalPages.value) - 1) * ALERT_PAGE_SIZE + 1 : 0));
+const alertsShowingTo = computed(() => Math.min(reservationAlerts.value.length, Math.min(alertPage.value, alertTotalPages.value) * ALERT_PAGE_SIZE));
+const alertsCapped = computed(() => alertFilteredTotal.value > ALERT_FETCH_LIMIT);
 const alertCounts = ref({
   overdue: 0,
   due_soon: 0,
@@ -1159,7 +1263,32 @@ const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const { prompt } = usePromptModal();
 const lastProvision = ref(null);
+const lastProvisionAt = ref(null); // ms epoch when the package was issued (A2-48)
+let lastProvisionClearTimer = null;
+const LAST_PROVISION_TTL_MS = 24 * 60 * 60 * 1000; // activation-token lifetime (24 h, single-use)
+const scheduleLastProvisionExpiry = () => {
+  if (lastProvisionClearTimer) clearTimeout(lastProvisionClearTimer);
+  lastProvisionClearTimer = setTimeout(() => {
+    lastProvision.value = null;
+    lastProvisionAt.value = null;
+  }, LAST_PROVISION_TTL_MS);
+};
+const stampLastProvision = () => {
+  lastProvisionAt.value = Date.now();
+  scheduleLastProvisionExpiry();
+};
+const clearLastProvision = () => {
+  if (lastProvisionClearTimer) {
+    clearTimeout(lastProvisionClearTimer);
+    lastProvisionClearTimer = null;
+  }
+  lastProvision.value = null;
+  lastProvisionAt.value = null;
+};
 const auditLogs = ref([]);
+const auditActionFilter = ref("");
+const auditTenantFilter = ref("");
+const auditSearch = ref("");
 const auditPage = ref(1);
 const auditPageSize = ref(50);
 const auditTotal = ref(0);
@@ -1213,7 +1342,7 @@ const activeAdminMetrics = computed(() => {
   if (activeAdminView.value === "monitoring") {
     return [
       { label: t("adminConsole.totalAlerts"), value: alertCounts.value.total_alerts || reservationAlerts.value.length, note: t("adminConsole.reservationFollowUpSla"), valueClass: "text-amber-300" },
-      { label: t("adminConsole.provisioningJobs"), value: jobs.value.length, note: adminPanels.value.jobs ? t("common.available") : t("adminConsole.hide"), valueClass: "" },
+      { label: t("adminConsole.provisioningJobs"), value: jobsTotal.value ?? jobs.value.length, note: jobsTotal.value != null && jobsTotal.value > jobs.value.length ? t("adminConsole.jobsCappedNote", { shown: jobs.value.length, total: jobsTotal.value, limit: JOBS_FETCH_LIMIT }) : (adminPanels.value.jobs ? t("common.available") : t("adminConsole.hide")), valueClass: "" },
       { label: t("adminConsole.securityAuditLog"), value: auditTotal.value || auditLogs.value.length, note: adminPanels.value.audit ? t("common.available") : t("adminConsole.hide"), valueClass: "" },
       { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
     ];
@@ -1240,6 +1369,53 @@ const activeAdminMetrics = computed(() => {
     { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
   ];
 });
+
+// A2-37: client-side lead filtering — the endpoint takes a single ?status=, so the
+// multi-status "actionable" default (new/contacted/won/paid/provisioning) and the
+// text search run here; a concrete status selection is also sent to the server.
+const filteredLeads = computed(() => {
+  const q = leadSearch.value.trim().toLowerCase();
+  const list = Array.isArray(leads.value) ? leads.value : [];
+  return list.filter((lead) => {
+    const status = String(lead.status || "").toLowerCase();
+    if (leadStatusFilter.value === "actionable" && !ACTIONABLE_LEAD_STATUSES.has(status)) return false;
+    if (leadStatusFilter.value !== "actionable" && leadStatusFilter.value !== "all" && status !== leadStatusFilter.value) return false;
+    if (!q) return true;
+    return [lead.name, lead.email, lead.phone, lead.tenant_slug, String(lead.id)]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q));
+  });
+});
+const leadTotalPages = computed(() => Math.max(1, Math.ceil(filteredLeads.value.length / LEAD_PAGE_SIZE)));
+const pagedLeads = computed(() => {
+  const page = Math.min(Math.max(1, leadPage.value), leadTotalPages.value);
+  return filteredLeads.value.slice((page - 1) * LEAD_PAGE_SIZE, page * LEAD_PAGE_SIZE);
+});
+const leadsShowingFrom = computed(() => (filteredLeads.value.length ? (Math.min(leadPage.value, leadTotalPages.value) - 1) * LEAD_PAGE_SIZE + 1 : 0));
+const leadsShowingTo = computed(() => Math.min(filteredLeads.value.length, Math.min(leadPage.value, leadTotalPages.value) * LEAD_PAGE_SIZE));
+const onLeadStatusFilterChange = async () => {
+  leadPage.value = 1;
+  await fetchLeads();
+};
+
+// A2-43 / A2-42: filter actions (reset to page 1 and refetch with ?q= / ?status= / ?action= / ?tenant=)
+const applyTenantFilters = async () => {
+  await fetchTenants(1);
+};
+const clearTenantFilters = async () => {
+  tenantSearch.value = "";
+  tenantStatusFilter.value = "all";
+  await fetchTenants(1);
+};
+const applyAuditFilters = async () => {
+  await fetchAuditLogs(1);
+};
+const clearAuditFilters = async () => {
+  auditActionFilter.value = "";
+  auditTenantFilter.value = "";
+  auditSearch.value = "";
+  await fetchAuditLogs(1);
+};
 
 const parseFlagConfigText = (text) => {
   const raw = String(text || "").trim();
@@ -1285,6 +1461,7 @@ const fetchPlanFeatureFlags = async () => {
     planFeatureRows.value = rows.map((row) => normalizePlanFeatureRow(row));
     planFlagDirtyKeys.value = new Set(); // clear any unsaved state — we just loaded fresh data
     planFlagErrors.value = {};
+    planFlagNotice.value = "";
     loadedAdminViews.value = { ...loadedAdminViews.value, plans: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadPlanFeatureFlagsFailed"));
@@ -1361,7 +1538,9 @@ const fetchJobs = async () => {
   error.value = null;
   try {
     const res = await adminApi.get("/provision-jobs/");
-    jobs.value = res.data;
+    jobs.value = Array.isArray(res.data) ? res.data : [];
+    const totalHeader = res?.headers?.["x-total-count"];
+    jobsTotal.value = totalHeader != null && totalHeader !== "" ? Number.parseInt(totalHeader, 10) || null : null;
     loadedAdminViews.value = { ...loadedAdminViews.value, monitoring: true };
   } catch (err) {
     error.value = parseApiError(err, t("adminConsole.loadJobsFailed"));
@@ -1370,10 +1549,26 @@ const fetchJobs = async () => {
   }
 };
 
+// A2-47: retry a failed job by re-running the SAME provision path the lead card
+// uses (PUT /lead-provision/{id}/). Idempotent-safe: provision_lead refuses an
+// already-live lead (SUCCESS job exists -> 400) and a schema failure deletes the
+// half-built tenant row, freeing the slug for the retry. No second endpoint.
+const retryProvisioningJob = async (job) => {
+  const leadId = job?.lead_id;
+  if (!leadId) {
+    toast.show(t("adminConsole.jobsRetryFailedNoLead"), "error");
+    return;
+  }
+  await provision({ id: leadId, name: job.lead_name, email: "" });
+  await fetchJobs();
+};
+
 const fetchUpgradeRequests = async () => {
   upgradeLoading.value = true;
   try {
-    const res = await adminApi.get("/admin-tier-upgrade-requests/");
+    const params = {};
+    if (upgradeStatusFilter.value !== "all") params.status = upgradeStatusFilter.value;
+    const res = await adminApi.get("/admin-tier-upgrade-requests/", { params });
     upgradeRequests.value = Array.isArray(res.data) ? res.data : [];
     loadedAdminViews.value = { ...loadedAdminViews.value, operations: true };
   } catch (err) {
@@ -1389,11 +1584,15 @@ const fetchAuditLogs = async (page = auditPage.value) => {
   const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
   auditLoading.value = true;
   try {
+    const auditParams = {
+      page: requestedPage,
+      page_size: auditPageSize.value,
+    };
+    if (auditActionFilter.value.trim()) auditParams.action = auditActionFilter.value.trim();
+    if (auditTenantFilter.value.trim()) auditParams.tenant = auditTenantFilter.value.trim();
+    if (auditSearch.value.trim()) auditParams.q = auditSearch.value.trim();
     const res = await adminApi.get("/admin-audit-logs/", {
-      params: {
-        page: requestedPage,
-        page_size: auditPageSize.value,
-      },
+      params: auditParams,
     });
     const payload = res?.data;
     if (Array.isArray(payload)) {
@@ -1432,8 +1631,12 @@ const changeAuditPage = async (nextPage) => {
 const fetchLeads = async () => {
   leadsLoading.value = true;
   try {
-    const res = await adminApi.get("/leads/");
-    leads.value = res.data;
+    const leadParams = {};
+    if (leadStatusFilter.value !== "actionable" && leadStatusFilter.value !== "all") {
+      leadParams.status = leadStatusFilter.value;
+    }
+    const res = await adminApi.get("/leads/", { params: leadParams });
+    leads.value = Array.isArray(res.data) ? res.data : [];
     previews.value = {};
     previewLoading.value = {};
     loadedAdminViews.value = { ...loadedAdminViews.value, operations: true };
@@ -1460,6 +1663,8 @@ const fetchTenants = async (page = tenantPage.value) => {
       params: {
         page: requestedPage,
         page_size: tenantPageSize.value,
+        ...(tenantSearch.value.trim() ? { q: tenantSearch.value.trim() } : {}),
+        ...(tenantStatusFilter.value !== "all" ? { status: tenantStatusFilter.value } : {}),
       },
     });
     const payload = res?.data;
@@ -1657,6 +1862,8 @@ const saveJsonFile = (filename, payload) => {
   URL.revokeObjectURL(objectUrl);
 };
 
+const MAX_TENANT_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2 MB — JSON.parse runs synchronously on the main thread (A2-51)
+
 const exportTenantSettings = async (tenant) => {
   if (!tenant?.id) return;
   tenantExportLoading.value = { ...tenantExportLoading.value, [tenant.id]: true };
@@ -1682,6 +1889,11 @@ const handleTenantImportFile = async (tenant, event) => {
   if (!file || !tenant?.id) return;
   tenantImportLoading.value = { ...tenantImportLoading.value, [tenant.id]: true };
   try {
+    if (file.size > MAX_TENANT_IMPORT_FILE_BYTES) {
+      throw new Error(
+        t("adminConsole.importFileTooLarge", { sizeMb: (file.size / (1024 * 1024)).toFixed(1), maxMb: 2 })
+      );
+    }
     const text = await readFileAsText(file);
     let parsed;
     try {
@@ -1835,7 +2047,7 @@ const fetchReservationAlerts = async () => {
   alertsLoading.value = true;
   try {
     const res = await adminApi.get("/admin-reservation-alerts/", {
-      params: { state: alertState.value, limit: 30 },
+      params: { state: alertState.value, limit: ALERT_FETCH_LIMIT },
     });
     const payload = res?.data || {};
     reservationAlerts.value = Array.isArray(payload.results) ? payload.results : [];
@@ -1861,6 +2073,7 @@ const setAlertState = async (state) => {
   if (!["all", "overdue", "due_soon"].includes(state)) return;
   if (alertState.value === state) return;
   alertState.value = state;
+  alertPage.value = 1;
   await fetchReservationAlerts();
 };
 
@@ -1936,6 +2149,8 @@ const provision = async (lead) => {
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
+    stampLastProvision();
+    await fetchLeads(); // A2-38: the card keeps its old status/buttons until the list refetches
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.provisionFailed"));
     error.value = msg;
@@ -1966,6 +2181,8 @@ const resendActivation = async (lead) => {
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
+    stampLastProvision();
+    await fetchLeads(); // A2-38: same staleness as provision — refresh the row
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.resendFailed"));
     error.value = msg;
@@ -1997,6 +2214,7 @@ const loadOnboardingPackage = async (lead, refreshToken = false) => {
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
+    stampLastProvision();
     toast.show(t("adminConsole.packageLoaded", { lead: lead.name || lead.email }), "success");
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadOnboardingPackageFailed"));
@@ -2035,6 +2253,7 @@ const decideUpgradeRequest = async (requestItem, decision) => {
   // Collect user input BEFORE activating the loading state so the button
   // doesn't appear busy while the admin is filling in the dialog.
   let adminNote;
+  let invoiceAmount;
   let paymentReference = requestItem.payment_reference || "";
   if (decision === "approve") {
     const ref = await prompt({
@@ -2052,6 +2271,22 @@ const decideUpgradeRequest = async (requestItem, decision) => {
     });
     if (note === null) return;
     adminNote = note;
+    const amountRaw = await prompt({
+      title: t("adminConsole.invoiceAmountOptionalPrompt"),
+      initialValue: "",
+      confirmLabel: t("adminConsole.upgradeApproved"),
+      danger: false,
+    });
+    if (amountRaw === null) return;
+    const amountText = String(amountRaw).trim();
+    if (amountText !== "") {
+      const amountValue = Number(amountText);
+      if (!Number.isFinite(amountValue) || amountValue < 0) {
+        toast.show(t("adminConsole.invalidInvoiceAmount"), "error");
+        return;
+      }
+      invoiceAmount = amountValue;
+    }
   } else {
     const note = await prompt({
       title: t("adminConsole.reasonForRejectionOptionalPrompt"),
@@ -2068,6 +2303,7 @@ const decideUpgradeRequest = async (requestItem, decision) => {
       decision,
       admin_note: adminNote,
       payment_reference: paymentReference,
+      ...(invoiceAmount !== undefined ? { invoice_amount: invoiceAmount } : {}),
     });
     const detail = res?.data?.detail || (decision === "approve" ? t("adminConsole.upgradeApproved") : t("adminConsole.upgradeRejected"));
     toast.show(detail, "success");
@@ -2180,13 +2416,9 @@ const refreshCurrentView = async () => {
     return;
   }
   if (activeAdminView.value === "monitoring") {
-    const tasks = [];
-    if (adminPanels.value.alerts) tasks.push(fetchReservationAlerts());
-    if (adminPanels.value.jobs) tasks.push(fetchJobs());
-    if (adminPanels.value.audit) tasks.push(fetchAuditLogs(auditPage.value));
-    if (tasks.length) {
-      await Promise.all(tasks);
-    }
+    // A2-50: refresh the collapsed panels' data anyway — with every panel
+    // collapsed the old code fetched nothing and the button looked dead.
+    await Promise.all([fetchReservationAlerts(), fetchJobs(), fetchAuditLogs(auditPage.value)]);
     return;
   }
   if (activeAdminView.value === "plans") {
@@ -2225,6 +2457,21 @@ const selectAdminView = async (view) => {
 const liveOrdersModal = ref({ open: false, tenant: null, loading: false, error: null });
 const liveOrders = ref([]);
 const liveOrdersCount = ref(0);
+const liveOrdersCapped = ref(false);
+const LIVE_ORDERS_POLL_MS = 30000; // A2-46: "live" modal polls while open
+let liveOrdersPollTimer = null;
+const stopLiveOrdersPolling = () => {
+  if (liveOrdersPollTimer) {
+    clearInterval(liveOrdersPollTimer);
+    liveOrdersPollTimer = null;
+  }
+};
+const startLiveOrdersPolling = () => {
+  stopLiveOrdersPolling();
+  liveOrdersPollTimer = setInterval(() => {
+    if (liveOrdersModal.value.open) reloadLiveOrders();
+  }, LIVE_ORDERS_POLL_MS);
+};
 
 const fetchLiveOrders = async (tenantId) => {
   liveOrdersModal.value.loading = true;
@@ -2234,9 +2481,11 @@ const fetchLiveOrders = async (tenantId) => {
     const payload = res?.data || {};
     liveOrders.value = Array.isArray(payload.results) ? payload.results : [];
     liveOrdersCount.value = Number.parseInt(payload.active_order_count, 10) || liveOrders.value.length;
+    liveOrdersCapped.value = payload.capped === true || liveOrdersCount.value > liveOrders.value.length;
   } catch (err) {
     liveOrders.value = [];
     liveOrdersCount.value = 0;
+    liveOrdersCapped.value = false;
     liveOrdersModal.value.error = parseApiError(err, t("adminConsole.liveOrders.loadFailed"));
   } finally {
     liveOrdersModal.value.loading = false;
@@ -2249,6 +2498,7 @@ const openLiveOrdersModal = async (tenant) => {
   liveOrders.value = [];
   liveOrdersCount.value = 0;
   await fetchLiveOrders(tenant.id);
+  startLiveOrdersPolling();
 };
 
 const reloadLiveOrders = async () => {
@@ -2258,6 +2508,7 @@ const reloadLiveOrders = async () => {
 };
 
 const closeLiveOrdersModal = () => {
+  stopLiveOrdersPolling();
   liveOrdersModal.value.open = false;
 };
 // ──────────────────────────────────────────────────────────────────────────
@@ -2265,6 +2516,10 @@ const closeLiveOrdersModal = () => {
 // ── Delivery pricing modal ─────────────────────────────────────────────────
 const deliveryModal = ref({ open: false, tenant: null, loading: false, saving: false });
 const deliveryFormError = ref("");
+const deliveryFormSnapshot = ref(""); // JSON of the loaded pricing (A2-45 dirty-check)
+const isDeliveryFormDirty = computed(
+  () => deliveryFormSnapshot.value !== "" && JSON.stringify(deliveryForm.value) !== deliveryFormSnapshot.value
+);
 const deliveryForm = ref({
   delivery_fee: 0,
   delivery_base_fee: 0,
@@ -2317,6 +2572,7 @@ const openDeliveryModal = async (tenant) => {
       marketplace_commission_pct: Math.round(Number(d.marketplace_commission_pct ?? 0) * 10000) / 100,
       platform_delivery_enabled: !!d.platform_delivery_enabled,
     };
+    deliveryFormSnapshot.value = JSON.stringify(deliveryForm.value);
   } catch {
     toast.show(t("adminConsole.delivery.loadFailed"), "error");
     deliveryModal.value.open = false;
@@ -2326,8 +2582,17 @@ const openDeliveryModal = async (tenant) => {
   }
 };
 
-const closeDeliveryModal = () => {
+const closeDeliveryModal = async () => {
   if (deliveryModal.value.saving) return;
+  if (isDeliveryFormDirty.value) {
+    const ok = await confirm({
+      title: t("adminConsole.delivery.discardTitle"),
+      body: t("adminConsole.delivery.discardBody", { tenant: deliveryModal.value.tenant?.name || "" }),
+      confirmLabel: t("adminConsole.delivery.discardConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
+  }
   deliveryModal.value.open = false;
 };
 
@@ -2395,13 +2660,20 @@ const saveDeliveryPricing = async () => {
     await adminApi.patch(`/admin-tenants/${deliveryModal.value.tenant.id}/delivery/`, payload);
     toast.show(t("adminConsole.delivery.saved"), "success");
     deliveryModal.value.open = false;
-  } catch {
-    toast.show(t("adminConsole.delivery.saveFailed"), "error");
+  } catch (err) {
+    const msg = parseApiError(err, t("adminConsole.delivery.saveFailed"));
+    deliveryFormError.value = msg;
+    toast.show(msg, "error");
   } finally {
     deliveryModal.value.saving = false;
   }
 };
 // ──────────────────────────────────────────────────────────────────────────
+
+onBeforeUnmount(() => {
+  stopLiveOrdersPolling();
+  if (lastProvisionClearTimer) clearTimeout(lastProvisionClearTimer);
+});
 
 onMounted(() => {
   selectAdminView("operations");
@@ -2417,6 +2689,11 @@ watch(domainSuffix, () => {
 watch(() => adminPanels.value.jobs, (open) => { if (open && !jobs.value.length) fetchJobs(); });
 watch(() => adminPanels.value.audit, (open) => { if (open && !auditLogs.value.length) fetchAuditLogs(auditPage.value); });
 watch(() => adminPanels.value.alerts, (open) => { if (open && !reservationAlerts.value.length) fetchReservationAlerts(); });
+
+// A2-37: a new search starts from page 1.
+watch(leadSearch, () => {
+  leadPage.value = 1;
+});
 
 // Re-query immediately when a page-size dropdown changes (reset to page 1).
 watch(tenantPageSize, () => fetchTenants(1));
