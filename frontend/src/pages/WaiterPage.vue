@@ -1106,7 +1106,7 @@ const shiftElapsed = computed(() => {
   const totalMin = Math.floor(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return h > 0 ? t("waiterPage.shiftElapsedHours", { h, m }) : t("waiterPage.shiftElapsedMinutes", { m });
 });
 
 const toast = useToastStore();
@@ -2300,10 +2300,20 @@ const onNewOrderClick = () => {
 let pollTimer = null;
 let prevPendingIds = new Set();
 
+// B-35: ONE shared AudioContext for every alert — constructing a new one per
+// alert leaked contexts and hit the browser's per-page limit on long shifts.
+let _alertAudioCtx = null;
+
 const playAlert = () => {
   if (!waiterSoundOn.value) return; // respect the 🔕 mute toggle (was unguarded → mute did nothing)
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!_alertAudioCtx) _alertAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _alertAudioCtx;
+    if (ctx.state === "suspended") {
+      // A context created outside a user gesture starts suspended; resume it
+      // so later alerts are heard (a rejected resume stays silent, as before).
+      try { const r = ctx.resume(); if (r && typeof r.catch === "function") r.catch(() => {}); } catch { /* ignore */ }
+    }
     [0, 0.18].forEach((delay) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();

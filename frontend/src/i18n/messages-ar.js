@@ -3045,11 +3045,6 @@ const arabicMessages = {
     "hoursMinutes": "{h} ساعة {m} دقيقة",
     "minutesAgo": "منذ {n} دقيقة",
     "minutesShort": "{n} دقيقة",
-    "djActionDone": "اكتمل إجراء التوصيل.",
-    "enableNotifications": "تفعيل الإشعارات",
-    "exportSuccess": "تم تصدير الطلبات بنجاح.",
-    "notificationsDeniedHint": "إشعارات المتصفح محظورة لهذا الموقع — فعّلها من إعدادات الموقع في متصفحك لتلقي تنبيهات الطلبات الجديدة.",
-    "notificationsEnabled": "تم تفعيل إشعارات المتصفح — ستتلقى تنبيهات بالطلبات الجديدة.",
   },
   "orderHandling": {
     "tabLabel": "الطلبات",
@@ -4324,9 +4319,6 @@ Object.assign(arabicMessages, {
     topupConfirmCta: "\u0634\u062d\u0646 \u0627\u0644\u0645\u062d\u0641\u0638\u0629",
     historyTitle: "\u0633\u062c\u0644 \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062a",
     historyEmpty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0639\u0627\u0645\u0644\u0627\u062a \u0628\u0639\u062f.",
-    "amountInvalid": "أدخل مبلغًا صحيحًا، مثل 10.50 — أرقام فقط، وبحد أقصى منزلتين عشريتين.",
-    "searchMoreResults": "عرض {shown} من أصل {total} عميلًا — حدّد بحثك أو اعرض المزيد.",
-    "searchShowMore": "عرض المزيد",
   },
   adminFlashSales: {
     kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
@@ -5212,8 +5204,6 @@ Object.assign(arabicMessages, {
   statementReasonPlaceholder: "\u0644\u0645\u0627\u0630\u0627 \u062a\u062a\u0645 \u0625\u0639\u0627\u062f\u0629 \u0625\u0635\u062f\u0627\u0631 \u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631\u061f",
   statementConfirmCurrent: "\u0647\u0630\u0627 \u0627\u0644\u0634\u0647\u0631 \u0645\u0627 \u0632\u0627\u0644 \u062c\u0627\u0631\u064a\u0627\u064b \u2014 \u0633\u062a\u0633\u062a\u0645\u0631 \u0627\u0644\u0623\u0631\u0642\u0627\u0645 \u0641\u064a \u0627\u0644\u062a\u063a\u064a\u0651\u0631. \u0647\u0644 \u062a\u0631\u064a\u062f \u0625\u0635\u062f\u0627\u0631\u0647 \u0639\u0644\u0649 \u0623\u064a \u062d\u0627\u0644\u061f",
   statementIssueAnyway: "\u0625\u0635\u062f\u0627\u0631 \u0639\u0644\u0649 \u0623\u064a \u062d\u0627\u0644",
-    "upgradeConfirmBody": "أثناء وجود طلب قيد الانتظار لا يمكنك إرسال طلب آخر. سنؤكد ونفعّل خطتك الجديدة.",
-    "upgradeConfirmTitle": "طلب الترقية إلى {plan}؟",
   },
   reservationCalendar: {
     prevWeek: "\u0627\u0644\u0633\u0627\u0628\u0642",

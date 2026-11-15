@@ -459,3 +459,79 @@ describe("OwnerHome — S1-B: drawer float (B-02) + revenue error (B-03)", () =>
     expect(text).not.toContain("ownerHome.tileError");
   });
 });
+
+describe("OwnerHome — G4b-E (B-31 tenant-tz today, B-35 translated time-ago)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    // Defensive: the B-03 describe leaves a dashboard-rejecting mockImplementation
+    // behind if it ever exits early — restore the default URL routing (the
+    // file's own pattern, cf. the S1-B beforeEach).
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    // Freeze ONLY Date (timers/promises stay real, so flushPromises keeps
+    // working): 2026-11-15T23:30:00Z is 2026-11-16 12:30 in Pacific/Auckland,
+    // i.e. UTC "today" and tenant-tz "today" differ by design. (Africa/Casablanca
+    // cannot be the example: Morocco is UTC in Nov 2026 per current tzdata —
+    // DST ended 20 Sep 2026 — so its date equals the UTC date at this hour.)
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T23:30:00Z"));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.useRealTimers();
+  });
+
+  // B-31: fetchTodayReservations must ask for the TENANT-tz date (2026-11-16),
+  // not the UTC date (2026-11-15) — the old toISOString() call was off by one
+  // near midnight local time.
+  it("fetches today's reservations for the tenant-tz date, not the UTC date (B-31)", async () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true, timezone: "Pacific/Auckland" } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+    };
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises(); // drain the nextTick-deferred ratings/reservations/drawer batch
+    await flushPromises();
+
+    const resvCalls = api.get.mock.calls.filter(([url]) => url.includes("/owner/reservations/"));
+    expect(resvCalls.length).toBeGreaterThan(0);
+    expect(resvCalls[0][1].params.booked_for_date).toBe("2026-11-16");
+  });
+
+  // B-35: formatTimeAgo must render translated units via the ownerOrders keys,
+  // never the raw "5m" / "2h" suffixes. The mocked t() returns the key verbatim
+  // (params appended), so the assertions read the raw key path.
+  it("renders recent-order ages with translated units, not raw m/h suffixes (B-35)", async () => {
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true, timezone: "Africa/Casablanca" } } },
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({ id: 1, order_number: "A100", status: "confirmed", created_at: "2026-11-15T23:25:00.000Z" }),
+            order({ id: 2, order_number: "A101", status: "confirmed", created_at: "2026-11-15T21:25:00.000Z" }),
+          ],
+          total: 2,
+        },
+      },
+    };
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("ownerOrders.minutesAgo");
+    expect(text).toContain("ownerOrders.hoursAgo");
+    expect(text).not.toContain("5m");
+    expect(text).not.toContain("2h");
+  });
+});

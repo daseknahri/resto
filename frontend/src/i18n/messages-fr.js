@@ -1906,9 +1906,6 @@ ownerWallet: {
   topupConfirmCta: "Crediter le portefeuille",
   historyTitle: "Historique des transactions",
   historyEmpty: "Aucune transaction pour l'instant.",
-  amountInvalid: "Saisissez un montant valide, par ex. 10.50 - chiffres uniquement, 2 decimales maximum.",
-  searchMoreResults: "{shown} clients sur {total} affiches - affinez votre recherche ou affichez-en plus.",
-  searchShowMore: "Afficher plus",
 },
 adminFlashSales: {
   kicker: "Admin plateforme",
@@ -4315,8 +4312,6 @@ ownerBilling: {
   statementReasonPlaceholder: "Pourquoi ce mois est-il re-emis ?",
   statementConfirmCurrent: "Ce mois est encore en cours \u2014 les chiffres vont encore changer. Emettre quand meme ?",
   statementIssueAnyway: "Emettre quand meme",
-  upgradeConfirmBody: "Tant qu'une demande est en attente, vous ne pouvez pas en envoyer une autre. Nous confirmerons et activerons votre nouvelle offre.",
-  upgradeConfirmTitle: "Demander un passage a l'offre {plan} ?",
 },
 adminConsole: {
   statusActive: "Actif",
@@ -5154,11 +5149,6 @@ ownerOrders: {
   hoursMinutes: "{h} h {m} min",
   minutesAgo: "il y a {n} min",
   minutesShort: "{n} min",
-  djActionDone: "Action de livraison terminee.",
-  enableNotifications: "Activer les notifications",
-  exportSuccess: "Commandes exportees avec succes.",
-  notificationsDeniedHint: "Les notifications du navigateur sont bloquees pour ce site - activez-les dans les parametres du site de votre navigateur pour etre alerte des nouvelles commandes.",
-  notificationsEnabled: "Notifications du navigateur activees - vous serez alerte des nouvelles commandes.",
 },
 orderHandling: {
   tabLabel: "Commandes",

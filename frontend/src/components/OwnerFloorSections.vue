@@ -17,6 +17,22 @@
       </button>
     </div>
 
+    <!-- Load failure — the section list / staff dropdown would otherwise render
+         empty with no indication the load failed (B-39). -->
+    <div
+      v-if="!loading && loadError"
+      role="alert"
+      class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3"
+    >
+      <p class="flex-1 text-sm text-red-300">{{ t('ownerSections.loadError') }}</p>
+      <button
+        class="ui-btn-outline ui-press shrink-0 px-3 py-1.5 text-xs"
+        @click="retryLoad"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+
     <!-- Inline create -->
     <Transition name="ui-fade">
       <div
@@ -62,7 +78,7 @@
 
     <!-- Empty state -->
     <div
-      v-if="!loading && !sections.length && !creating"
+      v-if="!loading && !loadError && !sections.length && !creating"
       class="ui-empty-state text-center"
     >
       <AppIcon name="table" class="mx-auto mb-2 h-8 w-8 text-slate-500" aria-hidden="true" />
@@ -236,7 +252,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue';
+import { computed, ref, nextTick, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
@@ -251,6 +267,12 @@ const sections = ref([]);
 const staff = ref([]);
 const busy = ref(false);
 const loading = ref(false);
+// Per-fetch failure flags (B-39): either load failing used to be swallowed as
+// "non-fatal" with no UI, so the section manager / staff-assignment dropdown
+// rendered empty with no indication why.
+const sectionsError = ref(false);
+const staffError = ref(false);
+const loadError = computed(() => sectionsError.value || staffError.value);
 
 const creating = ref(false);
 const newName = ref('');
@@ -265,17 +287,30 @@ const editTables = ref([]);
 let _editTriggerEl = null;
 
 const fetchSections = async () => {
+  sectionsError.value = false;
   try {
     const { data } = await api.get('/owner/sections/');
     sections.value = data.sections || [];
-  } catch { /* non-fatal */ }
+  } catch {
+    sectionsError.value = true;
+  }
 };
 
 const fetchStaff = async () => {
+  staffError.value = false;
   try {
     const { data } = await api.get('/owner/staff/');
     staff.value = data.staff || data.results || (Array.isArray(data) ? data : []);
-  } catch { /* non-fatal */ }
+  } catch {
+    staffError.value = true;
+  }
+};
+
+// Retry both loads after a failure (also the mount path).
+const retryLoad = async () => {
+  loading.value = true;
+  await Promise.all([fetchSections(), fetchStaff()]);
+  loading.value = false;
 };
 
 const startCreate = () => {
@@ -350,10 +385,7 @@ const removeSection = async (s) => {
 };
 
 onMounted(() => {
-  loading.value = true;
-  Promise.all([fetchSections(), fetchStaff()]).finally(() => {
-    loading.value = false;
-  });
+  void retryLoad();
 });
 defineExpose({ fetchSections });
 </script>

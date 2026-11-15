@@ -271,3 +271,53 @@ describe("OwnerZReport — S1-I B-16 tenant currency", () => {
     expect(wrapper.text()).not.toContain("€");
   });
 });
+
+describe("OwnerZReport — G4b-E (B-31 tenant-tz todayIso)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    window.print = vi.fn();
+    vi.clearAllMocks();
+    // Freeze ONLY Date (see OwnerHome G4b-E note): 2026-11-15T23:30:00Z is
+    // 2026-11-16 12:30 in Pacific/Auckland. (Africa/Casablanca cannot be the
+    // example: Morocco is UTC in Nov 2026 per current tzdata, so its date
+    // equals the UTC date at this hour.)
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T23:30:00Z"));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.useRealTimers();
+  });
+
+  // B-31: the date picker's :max (todayIso) must be the tenant-tz date
+  // (2026-11-16), not the UTC date (2026-11-15).
+  it("caps the date picker at the tenant-tz today, not the UTC today (B-31)", async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    useTenantStore().meta = { profile: { timezone: "Pacific/Auckland" } };
+    _routes = { "/owner/z-report/": { data: null } };
+
+    wrapper = mountReport();
+    await flushPromises();
+
+    const max = wrapper.find('input[type="date"]').attributes("max");
+    expect(max).toBe("2026-11-16");
+  });
+
+  // No tenant timezone configured → the UTC date is the honest fallback.
+  it("falls back to the UTC date when no tenant timezone is configured (B-31)", async () => {
+    _routes = { "/owner/z-report/": { data: null } };
+
+    wrapper = mountReport();
+    await flushPromises();
+
+    const max = wrapper.find('input[type="date"]').attributes("max");
+    expect(max).toBe("2026-11-15");
+  });
+});

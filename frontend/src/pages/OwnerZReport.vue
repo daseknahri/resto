@@ -466,6 +466,7 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
+import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
 import { formatCurrencyString } from "../lib/intlFormatters";
 
@@ -474,6 +475,7 @@ defineOptions({ name: "OwnerZReport" });
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
 const toast = useToastStore();
+const tenant = useTenantStore();
 
 const report = ref(null);
 const loading = ref(false);
@@ -523,8 +525,18 @@ const closeShiftAndPrint = async () => {
   }
 };
 
-// Default date = today in ISO format
-const todayIso = computed(() => new Date().toISOString().slice(0, 10));
+// Default date = today in the TENANT's timezone (Contract E), not UTC —
+// new Date().toISOString() was off by one near midnight local time (B-31).
+// Falls back to the UTC date when no tenant timezone is configured.
+const todayIso = computed(() => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  if (tz) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    } catch { /* fall through to the UTC date */ }
+  }
+  return new Date().toISOString().slice(0, 10);
+});
 const selectedDate = ref(""); // empty = current service day
 
 // B-16: Profile has no currency field server-side (ProfileSerializer never sends

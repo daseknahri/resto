@@ -14,6 +14,23 @@
     </div>
   </div>
 
+  <!-- Load failure — show an error + Retry, never a false "0% / everything
+       missing" checklist (B-38). A network failure must not make an established
+       restaurant look unlaunched. -->
+  <div
+    v-else-if="loadError"
+    role="alert"
+    class="ui-section-band ui-reveal space-y-2 p-3 sm:p-4"
+  >
+    <p class="text-sm text-red-300">{{ t("ownerHome.readinessLoadError") }}</p>
+    <button
+      class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
+      @click="load"
+    >
+      {{ t("common.retry") }}
+    </button>
+  </div>
+
   <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
        cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
   <article
@@ -95,12 +112,15 @@ const tenant = useTenantStore();
 
 // ── Own loading state — independent of the parent page ───────────────────────
 const loading = ref(true);
+// True only when the categories/dishes fetch itself failed (distinct from a
+// legitimately empty menu) — see the catch in load().
+const loadError = ref(false);
 const categoriesCount = ref(0);
 const dishesCount = ref(0);
 
 // Expose counts so the parent can pass them to the dish availability panel
 // without that panel having to fetch again.
-const emit = defineEmits(["loaded"]);
+const emit = defineEmits(["loaded", "error"]);
 
 // ── Readiness derived from local data + tenant profile ────────────────────────
 const profile = computed(() => tenant.meta?.profile || {});
@@ -165,6 +185,7 @@ const readinessItems = computed(() => [
 // ── Fetch categories + dishes counts independently ────────────────────────────
 const load = async () => {
   loading.value = true;
+  loadError.value = false;
   try {
     // Fetch enough dish fields to compute sold-out count — needed by the
     // alerts strip in the parent without triggering a second dishes fetch.
@@ -174,8 +195,10 @@ const load = async () => {
     ]);
     const catList = Array.isArray(cats.data) ? cats.data : [];
     const dishList = Array.isArray(dishes.data) ? dishes.data : [];
-    categoriesCount.value = catList.length;
-    dishesCount.value = dishList.length;
+    // B-38: count PUBLISHED items only — unpublished drafts are not "added"
+    // yet, so a menu of drafts must not score as ready.
+    categoriesCount.value = catList.filter((c) => c.is_published).length;
+    dishesCount.value = dishList.filter((d) => d.is_published).length;
     const soldOutCount = dishList.filter((d) => d.is_published && !d.is_available).length;
 
     // Build slug → name maps so siblings can resolve analytics slugs to labels
@@ -197,8 +220,12 @@ const load = async () => {
       dishesData: dishList,
     });
   } catch {
-    // Readiness degrades gracefully — missing counts just show "missing"
-    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0, categoryNameBySlug: {}, dishNameBySlug: {}, dishesData: [] });
+    // B-38: a fetch failure is NOT an empty restaurant. Do not emit "loaded"
+    // with all-zero counts — that rendered a false 0% with every item
+    // "missing". Emit an error instead; the parent keeps its previous counts
+    // (initially 0 with no checklist shown) and this component shows Retry.
+    loadError.value = true;
+    emit("error");
   } finally {
     loading.value = false;
   }

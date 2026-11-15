@@ -406,8 +406,17 @@ const hydrate = async (force = false) => {
     // Fallback to analytics-only endpoint
     try {
       const { data } = await api.get("/analytics/summary/", { params: { days: internalPeriod.value }, timeout: 5000 });
-      if (data?.analytics_summary) summary.value = data.analytics_summary;
-      else if (data?.counts) summary.value = data;
+      _apply(data);
+      if (!data?.analytics_summary && data?.counts) summary.value = data;
+      // B-37: bubble the fallback payload up like the primary one. Without
+      // this emit the parent (OwnerAnalytics.onInsightsData) never fires, so
+      // its loading state never clears via data and its KPI grid renders a
+      // false "0 / MAD 0" even though these tiles show real analytics data.
+      // The fallback carries analytics counts only (no revenue_summary), so
+      // mark it partial — the parent can then show revenue as unknown
+      // instead of zero. Do NOT writeCache it: a revenue-less payload must
+      // not poison the fresh-cache path.
+      emit("data", { ...data, partial: true });
     } catch {
       // Primary AND fallback both failed. With no cached data to fall back on,
       // surface the error — and tell the parent so it can replace its zero-value

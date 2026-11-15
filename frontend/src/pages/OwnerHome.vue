@@ -742,7 +742,12 @@ const todayReservationsNew = ref(0);
 const reservationsError = ref(false);
 
 const fetchTodayReservations = async () => {
-  const today = new Date().toISOString().slice(0, 10);
+  // B-31: bucket "today" in the TENANT timezone (Contract E), not UTC — the
+  // UTC date was off by one near midnight local time. _tenantDayStr is defined
+  // below; this runs after setup, so the reference is live. Its no-timezone
+  // fallback is toDateString(), which is not a YYYY-MM-DD param — guard it.
+  let today = _tenantDayStr(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) today = new Date().toISOString().slice(0, 10);
   reservationsError.value = false;
   try {
     const { data } = await api.get("/owner/reservations/", {
@@ -1174,8 +1179,8 @@ const formatTimeAgo = (iso) => {
   if (!iso) return "";
   const diffMin = Math.floor((Date.now() - new Date(iso)) / 60000);
   if (diffMin < 1) return t("ownerOrders.justNow");
-  if (diffMin < 60) return `${diffMin}m`;
-  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h`;
+  if (diffMin < 60) return t("ownerOrders.minutesAgo", { n: diffMin });
+  if (diffMin < 1440) return t("ownerOrders.hoursAgo", { n: Math.floor(diffMin / 60) });
   return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short" }).format(new Date(iso));
 };
 
