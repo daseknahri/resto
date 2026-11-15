@@ -407,6 +407,17 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
     with schema_context(getattr(tenant, "schema_name", get_public_schema_name())):
         with transaction.atomic():
             if categories_payload is not None:
+                # Run 8 G3a A2-13: the review modal must show the wipe — count the
+                # existing menu BEFORE deleting it (inside this transaction, so the
+                # dry-run counts are exact and the replace-mode counts are the
+                # pre-import state).
+                summary["replaces_menu"] = True
+                summary["existing_menu"] = {
+                    "categories": Category.objects.count(),
+                    "dishes": Dish.objects.count(),
+                    "options": DishOption.objects.count(),
+                    "combos": ComboComponent.objects.count(),
+                }
                 # The import REPLACES the whole menu. Combo links go first: their component FK
                 # is on_delete=PROTECT, so deleting the dishes while any combo exists raised
                 # ProtectedError (surfaced as a misleading "duplicate slug" 409). The export
@@ -530,6 +541,9 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
                             summary["options"] += 1
 
             if table_links_payload is not None:
+                # Run 8 G3a A2-13: same wipe disclosure for table links.
+                summary["replaces_tables"] = True
+                summary["existing_table_links"] = TableLink.objects.count()
                 TableLink.objects.all().delete()
                 table_slugs: set[str] = set()
                 for index, raw_table in enumerate(table_links_payload, start=1):

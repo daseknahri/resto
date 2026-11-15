@@ -155,3 +155,45 @@ describe("AdminConsoleDryRunImportModal", () => {
     removeSpy.mockRestore();
   });
 });
+
+describe("AdminConsoleDryRunImportModal — wipe warning (A2-13)", () => {
+  it("shows the tenant name/slug prominently", () => {
+    const w = mountModal({ review: review() });
+    // tenant has slug "acme" and no name — the slug is the prominent label.
+    expect(w.text()).toContain("acme");
+  });
+
+  it("shows the tenant name when present", () => {
+    const w = mountModal({
+      review: { ...review(), tenant: { id: 7, name: "Acme Bistro", slug: "acme" } },
+    });
+    expect(w.text()).toContain("Acme Bistro");
+    expect(w.text()).toContain("acme");
+  });
+
+  it("warns about the menu wipe with the existing counts", () => {
+    const w = mountModal({
+      review: review({
+        replaces_menu: true,
+        existing_menu: { categories: 5, dishes: 42, options: 17, combos: 3 },
+      }),
+    });
+    expect(w.text()).toContain("adminConsole.importWipeWarning");
+    expect(w.text()).toContain(
+      'adminConsole.importWipeExisting:{"categories":5,"dishes":42,"options":17,"combos":3}',
+    );
+  });
+
+  it("warns about the table-links wipe with the existing count", () => {
+    const w = mountModal({
+      review: review({ replaces_tables: true, existing_table_links: 8 }),
+    });
+    expect(w.text()).toContain("adminConsole.importWipeWarning");
+    expect(w.text()).toContain('adminConsole.importWipeTables:{"count":8}');
+  });
+
+  it("shows no wipe warning when nothing is replaced", () => {
+    const w = mountModal();
+    expect(w.text()).not.toContain("adminConsole.importWipeWarning");
+  });
+});

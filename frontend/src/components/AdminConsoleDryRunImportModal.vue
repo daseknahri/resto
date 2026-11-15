@@ -18,8 +18,20 @@
           <div class="border-b border-slate-800 px-5 py-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
             <h3 id="admin-console-dry-run-dialog-title" class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>
+            <!-- A2-13: name the tenant this import lands on -->
+            <p v-if="review.tenant" class="mt-1 text-sm font-semibold text-slate-200">{{ review.tenant.name || review.tenant.slug }}<span v-if="review.tenant.slug && review.tenant.name" class="font-normal text-slate-500"> · {{ review.tenant.slug }}</span></p>
           </div>
           <div class="px-5 py-4 space-y-2 text-sm text-slate-300">
+            <!-- A2-13: the import REPLACES the menu/tables — warn with the existing
+                 counts before the admin applies, instead of showing incoming counts only -->
+            <div v-if="review.summary.replaces_menu" class="rounded-xl border border-amber-500/40 bg-amber-500/8 px-3 py-2.5" role="alert">
+              <p class="text-xs font-semibold text-amber-300">{{ t('adminConsole.importWipeWarning') }}</p>
+              <p class="mt-1 text-xs text-amber-200/80">{{ t('adminConsole.importWipeExisting', { categories: review.summary.existing_menu?.categories || 0, dishes: review.summary.existing_menu?.dishes || 0, options: review.summary.existing_menu?.options || 0, combos: review.summary.existing_menu?.combos || 0 }) }}</p>
+            </div>
+            <div v-if="review.summary.replaces_tables" class="rounded-xl border border-amber-500/40 bg-amber-500/8 px-3 py-2.5" role="alert">
+              <p class="text-xs font-semibold text-amber-300">{{ t('adminConsole.importWipeWarning') }}</p>
+              <p class="mt-1 text-xs text-amber-200/80">{{ t('adminConsole.importWipeTables', { count: review.summary.existing_table_links || 0 }) }}</p>
+            </div>
             <div class="flex justify-between"><span class="text-slate-500">{{ t('common.categories') }}</span><span class="font-semibold">{{ review.summary.categories || 0 }}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">{{ t('common.dishes') }}</span><span class="font-semibold">{{ review.summary.dishes || 0 }}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.optionsLabel') }}</span><span class="font-semibold">{{ review.summary.options || 0 }}</span></div>
@@ -64,7 +76,8 @@ import { useI18n } from "../composables/useI18n";
 
 const props = defineProps({
   /** The dry-run review to display ({ tenant, summary, replaceBody }); null = closed.
-   * Only `summary` is rendered here — `tenant`/`replaceBody` are the parent's to apply. */
+   * Renders the tenant name/slug + the summary (incl. the A2-13 wipe warning);
+   * `replaceBody` stays the parent's to apply. */
   review: { type: Object, default: null },
   /** True while the parent's apply-import request is in flight (drives the spinner + disabled state). */
   applying: { type: Boolean, default: false },
