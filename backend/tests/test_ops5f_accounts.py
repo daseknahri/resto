@@ -402,6 +402,9 @@ class VoucherRedeemCreditWalletTests(SimpleTestCase):
         voucher.code = "ABCD1234"
         voucher.amount = Decimal("25.00")
         voucher.is_used = False
+        # Run 8 G3a A-20: redeem rejects revoked vouchers — a bare MagicMock
+        # would make is_revoked truthy and 400 the redeem.
+        voucher.is_revoked = False
         voucher.used_by_id = None
         voucher.expires_at = None
         voucher.note = "promo"

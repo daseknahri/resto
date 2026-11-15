@@ -31,12 +31,15 @@ def _customer(customer_id=1, phone_verified=True):
 
 
 def _make_voucher(code="GIFT1234AB", amount=Decimal("15.00"), is_used=False,
-                  expires_at=None, note="Gift", vid=7):
+                  expires_at=None, note="Gift", vid=7, is_revoked=False):
     v = MagicMock()
     v.id = vid
     v.code = code
     v.amount = amount
     v.is_used = is_used
+    # Run 8 G3a A-20: redeem rejects revoked vouchers — a bare MagicMock
+    # would make is_revoked truthy and 400 every redeem.
+    v.is_revoked = is_revoked
     v.expires_at = expires_at
     v.note = note
     return v

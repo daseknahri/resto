@@ -1097,6 +1097,12 @@ class AdminCarApprovalViewTests(SimpleTestCase):
     @patch("accounts.models.Customer.objects")
     def test_car_approve_sets_flag(self, mock_cust_objs, mock_audit, _perm):
         driver = _make_customer(pk=5, is_driver=True, driver_car_approved=False)
+        import datetime
+        # Run 8 G3a A2-10: approve validates the STORED doc expiries when no
+        # dates are supplied — the mock needs real dates (MagicMock < date
+        # raises TypeError).
+        driver.driver_licence_expiry = datetime.date(2027, 6, 1)
+        driver.driver_insurance_expiry = datetime.date(2027, 12, 31)
         mock_cust_objs.get.return_value = driver
 
         req = self.factory.post("/api/admin/drivers/5/car-approve/")
@@ -2317,6 +2323,7 @@ class AdminRideListViewTests(SimpleTestCase):
 
         mock_qs = MagicMock()
         mock_qs.filter.return_value = mock_qs
+        mock_qs.count.return_value = 1
         mock_qs.__getitem__.return_value = [ride]
         mock_ride_objs.select_related.return_value.order_by.return_value = mock_qs
 
@@ -2324,8 +2331,10 @@ class AdminRideListViewTests(SimpleTestCase):
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
-        ride_data = resp.data[0]
+        # Run 8 G3a A-08: the list is the envelope {results, total, page, page_size}.
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["total"], 1)
+        ride_data = resp.data["results"][0]
 
         required_fields = {"id", "status", "fare", "payment_method", "paid_with_wallet",
                            "distance_km", "pickup_address", "dropoff_address",
@@ -3102,8 +3111,9 @@ class PackageKindInHistoryAndAdminTests(SimpleTestCase):
         resp = view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("kind", resp.data[0])
-        self.assertEqual(resp.data[0]["kind"], "package")
+        # Run 8 G3a A-08: the list is the envelope {results, total, page, page_size}.
+        self.assertIn("kind", resp.data["results"][0])
+        self.assertEqual(resp.data["results"][0]["kind"], "package")
 
 
 # ── Scheduled trips ───────────────────────────────────────────────────────────────

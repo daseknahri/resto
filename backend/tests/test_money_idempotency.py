@@ -76,7 +76,9 @@ class VoucherRedeemIdempotencyTests(SimpleTestCase):
     def test_same_customer_replay_returns_success(self, mock_voucher, _mock_atomic):
         customer = Customer(id=7, phone_verified=True, wallet_balance=Decimal("60.00"))
 
-        voucher = MagicMock(is_used=True, used_by_id=7, amount=Decimal("25.00"), note="Promo")
+        # Run 8 G3a A-20: redeem rejects revoked vouchers — set is_revoked
+        # explicitly; a bare MagicMock makes it truthy and 400s the redeem.
+        voucher = MagicMock(is_used=True, is_revoked=False, used_by_id=7, amount=Decimal("25.00"), note="Promo")
         mock_voucher.select_for_update.return_value.get.return_value = voucher
 
         resp = self._post({"code": "ABCD1234"}, customer=customer)
@@ -92,7 +94,7 @@ class VoucherRedeemIdempotencyTests(SimpleTestCase):
         customer = Customer(id=7, phone_verified=True, wallet_balance=Decimal("60.00"))
 
         # Voucher was used by a DIFFERENT customer (id 99) — must stay rejected.
-        voucher = MagicMock(is_used=True, used_by_id=99, amount=Decimal("25.00"), note="Promo")
+        voucher = MagicMock(is_used=True, is_revoked=False, used_by_id=99, amount=Decimal("25.00"), note="Promo")
         mock_voucher.select_for_update.return_value.get.return_value = voucher
 
         resp = self._post({"code": "ABCD1234"}, customer=customer)
