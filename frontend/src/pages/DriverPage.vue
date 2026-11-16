@@ -389,10 +389,11 @@
                 >{{ t('driver.cashOutExpiresIn', { time: fmtCountdown(cashoutSecondsLeft) }) }}</p>
                 <button
                   class="ui-btn-outline ui-press px-5 py-2 text-sm"
+                  :class="cancelCashoutConfirming ? 'border-red-500/60 bg-red-500/18 text-red-200' : ''"
                   :disabled="busy"
                   @click="cancelCashout"
                 >
-                  {{ t('driver.cashOutCancel') }}
+                  {{ cancelCashoutConfirming ? t('ridePage.cancelConfirmCta') : t('driver.cashOutCancel') }}
                 </button>
               </div>
               <div v-if="cashoutErrorMessage" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -1105,7 +1106,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useFocusTrap } from '../composables/useFocusTrap';
-import api from '../lib/api';
+import api, { extractApiErrorMessage } from '../lib/api';
 import { formatCurrencyString } from '../lib/intlFormatters';
 import { pickupLabelKey } from '../lib/deliveryVocab';
 
@@ -1561,7 +1562,7 @@ const submitDeliveryCode = async () => {
     const errCode = err?.response?.data?.code;
     codeError.value = errCode === 'bad_delivery_code'
       ? t('driver.badDeliveryCode')
-      : (err?.response?.data?.detail || t('driver.errorGeneric'));
+      : extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     codeSubmitting.value = false;
   }
@@ -1582,7 +1583,10 @@ const cashoutErrorMessageFor = (err) => {
   const retryAfter = err?.response?.data?.retry_after;
   if (code === 'locked' && retryAfter) return t('driver.cashOutErrorLockedRetry', { seconds: retryAfter });
   if (code && CASHOUT_ERROR_KEYS[code]) return t(CASHOUT_ERROR_KEYS[code]);
-  return err?.response?.data?.detail || t('driver.errorGeneric');
+  // C-06: never surface raw backend `detail` — a known `code` maps to its
+  // localized apiClient message via the shared extractor; anything else shows
+  // the localized generic fallback.
+  return extractApiErrorMessage(err, t('driver.errorGeneric'));
 };
 
 // ── Cash-out modal (replaces window.prompt) ───────────────────────────────────────
@@ -1664,8 +1668,29 @@ const requestCashout = () => {
   cashoutModalOpen.value = true;
   // (DriverCashoutModal's focus trap moves focus to the amount input on open.)
 };
+// C-14: two-tap guard on cash-out cancel — a mis-tap must not cancel a money
+// code with no undo. Mirrors RidePage's armCancelGuard (same 3s expiry), but
+// the armed state is VISIBLE: the button text swaps to
+// ridePage.cancelConfirmCta and its styling intensifies while armed, and on
+// expiry the button visibly reverts to "Cancel" (no silent expiry).
+const cancelCashoutConfirming = ref(false);
+let _cancelCashoutGuardTimer = null;
+const armCashoutCancelGuard = () => {
+  cancelCashoutConfirming.value = true;
+  clearTimeout(_cancelCashoutGuardTimer);
+  _cancelCashoutGuardTimer = setTimeout(() => { cancelCashoutConfirming.value = false; }, 3000);
+};
+const clearCashoutCancelGuard = () => {
+  cancelCashoutConfirming.value = false;
+  clearTimeout(_cancelCashoutGuardTimer);
+};
 const cancelCashout = async () => {
   if (!cashout.value) return;
+  if (!cancelCashoutConfirming.value) {
+    armCashoutCancelGuard();
+    return;
+  }
+  clearCashoutCancelGuard();
   busy.value = true;
   cashoutErrorMessage.value = '';
   try {
@@ -1787,7 +1812,7 @@ const becomeDriver = async () => {
       ensurePoll();
     }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -1826,7 +1851,7 @@ const toggleOnline = async () => {
       activeRide.value = null;
     }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -1840,7 +1865,7 @@ const accept = async (jobId) => {
     activeJob.value = data;
     pendingJobs.value = [];
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
     await fetchJobs(); // someone else may have taken it
   } finally {
     busy.value = false;
@@ -1904,7 +1929,7 @@ const setVehicleType = async (vt) => {
     if (vt === 'car') fetchRides();
     else { rideOffers.value = []; activeRide.value = null; }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -1921,7 +1946,7 @@ const acceptRide = async (rideId) => {
     if (err?.response?.status === 409) {
       toast.show(t('driver.errorGeneric'), 'error');
     } else {
-      errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+      errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
     }
     await fetchRides();
   } finally {
@@ -1943,7 +1968,7 @@ const advanceRide = async (rideId, status) => {
       activeRide.value = data;
     }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -1973,7 +1998,7 @@ const submitPackageCode = async (rideId) => {
     } else if (errCode === 'code_locked') {
       packageCodeError.value = t('driverRides.codeLocked');
     } else {
-      packageCodeError.value = err?.response?.data?.detail || t('driver.errorGeneric');
+      packageCodeError.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
     }
   } finally {
     busy.value = false;
@@ -1993,7 +2018,7 @@ const releaseRide = async () => {
     releaseRideConfirmOpen.value = false;
     await fetchRides();
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -2080,7 +2105,7 @@ const advance = async (toStatus, extra = {}) => {
       activeJob.value = data;
     }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    errorMsg.value = extractApiErrorMessage(err, t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }
@@ -2291,6 +2316,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  clearCashoutCancelGuard();
   if (pollTimer) clearInterval(pollTimer);
   if (offerCountdownTimer) clearInterval(offerCountdownTimer); // Item B cleanup
   stopGeo();

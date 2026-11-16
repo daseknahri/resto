@@ -68,6 +68,13 @@ vi.mock("../../lib/api", () => ({
     patch: vi.fn(() => Promise.resolve({ data: {} })),
     delete: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // Contract-correct double of the real extractor (S2-H): a known backend
+  // `code` maps to its localized apiClient message; anything else returns the
+  // caller's localized fallback — raw backend `detail` is NEVER returned.
+  extractApiErrorMessage: vi.fn((err, fallback = "") => {
+    const KNOWN_CODES = { rate_limited: "apiClient.rateLimited", not_found: "apiClient.notFound" };
+    return KNOWN_CODES[err?.response?.data?.code] || fallback;
+  }),
 }));
 
 import { useCustomerStore } from "../../stores/customer";
@@ -488,5 +495,284 @@ describe("DriverPage — C-23 cash-out amount validation shows a specific error"
     expect(api.post).toHaveBeenCalledWith("/driver/cashout/", { amount: 10 });
     expect(cashoutModal().props("error")).toBe("");
     expect(cashoutModal().props("open")).toBe(false);
+  });
+});
+
+// ── S4-B / C-06 ────────────────────────────────────────────────────────────────
+// Every DriverPage catch that used to render `err?.response?.data?.detail`
+// verbatim now routes through the shared extractor: a known backend `code`
+// shows its localized apiClient message, anything else shows the localized
+// generic — the raw English backend string never reaches the driver.
+// Driven at the cash-out modal site (submitCashout) + the online-toggle site
+// (toggleOnline), through the real api mock + the contract-correct extractor
+// double in the ../../lib/api mock above.
+describe("DriverPage — C-06 error sites show localized messages, never raw detail", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    // Own isolation — never rely on another describe's hook (S2-B lesson).
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+    api.patch.mockImplementation(() => Promise.resolve({ data: {} }));
+    Object.defineProperty(navigator, "geolocation", {
+      value: geoStub,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    try {
+      delete navigator.geolocation;
+    } catch {
+      /* ignore */
+    }
+  });
+
+  const mountApprovedOnline = async () => {
+    useCustomerStore().setCustomer({ id: 1, name: "Driver", phone: "0600000000" });
+    _routes = {
+      "/driver/status/": APPROVED_ONLINE_STATUS,
+      "/driver/jobs/": { data: { active: [], pending: [] } },
+      "/driver/earnings/": {
+        data: {
+          available: "50.00",
+          earned: "120.00",
+          paid: "70.00",
+          owed: "50.00",
+          deliveries_today: 1,
+          earned_today: "20.00",
+          total_deliveries: 5,
+          can_cash_out: true,
+          cashout_min: "20.00",
+        },
+      },
+      "/driver/cashout/": { data: { pending: null } },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("driver.goOffline");
+  };
+
+  // shallowMount auto-stubs the modal; its name is the component name (or the
+  // name + "Stub" in some VTU builds) — try both so the lookup is not brittle.
+  const cashoutModal = () => {
+    const byName = wrapper.findComponent({ name: "DriverCashoutModal" });
+    if (byName.exists()) return byName;
+    const byStubName = wrapper.findComponent({ name: "DriverCashoutModalStub" });
+    if (byStubName.exists()) return byStubName;
+    throw new Error("DriverCashoutModal stub not found (tried DriverCashoutModal / DriverCashoutModalStub)");
+  };
+
+  const openCashoutModal = async () => {
+    await wrapper.find('button[aria-controls="driver-wallet-panel"]').trigger("click");
+    const cashOutButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("driver.cashOut"));
+    expect(cashOutButton).toBeDefined();
+    await cashOutButton.trigger("click");
+    await flushPromises();
+    expect(cashoutModal().props("open")).toBe(true);
+  };
+
+  const submitCashoutAmount = async (amount) => {
+    const modal = cashoutModal();
+    await modal.vm.$emit("update:amount", amount);
+    await modal.vm.$emit("submit");
+    await flushPromises();
+  };
+
+  it("cash-out: a known backend code shows its localized message, not the raw detail", async () => {
+    await mountApprovedOnline();
+    await openCashoutModal();
+    api.post.mockImplementation((url) =>
+      url.includes("/driver/cashout/")
+        ? Promise.reject({ response: { status: 429, data: { code: "rate_limited", detail: "Slow down, you are being throttled" } } })
+        : Promise.resolve({ data: {} }),
+    );
+    await submitCashoutAmount("10");
+    expect(cashoutModal().props("error")).toBe("apiClient.rateLimited");
+    expect(cashoutModal().props("error")).not.toContain("throttled");
+    expect(cashoutModal().props("open")).toBe(true);
+  });
+
+  it("cash-out: an unmapped code falls back to the localized generic, not the raw detail", async () => {
+    await mountApprovedOnline();
+    await openCashoutModal();
+    api.post.mockImplementation((url) =>
+      url.includes("/driver/cashout/")
+        ? Promise.reject({ response: { status: 400, data: { code: "something_weird", detail: "Backend exploded in English" } } })
+        : Promise.resolve({ data: {} }),
+    );
+    await submitCashoutAmount("10");
+    expect(cashoutModal().props("error")).toBe("driver.errorGeneric");
+    expect(wrapper.text()).not.toContain("Backend exploded in English");
+  });
+
+  it("online toggle: a known backend code shows its localized message, not the raw detail", async () => {
+    await mountApprovedOnline();
+    api.patch.mockImplementation(() =>
+      Promise.reject({ response: { status: 404, data: { code: "not_found", detail: "No such driver status row" } } }),
+    );
+    await wrapper.find('button[role="switch"]').trigger("click");
+    await flushPromises();
+    // Page-level error alert (no active job) carries the localized message.
+    expect(wrapper.text()).toContain("apiClient.notFound");
+    expect(wrapper.text()).not.toContain("No such driver status row");
+  });
+
+  it("online toggle: an unmapped code falls back to the localized generic", async () => {
+    await mountApprovedOnline();
+    api.patch.mockImplementation(() =>
+      Promise.reject({ response: { status: 500, data: { detail: "Something broke on the server" } } }),
+    );
+    await wrapper.find('button[role="switch"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("driver.errorGeneric");
+    expect(wrapper.text()).not.toContain("Something broke on the server");
+  });
+});
+
+// ── S4-B / C-14 ────────────────────────────────────────────────────────────────
+// cancelCashout needs TWO taps: the first tap only arms the guard (visible
+// armed state — button text + styling change, NO POST); a second tap within
+// the 3s window fires the cancel POST. After 3s the guard expires visibly
+// (button reverts to "Cancel") and a late tap only re-arms instead of firing.
+// Fake timers mirror the S2-F guard tests + S4-A C-17 poll tests.
+describe("DriverPage — C-14 cash-out cancel needs two taps", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    // Own isolation — never rely on another describe's hook (S2-B lesson).
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+    Object.defineProperty(navigator, "geolocation", {
+      value: geoStub,
+      configurable: true,
+      writable: true,
+    });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    vi.useRealTimers();
+    try {
+      delete navigator.geolocation;
+    } catch {
+      /* ignore */
+    }
+  });
+
+  const mountWithPendingCashout = async () => {
+    useCustomerStore().setCustomer({ id: 1, name: "Driver", phone: "0600000000" });
+    _routes = {
+      "/driver/status/": APPROVED_ONLINE_STATUS,
+      "/driver/jobs/": { data: { active: [], pending: [] } },
+      "/driver/earnings/": {
+        data: {
+          available: "50.00",
+          earned: "120.00",
+          paid: "70.00",
+          owed: "50.00",
+          deliveries_today: 1,
+          earned_today: "20.00",
+          total_deliveries: 5,
+          can_cash_out: true,
+          cashout_min: "20.00",
+        },
+      },
+      // Expires an hour out so the 1 s countdown clock never drops it mid-test.
+      "/driver/cashout/": {
+        data: {
+          pending: {
+            id: 7,
+            amount: "50.00",
+            code: "482913",
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          },
+        },
+      },
+    };
+    wrapper = mountPage();
+    // waitFor settles the async onMounted chain (fetchCustomer → fetchStatus →
+    // bootstrap → fetchCashout) while advancing the fake timers.
+    await vi.waitFor(() => expect(wrapper.text()).toContain("driver.goOffline"));
+    await vi.waitFor(() => expect(wrapper.text()).toContain("driver.cashoutCodeActive"));
+  };
+
+  const openWallet = async () => {
+    const trigger = wrapper.find('button[aria-controls="driver-wallet-panel"]');
+    expect(trigger.exists()).toBe(true);
+    await trigger.trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  const cancelButton = () =>
+    wrapper
+      .findAll("button")
+      .find((b) => b.text() === "driver.cashOutCancel" || b.text() === "ridePage.cancelConfirmCta");
+
+  it("first tap arms only: no cancel POST, button shows the armed state", async () => {
+    await mountWithPendingCashout();
+    await openWallet();
+    expect(cancelButton()).toBeDefined();
+    expect(cancelButton().text()).toBe("driver.cashOutCancel");
+
+    await cancelButton().trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(api.post).not.toHaveBeenCalled();
+    expect(cancelButton().text()).toBe("ridePage.cancelConfirmCta");
+    expect(cancelButton().classes()).toContain("border-red-500/60");
+    // The code is still there — nothing was cancelled.
+    expect(wrapper.text()).toContain("482913");
+  });
+
+  it("second tap inside the window fires the cancel POST and clears the code", async () => {
+    await mountWithPendingCashout();
+    await openWallet();
+
+    await cancelButton().trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+    await cancelButton().trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(api.post).toHaveBeenCalledWith("/driver/cashout/7/cancel/");
+    expect(wrapper.text()).not.toContain("482913");
+    expect(wrapper.text()).not.toContain("driver.cashoutCodeActive");
+  });
+
+  it("an expired guard re-arms instead of firing: a late tap sends no POST", async () => {
+    await mountWithPendingCashout();
+    await openWallet();
+
+    await cancelButton().trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(cancelButton().text()).toBe("ridePage.cancelConfirmCta");
+
+    // Past the 3s window: the guard expires and the button visibly reverts.
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(cancelButton().text()).toBe("driver.cashOutCancel");
+    expect(cancelButton().classes()).not.toContain("border-red-500/60");
+
+    // A late tap only re-arms — it must NOT fire the cancel.
+    await cancelButton().trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(cancelButton().text()).toBe("ridePage.cancelConfirmCta");
   });
 });
