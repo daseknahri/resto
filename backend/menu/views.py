@@ -4724,6 +4724,7 @@ class StaffOrderListView(APIView):
                 "payment_status": order.payment_status,
                 "fulfillment_type": order.fulfillment_type,
                 "table_label": order.table_label,
+                "table_slug": order.table_slug,
                 "section_name": section_name_by_slug.get(order.table_slug, "") if order.table_slug else "",
                 "customer_name": order.customer_name,
                 # Customer-rating affordance: only the server who handled this
