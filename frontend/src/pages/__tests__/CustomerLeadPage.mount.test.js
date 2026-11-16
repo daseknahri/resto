@@ -28,7 +28,7 @@
  * lib/businessHours, lib/escape (safeExternalUrl) and lib/runtimeHost are left REAL;
  * they are fully defensive and jsdom-safe, so running them exercises real setup.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { shallowMount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 

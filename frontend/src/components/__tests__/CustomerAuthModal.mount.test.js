@@ -105,7 +105,9 @@ describe("CustomerAuthModal — mount smoke + C-13 aria-describedby", () => {
     await flushPromises();
 
     expect(wrapper.find("#auth-phone-error").exists()).toBe(true);
-    expect(wrapper.text()).toContain("Send failed");
+    // C-06: the phone error is the localized fallback, never the raw backend detail.
+    expect(wrapper.text()).toContain("customerAuth.sendError");
+    expect(wrapper.text()).not.toContain("Send failed");
     expect(wrapper.find('input[type="tel"]').attributes("aria-describedby")).toBe("auth-phone-error");
   });
 

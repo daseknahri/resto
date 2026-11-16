@@ -26,7 +26,9 @@ describe("activation store — server error classification", () => {
     await store.activate("t", "Zx9kLmop-42qR");
     expect(store.alreadyActivated).toBe(true);
     expect(store.tokenExpiredOrUsed).toBe(false);
-    expect(store.error).toContain("already activated");
+    // C-06: the user-facing error is the localized fallback, never the raw backend string.
+    expect(store.error).toBe("Activation failed");
+    expect(store.error).not.toContain("already activated");
   });
 
   it("flags an expired/used token, not an activated account", async () => {

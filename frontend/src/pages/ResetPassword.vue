@@ -170,7 +170,7 @@ const submit = async () => {
   message.value = "";
   error.value = "";
   try {
-    const { data } = await api.post("/password-reset/confirm/", { token: token.value, password: password.value });
+    await api.post("/password-reset/confirm/", { token: token.value, password: password.value });
     message.value = t("resetPassword.successFallback");
   } catch (err) {
     // The confirm endpoint answers with non_field_errors / a bare list ("Token expired or

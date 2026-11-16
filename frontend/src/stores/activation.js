@@ -27,9 +27,16 @@ export const useActivationStore = defineStore("activation", {
         await api.post("/activate/", { token, password });
         this.success = true;
       } catch (err) {
+        // C-06: the user-facing message never carries raw backend detail —
+        // the extractor maps a known backend `code` or returns the fallback.
+        // Classification must NOT read the extractor's output (it no longer
+        // returns raw strings): classify from the raw body, which is read
+        // here only and never rendered.
+        const raw = err?.response?.data;
+        const rawMessage = Array.isArray(raw?.non_field_errors) ? raw.non_field_errors[0] : raw?.detail;
         this.error = extractErrorMessage(err, "Activation failed");
-        this.tokenExpiredOrUsed = this.error === TOKEN_EXPIRED_OR_USED;
-        this.alreadyActivated = typeof this.error === "string" && this.error.startsWith(ALREADY_ACTIVATED_PREFIX);
+        this.tokenExpiredOrUsed = rawMessage === TOKEN_EXPIRED_OR_USED;
+        this.alreadyActivated = typeof rawMessage === "string" && rawMessage.startsWith(ALREADY_ACTIVATED_PREFIX);
       } finally {
         this.submitting = false;
       }

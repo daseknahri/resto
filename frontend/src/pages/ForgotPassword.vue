@@ -108,7 +108,7 @@ const submit = async () => {
   message.value = "";
   error.value = "";
   try {
-    const { data } = await api.post("/password-reset/request/", { identifier: identifier.value });
+    await api.post("/password-reset/request/", { identifier: identifier.value });
     message.value = t("forgotPassword.successFallback");
   } catch (err) {
     error.value = extractApiErrorMessage(err, t("forgotPassword.requestFailed"));
