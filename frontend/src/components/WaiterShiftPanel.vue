@@ -26,6 +26,20 @@
       </button>
     </div>
 
+    <!-- Shift-load error (B-08): /staff/my-shift/ failed, so clock-in state
+         is unknown — show the error with Retry instead of silently treating
+         the waiter as not clocked in. -->
+    <div v-if="shiftLoadError" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+      <p class="flex-1 text-sm text-red-300">{{ shiftLoadError }}</p>
+      <button
+        type="button"
+        class="ui-press shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium text-slate-300 underline hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60 disabled:opacity-50"
+        :disabled="shiftLoading"
+        @click="emit('retryShift')"
+      >{{ shiftLoading ? t('waiterPage.shiftLoading') : t('waiterPage.retry') }}</button>
+    </div>
+
     <!-- Error -->
     <div v-if="waiter.shiftSummaryError" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
       <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
@@ -94,11 +108,22 @@
             :disabled="pwForm.loading"
           />
         </div>
+        <div class="space-y-1">
+          <label class="ui-stat-label block" for="waiter-confirm-password">{{ t('staffPassword.confirmLabel') }}</label>
+          <input
+            id="waiter-confirm-password"
+            v-model="pwForm.confirm"
+            type="password"
+            autocomplete="new-password"
+            class="ui-input"
+            :disabled="pwForm.loading"
+          />
+        </div>
         <p v-if="pwForm.error" class="text-xs text-red-400" role="alert">{{ pwForm.error }}</p>
         <button
           type="submit"
           class="ui-btn-primary ui-touch-target w-full justify-center disabled:opacity-50"
-          :disabled="pwForm.loading || !pwForm.current || !pwForm.next"
+          :disabled="pwForm.loading || !pwForm.current || !pwForm.next || !pwForm.confirm"
         >
           {{ pwForm.loading ? t('staffPassword.submitting') : t('staffPassword.submitBtn') }}
         </button>
@@ -130,7 +155,11 @@ defineProps({
   showShiftRevenue: { type: Boolean, default: false },
   /** Pre-formatted shift revenue string. */
   shiftRevenue: { type: String, default: '' },
+  /** B-08: /staff/my-shift/ load failure text ('' = no failure / state known). */
+  shiftLoadError: { type: String, default: '' },
+  /** B-08: a shift re-fetch is in flight (Retry disabled while true). */
+  shiftLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['refresh', 'submitPassword']);
+const emit = defineEmits(['refresh', 'retryShift', 'submitPassword']);
 </script>

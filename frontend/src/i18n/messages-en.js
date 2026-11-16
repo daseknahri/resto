@@ -335,6 +335,8 @@ staffPassword: {
   errorGeneric: "Could not update password. Please try again.",
   currentRequired: "Current password is required.",
   newRequired: "New password is required.",
+  confirmLabel: "Confirm new password",
+  confirmMismatch: "Passwords do not match.",
 },
 forcePasswordChange: {
   kicker: "Security",
@@ -2726,6 +2728,7 @@ waiterPage: {
   mergeNotTable: "Only table orders can be merged.",
   mergeSrcAlreadyPaid: "That order is already paid - pick another order to merge.",
   mergeSrcHasPayment: "That order already has a payment collected - settle or void it before merging.",
+  shiftLoadError: "Could not load your shift. Check your connection and try again.",
 },
 repeatAnalytics: {
   title: "Repeat Business",

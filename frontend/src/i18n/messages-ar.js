@@ -295,7 +295,9 @@ const arabicMessages = {
     "errorWeak": "كلمة المرور ضعيفة جداً. اختر كلمة مرور أطول أو أكثر تعقيداً.",
     "errorGeneric": "تعذر تحديث كلمة المرور. يرجى المحاولة مرة أخرى.",
     "currentRequired": "كلمة المرور الحالية مطلوبة.",
-    "newRequired": "كلمة المرور الجديدة مطلوبة."
+    "newRequired": "كلمة المرور الجديدة مطلوبة.",
+    "confirmLabel": "تأكيد كلمة المرور الجديدة",
+    "confirmMismatch": "كلمتا المرور غير متطابقتين.",
   },
   "forcePasswordChange": {
     "kicker": "الأمان",
@@ -5174,6 +5176,7 @@ Object.assign(arabicMessages, {
     "mergeNotTable": "يمكن دمج طلبات الطاولات فقط.",
     "mergeSrcAlreadyPaid": "هذا الطلب مدفوع بالفعل - اختر طلبًا آخر للدمج.",
     "mergeSrcHasPayment": "تم تحصيل دفعة على هذا الطلب بالفعل - قم بتسويته أو إلغائه قبل الدمج.",
+    "shiftLoadError": "تعذّر تحميل مناوبتك. تحقق من اتصالك وحاول مرة أخرى.",
   },
   repeatAnalytics: {
     title: "\u0648\u0641\u0627\u0621 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",

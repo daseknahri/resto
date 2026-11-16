@@ -93,21 +93,72 @@ describe("WaiterShiftPanel", () => {
     const w = mountPanel({ pwForm: model });
     await w.find("#waiter-current-password").setValue("old");
     await w.find("#waiter-new-password").setValue("new");
+    // B-09: the confirm field round-trips like current/next.
+    await w.find("#waiter-confirm-password").setValue("new");
     expect(model.current).toBe("old");
     expect(model.next).toBe("new");
+    expect(model.confirm).toBe("new");
     await w.find("form").trigger("submit");
     expect(w.emitted("submitPassword")).toBeTruthy();
   });
 
-  it("disables the password submit until both fields are filled", () => {
+  // B-09 (DELIBERATE CHANGE): the submit now needs current + new + CONFIRM —
+  // current + new alone no longer enables it.
+  it("disables the password submit until current, new AND confirm are filled", () => {
     const empty = mountPanel({ pwForm: pwForm({ current: "", next: "" }) });
     expect(empty.find('button[type="submit"]').attributes("disabled")).toBeDefined();
-    const filled = mountPanel({ pwForm: pwForm({ current: "a", next: "b" }) });
+    const noConfirm = mountPanel({ pwForm: pwForm({ current: "a", next: "b" }) });
+    expect(noConfirm.find('button[type="submit"]').attributes("disabled")).toBeDefined();
+    const filled = mountPanel({ pwForm: pwForm({ current: "a", next: "b", confirm: "c" }) });
     expect(filled.find('button[type="submit"]').attributes("disabled")).toBeUndefined();
   });
 
   it("shows the password error when present", () => {
     const w = mountPanel({ pwForm: pwForm({ error: "wrong password" }) });
     expect(w.text()).toContain("wrong password");
+  });
+});
+
+// ── S3-B (B-08 shift-load error + B-09 confirm field) ───────────────────────
+// Appended, not rewritten: the base describe above is untouched except for the
+// two B-09 tests it deliberately changes (see notes there). Panel tests mount
+// fresh per test with no shared state, so no extra isolation hook is needed.
+describe("WaiterShiftPanel — S3-B", () => {
+  // B-08: the shift-load error renders with a Retry button that emits retryShift.
+  it("shows the shift-load error with Retry and emits retryShift", async () => {
+    const w = mountPanel({ shiftLoadError: "waiterPage.shiftLoadError" });
+    expect(w.find('[role="alert"]').text()).toContain("waiterPage.shiftLoadError");
+    const btn = w.findAll("button").find((b) => b.text().includes("waiterPage.retry"));
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    expect(w.emitted("retryShift")).toBeTruthy();
+  });
+
+  // B-08: while a re-fetch is in flight the Retry button shows loading and is disabled.
+  it("disables Retry while the shift is reloading", () => {
+    const w = mountPanel({ shiftLoadError: "boom", shiftLoading: true });
+    const btn = w.findAll("button").find((b) => b.text().includes("waiterPage.shiftLoading"));
+    expect(btn.exists()).toBe(true);
+    expect(btn.attributes("disabled")).toBeDefined();
+    expect(w.findAll("button").find((b) => b.text().includes("waiterPage.retry"))).toBeUndefined();
+  });
+
+  // B-08: no shift-load error block when the shift state is known (empty string).
+  it("shows no shift-load error block when shiftLoadError is empty", () => {
+    const w = mountPanel({ shiftLoadError: "" });
+    expect(w.find('[role="alert"]').exists()).toBe(false);
+  });
+
+  // B-09: the confirm field is labelled and binds via v-model.
+  it("labels the confirm field and binds it", async () => {
+    const model = pwForm();
+    const w = mountPanel({ pwForm: model });
+    expect(w.text()).toContain("staffPassword.confirmLabel");
+    const input = w.find("#waiter-confirm-password");
+    expect(input.exists()).toBe(true);
+    expect(input.attributes("type")).toBe("password");
+    expect(input.attributes("autocomplete")).toBe("new-password");
+    await input.setValue("typed-twice");
+    expect(model.confirm).toBe("typed-twice");
   });
 });

@@ -343,7 +343,10 @@
       :waiter="waiter"
       :show-shift-revenue="showShiftRevenue"
       :shift-revenue="shiftRevenue"
+      :shift-load-error="shiftLoadError"
+      :shift-loading="shiftLoading"
       @refresh="loadShiftSummary"
+      @retry-shift="loadMyShift"
       @submit-password="submitPasswordChange"
     />
 
@@ -1182,10 +1185,8 @@ const openNewOrderForTable = async (tile) => {
   // Same clock-in guard as the toolbar "+ New order" (onNewOrderClick): a
   // not-clocked-in staff member is blocked from every new-order entry point
   // with the identical toast, not just the toolbar one.
-  if (!currentShift.value) {
-    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
-    return;
-  }
+  // B-08: re-fetch shift state before refusing (see ensureShiftForAction).
+  if (!(await ensureShiftForAction())) return;
   if (tile.orders?.length > 0) {
     const ok = await confirm({
       title: t('waiterPage.dupOrderConfirmTitle'),
@@ -1323,11 +1324,15 @@ const submitVoid = async () => {
   if (!voidSheet.value) return;
   if (!voidReasonValid.value) return;
   const { order, item } = voidSheet.value;
+  // B-13: send the preset KEY, not the localized label. The backend stores
+  // the posted string verbatim (menu/views.py StaffVoidOrderItemView:5585),
+  // so a localized label would record the same reason in FR/EN/AR depending
+  // on the waiter's locale. Labels apply only at display time (cf.
+  // OwnerOrders CANCEL_REASON_CODES / cancelReasonLabel). "Other" stays
+  // free text.
   const reason = voidPickedPreset.value === 'voidReasonOther'
     ? voidCustomReason.value.trim()
-    : voidPickedPreset.value
-      ? t(`waiterPage.${voidPickedPreset.value}`)
-      : '';
+    : voidPickedPreset.value || '';
   voidSheet.value = null;
   voidingItemId.value = item.id;
   try {
@@ -1361,11 +1366,15 @@ const submitComp = async () => {
   if (!compSheet.value) return;
   if (!compReasonValid.value) return;
   const { order, item } = compSheet.value;
+  // B-13: send the preset KEY, not the localized label. The backend stores
+  // the posted string verbatim (menu/views.py StaffCompOrderItemView:5944),
+  // so a localized label would record the same reason in FR/EN/AR depending
+  // on the waiter's locale. Labels apply only at display time (cf.
+  // OwnerOrders CANCEL_REASON_CODES / cancelReasonLabel). "Other" stays
+  // free text.
   const reason = compPickedPreset.value === 'compReasonOther'
     ? compCustomReason.value.trim()
-    : compPickedPreset.value
-      ? t(`waiterPage.${compPickedPreset.value}`)
-      : '';
+    : compPickedPreset.value || '';
   compSheet.value = null;
   compingItemId.value = item.id;
   try {
@@ -1609,16 +1618,50 @@ const currentShift = ref(null);
 const clockBusy = ref(false);
 const { confirm } = useConfirmModal();
 
+// B-08: shift-load state. A transient /staff/my-shift/ failure must not read
+// as "not clocked in": shiftLoadError holds the failure (cleared on success)
+// and the clock-in guards re-fetch once before refusing an action.
+const shiftLoadError = ref('');
+const shiftLoading = ref(false);
+
 const loadMyShift = async () => {
+  shiftLoading.value = true;
   try {
     const { data } = await api.get('/staff/my-shift/');
     currentShift.value = data || null;
+    shiftLoadError.value = '';
   } catch (e) {
+    // Surfaced with Retry in the shift panel; a stale null would otherwise
+    // block every new-order/payment entry point with "must clock in first".
+    shiftLoadError.value = t('waiterPage.shiftLoadError');
     void e;
+  } finally {
+    shiftLoading.value = false;
   }
 };
 
+// B-08: re-check shift state before refusing an action with "must clock in
+// first". When the last shift fetch failed, currentShift is a stale null and
+// the waiter may in fact be clocked in — one re-fetch first; refuse only
+// when the state is known (fetch succeeded) or the re-fetch still shows
+// no shift.
+const ensureShiftForAction = async () => {
+  if (currentShift.value) return true;
+  if (shiftLoadError.value) await loadMyShift();
+  if (currentShift.value) return true;
+  toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+  return false;
+};
+
 const doClock = async (direction) => {
+  // B-08: if the shift state is unknown (last load failed), re-check before
+  // clocking in — the waiter may already be clocked in and a second
+  // clock-in would 409. After a successful re-fetch the tab bar already
+  // shows the true state, so there is nothing left to do.
+  if (direction === 'in' && shiftLoadError.value) {
+    await loadMyShift();
+    if (currentShift.value) return;
+  }
   if (direction === 'out') {
     const ok = await confirm({
       title: t('waiterPage.clockOutConfirmTitle'),
@@ -1932,10 +1975,8 @@ const payCashForSeat = async (order, seat) => {
   // Same clock-in guard as payCash/payWallet: a not-clocked-in waiter must not
   // take payments (owner decision #11). This is an independent payment path, so
   // it needs the guard too. Stop before the confirm() dialog.
-  if (!currentShift.value) {
-    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
-    return;
-  }
+  // B-08: re-fetch shift state before refusing (see ensureShiftForAction).
+  if (!(await ensureShiftForAction())) return;
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
   const ok = await confirm({
@@ -1971,10 +2012,8 @@ const payWalletForSeat = async (order, seat) => {
   // Same clock-in guard as payCash/payWallet: a not-clocked-in waiter must not
   // take payments (owner decision #11). This is an independent payment path, so
   // it needs the guard too. Stop before the confirm() dialog.
-  if (!currentShift.value) {
-    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
-    return;
-  }
+  // B-08: re-fetch shift state before refusing (see ensureShiftForAction).
+  if (!(await ensureShiftForAction())) return;
   const amount = parseFloat(seat.subtotal);
   if (!amount || amount <= 0) return;
   const ok = await confirm({
@@ -2292,11 +2331,18 @@ const loadShiftSummary = () => {
 };
 
 // ── Password change ────────────────────────────────────────────────────────────
-const pwForm = ref({ current: "", next: "", loading: false, error: "" });
+// B-09: confirm mirrors WaiterJoin's forced-change form (current/next/confirm).
+const pwForm = ref({ current: "", next: "", confirm: "", loading: false, error: "" });
 
 const submitPasswordChange = async () => {
   pwForm.value.error = "";
-  if (!pwForm.value.current || !pwForm.value.next) return;
+  if (!pwForm.value.current || !pwForm.value.next || !pwForm.value.confirm) return;
+  // B-09: mirror WaiterJoin's forced-change form — a typo in the new
+  // password must not lock the waiter out.
+  if (pwForm.value.next !== pwForm.value.confirm) {
+    pwForm.value.error = t("staffPassword.confirmMismatch");
+    return;
+  }
   pwForm.value.loading = true;
   try {
     await api.post("/staff/change-password/", {
@@ -2305,6 +2351,7 @@ const submitPasswordChange = async () => {
     });
     pwForm.value.current = "";
     pwForm.value.next = "";
+    pwForm.value.confirm = "";
     toast.show(t("staffPassword.successMsg"), "success");
   } catch (err) {
     const data = err?.response?.data;
@@ -2363,9 +2410,9 @@ watch(activeTab, (tab) => {
 // Arrow-key navigation within the tablist (ARIA APG tab pattern).
 // Only moves focus — activation stays on click/Enter to match existing behavior.
 // New-order button (in WaiterStatusTabBar) — guard on an open shift before opening.
-const onNewOrderClick = () => {
-  if (currentShift.value) showNewOrder.value = true;
-  else toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+// B-08: async so the guard can re-fetch shift state before refusing.
+const onNewOrderClick = async () => {
+  if (await ensureShiftForAction()) showNewOrder.value = true;
 };
 
 // ── Polling ────────────────────────────────────────────────────────────────────
@@ -2538,10 +2585,8 @@ const payCash = async (order) => {
   // Same clock-in guard as the new-order entry points (onNewOrderClick /
   // openNewOrderForTable): a not-clocked-in waiter must not take payments
   // either (owner decision). A clocked-in waiter is unaffected.
-  if (!currentShift.value) {
-    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
-    return;
-  }
+  // B-08: re-fetch shift state before refusing (see ensureShiftForAction).
+  if (!(await ensureShiftForAction())) return;
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);
@@ -2568,10 +2613,8 @@ const payWallet = async (order) => {
   // Same clock-in guard as the new-order entry points (onNewOrderClick /
   // openNewOrderForTable): a not-clocked-in waiter must not take payments
   // either (owner decision). A clocked-in waiter is unaffected.
-  if (!currentShift.value) {
-    toast.show(t('waiterPage.mustClockInFirst'), 'warning');
-    return;
-  }
+  // B-08: re-fetch shift state before refusing (see ensureShiftForAction).
+  if (!(await ensureShiftForAction())) return;
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);

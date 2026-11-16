@@ -532,3 +532,247 @@ describe("WaiterPage S3-A — B-10 table QR failure toasts instead of silently d
     expect(toast.type).toBe("error");
   });
 });
+
+// ── S3-B (B-08 shift re-fetch, B-09 password confirm, B-13 reason codes) ────
+// Appended, not rewritten: the base "mount smoke" describe above is untouched.
+// Own isolation: this describe has its OWN beforeEach (localStorage.clear +
+// setActivePinia(createPinia) + _routes reset + vi.clearAllMocks + the api
+// mock implementations re-seeded) and its OWN afterEach (unmount, so the 15s
+// poll / 30s ticker never leak). The base describe's hooks do NOT run here.
+//
+// Drive notes (shallowMount stubs): the tab bar / shift panel / order card /
+// new-order sheet are auto-stubbed, so state is driven by emitting on the
+// stubs (e.g. tabBar emits "new-order" / "update:activeTab" / "clock") and
+// asserted via stub props (currentShift, shiftLoadError, pwForm). The void /
+// comp sheets are the page's OWN template (Teleport is stubbed to <slot />),
+// so their preset chips + submit buttons are real DOM. The mocked t() returns
+// the key verbatim — which is exactly what makes the B-13 assertions work: a
+// localized label would post "waiterPage.voidReasonWrongItem", the fixed code
+// posts the bare key "voidReasonWrongItem".
+describe("WaiterPage — S3-B", () => {
+  let wrapper;
+  let api;
+
+  const shift = (overrides = {}) => ({ id: 9, clock_in: new Date().toISOString(), ...overrides });
+  const tabBar = () => wrapper.findComponent({ name: "WaiterStatusTabBar" });
+  const panel = () => wrapper.findComponent({ name: "WaiterShiftPanel" });
+  const myShiftCalls = () => api.get.mock.calls.filter((c) => String(c[0]).includes("/staff/my-shift/"));
+  const postsTo = (frag) => api.post.mock.calls.filter((c) => String(c[0]).includes(frag));
+
+  // Mount-time /staff/my-shift/ fails; everything else resolves via _routes.
+  const failShift = () =>
+    api.get.mockImplementation((url) =>
+      url.includes("/staff/my-shift/") ? Promise.reject(new Error("shift down")) : Promise.resolve(_match(url))
+    );
+  // /staff/my-shift/ succeeds with an open shift; everything else via _routes.
+  const okShift = () =>
+    api.get.mockImplementation((url) =>
+      url.includes("/staff/my-shift/") ? Promise.resolve({ data: shift() }) : Promise.resolve(_match(url))
+    );
+  const openShiftTab = async () => {
+    await tabBar().vm.$emit("update:activeTab", "shift");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+  };
+  const orderWithItem = (item) => {
+    _routes = {
+      "/staff/orders/": { data: { count: 1, results: [tableOrder({ id: 1, items: [item] })] } },
+    };
+  };
+
+  beforeEach(async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api = (await import("../../lib/api")).default;
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+    api.patch.mockImplementation(() => Promise.resolve({ data: {} }));
+    api.delete.mockImplementation(() => Promise.resolve({ data: {} }));
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── B-08: shift-load failure must not block a clocked-in waiter ──────────
+  it("B-08: re-fetches the shift before blocking a new order when the first load failed", async () => {
+    failShift();
+    wrapper = mountPage();
+    await flushPromises();
+
+    // Mount-time load failed: no shift, one my-shift call.
+    expect(tabBar().props("currentShift")).toBeNull();
+    expect(myShiftCalls()).toHaveLength(1);
+
+    // The backend recovers; the guard tap re-fetches instead of refusing.
+    okShift();
+    await tabBar().vm.$emit("new-order");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(myShiftCalls()).toHaveLength(2);
+    expect(tabBar().props("currentShift")).toEqual(expect.objectContaining({ id: 9 }));
+    expect(wrapper.findComponent({ name: "WaiterNewOrder" }).exists()).toBe(true);
+  });
+
+  it("B-08: still blocks the new order when the re-fetch also finds no shift", async () => {
+    failShift();
+    wrapper = mountPage();
+    await flushPromises();
+
+    await tabBar().vm.$emit("new-order");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    // The guard DID re-fetch (mount + one guard call) and still refused.
+    expect(myShiftCalls()).toHaveLength(2);
+    expect(wrapper.findComponent({ name: "WaiterNewOrder" }).exists()).toBe(false);
+  });
+
+  it("B-08: passes the shift-load error to the shift panel and Retry recovers", async () => {
+    failShift();
+    wrapper = mountPage();
+    await flushPromises();
+    await openShiftTab();
+
+    expect(panel().props("shiftLoadError")).toBe("waiterPage.shiftLoadError");
+
+    okShift();
+    await panel().vm.$emit("retryShift");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(panel().props("shiftLoadError")).toBe("");
+    expect(tabBar().props("currentShift")).toEqual(expect.objectContaining({ id: 9 }));
+  });
+
+  it("B-08: clock-in tap re-checks the shift instead of posting a second clock-in", async () => {
+    failShift();
+    wrapper = mountPage();
+    await flushPromises();
+
+    okShift();
+    await tabBar().vm.$emit("clock", "in");
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(postsTo("/staff/clock-in/")).toHaveLength(0);
+    expect(tabBar().props("currentShift")).toEqual(expect.objectContaining({ id: 9 }));
+  });
+
+  // ── B-09: password change needs a matching confirm ───────────────────────
+  it("B-09: a mismatched confirm blocks the password change and shows the mismatch error", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await openShiftTab();
+
+    const form = panel().props("pwForm");
+    form.current = "old-pass";
+    form.next = "new-pass-1";
+    form.confirm = "new-pass-2";
+    await panel().vm.$emit("submitPassword");
+    await flushPromises();
+
+    expect(postsTo("/staff/change-password/")).toHaveLength(0);
+    expect(panel().props("pwForm").error).toBe("staffPassword.confirmMismatch");
+  });
+
+  it("B-09: matching new + confirm posts the change and clears all three fields", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await openShiftTab();
+
+    const form = panel().props("pwForm");
+    form.current = "old-pass";
+    form.next = "brand-new";
+    form.confirm = "brand-new";
+    await panel().vm.$emit("submitPassword");
+    await flushPromises();
+
+    const calls = postsTo("/staff/change-password/");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toEqual({ current_password: "old-pass", new_password: "brand-new" });
+    const cleared = panel().props("pwForm");
+    expect(cleared.current).toBe("");
+    expect(cleared.next).toBe("");
+    expect(cleared.confirm).toBe("");
+    expect(cleared.error).toBe("");
+  });
+
+  // ── B-13: void/comp reasons are stored as codes, not localized labels ────
+  it("B-13: voiding with a preset sends the preset KEY, not the localized label", async () => {
+    const item = { id: 7, dish_name: "Soup", subtotal: "30.00", unit_price: "30.00", qty: 1 };
+    orderWithItem(item);
+    wrapper = mountPage();
+    await flushPromises();
+
+    const card = wrapper.findComponent({ name: "WaiterOrderCard" });
+    expect(card.exists()).toBe(true);
+    await card.vm.$emit("void-item", item);
+    await wrapper.vm.$nextTick();
+
+    const chip = wrapper.findAll("button").find((b) => b.text() === "waiterPage.voidReasonWrongItem");
+    expect(chip.exists()).toBe(true);
+    await chip.trigger("click");
+    const submit = wrapper.findAll("button").find((b) => b.text() === "waiterPage.voidItem");
+    await submit.trigger("click");
+    await flushPromises();
+
+    const calls = postsTo("/void/");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toContain("/staff/orders/1/items/7/void/");
+    // The KEY, not the mocked-t label "waiterPage.voidReasonWrongItem".
+    expect(calls[0][1]).toEqual({ reason: "voidReasonWrongItem" });
+  });
+
+  it("B-13: comping with a preset sends the preset KEY, not the localized label", async () => {
+    const item = { id: 7, dish_name: "Soup", subtotal: "30.00", unit_price: "30.00", qty: 1 };
+    orderWithItem(item);
+    wrapper = mountPage();
+    await flushPromises();
+
+    const card = wrapper.findComponent({ name: "WaiterOrderCard" });
+    await card.vm.$emit("comp-item", item);
+    await wrapper.vm.$nextTick();
+
+    const chip = wrapper.findAll("button").find((b) => b.text() === "waiterPage.compReasonGoodwill");
+    expect(chip.exists()).toBe(true);
+    await chip.trigger("click");
+    const submit = wrapper.findAll("button").find((b) => b.text() === "waiterPage.compItem");
+    await submit.trigger("click");
+    await flushPromises();
+
+    const calls = postsTo("/comp/");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toContain("/staff/orders/1/items/7/comp/");
+    expect(calls[0][1]).toEqual({ reason: "compReasonGoodwill" });
+  });
+
+  it("B-13: voiding with 'Other' still sends the typed free text verbatim", async () => {
+    const item = { id: 7, dish_name: "Soup", subtotal: "30.00", unit_price: "30.00", qty: 1 };
+    orderWithItem(item);
+    wrapper = mountPage();
+    await flushPromises();
+
+    const card = wrapper.findComponent({ name: "WaiterOrderCard" });
+    await card.vm.$emit("void-item", item);
+    await wrapper.vm.$nextTick();
+
+    const chip = wrapper.findAll("button").find((b) => b.text() === "waiterPage.voidReasonOther");
+    expect(chip.exists()).toBe(true);
+    await chip.trigger("click");
+    const input = wrapper.find('input[aria-label="waiterPage.voidReasonOtherPlaceholder"]');
+    expect(input.exists()).toBe(true);
+    await input.setValue("Guest is allergic");
+    const submit = wrapper.findAll("button").find((b) => b.text() === "waiterPage.voidItem");
+    await submit.trigger("click");
+    await flushPromises();
+
+    expect(postsTo("/void/")).toHaveLength(1);
+    expect(postsTo("/void/")[0][1]).toEqual({ reason: "Guest is allergic" });
+  });
+});

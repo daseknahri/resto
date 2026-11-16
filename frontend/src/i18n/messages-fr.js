@@ -333,6 +333,8 @@ staffPassword: {
   errorGeneric: "Impossible de mettre a jour le mot de passe. Veuillez reessayer.",
   currentRequired: "Le mot de passe actuel est requis.",
   newRequired: "Le nouveau mot de passe est requis.",
+  confirmLabel: "Confirmer le nouveau mot de passe",
+  confirmMismatch: "Les mots de passe ne correspondent pas.",
 },
 forcePasswordChange: {
   kicker: "Securite",
@@ -2715,6 +2717,7 @@ waiterPage: {
   mergeNotTable: "Seules les commandes de table peuvent etre fusionnees.",
   mergeSrcAlreadyPaid: "Cette commande est deja payee - choisissez une autre commande a fusionner.",
   mergeSrcHasPayment: "Cette commande a deja un paiement enregistre - reglez-la ou annulez-la avant de fusionner.",
+  shiftLoadError: "Impossible de charger votre poste. Verifiez votre connexion et reessayez.",
 },
 repeatAnalytics: {
   title: "Fidelisation client",
