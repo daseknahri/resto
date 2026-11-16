@@ -3659,6 +3659,7 @@ dishPage: {
   tag_kosher: "Casher",
   cartWithCount: "Panier, {count} articles",
   optionsKicker: "Personnaliser",
+  maxSelectReached: "Choisissez au maximum {n} options",
 },
 menu: {
   reorderWalletShort: "Votre solde portefeuille pourrait ne pas couvrir cette commande — rechargez avant de passer.",

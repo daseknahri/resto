@@ -184,3 +184,41 @@ describe("MenuSelect — mount smoke", () => {
     expect(text).toContain("Drinks");
   });
 });
+
+// ── C-12: hero image error handler ────────────────────────────────────────────
+// The hero <img> now uses Menu.vue's handleHeroImageError (lib/images
+// withImageFallback), mirroring the logo right below it. withImageFallback
+// hides the broken img or swaps in a fallback src, so the test accepts
+// either outcome — what must NOT happen is a broken-image icon left in
+// place. The tenant store is imported dynamically: this file has no
+// top-level store import and the base must stay an exact prefix.
+describe("MenuSelect — hero image error (C-12)", () => {
+  let wrapper;
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  it("a broken hero image is hidden or falls back instead of showing a broken icon", async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    const tenant = useTenantStore();
+    tenant.meta = {
+      name: "Test Bistro",
+      profile: { hero_url: "https://example.invalid/hero.jpg", logo_url: "" },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+
+    const hero = wrapper.find("header img");
+    expect(hero.exists()).toBe(true);
+    const srcBefore = hero.attributes("src");
+    expect(srcBefore).toBe("https://example.invalid/hero.jpg");
+
+    await hero.trigger("error");
+    await flushPromises();
+
+    const el = hero.element;
+    expect(el.style.display === "none" || el.getAttribute("src") !== srcBefore).toBe(true);
+  });
+});

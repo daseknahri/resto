@@ -236,3 +236,108 @@ describe("Menu — mount smoke", () => {
     expect(text).toContain("Tagines");
   });
 });
+
+// ── C-10: reviews carousel arrow keys in RTL ────────────────────────────────
+// In RTL, scrollLeft is negative-based (Chrome), so ArrowRight must scroll the
+// carousel the opposite way from LTR. scrollReviewsCarousel flips the sign
+// when the document dir is rtl; these tests assert the scrollBy call args in
+// both directions. NOTE: there is no file-level beforeEach in this file -- the
+// base describe's hook (observers / matchMedia / localStorage + pinia) does not
+// run here, so this describe stubs them itself in its own beforeEach. The
+// scrollBy mock (jsdom has no layout, so clientWidth is 0 and the step is the
+// 160 floor) plus the document.dir setup/teardown are also in that hook.
+describe("Menu — reviews carousel RTL (C-10)", () => {
+  let wrapper;
+  let origScrollBy;
+
+  beforeEach(() => {
+    // Isolation + observers (same as the base describe): the C-10 tests mount
+    // Menu.vue, whose mounted hook news up an IntersectionObserver -- without
+    // the stub it throws an unhandled rejection in jsdom. There is no
+    // file-level beforeEach; the base describe's hook does not run here.
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal("IntersectionObserver", NoopObserver);
+    vi.stubGlobal("ResizeObserver", NoopObserver);
+    vi.stubGlobal("matchMedia", (query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }));
+    origScrollBy = Element.prototype.scrollBy;
+    Element.prototype.scrollBy = vi.fn();
+    document.documentElement.dir = "";
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    Element.prototype.scrollBy = origScrollBy;
+    document.documentElement.dir = "";
+    vi.unstubAllGlobals();
+  });
+
+  // resolvedMeta returns state.meta, so seeding tenant.meta drives the
+  // recentReviews computed the carousel renders from. The tenant store is
+  // imported dynamically: this file has no top-level store import and the
+  // base must stay an exact prefix, so nothing may be added above.
+  const mountWithReviews = async () => {
+    const { useTenantStore } = await import("../../stores/tenant");
+    const tenant = useTenantStore();
+    tenant.meta = {
+      profile: {},
+      recent_reviews: [{ score: 5, comment: "Great food, loved it" }],
+    };
+    wrapper = mountMenu();
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("LTR: ArrowRight scrolls forward (+step), ArrowLeft scrolls back (-step)", async () => {
+    await mountWithReviews();
+    const carousel = wrapper.find('[role="group"]');
+    expect(carousel.exists()).toBe(true);
+    expect(wrapper.text()).toContain("Great food, loved it");
+
+    await carousel.trigger("keydown", { key: "ArrowRight" });
+    expect(Element.prototype.scrollBy).toHaveBeenCalledWith({
+      left: 160,
+      behavior: "smooth",
+    });
+
+    await carousel.trigger("keydown", { key: "ArrowLeft" });
+    expect(Element.prototype.scrollBy).toHaveBeenCalledWith({
+      left: -160,
+      behavior: "smooth",
+    });
+  });
+
+  it("RTL: ArrowRight scrolls the opposite way (-step), ArrowLeft forward (+step)", async () => {
+    document.documentElement.dir = "rtl";
+    await mountWithReviews();
+    const carousel = wrapper.find('[role="group"]');
+    expect(carousel.exists()).toBe(true);
+
+    await carousel.trigger("keydown", { key: "ArrowRight" });
+    expect(Element.prototype.scrollBy).toHaveBeenCalledWith({
+      left: -160,
+      behavior: "smooth",
+    });
+
+    await carousel.trigger("keydown", { key: "ArrowLeft" });
+    expect(Element.prototype.scrollBy).toHaveBeenCalledWith({
+      left: 160,
+      behavior: "smooth",
+    });
+  });
+});

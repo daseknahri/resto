@@ -705,8 +705,14 @@ const scrollReviewsCarousel = (direction) => {
   const el = reviewsCarouselRef.value
   if (!el) return
   // Scroll roughly one card width per keypress.
+  // RTL: scrollLeft is negative-based (Chrome) and the visual "forward"
+  // direction is reversed, so ArrowRight must scroll the opposite way from
+  // LTR. Flip the sign here — this helper serves the keyboard handler (the
+  // only caller in this page; there are no click-arrow buttons), so the one
+  // correction covers every scroll path.
+  const isRtl = (document.documentElement?.dir || document.dir) === 'rtl'
   const step = Math.max(160, Math.round(el.clientWidth * 0.6))
-  el.scrollBy({ left: direction * step, behavior: 'smooth' })
+  el.scrollBy({ left: (isRtl ? -1 : 1) * direction * step, behavior: 'smooth' })
 }
 const onReviewsCarouselKeydown = (e) => {
   if (e.key === 'ArrowRight') {

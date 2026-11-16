@@ -3713,6 +3713,7 @@ dishPage: {
   tag_kosher: "Kosher",
   cartWithCount: "Cart, {count} items",
   optionsKicker: "Customise",
+  maxSelectReached: "Choose at most {n} options",
 },
 menu: {
   kicker: "Menu browsing",

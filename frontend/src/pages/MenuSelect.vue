@@ -11,6 +11,7 @@
           loading="eager"
           fetchpriority="high"
           decoding="async"
+          @error="handleHeroImageError"
         />
         <div class="absolute inset-0 bg-gradient-to-t from-slate-950/96 via-slate-950/55 to-slate-950/20" />
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.10),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.10),transparent_30%)]" />
@@ -184,6 +185,7 @@ import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useVocabulary } from '../composables/useVocabulary';
 import { getNextOpenInfo, getTodayClosingTime, isCurrentlyOpenBySchedule, isRestaurantOpenNow } from '../lib/businessHours';
+import { withImageFallback } from '../lib/images';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 
@@ -200,6 +202,10 @@ const tenantName = computed(() => meta.value?.name || t('customerLayout.fallback
 const tenantDescription = computed(() => String(profile.value?.description || profile.value?.tagline || '').trim());
 const heroImage = computed(() => String(profile.value?.hero_url || '').trim());
 const logoImage = computed(() => String(profile.value?.logo_url || '').trim());
+
+// Same broken-image fallback as Menu.vue's hero (lib/images): hide the img /
+// swap in the fallback instead of showing a broken-image icon over the header.
+const handleHeroImageError = (e) => withImageFallback(e);
 
 // Server-authoritative open/closed verdict (tenant-local, temp-disable + closure
 // aware), shared with Menu.vue and the rest of the storefront via lib/businessHours.

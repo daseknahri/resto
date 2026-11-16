@@ -2797,7 +2797,8 @@ const arabicMessages = {
     "shareDishCopied": "تم نسخ الرابط إلى الحافظة",
     "shareDishFailed": "تعذّر نسخ الرابط",
     "cartWithCount": "السلة، {count} عناصر",
-    "optionsKicker": "تخصيص"
+    "optionsKicker": "تخصيص",
+    "maxSelectReached": "اختر {n} خيارات كحد أقصى",
   },
   "waiterInstall": {
     "prompt": "ثبّت التطبيق لاستخدام يومي أسرع.",

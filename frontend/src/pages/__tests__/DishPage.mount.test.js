@@ -214,3 +214,162 @@ describe("DishPage — mount smoke", () => {
     expect(wrapper.text()).toContain("Extras");
   });
 });
+
+// ── C-11: option-group cap blocks (no silent drop) + similar-dish ranking ────
+// useVisibility gates the similar-dishes list behind an IntersectionObserver;
+// jsdom has none, so this describe stubs an observer that reports the target
+// visible immediately (passing the observed element through as entry.target).
+class AutoVisibleObserver {
+  constructor(cb) {
+    this.cb = cb;
+  }
+  observe(target) {
+    this.cb([{ isIntersecting: true, target }]);
+  }
+  unobserve() {}
+  disconnect() {}
+}
+
+describe("DishPage — option-group cap + similar dishes (C-11)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    // Isolation (same as the base describe): without it the toast spy and
+    // the localStorage-backed stores leak between tests in this describe.
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    vi.stubGlobal("IntersectionObserver", AutoVisibleObserver);
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    vi.unstubAllGlobals();
+  });
+
+  const seedDishPage = async (dishes) => {
+    const tenant = useTenantStore();
+    tenant.meta = { plan: { can_checkout: true, currency: "MAD" }, profile: {} };
+    const menu = useMenuStore();
+    menu.categories = [{ slug: "burgers", name: "Burgers" }];
+    menu.dishes = { burgers: dishes };
+    wrapper = mountDish({ category: "burgers", dish: "classic-burger" });
+    await flushPromises();
+    return wrapper;
+  };
+
+  // The toast store is imported dynamically: this file has no top-level toast
+  // import and the base must stay an exact prefix.
+  const toastShowSpy = async () => {
+    const { useToastStore } = await import("../../stores/toast");
+    return vi.spyOn(useToastStore(), "show");
+  };
+
+  // Extras group with THREE options at max_select 2, so the third pick is the
+  // one that must be blocked.
+  const dishWithThreeExtras = () => {
+    const dish = loadedDish();
+    dish.option_groups = [
+      dish.option_groups[0],
+      {
+        id: 2,
+        name: "Extras",
+        min_select: 0,
+        max_select: 2,
+        options: [
+          { id: 201, name: "Cheese", price_delta: "5.00" },
+          { id: 202, name: "Bacon", price_delta: "8.00" },
+          { id: 203, name: "Mushrooms", price_delta: "6.00" },
+        ],
+      },
+    ];
+    return dish;
+  };
+
+  it("blocks a third pick at maxSelect: selection unchanged + at-most-N toast", async () => {
+    await seedDishPage([dishWithThreeExtras()]);
+    const show = await toastShowSpy();
+    const boxes = () => wrapper.findAll('input[type="checkbox"]');
+    expect(boxes()).toHaveLength(3);
+
+    await boxes()[0].setChecked(true);
+    await boxes()[1].setChecked(true);
+    // Re-query fresh: the blocked attempt below re-renders the inputs.
+    expect(boxes()[0].element.checked).toBe(true);
+    expect(boxes()[1].element.checked).toBe(true);
+
+    await boxes()[2].setChecked(true);
+    await flushPromises();
+
+    const fresh = boxes();
+    expect(fresh[0].element.checked).toBe(true);
+    expect(fresh[1].element.checked).toBe(true);
+    expect(fresh[2].element.checked).toBe(false);
+    expect(show).toHaveBeenCalledWith(
+      'dishPage.maxSelectReached({"n":2})',
+      "error"
+    );
+  });
+
+  it("single-select (radio) groups still swap: picking another option replaces", async () => {
+    await seedDishPage([dishWithThreeExtras()]);
+    const show = await toastShowSpy();
+    const radios = () => wrapper.findAll('input[type="radio"]');
+    expect(radios()).toHaveLength(2);
+    // Size is required (min_select 1), so the watchEffect auto-selects Regular.
+    expect(radios()[0].element.checked).toBe(true);
+
+    await radios()[1].setChecked(true);
+    await flushPromises();
+
+    const fresh = radios();
+    expect(fresh[0].element.checked).toBe(false);
+    expect(fresh[1].element.checked).toBe(true);
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("option-group legend uses float-start, not physical float-left", async () => {
+    await seedDishPage([loadedDish()]);
+    const legend = wrapper.find("legend");
+    expect(legend.exists()).toBe(true);
+    expect(legend.classes()).toContain("float-start");
+    expect(legend.classes()).not.toContain("float-left");
+  });
+
+  it("similar dishes rank by shared tags then price proximity, not cheapest-first", async () => {
+    const main = { ...loadedDish(), tags: ["beef", "grilled"] };
+    const similarDish = (slug, name, price, tags) => ({
+      slug,
+      name,
+      price: String(price),
+      effective_price: String(price),
+      tags,
+      image_url: "",
+    });
+    // Seeded scrambled on purpose: the old cheapest-first sort would order
+    // Veggie(10) < Fish(57) < Grilled Chicken(58) < BBQ Beef(60).
+    await seedDishPage([
+      main,
+      similarDish("veggie-burger", "Veggie Burger", 10, []),
+      similarDish("fish-burger", "Fish Burger", 57, []),
+      similarDish("bbq-beef-burger", "BBQ Beef Burger", 60, ["beef"]),
+      similarDish("double-beef-burger", "Double Beef Burger", 100, ["beef", "grilled"]),
+      similarDish("grilled-chicken-burger", "Grilled Chicken Burger", 58, ["grilled"]),
+    ]);
+
+    const text = wrapper.text();
+    // 2 shared tags wins despite the highest price; 1 shared tag beats 0
+    // shared tags despite a bigger price gap; the cheapest dish drops out.
+    expect(text).not.toContain("Veggie Burger");
+    const order = [
+      "Double Beef Burger",
+      "Grilled Chicken Burger",
+      "BBQ Beef Burger",
+      "Fish Burger",
+    ].map((name) => text.indexOf(name));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+});

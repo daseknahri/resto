@@ -133,7 +133,7 @@
         <div v-if="dish.option_groups?.length" class="ui-section-band space-y-5">
           <fieldset v-for="group in dish.option_groups" :key="group.id" class="space-y-3 border-0 m-0 p-0">
             <div class="flex items-center justify-between gap-2">
-              <legend class="float-left text-sm font-bold text-slate-200 tracking-tight">
+              <legend class="float-start text-sm font-bold text-slate-200 tracking-tight">
                 {{ group.name }}
                 <span v-if="group.min_select > 0" class="ms-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-400/20">{{ t('dishPage.required') }}</span>
               </legend>
@@ -154,7 +154,7 @@
                     :value="opt.id"
                     :checked="groupIsSelected(group.id, opt.id)"
                     class="h-4 w-4 shrink-0 accent-[var(--color-secondary)]"
-                    @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select)"
+                    @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select, $event)"
                   />
                   <input
                     v-else
@@ -162,7 +162,7 @@
                     :value="opt.id"
                     :checked="groupIsSelected(group.id, opt.id)"
                     class="h-4 w-4 shrink-0 rounded accent-[var(--color-secondary)]"
-                    @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select)"
+                    @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select, $event)"
                   />
                   <p class="min-w-0 flex-1 font-medium text-slate-100 leading-snug">{{ opt.name }}</p>
                   <span v-if="Number(opt.price_delta) > 0" class="shrink-0 text-xs font-bold tabular-nums text-[var(--color-secondary)]">
@@ -427,9 +427,32 @@ const dish          = computed(() => dishes.value.find((d) => d.slug === props.d
 const menuCategories = computed(() => Array.isArray(menu.categories) ? menu.categories : []);
 const categoryName   = computed(() => menuCategories.value.find((c) => c.slug === props.category)?.name || props.category);
 
-const similarDishes = computed(() =>
-  dishes.value.filter((d) => d.slug !== props.dish).sort((a, b) => (a.price || 0) - (b.price || 0)).slice(0, 4)
-);
+// Similarity ranking (C-11): `dishes` is already this dish's own category list,
+// so every candidate shares the category. Rank by shared tags first, then
+// price proximity; slug breaks ties so the order is deterministic. The old
+// code just took the four cheapest dishes in the catalogue.
+const similarDishes = computed(() => {
+  const current = dish.value;
+  if (!current) return [];
+  const currentTags = new Set(Array.isArray(current.tags) ? current.tags : []);
+  const currentPrice = Number(current.price) || 0;
+  const scored = dishes.value
+    .filter((d) => d.slug !== props.dish)
+    .map((d) => {
+      const tags = Array.isArray(d.tags) ? d.tags : [];
+      return {
+        dish: d,
+        sharedTags: tags.filter((tag) => currentTags.has(tag)).length,
+        priceGap: Math.abs((Number(d.price) || 0) - currentPrice),
+      };
+    });
+  scored.sort((a, b) =>
+    b.sharedTags - a.sharedTags ||
+    a.priceGap - b.priceGap ||
+    String(a.dish.slug).localeCompare(String(b.dish.slug))
+  );
+  return scored.slice(0, 4).map((entry) => entry.dish);
+});
 const showSimilarSkeletons  = computed(() => menu.loading && !similarVis.isVisible.value);
 const visibleSimilarDishes  = computed(() => similarVis.isVisible.value ? similarDishes.value : []);
 
@@ -453,7 +476,7 @@ const groupIsSelected = (groupId, optionId) => {
   return Array.isArray(sel) ? sel.includes(optionId) : sel === optionId;
 };
 
-const toggleInGroup = (groupId, optionId, maxSelect, minSelect = 0) => {
+const toggleInGroup = (groupId, optionId, maxSelect, minSelect = 0, event = null) => {
   const current = Array.isArray(groupSelections.value[groupId])
     ? [...groupSelections.value[groupId]]
     : groupSelections.value[groupId] != null ? [groupSelections.value[groupId]] : [];
@@ -461,8 +484,27 @@ const toggleInGroup = (groupId, optionId, maxSelect, minSelect = 0) => {
   if (idx >= 0) {
     if (current.length > Math.max(minSelect, 0)) current.splice(idx, 1);
   } else {
-    if (current.length >= maxSelect) current.shift();
-    current.push(optionId);
+    if (current.length >= maxSelect) {
+      if (maxSelect <= 1) {
+        // Single-select (radio) group: picking another option replaces the
+        // current one — that IS the pick, so the swap stays allowed.
+        current.splice(0, current.length, optionId);
+      } else {
+        // Multi-select group at capacity: block the new pick and say so —
+        // never silently drop the oldest selection (C-11). The existing
+        // selection is left unchanged (early return skips the assignment).
+        toast.show(t('dishPage.maxSelectReached', { n: maxSelect }), 'error');
+        // Reset the just-clicked box to the true selection state: the browser
+        // already toggled it before firing change, and the block changes no
+        // state, so the next render produces identical vnodes and Vue never
+        // re-patches :checked -- without this the box stays visually checked
+        // although the pick was refused (C-11).
+        if (event?.target) event.target.checked = groupIsSelected(groupId, optionId);
+        return;
+      }
+    } else {
+      current.push(optionId);
+    }
   }
   groupSelections.value = { ...groupSelections.value, [groupId]: current };
 };
