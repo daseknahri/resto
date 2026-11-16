@@ -45,8 +45,14 @@ vi.mock("../../composables/useI18n", () => ({
 
 // Wizard destructures { confirm } from useConfirmModal(); it's used ONLY inside the
 // onBeforeRouteLeave guard (never at mount). Resolve true defensively.
+// SINGLE mock for this path (do NOT re-mock it below): the shared spy is what
+// the A3-34 leave-guard tests assert on. A duplicate re-mock used to live in
+// the K2 section; which factory won depended on async resolution timing —
+// FE gate run 3 failed A3-34 with confirmSpy at 0 calls (the base factory's
+// fresh fn took the call instead). One mock, one spy, no race.
+const confirmSpy = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
 vi.mock("../../composables/useConfirmModal", () => ({
-  useConfirmModal: () => ({ confirm: vi.fn(() => Promise.resolve(true)) }),
+  useConfirmModal: () => ({ confirm: confirmSpy }),
 }));
 
 // Wizard destructures { catalog, groupSingular, itemSingular } from useVocabulary()
@@ -794,18 +800,15 @@ describe("S1-H A3-09 — publish gate requires the brand check", () => {
 // Mock notes — every vi.mock below is hoisted by Vitest, so it applies
 // file-wide, and each factory is a SUPERSET of (or disjoint from) the base
 // factories, so the tests above keep passing:
-// - ../../composables/useConfirmModal is RE-MOCKED with a shared spy that
-//   resolves true by default (the base factory created a fresh fn per call,
-//   which no earlier test observes). S1-H's A3-05 delete tests rely on the
-//   confirm resolving true — the spy preserves that — while the A3-34 tests
-//   below can assert confirm was/wasn't called and flip it to false.
+// - ../../composables/useConfirmModal is NOT re-mocked here — the single base
+//   factory above already returns the shared confirmSpy (resolves true by
+//   default). S1-H's A3-05 delete tests rely on the confirm resolving true —
+//   the spy preserves that — while the A3-34 tests below can assert confirm
+//   was/wasn't called and flip it to false. A duplicate re-mock used to live
+//   here; it made which factory wins depend on async resolution timing and
+//   failed FE gate run 3 with confirmSpy at 0 calls.
 // - vue-router is NOT re-mocked: the base onBeforeRouteLeave vi.fn() stands,
 //   and the guard under test is read back from its mock.calls.
-const confirmSpy = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-vi.mock("../../composables/useConfirmModal", () => ({
-  useConfirmModal: () => ({ confirm: confirmSpy }),
-}));
-
 import { onBeforeRouteLeave } from "vue-router";
 
 // ── A3-34 — leave guards only fire after a real edit ──────────────────────
