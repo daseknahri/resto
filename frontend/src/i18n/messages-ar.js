@@ -686,6 +686,7 @@ const arabicMessages = {
     "heldCourseWarningTitle": "لا تزال هناك أطباق معلّقة",
     "heldCourseWarningBody": "لا يزال بهذا الطلب أطباق معلّقة لم يتم إطلاقها بعد. هل تريد وضع علامة جاهز على أي حال؟",
     "heldCourseWarningConfirm": "وضع علامة جاهز على أي حال",
+    "markAllFailedTerminal": "هذا الطلب منتهٍ بالفعل، لذا لا يمكن تعليم أصنافه جاهزة.",
   },
   "ownerHome": {
     "closeStorefrontConfirmTitle": "إغلاق المتجر؟",
@@ -6659,6 +6660,7 @@ Object.assign(arabicMessages, {
     noteLabel: "\u0645\u0644\u0627\u062d\u0638\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
     "openFloatInvalid": "أدخل رصيد بداية صحيحًا (0 أو أكثر).",
     "recommendedFloatHint": "الرصيد الموصى به: {amount}",
+    "countedInvalid": "أدخل المبلغ المحصي الصحيح (0 أو أكثر).",
   },
   shiftClose: {
     navLabel: "\u0625\u063a\u0644\u0627\u0642 \u0627\u0644\u0648\u0631\u062f\u064a\u0629",

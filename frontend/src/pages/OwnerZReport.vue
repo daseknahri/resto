@@ -78,6 +78,7 @@
             :aria-label="t('zReport.closeDrawerCountLabel')"
             placeholder="0.00"
             :disabled="closingDrawer"
+            @input="closeDrawerCountedError = ''"
           />
         </div>
         <button
@@ -91,6 +92,9 @@
           {{ closingDrawer ? t("zReport.closeDrawerBusy") : t("zReport.closeDrawerBtn") }}
         </button>
       </div>
+      <!-- B-44: invalid counted total explains itself inline instead of the
+           close button silently doing nothing. -->
+      <p v-if="closeDrawerCountedError" role="alert" class="text-xs text-red-400">{{ closeDrawerCountedError }}</p>
     </section>
 
     <!-- Drawer fetch failed — surfaced distinctly so a failed fetch is never
@@ -494,6 +498,10 @@ const drawerError = ref(false);
 // Close-shift inline state
 const closingDrawer = ref(false);
 const closeDrawerCounted = ref("");
+// B-44: inline validation error for the counted total — a typed negative enables
+// the close button (it is only disabled while the field is empty), so an invalid
+// value must explain itself instead of the handler returning silently.
+const closeDrawerCountedError = ref("");
 
 // The open drawer session, if any, for this service day
 const openDrawerSession = computed(() =>
@@ -502,7 +510,12 @@ const openDrawerSession = computed(() =>
 
 const closeShiftAndPrint = async () => {
   const counted = parseFloat(closeDrawerCounted.value);
-  if (isNaN(counted) || counted < 0) return;
+  if (isNaN(counted) || counted < 0) {
+    // B-44: show the error inline (same key family as cashDrawer.openFloatInvalid).
+    closeDrawerCountedError.value = t("cashDrawer.countedInvalid");
+    return;
+  }
+  closeDrawerCountedError.value = "";
   const ok = await confirm({
     title: t("cashDrawer.closeConfirmTitle"),
     body: t("cashDrawer.closeConfirmBody", { total: fmtMoney(counted) }),

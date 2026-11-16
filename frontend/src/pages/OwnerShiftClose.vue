@@ -88,6 +88,7 @@
                   :aria-label="t('cashDrawer.countedTotal')"
                   :placeholder="`0.00`"
                   :disabled="closing"
+                  @input="countedError = ''"
                 />
               </div>
               <button
@@ -100,6 +101,9 @@
                 {{ closing ? t("common.loading") : t("cashDrawer.submitClose") }}
               </button>
             </div>
+            <!-- B-44: invalid counted total explains itself inline instead of the
+                 close button silently doing nothing. -->
+            <p v-if="countedError" role="alert" class="text-xs text-red-400">{{ countedError }}</p>
           </div>
         </template>
 
@@ -244,6 +248,10 @@ const loading = ref(false);
 const error = ref("");
 const closing = ref(false);
 const countedInput = ref("");
+// B-44: inline validation error for the counted total — a typed negative enables
+// the close button (it is only disabled while the field is empty), so an invalid
+// value must explain itself instead of the handler returning silently.
+const countedError = ref("");
 
 // B-16: Profile has no currency field server-side (ProfileSerializer never sends
 // one), so the profile?.currency read was dead and always fell back to MAD —
@@ -340,7 +348,12 @@ const loadData = async () => {
 
 const closeDrawerNow = async () => {
   const counted = parseFloat(countedInput.value);
-  if (isNaN(counted) || counted < 0) return;
+  if (isNaN(counted) || counted < 0) {
+    // B-44: show the error inline (same key family as cashDrawer.openFloatInvalid).
+    countedError.value = t("cashDrawer.countedInvalid");
+    return;
+  }
+  countedError.value = "";
   const ok = await confirm({
     title: t("cashDrawer.closeConfirmTitle"),
     body: t("cashDrawer.closeConfirmBody", { total: fmtMoney(counted) }),

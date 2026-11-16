@@ -949,8 +949,9 @@ const markAllReady = async (order) => {
   } catch (err) {
     const code = err?.response?.data?.code;
     if (code === "bad_status") {
-      // Order is terminal — show a clear message
-      toast.show(t("kitchen.markAllFailed"), "error");
+      // B-45: the order is terminal (completed/cancelled) — say so distinctly
+      // instead of the generic failure, so the kitchen knows why nothing moved.
+      toast.show(t("kitchen.markAllFailedTerminal"), "error");
     } else {
       toast.show(t("kitchen.markAllFailed"), "error");
     }

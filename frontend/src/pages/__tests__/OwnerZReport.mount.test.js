@@ -321,3 +321,78 @@ describe("OwnerZReport — G4b-E (B-31 tenant-tz todayIso)", () => {
     expect(max).toBe("2026-11-15");
   });
 });
+
+describe("OwnerZReport — S3-D B-44 invalid counted total", () => {
+  let wrapper;
+
+  // Own isolation (S2 lesson): the base describe's beforeEach does NOT run for
+  // appended describes, so this hook repeats the full reset here.
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    window.print = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // zReportPayload + drawerPayload are the file-scope fixtures above: the open
+  // session in drawerPayload renders the amber close-shift card.
+  const loadedRoutes = () => {
+    _routes = {
+      "/owner/z-report/": { data: zReportPayload },
+      "/owner/drawer/history/": { data: drawerPayload },
+    };
+  };
+
+  const countedInput = () => wrapper.find('input[type="number"]');
+  const closeButton = () =>
+    wrapper.findAll("button").find((b) => b.text().includes("zReport.closeDrawerBtn"));
+
+  // B-44: a typed negative enables the button (it is only disabled while the
+  // field is empty) but the old handler returned silently. Now the error must
+  // show inline and no close POST may fire.
+  // NOTE: no valid-input click test here — a valid close reaches the REAL
+  // useConfirmModal.confirm(), whose promise only settles when the modal
+  // component answers, so clicking through would hang the test.
+  it("shows an inline error and posts nothing for a negative counted total (B-44)", async () => {
+    loadedRoutes();
+    wrapper = mountReport();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("zReport.closeDrawerTitle");
+    expect(countedInput().exists()).toBe(true);
+    await countedInput().setValue("-3");
+    // The bug scenario: a negative value still enables the button …
+    expect(closeButton().attributes("disabled")).toBeUndefined();
+    await closeButton().trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("cashDrawer.countedInvalid");
+    expect(wrapper.find('[role="alert"]').text()).toContain("cashDrawer.countedInvalid");
+    const api = (await import("../../lib/api")).default;
+    expect(api.post).not.toHaveBeenCalled();
+    // … and the close-shift card is still there (no close happened).
+    expect(wrapper.text()).toContain("zReport.closeDrawerTitle");
+  });
+
+  // Editing the field clears the error so a corrected value starts clean.
+  it("clears the inline error when the counted total is edited (B-44)", async () => {
+    loadedRoutes();
+    wrapper = mountReport();
+    await flushPromises();
+
+    await countedInput().setValue("-3");
+    await closeButton().trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("cashDrawer.countedInvalid");
+
+    await countedInput().setValue("307");
+    expect(wrapper.text()).not.toContain("cashDrawer.countedInvalid");
+  });
+});

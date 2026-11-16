@@ -194,3 +194,73 @@ describe("OwnerKitchen — mount smoke", () => {
     expect(wrapper.text()).not.toContain("kitchen.allClear");
   });
 });
+
+describe("OwnerKitchen — S3-D B-45 markAllReady terminal order", () => {
+  let wrapper;
+
+  // Own isolation (S2 lesson): the base describe's beforeEach does NOT run for
+  // appended describes, so this hook repeats the full reset here.
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // Drive markAllReady through the card stub's @mark-all-ready emit: the card
+  // is auto-stubbed by shallowMount, so emitting on the stub invokes the
+  // parent's handler with the order object — no child setup runs. The ticket's
+  // items are all course 0 with fired_course 1, so lowestHeldCourse() is null
+  // and no held-course confirm is reached.
+  const emitMarkAllReady = async (order) => {
+    const card = wrapper.findComponent(OwnerKitchenOrderCard);
+    expect(card.exists()).toBe(true);
+    card.vm.$emit("mark-all-ready", order);
+    await flushPromises();
+  };
+
+  const mountWithTicket = async () => {
+    _routes = { "/staff/orders/": { data: { results: [ticket()] } } };
+    wrapper = mountKitchen();
+    await flushPromises();
+    expect(wrapper.findAllComponents(OwnerKitchenOrderCard)).toHaveLength(1);
+  };
+
+  // B-45: the old catch showed the generic markAllFailed for bad_status too,
+  // discarding the terminal-order distinction. Now the kitchen gets a distinct
+  // message saying the order is already finished.
+  it("shows a distinct terminal-order message when the order is already finished (B-45)", async () => {
+    await mountWithTicket();
+    const api = (await import("../../lib/api")).default;
+    api.post.mockRejectedValueOnce({ response: { data: { code: "bad_status" } } });
+
+    await emitMarkAllReady(ticket());
+
+    const { useToastStore } = await import("../../stores/toast");
+    const toast = useToastStore();
+    expect(toast.message).toBe("kitchen.markAllFailedTerminal");
+    expect(toast.type).toBe("error");
+    expect(toast.visible).toBe(true);
+  });
+
+  // The generic branch is unchanged: any other failure still shows markAllFailed.
+  it("keeps the generic message for a non-terminal mark-all failure (B-45)", async () => {
+    await mountWithTicket();
+    const api = (await import("../../lib/api")).default;
+    api.post.mockRejectedValueOnce(new Error("network down"));
+
+    await emitMarkAllReady(ticket());
+
+    const { useToastStore } = await import("../../stores/toast");
+    const toast = useToastStore();
+    expect(toast.message).toBe("kitchen.markAllFailed");
+    expect(toast.type).toBe("error");
+    expect(toast.visible).toBe(true);
+  });
+});

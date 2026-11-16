@@ -5982,6 +5982,7 @@ kitchen: {
   autoPrint: "Impression auto",
   autoPrintOn: "Impression auto : ACTIVEE",
   autoPrintOff: "Impression auto : DESACTIVEE",
+  markAllFailedTerminal: "Cette commande est deja terminee, ses articles ne peuvent pas etre marques prets.",
 },
 stepSuperCategories: {
   title: "Groupes de menu",
@@ -6549,6 +6550,7 @@ cashDrawer: {
   noteLabel: "Note (optionnel)",
   openFloatInvalid: "Saisissez un fonds de caisse valide (0 ou plus).",
   recommendedFloatHint: "Fonds recommande : {amount}",
+  countedInvalid: "Saisissez un total compte valide (0 ou plus).",
 },
 shiftClose: {
   navLabel: "Cloture de service",

@@ -5985,6 +5985,7 @@ kitchen: {
   autoPrint: "Auto-print",
   autoPrintOn: "Auto-print: ON",
   autoPrintOff: "Auto-print: OFF",
+  markAllFailedTerminal: "This order is already finished, so its items can't be marked ready.",
 },
 orderStatus: {
   kicker: "Order tracking",
@@ -6562,6 +6563,7 @@ cashDrawer: {
   noteLabel: "Note (optional)",
   openFloatInvalid: "Enter a valid opening float (0 or more).",
   recommendedFloatHint: "Recommended float: {amount}",
+  countedInvalid: "Enter a valid counted total (0 or more).",
 },
 shiftClose: {
   navLabel: "Shift close",
