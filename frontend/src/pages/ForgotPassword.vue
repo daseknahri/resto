@@ -83,7 +83,7 @@
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "../composables/useI18n";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -109,9 +109,9 @@ const submit = async () => {
   error.value = "";
   try {
     const { data } = await api.post("/password-reset/request/", { identifier: identifier.value });
-    message.value = data?.detail || t("forgotPassword.successFallback");
+    message.value = t("forgotPassword.successFallback");
   } catch (err) {
-    error.value = err?.response?.data?.detail || t("forgotPassword.requestFailed");
+    error.value = extractApiErrorMessage(err, t("forgotPassword.requestFailed"));
   } finally {
     submitting.value = false;
   }

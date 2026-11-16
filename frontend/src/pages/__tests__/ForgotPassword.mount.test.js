@@ -54,6 +54,13 @@ vi.mock("../../lib/api", () => ({
     get: vi.fn((url) => Promise.resolve(_match(url))),
     post: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // C-06 contract double (S2-H): known code -> localized apiClient key, else fallback.
+  extractApiErrorMessage: (err, fallback = "") => {
+    const code = err?.response?.data?.code;
+    const MAP = { invalid_phone: "apiClient.invalidPhone", otp_rate_limited: "apiClient.otpRateLimited" };
+    if (code && MAP[code]) return MAP[code];
+    return fallback;
+  },
 }));
 
 // The page imports { useRoute } (signinLink reads route.query.next). useRouter is
@@ -137,8 +144,9 @@ describe("ForgotPassword — mount smoke", () => {
       "/password-reset/request/",
       { identifier: "owner@example.com" }
     );
-    // The success alert rendered the returned detail message.
-    expect(wrapper.text()).toContain("Check your inbox");
+    // C-06: the success alert renders the localized fallback, never the raw backend detail.
+    expect(wrapper.text()).toContain("forgotPassword.successFallback");
+    expect(wrapper.text()).not.toContain("Check your inbox");
     // Page is still intact (own heading still present).
     expect(wrapper.text()).toContain("forgotPassword.title");
   });
@@ -174,9 +182,47 @@ describe("ForgotPassword — C-19 debug_reset_url is never rendered", () => {
     await flushPromises();
 
     expect(wrapper.exists()).toBe(true);
-    expect(wrapper.text()).toContain("Check your inbox");
+    expect(wrapper.text()).toContain("forgotPassword.successFallback");
+    expect(wrapper.text()).not.toContain("Check your inbox");
     expect(wrapper.text()).not.toContain("https://example.com/reset/abc123");
     expect(wrapper.text()).not.toContain("abc123");
     expect(wrapper.text()).not.toContain("forgotPassword.debugUrlPrefix");
+  });
+});
+
+describe("ForgotPassword — C-06 request errors never surface raw backend detail", () => {
+  let wrapper;
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const submitWith = async (wrapper, postError) => {
+    api.post.mockRejectedValueOnce(postError);
+    await wrapper.find("input").setValue("owner@example.com");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+  };
+
+  it("shows the localized generic for an unmapped error, never the raw detail", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await submitWith(wrapper, {
+      response: { data: { code: "something_new", detail: "No account matches that identifier." } },
+    });
+    expect(wrapper.text()).toContain("forgotPassword.requestFailed");
+    expect(wrapper.text()).not.toContain("No account matches that identifier.");
+  });
+
+  it("shows the success fallback (not the backend detail) on a successful request", async () => {
+    api.post.mockResolvedValueOnce({ data: { detail: "Check your inbox" } });
+    wrapper = mountPage();
+    await flushPromises();
+    await wrapper.find("input").setValue("owner@example.com");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("forgotPassword.successFallback");
+    expect(wrapper.text()).not.toContain("Check your inbox");
   });
 });

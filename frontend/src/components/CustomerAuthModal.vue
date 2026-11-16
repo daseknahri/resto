@@ -199,7 +199,7 @@ const FOCUSABLE = [
 import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCustomerStore } from "../stores/customer";
-import api from "../lib/api";
+import api, { extractApiErrorMessage } from "../lib/api";
 import { PLATFORM_NAME } from "../lib/brand";
 
 defineProps({
@@ -298,7 +298,7 @@ const requestOtp = async () => {
     await nextTick();
     otpInputRef.value?.focus();
   } catch (err) {
-    phoneError.value = err?.response?.data?.detail || t("customerAuth.sendError");
+    phoneError.value = extractApiErrorMessage(err, t("customerAuth.sendError"));
   } finally {
     requesting.value = false;
   }
@@ -330,15 +330,17 @@ const verifyOtp = async () => {
       finishAuth(customer);
     }
   } catch (err) {
-    const code   = err?.response?.data?.code;
-    const detail = err?.response?.data?.detail;
+    const code = err?.response?.data?.code;
     if (code === "otp_expired" || code === "too_many_attempts") {
       otpError.value = code === "otp_expired" ? t("customerAuth.otpExpired") : t("customerAuth.tooManyAttempts");
       step.value = "phone";
     } else if (code === "invalid_code") {
       otpError.value = t("customerAuth.otpInvalid");
     } else {
-      otpError.value = detail || t("customerAuth.verifyError");
+      // C-06: never surface the raw backend `detail`; the shared extractor maps
+      // a known code (otp_expired / too_many_attempts / invalid_code are handled
+      // above with their specific keys) and otherwise shows the localized fallback.
+      otpError.value = extractApiErrorMessage(err, t("customerAuth.verifyError"));
     }
   } finally {
     verifying.value = false;
@@ -404,7 +406,7 @@ const handleGoogleCredential = async (response) => {
     _linkPendingReferral();
     finishAuth(res.data.customer);
   } catch (err) {
-    generalError.value = err?.response?.data?.detail || t("customerAuth.googleError");
+    generalError.value = extractApiErrorMessage(err, t("customerAuth.googleError"));
   }
 };
 

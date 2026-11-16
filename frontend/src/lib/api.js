@@ -74,22 +74,108 @@ export const isAuthRedirectExempt = (url) => {
   return AUTH_REDIRECT_EXEMPT_PATHS.some((p) => u.includes(p));
 };
 
+// C-06 (Run 8 S2-H): backend `detail` / `non_field_errors` / field-error strings are
+// English backend copy and must NEVER reach the customer UI (OPS-6b). The only
+// backend-derived message a screen may show is the LOCALIZED string for a known
+// backend `code`, looked up here. Anything unmapped falls back to the caller's
+// localized fallback — or "" when none is given — never to the raw backend string.
+// (The old extractor returned `detail` first; that is the behaviour this replaces.)
+//
+// Canonical map: backend `code` -> i18n key under the `apiClient` block (EN+FR+AR in
+// messages-*.js). Prefix families share one key: every `loyalty_*` code, every
+// `schedule_*` code, and every `plan_forbidden*` code.
+export const API_ERROR_CODE_MESSAGES = {
+  // Checkout / ordering (mirrors Cart's mapOrderApiError code list).
+  promo_not_found: "apiClient.promoInvalid",
+  promo_invalid: "apiClient.promoInvalid",
+  auth_required: "apiClient.authRequired",
+  wallet_insufficient: "apiClient.walletInsufficient",
+  not_verified: "apiClient.notVerified",
+  phone_required: "apiClient.phoneRequired",
+  items_unavailable: "apiClient.itemsUnavailable",
+  plan_forbidden: "apiClient.planForbidden",
+  plan_forbidden_checkout: "apiClient.planForbidden",
+  menu_unpublished: "apiClient.menuUnpublished",
+  restaurant_closed: "apiClient.restaurantClosed",
+  contact_missing: "apiClient.contactMissing",
+  table_unavailable: "apiClient.tableUnavailable",
+  mixed_currency: "apiClient.mixedCurrency",
+  stale_options: "apiClient.staleOptions",
+  menu_temporarily_disabled: "apiClient.menuTemporarilyDisabled",
+  below_delivery_minimum: "apiClient.belowDeliveryMinimum",
+  delivery_out_of_range: "apiClient.deliveryOutOfRange",
+  ordering_paused: "apiClient.orderingPaused",
+  dine_in_unavailable: "apiClient.dineInUnavailable",
+  delivery_unavailable: "apiClient.deliveryUnavailable",
+  schedule_invalid: "apiClient.scheduleInvalid",
+  currency_unsupported: "apiClient.currencyUnsupported",
+  loyalty_insufficient_points: "apiClient.loyaltyError",
+  // Customer auth / account (accounts/views.py error codes).
+  otp_expired: "apiClient.otpExpired",
+  too_many_attempts: "apiClient.tooManyAttempts",
+  invalid_code: "apiClient.invalidCode",
+  otp_rate_limited: "apiClient.otpRateLimited",
+  otp_cooldown: "apiClient.otpCooldown",
+  invalid_phone: "apiClient.invalidPhone",
+  phone_taken: "apiClient.phoneTaken",
+  email_taken: "apiClient.emailTaken",
+  email_invalid: "apiClient.emailInvalid",
+  email_required: "apiClient.emailRequired",
+  name_required: "apiClient.nameRequired",
+  phone_unverified: "apiClient.phoneUnverified",
+  invalid_credential: "apiClient.invalidCredential",
+  not_configured: "apiClient.notConfigured",
+  password_too_weak: "apiClient.passwordTooWeak",
+  wrong_current_password: "apiClient.wrongCurrentPassword",
+  current_password_required: "apiClient.currentPasswordRequired",
+  new_password_required: "apiClient.newPasswordRequired",
+  // Generic / shared.
+  rate_limited: "apiClient.rateLimited",
+  not_found: "apiClient.notFound",
+  forbidden: "apiClient.forbidden",
+  invalid: "apiClient.invalidRequest",
+  invalid_body: "apiClient.invalidRequest",
+  server_error: "apiClient.serverError",
+  unavailable: "apiClient.unavailable",
+  already_claimed: "apiClient.alreadyClaimed",
+  phone_mismatch: "apiClient.phoneMismatch",
+  voucher_locked: "apiClient.voucherLocked",
+  already_used: "apiClient.alreadyUsed",
+  already_revoked: "apiClient.alreadyRevoked",
+  insufficient: "apiClient.insufficientBalance",
+  expired: "apiClient.expired",
+  conflict: "apiClient.conflict",
+  cancel_too_late: "apiClient.cancelTooLate",
+  not_owner: "apiClient.notOwner",
+  missing_fields: "apiClient.missingFields",
+  staff_session_conflict: "apiClient.sessionConflict",
+  no_tenant: "apiClient.noTenant",
+};
+
+// Prefix families: one localized key per family (see map above).
+const API_ERROR_CODE_PREFIXES = [
+  ["loyalty_", "apiClient.loyaltyError"],
+  ["schedule_", "apiClient.scheduleInvalid"],
+  ["plan_forbidden", "apiClient.planForbidden"],
+];
+
+// Resolve a backend error `code` to its i18n key, or "" when the code is unknown.
+// Shared by stores/menu.js so both extractors map codes identically.
+export const mapApiErrorCode = (code) => {
+  if (typeof code !== "string" || !code) return "";
+  if (Object.prototype.hasOwnProperty.call(API_ERROR_CODE_MESSAGES, code)) return API_ERROR_CODE_MESSAGES[code];
+  const prefix = API_ERROR_CODE_PREFIXES.find(([p]) => code.startsWith(p));
+  return prefix ? prefix[1] : "";
+};
+
 // Canonical extractor for a human message out of an axios/DRF error. Single source of
-// truth — several files had hand-rolled copies of varying completeness (the weakest
-// missed `non_field_errors` and field-level errors), so error quality drifted per screen.
-// Order: DRF `detail` → `non_field_errors[0]` → a bare list body's first entry (DRF's shape
-// for a ValidationError raised from a serializer's save()) → first non-empty array field
-// (serializer field errors) → a plain string body → the caller's fallback.
+// truth. Contract (C-06): a known `data.code` returns its LOCALIZED message; anything
+// else returns the caller's localized `fallback` ("" when none is given). Raw backend
+// strings (`detail`, `non_field_errors`, field errors, bare-list bodies, plain-string
+// bodies) are NEVER returned.
 export const extractApiErrorMessage = (err, fallback = "") => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return String(data.non_field_errors[0]);
-  if (Array.isArray(data)) return data.length && typeof data[0] === "string" ? data[0] : fallback;
-  if (data && typeof data === "object") {
-    const firstList = Object.values(data).find((v) => Array.isArray(v) && v.length);
-    if (firstList) return String(firstList[0]);
-  }
-  if (typeof data === "string" && data.trim()) return data;
+  const key = mapApiErrorCode(err?.response?.data?.code);
+  if (key) return translate(key);
   return fallback;
 };
 
@@ -216,7 +302,9 @@ export function createApiClient({ baseURL, timeout = 30000 }) {
         }
       }
       if (error.response?.status === 429) {
-        error.response.data = { detail: translate("apiClient.rateLimitRetry") };
+        // Tag the rewritten body with the code so the C-06 extractor can map it to
+        // the localized rate-limit message instead of dropping it to the fallback.
+        error.response.data = { code: "rate_limited", detail: translate("apiClient.rateLimitRetry") };
       }
       return Promise.reject(error);
     }

@@ -250,7 +250,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
-import api from '../lib/api';
+import api, { extractApiErrorMessage } from '../lib/api';
 import { useI18n } from '../composables/useI18n';
 
 const props = defineProps({ token: { type: String, required: true } });
@@ -323,7 +323,7 @@ const cancel = async () => {
     _apply(res.data);
     confirming.value = false;
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('reservationManage.cancelFailed');
+    errorMsg.value = extractApiErrorMessage(err, t('reservationManage.cancelFailed'));
     confirming.value = false;
   } finally {
     cancelling.value = false;

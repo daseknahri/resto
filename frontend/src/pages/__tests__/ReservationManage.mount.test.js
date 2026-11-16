@@ -61,6 +61,13 @@ vi.mock("../../lib/api", () => ({
     get: vi.fn((url) => Promise.resolve(_match(url))),
     post: vi.fn(() => Promise.resolve({ data: {} })),
   },
+  // C-06 contract double (S2-H): known code -> localized apiClient key, else fallback.
+  extractApiErrorMessage: (err, fallback = "") => {
+    const code = err?.response?.data?.code;
+    const MAP = { cancel_too_late: "apiClient.cancelTooLate", not_found: "apiClient.notFound" };
+    if (code && MAP[code]) return MAP[code];
+    return fallback;
+  },
 }));
 
 import ReservationManage from "../ReservationManage.vue";
@@ -252,5 +259,56 @@ describe("ReservationManage — S2-E (C-15)", () => {
     expect(wrapper.text()).toContain("reservationManage.loadErrorTitle");
     expect(wrapper.text()).not.toContain("reservationManage.notFoundTitle");
     expect(wrapper.text()).toContain("common.retry");
+  });
+});
+
+describe("ReservationManage — C-06 cancel errors never surface raw backend detail", () => {
+  let wrapper;
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountCancellable = async () => {
+    _routes = {
+      "/reservations/manage/": {
+        data: {
+          restaurant: "Le Gourmet",
+          name: "Sara",
+          booked_for: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+          party_size: 2,
+          status: "confirmed",
+          cancelled: false,
+          is_past: false,
+          can_cancel: true,
+        },
+      },
+    };
+    wrapper = mountPage("tok_c06");
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("shows the localized message for a known backend code, not the raw detail", async () => {
+    await mountCancellable();
+    api.post.mockRejectedValueOnce({
+      response: { data: { code: "cancel_too_late", detail: "This order can no longer be cancelled." } },
+    });
+    await wrapper.vm.cancel();
+    await flushPromises();
+    expect(wrapper.find("#cancel-error").text()).toContain("apiClient.cancelTooLate");
+    expect(wrapper.text()).not.toContain("This order can no longer be cancelled.");
+  });
+
+  it("shows the localized generic for an unmapped error, never the raw detail", async () => {
+    await mountCancellable();
+    api.post.mockRejectedValueOnce({
+      response: { data: { code: "something_new", detail: "Cancel window closed by the restaurant." } },
+    });
+    await wrapper.vm.cancel();
+    await flushPromises();
+    expect(wrapper.find("#cancel-error").text()).toContain("reservationManage.cancelFailed");
+    expect(wrapper.text()).not.toContain("Cancel window closed by the restaurant.");
   });
 });

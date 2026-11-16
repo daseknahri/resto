@@ -1366,7 +1366,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useCurrencyStore } from '../stores/currency';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
-import api from '../lib/api';
+import api, { extractApiErrorMessage } from '../lib/api';
 import { safeExternalUrl } from '../lib/escape';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
@@ -1544,7 +1544,7 @@ const saveEmail = async () => {
     showEmailInput.value = false;
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    emailError.value = err?.response?.data?.detail || t('customerAccount.emailSaveFailed');
+    emailError.value = extractApiErrorMessage(err, t('customerAccount.emailSaveFailed'));
   } finally {
     savingEmail.value = false;
   }
@@ -1665,7 +1665,7 @@ const submitReview = async (order) => {
     toast.show(t('customerAccount.reviewsSuccess'), 'success');
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    toast.show(err?.response?.data?.detail || t('customerAccount.reviewsError'), 'error');
+    toast.show(extractApiErrorMessage(err, t('customerAccount.reviewsError')), 'error');
   } finally {
     const s2 = new Set(submittingReview.value); s2.delete(num); submittingReview.value = s2;
   }
@@ -2004,7 +2004,7 @@ const redeemPoints = async () => {
     redeemAmount.value = loyaltyConfig.value?.redeem_threshold || 100;
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    redeemError.value = err?.response?.data?.detail || t('customerAccount.loyaltyRedeemFailed');
+    redeemError.value = extractApiErrorMessage(err, t('customerAccount.loyaltyRedeemFailed'));
   } finally {
     redeeming.value = false;
   }
@@ -2035,7 +2035,7 @@ const redeemVoucher = async () => {
     voucherSuccess.value = t('customerAccount.voucherSuccess', { amount: res.data.credited });
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    voucherError.value = err?.response?.data?.detail || t('customerAccount.voucherError');
+    voucherError.value = extractApiErrorMessage(err, t('customerAccount.voucherError'));
   } finally {
     voucherLoading.value = false;
   }
@@ -2192,7 +2192,7 @@ const sendCredit = async () => {
     await fetchWallet();
   } catch (err) {
     if (handleAuthExpired(err)) return;
-    sendError.value = err?.response?.data?.detail || t('customerAccount.sendFailed');
+    sendError.value = extractApiErrorMessage(err, t('customerAccount.sendFailed'));
   } finally {
     sending.value = false;
   }
@@ -2711,8 +2711,10 @@ const requestErasure = async () => {
   } catch (err) {
     if (handleAuthExpired(err)) return;
     if (err?.response?.status === 409) {
-      const errors = err.response.data?.errors || [];
-      erasureBlockedMsg.value = errors.join(' · ') || t('customerAccount.privacyDeleteBlocked');
+      // C-06: the 409 guard-rail `errors` are raw backend English strings -- never
+      // join them into the UI. The extractor maps a known backend `code` (none is
+      // sent here yet) and otherwise shows the localized blocked message.
+      erasureBlockedMsg.value = extractApiErrorMessage(err, t('customerAccount.privacyDeleteBlocked'));
       erasureConfirmVisible.value = false;
     } else {
       toast.show(t('customerAccount.privacyDeleteFailed'), 'error');

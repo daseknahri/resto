@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import api from "../lib/api";
+import api, { mapApiErrorCode } from "../lib/api";
 import { translate } from "../i18n/translate";
 import { hasPublicDemoTenant, isPublicDemoHost } from "../lib/runtimeHost";
 import { readCache, isFresh, writeCache } from "../lib/staleCache";
@@ -67,16 +67,14 @@ const demoDishesByCategory = async () => {
   return buildDemoDishesByCategory();
 };
 
+// C-06 (Run 8 S2-H): same contract as lib/api.js extractApiErrorMessage — a known
+// backend `code` maps to its localized message via the shared map; anything else
+// returns the caller's localized fallback. Raw backend `detail` (and `note`) are
+// never returned. Both call sites already pass translated fallbacks
+// (menuStore.loadCategoriesFailed / menuStore.loadDishesFailed).
 const extractErrorMessage = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data?.detail === "string") {
-    if (typeof data?.note === "string" && data.note.trim()) {
-      return `${data.detail} ${data.note}`;
-    }
-    return data.detail;
-  }
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return String(data.non_field_errors[0]);
-  if (typeof data === "string" && data.trim()) return data;
+  const key = mapApiErrorCode(err?.response?.data?.code);
+  if (key) return translate(key);
   return fallback;
 };
 

@@ -48,12 +48,12 @@ vi.mock("../../lib/api", () => ({
     get: vi.fn(() => Promise.resolve({ data: {} })),
     post: vi.fn(() => Promise.resolve({ data: {} })),
   },
-  // Pass-through of the real precedence for the two shapes the confirm endpoint returns
-  // (bare list from save(), non_field_errors from validate()); fallback otherwise.
+  // C-06 contract double (S2-H; REPLACES the old pass-through that returned raw
+  // non_field_errors / bare-list strings): known code -> localized apiClient key, else fallback.
   extractApiErrorMessage: (err, fallback = "") => {
-    const data = err?.response?.data;
-    if (Array.isArray(data) && typeof data[0] === "string") return data[0];
-    if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) return data.non_field_errors[0];
+    const code = err?.response?.data?.code;
+    const MAP = { invalid_code: "apiClient.invalidCode", otp_expired: "apiClient.otpExpired", password_too_weak: "apiClient.passwordTooWeak" };
+    if (code && MAP[code]) return MAP[code];
     return fallback;
   },
 }));
@@ -170,8 +170,8 @@ describe("ResetPassword — mount smoke", () => {
     expect(target.query).toEqual({ next: "/owner" });
   });
 
-  // ── (4) a spent link shows the server's reason, not the generic failure ──────
-  it("shows the server's 'Token expired or used' message when the reset is rejected", async () => {
+  // ── (4) C-06: a spent link shows the localized failure, never the raw server string ──────
+  it("shows the localized failure (never the raw server string) when the reset is rejected", async () => {
     routeState.query = { token: "reset-token-abc123" };
     api.post.mockRejectedValueOnce({ response: { status: 400, data: ["Token expired or used"] } });
     wrapper = mountPage();
@@ -183,7 +183,43 @@ describe("ResetPassword — mount smoke", () => {
     await flushPromises();
 
     expect(api.post).toHaveBeenCalledTimes(1);
-    expect(wrapper.text()).toContain("Token expired or used");
-    expect(wrapper.text()).not.toContain("resetPassword.failed");
+    expect(wrapper.text()).toContain("resetPassword.failed");
+    expect(wrapper.text()).not.toContain("Token expired or used");
+  });
+});
+
+describe("ResetPassword — C-06 confirm errors never surface raw backend detail", () => {
+  let wrapper;
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const submitWith = async (wrapper, postError) => {
+    api.post.mockRejectedValueOnce(postError);
+    await wrapper.find("#reset-token-input").setValue("tok_abc123");
+    await wrapper.find("#reset-password-input").setValue("newpass123");
+    await wrapper.find("#reset-confirm-input").setValue("newpass123");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+  };
+
+  it("shows the localized message for a known backend code, not the raw detail", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await submitWith(wrapper, {
+      response: { data: { code: "password_too_weak", detail: "This password is too common." } },
+    });
+    expect(wrapper.text()).toContain("apiClient.passwordTooWeak");
+    expect(wrapper.text()).not.toContain("This password is too common.");
+  });
+
+  it("shows the localized generic for the bare-list spent-token shape, never the raw string", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    await submitWith(wrapper, { response: { data: ["Token expired or used"] } });
+    expect(wrapper.text()).toContain("resetPassword.failed");
+    expect(wrapper.text()).not.toContain("Token expired or used");
   });
 });

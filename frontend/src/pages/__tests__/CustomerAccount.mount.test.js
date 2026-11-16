@@ -15,9 +15,11 @@
  * smoke test also exercises their setup-time integration; they are jsdom-safe
  * (guarded navigator/Notification checks) and consume the mocked api/useI18n.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { shallowMount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import { nextTick } from "vue";
+import { useCustomerStore } from "../../stores/customer";
 
 // TRAP #1: any stub referenced inside a vi.mock factory must be vi.hoisted. vi.mock
 // is hoisted above the imports and its factory runs during import evaluation —
@@ -61,6 +63,14 @@ vi.mock("../../lib/api", () => {
       patch: vi.fn(() => Promise.resolve({ data: {} })),
       delete: vi.fn(() => Promise.resolve({ data: {} })),
       put: vi.fn(() => Promise.resolve({ data: {} })),
+    },
+    // C-06 contract double (S2-H): known code -> localized apiClient key, else fallback.
+    extractApiErrorMessage: (err, fallback = "") => {
+      const code = err?.response?.data?.code;
+      const MAP = { email_taken: "apiClient.emailTaken", email_invalid: "apiClient.emailInvalid" };
+      if (code && MAP[code]) return MAP[code];
+      if (typeof code === "string" && (code.startsWith("loyalty_") || code.startsWith("schedule_"))) return `apiClient.${code}`;
+      return fallback;
     },
   };
 });
@@ -379,5 +389,74 @@ describe("CustomerAccount — S2-B C-08 wallet top-up validation", () => {
 
     expect(topUpCalls(api)).toHaveLength(1);
     expect(wrapper.text()).toContain("customerAccount.topUpError");
+  });
+});
+
+describe("CustomerAccount — C-06 email save never surfaces raw backend detail", () => {
+  let wrapper;
+
+  // S2-B lesson: an appended describe needs its own isolation beforeEach —
+  // the base describe's hook does not run for it.
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    routes.current = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountAuthed = async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    const cs = useCustomerStore();
+    cs.customer = { name: "Sara", email: "sara@example.com", phone: "+212600000000" };
+    cs.loaded = true;
+    await nextTick();
+    await flushPromises();
+    // The profile only renders on the profile tab (default tab is overview),
+    // so select it first — same pattern as mountWallet in the S2-B describes.
+    const profileTab = wrapper
+      .findAll('button[role="tab"]')
+      .find((t) => t.text().includes("customerAccount.tabProfile"));
+    expect(profileTab.exists()).toBe(true);
+    await profileTab.trigger("click");
+    await nextTick();
+    return wrapper;
+  };
+
+  const profileStub = (wrapper) => wrapper.findComponent({ name: "CustomerAccountProfile" });
+
+  const saveEmailWith = async (wrapper, patchError) => {
+    const api = await getApi();
+    api.patch.mockRejectedValueOnce(patchError);
+    profileStub(wrapper).vm.$emit("open-email-input");
+    await nextTick();
+    profileStub(wrapper).vm.$emit("update-editable-email", "new@example.com");
+    await nextTick();
+    profileStub(wrapper).vm.$emit("save-email");
+    await flushPromises();
+    await nextTick();
+  };
+
+  it("shows the localized message for a known backend code, not the raw detail", async () => {
+    await mountAuthed();
+    await saveEmailWith(wrapper, {
+      response: { data: { code: "email_taken", detail: "A user with this email already exists." } },
+    });
+    expect(profileStub(wrapper).props("emailError")).toBe("apiClient.emailTaken");
+    expect(wrapper.text()).not.toContain("A user with this email already exists.");
+  });
+
+  it("shows the localized generic for an unmapped code, never the raw detail", async () => {
+    await mountAuthed();
+    await saveEmailWith(wrapper, {
+      response: { data: { code: "something_new", detail: "Brand new backend wording." } },
+    });
+    expect(profileStub(wrapper).props("emailError")).toBe("customerAccount.emailSaveFailed");
+    expect(wrapper.text()).not.toContain("Brand new backend wording.");
   });
 });

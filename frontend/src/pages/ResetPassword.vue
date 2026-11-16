@@ -171,11 +171,13 @@ const submit = async () => {
   error.value = "";
   try {
     const { data } = await api.post("/password-reset/confirm/", { token: token.value, password: password.value });
-    message.value = data?.detail || t("resetPassword.successFallback");
+    message.value = t("resetPassword.successFallback");
   } catch (err) {
     // The confirm endpoint answers with non_field_errors / a bare list ("Token expired or
-    // used", "Invalid token") or a password-validator field error — not `detail` — so read
-    // it with the shared extractor instead of always showing the generic failure.
+    // used", "Invalid token") or a password-validator field error — not `detail`. The
+    // shared extractor (C-06) never surfaces those raw backend strings: a known backend
+    // `code` maps to a localized message, anything else shows the generic failure below
+    // (until the backend sends a code for the spent/invalid-token cases).
     error.value = extractApiErrorMessage(err, t("resetPassword.failed"));
   } finally {
     submitting.value = false;
