@@ -318,3 +318,26 @@ describe("CustomerAccountProfile", () => {
     expect(w.text()).toContain("Cannot delete: active order");
   });
 });
+
+// ── S2-B C-13: dangling aria-describedby ─────────────────────────────────────
+// Appended by S2-B; the base tests above are untouched. The email input's
+// aria-describedby must only be present when the error element it points at
+// exists (SignIn / LeadCapture pattern).
+describe("CustomerAccountProfile — S2-B C-13 aria-describedby", () => {
+  it("leaves aria-describedby off the email input when there is no email error", () => {
+    const w = mountComp({ showEmailInput: true, emailError: "" });
+    const input = w.find('input[type="email"]');
+    expect(input.exists()).toBe(true);
+    expect(input.attributes("aria-describedby")).toBeUndefined();
+    expect(w.find("#customer-account-email-error").exists()).toBe(false);
+  });
+
+  it("points aria-describedby at the error element when an email error is shown", () => {
+    const w = mountComp({ showEmailInput: true, emailError: "Invalid email" });
+    const input = w.find('input[type="email"]');
+    expect(input.attributes("aria-describedby")).toBe("customer-account-email-error");
+    const err = w.find("#customer-account-email-error");
+    expect(err.exists()).toBe(true);
+    expect(err.text()).toContain("Invalid email");
+  });
+});

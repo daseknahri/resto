@@ -6393,6 +6393,8 @@ customerAccount: {
   notifOrderUpdates: "Mises a jour de commande",
   notifPromotions: "Promotions",
   perServiceLoadError: "Impossible de charger les reglages par service.",
+  payCodeError: "Impossible de charger votre code de paiement. Veuillez reessayer.",
+  topUpAmountError: "Saisissez un montant entre {min} et {max}.",
 },
 roleSwitch: {
   driverMode: "Mode livreur",

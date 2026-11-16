@@ -109,7 +109,7 @@
               :placeholder="t('customerAccount.emailPlaceholder')"
               :aria-label="t('customerAccount.emailPlaceholder')"
               :aria-invalid="emailError ? 'true' : undefined"
-              aria-describedby="customer-account-email-error"
+              :aria-describedby="emailError ? 'customer-account-email-error' : undefined"
               :disabled="savingEmail"
               @keydown.enter.prevent="emit('save-email')"
               @keydown.escape.prevent="emit('cancel-email-input')"

@@ -752,6 +752,10 @@
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
             <div class="rounded-2xl bg-white p-3">
               <img v-if="payCodeImg" :src="payCodeImg" :alt="t('customerAccount.payCodeTitle')" class="h-44 w-44" />
+              <div v-else-if="payCodeError" class="flex h-44 w-44 flex-col items-center justify-center gap-2 px-3 text-center" role="alert">
+                <p class="text-xs font-medium text-red-600">{{ t('customerAccount.payCodeError') }}</p>
+                <button class="text-xs font-semibold text-[var(--color-secondary)] hover:underline" @click="refreshPayCode">{{ t('customerAccount.payCodeRefresh') }}</button>
+              </div>
               <div v-else class="flex h-44 w-44 items-center justify-center" role="status" :aria-label="t('common.loading')">
                 <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
               </div>
@@ -1363,6 +1367,7 @@ import { useCurrencyStore } from '../stores/currency';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { safeExternalUrl } from '../lib/escape';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import { useConfirmModal } from '../composables/useConfirmModal';
@@ -2067,19 +2072,34 @@ const walletVerified = computed(() => !!customerStore.customer?.phone_verified);
 // ── Pay code (QR) — a restaurant scans this to top up the wallet ───────────────
 const showPayCode = ref(false);
 const payCodeImg = ref('');
+const payCodeError = ref(false);
 
 // ── PSP top-up (Stripe Checkout, shown only when platform flag is on) ─────────
 const topUpAmount = ref(100);
 const topUpLoading = ref(false);
 const topUpError = ref('');
 
+// Server gate is 10-2000 (CustomerTopUpIntentView); mirror it here so an
+// out-of-range amount fails inline instead of after a round-trip.
+const TOP_UP_MIN = 10;
+const TOP_UP_MAX = 2000;
+const isValidTopUpAmount = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= TOP_UP_MIN && amount <= TOP_UP_MAX;
+};
+
 const initTopUp = async () => {
+  if (!isValidTopUpAmount(topUpAmount.value)) {
+    topUpError.value = t('customerAccount.topUpAmountError', { min: TOP_UP_MIN, max: TOP_UP_MAX });
+    return;
+  }
   topUpError.value = '';
   topUpLoading.value = true;
   try {
     const { data } = await api.post('/customer/topup/intent/', { amount: String(topUpAmount.value) });
-    if (data.enabled && data.url) {
-      window.location.href = data.url;
+    const url = safeExternalUrl(data.url);
+    if (data.enabled && url) {
+      window.location.href = url;
     } else {
       topUpError.value = t('customerAccount.topUpError');
     }
@@ -2093,12 +2113,14 @@ const initTopUp = async () => {
 
 const refreshPayCode = async () => {
   payCodeImg.value = '';
+  payCodeError.value = false;
   try {
     const { data } = await api.get('/customer/wallet/pay-token/');
     const QRCode = (await import('qrcode')).default;  // lazy — keeps ~60KB out of the page chunk
     payCodeImg.value = await QRCode.toDataURL(data.token, { width: 320, margin: 1 });
   } catch {
     payCodeImg.value = '';
+    payCodeError.value = true;
   }
 };
 

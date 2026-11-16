@@ -6406,6 +6406,8 @@ customerAccount: {
   notifOrderUpdates: "Order updates",
   notifPromotions: "Promotions",
   perServiceLoadError: "Couldn't load per-service settings.",
+  payCodeError: "Could not load your pay code. Please try again.",
+  topUpAmountError: "Enter an amount between {min} and {max}.",
 },
 roleSwitch: {
   driverMode: "Driver mode",
