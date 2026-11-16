@@ -478,7 +478,7 @@
                 >
                   <span
                     class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform duration-200"
-                    :class="scheduleEnabled ? 'translate-x-4' : 'translate-x-0'"
+                    :class="scheduleEnabled ? 'translate-x-4 rtl:-translate-x-4' : 'translate-x-0'"
                   />
                 </button>
               </div>
@@ -544,11 +544,14 @@
               </span>
               <button
                 type="button"
-                class="shrink-0 rounded-xl border border-red-500/30 bg-red-500/8 px-2.5 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-50"
+                class="shrink-0 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-50"
+                :class="confirmingSchId === trip.id
+                  ? 'border-red-500/60 bg-red-500/18 text-red-200'
+                  : 'border-red-500/30 bg-red-500/8 text-red-300 hover:bg-red-500/15'"
                 :disabled="cancellingSchId === trip.id"
                 @click="cancelScheduled(trip.id)"
               >
-                {{ cancellingSchId === trip.id ? t('common.loading') : t('tripSchedule.cancelCta') }}
+                {{ cancellingSchId === trip.id ? t('common.loading') : (confirmingSchId === trip.id ? t('ridePage.cancelConfirmCta') : t('tripSchedule.cancelCta')) }}
               </button>
             </li>
           </ul>
@@ -663,6 +666,22 @@ const armCancelGuard = () => {
 const clearCancelGuard = () => {
   cancelConfirming.value = false;
   clearTimeout(_cancelGuardTimer);
+};
+
+// ── Scheduled-cancel guard ────────────────────────────────────────────────────
+// Mirrors armCancelGuard/clearCancelGuard, but keyed by trip id: the scheduled
+// list holds several trips, so one shared boolean would arm every row at once
+// (and cross-arm the active-ride guard). Same 3s expiry as the active guard.
+const confirmingSchId = ref(null);
+let _cancelSchGuardTimer = null;
+const armScheduledCancelGuard = (tripId) => {
+  confirmingSchId.value = tripId;
+  clearTimeout(_cancelSchGuardTimer);
+  _cancelSchGuardTimer = setTimeout(() => { confirmingSchId.value = null; }, 3000);
+};
+const clearScheduledCancelGuard = () => {
+  confirmingSchId.value = null;
+  clearTimeout(_cancelSchGuardTimer);
 };
 
 // ── Cancelled state ───────────────────────────────────────────────────────────
@@ -879,6 +898,12 @@ const requestRide = async () => {
 
 // ── Cancel a scheduled trip ───────────────────────────────────────────────────
 const cancelScheduled = async (tripId) => {
+  // Two-tap guard (C-14): first tap arms, second tap within 3s cancels.
+  if (confirmingSchId.value !== tripId) {
+    armScheduledCancelGuard(tripId);
+    return;
+  }
+  clearScheduledCancelGuard();
   cancellingSchId.value = tripId;
   try {
     await api.post(`/rides/${tripId}/cancel/`);
@@ -1141,6 +1166,9 @@ const ensureDropoffMarker = (lat, lng) => {
 const initPickMap = async () => {
   if (!pickMapEl.value) return;
   const L = await ensureLeaflet();
+  // Re-check: the import resolves async -- the page may have unmounted (or
+  // the form hidden) meanwhile, and L.map(null) throws an unhandled rejection.
+  if (!pickMapEl.value) return;
   const defaultCenter = [33.5731, -7.5898]; // Casablanca fallback
   _pickMap = L.map(pickMapEl.value, { zoomControl: false, attributionControl: false }).setView(defaultCenter, 12);
   addTileLayer(L, _pickMap);
@@ -1169,6 +1197,9 @@ const destroyPickMap = () => {
 const initPickupMap = async () => {
   if (!pickupMapEl.value) return;
   const L = await ensureLeaflet();
+  // Re-check: see initPickMap -- the container may be gone by the time the
+  // dynamic Leaflet import resolves (unmount / form hidden).
+  if (!pickupMapEl.value) return;
   const defaultCenter = [33.5731, -7.5898]; // Casablanca fallback
   _pickupMap = L.map(pickupMapEl.value, { zoomControl: false, attributionControl: false }).setView(defaultCenter, 12);
   addTileLayer(L, _pickupMap);
@@ -1199,6 +1230,9 @@ const renderTrackingMap = async () => {
   const d = activeRide.value?.driver;
   if (!d || d.driver_lat == null || d.driver_lng == null || !trackingMapEl.value) return;
   const L = await ensureLeaflet();
+  // Re-check: see initPickMap -- the tracking block may have unmounted while
+  // the dynamic Leaflet import resolved.
+  if (!trackingMapEl.value) return;
   const driverPos = [Number(d.driver_lat), Number(d.driver_lng)];
   if (!_trackMap) {
     _trackMap = L.map(trackingMapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
@@ -1261,6 +1295,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopPolling();
   clearCancelGuard();
+  clearScheduledCancelGuard();
   destroyPickMap();
   destroyPickupMap();
   destroyTrackingMap();

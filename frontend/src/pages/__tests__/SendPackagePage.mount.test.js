@@ -251,3 +251,140 @@ describe("SendPackagePage — mount smoke", () => {
     expect(wrapper.text()).toContain("sendPackage.title");
   });
 });
+
+// ── S2-F (C-03 + C-14, appended by Run 8) ─────────────────────────────────────
+// The schedule toggle + scheduled-trips list live in the BOOKING FORM (no
+// active package), so these tests mount the booking form — the mocked Leaflet
+// covers the mount-time pickup-map init (see the file header). The api mock's
+// post fn is reached via the mocked-module import below (imports hoist, so it
+// sits with this appended block).
+import api from "../../lib/api";
+import { nextTick } from "vue";
+
+// A scheduled package trip as GET /rides/active/ returns it (kind 'package' —
+// fetchActiveTrip filters scheduled by kind).
+const scheduledPackage = (overrides = {}) => ({
+  id: 7,
+  kind: "package",
+  status: "scheduled",
+  pickup_address: "1 Pickup St",
+  dropoff_address: "9 Dropoff Ave",
+  scheduled_for: "2026-11-17T10:00:00.000Z",
+  ...overrides,
+});
+
+// Mount the booking form (no active package) with the given scheduled trips.
+// Extra flushes drain history/addresses + the nextTick(initPickMap) Leaflet
+// chain (mocked).
+const mountBookingForm = async (scheduled = []) => {
+  useCustomerStore().setCustomer({ id: 9, name: "Sender", phone: "0600000000" });
+  _routes = { "/rides/active/": { data: { ride: null, scheduled } } };
+  const w = mountPage();
+  await flushPromises();
+  await flushPromises();
+  await flushPromises();
+  await nextTick();
+  return w;
+};
+
+// Fresh query each time (the button re-renders on arm/cancel): the scheduled
+// cancel buttons are the ones whose text is the mocked tripSchedule.cancelCta
+// key (idle) or ridePage.cancelConfirmCta key (armed).
+const schCancelBtns = (w) =>
+  w.findAll("button").filter((b) => b.text().includes("tripSchedule.cancelCta") || b.text().includes("ridePage.cancelConfirmCta"));
+
+// Drive the real estimate flow so the schedule toggle renders (it lives inside
+// v-if="estimate"): pin both ends → the auto-estimate watcher POSTs
+// /rides/estimate/ → the mocked api resolves { data: {} } → estimate truthy.
+const resolveEstimate = async (w) => {
+  w.vm.pickupLatLng = { lat: 33.5, lng: -7.6 };
+  w.vm.dropoffLatLng = { lat: 33.6, lng: -7.5 };
+  await nextTick();
+  await flushPromises();
+  await nextTick();
+};
+
+describe("SendPackagePage — S2-F: schedule toggle RTL (C-03) + scheduled-cancel guard (C-14)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── C-03 ──
+  it("schedule toggle knob carries the rtl: mirror when on (C-03)", async () => {
+    wrapper = await mountBookingForm();
+    await resolveEstimate(wrapper);
+
+    const toggle = wrapper.find('button[aria-label="tripSchedule.toggle"]');
+    expect(toggle.exists()).toBe(true);
+    const knob = () => toggle.find("span");
+    // Off: parked at translate-x-0, no RTL mirror.
+    expect(knob().classes()).toContain("translate-x-0");
+    expect(knob().classes()).not.toContain("rtl:-translate-x-4");
+
+    await toggle.trigger("click");
+    // On: slides right in LTR and mirrors left in RTL.
+    expect(knob().classes()).toContain("translate-x-4");
+    expect(knob().classes()).toContain("rtl:-translate-x-4");
+
+    await toggle.trigger("click");
+    expect(knob().classes()).toContain("translate-x-0");
+  });
+
+  // ── C-14 ──
+  it("first tap on a scheduled cancel arms the guard and does NOT fire the cancel POST (C-14)", async () => {
+    wrapper = await mountBookingForm([scheduledPackage(), scheduledPackage({ id: 8, dropoff_address: "2 Other Rd" })]);
+    expect(wrapper.text()).toContain("tripSchedule.upcomingTitle");
+    expect(wrapper.text()).toContain("9 Dropoff Ave");
+    expect(schCancelBtns(wrapper)).toHaveLength(2);
+
+    await schCancelBtns(wrapper)[0].trigger("click");
+    expect(api.post).not.toHaveBeenCalledWith("/rides/7/cancel/");
+
+    // Armed state is visible: confirm text + intensified armed styling…
+    const armed = schCancelBtns(wrapper)[0];
+    expect(armed.text()).toContain("ridePage.cancelConfirmCta");
+    expect(armed.classes()).toContain("border-red-500/60");
+    // …and only on the tapped row: the other trip's button is still idle.
+    expect(schCancelBtns(wrapper)[1].text()).toContain("tripSchedule.cancelCta");
+  });
+
+  it("second tap within the window fires the cancel POST (C-14)", async () => {
+    wrapper = await mountBookingForm([scheduledPackage()]);
+    await schCancelBtns(wrapper)[0].trigger("click");
+    expect(api.post).not.toHaveBeenCalledWith("/rides/7/cancel/");
+
+    await schCancelBtns(wrapper)[0].trigger("click");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith("/rides/7/cancel/");
+  });
+
+  it("guard expires after 3s: a late tap only re-arms, it does not cancel (C-14)", async () => {
+    wrapper = await mountBookingForm([scheduledPackage()]);
+    // Real timers for the mount/flush; fake timers only around the guard window.
+    try {
+      vi.useFakeTimers();
+      await schCancelBtns(wrapper)[0].trigger("click");
+      expect(schCancelBtns(wrapper)[0].text()).toContain("ridePage.cancelConfirmCta");
+
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(schCancelBtns(wrapper)[0].text()).toContain("tripSchedule.cancelCta");
+
+      await schCancelBtns(wrapper)[0].trigger("click");
+      expect(api.post).not.toHaveBeenCalledWith("/rides/7/cancel/");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
