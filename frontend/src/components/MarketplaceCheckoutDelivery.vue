@@ -39,7 +39,7 @@
         :placeholder="t('mktMenu.deliveryAddressPlaceholder')"
         class="ui-textarea resize-none"
         :aria-invalid="addressError ? 'true' : undefined"
-        aria-describedby="mkt-address-error"
+        :aria-describedby="addressError ? 'mkt-address-error' : undefined"
       />
       <p v-if="addressError" id="mkt-address-error" role="alert" class="mt-1 text-xs text-red-300">{{ addressError }}</p>
     </div>

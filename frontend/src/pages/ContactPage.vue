@@ -35,17 +35,27 @@
         <p class="mt-2 truncate text-sm font-semibold text-slate-100">{{ supportEmail }}</p>
       </a>
       <a
+        v-if="whatsappConfigured"
         :href="whatsappUrl"
         target="_blank"
         rel="noopener noreferrer"
         class="ui-spotlight-card ui-surface-lift ui-reveal p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
         :style="{ '--ui-delay': '28ms' }"
-        :aria-disabled="whatsappUrl === '#' ? 'true' : undefined"
-        :aria-label="whatsappUrl === '#' ? `${t('contactPage.whatsapp')}: ${t('contactPage.notConfigured')}` : `${t('contactPage.whatsapp')}: ${supportPhoneLabel}`"
+        :aria-label="`${t('contactPage.whatsapp')}: ${supportPhoneLabel}`"
       >
         <p class="ui-kicker">{{ t("contactPage.whatsapp") }}</p>
         <p class="mt-2 text-sm font-semibold text-slate-100">{{ supportPhoneLabel }}</p>
       </a>
+      <div
+        v-else
+        class="ui-spotlight-card ui-reveal p-4 opacity-60"
+        :style="{ '--ui-delay': '28ms' }"
+        aria-disabled="true"
+        :aria-label="`${t('contactPage.whatsapp')}: ${t('contactPage.notConfigured')}`"
+      >
+        <p class="ui-kicker">{{ t("contactPage.whatsapp") }}</p>
+        <p class="mt-2 text-sm font-semibold text-slate-100">{{ t("contactPage.notConfigured") }}</p>
+      </div>
       <div class="ui-spotlight-card ui-reveal p-4" :style="{ '--ui-delay': '56ms' }">
         <h2 class="ui-kicker">{{ t("contactPage.hours") }}</h2>
         <p class="mt-2 text-sm font-semibold text-slate-100">{{ t("contactPage.hoursValue") }}</p>
@@ -79,11 +89,12 @@ import { SUPPORT_EMAIL } from "../lib/brand";
 const { t } = useI18n();
 const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || SUPPORT_EMAIL).trim());
 const supportPhone = computed(() => String(import.meta.env.VITE_CONTACT_PHONE || "").trim());
-const supportPhoneLabel = computed(() => supportPhone.value || "+212...");
+const supportPhoneLabel = computed(() => supportPhone.value || t("contactPage.notConfigured"));
 const whatsappUrl = computed(() => {
   const normalized = supportPhone.value.replace(/[^\d]/g, "");
   const text = encodeURIComponent(import.meta.env.VITE_CONTACT_MESSAGE || "");
   if (!normalized) return "#";
   return `https://wa.me/${normalized}${text ? `?text=${text}` : ""}`;
 });
+const whatsappConfigured = computed(() => whatsappUrl.value !== "#");
 </script>

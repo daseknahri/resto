@@ -347,6 +347,8 @@ forcePasswordChange: {
   errorGeneric: "Impossible de mettre a jour le mot de passe. Veuillez reessayer.",
   currentRequired: "Le mot de passe temporaire est requis.",
   newRequired: "Le nouveau mot de passe est requis.",
+  passwordHint: "Au moins 8 caracteres.",
+  passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres",
 },
 mfa: {
   securityTabLabel: "Securite",
@@ -3327,7 +3329,9 @@ customerLeadPage: {
   leadNoteIntro: "Lead client depuis la landing du restaurant",
   customerNoteLine: "Message : {message}",
   pageUrlLine: "URL de la page : {url}",
-  moreInfoMessage: "Bonjour {tenant}, je souhaite plus d'informations."
+  moreInfoMessage: "Bonjour {tenant}, je souhaite plus d'informations.",
+  shareCopyFailed: "Copie impossible. Copiez le lien ci-dessous.",
+  shareLinkLabel: "Lien de la page",
 },
 categoryCard: {
   openCategory: "Ouvrir la categorie",

@@ -104,3 +104,19 @@ describe("MarketplaceCheckoutDelivery", () => {
     expect(mountIt({ addressError: "Address required" }).text()).toContain("Address required");
   });
 });
+
+// ── C-13: aria-describedby dangles no more ─────────────────────────────────
+describe("MarketplaceCheckoutDelivery — C-13 aria-describedby", () => {
+  it("has no aria-describedby on the address field when there is no error", () => {
+    const w = mountIt({ addressError: "" });
+    expect(w.find("#mkt-address").attributes("aria-describedby")).toBeUndefined();
+    expect(w.find("#mkt-address-error").exists()).toBe(false);
+  });
+
+  it("points at the error element only when an address error is shown", () => {
+    const w = mountIt({ addressError: "Address required" });
+    expect(w.find("#mkt-address").attributes("aria-describedby")).toBe("mkt-address-error");
+    expect(w.find("#mkt-address-error").exists()).toBe(true);
+    expect(w.find("#mkt-address-error").text()).toBe("Address required");
+  });
+});

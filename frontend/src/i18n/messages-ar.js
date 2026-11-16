@@ -309,7 +309,9 @@ const arabicMessages = {
     "submitting": "جارٍ التحديث...",
     "errorGeneric": "تعذر تحديث كلمة المرور. يرجى المحاولة مرة أخرى.",
     "currentRequired": "كلمة المرور المؤقتة مطلوبة.",
-    "newRequired": "كلمة المرور الجديدة مطلوبة."
+    "newRequired": "كلمة المرور الجديدة مطلوبة.",
+    "passwordHint": "يجب أن تكون 8 أحرف على الأقل.",
+    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
   },
   "mfa": {
     "securityTabLabel": "الأمان",
@@ -1578,7 +1580,9 @@ const arabicMessages = {
     "about": "حول المطعم",
     "businessHours": "ساعات العمل",
     "bookOnPlatform": "احجز عبر منصتهم",
-    "bookOnPlatformBody": "يقبل هذا المطعم الحجوزات المباشرة عبر منصة حجز خارجية."
+    "bookOnPlatformBody": "يقبل هذا المطعم الحجوزات المباشرة عبر منصة حجز خارجية.",
+    "shareCopyFailed": "تعذّر النسخ. انسخ الرابط أدناه بدلاً من ذلك.",
+    "shareLinkLabel": "رابط الصفحة",
   },
   "menu": {
     "kicker": "تصفح القائمة",

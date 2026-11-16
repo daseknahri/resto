@@ -130,3 +130,67 @@ describe("SignIn — mount smoke", () => {
     expect(wrapper.text()).toContain("signIn.title");
   });
 });
+
+// ── C-20: forced password change enforces the 8-character minimum ──────────
+// The forced-change step is reached via completeSignIn() when the signed-in
+// user has must_change_password; the test drives it by flipping the exposed
+// step ref (sanctioned wrapper.vm pattern) and awaiting nextTick before
+// touching the form, so the :disabled bindings have settled.
+import api from "../../lib/api";
+
+describe("SignIn — C-20 forced password change length check", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    routeState.query = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+  });
+
+  const mountForceStep = async () => {
+    wrapper = mountPage();
+    await flushPromises();
+    wrapper.vm.forcePasswordChangeRequired = true;
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+    expect(wrapper.text()).toContain("forcePasswordChange.title");
+    return wrapper.findAll('input[type="password"]');
+  };
+
+  const fillForceForm = async (inputs, current, next, confirm) => {
+    await inputs[0].setValue(current);
+    await inputs[1].setValue(next);
+    await inputs[2].setValue(confirm);
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+  };
+
+  it("shows the length hint on the new-password field", async () => {
+    await mountForceStep();
+    expect(wrapper.text()).toContain("forcePasswordChange.passwordHint");
+  });
+
+  it("blocks a new password under 8 chars client-side (no API call)", async () => {
+    const inputs = await mountForceStep();
+    expect(inputs).toHaveLength(3);
+    await fillForceForm(inputs, "old-temp-pw", "short", "short");
+    expect(wrapper.text()).toContain("forcePasswordChange.passwordTooShort");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("lets an 8-char new password through to the change-password endpoint", async () => {
+    const inputs = await mountForceStep();
+    await fillForceForm(inputs, "old-temp-pw", "12345678", "12345678");
+    expect(wrapper.text()).not.toContain("forcePasswordChange.passwordTooShort");
+    expect(api.post).toHaveBeenCalledWith("/staff/change-password/", {
+      current_password: "old-temp-pw",
+      new_password: "12345678",
+    });
+  });
+});

@@ -53,7 +53,7 @@
                 :placeholder="t('customerAuth.phonePlaceholder')"
                 :disabled="requesting"
                 :aria-invalid="phoneError ? 'true' : undefined"
-                aria-describedby="auth-phone-error"
+                :aria-describedby="phoneError ? 'auth-phone-error' : undefined"
                 aria-required="true"
                 @keydown.enter.prevent="requestOtp"
               />
@@ -92,7 +92,7 @@
                 :placeholder="t('customerAuth.otpPlaceholder')"
                 :disabled="verifying"
                 :aria-invalid="otpError ? 'true' : undefined"
-                aria-describedby="auth-otp-error"
+                :aria-describedby="otpError ? 'auth-otp-error' : undefined"
                 aria-required="true"
                 @keydown.enter.prevent="verifyOtp"
               />

@@ -143,3 +143,40 @@ describe("ForgotPassword — mount smoke", () => {
     expect(wrapper.text()).toContain("forgotPassword.title");
   });
 });
+
+// ── C-19: a debug_reset_url in the response is never rendered ──────────────
+describe("ForgotPassword — C-19 debug_reset_url is never rendered", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  it("shows the success message but not the debug reset URL", async () => {
+    api.post.mockResolvedValueOnce({
+      data: { detail: "Check your inbox", debug_reset_url: "https://example.com/reset/abc123" },
+    });
+
+    wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.find("input").setValue("owner@example.com");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    expect(wrapper.text()).toContain("Check your inbox");
+    expect(wrapper.text()).not.toContain("https://example.com/reset/abc123");
+    expect(wrapper.text()).not.toContain("abc123");
+    expect(wrapper.text()).not.toContain("forgotPassword.debugUrlPrefix");
+  });
+});

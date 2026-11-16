@@ -149,3 +149,70 @@ describe("CustomerLeadPage — mount smoke", () => {
     expect(text).toContain("customerLeadPage.helpTitle");
   });
 });
+
+// ── C-22: share failure is no longer silent ────────────────────────────────
+// jsdom has no navigator.share; the clipboard is stubbed per test so the
+// fallback path is deterministic. The toast store is real pinia; its show()
+// is spied on (the toast itself renders in App.vue, outside this page).
+import { useToastStore } from "../../stores/toast";
+
+describe("CustomerLeadPage — C-22 share failure fallback", () => {
+  let wrapper;
+  let toastSpy;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    toastSpy = vi.spyOn(useToastStore(), "show");
+    Object.defineProperty(window.navigator, "share", { value: undefined, configurable: true });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    toastSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  const clickShare = async () => {
+    const btn = wrapper.find('button[aria-label="customerLeadPage.shareRestaurant"]');
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    await flushPromises();
+  };
+
+  it("clipboard failure shows an error toast and reveals the URL to copy by hand", async () => {
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText: vi.fn(() => Promise.reject(new Error("denied"))) },
+      configurable: true,
+    });
+    wrapper = mountPage();
+    await flushPromises();
+
+    await clickShare();
+
+    expect(toastSpy).toHaveBeenCalledWith("customerLeadPage.shareCopyFailed", "error");
+    const fallback = wrapper.find("#share-fallback-url");
+    expect(fallback.exists()).toBe(true);
+    expect(fallback.element.value).toBe(window.location.origin);
+    expect(wrapper.text()).toContain("customerLeadPage.shareLinkLabel");
+  });
+
+  it("clipboard success still copies silently with the success toast and no fallback", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    wrapper = mountPage();
+    await flushPromises();
+
+    await clickShare();
+
+    expect(writeText).toHaveBeenCalledWith(window.location.origin);
+    expect(toastSpy).toHaveBeenCalledWith("customerLeadPage.shareRestaurantCopied", "success");
+    expect(wrapper.find("#share-fallback-url").exists()).toBe(false);
+  });
+});

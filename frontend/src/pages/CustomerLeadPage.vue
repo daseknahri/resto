@@ -102,6 +102,20 @@
           </button>
         </div>
 
+        <!-- Share fallback: shown only when the clipboard copy failed, so the
+             user can still copy the page link by hand (C-22). -->
+        <div v-if="shareFallbackUrl" class="mt-2.5">
+          <label for="share-fallback-url" class="mb-1 block text-xs text-slate-400">{{ t('customerLeadPage.shareLinkLabel') }}</label>
+          <input
+            id="share-fallback-url"
+            :value="shareFallbackUrl"
+            type="text"
+            readonly
+            class="ui-input w-full text-xs"
+            @focus="$event.target.select()"
+          />
+        </div>
+
       </div>
     </section>
 
@@ -361,6 +375,7 @@ const toast = useToastStore();
 const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
+const shareFallbackUrl = ref("");
 const leadDialogRef = ref(null);
 
 const FOCUSABLE_LEAD = [
@@ -537,7 +552,12 @@ const shareRestaurant = async () => {
   try {
     await navigator.clipboard.writeText(url);
     toast.show(t('customerLeadPage.shareRestaurantCopied'), 'success');
-  } catch { /* clipboard blocked — silently ignore */ }
+  } catch {
+    // Clipboard blocked (permissions / insecure context): tell the user and
+    // reveal the URL so they can still copy it by hand.
+    shareFallbackUrl.value = url;
+    toast.show(t('customerLeadPage.shareCopyFailed'), 'error');
+  }
 };
 
 onMounted(async () => {

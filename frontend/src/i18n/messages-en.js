@@ -349,6 +349,8 @@ forcePasswordChange: {
   errorGeneric: "Could not update password. Please try again.",
   currentRequired: "Temporary password is required.",
   newRequired: "New password is required.",
+  passwordHint: "Must be at least 8 characters.",
+  passwordTooShort: "Password must be at least 8 characters",
 },
 mfa: {
   securityTabLabel: "Security",
@@ -3381,7 +3383,9 @@ customerLeadPage: {
   leadNoteIntro: "Customer lead from restaurant landing",
   customerNoteLine: "Message: {message}",
   pageUrlLine: "Page URL: {url}",
-  moreInfoMessage: "Hi {tenant}, I'd like more information."
+  moreInfoMessage: "Hi {tenant}, I'd like more information.",
+  shareCopyFailed: "Copy failed. Copy the link below instead.",
+  shareLinkLabel: "Page link",
 },
 categoryCard: {
   openCategory: "Open category",

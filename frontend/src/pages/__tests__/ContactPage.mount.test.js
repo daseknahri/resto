@@ -106,3 +106,49 @@ describe("ContactPage — mount smoke", () => {
     expect(text).toContain(expectedSupportEmail);
   });
 });
+
+// ── C-09: unconfigured WhatsApp is disabled text, never a "#" link or a
+// fake "+212..." number; configured it renders a real wa.me link ─────────────
+describe("ContactPage — C-09 WhatsApp unconfigured / configured", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    vi.unstubAllEnvs();
+  });
+
+  it("unconfigured: no clickable '#' link and no '+212...' placeholder number", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.exists()).toBe(true);
+    // No anchor at all points at "#" (the dead link is gone).
+    expect(wrapper.findAll('a[href="#"]')).toHaveLength(0);
+    // The placeholder is never displayed as if it were a real number.
+    expect(wrapper.text()).not.toContain("+212...");
+    // The WhatsApp card renders as disabled text with the generic label.
+    expect(wrapper.text()).toContain("contactPage.notConfigured");
+    expect(wrapper.find('[aria-disabled="true"]').exists()).toBe(true);
+    // The mailto card is untouched.
+    expect(wrapper.find(`a[href="mailto:${expectedSupportEmail}"]`).exists()).toBe(true);
+  });
+
+  it("configured: renders a real wa.me link with the real number", async () => {
+    vi.stubEnv("VITE_CONTACT_PHONE", "+212 600 00 00 00");
+    wrapper = mountPage();
+    await flushPromises();
+
+    const link = wrapper.find('a[href="https://wa.me/212600000000"]');
+    expect(link.exists()).toBe(true);
+    expect(wrapper.text()).toContain("+212 600 00 00 00");
+    expect(wrapper.text()).not.toContain("contactPage.notConfigured");
+    expect(wrapper.findAll('a[href="#"]')).toHaveLength(0);
+  });
+});

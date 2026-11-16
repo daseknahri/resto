@@ -110,9 +110,6 @@ const submit = async () => {
   try {
     const { data } = await api.post("/password-reset/request/", { identifier: identifier.value });
     message.value = data?.detail || t("forgotPassword.successFallback");
-    if (data?.debug_reset_url) {
-      message.value += ` (${t("forgotPassword.debugUrlPrefix")}: ${data.debug_reset_url})`;
-    }
   } catch (err) {
     error.value = err?.response?.data?.detail || t("forgotPassword.requestFailed");
   } finally {

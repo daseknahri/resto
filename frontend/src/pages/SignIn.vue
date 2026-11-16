@@ -148,8 +148,11 @@
                 autocomplete="new-password"
                 class="ui-input mt-1 font-normal"
                 :disabled="forcePwForm.loading"
+                aria-describedby="force-new-password-hint"
                 aria-required="true"
+                @input="forcePwForm.error = ''"
               />
+              <p id="force-new-password-hint" class="text-xs font-normal text-slate-400">{{ t("forcePasswordChange.passwordHint") }}</p>
             </label>
             <label class="block space-y-1.5 text-sm font-medium text-slate-200">
               {{ t("forcePasswordChange.confirmLabel") }}
@@ -458,6 +461,10 @@ const submitMfa = async () => {
 const submitForcePasswordChange = async () => {
   forcePwForm.value.error = "";
   if (!forcePwForm.value.current || !forcePwForm.value.next || !forcePwForm.value.confirm) return;
+  if (forcePwForm.value.next.length < 8) {
+    forcePwForm.value.error = t("forcePasswordChange.passwordTooShort");
+    return;
+  }
   if (forcePwForm.value.next !== forcePwForm.value.confirm) {
     forcePwForm.value.error = t("forcePasswordChange.confirmMismatch");
     return;
