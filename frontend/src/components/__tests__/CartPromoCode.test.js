@@ -123,3 +123,23 @@ describe("CartPromoCode", () => {
     expect(w.emitted("remove")).toBeTruthy();
   });
 });
+
+// ── Run 8 S2-C: C-13 — no dangling aria-describedby ───────────────────────
+// The promo input's `aria-describedby="cart-promo-error"` used to be static
+// while its target only exists when `promoError` is set.
+describe("CartPromoCode — Run 8 S2-C (C-13)", () => {
+  it("input has no aria-describedby when there is no promo error", () => {
+    const w = mountComp({ promoOpen: true });
+    const input = w.find('input[type="text"]');
+    expect(input.attributes("aria-describedby")).toBeUndefined();
+    expect(w.find("#cart-promo-error").exists()).toBe(false);
+  });
+
+  it("input links the error element when promoError is set", () => {
+    const w = mountComp({ promoOpen: true, promoError: "cartPage.promoInvalid" });
+    const input = w.find('input[type="text"]');
+    expect(input.attributes("aria-describedby")).toBe("cart-promo-error");
+    expect(w.find("#cart-promo-error").exists()).toBe(true);
+    expect(w.find("#cart-promo-error").text()).toContain("cartPage.promoInvalid");
+  });
+});

@@ -42,7 +42,7 @@
           :aria-label="t('cartPage.promoCodeLabel')"
           :placeholder="t('cartPage.promoPlaceholder')"
           :aria-invalid="promoError ? 'true' : undefined"
-          aria-describedby="cart-promo-error"
+          :aria-describedby="promoError ? 'cart-promo-error' : undefined"
           @keyup.enter="emit('apply')"
           @input="emit('promo-code-input', $event.target.value)"
         />

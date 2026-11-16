@@ -162,7 +162,7 @@
                 >
                   <span
                     class="absolute top-0.5 h-4 w-4 rounded-full transition-transform"
-                    :class="expressCheckout ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
+                    :class="expressCheckout ? 'translate-x-4 rtl:-translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 rtl:-translate-x-0.5 bg-slate-500'"
                   />
                 </button>
               </div>
@@ -288,7 +288,7 @@
                 <button
                   class="ui-btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-50"
                   :disabled="locating"
-                  aria-describedby="cart-location-error"
+                  :aria-describedby="locationError ? 'cart-location-error' : undefined"
                   @click="useCurrentLocation"
                 >
                   <AppIcon name="location" class="h-4 w-4" />
@@ -314,7 +314,7 @@
                     @click="showMoreLocationOptions = !showMoreLocationOptions"
                   >
                     {{ t('cartPage.moreLocationOptions') }}
-                    <span aria-hidden="true" class="text-[10px]">{{ (showMoreLocationOptions || deliveryLocationUrl) ? '▾' : '▸' }}</span>
+                    <span aria-hidden="true" class="text-[10px] rtl:scale-x-[-1]">{{ (showMoreLocationOptions || deliveryLocationUrl) ? '▾' : '▸' }}</span>
                   </button>
                   <button
                     v-if="hasLocationCoords || deliveryLocationUrl"
@@ -357,7 +357,7 @@
                       placeholder="https://maps.google.com/..."
                       :aria-label="t('cartPage.mapPinUrlOptional')"
                       :aria-invalid="fieldErrors.delivery_location_url ? 'true' : undefined"
-                      aria-describedby="cart-map-url-error"
+                      :aria-describedby="fieldErrors.delivery_location_url ? 'cart-map-url-error' : undefined"
                       @input="clearFieldError('delivery_location_url')"
                     />
                     <button
@@ -386,7 +386,7 @@
                   autocomplete="street-address"
                   :placeholder="t('cartPage.deliveryAddressPlaceholder')"
                   :aria-invalid="fieldErrors.delivery_address ? 'true' : undefined"
-                  aria-describedby="cart-address-error"
+                  :aria-describedby="fieldErrors.delivery_address ? 'cart-address-error' : undefined"
                   @input="clearFieldError('delivery_address')"
                 ></textarea>
                 <p v-if="fieldErrors.delivery_address" id="cart-address-error" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
@@ -417,7 +417,7 @@
                   :aria-expanded="locationAdvancedOpen"
                   @click="locationAdvancedOpen = !locationAdvancedOpen"
                 >
-                  <span aria-hidden="true">{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
+                  <span aria-hidden="true" class="rtl:scale-x-[-1]">{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
                   {{ t('cartPage.latitudeOptional') }} / {{ t('cartPage.longitudeOptional') }}
                 </button>
                 <div v-if="locationAdvancedOpen" class="mt-2 grid grid-cols-2 gap-2">
@@ -431,7 +431,7 @@
                       inputmode="decimal"
                       placeholder="33.5731"
                       :aria-invalid="fieldErrors.delivery_lat ? 'true' : undefined"
-                      aria-describedby="cart-lat-error"
+                      :aria-describedby="fieldErrors.delivery_lat ? 'cart-lat-error' : undefined"
                       @input="clearFieldError('delivery_lat')"
                     />
                     <p v-if="fieldErrors.delivery_lat" id="cart-lat-error" class="text-xs text-red-300">{{ fieldErrors.delivery_lat }}</p>
@@ -446,7 +446,7 @@
                       inputmode="decimal"
                       placeholder="-7.5898"
                       :aria-invalid="fieldErrors.delivery_lng ? 'true' : undefined"
-                      aria-describedby="cart-lng-error"
+                      :aria-describedby="fieldErrors.delivery_lng ? 'cart-lng-error' : undefined"
                       @input="clearFieldError('delivery_lng')"
                     />
                     <p v-if="fieldErrors.delivery_lng" id="cart-lng-error" class="text-xs text-red-300">{{ fieldErrors.delivery_lng }}</p>
@@ -627,7 +627,7 @@
               >
                 <span
                   class="absolute top-0.5 h-4 w-4 rounded-full transition-transform"
-                  :class="useWallet ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
+                  :class="useWallet ? 'translate-x-4 rtl:-translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 rtl:-translate-x-0.5 bg-slate-500'"
                 />
               </button>
             </div>
@@ -2143,7 +2143,7 @@ const assignFieldErrors = (data) => {
   }
 };
 
-const mapOrderApiError = (err) => {
+const mapOrderApiError = (err, fallback) => {
   const data = err?.response?.data || {};
   const code = data?.code || '';
   // The place-order endpoints reject unorderable lines as `{ code: 'items_unavailable',
@@ -2247,7 +2247,10 @@ const mapOrderApiError = (err) => {
   if (code === 'dine_in_unavailable') {
     return t('cartPage.dineInUnavailable');
   }
-  return t('cartPage.genericCheckoutError');
+  // C-07: the call sites pass a contextual fallback (unable to start checkout /
+  // prepare the WhatsApp order / place the order) — it wins over the internal
+  // generic when provided.
+  return fallback || t('cartPage.genericCheckoutError');
 };
 
 const removeUnavailable = () => {
@@ -2300,7 +2303,13 @@ const startCheckout = async () => {
       toast.show(t('cartPage.openingCheckout'), 'success');
       return;
     }
-    const detail = data.detail || t('cartPage.checkoutNotConfigured');
+    // C-06: never surface raw backend `detail` to the customer. Map the backend
+    // `code` through mapOrderApiError (known codes get their localized message;
+    // unmapped codes get the contextual fallback below) and fall back to the
+    // localized generic when there is no code at all.
+    const detail = data?.code
+      ? mapOrderApiError({ response: { data } }, t('cartPage.checkoutNotConfigured'))
+      : t('cartPage.checkoutNotConfigured');
     checkoutError.value = detail;
     toast.show(detail, 'info');
   } catch (err) {

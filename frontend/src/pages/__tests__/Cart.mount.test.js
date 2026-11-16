@@ -466,3 +466,331 @@ describe("Cart — checkout preview parity (auto promo, points, replay)", () => 
     expect(cart.items[0].qty).toBe(2);
   });
 });
+
+// ── Run 8 S2-C: C-03, C-06, C-07, C-13, C-21 ──────────────────────────────
+// Cart.vue fixes for the Run 8 Lane C gap list (cart slice only):
+//  - C-03: RTL toggle knobs carry `rtl:-translate-x-4` (express + wallet).
+//  - C-06: startCheckout never surfaces raw backend `detail` (Cart.vue:2303
+//    was `data.detail || t('cartPage.checkoutNotConfigured')`).
+//  - C-07: mapOrderApiError(err, fallback) — the contextual fallback now wins
+//    over the internal generic on unmapped errors.
+//  - C-13: every `aria-describedby` is conditional on its error being present.
+//  - C-21: disclosure chevrons carry `rtl:scale-x-[-1]`.
+describe("Cart — Run 8 S2-C (C-03, C-06, C-07, C-13, C-21)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+  });
+
+  const rejection = (data) => ({ response: { status: 400, data } });
+
+  const mountWithBurger = async () => {
+    seedOrderableTenant();
+    useCartStore().add({ slug: "burger", name: "Burger", price: 50, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+  };
+
+  // Signed-in pickup customer with a 100 MAD cart and a 500 MAD wallet, so
+  // validateForm() passes (same shape as the M8 mountPickup helper above).
+  // `whatsapp: true` additionally seeds the WhatsApp-ordering entitlement the
+  // cart store's `canWhatsapp` gate reads (the codebase pattern — OwnerHome /
+  // StepBrand / StepPublish all use `tenant.entitlements?.can_whatsapp_order`).
+  const mountCheckout = async ({ wallet = "500.00", whatsapp = false } = {}) => {
+    if (whatsapp) {
+      useTenantStore().meta = {
+        plan: { can_checkout: true, currency: "MAD" },
+        profile: { whatsapp_number: "+212600000000" },
+        entitlements: { can_whatsapp_order: true },
+      };
+    } else {
+      seedOrderableTenant();
+    }
+    // Production sets the cart gates in fetchMeta -> syncCartEntitlements();
+    // a direct meta assignment never fires it, so sync explicitly here.
+    useTenantStore().syncCartEntitlements();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", wallet_balance: wallet });
+    useCartStore().add({ slug: "burger", name: "Burger", price: 100, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+    wrapper.vm.fulfillmentType = "pickup";
+    await flushPromises();
+  };
+
+  // Signed-in customer on the delivery form (no wallet — the wallet switch is
+  // not under test here).
+  const mountDelivery = async () => {
+    seedOrderableTenant();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", wallet_balance: "0.00" });
+    useCartStore().add({ slug: "burger", name: "Burger", price: 50, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+    wrapper.vm.fulfillmentType = "delivery";
+    await flushPromises();
+  };
+
+  // ── C-07: contextual fallback ───────────────────────────────────────────
+  it("returns the passed contextual fallback for an unmapped error (checkout call site)", async () => {
+    await mountWithBurger();
+    expect(
+      wrapper.vm.mapOrderApiError(rejection({ code: "bogus_code_xyz" }), "cartPage.unableToStartCheckout")
+    ).toBe("cartPage.unableToStartCheckout");
+  });
+
+  it("returns the passed contextual fallback for an unmapped error (WhatsApp call site)", async () => {
+    await mountWithBurger();
+    expect(
+      wrapper.vm.mapOrderApiError(rejection({ code: "bogus_code_xyz" }), "cartPage.unableToPrepareWhatsAppOrder")
+    ).toBe("cartPage.unableToPrepareWhatsAppOrder");
+  });
+
+  it("returns the passed contextual fallback for an unmapped error (place-order call site)", async () => {
+    await mountWithBurger();
+    expect(
+      wrapper.vm.mapOrderApiError(rejection({ code: "bogus_code_xyz" }), "cartPage_order.placeOrderError")
+    ).toBe("cartPage_order.placeOrderError");
+  });
+
+  it("still returns the internal generic when no fallback is passed", async () => {
+    await mountWithBurger();
+    expect(wrapper.vm.mapOrderApiError(rejection({ code: "bogus_code_xyz" }))).toBe(
+      "cartPage.genericCheckoutError"
+    );
+  });
+
+  it("a mapped code still wins over the passed fallback", async () => {
+    await mountWithBurger();
+    expect(
+      wrapper.vm.mapOrderApiError(rejection({ code: "restaurant_closed" }), "cartPage.unableToStartCheckout")
+    ).toBe("cartPage.restaurantCurrentlyClosed");
+  });
+
+  it("startCheckout surfaces its contextual fallback on an unmapped rejection", async () => {
+    await mountCheckout();
+    expect(useCartStore().canCheckout).toBe(true); // precondition: the CTA gate
+    const show = vi.spyOn(useToastStore(), "show");
+    api.post.mockImplementation((url) =>
+      String(url).includes("/checkout-intent/")
+        ? Promise.reject(rejection({ code: "bogus_code_xyz" }))
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.startCheckout();
+    await flushPromises();
+
+    expect(wrapper.vm.checkoutError).toBe("cartPage.unableToStartCheckout");
+    expect(show).toHaveBeenCalledWith("cartPage.unableToStartCheckout", "error");
+  });
+
+  it("openWhatsApp surfaces its contextual fallback on an unmapped rejection", async () => {
+    await mountCheckout({ whatsapp: true });
+    expect(useCartStore().canWhatsapp).toBe(true); // precondition: the handoff gate
+    const show = vi.spyOn(useToastStore(), "show");
+    api.post.mockImplementation((url) =>
+      String(url).includes("/order-handoff/")
+        ? Promise.reject(rejection({ code: "bogus_code_xyz" }))
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.openWhatsApp();
+    await flushPromises();
+
+    expect(wrapper.vm.handoffError).toBe("cartPage.unableToPrepareWhatsAppOrder");
+    expect(show).toHaveBeenCalledWith("cartPage.unableToPrepareWhatsAppOrder", "error");
+  });
+
+  it("placeInAppOrder surfaces its contextual fallback on an unmapped rejection", async () => {
+    await mountCheckout();
+    const show = vi.spyOn(useToastStore(), "show");
+    api.post.mockImplementation((url) =>
+      String(url).includes("/place-order/")
+        ? Promise.reject(rejection({ code: "bogus_code_xyz" }))
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.placeInAppOrder();
+    await flushPromises();
+
+    expect(wrapper.vm.placeOrderError).toBe("cartPage_order.placeOrderError");
+    expect(show).toHaveBeenCalledWith("cartPage_order.placeOrderError", "error");
+  });
+
+  // ── C-06: raw backend detail never reaches the customer ────────────────
+  it("startCheckout shows the localized generic, never raw detail, for an unmapped code", async () => {
+    await mountCheckout();
+    const show = vi.spyOn(useToastStore(), "show");
+    const RAW = "Stripe account not connected for this tenant";
+    api.post.mockImplementation((url) =>
+      String(url).includes("/checkout-intent/")
+        ? Promise.resolve({ data: { code: "bogus_code_xyz", detail: RAW } })
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.startCheckout();
+    await flushPromises();
+
+    expect(wrapper.vm.checkoutError).toBe("cartPage.checkoutNotConfigured");
+    expect(show).toHaveBeenCalledWith("cartPage.checkoutNotConfigured", "info");
+    expect(wrapper.vm.checkoutError).not.toContain("Stripe");
+    expect(wrapper.text()).not.toContain(RAW);
+  });
+
+  it("startCheckout maps a known backend code to its localized message", async () => {
+    await mountCheckout();
+    api.post.mockImplementation((url) =>
+      String(url).includes("/checkout-intent/")
+        ? Promise.resolve({ data: { code: "restaurant_closed", detail: "Restaurant is closed right now" } })
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.startCheckout();
+    await flushPromises();
+
+    expect(wrapper.vm.checkoutError).toBe("cartPage.restaurantCurrentlyClosed");
+    expect(wrapper.text()).not.toContain("Restaurant is closed right now");
+  });
+
+  it("startCheckout falls back to the localized generic when there is no code at all", async () => {
+    await mountCheckout();
+    api.post.mockImplementation((url) =>
+      String(url).includes("/checkout-intent/")
+        ? Promise.resolve({ data: { detail: "Something backend-y" } })
+        : Promise.resolve({ data: {} })
+    );
+
+    await wrapper.vm.startCheckout();
+    await flushPromises();
+
+    expect(wrapper.vm.checkoutError).toBe("cartPage.checkoutNotConfigured");
+    expect(wrapper.text()).not.toContain("Something backend-y");
+  });
+
+  // ── C-13: no dangling aria-describedby ──────────────────────────────────
+  it("location button has no dangling aria-describedby until the GPS error exists", async () => {
+    await mountDelivery();
+    const locationButton = () =>
+      wrapper.findAll("button").find((b) => b.text().includes("cartPage.useCurrentLocation"));
+    expect(locationButton().exists()).toBe(true);
+    expect(locationButton().attributes("aria-describedby")).toBeUndefined();
+    expect(wrapper.find("#cart-location-error").exists()).toBe(false);
+
+    wrapper.vm.locationError = "cartPage.unableToReadGps";
+    await flushPromises();
+
+    expect(locationButton().attributes("aria-describedby")).toBe("cart-location-error");
+    expect(wrapper.find("#cart-location-error").exists()).toBe(true);
+  });
+
+  it("address textarea has no dangling aria-describedby until its field error exists", async () => {
+    await mountDelivery();
+    const addressArea = () =>
+      wrapper.find('textarea[placeholder="cartPage.deliveryAddressPlaceholder"]');
+    expect(addressArea().exists()).toBe(true);
+    expect(addressArea().attributes("aria-describedby")).toBeUndefined();
+    expect(wrapper.find("#cart-address-error").exists()).toBe(false);
+
+    wrapper.vm.fieldErrors = { delivery_address: "cartPage.deliveryAddressRequiredError" };
+    await flushPromises();
+
+    expect(addressArea().attributes("aria-describedby")).toBe("cart-address-error");
+    expect(wrapper.find("#cart-address-error").exists()).toBe(true);
+  });
+
+  it("map-URL, latitude and longitude inputs link their errors only when present", async () => {
+    await mountDelivery();
+    const mapInput = () => wrapper.find('input[placeholder="https://maps.google.com/..."]');
+    expect(mapInput().exists()).toBe(true);
+    expect(mapInput().attributes("aria-describedby")).toBeUndefined();
+
+    wrapper.vm.fieldErrors = { delivery_location_url: "cartPage.provideMapLinkOrCurrentLocation" };
+    await flushPromises();
+    expect(mapInput().attributes("aria-describedby")).toBe("cart-map-url-error");
+    expect(wrapper.find("#cart-map-url-error").exists()).toBe(true);
+
+    // Lat/lng live behind the collapsed advanced toggle.
+    wrapper.vm.locationAdvancedOpen = true;
+    await flushPromises();
+    const latInput = () => wrapper.find('input[placeholder="33.5731"]');
+    const lngInput = () => wrapper.find('input[placeholder="-7.5898"]');
+    expect(latInput().exists()).toBe(true);
+    expect(lngInput().exists()).toBe(true);
+    expect(latInput().attributes("aria-describedby")).toBeUndefined();
+    expect(lngInput().attributes("aria-describedby")).toBeUndefined();
+
+    wrapper.vm.fieldErrors = { delivery_lat: "x", delivery_lng: "y" };
+    await flushPromises();
+    expect(latInput().attributes("aria-describedby")).toBe("cart-lat-error");
+    expect(lngInput().attributes("aria-describedby")).toBe("cart-lng-error");
+  });
+
+  // ── C-21: RTL-mirrored disclosure chevrons ──────────────────────────────
+  it("location-options and advanced-location chevrons carry the RTL mirror class", async () => {
+    await mountDelivery();
+    // The advanced toggle is always rendered inside the delivery form.
+    const advancedButton = () =>
+      wrapper.findAll("button").find((b) => b.text().includes("cartPage.latitudeOptional"));
+    expect(advancedButton().exists()).toBe(true);
+    expect(advancedButton().find("span").classes()).toContain("rtl:scale-x-[-1]");
+
+    // The "more location options" toggle appears once a pin/URL is set.
+    wrapper.vm.deliveryLocationUrl = "https://maps.google.com/?q=33.5,-7.5";
+    await flushPromises();
+    const moreButton = () =>
+      wrapper.findAll("button").find((b) => b.text().includes("cartPage.moreLocationOptions"));
+    expect(moreButton().exists()).toBe(true);
+    expect(moreButton().find("span").classes()).toContain("rtl:scale-x-[-1]");
+  });
+
+  // ── C-03: RTL toggle knobs ───────────────────────────────────────────────
+  it("express-checkout knob mirrors its slide in RTL", async () => {
+    await mountDelivery();
+    const knob = () =>
+      wrapper.find('button[aria-label="cartPage.expressCheckoutTitle"]').find("span");
+    expect(knob().exists()).toBe(true);
+
+    wrapper.vm.expressCheckout = false;
+    await flushPromises();
+    expect(knob().classes()).toContain("translate-x-0.5");
+    expect(knob().classes()).toContain("rtl:-translate-x-0.5");
+
+    wrapper.vm.expressCheckout = true;
+    await flushPromises();
+    expect(knob().classes()).toContain("translate-x-4");
+    expect(knob().classes()).toContain("rtl:-translate-x-4");
+  });
+
+  it("wallet knob mirrors its slide in RTL", async () => {
+    // No fulfillment chosen yet, so requiresPrepay is false and the wallet
+    // opt-in block (with the switch) renders for a customer with credits.
+    seedOrderableTenant();
+    useCustomerStore().setCustomer({ id: 1, name: "Ali", wallet_balance: "500.00" });
+    useCartStore().add({ slug: "burger", name: "Burger", price: 50, qty: 1, currency: "MAD" });
+    wrapper = mountCart();
+    await flushPromises();
+
+    const knob = () =>
+      wrapper.find('button[aria-label="cartPage.payWithCredits"]').find("span");
+    expect(knob().exists()).toBe(true);
+
+    wrapper.vm.useWallet = false;
+    await flushPromises();
+    expect(knob().classes()).toContain("translate-x-0.5");
+    expect(knob().classes()).toContain("rtl:-translate-x-0.5");
+
+    wrapper.vm.useWallet = true;
+    await flushPromises();
+    expect(knob().classes()).toContain("translate-x-4");
+    expect(knob().classes()).toContain("rtl:-translate-x-4");
+  });
+});
