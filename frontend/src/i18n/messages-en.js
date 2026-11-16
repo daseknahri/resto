@@ -771,6 +771,8 @@ reservationManage: {
   confirmTitle: "Cancel this reservation?",
   confirmBody: "This action cannot be undone. The restaurant will be notified.",
   confirmYes: "Yes, cancel it",
+  loadError: "Something went wrong while loading. Please check your connection and try again.",
+  loadErrorTitle: "Couldn't load your reservation",
 },
 deliveryVocab: {
   atPickupRestaurant: "At the restaurant",
@@ -3886,7 +3888,9 @@ reservationPage: {
   contactSupport: "Need help?",
   directBookingHint: "This restaurant also accepts reservations on an external platform.",
   pastDateError: "Please choose a date from today onward.",
-  pastTimeError: "Please choose a time that hasn't passed yet."
+  pastTimeError: "Please choose a time that hasn't passed yet.",
+  availabilityUnavailable: "Live availability is unavailable right now. Please check with the restaurant before picking a time.",
+  slotAvailabilityUnknown: "Unknown",
 },
 ownerAnalytics: {
   kicker: "Performance",

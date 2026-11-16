@@ -769,6 +769,8 @@ reservationManage: {
   confirmTitle: "Annuler cette reservation ?",
   confirmBody: "Cette action est irreversible. Le restaurant sera notifie.",
   confirmYes: "Oui, annuler",
+  loadError: "Une erreur est survenue pendant le chargement. Verifiez votre connexion et reessayez.",
+  loadErrorTitle: "Impossible de charger votre reservation",
 },
 deliveryVocab: {
   atPickupRestaurant: "Au restaurant",
@@ -3832,7 +3834,9 @@ reservationPage: {
   bookDirectly: "Reserver directement",
   bookingSummary: "Votre reservation",
   contactSupport: "Besoin d'aide ?",
-  directBookingHint: "Ce restaurant accepte aussi les reservations sur une plateforme externe."
+  directBookingHint: "Ce restaurant accepte aussi les reservations sur une plateforme externe.",
+  availabilityUnavailable: "Disponibilite en direct indisponible pour le moment. Verifiez aupres du restaurant avant de choisir un horaire.",
+  slotAvailabilityUnknown: "Inconnu",
 },
 ownerAnalytics: {
   kicker: "Performance",

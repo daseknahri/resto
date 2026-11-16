@@ -36,7 +36,7 @@
                 :class="fieldClass('name')"
                 autocomplete="name"
                 :aria-invalid="errors.name ? 'true' : undefined"
-                aria-describedby="res-name-error"
+                :aria-describedby="errors.name ? 'res-name-error' : undefined"
                 aria-required="true"
                 @input="clearError('name')"
               />
@@ -53,7 +53,7 @@
                 inputmode="tel"
                 autocomplete="tel"
                 :aria-invalid="errors.phone ? 'true' : undefined"
-                aria-describedby="res-phone-error"
+                :aria-describedby="errors.phone ? 'res-phone-error' : undefined"
                 aria-required="true"
                 @input="clearError('phone')"
               />
@@ -70,7 +70,7 @@
                 autocomplete="email"
                 spellcheck="false"
                 :aria-invalid="errors.email ? 'true' : undefined"
-                aria-describedby="res-email-error"
+                :aria-describedby="errors.email ? 'res-email-error' : undefined"
                 @input="clearError('email')"
               />
               <p v-if="errors.email" id="res-email-error" role="alert" class="text-xs text-red-300">{{ errors.email }}</p>
@@ -85,7 +85,7 @@
                 :class="fieldClass('party_size')"
                 inputmode="numeric"
                 :aria-invalid="errors.party_size ? 'true' : undefined"
-                aria-describedby="res-party-error"
+                :aria-describedby="errors.party_size ? 'res-party-error' : undefined"
                 aria-required="true"
                 @input="clearError('party_size')"
               />
@@ -120,7 +120,7 @@
                   :class="fieldClass('date')"
                   :min="todayDateStr"
                   :aria-invalid="errors.date ? 'true' : undefined"
-                  aria-describedby="res-date-error"
+                  :aria-describedby="errors.date ? 'res-date-error' : undefined"
                   @change="onDateChange"
                 />
                 <p v-if="errors.date" id="res-date-error" role="alert" class="text-xs text-red-300">{{ errors.date }}</p>
@@ -133,7 +133,7 @@
                   class="ui-input"
                   :class="fieldClass('time')"
                   :aria-invalid="errors.time ? 'true' : undefined"
-                  aria-describedby="res-time-error"
+                  :aria-describedby="errors.time ? 'res-time-error' : undefined"
                   @input="clearError('time')"
                 />
                 <p v-if="errors.time" id="res-time-error" role="alert" class="text-xs text-red-300">{{ errors.time }}</p>
@@ -165,6 +165,16 @@
                   <span v-if="capacityEnabled && form.date" class="mt-0.5 text-[10px] leading-none" :class="isSlotFull(slot) ? 'text-red-400' : 'text-emerald-400/80'">
                     {{ slotAvailabilityLabel(slot) }}
                   </span>
+                </button>
+              </div>
+              <div v-if="availabilityError" role="alert" class="mt-3 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/8 p-3">
+                <p class="text-xs leading-relaxed text-amber-200">{{ t("reservationPage.availabilityUnavailable") }}</p>
+                <button
+                  type="button"
+                  class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
+                  @click="fetchAvailability(form.date)"
+                >
+                  {{ t("common.retry") }}
                 </button>
               </div>
             </div>
@@ -244,7 +254,7 @@
             <button
               type="button"
               class="ui-btn-primary ui-touch-target inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-65"
-              :disabled="lead.submitting || submitted"
+              :disabled="lead.submitting || submitted || submitBlocked"
               :aria-busy="lead.submitting"
               @click="submitReservation"
             >
@@ -349,6 +359,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
+import { safeExternalUrl } from "../lib/escape";
 import api from "../lib/api";
 import { useCartStore } from "../stores/cart";
 import { useLeadStore } from "../stores/lead";
@@ -369,6 +380,7 @@ const quickTimes = ["12:00", "13:00", "14:00", "19:00", "20:00", "21:00"];
 // ── Availability ─────────────────────────────────────────────────────────────
 const availabilityLoading = ref(false);
 const availabilitySlots = ref([]); // [{ time, datetime, used, max, available, full }]
+const availabilityError = ref(false); // last /availability/ fetch failed (C-16)
 const capacityEnabled = computed(() => {
   const p = meta.value?.profile;
   return Boolean(p?.max_covers_per_slot && Number(p.max_covers_per_slot) > 0);
@@ -377,14 +389,20 @@ const capacityEnabled = computed(() => {
 const fetchAvailability = async (date) => {
   if (!date || !capacityEnabled.value) {
     availabilitySlots.value = [];
+    availabilityError.value = false;
     return;
   }
   availabilityLoading.value = true;
+  availabilityError.value = false;
   try {
     const res = await api.get('/availability/', { params: { date } });
     availabilitySlots.value = Array.isArray(res.data?.slots) ? res.data.slots : [];
   } catch {
+    // C-16: never silently label slots "unlimited" after a failed fetch —
+    // keep the failure visible (warning banner) and block submit (see
+    // submitBlocked) until availability loads again.
     availabilitySlots.value = [];
+    availabilityError.value = true;
   } finally {
     availabilityLoading.value = false;
   }
@@ -401,6 +419,7 @@ const isSlotFull = (timeStr) => {
 };
 
 const slotAvailabilityLabel = (timeStr) => {
+  if (availabilityError.value) return t('reservationPage.slotAvailabilityUnknown');
   const s = slotDataFor(timeStr);
   if (!s) return t('reservationPage.slotUnlimited');
   if (s.full) return t('reservationPage.slotFull');
@@ -415,6 +434,13 @@ const slotButtonClass = (slot) => {
   if (active) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]';
   return 'border-slate-700 bg-slate-900/50 text-slate-300 hover:border-slate-500 hover:text-slate-200';
 };
+
+// C-16: block submit while capacity is enabled, a date is picked, and live
+// availability failed to load — the customer must not submit a slot we could
+// not verify. Clears as soon as a fetch succeeds (or the date is cleared).
+const submitBlocked = computed(
+  () => capacityEnabled.value && Boolean(form.date) && availabilityError.value
+);
 
 const onDateChange = () => {
   clearError("date");
@@ -489,7 +515,7 @@ const todayDateStr = (() => {
 })();
 
 const profile = computed(() => meta.value?.profile || {});
-const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
+const reservationUrl = computed(() => safeExternalUrl(profile.value?.reservation_url));
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
@@ -546,6 +572,10 @@ const validate = () => {
   }
   if (capacityEnabled.value && form.time && isSlotFull(form.time)) {
     errors.time = t("reservationPage.slotFull");
+    valid = false;
+  }
+  if (submitBlocked.value) {
+    errors.time = t("reservationPage.availabilityUnavailable");
     valid = false;
   }
   if (form.date && form.date < todayDateStr) {

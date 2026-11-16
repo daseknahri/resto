@@ -187,3 +187,70 @@ describe("ReservationManage — mount smoke", () => {
     expect(url).not.toContain("/cancel/");
   });
 });
+
+
+// ── S2-E appended tests (C-15) ─────────────────────────────────────────────
+// Appended, never rewriting the base above: the base file stays an exact prefix.
+// Reuses the module-scope helpers/imports from the base (mountPage, api,
+// shallowMount/flushPromises, the mocked lib/api + useI18n).
+
+describe("ReservationManage — S2-E (C-15)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  // ── C-15: 404 → not-found card, no retry ───────────────────────────────
+  it("C-15: a 404 load failure shows the not-found card with no retry button", async () => {
+    api.get.mockRejectedValueOnce({ response: { status: 404 } });
+    wrapper = mountPage("tok_404");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("reservationManage.notFoundTitle");
+    expect(wrapper.text()).toContain("reservationManage.notFound");
+    expect(wrapper.text()).not.toContain("reservationManage.loadErrorTitle");
+    expect(wrapper.text()).not.toContain("common.retry");
+  });
+
+  // ── C-15: 500 → retryable error card; Retry re-runs load ──────────────
+  it("C-15: a 500 load failure shows a retryable error card, and Retry recovers", async () => {
+    api.get.mockRejectedValueOnce({ response: { status: 500 } });
+    wrapper = mountPage("tok_500");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("reservationManage.loadErrorTitle");
+    expect(wrapper.text()).toContain("reservationManage.loadError");
+    expect(wrapper.text()).not.toContain("reservationManage.notFoundTitle");
+    expect(wrapper.text()).toContain("common.retry");
+
+    // Retry re-runs load(): the default mock now resolves { data: {} }, so the
+    // empty main card renders (title fallback) and the error card is gone.
+    await wrapper.find("button").trigger("click");
+    await flushPromises();
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).not.toContain("reservationManage.loadErrorTitle");
+    expect(wrapper.text()).toContain("reservationManage.title");
+  });
+
+  // ── C-15: network failure (no response) is a load error, not "not found" ─
+  it("C-15: a network load failure shows the retryable error card, not not-found", async () => {
+    api.get.mockRejectedValueOnce(new Error("Network Error"));
+    wrapper = mountPage("tok_net");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("reservationManage.loadErrorTitle");
+    expect(wrapper.text()).not.toContain("reservationManage.notFoundTitle");
+    expect(wrapper.text()).toContain("common.retry");
+  });
+});

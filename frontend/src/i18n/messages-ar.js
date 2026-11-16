@@ -79,7 +79,8 @@ const arabicMessages = {
     "included": "مضمّن",
     "notIncluded": "غير مضمّن",
     "legal": "قانوني",
-    "dismiss": "إغلاق"
+    "dismiss": "إغلاق",
+    "retry": "إعادة المحاولة",
   },
   "toast": {
     "type": {
@@ -1738,7 +1739,9 @@ const arabicMessages = {
     "contactSupport": "هل تحتاج إلى مساعدة؟",
     "directBookingHint": "يقبل هذا المطعم أيضاً الحجوزات عبر منصة خارجية.",
     "pastDateError": "الرجاء اختيار تاريخ من اليوم فصاعدًا.",
-    "pastTimeError": "الرجاء اختيار وقت لم يمض بعد."
+    "pastTimeError": "الرجاء اختيار وقت لم يمض بعد.",
+    "availabilityUnavailable": "التوفّر المباشر غير متاح حالياً. يرجى التأكد مع المطعم قبل اختيار الوقت.",
+    "slotAvailabilityUnknown": "غير معروف",
   },
   "stepBrand": {
     "title": "الهوية ووسائل التواصل",
@@ -3796,6 +3799,8 @@ Object.assign(arabicMessages, {
     confirmTitle: "\u0625\u0644\u063a\u0627\u0621 \u0647\u0630\u0627 \u0627\u0644\u062d\u062c\u0632\u061f",
     confirmBody: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621. \u0633\u064a\u062a\u0645 \u0625\u062e\u0637\u0627\u0631 \u0627\u0644\u0645\u0637\u0639\u0645.",
     confirmYes: "\u0646\u0639\u0645\u060c \u0623\u0644\u063a\u0650",
+    "loadError": "حدث خطأ أثناء التحميل. يرجى التحقق من اتصالك والمحاولة مجدداً.",
+    "loadErrorTitle": "تعذّر تحميل حجزك",
   },
   deliveryVocab: {
     atPickupRestaurant: "\u0641\u064a \u0627\u0644\u0645\u0637\u0639\u0645",

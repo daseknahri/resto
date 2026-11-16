@@ -43,6 +43,33 @@
       </div>
     </div>
 
+    <!-- ── Load error (retryable) ──────────────────────────────────────── -->
+    <div
+      v-else-if="loadError"
+      class="ui-empty-state ui-reveal text-center space-y-4 p-8"
+      role="alert"
+    >
+      <div
+        class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/50 bg-slate-900/60"
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7 text-slate-500">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+      </div>
+      <div class="space-y-1.5">
+        <p class="text-base font-semibold text-slate-100">{{ t('reservationManage.loadErrorTitle') }}</p>
+        <p class="text-sm leading-relaxed text-slate-400">{{ t('reservationManage.loadError') }}</p>
+      </div>
+      <button
+        type="button"
+        class="ui-btn-outline ui-press ui-touch-target px-4 py-2.5 text-sm"
+        @click="load"
+      >
+        {{ t('common.retry') }}
+      </button>
+    </div>
+
     <!-- ── Main card ───────────────────────────────────────────────────── -->
     <template v-else>
       <!-- Icon hero -->
@@ -231,6 +258,7 @@ const { t, currentLocale } = useI18n();
 
 const loading = ref(true);
 const notFound = ref(false);
+const loadError = ref(false); // non-404 load failure: retryable error card (C-15)
 const cancelling = ref(false);
 const confirming = ref(false);
 const errorMsg = ref('');
@@ -266,11 +294,18 @@ const formatWhen = (iso) => {
 const load = async () => {
   loading.value = true;
   notFound.value = false;
+  loadError.value = false;
   try {
     const res = await api.get(`/reservations/manage/${props.token}/`);
     _apply(res.data);
-  } catch {
-    notFound.value = true;
+  } catch (err) {
+    // C-15: only a 404 means "not found". Any other failure (5xx / network)
+    // is a transient load error with a Retry button, not a missing reservation.
+    if (err?.response?.status === 404) {
+      notFound.value = true;
+    } else {
+      loadError.value = true;
+    }
   } finally {
     loading.value = false;
   }

@@ -128,3 +128,159 @@ describe("ReservationPage — mount smoke", () => {
     expect(wrapper.text()).toContain("reservationPage.bookDirectly");
   });
 });
+
+
+// ── S2-E appended tests (C-13 / C-16 / C-24) ─────────────────────────────────
+// Appended, never rewriting the base above: the base file stays an exact prefix.
+// Reuses the module-scope helpers/imports from the base (mountPage,
+// useTenantStore, shallowMount/flushPromises, the mocked lib/api + useI18n).
+// lib/escape (safeExternalUrl) is left REAL, as in CustomerLeadPage.mount.test.js.
+
+describe("ReservationPage — S2-E (C-13 / C-16 / C-24)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const seedCapacityTenant = (reservationUrl) => {
+    const tenant = useTenantStore();
+    tenant.meta = {
+      name: "Chez Test",
+      slug: "chez-test",
+      profile: {
+        phone: "+212600000000",
+        whatsapp: "+212600000000",
+        ...(reservationUrl !== undefined ? { reservation_url: reservationUrl } : {}),
+        max_covers_per_slot: 20,
+      },
+    };
+  };
+
+  const nameInput = () => wrapper.find('input[autocomplete="name"]');
+  const phoneInput = () => wrapper.find('input[autocomplete="tel"]');
+  const emailInput = () => wrapper.find('input[autocomplete="email"]');
+  const partyInput = () => wrapper.find('input[type="number"]');
+  const dateInput = () => wrapper.find('input[type="date"]');
+  const timeInput = () => wrapper.find('input[type="time"]');
+  const submitButton = () => wrapper.find("button.ui-btn-primary");
+
+  // ── C-13: no dangling aria-describedby when no error is shown ──────────
+  it("C-13: inputs carry no aria-describedby while their error is absent", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+
+    for (const input of [nameInput(), phoneInput(), emailInput(), partyInput(), dateInput(), timeInput()]) {
+      expect(input.exists()).toBe(true);
+      expect(input.attributes("aria-describedby")).toBeUndefined();
+    }
+  });
+
+  // ── C-13: aria-describedby present once its error is shown ─────────────
+  it("C-13: aria-describedby appears for exactly the fields that fail validation", async () => {
+    wrapper = mountPage();
+    await flushPromises();
+
+    // Name too short + neither phone nor email → name/phone/email errors.
+    await nameInput().setValue("A");
+    // Past date → date error; party size 0 → party_size error.
+    await partyInput().setValue(0);
+    await dateInput().setValue("2000-01-01");
+    await wrapper.vm.submitReservation();
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(nameInput().attributes("aria-describedby")).toBe("res-name-error");
+    expect(phoneInput().attributes("aria-describedby")).toBe("res-phone-error");
+    expect(emailInput().attributes("aria-describedby")).toBe("res-email-error");
+    expect(partyInput().attributes("aria-describedby")).toBe("res-party-error");
+    expect(dateInput().attributes("aria-describedby")).toBe("res-date-error");
+    // No time error was raised, so the time input stays undescribed.
+    expect(timeInput().attributes("aria-describedby")).toBeUndefined();
+  });
+
+  // ── C-16: failed availability fetch ─────────────────────────────────────
+  it("C-16: failed availability fetch warns, labels no slot unlimited, and blocks submit", async () => {
+    seedCapacityTenant();
+    wrapper = mountPage();
+    await flushPromises();
+
+    const api = (await import("../../lib/api")).default;
+    api.get.mockRejectedValueOnce(new Error("Network Error"));
+    wrapper.vm.form.date = "2026-11-20";
+    await wrapper.vm.onDateChange();
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    // Warning is shown (mocked t echoes the key).
+    expect(wrapper.text()).toContain("reservationPage.availabilityUnavailable");
+    // No slot is labelled unlimited after a failed fetch.
+    expect(wrapper.text()).toContain("reservationPage.slotAvailabilityUnknown");
+    expect(wrapper.text()).not.toContain("reservationPage.slotUnlimited");
+    // Submit is blocked: button disabled AND validate() refuses to submit.
+    expect(submitButton().attributes("disabled")).not.toBeUndefined();
+    api.post.mockClear();
+    await wrapper.vm.submitReservation();
+    await flushPromises();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  // ── C-16: recovery — a later successful fetch clears the block ─────────
+  it("C-16: a successful refetch clears the warning and unblocks submit", async () => {
+    seedCapacityTenant();
+    wrapper = mountPage();
+    await flushPromises();
+
+    const api = (await import("../../lib/api")).default;
+    api.get.mockRejectedValueOnce(new Error("Network Error"));
+    wrapper.vm.form.date = "2026-11-20";
+    await wrapper.vm.onDateChange();
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("reservationPage.availabilityUnavailable");
+
+    // Retry (same date change) now succeeds via the routed payload.
+    _routes = {
+      "/availability/": {
+        data: { slots: [{ time: "12:00", datetime: "2026-11-20T12:00", used: 15, max: 20, available: 5, full: false }] },
+      },
+    };
+    await wrapper.vm.onDateChange();
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).not.toContain("reservationPage.availabilityUnavailable");
+    expect(submitButton().attributes("disabled")).toBeUndefined();
+    // With real slot data back, the 12:00 slot is labelled from the payload.
+    expect(wrapper.text()).toContain("reservationPage.slotUnlimited");
+  });
+
+  // ── C-24: unsafe reservation_url is neutralized ────────────────────────
+  it("C-24: a javascript: reservation_url renders no external-booking link", async () => {
+    seedCapacityTenant("javascript:alert(1)");
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("reservationPage.bookDirectly");
+    expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
+  });
+
+  // ── C-24: valid https reservation_url passes through ───────────────────
+  it("C-24: a valid https reservation_url renders the external-booking link", async () => {
+    seedCapacityTenant("https://book.example.com/chez-test");
+    wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("reservationPage.bookDirectly");
+    expect(wrapper.find('a[href="https://book.example.com/chez-test"]').exists()).toBe(true);
+  });
+});
