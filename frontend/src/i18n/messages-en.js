@@ -2729,6 +2729,9 @@ waiterPage: {
   mergeSrcAlreadyPaid: "That order is already paid - pick another order to merge.",
   mergeSrcHasPayment: "That order already has a payment collected - settle or void it before merging.",
   shiftLoadError: "Could not load your shift. Check your connection and try again.",
+  addFailedAlreadyPaid: "This order is already paid — no more items can be added.",
+  addFailedBadStatus: "This order is no longer editable — it is completed or cancelled.",
+  addFailedNotTable: "Items can only be added to a table order.",
 },
 repeatAnalytics: {
   title: "Repeat Business",

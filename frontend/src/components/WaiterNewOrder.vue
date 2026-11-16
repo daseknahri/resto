@@ -397,7 +397,7 @@
                     :name="`wg-${group.id}`"
                     class="h-4 w-4 accent-[var(--color-secondary)]"
                     :checked="isGroupOptSelected(group.id, opt.id)"
-                    @change="toggleGroupOpt(group, opt.id)"
+                    @change="toggleGroupOpt(group, opt.id, $event)"
                   />
                   {{ opt.name }}
                 </span>
@@ -682,8 +682,29 @@ const cartQty = (slug) =>
 const dishHasOptions = (dish) =>
   Boolean(dish?.option_groups?.length || dish?.options?.length);
 
-const lineKey = (slug, optionIds) =>
-  optionIds.length ? `${slug}::${[...optionIds].sort((a, b) => a - b).join('-')}` : slug;
+// Merge identity for a cart line (B-11): dish + options + seat + course + note.
+// Two lines merge ONLY when every part matches, so the same dish can be split
+// across seats (or courses, or notes) as separate lines. The merge lookup in
+// addLine compares each existing line's CURRENT seat/course/note -- a line whose
+// seat was edited after adding no longer matches a fresh add, so the new add
+// starts its own line instead of collapsing into the edited one (and the
+// second add's note is no longer dropped). JSON keeps the tuple unambiguous
+// (a free-text note may itself contain separators).
+const lineKey = (slug, optionIds, seat = 0, course = 0, note = '') =>
+  JSON.stringify([
+    slug,
+    [...optionIds].sort((a, b) => a - b),
+    Number(seat) || 0,
+    Number(course) || 0,
+    note || '',
+  ]);
+
+// Monotonic suffix for the stored line_key: the merge identity above is NOT
+// the row identity -- a line's seat/course/note are edited after adding, so the
+// stored key must stay stable and unique for its whole life (template :key,
+// increment/decrement/removeItem). Two lines can never share a merge identity
+// (they would have merged), so slug + sequence is enough.
+let lineSeq = 0;
 
 // ── Customization derived state ──────────────────────────────────────────────
 const groupCount = (groupId) => {
@@ -739,16 +760,24 @@ const selectCat = (slug) => {
   }
 };
 
-// Add a fully-specified line to the cart (merging same dish + same options).
-const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, qty, note }) => {
+// Add a fully-specified line to the cart, merging ONLY with a line that matches
+// on dish + options + seat + course + note (B-11). A repeat add of the same dish
+// with the same options still merges (today's behaviour); a repeat add after the
+// first line's seat/course/note was edited starts a new line, so the same dish
+// can be split across seats. seat/course default as before (0 / category
+// snapshot); callers may pass them explicitly.
+const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, qty, note, seat = 0, course = null }) => {
   bumpFreq(dish_slug);
-  const key = lineKey(dish_slug, option_ids);
-  const existing = cartItems.value.find((i) => i.line_key === key);
+  const lineCourse = course ?? dishCourse(dish_slug);
+  const key = lineKey(dish_slug, option_ids, seat, lineCourse, note || '');
+  const existing = cartItems.value.find((i) =>
+    lineKey(i.dish_slug, i.option_ids, i.seat || 0, i.course || 0, i.note || '') === key
+  );
   if (existing) {
     existing.qty = Math.min(99, existing.qty + qty);
   } else {
     cartItems.value.push({
-      line_key: key,
+      line_key: `${dish_slug}#${++lineSeq}`,
       dish_slug,
       dish_name,
       unit_price,
@@ -758,11 +787,11 @@ const addLine = ({ dish_slug, dish_name, unit_price, option_ids, options_label, 
       note: note || '',
       // Default course = the dish's category snapshot (0 = no course). The waiter
       // can override per line via the picker. Stays 0 for non-coursing menus.
-      course: dishCourse(dish_slug),
+      course: lineCourse,
       // Default seat = 0 (unassigned). The waiter can override per line via the
       // seat picker (only shown for dine-in/table context). Seat 0 = one bill,
       // today's behavior — preserved for any tenant not using seat-level ordering.
-      seat: 0,
+      seat: seat || 0,
     });
   }
 };
@@ -791,7 +820,7 @@ const openCustomize = (dish) => {
 };
 const closeCustomize = () => { customizingDish.value = null; };
 
-const toggleGroupOpt = (group, optId) => {
+const toggleGroupOpt = (group, optId, event = null) => {
   if (group.max_select === 1) {
     groupSel.value = { ...groupSel.value, [group.id]: optId };
     return;
@@ -800,6 +829,22 @@ const toggleGroupOpt = (group, optId) => {
   const idx = cur.indexOf(optId);
   if (idx >= 0) cur.splice(idx, 1);
   else if (cur.length < group.max_select) cur.push(optId);
+  else {
+    // Multi-select group at capacity: block the new pick and say so -- never
+    // silently ignore the tap (B-46; same pattern as DishPage C-11). The
+    // max_select > 1 guard keeps malformed groups (no max) on the old silent
+    // path instead of toasting an undefined cap.
+    if (group.max_select > 1) {
+      toast.show(t('dishPage.maxSelectReached', { n: group.max_select }), 'error');
+    }
+    // Reset the just-clicked box to the true selection state: the browser
+    // already toggled it before firing change, and the block changes no
+    // state, so the next render produces identical vnodes and Vue never
+    // re-patches :checked -- without this the box stays visually checked
+    // although the pick was refused (C-11 pattern).
+    if (event?.target) event.target.checked = isGroupOptSelected(group.id, optId);
+    return;
+  }
   groupSel.value = { ...groupSel.value, [group.id]: cur };
 };
 const toggleAddon = (optId) => {
@@ -894,9 +939,9 @@ const _appendErrorMsg = (err) => {
   const code = data.code || '';
   const detail = data.detail || data.error || '';
   if (code === 'out_of_stock') return detail || t('waiterPage.addFailed');
-  if (code === 'not_table')    return t('waiterPage.addFailed');
-  if (code === 'bad_status')   return t('waiterPage.addFailed');
-  if (code === 'already_paid') return t('waiterPage.addFailed');
+  if (code === 'not_table')    return t('waiterPage.addFailedNotTable');
+  if (code === 'bad_status')   return t('waiterPage.addFailedBadStatus');
+  if (code === 'already_paid') return t('waiterPage.addFailedAlreadyPaid');
   return detail || t('waiterPage.addFailed');
 };
 

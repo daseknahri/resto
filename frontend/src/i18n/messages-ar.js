@@ -5177,6 +5177,9 @@ Object.assign(arabicMessages, {
     "mergeSrcAlreadyPaid": "هذا الطلب مدفوع بالفعل - اختر طلبًا آخر للدمج.",
     "mergeSrcHasPayment": "تم تحصيل دفعة على هذا الطلب بالفعل - قم بتسويته أو إلغائه قبل الدمج.",
     "shiftLoadError": "تعذّر تحميل مناوبتك. تحقق من اتصالك وحاول مرة أخرى.",
+    "addFailedAlreadyPaid": "هذا الطلب مدفوع بالفعل — لا يمكن إضافة أصناف أخرى.",
+    "addFailedBadStatus": "هذا الطلب لم يعد قابلاً للتعديل — فقد اكتمل أو أُلغي.",
+    "addFailedNotTable": "لا يمكن إضافة الأصناف إلا إلى طلب طاولة.",
   },
   repeatAnalytics: {
     title: "\u0648\u0641\u0627\u0621 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",

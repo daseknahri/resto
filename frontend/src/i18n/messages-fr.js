@@ -2718,6 +2718,9 @@ waiterPage: {
   mergeSrcAlreadyPaid: "Cette commande est deja payee - choisissez une autre commande a fusionner.",
   mergeSrcHasPayment: "Cette commande a deja un paiement enregistre - reglez-la ou annulez-la avant de fusionner.",
   shiftLoadError: "Impossible de charger votre poste. Verifiez votre connexion et reessayez.",
+  addFailedAlreadyPaid: "Cette commande est deja payee : impossible d'ajouter des articles.",
+  addFailedBadStatus: "Cette commande n'est plus modifiable : elle est terminee ou annulee.",
+  addFailedNotTable: "Les articles ne peuvent etre ajoutes qu'a une commande a table.",
 },
 repeatAnalytics: {
   title: "Fidelisation client",
