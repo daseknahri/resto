@@ -71,6 +71,24 @@
           >{{ sec }}</button>
         </div>
 
+        <!-- Auto-dirty on settle toggle (B-34) — the waiter can turn off the
+             automatic table → dirty flip when a table's last order settles. -->
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-700/60 bg-slate-900/60 px-3 py-2">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-slate-200">{{ t('waiterPage.autoDirtyLabel') }}</p>
+            <p class="text-[11px] leading-snug text-slate-500">{{ t('waiterPage.autoDirtyHint') }}</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="autoDirtyOnSettle"
+            :aria-label="t('waiterPage.autoDirtyLabel')"
+            class="ui-press shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none"
+            :class="autoDirtyOnSettle ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : 'border-slate-600/70 bg-slate-800/60 text-slate-400'"
+            @click="autoDirtyOnSettle = !autoDirtyOnSettle"
+          >{{ autoDirtyOnSettle ? t('waiterPage.autoDirtyOn') : t('waiterPage.autoDirtyOff') }}</button>
+        </div>
+
         <!-- Idle table alert banner — tables waiting >= 20 min (RISK FE-2) -->
         <Transition name="fade">
           <WaiterIdleTableAlert
@@ -1075,6 +1093,7 @@ import WaiterCustomerRatingForm from "../components/WaiterCustomerRatingForm.vue
 import WaiterSettleSheet from "../components/WaiterSettleSheet.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
+import { loadQRCode } from "../lib/qr";
 import { useNowTicker } from "../composables/useNowTicker";
 import { useWakeLock } from "../composables/useWakeLock";
 import { useConfirmModal } from "../composables/useConfirmModal";
@@ -1130,10 +1149,13 @@ const showTableQR = async (slug, label) => {
   qrDataUrl.value = '';
   const url = window.location.origin + '/t/' + encodeURIComponent(slug);
   try {
-    const { default: QRCode } = await import('qrcode');
+    const QRCode = await loadQRCode();
     qrDataUrl.value = await QRCode.toDataURL(url, { width: 220, margin: 2, color: { dark: '#1e293b', light: '#f8fafc' } });
   } catch {
     qrDataUrl.value = '';
+    // B-10: a failed generation used to be a silent no-op (the modal only
+    // renders when qrDataUrl is set) — surface it like OwnerTables does.
+    toast.show(t('ownerTables.qrGenerateFailed'), 'error', 3000);
   }
 };
 
@@ -1627,7 +1649,13 @@ const doClock = async (direction) => {
   }
 };
 
-// Groups active table orders by table_label. Returns:
+// Grouping key for a table order: the table slug when the payload carries one
+// (tableStatusMap is keyed by slug), falling back to the normalised label for
+// payloads without a slug. Two sections with a table "T1" must not merge into
+// one group (B-33) — their slugs differ even when their labels match.
+const tableGroupKey = (order) => (order.table_slug || '').trim() || order.table_label.trim().toLowerCase();
+
+// Groups active table orders by table slug (label fallback). Returns:
 //   { tableGroups: [{ tableKey, tableLabel, tableId, tableStatus, orders, totalOutstanding }], nonTableOrders }
 const tableGrouping = computed(() => {
   // Only group when activeTab is 'all' or one of the active status tabs and not 'recent'/'shift'.
@@ -1642,7 +1670,7 @@ const tableGrouping = computed(() => {
       ACTIVE_TABLE_STATUSES.has(order.status);
 
     if (isActiveTable) {
-      const key = order.table_label.trim().toLowerCase();
+      const key = tableGroupKey(order);
       if (!tableMap.has(key)) {
         tableMap.set(key, { tableKey: key, tableLabel: order.table_label, orders: [] });
       }
@@ -1708,12 +1736,16 @@ const markTableStatus = async (group, newStatus) => {
 // tracked with zero extra taps. The waiter overrides via the existing
 // mark-clean (→ open) button. No-op (today's behavior) unless the table is
 // tracked in the table-state feature (has a tableId) — see store guard.
-const autoDirtyOnSettle = ref(true);
+// B-34: persisted like waiterSoundOn (localStorage, per-host) so the waiter's
+// choice survives reloads; default ON preserves the previous behaviour.
+const AUTO_DIRTY_KEY = typeof window === 'undefined' ? 'waiter:auto-dirty' : `waiter:auto-dirty:${window.location.hostname}`;
+const autoDirtyOnSettle = ref((() => { try { return localStorage.getItem(AUTO_DIRTY_KEY) !== 'off'; } catch { return true; } })());
+watch(autoDirtyOnSettle, (v) => { try { localStorage.setItem(AUTO_DIRTY_KEY, v ? 'on' : 'off'); } catch { /* ignore */ } });
 
 const maybeAutoDirtyTable = async (order) => {
   if (!autoDirtyOnSettle.value) return;
   if (order?.fulfillment_type !== 'table' || !order?.table_label) return;
-  const key = order.table_label.trim().toLowerCase();
+  const key = tableGroupKey(order);
   const tInfo = tableStatusMap.value.get(key);
   const tableId = tInfo?.id || null;
   if (!tableId) return; // table-state feature not in use for this table → no change
@@ -1808,14 +1840,18 @@ const openMerge = (order) => {
 
 const closeMerge = () => { mergeModal.value = false; mergeDestOrder.value = null; };
 
-// All active table orders except the destination — candidates to merge IN
+// All active table orders except the destination — candidates to merge IN.
+// Paid or partially-paid sources are ineligible: the backend rejects a paid
+// merge with 409 already_paid and any collected source payment with 409
+// source_has_payment (menu/views.py StaffMergeOrdersView) — the same exclusion
+// the transfer flow applies to paid destinations (B-32).
 const mergeSrcOptions = computed(() => {
   const dstId = mergeDestOrder.value?.id;
   const allGroups = tableGrouping.value.tableGroups;
   const opts = [];
   for (const g of allGroups) {
     for (const o of g.orders) {
-      if (o.id !== dstId) opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
+      if (o.id !== dstId && o.payment_status !== 'paid' && !Number(o.amount_paid) && !Number(o.wallet_amount_paid)) opts.push({ id: o.id, label: `#${o.order_number} · ${o.table_label}` });
     }
   }
   return opts;
@@ -1834,8 +1870,18 @@ const submitMerge = async () => {
     toast.show(t('waiterPage.mergeSuccess'), 'success', 2500);
     waiter.fetchOrders({ silent: true });
   } catch (e) {
-    void e;
-    mergeError.value = t('waiterPage.mergeFailed');
+    // B-32: map the backend's merge rejections like the transfer flow maps
+    // dest_already_paid, instead of the generic mergeFailed for every failure.
+    const code = e?.response?.data?.code;
+    const key =
+      code === 'already_paid' ? 'waiterPage.mergeSrcAlreadyPaid'
+      : code === 'source_has_payment' ? 'waiterPage.mergeSrcHasPayment'
+      : code === 'bad_status' ? 'waiterPage.mergeBadStatus'
+      : code === 'not_table' ? 'waiterPage.mergeNotTable'
+      : code === 'same_order' ? 'waiterPage.mergeSameOrder'
+      : 'waiterPage.mergeFailed';
+    mergeError.value = t(key);
+    if (key !== 'waiterPage.mergeFailed') toast.show(t(key), 'error');
   } finally {
     mergeBusy.value = false;
   }
@@ -1959,12 +2005,38 @@ const payWalletForSeat = async (order, seat) => {
   }
 };
 
-// If the backend provides `outstanding` (new ledger), use it; otherwise fall back to total-wallet.
-const settleOutstanding = (order) => {
+// Outstanding balance for an order — the single source of truth for both the
+// bill view (billOutstanding) and the settle flow (settleOutstanding), so the
+// two can no longer disagree on partial payments (B-48).
+//
+// Backend-verified semantics (menu/views.py _staff_order_payload, ~4975-5035):
+// `amount_paid` is the OrderPayment ledger total ONLY — it misses legacy
+// one-shot wallet settles (which bump wallet_amount_paid with no ledger row),
+// while split-bill wallet payments write BOTH a WALLET ledger row AND
+// wallet_amount_paid (adding amount_paid + wallet_amount_paid would
+// double-count those). The server `outstanding` field already reconciles both
+// signals (and is 0 once paid), so it wins whenever present. Fallback, for
+// list payloads that carry neither `outstanding` nor `payments`: total −
+// ledger − wallet-not-already-in-the-ledger; with no payments array that
+// reduces to total − the larger of the two signals, so what is owed is never
+// understated by double-crediting a wallet payment.
+const orderOutstanding = (order) => {
+  if (!order) return 0;
   if (order.outstanding !== undefined && order.outstanding !== null)
     return Math.max(0, +Number(order.outstanding).toFixed(2));
-  return Math.max(0, +((Number(order.total) || 0) - (Number(order.wallet_amount_paid) || 0)).toFixed(2));
+  const total = Number(order.total) || 0;
+  const ledger = Number(order.amount_paid) || 0;
+  const wallet = Number(order.wallet_amount_paid) || 0;
+  if (Array.isArray(order.payments)) {
+    const walletInLedger = order.payments.reduce(
+      (sum, p) => sum + (p.method === 'wallet' ? Number(p.amount) || 0 : 0), 0);
+    return Math.max(0, +(total - ledger - Math.max(0, wallet - walletInLedger)).toFixed(2));
+  }
+  return Math.max(0, +(total - Math.max(ledger, wallet)).toFixed(2));
 };
+
+// Settle path reads the same helper as the bill view (B-48).
+const settleOutstanding = (order) => orderOutstanding(order);
 // Tracks the amount the user typed in the settle-chooser input (empty string = full amount).
 const splitAmount = ref('');
 
@@ -1979,13 +2051,13 @@ const cashChange = computed(() => {
   return (received - due).toFixed(2);
 });
 
-// Outstanding amount on the open bill (total minus any wallet already applied).
+// Outstanding amount on the open bill — same helper as the settle flow (B-48).
+// The old formula (total − (amount_paid OR wallet_amount_paid)) overstated what
+// was owed whenever a cash partial and a legacy wallet settle coexisted.
 const billOutstanding = computed(() => {
   if (!billOrder.value) return 0;
   if (billOrder.value.payment_status === 'paid') return 0;
-  const total = Number(billOrder.value.total) || 0;
-  const paid = Number(billOrder.value.amount_paid) || Number(billOrder.value.wallet_amount_paid) || 0;
-  return Math.max(0, +(total - paid).toFixed(2));
+  return orderOutstanding(billOrder.value);
 });
 
 const openCharge = (ctx = { amount: '', orderNumber: '' }) => {
