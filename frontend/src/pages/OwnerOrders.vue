@@ -964,7 +964,7 @@
               </p>
               <p v-if="item.note" class="italic text-slate-400">{{ item.note }}</p>
               <!-- Contract F: void reason surfaced -->
-              <p v-if="item.is_voided && item.void_reason" class="text-[10px] text-red-400/80 italic">{{ t("ownerOrders.voidReason") }}: {{ item.void_reason }}</p>
+              <p v-if="item.is_voided && item.void_reason" class="text-[10px] text-red-400/80 italic">{{ t("ownerOrders.voidReason") }}: {{ voidReasonLabel(item.void_reason) }}</p>
               <!-- Combo sub-lines -->
               <ul v-if="item.combo_components?.length" class="mt-0.5 space-y-0">
                 <li
@@ -2086,6 +2086,18 @@ const CANCEL_REASON_CODES = [
 ];
 
 const cancelReasonLabel = (code) => t(`ownerOrders.cancelReason_${code}`);
+
+// S3-B follow-up: void reasons are stored as codes now (B-13); localize at
+// display. Unknown strings (old localized rows, "Other" free text) render verbatim.
+const VOID_REASON_CODES = [
+  "voidReasonWrongItem",
+  "voidReasonChangedMind",
+  "voidReasonKitchenError",
+  "voidReasonComp",
+];
+
+const voidReasonLabel = (code) =>
+  VOID_REASON_CODES.includes(code) ? t(`waiterPage.${code}`) : code;
 
 // cancelReasonPanel: { orderId, code, note }
 const cancelReasonPanel = ref(null);

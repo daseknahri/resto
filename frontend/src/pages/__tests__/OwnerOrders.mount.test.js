@@ -638,3 +638,55 @@ describe("OwnerOrders — G4b-F (B-42 export toast + djAction keys / B-43 notifi
     ).toBe(false);
   });
 });
+
+// ── S3-B follow-up (B-13): void reasons are stored as codes now, so the
+// owner board must localize them at display instead of showing the raw code.
+describe("OwnerOrders ─ S3-B follow-up (void reason codes localize)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountWithVoidItem = async (voidReason) => {
+    _routes = {
+      "/owner/orders/": {
+        data: {
+          results: [
+            order({
+              id: 1,
+              order_number: "A100",
+              status: "confirmed",
+              items: [
+                { dish_name: "Burger", qty: 2, subtotal: "82.50", is_voided: true, void_reason: voidReason },
+              ],
+            }),
+          ],
+          total: 1,
+        },
+      },
+    };
+    wrapper = mountOrders();
+    await flushPromises();
+    await flushPromises();
+  };
+
+  it("localizes a stored void preset code instead of showing the raw code", async () => {
+    await mountWithVoidItem("voidReasonWrongItem");
+    expect(wrapper.text()).toContain("ownerOrders.voidReason: waiterPage.voidReasonWrongItem");
+  });
+
+  it("renders old localized rows and free-text reasons verbatim", async () => {
+    await mountWithVoidItem("Wrong item");
+    expect(wrapper.text()).toContain("ownerOrders.voidReason: Wrong item");
+  });
+});
