@@ -1779,6 +1779,7 @@ driver: {
   proofPhotoOr: "ou",
   proofPhotoReady: "Photo prise — appuyez sur Confirmer pour terminer la livraison.",
   proofPhotoRetake: "Reprendre la photo",
+  cashoutInvalidAmount: "Entrez un montant valide pour retirer.",
 },
 driverOffer: {
   newOffer: "Nouvelle offre",

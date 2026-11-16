@@ -1781,6 +1781,7 @@ driver: {
   proofPhotoOr: "or",
   proofPhotoReady: "Photo taken — tap Confirm to complete delivery.",
   proofPhotoRetake: "Retake photo",
+  cashoutInvalidAmount: "Enter a valid amount to cash out.",
 },
 driverOffer: {
   newOffer: "New offer",

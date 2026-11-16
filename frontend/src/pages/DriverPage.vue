@@ -1602,7 +1602,7 @@ const closeCashoutModal = () => {
 const submitCashout = async () => {
   const amount = Number(String(cashoutInput.value).replace(',', '.'));
   if (!Number.isFinite(amount) || amount <= 0) {
-    cashoutModalError.value = t('driver.errorGeneric');
+    cashoutModalError.value = t('driver.cashoutInvalidAmount');
     return;
   }
   cashoutModalError.value = '';
@@ -1648,7 +1648,11 @@ const fetchCashout = async () => {
     }
     cashout.value = nowPending;
   } catch {
-    cashout.value = null;
+    // C-17: keep the last-good pending cash-out on a poll failure — a
+    // transient network blip must not make the driver think the code
+    // vanished. Only a successful response with no pending request
+    // clears it (above).
+    /* keep last */
   }
 };
 const requestCashout = () => {

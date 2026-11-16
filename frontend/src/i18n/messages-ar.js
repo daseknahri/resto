@@ -4242,6 +4242,7 @@ Object.assign(arabicMessages, {
     proofPhotoOr: "أو",
     proofPhotoReady: "تم التقاط الصورة — اضغط تأكيد لإتمام التوصيل.",
     proofPhotoRetake: "إعادة التقاط",
+    "cashoutInvalidAmount": "أدخل مبلغاً صحيحاً للسحب.",
   },
   driverOffer: {
     newOffer: "عرض جديد",

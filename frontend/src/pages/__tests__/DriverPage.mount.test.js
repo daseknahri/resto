@@ -72,6 +72,7 @@ vi.mock("../../lib/api", () => ({
 
 import { useCustomerStore } from "../../stores/customer";
 import DriverPage from "../DriverPage.vue";
+import api from "../../lib/api";
 
 // Geolocation stub — added to the REAL navigator so startGeo()'s
 // `'geolocation' in navigator` guard passes and watchPosition actually runs for the
@@ -253,5 +254,239 @@ describe("DriverPage — mount smoke", () => {
     expect(wrapper.text()).toContain("driver.title");
     // Approved dashboard chrome still renders alongside the (stubbed) active-job hero.
     expect(wrapper.text()).toContain("driver.goOffline");
+  });
+});
+// ── S4-A / C-17 ────────────────────────────────────────────────────────────────
+// fetchCashout polls on the adaptive interval (15 s idle, no active job/ride).
+// A failed poll must NOT clear the last-good pending code; only a successful
+// response with no pending request clears it. Driven through the real poll
+// timer (fake timers) + the real api mock, asserting on the rendered code /
+// "code active" chip (the code digits live in the collapsed wallet panel).
+describe("DriverPage — C-17 cash-out poll failure keeps the last-good code", () => {
+  let wrapper;
+  let cashoutShouldFail = false;
+
+  beforeEach(() => {
+    // Own isolation — never rely on the base describe's hook (S2-B lesson).
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    cashoutShouldFail = false;
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) =>
+      cashoutShouldFail && url.includes("/driver/cashout/")
+        ? Promise.reject(new Error("cash-out poll down"))
+        : Promise.resolve(_match(url)),
+    );
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+    Object.defineProperty(navigator, "geolocation", {
+      value: geoStub,
+      configurable: true,
+      writable: true,
+    });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    cashoutShouldFail = false;
+    vi.useRealTimers();
+    try {
+      delete navigator.geolocation;
+    } catch {
+      /* ignore */
+    }
+  });
+
+  const mountWithPendingCashout = async () => {
+    useCustomerStore().setCustomer({ id: 1, name: "Driver", phone: "0600000000" });
+    _routes = {
+      "/driver/status/": APPROVED_ONLINE_STATUS,
+      "/driver/jobs/": { data: { active: [], pending: [] } },
+      "/driver/earnings/": {
+        data: {
+          available: "50.00",
+          earned: "120.00",
+          paid: "70.00",
+          owed: "50.00",
+          deliveries_today: 1,
+          earned_today: "20.00",
+          total_deliveries: 5,
+          can_cash_out: true,
+          cashout_min: "20.00",
+        },
+      },
+      // Expires an hour out so the 1 s countdown clock never drops it mid-test.
+      "/driver/cashout/": {
+        data: {
+          pending: {
+            id: 7,
+            amount: "50.00",
+            code: "482913",
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          },
+        },
+      },
+    };
+    wrapper = mountPage();
+    // waitFor settles the async onMounted chain (fetchCustomer → fetchStatus →
+    // bootstrap → fetchCashout) while advancing the fake timers.
+    await vi.waitFor(() => expect(wrapper.text()).toContain("driver.goOffline"));
+    await vi.waitFor(() => expect(wrapper.text()).toContain("driver.cashoutCodeActive"));
+  };
+
+  const openWallet = async () => {
+    const trigger = wrapper.find('button[aria-controls="driver-wallet-panel"]');
+    expect(trigger.exists()).toBe(true);
+    await trigger.trigger("click");
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  it("keeps showing the pending code when the next cash-out poll fails", async () => {
+    await mountWithPendingCashout();
+    await openWallet();
+    expect(wrapper.text()).toContain("482913");
+
+    cashoutShouldFail = true;
+    // One idle poll tick (15 s): fetchJobs + fetchEarnings + fetchCashout (fails).
+    await vi.advanceTimersByTimeAsync(15000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Pre-fix behaviour cleared the code here (cashout.value = null in the catch).
+    expect(wrapper.text()).toContain("482913");
+    expect(wrapper.text()).toContain("driver.cashoutCodeActive");
+  });
+
+  it("clears the code when a poll succeeds with no pending request", async () => {
+    await mountWithPendingCashout();
+    await openWallet();
+    expect(wrapper.text()).toContain("482913");
+
+    _routes["/driver/cashout/"] = { data: { pending: null } };
+    await vi.advanceTimersByTimeAsync(15000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(wrapper.text()).not.toContain("482913");
+    expect(wrapper.text()).not.toContain("driver.cashoutCodeActive");
+  });
+});
+
+// ── S4-A / C-23 ────────────────────────────────────────────────────────────────
+// submitCashout with a non-numeric / zero / negative amount must show the
+// specific "enter a valid amount" message — not the generic error. Driven
+// through the stubbed DriverCashoutModal's v-model + submit events (the modal
+// is a shallowMount stub, so its $emit drives the parent's v-model listener
+// and @submit handler exactly as the real modal would).
+describe("DriverPage — C-23 cash-out amount validation shows a specific error", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    // Own isolation — never rely on the base describe's hook (S2-B lesson).
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+    api.get.mockImplementation((url) => Promise.resolve(_match(url)));
+    api.post.mockImplementation(() => Promise.resolve({ data: {} }));
+    Object.defineProperty(navigator, "geolocation", {
+      value: geoStub,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    try {
+      delete navigator.geolocation;
+    } catch {
+      /* ignore */
+    }
+  });
+
+  // shallowMount auto-stubs the modal; its name is the component name (or the
+  // name + "Stub" in some VTU builds) — try both so the lookup is not brittle.
+  const cashoutModal = () => {
+    const byName = wrapper.findComponent({ name: "DriverCashoutModal" });
+    if (byName.exists()) return byName;
+    const byStubName = wrapper.findComponent({ name: "DriverCashoutModalStub" });
+    if (byStubName.exists()) return byStubName;
+    throw new Error("DriverCashoutModal stub not found (tried DriverCashoutModal / DriverCashoutModalStub)");
+  };
+
+  const mountWithCashoutModalOpen = async () => {
+    useCustomerStore().setCustomer({ id: 3, name: "Driver", phone: "0622222222" });
+    _routes = {
+      "/driver/status/": APPROVED_ONLINE_STATUS,
+      "/driver/jobs/": { data: { active: [], pending: [] } },
+      "/driver/earnings/": {
+        data: {
+          available: "25.00",
+          earned: "120.00",
+          paid: "95.00",
+          owed: "25.00",
+          deliveries_today: 3,
+          earned_today: "40.00",
+          total_deliveries: 12,
+          can_cash_out: true,
+          cashout_min: "20.00",
+        },
+      },
+      "/driver/cashout/": { data: { pending: null } },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    expect(wrapper.text()).toContain("driver.goOffline");
+    await wrapper.find('button[aria-controls="driver-wallet-panel"]').trigger("click");
+    const cashOutButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("driver.cashOut"));
+    expect(cashOutButton).toBeDefined();
+    await cashOutButton.trigger("click");
+    await flushPromises();
+    expect(cashoutModal().props("open")).toBe(true);
+  };
+
+  const submitAmount = async (amount) => {
+    const modal = cashoutModal();
+    await modal.vm.$emit("update:amount", amount);
+    await modal.vm.$emit("submit");
+    await flushPromises();
+  };
+
+  it("shows the specific invalid-amount message for zero (no network call)", async () => {
+    await mountWithCashoutModalOpen();
+    await submitAmount("0");
+    expect(cashoutModal().props("error")).toBe("driver.cashoutInvalidAmount");
+    expect(cashoutModal().props("open")).toBe(true);
+    expect(api.post).not.toHaveBeenCalledWith("/driver/cashout/", expect.anything());
+  });
+
+  it("shows the specific invalid-amount message for a non-numeric amount (no network call)", async () => {
+    await mountWithCashoutModalOpen();
+    await submitAmount("abc");
+    expect(cashoutModal().props("error")).toBe("driver.cashoutInvalidAmount");
+    expect(cashoutModal().props("open")).toBe(true);
+    expect(api.post).not.toHaveBeenCalledWith("/driver/cashout/", expect.anything());
+  });
+
+  it("shows the specific invalid-amount message for a negative amount (no network call)", async () => {
+    await mountWithCashoutModalOpen();
+    await submitAmount("-5");
+    expect(cashoutModal().props("error")).toBe("driver.cashoutInvalidAmount");
+    expect(cashoutModal().props("open")).toBe(true);
+    expect(api.post).not.toHaveBeenCalledWith("/driver/cashout/", expect.anything());
+  });
+
+  it("submits a valid amount and closes the modal without the error", async () => {
+    await mountWithCashoutModalOpen();
+    await submitAmount("10");
+    expect(api.post).toHaveBeenCalledWith("/driver/cashout/", { amount: 10 });
+    expect(cashoutModal().props("error")).toBe("");
+    expect(cashoutModal().props("open")).toBe(false);
   });
 });
