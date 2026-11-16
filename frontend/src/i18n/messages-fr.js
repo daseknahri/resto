@@ -906,6 +906,7 @@ mktOrderStatus: {
   etaReady: "Pret dans ~{min} min",
   etaAnyMoment: "Pret d'un moment a l'autre",
   contactRestaurant: "Contacter le restaurant",
+  ratingLabel: "{score} sur 5",
 },
 contactPage: {
   kicker: "Support",

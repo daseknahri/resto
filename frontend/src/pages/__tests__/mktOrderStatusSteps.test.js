@@ -52,3 +52,56 @@ describe("marketplace order-status stepper (fulfillment-aware)", () => {
     expect(progressPercent(buildStatusSteps("delivery"), "cancelled")).toBe(0);
   });
 });
+
+// ── C-01: scheduled orders get a leading "scheduled" step ────────────────────
+// Mirror of the FIXED MarketplaceOrderStatus.vue stepper: the step is prepended
+// when the order is scheduled OR carries a scheduled_for (it was scheduled, even
+// after it moves on), so a scheduled order matches a step and progress is > 0.
+// (The base mirror above cannot express this — it has no order — so the fixed
+// logic is mirrored here without touching the base.)
+function buildStatusStepsFixed(fulfillmentType, order) {
+  const steps = [];
+  if (order?.status === "scheduled" || order?.scheduled_for) steps.push("scheduled");
+  steps.push("pending", "confirmed", "preparing", "ready");
+  if (fulfillmentType === "delivery") steps.push("out_for_delivery");
+  steps.push("completed");
+  return steps;
+}
+
+describe("marketplace order-status stepper — scheduled orders (C-01)", () => {
+  it("a scheduled pickup order starts with a 'scheduled' step (6 steps)", () => {
+    expect(
+      buildStatusStepsFixed("pickup", { status: "scheduled", scheduled_for: "2026-11-17T12:00:00Z" }),
+    ).toEqual(["scheduled", "pending", "confirmed", "preparing", "ready", "completed"]);
+  });
+
+  it("a scheduled delivery order starts with a 'scheduled' step (7 steps)", () => {
+    expect(
+      buildStatusStepsFixed("delivery", { status: "scheduled", scheduled_for: "2026-11-17T12:00:00Z" }),
+    ).toEqual(["scheduled", "pending", "confirmed", "preparing", "ready", "out_for_delivery", "completed"]);
+  });
+
+  it("a scheduled pickup order reads 1/6 = 17%, not 0% (was -1 → 0% with no step)", () => {
+    const steps = buildStatusStepsFixed("pickup", { status: "scheduled", scheduled_for: "2026-11-17T12:00:00Z" });
+    expect(progressPercent(steps, "scheduled")).toBe(17);
+  });
+
+  it("a scheduled delivery order reads 1/7 = 14%", () => {
+    const steps = buildStatusStepsFixed("delivery", { status: "scheduled", scheduled_for: "2026-11-17T12:00:00Z" });
+    expect(progressPercent(steps, "scheduled")).toBe(14);
+  });
+
+  it("a scheduled_for order that moved on keeps 'scheduled' as a completed first step", () => {
+    const steps = buildStatusStepsFixed("pickup", { status: "confirmed", scheduled_for: "2026-11-17T12:00:00Z" });
+    expect(steps[0]).toBe("scheduled");
+    // confirmed is index 2 of 6 steps (scheduled, pending, confirmed, ...) -> 3/6 = 50%
+    expect(progressPercent(steps, "confirmed")).toBe(50);
+  });
+
+  it("a non-scheduled order is unchanged (no 'scheduled' step, same progress as before)", () => {
+    expect(buildStatusStepsFixed("pickup", { status: "pending" })).toEqual([
+      "pending", "confirmed", "preparing", "ready", "completed",
+    ]);
+    expect(progressPercent(buildStatusStepsFixed("pickup", { status: "pending" }), "pending")).toBe(20);
+  });
+});

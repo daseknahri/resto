@@ -514,9 +514,11 @@
               type="button"
               role="radio"
               class="ui-touch-target ui-press flex items-center justify-center text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 focus-visible:rounded-lg"
-              :aria-label="`${star}`"
+              :aria-label="t('mktOrderStatus.ratingLabel', { score: star })"
               :aria-checked="star <= mktRatingScore"
+              :tabindex="star === (mktRatingScore || 1) ? 0 : -1"
               @click="mktRatingScore = star"
+              @keydown="onStarKey($event, star)"
             >
               <span :class="star <= mktRatingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
             </button>
@@ -555,6 +557,9 @@
       @close="claimModalOpen = false"
       @authenticated="onClaimAuthenticated"
     />
+
+    <!-- Push-permission priming soft-ask (self-gated; triggered post-checkout) -->
+    <PushPrimingSheet ref="pushPrimingSheet" />
   </div>
 </template>
 
@@ -567,6 +572,7 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import DeliveryTracker from '../components/DeliveryTracker.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
+import PushPrimingSheet from '../components/PushPrimingSheet.vue';
 import { useCustomerStore } from '../stores/customer';
 
 const { t, formatDateTime, formatCurrency } = useI18n();
@@ -611,6 +617,11 @@ const claimModalOpen = ref(false);
 const showClaimCta = computed(
   () => canClaim.value && !customerStore.isAuthenticated && !claimed.value
 );
+// Push-permission priming soft-ask — triggered post-checkout (high-intent moment).
+// The sheet self-gates (supported + permission==='default' + push enabled + not
+// recently dismissed) and only fires the real OS prompt on accept. It owns the
+// permission ask: no raw Notification.requestPermission() on mount (C-04).
+const pushPrimingSheet = ref(null);
 const onClaimAuthenticated = async () => {
   claimModalOpen.value = false;
   claiming.value = true;
@@ -721,6 +732,34 @@ const {
   buildRateUrl: (num) => `/marketplace/order/${num}/rate/?restaurant=${encodeURIComponent(slug)}`,
 });
 
+// Roving-tabindex keyboard support for the star radiogroup: only the selected star (or the
+// first, when none is chosen) is tabbable, and Arrow/Home/End move both selection and focus —
+// the ARIA radiogroup contract. Click behaviour is unchanged. (C-05; mirrors OrderStatus.vue.)
+const onStarKey = (e, star) => {
+  let next;
+  switch (e.key) {
+    case "ArrowRight":
+    case "ArrowUp":
+      next = Math.min(5, star + 1);
+      break;
+    case "ArrowLeft":
+    case "ArrowDown":
+      next = Math.max(1, star - 1);
+      break;
+    case "Home":
+      next = 1;
+      break;
+    case "End":
+      next = 5;
+      break;
+    default:
+      return;
+  }
+  e.preventDefault();
+  mktRatingScore.value = next;
+  e.currentTarget?.parentElement?.querySelectorAll('[role="radio"]')?.[next - 1]?.focus();
+};
+
 // ── Reorder ───────────────────────────────────────────────────────────────────
 const reorder = () => {
   if (!order.value?.items?.length) return;
@@ -760,12 +799,18 @@ const formatScheduledFor = (iso) => {
 // otherwise reads 4/6) — must not show for them. Mirrors the tenant OrderStatus.vue,
 // which builds its steps per fulfillment type.
 const statusSteps = computed(() => {
-  const steps = [
+  const steps = [];
+  // A scheduled (advance) order is a real first step: without it a scheduled order
+  // matches no step, so currentStatusIdx is -1 and progress reads 0% (C-01). The
+  // step stays first once scheduled_for is set, even after the order moves on (it
+  // was scheduled) — the label resolves via the existing mktOrderStatus.scheduled key.
+  if (order.value?.status === 'scheduled' || order.value?.scheduled_for) steps.push({ key: 'scheduled' });
+  steps.push(
     { key: 'pending' },
     { key: 'confirmed' },
     { key: 'preparing' },
     { key: 'ready' },
-  ];
+  );
   if (order.value?.fulfillment_type === 'delivery') steps.push({ key: 'out_for_delivery' });
   steps.push({ key: 'completed' });
   return steps;
@@ -893,10 +938,6 @@ const onMktStatusVisible = () => {
 };
 
 onMounted(() => {
-  // Request push notification permission proactively (best-effort; same as tenant OrderStatus)
-  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {});
-  }
   // Show celebration banner if arriving within 60s of placing this order
   try {
     const lastNum = localStorage.getItem('mktLastOrderNumber');
@@ -909,6 +950,9 @@ onMounted(() => {
       if ((Date.now() - lastAt) < 60000) {
         showJustPlacedBanner.value = true;
         _justPlacedTimer = setTimeout(() => { showJustPlacedBanner.value = false; }, 5000);
+        // High-intent moment: just placed this order → soft-ask for push permission.
+        // The sheet self-gates and only fires the real OS prompt on accept (C-04).
+        pushPrimingSheet.value?.maybeShow?.();
       }
     }
   } catch { /* storage unavailable */ }

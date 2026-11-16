@@ -459,3 +459,196 @@ describe("OrderStatus — receipt details (L5 / L12 / L13 / M9)", () => {
     expect(statusFetches()).toBe(2);
   });
 });
+
+// ── S2-A: C-04 + C-18 ────────────────────────────────────────────────────────
+// Appended 2026-11-16 (S2-A). The base above stays an exact prefix.
+
+const maybeShowSpy = vi.fn();
+const PushPrimingSheetStub = {
+  name: "PushPrimingSheet",
+  setup(_, { expose }) {
+    expose({ maybeShow: maybeShowSpy });
+    return () => null;
+  },
+};
+
+// Same shallowMount as mountPage, but with the priming sheet stubbed to its real
+// contract (an exposed maybeShow) so C-04 can assert the soft-ask fires.
+const mountPageWithPrime = (orderNumber = "A1") =>
+  shallowMount(OrderStatus, {
+    props: { orderNumber },
+    global: {
+      stubs: {
+        RouterLink: { template: "<a><slot /></a>" },
+        Transition: { template: "<slot />" },
+        Teleport: { template: "<slot />" },
+        PushPrimingSheet: PushPrimingSheetStub,
+      },
+    },
+  });
+
+describe("OrderStatus — notification permission (C-04)", () => {
+  let wrapper;
+  let requestPermissionSpy;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    realtime.state.value = "polling";
+    vi.clearAllMocks();
+    requestPermissionSpy = vi.fn(() => Promise.resolve("granted"));
+    globalThis.Notification = { permission: "default", requestPermission: requestPermissionSpy };
+    _routes = { "/order-status/": { data: ownerOrder() } };
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    delete globalThis.Notification;
+  });
+
+  it("on a just-placed order the priming sheet's maybeShow fires and no raw OS prompt is requested", async () => {
+    localStorage.setItem("lastOrderNumber", "B1");
+    localStorage.setItem("lastOrderAt", String(Date.now()));
+    wrapper = mountPageWithPrime("B1");
+    await flushPromises();
+
+    expect(maybeShowSpy).toHaveBeenCalledTimes(1);
+    expect(requestPermissionSpy).not.toHaveBeenCalled();
+  });
+
+  it("on a plain visit neither the sheet nor a raw OS prompt fires", async () => {
+    wrapper = mountPageWithPrime("B1");
+    await flushPromises();
+
+    expect(maybeShowSpy).not.toHaveBeenCalled();
+    expect(requestPermissionSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("OrderStatus — ready banner branches on fulfillment_type, not on a translated string (C-18)", () => {
+  let wrapper;
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    realtime.state.value = "polling";
+    vi.clearAllMocks();
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    realtime.state.value = "polling";
+  });
+
+  // Re-import the page with a useI18n mock whose fulfillmentDelivery translation
+  // returns a DIFFERENT string on every second evaluation — simulating a reworded
+  // / locale-changed translation. The old code compared
+  // fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") (two
+  // evaluations of the same key), so it silently fell through to the pickup copy
+  // the moment the two evaluations disagreed; the fixed code branches on
+  // fulfillment_type and is unaffected. (node_modules stay singletons across
+  // resetModules, so Vue/pinia are shared — only workspace modules re-evaluate.)
+  // If the per-test mock ever stops overriding the hoisted one, this degrades to
+  // the plain delivery-vs-pickup copy check below — it still passes with the fix.
+  const loadFreshReady = async (order) => {
+    let deliveryCalls = 0;
+    vi.resetModules();
+    vi.doMock("../../composables/useI18n", () => ({
+      useI18n: () => ({
+        t: (k, p) => {
+          if (k === "orderStatus.fulfillmentDelivery") {
+            deliveryCalls += 1;
+            return deliveryCalls % 2 === 1 ? "Delivery" : "Livraison";
+          }
+          return p ? `${k}(${JSON.stringify(p)})` : k;
+        },
+        formatPrice: (v) => String(v),
+        formatDateTime: (v) => String(v),
+        currentLocale: { value: "en" },
+      }),
+    }));
+    const { default: FreshOrderStatus } = await import("../OrderStatus.vue");
+    _routes = { "/order-status/": { data: order } };
+    wrapper = shallowMount(FreshOrderStatus, {
+      props: { orderNumber: order.order_number },
+      global: {
+        stubs: {
+          RouterLink: { template: "<a><slot /></a>" },
+          Transition: { template: "<slot />" },
+          Teleport: { template: "<slot />" },
+        },
+      },
+    });
+    await flushPromises();
+    return wrapper.text();
+  };
+
+  it("a ready DELIVERY order shows the delivery copy even when the translated fulfillment label disagrees with itself", async () => {
+    const text = await loadFreshReady(
+      ownerOrder({ status: "ready", fulfillment_type: "delivery" }),
+    );
+    expect(text).toContain("orderStatus.readyBodyDelivery");
+    expect(text).not.toContain("orderStatus.readyBodyPickup");
+  });
+
+  it("a ready PICKUP order shows the pickup copy", async () => {
+    const text = await loadFreshReady(
+      ownerOrder({ status: "ready", fulfillment_type: "pickup" }),
+    );
+    expect(text).toContain("orderStatus.readyBodyPickup");
+    expect(text).not.toContain("orderStatus.readyBodyDelivery");
+  });
+
+  it("a ready TABLE order shows the pickup copy (not delivery)", async () => {
+    const text = await loadFreshReady(
+      ownerOrder({ status: "ready", fulfillment_type: "table" }),
+    );
+    expect(text).toContain("orderStatus.readyBodyPickup");
+    expect(text).not.toContain("orderStatus.readyBodyDelivery");
+  });
+});
+
+describe("OrderStatus - tenant timeline scheduled step (C-01 follow-up, coordinator addition)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    realtime.state.value = "polling";
+    vi.clearAllMocks();
+  });
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+    realtime.state.value = "polling";
+  });
+
+  const timelineProps = async (order) => {
+    _routes = { "/order-status/": { data: order } };
+    wrapper = mountPage(order.order_number);
+    await flushPromises();
+    const tl = wrapper.findComponent({ name: "OrderStatusTimeline" });
+    expect(tl.exists()).toBe(true);
+    return tl.props();
+  };
+
+  it("a scheduled tenant order shows the scheduled step first with progress above 0", async () => {
+    const props = await timelineProps(
+      ownerOrder({ status: "scheduled", fulfillment_type: "pickup", scheduled_for: "2026-11-16T18:00:00" }),
+    );
+    expect(props.steps[0].value).toBe("scheduled");
+    expect(props.currentStepIndex).toBe(0);
+    expect(props.progressPercent).toBeGreaterThan(0);
+  });
+
+  it("a confirmed order with scheduled_for keeps scheduled as a completed first step", async () => {
+    const props = await timelineProps(
+      ownerOrder({ status: "confirmed", fulfillment_type: "pickup", scheduled_for: "2026-11-16T18:00:00" }),
+    );
+    expect(props.steps[0].value).toBe("scheduled");
+    // confirmed is index 2 (scheduled 0, pending 1, confirmed 2)
+    expect(props.currentStepIndex).toBe(2);
+    expect(props.progressPercent).toBeGreaterThan(0);
+  });
+});

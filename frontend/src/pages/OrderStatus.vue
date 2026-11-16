@@ -135,7 +135,7 @@
           <p class="text-3xl" aria-hidden="true">🎉</p>
           <p class="text-2xl font-bold text-emerald-200">{{ t("orderStatus.orderReadyTitle") }}</p>
           <p class="text-sm text-emerald-100/75">
-            {{ fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
+            {{ orderData.fulfillment_type === 'delivery' ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
           </p>
         </div>
       </div>
@@ -979,7 +979,16 @@ const reorder = async () => {
 // dine-in adds a final "To pay" step, delivery adds "Out for delivery → Delivered".
 const statusSteps = computed(() => {
   const ft = orderData.value?.fulfillment_type;
+  // C-01 follow-up (coordinator): a scheduled order is a real first step -
+  // without it currentStepIndex is -1 and the timeline shows 0% (same defect
+  // as the marketplace page). The step stays first once scheduled_for is set,
+  // even after the order moves on.
+  const isScheduled =
+    orderData.value?.status === "scheduled" || orderData.value?.scheduled_for;
   const base = [
+    ...(isScheduled
+      ? [{ value: "scheduled", label: t("orderStatus.statusScheduled") }]
+      : []),
     { value: "pending", label: t("orderStatus.statusPending") },
     { value: "confirmed", label: t("orderStatus.statusConfirmed") },
     { value: "preparing", label: t("orderStatus.statusPreparing") },
@@ -1402,10 +1411,6 @@ watch(pollSeconds, () => {
 });
 
 onMounted(() => {
-  // Request notification permission proactively (non-blocking)
-  if (typeof Notification !== "undefined" && Notification.permission === "default") {
-    Notification.requestPermission().catch(() => {});
-  }
   // Show celebration banner if arriving within 60s of placing this order
   try {
     const lastNum = localStorage.getItem('lastOrderNumber');

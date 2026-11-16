@@ -3932,6 +3932,7 @@ Object.assign(arabicMessages, {
     etaReady: "\u062c\u0627\u0647\u0632 \u062e\u0644\u0627\u0644 ~{min} \u062f\u0642\u064a\u0642\u0629",
     etaAnyMoment: "\u062c\u0627\u0647\u0632 \u0641\u064a \u0623\u064a \u0644\u062d\u0638\u0629 \u0627\u0644\u0622\u0646",
     contactRestaurant: "\u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0645\u0637\u0639\u0645",
+    "ratingLabel": "{score} من 5",
   },
   ownerMenuBuilder: {
     importCsv: "\u0627\u0633\u062a\u064a\u0631\u0627\u062f CSV",

@@ -908,6 +908,7 @@ mktOrderStatus: {
   etaReady: "Ready in ~{min} min",
   etaAnyMoment: "Ready any moment now",
   contactRestaurant: "Contact restaurant",
+  ratingLabel: "{score} out of 5",
 },
 contactPage: {
   kicker: "Support",
