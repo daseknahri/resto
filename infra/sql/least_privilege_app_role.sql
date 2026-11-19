@@ -40,28 +40,30 @@
 -- ============================================================================
 
 \set ON_ERROR_STOP on
+SELECT set_config('app.role', :'app_role', false);
+SELECT set_config('app.password', :'app_password', false);
 
 -- ── 0. Create/refresh the role (idempotent, cluster-level) ───────────────────
 --    NOSUPERUSER is the whole point. No CREATEDB (django-tenants makes SCHEMAS,
 --    not databases). No CREATEROLE / NOREPLICATION / NOBYPASSRLS = minimal.
 SELECT format(
   'role %I: %s',
-  :'app_role',
-  CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role')
+  current_setting('app.role'),
+  CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_setting('app.role'))
        THEN 'exists — will ALTER' ELSE 'missing — will CREATE' END
 ) AS status \gset
 \echo :status
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role') THEN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_setting('app.role')) THEN
     EXECUTE format(
       'ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L',
-      :'app_role', :'app_password');
+      current_setting('app.role'), current_setting('app.password'));
   ELSE
     EXECUTE format(
       'CREATE ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L',
-      :'app_role', :'app_password');
+      current_setting('app.role'), current_setting('app.password'));
   END IF;
 END$$;
 
@@ -116,7 +118,7 @@ END$$;
 --     WHERE nspname NOT IN ('pg_catalog','information_schema','pg_toast')
 --       AND nspname NOT LIKE 'pg_temp%' AND nspname NOT LIKE 'pg_toast_temp%'
 --   LOOP
---     EXECUTE format('ALTER SCHEMA %I OWNER TO %I', s, :'app_role');
+--     EXECUTE format('ALTER SCHEMA %I OWNER TO %I', s, current_setting('app.role'));
 --   END LOOP;
 -- END$$;
 
