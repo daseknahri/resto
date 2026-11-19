@@ -40,10 +40,14 @@ data impact (they're stateless app containers; Postgres and its volume are untou
    `docker compose up -d --remove-orphans` in the deploy, and/or a scheduled `docker container prune -f`
    on the host. Investigate why Coolify leaves old `admin` containers specifically (likely a
    service-name/compose-project mismatch across versions so compose doesn't recognize them as replaceable).
-2. **Give Postgres headroom + reduce hold time.** Raise `PG_MAX_CONNECTIONS` (50 → 100) with a matching
-   `POSTGRES_MEM_LIMIT`, and/or lower `CONN_MAX_AGE` so idle persistent connections are released sooner.
-   Sizing rule already documented in `backend/docker/entrypoint.sh`: `workers*4 + ~10` across **all**
-   services (api + admin + worker + beat).
+2. **Give Postgres headroom + reduce hold time.** 🔶 **PR prepared — needs staging validation before
+   deploy.** `PG_MAX_CONNECTIONS` default raised 50 → 100 with `POSTGRES_MEM_LIMIT` 1g → 1536m to match,
+   and `CONN_MAX_AGE` is now env-tunable via `DB_CONN_MAX_AGE` (default unchanged at 600) so idle
+   connections can be released sooner without a code deploy. Sizing rule (`backend/docker/entrypoint.sh`):
+   `workers*4 + ~10` across **all** services (api + worker + beat). ⚠️ The bump lifts the total compose
+   memory floor to ~3.4 GB — **confirm the VPS has ≥ 4 GB and run a staging deploy before merging to prod**
+   (override `PG_MAX_CONNECTIONS`/`POSTGRES_MEM_LIMIT` down if the VPS is smaller). This is the safety
+   margin *behind* fix #1 (orphan-removal), not a substitute for it.
 3. **Least-privilege DB role.** The app connects as the Postgres **superuser**, which let it consume the
    `superuser_reserved_connections` slots — leaving no emergency slot for diagnostics/recovery. Create a
    dedicated non-superuser application role so the reserved slots stay available.

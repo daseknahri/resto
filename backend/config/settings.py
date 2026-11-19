@@ -198,10 +198,16 @@ TENANT_MODEL = "tenancy.Tenant"
 TENANT_DOMAIN_MODEL = "tenancy.Domain"
 PUBLIC_SCHEMA_NAME = "public"
 
+# CONN_MAX_AGE — how long (seconds) Django keeps a persistent DB connection open
+# for reuse. Env-tunable so the outage lever "release idle connections sooner"
+# (docs/INCIDENT_2026-09-18…) can be pulled without a code deploy: a lower value
+# frees Postgres slots faster (at the cost of more reconnect churn), a higher one
+# reduces reconnect overhead. Default 600 preserves the prior behaviour exactly.
+DB_CONN_MAX_AGE = int(os.getenv("DB_CONN_MAX_AGE", "600"))
 DATABASES = {
     "default": dj_database_url.config(
         default=os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/resto"),
-        conn_max_age=600,
+        conn_max_age=DB_CONN_MAX_AGE,
     )
 }
 DATABASES["default"]["ENGINE"] = "django_tenants.postgresql_backend"
