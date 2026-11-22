@@ -4516,6 +4516,30 @@ def _can_edit_tenant_order(request) -> bool:
             and user.effective_perm_manage_orders())
 
 
+def _staff_clocked_in(request) -> bool:
+    """True when the actor may mutate orders under the clock-in rule (R P1-2).
+
+    The frontend (WaiterPage.vue) already hides mutation buttons until clock-in,
+    but that is not enforcement — any staff session could call the endpoints
+    directly. Owners, superusers and platform admins are exempt (they do not
+    clock in); every other staff actor needs an OPEN Shift (clock_out null).
+    The check is per-actor, so a hand-off works as long as the closer is
+    clocked in.
+    """
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
+        return True
+    from accounts.models import User
+    if getattr(user, "role", None) == User.Roles.TENANT_OWNER:
+        return True
+    from menu.models import Shift
+    return Shift.objects.filter(
+        user_id=getattr(user, "id", None), clock_out__isnull=True
+    ).exists()
+
+
 def _can_access_order(request, order, *, my_slugs=None, claimed_slugs=None) -> bool:
     """Check that a waiter is allowed to mutate *order*.
 
@@ -4921,6 +4945,12 @@ class StaffOrderItemReadyView(APIView):
     def patch(self, request, item_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Kitchen item-readiness is a restaurant-only capability (shops have no
         # kitchen). Defaults to allowed for restaurants (non-breaking).
         from tenancy.capabilities import tenant_capability_enabled
@@ -5168,6 +5198,12 @@ class StaffAppendOrderItemsView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -5545,6 +5581,12 @@ class StaffVoidOrderItemView(APIView):
     def post(self, request, order_id, item_id, *args, **kwargs):
         if not _can_void_order_item(request):
             return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -5913,6 +5955,12 @@ class StaffCompOrderItemView(APIView):
     def post(self, request, order_id, item_id, *args, **kwargs):
         if not _can_void_order_item(request):
             return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -6123,6 +6171,12 @@ class StaffFireCourseView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Course firing is a kitchen capability (shops have no kitchen). Gate it
         # like the sibling ready endpoints; defaults to allowed for restaurants.
         from tenancy.capabilities import tenant_capability_enabled
@@ -6231,6 +6285,12 @@ class StaffBulkReadyView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Kitchen readiness is a restaurant-only capability (shops have no
         # kitchen). Mirror the single-item StaffOrderItemReadyView gate so the
         # bulk path can't bypass it for retail/grocery tenants.
@@ -6414,6 +6474,12 @@ class StaffTransferItemsView(APIView):
     def post(self, request, src_order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         item_ids = request.data.get("item_ids") or []
         dest_order_id = request.data.get("dest_order_id")
@@ -6560,6 +6626,12 @@ class StaffMergeOrdersView(APIView):
     def post(self, request, dest_order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         src_order_id = request.data.get("src_order_id")
         if not src_order_id:
@@ -6814,6 +6886,12 @@ class StaffOrderPaymentView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # ── Parse body ────────────────────────────────────────────────────────
         method = str(request.data.get("method") or "").strip().lower()
@@ -7101,6 +7179,8 @@ class StaffSeatSplitView(APIView):
     def get(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        # NOTE (R P1-2): this is a READ-only grouping, not a mutation — the
+        # clock-in gate deliberately does NOT apply here.
 
         order = (
             Order.objects

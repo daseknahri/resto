@@ -19,6 +19,7 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
+from accounts.models import User
 from menu.models import Order
 from menu.views import StaffOrderItemReadyView
 
@@ -38,6 +39,11 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         self._tx_mock = _tx_patcher.start()
         self.addCleanup(_tx_patcher.stop)
         self._tx_mock.atomic.return_value = _Atomic()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _item(self, **kw):
         item = MagicMock()
@@ -73,7 +79,15 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
             body if body is not None else {},
             format="json",
         )
-        req.user = MagicMock(id=9)
+        # R P1-2: an explicit staff user — a bare MagicMock's truthy is_superuser
+        # would accidentally exempt it from the clock-in gate.
+        user = MagicMock(id=9)
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.is_platform_admin = False
+        user.role = User.Roles.TENANT_STAFF
+        user.tenant_id = 7
+        req.user = user
         req.tenant = MagicMock(id=7)
         return req
 
@@ -83,6 +97,14 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         self._set(objects_mock, self._item())
         resp = self.view(self._patch(), item_id=11)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    def test_not_clocked_in_409(self, _gate):
+        """R P1-2: a staff user with no open shift is refused before any work."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self.view(self._patch(), item_id=11)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
 
     @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)

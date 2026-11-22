@@ -230,6 +230,11 @@ class StaffOrderPaymentKeyTests(SimpleTestCase):
         from menu.views import StaffOrderPaymentView
         self.factory = APIRequestFactory()
         self.view = StaffOrderPaymentView.as_view()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift = patch("menu.models.Shift")
+        self._shift_mock = _shift.start()
+        self.addCleanup(_shift.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None):
         body = body or {"method": "wallet", "amount": "20.00"}
@@ -261,6 +266,13 @@ class StaffOrderPaymentKeyTests(SimpleTestCase):
         self.assertEqual(key, f"orderpay:{connection.schema_name}:99")
         self.assertIn(connection.schema_name, key)
 
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any debit."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
+
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
     def test_already_paid_guard_blocks_before_any_debit(self, order_om, tx_mock):
@@ -291,6 +303,11 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         self._orderitem_mock = _oi_patcher.start()
         self.addCleanup(_oi_patcher.stop)
         self._orderitem_mock.objects.filter.return_value.update.return_value = 1
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift = patch("menu.models.Shift")
+        self._shift_mock = _shift.start()
+        self.addCleanup(_shift.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _make_item(self, item_id=901, subtotal=Decimal("20.00"), is_voided=False):
         item = MagicMock()
@@ -352,6 +369,13 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         force_authenticate(req, user=_user())
         req.tenant = SimpleNamespace(id=1)
         return self.view(req, order_id=10, item_id=item_id)
+
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any void."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post(item_id=901)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.Dish.objects")
