@@ -113,6 +113,19 @@ class PayWalletTests(SimpleTestCase):
         self.assertEqual(order.wallet_amount_paid, Decimal("45.00"))
         order.mark_paid.assert_called_once()
 
+    @patch("accounts.wallet_service.debit_wallet")
+    @patch("menu.views.Order.objects")
+    def test_cancelled_order_is_409_and_never_debited(self, om, debit):
+        """Gap-hunt 2026-11-22 (W P1-6): a CANCELLED order cannot be paid from the
+        wallet -- the old code checked only payment_status and would flip it PAID.
+        """
+        om.filter.return_value.first.return_value = _order(order_status="cancelled")
+        om.select_for_update.return_value = om
+        resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data["code"], "order_cancelled")
+        debit.assert_not_called()
+
     @patch("accounts.models.Customer")
     @patch("accounts.wallet_service.debit_wallet")
     @patch("menu.views.Order.objects")

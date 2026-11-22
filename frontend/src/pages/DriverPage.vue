@@ -1279,7 +1279,7 @@ const offerSecondsLeft = (isoExpiry) => {
 // live deadline (offered_to_me + a future offer_expires_at). Open-pool offers keep
 // using the inline list (the fallback). Typical exclusive offer window in seconds —
 // sizes the countdown ring's "full" state at the start.
-const OFFER_WINDOW_SECONDS = 30;
+const OFFER_WINDOW_SECONDS = 60; // Gap-hunt 2026-11-22 (D G14): match server offer TTL (dispatch.py:36)
 const exclusiveOffer = computed(() => {
   if (activeJob.value) return null; // never take over while a job is in progress
   return (

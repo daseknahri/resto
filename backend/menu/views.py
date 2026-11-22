@@ -4357,7 +4357,7 @@ class CustomerOrdersByPhoneView(APIView):
                 "fulfillment_type": order.fulfillment_type,
                 "total": str(order.total),
                 "currency": order.currency,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "created_at": order.created_at.isoformat(),
                 "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
             })
@@ -4738,7 +4738,7 @@ class StaffOrderListView(APIView):
                 "delivery_fee": str(order.delivery_fee),
                 "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 "currency": order.currency,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
@@ -7758,7 +7758,7 @@ class OwnerOrderListView(APIView):
                 "cancel_note": order.cancel_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
@@ -12768,10 +12768,13 @@ def _settle_order_if_wallet_covers(order_number):
         return
     try:
         o = Order.objects.filter(order_number=order_number).only(
-            "id", "total", "wallet_amount_paid", "payment_status", "paid_at"
+            "id", "total", "wallet_amount_paid", "payment_status", "paid_at", "status"
         ).first()
         if (
             o is not None
+            # Gap-hunt 2026-11-22 (W P1-6): never settle a CANCELLED order -- a dead
+            # order must not flip to PAID even if its payments cover the total.
+            and o.status != Order.Status.CANCELLED
             and o.payment_status != Order.PaymentStatus.PAID
             and o.total > Decimal("0")
             # Ledger-aware: a cash/card partial (OrderPayment rows) + wallet together can
@@ -12810,6 +12813,15 @@ class CustomerOrderPayWalletView(APIView):
         if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to pay this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
+        # Gap-hunt 2026-11-22 (W P1-6): a CANCELLED order is not payable -- paying it
+        # would flip a dead order to PAID and take the customer's money for food that
+        # will never be served.
+        if order.status == Order.Status.CANCELLED:
+            return Response(
+                {"detail": "Order is cancelled.", "code": "order_cancelled"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         if order.payment_status == Order.PaymentStatus.PAID:
             return Response({"status": "paid", "payment_status": order.payment_status})
 
@@ -12829,6 +12841,14 @@ class CustomerOrderPayWalletView(APIView):
             locked = Order.objects.select_for_update().filter(pk=order.pk).first() or order
             if locked.payment_status == Order.PaymentStatus.PAID:
                 return Response({"status": "paid", "payment_status": locked.payment_status})
+            # Gap-hunt 2026-11-22 (W P1-6): re-check under the lock -- the order may
+            # have been cancelled between the read above and the lock.
+            if locked.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "Order is cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
 
             # LEDGER-AWARE outstanding: count cash/card OrderPayment rows already collected, not
             # just wallet_amount_paid. Before this, a tab with a 60 cash split-bill row
