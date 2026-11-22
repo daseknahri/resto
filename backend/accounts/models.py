@@ -987,6 +987,15 @@ class DeliveryJob(models.Model):
     delivery_commission_rate_applied = models.DecimalField(
         max_digits=7, decimal_places=4, default=0
     )
+    # D G2 — COD cash ledger: cash collected by the driver on a cash-on-delivery
+    # handover. Set when the delivery completes (see _complete_delivered_order) to the
+    # order's outstanding at delivery time (total − already collected); 0 for prepaid
+    # orders. This field only RECORDS what was collected — the driver remittance policy
+    # (when/how the cash is handed in) is an owner decision, not built here.
+    cash_collected = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Cash collected by the driver on a cash-on-delivery handover (0 for prepaid orders). The COD ledger — see _complete_delivered_order.",
+    )
     # Snapshot of the tenant's business_type at job creation. Avoids a cross-schema
     # Profile query every time a single-job endpoint serializes the job.
     business_type = models.CharField(max_length=40, blank=True, default="restaurant")

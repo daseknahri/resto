@@ -7599,9 +7599,14 @@ def _credit_driver_noshow(job) -> None:
 def _complete_delivered_order(job, proof_photo_url="") -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
-    prepaid by wallet or cash-collected on handover), store any proof photo, and
-    credit the driver's wallet. Best-effort — never blocks the driver.
+    prepaid by wallet or cash-collected on handover), store any proof photo, record
+    the COD cash collected (D G2), and credit the driver's wallet. Best-effort —
+    never blocks the driver.
     """
+    # D G2: the cash the driver collected on handover (0 for prepaid orders).
+    # Computed inside the tenant-schema block below (it needs the order + its
+    # payment ledger) and saved on the job afterwards.
+    _cash_collected = None
     try:
         from tenancy.models import Tenant as _T
         from django_tenants.utils import schema_context
@@ -7619,6 +7624,21 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
             # driver completion must not flip it back to completed/paid.
             if order.status == _O.Status.CANCELLED:
                 return
+            # D G2: capture the outstanding BEFORE flipping to PAID — the cash the
+            # driver collected is the order total minus everything already collected
+            # (wallet + any staff-collected cash/card partials, via the shared
+            # _order_collected measure). 0 for a prepaid order. The ledger read is
+            # best-effort: if it fails, fall back to the wallet counter, which is
+            # exact for the standard COD / prepaid cases.
+            from decimal import Decimal as _D
+            try:
+                from menu.views import _order_collected as _collected
+                _already = _collected(order)
+            except Exception:
+                _already = _D(str(order.wallet_amount_paid or "0"))
+            _cash_collected = max(
+                _D("0"), (_D(str(order.total or "0")) - _already)
+            )
             fields = []
             if order.status != _O.Status.COMPLETED:
                 order.status = _O.Status.COMPLETED
@@ -7639,6 +7659,16 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
                 _broadcast_order_change(order)
     except Exception:
         logger.exception("Failed to complete delivered order %s", getattr(job, "order_number", "?"))
+    # Record the COD cash on the job (public schema — outside the tenant context).
+    # Only when cash actually changed hands; a prepaid order leaves the field at 0.
+    if _cash_collected:
+        try:
+            job.cash_collected = _cash_collected
+            job.save(update_fields=["cash_collected"])
+        except Exception:
+            logger.exception(
+                "Failed to record cash collected for %s", getattr(job, "order_number", "?")
+            )
     # Driver earnings live in the public schema — credit outside the tenant context.
     _credit_driver_earnings(job)
 
