@@ -10113,7 +10113,8 @@ class CustomerTopUpIntentView(APIView):
 class CustomerTopUpWebhookView(APIView):
     """POST /api/customer/topup/webhook/ — receive Stripe events.
 
-    Handles ``checkout.session.completed`` by crediting the customer wallet.
+    Handles ``checkout.session.completed`` and
+    ``checkout.session.async_payment_succeeded`` by crediting the customer wallet.
     Idempotent: Stripe may deliver each event more than once; the wallet service
     deduplicates on ``idempotency_key="stripe:<event_id>"``.
 
@@ -10169,7 +10170,20 @@ class CustomerTopUpWebhookView(APIView):
             except Exception:
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
 
-        if event.get("type") != "checkout.session.completed":
+        event_type = event.get("type")
+        # Gap-hunt 2026-11-22 (W P1-1): async payment methods (e.g. bank transfer)
+        # complete AFTER the session: Stripe fires checkout.session.async_payment_succeeded
+        # when the money actually lands. The old code dropped every non-completed event
+        # silently, so an async-paid top-up was paid-but-never-credited, invisibly.
+        # The completed event for such a session carries payment_status "unpaid" and is
+        # dropped by the paid-check below (no credit); the async event then credits once.
+        # A session never fires async_payment_succeeded after a paid completion for the
+        # same payment, so the stripe:{event_id} key cannot double-credit across the two.
+        if event_type not in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+            payments_logger.info(
+                "Stripe webhook ignored event type=%s event_id=%s",
+                event_type, event.get("id", ""),
+            )
             return Response({"ok": True})
 
         cs = event.get("data", {}).get("object", {})
@@ -10178,30 +10192,36 @@ class CustomerTopUpWebhookView(APIView):
         event_id = event.get("id", "")
 
         # MONEY-3: only credit a session that actually cleared, and credit the SETTLED
-        # amount Stripe reports (amount_total, in the currency's minor unit) — NOT the
+        # amount Stripe reports (amount_total, in the currency's minor unit) -- NOT the
         # client-echoed metadata amount, which is merely what we REQUESTED at intent time.
         # A partial/adjusted/tampered session would otherwise over- or under-credit.
-        if cs.get("payment_status") not in (None, "paid"):
-            return Response({"ok": True})  # session didn't clear → nothing to credit
-
+        # Gap-hunt 2026-11-22 (W P2-5): no metadata-amount fallback. A missing or
+        # unparseable amount_total is a 400, not a silent credit of the requested amount.
         amount_total = cs.get("amount_total")
+        amount_value = None
         if amount_total is not None:
             from decimal import Decimal as _D, InvalidOperation as _IO
             try:
                 amount_value = (_D(str(amount_total)) / _D("100")).quantize(_D("0.01"))
             except (_IO, ValueError, TypeError):
                 amount_value = None
-        else:
-            # Fallback for events without amount_total (older API / test fixtures): the
-            # server-set metadata amount. Trustworthy only because the signature is verified
-            # in production — always set PSP_STRIPE_WEBHOOK_SECRET before going live.
-            amount_value = meta.get("amount")
 
         if not customer_id or amount_value in (None, "") or not event_id:
             return Response(
                 {"ok": False, "detail": "Missing metadata."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Gap-hunt 2026-11-22 (W P1-2): payment_status must be EXACTLY "paid". The old
+        # code also accepted a missing (None) status, crediting sessions whose payment
+        # state Stripe never confirmed. Checked after the shape validation above so a
+        # malformed event still returns 400 rather than a silent drop.
+        if cs.get("payment_status") != "paid":
+            payments_logger.warning(
+                "Stripe webhook dropped uncleared session event_id=%s payment_status=%r",
+                event_id, cs.get("payment_status"),
+            )
+            return Response({"ok": True})  # session didn't clear -- nothing to credit
 
         from .wallet_service import credit_wallet, WalletError
         try:
@@ -10216,6 +10236,17 @@ class CustomerTopUpWebhookView(APIView):
         except WalletError:
             return Response(
                 {"ok": False, "detail": "Wallet credit failed."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except Customer.DoesNotExist:
+            # Gap-hunt 2026-11-22 (W P1-7): a deleted customer used to 500 here, so
+            # Stripe retried forever with no dead-letter. Fail clean instead.
+            payments_logger.warning(
+                "Stripe webhook customer gone event_id=%s customer_id=%s",
+                event_id, customer_id,
+            )
+            return Response(
+                {"ok": False, "detail": "Customer not found."},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
