@@ -5662,6 +5662,17 @@ class StaffVoidOrderItemView(APIView):
                             is_available=True,
                             stock_auto_zeroed=False,
                         )
+            # Gap-hunt 2026-11-22 (R P1-1): return this line's recipe ingredients
+            # too. Top-level dish only -- component ingredients were never depleted
+            # at placement.
+            from menu.order_service import restock_ingredients as _restock_ingredients
+            _void_ing_qty = {}
+            for _d in _all_locked:
+                _vq = next((q for s, q in _void_slugs_to_restock if s == _d.slug), 0)
+                if _vq > 0:
+                    _void_ing_qty[_d.pk] = _void_ing_qty.get(_d.pk, 0) + _vq
+            if _void_ing_qty:
+                _restock_ingredients(_void_ing_qty)
 
             # Recompute order totals from non-voided items.
             # select_for_update() locks the order row so concurrent void calls on
@@ -8398,6 +8409,19 @@ def _restock_cancelled_order(order) -> None:
                     Dish.objects.filter(pk=d.pk).update(
                         stock_qty=_F("stock_qty") + total_qty, is_available=True, stock_auto_zeroed=False
                     )
+            # Gap-hunt 2026-11-22 (R P1-1): return the recipe ingredients too --
+            # placement depletes them (deplete_ingredients) but cancel only ever
+            # restored dish stock, so every cancellation silently shrank ingredient
+            # stock. Top-level dishes only: combo components' ingredients were
+            # never depleted at placement.
+            from menu.order_service import restock_ingredients as _restock_ingredients
+            _ing_qty = {}
+            for d in _all_locked:
+                _q = by_slug.get(d.slug, 0)
+                if _q > 0:
+                    _ing_qty[d.pk] = _ing_qty.get(d.pk, 0) + _q
+            if _ing_qty:
+                _restock_ingredients(_ing_qty)
     except Exception:
         # Best-effort — never block a cancellation — but log so a swallowed inventory
         # desync (e.g. a malformed combo_components snapshot raising in the loop) is
