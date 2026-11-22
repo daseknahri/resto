@@ -7291,7 +7291,21 @@ class DriverJobListView(APIView):
         from django.db.models import Q
         from django.utils import timezone as _tz
         _now = _tz.now()
-        pending_jobs = list(
+        # D G13: an exclusive offer to THIS driver must never fall off the pending list
+        # under the [:20] cap. The old single query sliced the first 20 rows in default
+        # (-created_at) order, so a live exclusive offer could be pushed out by 20+
+        # open-pool jobs. Live exclusive offers are fetched first, then the rest fills
+        # the remaining slots — a driver with a live offer always sees it.
+        _exclusive = list(
+            DeliveryJob.objects.filter(
+                driver__isnull=True,
+                status=DeliveryJob.Status.SEARCHING,
+                offered_to=customer,
+                offer_expires_at__gt=_now,
+            ).select_related("driver")[:20]
+        )
+        _excl_ids = [j.id for j in _exclusive]
+        _rest = list(
             DeliveryJob.objects.filter(
                 driver__isnull=True,
                 status=DeliveryJob.Status.SEARCHING,
@@ -7300,8 +7314,9 @@ class DriverJobListView(APIView):
                 | Q(offered_to=customer)
                 | Q(offered_to__isnull=True)
                 | Q(offer_expires_at__lte=_now)
-            ).select_related("driver")[:20]
+            ).exclude(pk__in=_excl_ids).select_related("driver")[: max(0, 20 - len(_exclusive))]
         )
+        pending_jobs = _exclusive + _rest
 
         # Enrich jobs with the order summary, BATCHED by tenant — one schema switch
         # per tenant instead of one per job (a driver poll can carry ~20 pending jobs

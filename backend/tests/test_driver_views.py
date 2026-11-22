@@ -110,6 +110,8 @@ def _make_job(pk=1, status_val="assigned", driver=None, tenant_id=1, order_numbe
     j.code_locked_until = None
     j.failure_reason = ""
     j.failure_note = ""
+    j.offered_to_id = None
+    j.offer_expires_at = None
     return j
 
 
@@ -303,12 +305,18 @@ class DriverJobListViewTests(SimpleTestCase):
             # active jobs query
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
-            # pending jobs query
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first, then the rest. No live exclusive offer for this driver here.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.select_related.return_value.__getitem__.return_value = [job_pending]
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
                 if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
                     return pending_qs
                 return active_qs
 
@@ -325,6 +333,49 @@ class DriverJobListViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("active", resp.data)
         self.assertIn("pending", resp.data)
+        self.assertEqual([d["id"] for d in resp.data["pending"]], [2])
+
+    def test_exclusive_offer_is_listed_first(self):
+        """D G13: a live exclusive offer to this driver is listed BEFORE the open-pool
+        jobs — it must never fall off the [:20] cap under default ordering."""
+        customer = _make_customer()
+        from datetime import timedelta as _td
+        from django.utils import timezone as _tz
+        job_exclusive = _make_job(pk=9, status_val="searching", driver=None)
+        job_exclusive.offered_to_id = customer.id
+        job_exclusive.offer_expires_at = _tz.now() + _td(minutes=1)
+        pool_jobs = [
+            _make_job(pk=100 + i, status_val="searching", driver=None) for i in range(3)
+        ]
+
+        with patch("accounts.models.DeliveryJob") as mock_dj:
+            active_qs = MagicMock()
+            active_qs.select_related.return_value = []
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = [job_exclusive]
+            rest_qs = MagicMock()
+            (rest_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = pool_jobs
+
+            def _filter(**kwargs):
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return rest_qs
+                return active_qs
+
+            mock_dj.objects.filter.side_effect = _filter
+            mock_dj.Status.ASSIGNED = "assigned"
+            mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+            mock_dj.Status.PICKED_UP = "picked_up"
+            mock_dj.Status.SEARCHING = "searching"
+
+            with patch("accounts.views._serialize_delivery_job", side_effect=lambda j, **kw: {"id": j.id}):
+                req = self._get(customer=customer)
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual([d["id"] for d in resp.data["pending"]], [9, 100, 101, 102])
 
 
 # ── DriverDeliveriesView ──────────────────────────────────────────────────────
@@ -1011,15 +1062,20 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
 
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first (none live here), then the rest.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
-                lambda s, sl: [job_pending]
-            )
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
-                if not kwargs.get("driver__isnull"):
-                    return active_qs
-                return pending_qs
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return pending_qs
+                return active_qs
 
             mock_dj.objects.filter.side_effect = _filter
             mock_dj.Status.ASSIGNED = "assigned"
@@ -1058,15 +1114,20 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
 
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first (none live here), then the rest.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
-                lambda s, sl: [job_pending]
-            )
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
-                if not kwargs.get("driver__isnull"):
-                    return active_qs
-                return pending_qs
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return pending_qs
+                return active_qs
 
             mock_dj.objects.filter.side_effect = _filter
             mock_dj.Status.ASSIGNED = "assigned"
