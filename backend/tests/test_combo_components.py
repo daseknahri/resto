@@ -325,8 +325,9 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
     @patch("menu.views.Dish.objects")
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
+    @patch("menu.order_service.restock_ingredients")
     def test_void_restocks_combo_components(
-        self, order_om, tx_mock, dish_om, broadcast_mock
+        self, mock_restock, order_om, tx_mock, dish_om, broadcast_mock
     ):
         """Voiding a combo item must restock each component (per-unit qty × item.qty).
 
@@ -394,13 +395,18 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
         # Dish.objects.filter(pk=...).update() must have been called (for restock)
         self.assertTrue(dish_om.filter.called,
                         "Expected Dish.objects.filter(pk=...).update() for at least one restock")
+        # Gap-hunt 2026-11-22 (R P1-1): voiding must also return the combo dish's
+        # own recipe ingredients -- components' ingredients were never depleted,
+        # so only the top-level dish (pk 1, qty 2) is restocked.
+        mock_restock.assert_called_once_with({1: 2})
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
+    @patch("menu.order_service.restock_ingredients")
     def test_void_non_combo_item_skips_component_restock(
-        self, order_om, tx_mock, dish_om, broadcast_mock
+        self, mock_restock, order_om, tx_mock, dish_om, broadcast_mock
     ):
         """Voiding a plain (non-combo) item must NOT attempt to restock components."""
         item = _make_item(
@@ -431,6 +437,8 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
 
         resp = self._post(order_id=10, item_id=901)
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        # Gap-hunt 2026-11-22 (R P1-1): the plain dish's own ingredients are returned.
+        mock_restock.assert_called_once_with({99: 1})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
