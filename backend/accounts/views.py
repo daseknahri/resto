@@ -7555,6 +7555,47 @@ def _credit_driver_earnings(job) -> None:
         )
 
 
+def _credit_driver_noshow(job) -> None:
+    """Credit the driver's wallet with this job's no-show payout exactly once
+    (idempotent on the job id). Best-effort — a hiccup here must never block the owner
+    flow; the payout can be reconciled. Only called for FAILED jobs the owner already
+    confirmed as a no-show (resolution NOSHOW_PAID via confirm_noshow) — the owner
+    already approved this payout, so this is just the reconcile backfill when that
+    credit failed transiently. Bypasses the verified-phone gate (the driver clearly
+    exists). Mirrors _credit_driver_earnings; see reconcile_driver_earnings (D G7)."""
+    try:
+        from decimal import Decimal as _D
+        from accounts.wallet_service import credit_wallet
+        from accounts.models import WalletTransaction as _WT
+        if not getattr(job, "driver_id", None):
+            return
+        payout = _D(str(job.driver_payout or "0"))
+        if payout <= 0:
+            return
+        from accounts.verticals import DRIVER as _DRIVER
+        credit_wallet(
+            job.driver_id, payout,
+            tx_type=_WT.Type.EARNING,
+            idempotency_key=f"noshow:{job.id}",
+            reference=f"noshow:{job.order_number}",
+            tenant_id=job.tenant_id,
+            note="No-show payout",
+            require_verified=False,
+            # C13: a delivery payout is the driver vertical, NOT the originating
+            # tenant's consumer vertical that tenant_id would auto-derive.
+            vertical=_DRIVER,
+        )
+    except Exception:
+        # Money failure: a driver's no-show payout was not credited. Swallowed so the
+        # owner flow still completes, but it MUST be alertable + reconcilable, so route
+        # it to the payments channel with the job/driver/tenant ids for triage.
+        payments_logger.exception(
+            "driver no-show credit failed job_id=%s driver_id=%s tenant_id=%s order=%s",
+            getattr(job, "id", "?"), getattr(job, "driver_id", "?"),
+            getattr(job, "tenant_id", "?"), getattr(job, "order_number", "?"),
+        )
+
+
 def _complete_delivered_order(job, proof_photo_url="") -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are

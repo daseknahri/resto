@@ -15,6 +15,11 @@ escalates to the payments logger only after a job has failed reconciliation ``--
 runs, so a genuinely stuck credit surfaces for manual triage without spamming on a single
 transient run.
 
+D G7: the same sweep also backfills NO-SHOW payouts — FAILED jobs whose owner already
+confirmed the no-show (resolution NOSHOW_PAID) but whose ``noshow:{job.id}`` credit failed
+transiently. Same pattern, same flags, separate per-kind failure streaks. A FAILED job
+with any other resolution has no payout to backfill.
+
     python manage.py reconcile_driver_earnings [--days 14] [--limit 500] [--alert-after 3] [--dry-run]
 
 Idempotent and safe to re-run. Deliberately a SEPARATE command from sweep_delivery_jobs
@@ -57,7 +62,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from django.core.cache import cache
         from accounts.models import DeliveryJob, WalletTransaction
-        from accounts.views import _credit_driver_earnings
+        from accounts.views import _credit_driver_earnings, _credit_driver_noshow
 
         days = options["days"]
         limit = options["limit"]
@@ -66,22 +71,38 @@ class Command(BaseCommand):
 
         cutoff = timezone.now() - timedelta(days=days)
 
-        # Candidate DELIVERED jobs that SHOULD carry an earning credit: a real driver and a
-        # positive payout, delivered within the lookback window. Newest first so a backlog
-        # is worked from the most recently-affected drivers down.
+        # Candidate jobs that SHOULD carry a driver credit: a real driver and a positive
+        # payout, within the lookback window. Two kinds, one scan (D G7):
+        #   * DELIVERED jobs missing their `earning:{id}` credit (the original case), and
+        #   * FAILED + resolution=NOSHOW_PAID jobs missing their `noshow:{id}` credit —
+        #     the owner confirmed the no-show payout but the credit failed transiently.
+        #     (A FAILED job with any other resolution has no payout to backfill.)
+        # Newest first so a backlog is worked from the most recently-affected drivers down.
+        from django.db.models import Q
         candidates = list(
             DeliveryJob.objects.filter(
-                status=DeliveryJob.Status.DELIVERED,
-                driver__isnull=False,
-                driver_payout__gt=0,
-                delivered_at__gte=cutoff,
-            ).order_by("-delivered_at")[:limit]
+                Q(status=DeliveryJob.Status.DELIVERED, driver__isnull=False,
+                  driver_payout__gt=0, delivered_at__gte=cutoff)
+                | Q(status=DeliveryJob.Status.FAILED,
+                    resolution=DeliveryJob.Resolution.NOSHOW_PAID,
+                    driver__isnull=False, driver_payout__gt=0, failed_at__gte=cutoff)
+            ).order_by("-delivered_at", "-failed_at")[:limit]
         )
         if not candidates:
             self.stdout.write("reconcile_driver_earnings: no delivered jobs in window")
             return
 
-        keys = {j.id: f"earning:{j.id}" for j in candidates}
+        def _credit_key(j):
+            # A no-show-paid job carries the noshow:{id} credit, not the earning one.
+            # (status + resolution together: a DELIVERED job never has NOSHOW_PAID.)
+            if (
+                getattr(j, "status", None) == DeliveryJob.Status.FAILED
+                and getattr(j, "resolution", None) == DeliveryJob.Resolution.NOSHOW_PAID
+            ):
+                return f"noshow:{j.id}"
+            return f"earning:{j.id}"
+
+        keys = {j.id: _credit_key(j) for j in candidates}
         have = set(
             WalletTransaction.objects.filter(
                 idempotency_key__in=list(keys.values())
@@ -98,7 +119,7 @@ class Command(BaseCommand):
         if dry_run:
             for j in missing:
                 self.stdout.write(
-                    f"[dry-run] would credit earning:{j.id} "
+                    f"[dry-run] would credit {keys[j.id]} "
                     f"driver={j.driver_id} payout={j.driver_payout} order={j.order_number}"
                 )
             self.stdout.write(
@@ -107,11 +128,14 @@ class Command(BaseCommand):
             )
             return
 
-        # Re-run the idempotent credit for each missing job. _credit_driver_earnings
-        # swallows + logs its own errors, so success is detected by re-querying below
+        # Re-run the idempotent credit for each missing job. The credit helpers
+        # swallow + log their own errors, so success is detected by re-querying below
         # rather than by catching here.
         for j in missing:
-            _credit_driver_earnings(j)
+            if keys[j.id].startswith("noshow:"):
+                _credit_driver_noshow(j)
+            else:
+                _credit_driver_earnings(j)
 
         now_have = set(
             WalletTransaction.objects.filter(
@@ -122,7 +146,10 @@ class Command(BaseCommand):
         credited = 0
         still_failing = 0
         for j in missing:
-            fail_key = f"earning_reconcile_fail:{j.id}"
+            # Separate streaks per credit kind so an earning failure and a no-show
+            # failure on the same job id can never share (or reset) each other's count.
+            _kind = "noshow" if keys[j.id].startswith("noshow:") else "earning"
+            fail_key = f"{_kind}_reconcile_fail:{j.id}"
             if keys[j.id] in now_have:
                 credited += 1
                 cache.delete(fail_key)
@@ -135,7 +162,7 @@ class Command(BaseCommand):
                 # NEVER log a cash-out code here; delivery earnings carry only the
                 # order_number reference, so this is safe.
                 payments_logger.error(
-                    "driver earning still uncredited after %s reconcile runs "
+                    f"driver {_kind} still uncredited after %s reconcile runs "
                     "job_id=%s driver_id=%s payout=%s order=%s",
                     streak, j.id, j.driver_id, j.driver_payout, j.order_number,
                 )
