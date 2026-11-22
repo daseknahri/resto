@@ -13005,23 +13005,44 @@ class OwnerWalletChargeView(APIView):
         if amount > _threshold:
             from accounts.models import WalletChargeRequest
             from django.utils import timezone as _tz
-            from django.utils.crypto import get_random_string
             from datetime import timedelta as _td
             _ttl = int(getattr(_settings, "WALLET_CHARGE_REQUEST_TTL", 300))
+            # Gap-hunt 2026-11-22 (W P1-3): self-defending idempotency. A retry
+            # (double-tap, network retry, proxy replay) with no client key used to
+            # mint a NEW charge request on every attempt (f"cr-{random}"), so each
+            # copy could be approved and the customer charged twice. Fall back to a
+            # deterministic server-side fingerprint of actor + customer + amount +
+            # order, mirroring AdminWalletBonusView. To issue a SECOND identical
+            # charge, the caller must supply a distinct idempotency_key.
+            if idem is None:
+                import hashlib as _hashlib
+                _actor_id = getattr(request.user, "id", None)
+                _fp_src = f"{_actor_id}|{customer_id}|{amount}|{order_number}"
+                _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+                idem = f"ownercharge:{getattr(tenant, 'schema_name', '')}:fp:{_fp}"
+            _cr_defaults = {
+                "customer_id": customer_id,
+                "tenant_id": tenant.id,
+                "restaurant_name": getattr(tenant, "name", "") or "",
+                "amount": amount,
+                "order_number": order_number,
+                "note": note,
+                "status": WalletChargeRequest.Status.PENDING,
+                "actor_user_id": getattr(request.user, "id", None),
+                "expires_at": _tz.now() + _td(seconds=_ttl),
+            }
             cr, _created = WalletChargeRequest.objects.get_or_create(
-                idempotency_key=(idem or f"cr-{get_random_string(24)}"),
-                defaults={
-                    "customer_id": customer_id,
-                    "tenant_id": tenant.id,
-                    "restaurant_name": getattr(tenant, "name", "") or "",
-                    "amount": amount,
-                    "order_number": order_number,
-                    "note": note,
-                    "status": WalletChargeRequest.Status.PENDING,
-                    "actor_user_id": getattr(request.user, "id", None),
-                    "expires_at": _tz.now() + _td(seconds=_ttl),
-                },
+                idempotency_key=idem, defaults=_cr_defaults,
             )
+            if not _created and cr.status == WalletChargeRequest.Status.PENDING \
+                    and cr.expires_at is not None and cr.expires_at <= _tz.now():
+                # Stale fingerprint hit: the first request expired before the customer
+                # approved, so a retry would otherwise be stuck on a dead request_id.
+                # No money moved while PENDING, so retire it and mint a fresh one.
+                cr.delete()
+                cr, _created = WalletChargeRequest.objects.get_or_create(
+                    idempotency_key=idem, defaults=_cr_defaults,
+                )
             if _created:
                 # Best-effort push nudge so the customer sees the approval prompt even if
                 # their app is backgrounded. The in-app modal + polling is the fallback.

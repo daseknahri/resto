@@ -75,6 +75,31 @@ class OwnerWalletChargeViewTests(SimpleTestCase):
         self.assertEqual(resp.data["request_id"], 7)
         mock_debit.assert_not_called()
 
+    def test_above_threshold_retry_without_key_reuses_fingerprint_key(self):
+        """Gap-hunt 2026-11-22 (W P1-3): two identical above-threshold POSTs with no
+        client idempotency_key must map to the SAME server fingerprint key, so the
+        second is a replay of the first charge request instead of a second mint.
+        """
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        cr = MagicMock(id=7)
+        cr.expires_at.isoformat.return_value = "2026-06-03T15:00:00+00:00"
+        user = _owner()
+        user.id = 3  # fixed actor id so the fingerprint is deterministic
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_cr, \
+             patch("accounts.wallet_service.debit_wallet") as mock_debit:
+            mock_cr.get_or_create.return_value = (cr, True)
+            resp1 = self._post({"token": token, "amount": "100.00"}, user=user)
+            resp2 = self._post({"token": token, "amount": "100.00"}, user=user)
+        self.assertEqual(resp1.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(resp2.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(resp1.data["request_id"], resp2.data["request_id"])
+        self.assertEqual(mock_cr.get_or_create.call_count, 2)
+        keys = [c.kwargs["idempotency_key"] for c in mock_cr.get_or_create.call_args_list]
+        self.assertEqual(keys[0], keys[1])  # same fingerprint, not a fresh random key
+        self.assertIn(":fp:", keys[0])
+        self.assertTrue(keys[0].startswith("ownercharge:"))
+        mock_debit.assert_not_called()
+
     def test_at_or_below_threshold_charges_instantly(self):
         """Amount within the threshold → instant debit, 200 charged."""
         token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
