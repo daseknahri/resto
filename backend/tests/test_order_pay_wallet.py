@@ -106,9 +106,10 @@ class PayWalletTests(SimpleTestCase):
         # OPS-5g: idempotency key tied to the order AND tenant-schema-namespaced (the
         # shared-schema ledger makes the key a GLOBAL namespace, so a bare order_number
         # could collide cross-tenant). A double-tap still never double-charges.
+        # W P2-8: the key is ALSO bound to the outstanding amount (45.00 here).
         from django.db import connection as _c
         _key = debit.call_args.kwargs.get("idempotency_key")
-        self.assertEqual(_key, f"order-pay-{_c.schema_name}-ORD-1")
+        self.assertEqual(_key, f"order-pay-{_c.schema_name}-ORD-1-45.00")
         # Bill bumped and the order settled.
         self.assertEqual(order.wallet_amount_paid, Decimal("45.00"))
         order.mark_paid.assert_called_once()

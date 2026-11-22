@@ -12147,6 +12147,22 @@ class CustomerLoyaltyRedeemView(APIView):
         # refetch all use _idem.
         _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
         _idem = f"loyalty:{_dbc.schema_name}:{_raw_idem}" if _raw_idem else None
+        if _idem is None:
+            # W P2-7: no client key — mint a deterministic server fingerprint so a
+            # double-tap (same customer, same requested points, same minute) replays
+            # instead of redeeming twice. The minute bucket bounds the dedup window:
+            # a genuinely new redemption of the same points amount a minute later
+            # mints a new key; to redeem the same amount twice within a minute, send
+            # a distinct idempotency_key. Mirrors OwnerWalletChargeView's fingerprint.
+            # (The fingerprint uses the REQUESTED points, not the redeemable amount —
+            # the redeemable depends on the balance, which the first redemption already
+            # changed, so a retry would mint a different key and never dedup.)
+            import hashlib as _hashlib
+            from django.utils import timezone as _tz2
+            _bucket = _tz2.now().strftime("%Y-%m-%dT%H:%M")
+            _fp_src = f"{_customer.id}|{_requested_pts}|{_bucket}"
+            _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+            _idem = f"loyalty:{_dbc.schema_name}:fp:{_fp}"
         if _idem:
             # OPS-5g IDOR: idempotency_key is a GLOBAL namespace on the shared-schema
             # WalletTransaction table and is CLIENT-supplied here. Scope the replay lookup
@@ -12193,20 +12209,44 @@ class CustomerLoyaltyRedeemView(APIView):
                     )
                 if _locked.loyalty_points < _redeemable:
                     return Response({"detail": "Insufficient points.", "code": "insufficient_points"}, status=status.HTTP_400_BAD_REQUEST)
+                # W P2-7: in-block replay re-check. The pre-flight read above ran
+                # outside the row lock, so a concurrent same-key redemption may have
+                # committed between it and this lock. The customer row lock serializes
+                # same-customer redemptions, so a key that exists now is a committed
+                # duplicate — return it WITHOUT deducting points a second time.
+                if _idem:
+                    _prior_in_block = _WTM.objects.filter(
+                        idempotency_key=_idem, type=_WTM.Type.LOYALTY, customer_id=_locked.pk
+                    ).first()
+                    if _prior_in_block is not None:
+                        _prior_pts = 0
+                        try:
+                            _prior_pts = int(str(_prior_in_block.reference or "").split(":")[1].replace("pts", ""))
+                        except (IndexError, ValueError):
+                            _prior_pts = 0
+                        _locked.refresh_from_db()
+                        return Response({
+                            "redeemed_points": _prior_pts,
+                            "credit_amount": str(_prior_in_block.amount),
+                            "new_points_balance": _locked.loyalty_points,
+                            "new_wallet_balance": str(_locked.wallet_balance),
+                            "duplicate": True,
+                        })
                 _locked.loyalty_points -= _redeemable
-                _locked.wallet_balance = _Dec(str(_locked.wallet_balance or "0")) + _credit_amount
-                _locked.save(update_fields=["loyalty_points", "wallet_balance", "updated_at"])
-                tenant_id = getattr(_dbc.tenant, "id", None)
-                _WTM.objects.create(
-                    customer=_locked,
-                    type=_WTM.Type.LOYALTY,
-                    amount=_credit_amount,
-                    reference=f"loyalty:{_redeemable}pts",
-                    tenant_id=tenant_id,
+                _locked.save(update_fields=["loyalty_points", "updated_at"])
+                # W P2-7: credit through wallet_service, not a hand-rolled balance
+                # write + WalletTransaction. The service brings its own idempotency
+                # re-check under the row lock, the verified-phone gate, and the
+                # vertical tagging — and the points deduction above + this credit
+                # commit together in this atomic block.
+                from accounts.wallet_service import credit_wallet as _credit_wallet
+                _credit_wallet(
+                    _locked.pk, _credit_amount, tx_type=_WTM.Type.LOYALTY,
+                    idempotency_key=_idem, reference=f"loyalty:{_redeemable}pts",
+                    tenant_id=getattr(_dbc.tenant, "id", None),
                     note=f"Redeemed {_redeemable} loyalty points",
-                    balance_after=_locked.wallet_balance,
-                    idempotency_key=_idem,
                 )
+                _locked.refresh_from_db()
         except IntegrityError:
             # Concurrent duplicate with the same idempotency_key — the other request
             # won the unique constraint. Treat this as an idempotent replay.
@@ -12938,11 +12978,18 @@ class CustomerOrderPayWalletView(APIView):
             # f"order-pay-{order_number}" could collide with another tenant's order of the same
             # number — the OPS-5f customer-match guard would PASS (same customer can hold orders in
             # two tenants) and silently replay. Namespace the key with the tenant schema.
+            # W P2-8: the key is ALSO bound to the amount. The old key was amount-blind:
+            # a replay returned the ORIGINAL tx (original amount) while the view still
+            # added the NEW outstanding and marked PAID — e.g. after items were appended
+            # to a paid order, the extra amount was never debited but the bill claimed
+            # it. A different outstanding now mints a different key (a real new debit);
+            # the same outstanding replays the same tx (a true idempotent retry).
             try:
                 tx = debit_wallet(
                     locked.customer_id, outstanding,
                     reference=order_number, tenant_id=(tenant.id if tenant else None),
-                    note="Order payment", idempotency_key=f"order-pay-{_schema}-{order_number}",
+                    note="Order payment",
+                    idempotency_key=f"order-pay-{_schema}-{order_number}-{outstanding.quantize(Decimal('0.01'))}",
                 )
             except InsufficientFunds:
                 cust = _Cust.objects.filter(pk=locked.customer_id).first()
@@ -13134,6 +13181,21 @@ class OwnerWalletChargeView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
+        # W P2-9: the instant path had no durable dedup when the client sent no key
+        # (idem=None) — only the cache-backed velocity cap (5 charges / 100 MAD per
+        # pay-token) bounded a double-tap, and a replay debited twice. Mint the same
+        # deterministic server fingerprint the above-threshold path uses (actor +
+        # customer + amount + order), PLUS the pay-token digest: the token IS the
+        # consent here, so a fresh scan (new token) with the same amount is a NEW
+        # charge, while a double-tap under the same scan replays the same key and
+        # debit_wallet returns the original tx instead of debiting twice.
+        if idem is None:
+            _fp_src = (
+                f"{getattr(request.user, 'id', None)}|{customer_id}|{amount}|"
+                f"{order_number}|{_tok_digest}"
+            )
+            _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+            idem = f"ownercharge:{getattr(tenant, 'schema_name', '')}:fp:{_fp}"
         try:
             tx = debit_wallet(
                 customer_id, amount,
@@ -13235,9 +13297,12 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
 
     A customer approves an above-threshold charge in the PUBLIC schema, which can't reach
     the tenant-schema Order. This runs in tenant context to keep the bill in sync. Each
-    request is claimed atomically (flip bill_synced) before its amount is applied, so two
-    concurrent callers (the owner's status poll and the order list) can never double-apply
-    the same charge. Returns {order_number: amount_applied}.
+    request is claimed (flip bill_synced) AND its amount applied in ONE atomic block, so
+    two concurrent callers (the owner's status poll and the order list) can never
+    double-apply the same charge — and a crash between claim and apply can never lose the
+    amount (before this the two UPDATEs were separate and outside a transaction, so a
+    crash left the request marked synced while the amount was never applied, with nothing
+    to re-apply it). Returns {order_number: amount_applied}.
     """
     from accounts.models import WalletChargeRequest as _WCR
     from django.db.models import F as _F
@@ -13249,35 +13314,39 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
         tenant_id=tenant_id, status=_WCR.Status.CHARGED, bill_synced=False, order_number__in=nums
     ).values_list("id", "order_number", "amount"))
     for cr_id, onum, amount in pending:
-        # Atomic claim: only the caller that flips bill_synced False->True applies the bill.
-        if not _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True):
-            continue
         try:
-            Order.objects.filter(order_number=onum).update(
-                wallet_amount_paid=_F("wallet_amount_paid") + amount
-            )
-            # S1 fix: same OrderPayment tie-in as the instant-charge path above —
-            # this is the above-threshold (customer-approved) charge landing on the
-            # bill, so it needs the same reconciliation-guard visibility. Kept in
-            # its own try so a failure here (e.g. order looked up mid-delete)
-            # can never swallow the `applied` bookkeeping or the settle-check
-            # below — those must run whenever the wallet_amount_paid update above
-            # succeeded, exactly as before this ledger tie-in was added.
-            try:
-                _synced_order = Order.objects.filter(order_number=onum).only("id").first()
-                if _synced_order is not None:
-                    OrderPayment.objects.create(
-                        order=_synced_order,
-                        amount=amount,
-                        method=OrderPayment.Method.WALLET,
-                        note="Wallet charge (pay code, approved)",
-                    )
-            except Exception:
-                pass  # ledger row is best-effort; the wallet bill update above already landed
-            _settle_order_if_wallet_covers(onum)
-            applied[onum] = applied.get(onum, Decimal("0")) + amount
+            # W P1-4: claim + apply in ONE atomic block (see the docstring). A failure
+            # rolls the claim back, so the request stays unsynced and is retried on
+            # the next poll instead of being lost.
+            with transaction.atomic():
+                # Atomic claim: only the caller that flips bill_synced False->True applies the bill.
+                if not _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True):
+                    continue
+                Order.objects.filter(order_number=onum).update(
+                    wallet_amount_paid=_F("wallet_amount_paid") + amount
+                )
         except Exception:
-            pass  # best-effort; the payment is recorded in the wallet ledger regardless
+            continue  # claim or bill update failed — stays unsynced, retried next poll
+        # S1 fix: same OrderPayment tie-in as the instant-charge path above —
+        # this is the above-threshold (customer-approved) charge landing on the
+        # bill, so it needs the same reconciliation-guard visibility. Kept in
+        # its own try so a failure here (e.g. order looked up mid-delete)
+        # can never swallow the `applied` bookkeeping or the settle-check
+        # below — those must run whenever the wallet_amount_paid update above
+        # succeeded, exactly as before this ledger tie-in was added.
+        try:
+            _synced_order = Order.objects.filter(order_number=onum).only("id").first()
+            if _synced_order is not None:
+                OrderPayment.objects.create(
+                    order=_synced_order,
+                    amount=amount,
+                    method=OrderPayment.Method.WALLET,
+                    note="Wallet charge (pay code, approved)",
+                )
+        except Exception:
+            pass  # ledger row is best-effort; the wallet bill update above already landed
+        _settle_order_if_wallet_covers(onum)
+        applied[onum] = applied.get(onum, Decimal("0")) + amount
     return applied
 
 

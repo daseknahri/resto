@@ -22,7 +22,7 @@ from menu.views import (
     CustomerLoyaltyRedeemView,
     OwnerLoyaltyView,
 )
-from accounts.models import Customer, User
+from accounts.models import Customer, User, WalletTransaction
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -257,8 +257,12 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
 
     # ── Below threshold ───────────────────────────────────────────────────────
 
+    @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
-    def test_below_threshold_returns_400(self, mock_cfg_objs):
+    def test_below_threshold_returns_400(self, mock_cfg_objs, mock_tx_objs):
+        # W P2-7: the pre-flight replay check now always runs (server fingerprint
+        # key), so stub "no prior redemption" or the real lookup hits the DB.
+        mock_tx_objs.filter.return_value.first.return_value = None
         customer = Customer(id=1, phone_verified=True, loyalty_points=50)  # below threshold 100
 
         cfg = _make_loyalty_config(enabled=True, redeem_threshold=100)
@@ -299,6 +303,9 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
         locked.wallet_balance = Decimal("10.00")
         locked.phone_verified = False  # unverified at lock time!
         mock_cust_objs.select_for_update.return_value.get.return_value = locked
+        # W P2-7: the pre-flight replay check now always runs (server fingerprint),
+        # so the mock must report no prior redemption for the test to reach the lock.
+        mock_tx_objs.filter.return_value.first.return_value = None
 
         cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")
         mock_cfg_objs.filter.return_value.first.return_value = cfg
@@ -314,18 +321,23 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
 
     # ── Happy path ────────────────────────────────────────────────────────────
 
+    @patch("accounts.wallet_service.credit_wallet")
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
-    def test_valid_redemption_returns_200(self, mock_cust_objs, mock_cfg_objs, mock_tx_objs):
+    def test_valid_redemption_returns_200(self, mock_cust_objs, mock_cfg_objs, mock_tx_objs, mock_credit):
         customer = Customer(id=1, phone_verified=True, loyalty_points=200,
                             wallet_balance=Decimal("10.00"))
 
         locked = MagicMock()
+        locked.pk = 1  # the locked row IS customer 1; the view passes _locked.pk on
+        locked.id = 1  # to credit_wallet
         locked.loyalty_points = 200
         locked.wallet_balance = Decimal("10.00")
         locked.phone_verified = True  # verified — passes the FIX 1 guard
         mock_cust_objs.select_for_update.return_value.get.return_value = locked
+        # W P2-7: the pre-flight replay check now always runs (server fingerprint).
+        mock_tx_objs.filter.return_value.first.return_value = None
 
         cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")
         mock_cfg_objs.filter.return_value.first.return_value = cfg
@@ -341,6 +353,66 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
             self.assertIn(field, resp.data, f"Missing field: {field}")
         self.assertEqual(resp.data["redeemed_points"], 100)
         self.assertEqual(resp.data["credit_amount"], "1.00")  # 100 * 0.01
+        self.assertEqual(resp.data["new_points_balance"], 100)
+        # W P2-7: the credit goes through wallet_service, keyed by the server
+        # fingerprint (no client key was sent).
+        mock_credit.assert_called_once()
+        _cargs, _ckwargs = mock_credit.call_args
+        self.assertEqual(_cargs[0], 1)
+        self.assertEqual(_cargs[1], Decimal("1.00"))
+        self.assertEqual(_ckwargs["tx_type"], WalletTransaction.Type.LOYALTY)
+        self.assertEqual(_ckwargs["reference"], "loyalty:100pts")
+        self.assertIn(":fp:", _ckwargs["idempotency_key"])
+        self.assertTrue(_ckwargs["idempotency_key"].startswith("loyalty:"))
+
+    @patch("accounts.wallet_service.credit_wallet")
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_double_tap_without_key_redeems_once(self, mock_cust_objs, mock_cfg_objs, mock_tx_objs, mock_credit):
+        """W P2-7: two identical POSTs with no client key — the second is a replay of
+        the first (same server fingerprint), not a second redemption."""
+        customer = Customer(id=1, phone_verified=True, loyalty_points=200,
+                            wallet_balance=Decimal("10.00"))
+        locked = MagicMock()
+        locked.loyalty_points = 200
+        locked.wallet_balance = Decimal("10.00")
+        locked.phone_verified = True
+        mock_cust_objs.select_for_update.return_value.get.return_value = locked
+        cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")
+        mock_cfg_objs.filter.return_value.first.return_value = cfg
+        # The prior redemption the second tap's pre-flight finds.
+        prior = MagicMock()
+        prior.reference = "loyalty:100pts"
+        prior.amount = Decimal("1.00")
+        # Call order of WalletTransaction.objects.filter(...).first():
+        #  1st tap pre-flight -> None, 1st tap in-block re-check -> None,
+        #  2nd tap pre-flight -> the prior redemption.
+        mock_tx_objs.filter.return_value.first.side_effect = [None, None, prior]
+        mock_credit.return_value = MagicMock(balance_after=Decimal("11.00"))
+
+        with patch("django.db.transaction.atomic"):
+            with patch("django.db.connection") as mock_dbc:
+                mock_dbc.tenant = SimpleNamespace(id=1)
+                resp1 = self.view(self._post({"points": 100}, principal=customer))
+                from django.core.cache import cache as _cache
+                _cache.clear()  # isolate the per-customer throttle from the idempotency check
+                resp2 = self.view(self._post({"points": 100}, principal=customer))
+
+        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
+        self.assertNotIn("duplicate", resp1.data)
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp2.data.get("duplicate"))
+        self.assertEqual(resp2.data["redeemed_points"], 100)
+        self.assertEqual(resp2.data["credit_amount"], "1.00")
+        # The wallet was credited exactly once.
+        mock_credit.assert_called_once()
+        # And all three replay lookups used the SAME server fingerprint key.
+        keys = [c.kwargs.get("idempotency_key") for c in mock_tx_objs.filter.call_args_list]
+        self.assertEqual(len(keys), 3)
+        self.assertEqual(keys[0], keys[1])
+        self.assertEqual(keys[0], keys[2])
+        self.assertIn(":fp:", keys[0])
 
 
 # ── CustomerLoyaltyHistoryView ────────────────────────────────────────────────
