@@ -3862,7 +3862,15 @@ class PlaceOrderView(APIView):
                 from accounts.dispatch import start_dispatch
                 start_dispatch(_job)
             except Exception:
-                pass  # never fail the order response if job creation hiccups
+                # D G3: never fail the order response if job creation hiccups — but
+                # LOG it. A silent `pass` stranded the order (paid, kitchen sees it,
+                # no driver ever dispatched) with nothing to triage. The sweep's
+                # _backfill_missing_jobs recreates the job from this log's evidence.
+                import logging as _logging
+                _logging.getLogger(__name__).exception(
+                    "Delivery job creation failed tenant=%s order=%s",
+                    getattr(tenant, "id", "?"), getattr(order, "order_number", "?"),
+                )
 
         # Send WhatsApp notification to the restaurant (truly non-blocking daemon thread).
         # The order is already committed — a slow/failed Twilio call must never delay
@@ -7244,6 +7252,9 @@ class OwnerDeliveryJobActionView(APIView):
       - "redispatch"      → re-offer the SAME job to the driver pool (reuses the row).
       - "refund_cancel"   → cancel the order + refund wallet + reverse loyalty + restock.
       - "confirm_noshow"  → pay the driver for a customer-no-show failure (owner-confirmed).
+      - "unassign"        → stand down the assigned driver (pre-pickup only) and re-offer
+                            the job to the pool. The manual counterpart of the pickup-SLA
+                            sweep release (D G5).
     Owner/manager of the tenant only. All actions are idempotent.
     """
     permission_classes = [IsAuthenticated]
@@ -7258,7 +7269,7 @@ class OwnerDeliveryJobActionView(APIView):
             return Response({"detail": "Restaurant context required.", "code": "no_tenant"}, status=status.HTTP_400_BAD_REQUEST)
 
         action = (request.data.get("action") or "").strip()
-        if action not in ("redispatch", "refund_cancel", "confirm_noshow"):
+        if action not in ("redispatch", "refund_cancel", "confirm_noshow", "unassign"):
             return Response({"detail": "Unknown action.", "code": "bad_action"}, status=status.HTTP_400_BAD_REQUEST)
 
         order = Order.objects.filter(pk=order_id).first()
@@ -7366,7 +7377,44 @@ class OwnerDeliveryJobActionView(APIView):
                 job.resolution = _DJob.Resolution.NOSHOW_PAID
                 job.save(update_fields=["resolution"])
 
-        if action == "redispatch":
+            elif action == "unassign":
+                # D G5: the owner stands down an assigned-but-idle driver by hand (the
+                # manual counterpart of the pickup-SLA sweep release). Pre-pickup only:
+                # once the driver has the food, unassigning would strand the order.
+                if job.status not in (_DJob.Status.ASSIGNED, _DJob.Status.AT_RESTAURANT):
+                    return Response({"detail": "Only an assigned (pre-pickup) job can be unassigned.",
+                                     "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
+                if job.driver_id is None:
+                    return Response({"detail": "This job has no driver to unassign.",
+                                     "code": "no_driver"}, status=status.HTTP_409_CONFLICT)
+                # Same reset as redispatch (re-enters the ranked-offer cascade) and the
+                # same redispatch_count increment — a manual unassign is a dispatch cycle
+                # too, so it counts toward the cap that bounds re-offer loops.
+                job.driver = None
+                job.status = _DJob.Status.SEARCHING
+                job.assigned_at = None
+                job.picked_up_at = None
+                job.failed_at = None
+                job.failure_reason = ""
+                job.failure_note = ""
+                job.owner_alerted_at = None
+                job.code_attempts = 0
+                job.code_locked_until = None
+                job.redispatch_count = (job.redispatch_count or 0) + 1
+                job.resolution = _DJob.Resolution.REDISPATCHED
+                job.offered_to = None
+                job.offer_expires_at = None
+                job.declined_by = []
+                job.offer_round = 0
+                job.is_open_pool = False
+                job.save(update_fields=[
+                    "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                    "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                    "code_locked_until", "redispatch_count", "resolution",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                ])
+
+        if action in ("redispatch", "unassign"):
             try:
                 # Re-enter the ranked-offer cascade (nearest driver first, then pool).
                 from accounts.dispatch import offer_to_next_driver
@@ -7382,7 +7430,8 @@ class OwnerDeliveryJobActionView(APIView):
                     _broadcast_order_change(order)
             except Exception:
                 pass
-            return Response({"ok": True, "resolution": "redispatched"})
+            return Response({"ok": True,
+                             "resolution": "redispatched" if action == "redispatch" else "unassigned"})
         return Response({"ok": True, "resolution": "noshow_paid"})
 
 

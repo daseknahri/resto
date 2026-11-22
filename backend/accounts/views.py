@@ -5808,7 +5808,13 @@ class MarketplacePlaceOrderView(APIView):
                         from accounts.dispatch import start_dispatch
                         start_dispatch(_job)
                     except Exception:
-                        pass
+                        # D G3: log, don't swallow — a silent failure strands the order
+                        # (see _backfill_missing_jobs in sweep_delivery_jobs, which
+                        # recreates the job from this log's evidence).
+                        logger.exception(
+                            "Marketplace delivery job creation failed tenant=%s order=%s",
+                            getattr(tenant, "id", "?"), getattr(order, "order_number", "?"),
+                        )
 
         except Exception as exc:
             logger.exception("MarketplacePlaceOrderView error for tenant=%s: %s", restaurant_slug, exc)
