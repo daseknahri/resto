@@ -403,12 +403,19 @@
               v-for="(item, idx) in order.items"
               :key="idx"
               class="flex items-start gap-2.5 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm"
+              :class="item.is_comped ? 'opacity-60' : ''"
             >
               <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums">
                 {{ item.qty }}
               </span>
               <div class="min-w-0 flex-1">
-                <p class="text-slate-200 leading-snug">{{ item.dish_name }}</p>
+                <p class="text-slate-200 leading-snug" :class="item.is_comped ? 'line-through text-slate-500' : ''">{{ item.dish_name }}
+                  <span
+                    v-if="item.is_comped"
+                    class="ms-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400 leading-none"
+                    style="text-decoration:none"
+                  >{{ t('waiterPage.compedBadge') }}</span>
+                </p>
                 <!-- Selected option modifiers (from snapshot) -->
                 <p
                   v-if="item.options?.length"
@@ -420,7 +427,7 @@
                   class="mt-0.5 text-[11px] italic text-slate-500 leading-snug"
                 >{{ item.note }}</p>
               </div>
-              <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatCurrency(item.subtotal, order.currency) }}</span>
+              <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]" :class="item.is_comped ? 'line-through text-slate-500' : ''">{{ formatCurrency(item.subtotal, order.currency) }}</span>
             </li>
           </ul>
 

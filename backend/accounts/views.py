@@ -5917,6 +5917,11 @@ class MarketplaceOrderStatusView(APIView):
                             "options": item.options,
                             "note": item.note,
                             "is_voided": item.is_voided,
+                            # R P2-1: expose comp state like the direct payload does
+                            # (menu/views.py) so the receipt can render a comped line
+                            # as contributing 0 — otherwise a comped item shows at
+                            # full price while being excluded from the total.
+                            "is_comped": item.is_comped,
                             "combo_components": item.combo_components,
                         }
                         for item in order.items.all()
