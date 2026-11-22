@@ -174,6 +174,11 @@ class StaffBulkReadyViewTests(SimpleTestCase):
         _bulk_patcher = patch("menu.views.OrderItem.objects.bulk_update")
         self._bulk_update_mock = _bulk_patcher.start()
         self.addCleanup(_bulk_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, user=None):
         req = self.factory.post(

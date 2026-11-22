@@ -233,6 +233,11 @@ class StaffTransferItemsViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffTransferItemsView.as_view()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, src_order_id, payload, user=None, tenant_id=1):
         req = self.factory.post(
@@ -526,6 +531,11 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffMergeOrdersView.as_view()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, dest_order_id, payload, user=None, tenant_id=1):
         req = self.factory.post(

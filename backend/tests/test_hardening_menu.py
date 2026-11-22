@@ -392,6 +392,11 @@ class VoidItemCompareAndSetTests(SimpleTestCase):
             p = patch(tgt, return_value=True)
             p.start()
             self.addCleanup(p.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, item_id=901):
         req = self.factory.post(f"/api/staff/orders/10/items/{item_id}/void/", {}, format="json")
