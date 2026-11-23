@@ -14,24 +14,21 @@
             :aria-label="t('ownerLayout.publicPreview')"
           >
             <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ t("ownerLayout.publicPreview") }}</span>
-            <span class="sr-only sm:hidden">{{ t("ownerLayout.publicPreview") }}</span>
+            <span>{{ t("ownerLayout.publicPreview") }}</span>
           </a>
           <button
             class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
             @click="showTemplates = true"
           >
             <AppIcon name="sparkles" class="h-3.5 w-3.5" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ t("ownerTemplates.button") }}</span>
-            <span class="sr-only sm:hidden">{{ t("ownerTemplates.button") }}</span>
+            <span>{{ t("ownerTemplates.button") }}</span>
           </button>
           <button
             class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
             @click="showImport = true"
           >
             <AppIcon name="upload" class="h-3.5 w-3.5" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ t("ownerMenuBuilder.importCsv") }}</span>
-            <span class="sr-only sm:hidden">{{ t("ownerMenuBuilder.importCsv") }}</span>
+            <span>{{ t("ownerMenuBuilder.importCsv") }}</span>
           </button>
         </div>
       </div>

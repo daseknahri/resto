@@ -117,6 +117,13 @@
                 ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
                 : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
             >{{ isItemHeld(item, order) ? `${t('waiterPage.heldChip')} · ${t('waiterPage.courseChip', { n: item.course })}` : t('waiterPage.courseChip', { n: item.course }) }}</span>
+            <!-- Empty circle: the tap-to-ready affordance for an unready item —
+                 mirrors the ready checkmark's slot so the row reads tappable. -->
+            <span
+              v-if="!item.is_ready"
+              class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-slate-500 dark:border-slate-400"
+              aria-hidden="true"
+            />
             <!-- Checkmark when item ready -->
             <span v-if="item.is_ready" class="text-emerald-400" aria-hidden="true">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">

@@ -302,7 +302,7 @@
           <p class="ui-stat-label">{{ t('ownerHome.marketplaceTitle') }}</p>
           <span class="text-[11px] text-slate-500">{{ t('ownerHome.marketplacePeriod') }}</span>
         </div>
-        <div class="grid grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceOrders') }}</p>
             <p class="text-base font-semibold tabular-nums text-slate-100">{{ marketplaceStats.order_count }}</p>
@@ -489,9 +489,9 @@
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
         </button>
-        <!-- High-frequency daily destination kept here: Availability. Kitchen, Tables & QR,
-             and Z-Report are reachable via OwnerLayout nav/dock/settings, so they are not
-             duplicated in this quick-actions grid. -->
+        <!-- High-frequency daily destinations kept here: Availability, Kitchen,
+             Tables & QR, and Z-Report — the three taps an owner reaches for
+             every shift. -->
         <button
           class="ui-btn-outline ui-press col-span-2 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
           @click="openAvailabilityPanel"
@@ -499,6 +499,18 @@
           <AppIcon name="eye" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("ownerHome.dishAvailability") }}
         </button>
+        <RouterLink :to="{ name: 'owner-kitchen' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="food" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.kitchen") }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'owner-tables' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="table" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.tablesQr") }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'owner-z-report' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="chart" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("zReport.navLabel") }}
+        </RouterLink>
       </div>
     </article>
 

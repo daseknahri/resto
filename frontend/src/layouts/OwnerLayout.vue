@@ -44,7 +44,7 @@
                 exact-active-class=""
               >
                 <span class="relative inline-flex items-center gap-1">
-                  <AppIcon name="menu" class="owner-nav-icon" />
+                  <AppIcon name="receipt" class="owner-nav-icon" />
                   <span
                     v-if="pendingOrdersCount > 0"
                     class="owner-orders-badge"
@@ -337,7 +337,7 @@
           exact-active-class=""
         >
           <span class="relative inline-flex">
-            <AppIcon name="menu" class="owner-dock-icon" />
+            <AppIcon name="receipt" class="owner-dock-icon" />
             <span v-if="pendingOrdersCount > 0" class="owner-orders-badge-dock" aria-hidden="true">{{ pendingOrdersCount }}</span>
           </span>
           <span>{{ t("ownerLayout.orders") }}</span>

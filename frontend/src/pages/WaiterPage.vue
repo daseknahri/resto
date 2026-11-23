@@ -1650,6 +1650,11 @@ const ensureShiftForAction = async () => {
   if (shiftLoadError.value) await loadMyShift();
   if (currentShift.value) return true;
   toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+  // Point at the control: scroll the tab bar to the Clock in button and
+  // focus it so the waiter lands on the action, not just the message.
+  const clockInBtn = document.getElementById('waiter-clock-in-btn');
+  clockInBtn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  clockInBtn?.focus({ preventScroll: true });
   return false;
 };
 

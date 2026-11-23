@@ -69,7 +69,7 @@
           :aria-label="t('kitchen.eightySixOpen')"
           @click="open86Board"
         >
-          <span aria-hidden="true" class="text-sm font-bold">86</span>
+          <span class="text-[11px] font-bold leading-none">{{ t('kitchen.eightySixTitle') }}</span>
         </button>
         <!-- Active order count -->
         <span class="rounded-full border border-slate-600/60 bg-slate-700/50 px-3 py-1 text-sm font-bold tabular-nums text-slate-100" aria-live="polite" aria-atomic="true">
@@ -79,17 +79,18 @@
         <span class="font-mono text-base tabular-nums text-slate-300" aria-hidden="true">{{ clockDisplay }}</span>
         <!-- Sound toggle (task 4) -->
         <button
-          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          class="kitchen-fs-btn ui-press flex-col gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :class="kitchenSoundOn ? '' : 'opacity-50'"
           :aria-label="kitchenSoundOn ? t('orderFlow.soundOff') : t('orderFlow.soundOn')"
           :aria-pressed="kitchenSoundOn"
           @click="toggleKitchenSound"
         >
           <span aria-hidden="true" class="text-sm">{{ kitchenSoundOn ? '🔔' : '🔕' }}</span>
+          <span class="text-[9px] font-semibold leading-none">{{ t('kitchen.soundLabel') }}</span>
         </button>
         <!-- Auto-print toggle -->
         <button
-          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          class="kitchen-fs-btn ui-press flex-col gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :class="autoPrint ? '' : 'opacity-50'"
           :aria-label="autoPrint ? t('kitchen.autoPrintOn') : t('kitchen.autoPrintOff')"
           :aria-pressed="autoPrint"
@@ -98,10 +99,11 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
             <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a1 1 0 001 1h8a1 1 0 001-1v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9v-1h8v1H6zm0 2v-1h8v1H6zM4 9h12v3H4V9z" clip-rule="evenodd"/>
           </svg>
+          <span class="text-[9px] font-semibold leading-none">{{ t('kitchen.autoPrintLabel') }}</span>
         </button>
         <!-- Fullscreen toggle -->
         <button
-          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          class="kitchen-fs-btn ui-press flex-col gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :aria-label="isFullscreen ? t('kitchen.exitFullscreen') : t('kitchen.enterFullscreen')"
           :aria-pressed="isFullscreen"
           @click="toggleFullscreen"
@@ -113,6 +115,7 @@
           <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
             <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 10-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z"/>
           </svg>
+          <span class="text-[9px] font-semibold leading-none">{{ t('kitchen.fullscreenLabel') }}</span>
         </button>
       </div>
     </div>

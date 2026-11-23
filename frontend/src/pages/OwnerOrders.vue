@@ -1344,7 +1344,6 @@
           :aria-label="t('ownerOrders.eightySixBoardBtn')"
           @click="open86BoardFromOrders"
         >
-          <span aria-hidden="true" class="text-base font-black leading-none">86</span>
           {{ t('ownerOrders.eightySixBoardBtn') }}
           <span
             v-if="orders86SoldOutCount > 0"
