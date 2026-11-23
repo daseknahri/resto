@@ -262,6 +262,7 @@
               :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
             >{{ todayStats.revenueRaw >= yesterdayStats.revenue ? '+' : '' }}{{ Math.round((todayStats.revenueRaw - yesterdayStats.revenue) / yesterdayStats.revenue * 100) }}%</span>
           </div>
+          <p v-if="todayStats.cashLabel !== null" class="text-[10px] tabular-nums text-slate-400">{{ t("ownerHome.todayCashCollected") }} {{ todayStats.cashLabel }} · {{ t("ownerHome.todayWalletCollected") }} {{ todayStats.walletLabel }}</p>
         </div>
 
         <!-- Avg ticket today -->
@@ -945,10 +946,21 @@ const todayStats = computed(() => {
   } catch {
     revenueLabel = `${currency} ${Math.floor(revenue)}`;
   }
+  // POS-UX-11 (Wave C): cash/wallet collected today, from the dashboard
+  // aggregate's today_payment_split (PAID orders only, paid today). Exact
+  // figures — the compact total above stays as-is.
+  const split = revenueSummary.value?.today_payment_split || null;
+  const fmtSplit = (val) => {
+    const n = Number(val) || 0;
+    try { return formatNumber(n, { style: "currency", currency, maximumFractionDigits: 2 }); }
+    catch { return `${currency} ${n.toFixed(2)}`; }
+  };
   return {
     count,
     revenue: revenueLabel,
     revenueRaw: revenue,
+    cashLabel: split ? fmtSplit(split.cash) : null,
+    walletLabel: split ? fmtSplit(split.wallet) : null,
     pending: order.orders.filter((o) => o.status === "pending").length,
   };
 });

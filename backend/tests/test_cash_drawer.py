@@ -562,3 +562,91 @@ class DefaultPreservingNoDrawerTest(SimpleTestCase):
         self.assertFalse(resp.data["open"])
         # Clients check resp.data["open"] to decide whether to show the close UI.
         # When it's False, nothing changes from the pre-drawer UX.
+
+
+class DrawerHistoryViewLiveExpectedTests(SimpleTestCase):
+    """POS-UX-33: an OPEN session in /owner/drawer/history/ carries the live
+    expected total (opening float + cash collected since open + pay-ins minus
+    pay-outs) so the close-shift card can show it while counting."""
+
+    @patch("menu.views.split_revenue_for_orders")
+    @patch("menu.views.Order")
+    @patch("menu.views.DrawerTransaction")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views.service_day_window")
+    def test_open_session_carries_live_expected_total(self, mock_window, mock_ds, mock_dt, mock_order, mock_split):
+        mock_window.return_value = (
+            datetime(2024, 1, 15, 0, 0, tzinfo=_tz.utc),
+            datetime(2024, 1, 16, 0, 0, tzinfo=_tz.utc),
+        )
+        session = MagicMock()
+        session.id = 1
+        session.status = "open"
+        session.opened_by_name = "Alice"
+        session.opening_float = Decimal("100.00")
+        session.opened_at = datetime(2024, 1, 15, 8, 0, 0, tzinfo=_tz.utc)
+        session.closed_at = None
+        session.closed_by_name = ""
+        session.counted_total = None
+        session.expected_total = None
+        session.over_short = None
+        session.note = ""
+        mock_ds.objects.filter.return_value.order_by.return_value = [session]
+        mock_ds.Status.OPEN = "open"
+        mock_dt.objects.filter.return_value.order_by.return_value = []
+        mock_dt.objects.filter.return_value.aggregate.return_value = {"pay_in": None, "pay_out": None}
+        mock_order.Status.COMPLETED = "completed"
+        mock_order.PaymentStatus.PAID = "paid"
+        mock_order.objects.filter.return_value = MagicMock()
+        mock_split.return_value = {"cash": Decimal("200.00"), "wallet": Decimal("50.00")}
+
+        factory = APIRequestFactory()
+        req = factory.get("/api/owner/drawer/history/")
+        req.tenant = SimpleNamespace(id=1, profile=SimpleNamespace())
+        force_authenticate(req, user=User(id=7, role=User.Roles.TENANT_OWNER, tenant_id=1))
+        with patch("menu.views.timezone") as mock_tz:
+            mock_tz.now.return_value = datetime(2024, 1, 15, 18, 0, tzinfo=_tz.utc)
+            resp = DrawerHistoryView.as_view()(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data["sessions"]), 1)
+        # 100 float + 200 cash collected + 0 movements = 300 expected.
+        self.assertEqual(resp.data["sessions"][0]["expected_total"], "300.00")
+
+    @patch("menu.views.split_revenue_for_orders")
+    @patch("menu.views.Order")
+    @patch("menu.views.DrawerTransaction")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views.service_day_window")
+    def test_closed_session_keeps_stored_expected_total(self, mock_window, mock_ds, mock_dt, mock_order, mock_split):
+        """A CLOSED session keeps the expected_total recorded at close — the
+        live computation runs for OPEN sessions only."""
+        mock_window.return_value = (
+            datetime(2024, 1, 15, 0, 0, tzinfo=_tz.utc),
+            datetime(2024, 1, 16, 0, 0, tzinfo=_tz.utc),
+        )
+        session = MagicMock()
+        session.id = 2
+        session.status = "closed"
+        session.opened_by_name = "Alice"
+        session.opening_float = Decimal("100.00")
+        session.opened_at = datetime(2024, 1, 15, 8, 0, 0, tzinfo=_tz.utc)
+        session.closed_at = datetime(2024, 1, 15, 18, 0, 0, tzinfo=_tz.utc)
+        session.closed_by_name = "Alice"
+        session.counted_total = Decimal("335.00")
+        session.expected_total = Decimal("340.00")
+        session.over_short = Decimal("-5.00")
+        session.note = ""
+        mock_ds.objects.filter.return_value.order_by.return_value = [session]
+        mock_ds.Status.OPEN = "open"
+        mock_dt.objects.filter.return_value.order_by.return_value = []
+
+        factory = APIRequestFactory()
+        req = factory.get("/api/owner/drawer/history/")
+        req.tenant = SimpleNamespace(id=1, profile=SimpleNamespace())
+        force_authenticate(req, user=User(id=7, role=User.Roles.TENANT_OWNER, tenant_id=1))
+        resp = DrawerHistoryView.as_view()(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["sessions"][0]["expected_total"], "340.00")
+        mock_split.assert_not_called()

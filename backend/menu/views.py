@@ -6877,6 +6877,8 @@ class StaffOrderPaymentView(APIView):
     ledger and will therefore be "0.00" even though the order is PAID.  This is
     intentional: the split-bill endpoint is additive-only and is NOT meant to
     back-fill legacy settled orders.
+    Exception: OwnerOrderMarkPaidView writes a CASH row for the full total when
+    no payment is tracked at all (POS-UX-2).
     """
     permission_classes = [IsAuthenticated]
 
@@ -9137,6 +9139,10 @@ class OwnerOrderMarkPaidView(APIView):
     leaves. Idempotent. Pass {"complete": true} to also complete a READY order
     in the same call (the dine-in "settle & close" action).
 
+    When no payment is tracked at all for the order, the settle also records
+    a CASH OrderPayment row for the full total (POS-UX-2) so the order shows
+    up in the Z-report cash/wallet split and the by-staff breakdown.
+
     Requires: a tenant editor (owner or staff with manage-orders).
     """
 
@@ -9235,6 +9241,38 @@ class OwnerOrderMarkPaidView(APIView):
                         "total": str(_order_total),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # ── POS-UX-2 (Wave C): owner "Mark paid" ledger row ────
+            # With no tracked payment at all (no OrderPayment rows and
+            # wallet_amount_paid == 0) this call is staff's attestation that the
+            # bill was collected in full at the till, in cash. Record that
+            # attestation as an OrderPayment row — same shape the waiter settle
+            # sheet writes — so the order appears in the Z-report cash/wallet
+            # split, the per-order Payments ledger, and the by-staff breakdown.
+            # Only CASH is recorded here: a wallet settlement must go through
+            # the wallet-charge flow (which debits the wallet); recording a
+            # wallet row here would claim money that never moved. Card is not
+            # offered: there is no card tender (POS-UX-1, owner decision D2).
+            if not _has_tracked_payment:
+                _recorder_name = ""
+                _recorder_id = None
+                _user = getattr(request, "user", None)
+                if _user and _user.is_authenticated:
+                    _recorder_id = getattr(_user, "id", None)
+                    _recorder_name = (
+                        getattr(_user, "get_full_name", lambda: "")() or
+                        getattr(_user, "username", "") or
+                        getattr(_user, "email", "") or
+                        ""
+                    )[:80]
+                OrderPayment.objects.create(
+                    order=order,
+                    amount=_order_total,
+                    method=OrderPayment.Method.CASH,
+                    recorded_by_user_id=_recorder_id,
+                    recorded_by_name=_recorder_name,
+                    note="Marked paid by owner (cash at till)",
                 )
 
             order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
@@ -14447,9 +14485,11 @@ class DrawerTransactionView(APIView):
 class DrawerCloseView(APIView):
     """POST /api/owner/drawer/close/
 
-    Blind-count close: submit the physical count WITHOUT knowing the expected
-    amount first. The view computes expected = opening_float + cash_collected
-    since session open + pay-ins − pay-outs, then records over/short.
+    Count close: the owner counts the physical cash against the live expected
+    total shown on the Z-report close card (POS-UX-33 — the count is no
+    longer blind). The view still computes expected independently as
+    opening_float + cash_collected since session open + pay-ins − pay-outs,
+    then records over/short, so the reconciliation check itself is unchanged.
 
     Body: { "counted_total": "345.00", "note": "" }
     """
@@ -14555,8 +14595,24 @@ class DrawerHistoryView(APIView):
         result = []
         for sess in sessions:
             txs = DrawerTransaction.objects.filter(session=sess).order_by("at", "id")
+            sess_dict = _drawer_session_dict(sess)
+            if sess.status == DrawerSession.Status.OPEN:
+                # POS-UX-33 (Wave C): an open session has no stored
+                # expected_total (it is only computed at close) — show the live
+                # expected total so the owner counts against a known figure
+                # instead of blind. Same formula as DrawerCloseView: opening
+                # float + cash collected since open + pay-ins − pay-outs.
+                _now = timezone.now()
+                _collected_qs = Order.objects.filter(
+                    status=Order.Status.COMPLETED,
+                    payment_status=Order.PaymentStatus.PAID,
+                    paid_at__gte=sess.opened_at,
+                    paid_at__lte=_now,
+                )
+                _cash = split_revenue_for_orders(_collected_qs)["cash"]
+                sess_dict["expected_total"] = str(_compute_expected_total(sess, _cash))
             result.append({
-                **_drawer_session_dict(sess),
+                **sess_dict,
                 "transactions": [_drawer_transaction_dict(t) for t in txs],
             })
 

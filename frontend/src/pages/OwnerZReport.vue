@@ -66,6 +66,10 @@
         <p class="text-sm font-semibold text-amber-200">{{ t("zReport.closeDrawerTitle") }}</p>
         <p class="text-xs text-slate-400">{{ t("zReport.closeDrawerDescription") }}</p>
       </div>
+      <div v-if="openDrawerSession.expected_total != null" class="flex flex-wrap items-center gap-3 rounded-lg border border-slate-700/50 bg-slate-950/40 px-3 py-2">
+        <p class="text-xs text-slate-400">{{ t("zReport.closeDrawerExpected") }}: <span class="font-semibold tabular-nums text-slate-100">{{ fmtMoney(openDrawerSession.expected_total) }}</span></p>
+        <button type="button" class="ui-btn-outline ui-press px-2.5 py-1 text-xs" @click="closeDrawerCounted = openDrawerSession.expected_total; closeDrawerCountedError = ''">{{ t("zReport.closeDrawerUseExpected") }}</button>
+      </div>
       <div class="flex items-end gap-3 flex-wrap">
         <div class="flex-1 min-w-36 space-y-1">
           <label class="block text-xs text-slate-400">{{ t("zReport.closeDrawerCountLabel") }}</label>
@@ -191,12 +195,16 @@
         <div class="ui-admin-subcard ui-reveal space-y-1.5 p-3 print:border print:border-slate-300 print:bg-white print:shadow-none">
           <p class="ui-stat-label print:text-slate-500">{{ t("zReport.netCash") }}</p>
           <p class="text-xl font-bold tabular-nums text-white print:text-black">{{ fmtMoney(report.net_cash_position) }}</p>
+          <p class="text-[10px] text-slate-600 print:text-slate-400">{{ t("zReport.netCashHint") }}</p>
         </div>
       </div>
 
       <!-- Reconciliation line -->
       <div class="ui-workspace-stage ui-reveal rounded-xl border border-slate-700/50 px-4 py-3 flex flex-wrap items-center justify-between gap-3 print:border-slate-300 print:bg-white">
-        <p class="text-sm font-semibold text-slate-200 print:text-black">{{ t("zReport.netLabel") }}</p>
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold text-slate-200 print:text-black">{{ t("zReport.netLabel") }}</p>
+          <p class="text-[11px] text-slate-500 print:text-slate-600">{{ t("zReport.netLabelHint") }}</p>
+        </div>
         <p class="text-2xl font-bold tabular-nums text-[var(--color-secondary)] print:text-slate-800">{{ fmtMoney(report.net) }}</p>
       </div>
 
