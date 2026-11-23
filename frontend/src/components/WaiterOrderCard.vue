@@ -148,7 +148,7 @@
           :aria-label="order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid')"
           :disabled="waiter.updatingOrderIds.has(order.id)"
           @click="emit('settle')"
-        ><span aria-hidden="true">💵</span></button>
+        ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
         <button
           v-if="canManage && order.fulfillment_type === 'table' && appendableTableStatuses.has(order.status) && order.payment_status !== 'paid'"
           class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"

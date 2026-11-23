@@ -99,6 +99,7 @@
       <!-- B-44: invalid counted total explains itself inline instead of the
            close button silently doing nothing. -->
       <p v-if="closeDrawerCountedError" role="alert" class="text-xs text-red-400">{{ closeDrawerCountedError }}</p>
+      <p v-else-if="!closeDrawerCounted" class="text-xs text-slate-500">{{ t('zReport.countedEmptyHint') }}</p>
     </section>
 
     <!-- Drawer fetch failed — surfaced distinctly so a failed fetch is never
@@ -558,7 +559,7 @@ const todayIso = computed(() => {
   }
   return new Date().toISOString().slice(0, 10);
 });
-const selectedDate = ref(""); // empty = current service day
+const selectedDate = ref(todayIso.value); // default = today's service day (the picker used to start blank)
 
 // B-16: Profile has no currency field server-side (ProfileSerializer never sends
 // one), so the profile?.currency read was dead and always fell back to MAD —

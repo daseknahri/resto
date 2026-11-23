@@ -54,10 +54,7 @@
           </label>
         </div>
         <div class="hidden ui-scroll-row min-w-0 md:flex">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
-            <AppIcon name="refresh" class="owner-table-icon" aria-hidden="true" />
-            {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
-          </button>
+          <!-- POS-UX-45: the header already has a Refresh button — no duplicate here. -->
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">
             <AppIcon name="download" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.exportCsv") }}
@@ -281,7 +278,10 @@
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="openRename(table)">
               {{ t("ownerTables.rename") }}
             </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
+          </div>
+          <!-- POS-UX-44: destructive action lives apart from the copy buttons. -->
+          <div class="mt-2.5 border-t border-slate-800/60 pt-2.5">
+            <button class="ui-btn-outline owner-table-btn w-full px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
               {{ t("ownerTables.delete") }}
             </button>
           </div>
@@ -315,6 +315,9 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
             {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
+        </div>
+        <!-- POS-UX-44: destructive action lives apart from the copy buttons. -->
+        <div class="no-print mt-2 flex justify-end border-t border-slate-800/60 pt-2">
           <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
             {{ t("ownerTables.delete") }}
           </button>
@@ -856,7 +859,17 @@ const copyQrUrl = async (table) => {
     toast.show(t("ownerTables.qrNotReady"), "error");
     return;
   }
-  copyText(src, t("ownerTables.qrCopied"));
+  // POS-UX-43: copy the QR as an image (pastes as a picture in WhatsApp),
+  // not the base64 data URL as text. Fall back to the text copy when the
+  // image write is unavailable (older browsers / non-secure contexts).
+  try {
+    if (typeof ClipboardItem === "undefined") throw new Error("no ClipboardItem");
+    const blob = await (await fetch(src)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    toast.show(t("ownerTables.qrCopied"), "success");
+  } catch {
+    copyText(src, t("ownerTables.qrCopied"));
+  }
 };
 
 const safeFileBase = (value) =>

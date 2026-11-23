@@ -78,6 +78,7 @@
         class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
         :placeholder="fmtOrderPrice(settleOutstanding(order), order.currency)"
       />
+      <p class="text-[11px] leading-relaxed text-slate-500">{{ t('waiterPage.cashReceivedHint') }}</p>
       <div v-if="cashChange !== null" class="flex items-center justify-between text-sm tabular-nums">
         <span class="text-slate-400">{{ t('waiterPage.cashChange') }}</span>
         <span :class="Number(cashChange) >= 0 ? 'font-bold text-emerald-300' : 'font-bold text-red-400'">

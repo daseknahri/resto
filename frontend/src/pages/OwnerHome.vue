@@ -41,6 +41,7 @@
             class="ui-chip ui-press inline-flex items-center gap-1 transition-colors"
             :class="focusMode ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             :aria-pressed="focusMode"
+            :title="t('ownerHome.focusHint')"
             @click="toggleFocusMode"
           >
             <span aria-hidden="true">🎯</span>
@@ -549,6 +550,7 @@
           </span>
           <p class="flex-1 text-sm font-semibold text-amber-200">{{ t('ownerHome.newOrderArrived') }}</p>
           <RouterLink :to="{ name: 'owner-orders' }" class="text-xs font-semibold text-amber-300 underline hover:no-underline">{{ t('ownerHome.viewAllOrders') }}</RouterLink>
+          <button type="button" class="shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold text-amber-300/80 hover:bg-amber-500/20 hover:text-amber-200" :aria-label="t('common.dismiss')" @click="newOrderFlash = false">✕</button>
         </div>
       </Transition>
 
@@ -1038,7 +1040,7 @@ const watchHomeOrders = (orders) => {
   if (hasNew) {
     newOrderFlash.value = true;
     if (newOrderFlashTimer) clearTimeout(newOrderFlashTimer);
-    newOrderFlashTimer = setTimeout(() => { newOrderFlash.value = false; }, 6000);
+    newOrderFlashTimer = setTimeout(() => { newOrderFlash.value = false; }, 15000);
   }
 };
 watch(() => order.orders, watchHomeOrders, { deep: false });

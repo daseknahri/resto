@@ -57,6 +57,7 @@
           :class="allDay ? 'kitchen-filter-btn--active' : ''"
           :aria-pressed="allDay"
           :aria-label="allDay ? t('kitchen.allDayHide') : t('kitchen.allDay')"
+          :title="t('kitchen.allDayHint')"
           @click="allDay = !allDay"
         >
           {{ allDay ? t('kitchen.allDayHide') : t('kitchen.allDay') }}
@@ -199,6 +200,7 @@
           class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :class="includeHeld ? 'kitchen-filter-btn--active' : ''"
           :aria-pressed="includeHeld"
+          :title="t('kitchen.includeHeldHint')"
           @click="includeHeld = !includeHeld"
         >{{ t('kitchen.includeHeld') }}</button>
       </div>
