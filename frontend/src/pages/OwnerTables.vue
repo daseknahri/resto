@@ -278,6 +278,9 @@
               <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
               {{ t("ownerTables.printSingle") }}
             </button>
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="openRename(table)">
+              {{ t("ownerTables.rename") }}
+            </button>
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
               {{ t("ownerTables.delete") }}
             </button>
@@ -306,6 +309,9 @@
             <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.printSingle") }}
           </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="openRename(table)">
+            {{ t("ownerTables.rename") }}
+          </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
             {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
@@ -329,7 +335,7 @@
             <div class="min-w-0 space-y-0.5">
               <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
               <h2 id="owner-tables-setup-dialog-title" class="text-lg font-semibold leading-snug text-white">
-                {{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}
+                {{ formMode === "create" ? t("ownerTables.createTable") : formMode === "bulk" ? t("ownerTables.bulkGenerate") : t("ownerTables.renameTable") }}
               </h2>
             </div>
             <button class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs" @click="closeSetup">
@@ -413,7 +419,7 @@
                 </div>
               </template>
 
-              <template v-else>
+              <template v-else-if="formMode === 'bulk'">
                 <div class="space-y-1 pb-4 border-b border-slate-800/60">
                   <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
                   <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
@@ -451,6 +457,33 @@
                   </label>
                   <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="generating" @click="generateTables">
                     {{ generating ? t("ownerTables.generating") : t("ownerTables.generate") }}
+                  </button>
+                </div>
+              </template>
+              <template v-else-if="formMode === 'rename'">
+                <div class="space-y-1 pb-4 border-b border-slate-800/60">
+                  <p class="ui-kicker">{{ t("ownerTables.rename") }}</p>
+                  <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.renameTable") }}</h3>
+                  <p class="text-sm text-slate-400 leading-relaxed">{{ t("ownerTables.renameHint") }}</p>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-[1.5fr,auto] sm:items-end">
+                  <label class="space-y-1.5 text-sm font-medium text-slate-300">
+                    <span>{{ t("ownerTables.tableLabel") }}</span>
+                    <input
+                      ref="renameInputRef"
+                      v-model.trim="renameLabel"
+                      type="text"
+                      maxlength="40"
+                      class="ui-input"
+                      :class="error ? 'border-red-400 focus:border-red-400 focus:ring-red-400/30' : ''"
+                      :aria-invalid="error ? 'true' : 'false'"
+                      :placeholder="t('ownerTables.tableLabelPlaceholder')"
+                      @input="error = ''"
+                      @keydown.enter="renameTable"
+                    />
+                  </label>
+                  <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="renaming" @click="renameTable">
+                    {{ renaming ? t("ownerTables.loading") : t("common.save") }}
                   </button>
                 </div>
               </template>
@@ -507,6 +540,10 @@ const statusFilter = ref("all");
 const { confirm } = useConfirmModal();
 const togglingId = ref(null);
 const deletingId = ref(null);
+const renameTarget = ref(null);
+const renameLabel = ref("");
+const renaming = ref(false);
+const renameInputRef = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -747,6 +784,51 @@ const removeTable = async (table) => {
     toast.show(parseError(err, t("ownerTables.deleteFailed")), "error");
   } finally {
     deletingId.value = null;
+  }
+};
+
+// POS-UX-41 (Wave D): rename a table in place. The backend keeps the slug
+// immutable (TableLinkSerializer.update pops it), so the printed QR code and
+// short link keep working — only the label changes.
+const openRename = (table) => {
+  _setupTriggerEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  error.value = "";
+  formMode.value = "rename";
+  renameTarget.value = table;
+  renameLabel.value = table?.label || "";
+  setupOpen.value = true;
+  nextTick(() => renameInputRef.value?.focus());
+};
+
+const renameTable = async () => {
+  if (!renameTarget.value) return;
+  const label = renameLabel.value.trim();
+  if (!label) {
+    error.value = t("ownerTables.labelRequired");
+    nextTick(() => renameInputRef.value?.focus());
+    return;
+  }
+  if (label === renameTarget.value.label) {
+    closeSetup();
+    return;
+  }
+  renaming.value = true;
+  error.value = "";
+  try {
+    await api.put(`/tables/${renameTarget.value.id}/`, {
+      ...renameTarget.value,
+      label,
+    });
+    renameTarget.value.label = label;
+    writeCache(TABLES_CACHE_KEY, tables.value);
+    toast.show(t("ownerTables.renamed"), "success");
+    setupOpen.value = false;
+    renameTarget.value = null;
+  } catch (err) {
+    error.value = parseError(err, t("ownerTables.renameFailed"));
+    toast.show(error.value, "error");
+  } finally {
+    renaming.value = false;
   }
 };
 
@@ -1036,6 +1118,7 @@ const openSetup = (mode = "create") => {
 const closeSetup = () => {
   setupOpen.value = false;
   error.value = "";
+  renameTarget.value = null;
   // Restore focus to the element that triggered the dialog (keyboard a11y)
   nextTick(() => _setupTriggerEl?.focus());
 };

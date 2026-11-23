@@ -16,7 +16,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -40,6 +40,8 @@ def _order(
         order_number=order_number,
         customer_id=customer_id,
         wallet_amount_paid=wallet_amount_paid,
+        # P2-3: the helper persists the zeroed wallet_amount_paid.
+        save=Mock(),
     )
 
 

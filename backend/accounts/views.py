@@ -7398,6 +7398,7 @@ class DriverJobAcceptView(APIView):
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
+        from datetime import timedelta as _td
         from django.utils import timezone as _tz
         from django.db import transaction as _tx
         from .models import DeliveryJob
@@ -7456,6 +7457,32 @@ class DriverJobAcceptView(APIView):
                     {"detail": "This delivery is currently offered to another driver.", "code": "offered_elsewhere"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # DEL-7: open-pool claims require a fresh GPS fix — the same <=300s
+            # rule the ranked exclusive offers use (dispatch.POSITION_FRESH_SECONDS).
+            # A driver whose position is hours stale must not grab a pool job they
+            # may not be able to reach. The live exclusive offeree is exempt: they
+            # were ranked on a fresh fix when the offer was made (<=60s ago).
+            _live_offeree = (
+                not job.is_open_pool
+                and job.offered_to_id == customer.id
+                and job.offer_expires_at is not None
+                and job.offer_expires_at > _now
+            )
+            if not _live_offeree:
+                from accounts.dispatch import POSITION_FRESH_SECONDS as _FRESH_SECONDS
+                _fresh_since = _now - _td(seconds=_FRESH_SECONDS)
+                _pos_at = getattr(customer, "driver_position_updated_at", None)
+                if (
+                    _pos_at is None
+                    or _pos_at < _fresh_since
+                    or getattr(customer, "driver_lat", None) is None
+                    or getattr(customer, "driver_lng", None) is None
+                ):
+                    return Response(
+                        {"detail": "Your location is too old to accept jobs from the open pool. Share your location again and try once more.", "code": "stale_gps"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
             job.driver = customer
             job.status = DeliveryJob.Status.ASSIGNED

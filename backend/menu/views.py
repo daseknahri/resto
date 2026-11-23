@@ -4,7 +4,7 @@ import csv
 import hashlib
 from io import BytesIO, StringIO
 import re
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 import zipfile
 
 
@@ -1160,6 +1160,55 @@ class TableLinkViewSet(viewsets.ModelViewSet):
             host = f"{host[:-5]}:5173"
         return f"{scheme}://{host}"
 
+    def _expected_menu_hosts(self, request):
+        """Hostnames the tenant's public menu is allowed to live on.
+
+        QR-1: printed QRs must point at the tenant's public menu host, never at
+        whatever host the export happened to be requested from. The expected set
+        is built from server-authoritative sources only: the tenant's primary
+        domain, {slug}.{TENANT_DOMAIN_SUFFIX}, and PUBLIC_MENU_BASE_URL. Empty
+        when nothing authoritative is configured (local dev / unit tests) — the
+        caller then falls back to the request host, as before.
+        """
+        hosts = set()
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            try:
+                primary = tenant.domains.filter(is_primary=True).first()
+                if primary is not None and getattr(primary, "domain", ""):
+                    hosts.add(str(primary.domain).strip().lower())
+            except Exception:
+                pass
+            suffix = str(getattr(settings, "TENANT_DOMAIN_SUFFIX", "") or "").strip().lower()
+            slug = str(getattr(tenant, "slug", "") or "").strip().lower()
+            if suffix and slug:
+                hosts.add(f"{slug}.{suffix}")
+        configured = str(getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
+        if configured:
+            host = urlparse(configured if "://" in configured else f"https://{configured}").hostname
+            if host:
+                hosts.add(host.lower())
+        return hosts
+
+    def _validate_menu_base_url(self, request, base_url):
+        """QR-1: refuse a QR export whose base URL is not the tenant's public
+        menu host. Returns a 400 Response, or None when the base is allowed
+        (matches an expected host, or nothing authoritative is configured)."""
+        expected = self._expected_menu_hosts(request)
+        if not expected:
+            return None
+        host = urlparse(base_url if "://" in base_url else f"https://{base_url}").hostname
+        if host and host.lower() in expected:
+            return None
+        return Response(
+            {
+                "detail": "The menu base URL does not match this restaurant's public menu host. Check PUBLIC_MENU_BASE_URL or pass ?menu_base_url= with the restaurant's public menu address.",
+                "code": "menu_base_url_mismatch",
+                "expected_hosts": sorted(expected),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     def _table_short_url(self, table, base_url):
         return f"{base_url}/t/{table.slug}"
 
@@ -1226,6 +1275,9 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     def qr_image(self, request, pk=None):
         table = self.get_object()
         base_url = self._public_menu_base_url(request)
+        refused = self._validate_menu_base_url(request, base_url)
+        if refused is not None:
+            return refused
         short_url = self._table_short_url(table, base_url)
         png_bytes = self._qr_png_bytes(short_url)
         filename = f"{self._safe_filename_token(table.label, fallback='table')}-qr.png"
@@ -1259,6 +1311,9 @@ class TableLinkViewSet(viewsets.ModelViewSet):
             )
 
         base_url = self._public_menu_base_url(request)
+        refused = self._validate_menu_base_url(request, base_url)
+        if refused is not None:
+            return refused
 
         tenant = getattr(request, "tenant", None)
         tenant_slug = self._safe_filename_token(getattr(tenant, "slug", ""), fallback="tenant")
@@ -7586,6 +7641,26 @@ class OwnerNotificationsView(APIView):
         })
 
 
+def _order_payment_methods(order, methods_by_order):
+    """POS-UX-20: payment-method summary for one order-list row.
+
+    Ledger rows first (distinct methods, first-seen order). A legacy one-shot
+    wallet settle leaves no row but bumps wallet_amount_paid, so that implies
+    "wallet"; a paid order with neither implies a legacy cash settle. Unpaid
+    orders with no payments report [].
+    """
+    methods = list(methods_by_order.get(order.id, []))
+    try:
+        wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+    except Exception:
+        wallet_paid = Decimal("0")
+    if wallet_paid > 0 and "wallet" not in methods:
+        methods.append("wallet")
+    if not methods and str(getattr(order, "payment_status", "") or "").strip().lower() == "paid":
+        methods = ["cash"]
+    return methods
+
+
 class OwnerOrderListView(APIView):
     """GET /api/owner/orders/ — owner lists all orders.
 
@@ -7737,10 +7812,19 @@ class OwnerOrderListView(APIView):
         from menu.models import OrderPayment as _OP
         _order_ids_page = [o.id for o in all_orders]
         _payments_by_order: dict = {}
+        # POS-UX-20: distinct payment methods per order, so the card can show
+        # "how was this paid" without a lazy per-order fetch. Same per-page
+        # query as the totals above — no extra round-trip.
+        _payment_methods_by_order: dict = {}
         if _order_ids_page:
-            for _pay in _OP.objects.filter(order_id__in=_order_ids_page).values("order_id", "amount"):
+            for _pay in _OP.objects.filter(order_id__in=_order_ids_page).values("order_id", "method", "amount"):
                 _payments_by_order.setdefault(_pay["order_id"], Decimal("0"))
                 _payments_by_order[_pay["order_id"]] += Decimal(str(_pay["amount"] or 0))
+                _method = str(_pay.get("method") or "").strip().lower()
+                if _method:
+                    _methods_for_order = _payment_methods_by_order.setdefault(_pay["order_id"], [])
+                    if _method not in _methods_for_order:
+                        _methods_for_order.append(_method)
 
         def _safe_ledger(value):
             """Coerce to quantized Decimal; returns 0.00 for None/non-numeric."""
@@ -7936,6 +8020,9 @@ class OwnerOrderListView(APIView):
                         - _safe_ledger(_payments_by_order.get(order.id)),
                     ).quantize(Decimal("0.01"))
                 ),
+                # POS-UX-20: payment-method summary for the card (ledger + legacy
+                # inference). The full ledger stays lazy-loaded from detail.
+                "payment_methods": _order_payment_methods(order, _payment_methods_by_order),
                 # Order source, commission & promotion
                 "source": order.source,
                 "commission_amount": str(order.commission_amount),
@@ -8461,6 +8548,16 @@ def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
         # so an edge case can never refuse a refund the platform owes.
         require_verified=False,
     )
+
+    # P2-3 (Wave D): the wallet money has now left the order — zero the held
+    # amount so cancelled-order figures (order detail/list, CSV export) stop
+    # reporting money that was already refunded. The REFUND ledger row above is
+    # the permanent record; this field means "wallet money currently held
+    # against the order". Cash is untouched (no cash-refund ledger — D3/D4).
+    # Runs inside the caller's atomic block, so a later failure rolls the
+    # zeroing back with the status flip.
+    order.wallet_amount_paid = _Dec("0")
+    order.save(update_fields=["wallet_amount_paid"])
 
 
 def _reverse_loyalty_for_cancelled_order(order) -> None:

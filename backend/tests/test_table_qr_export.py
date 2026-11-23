@@ -1,8 +1,9 @@
 from io import BytesIO
+from unittest.mock import MagicMock
 from types import SimpleNamespace
 import zipfile
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from rest_framework.permissions import AllowAny
 from rest_framework.test import APIRequestFactory
 
@@ -94,3 +95,73 @@ class TableQrExportTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertTrue(response.content.startswith(b"\x89PNG\r\n\x1a\n"))
+class TableQrBaseUrlValidationTests(SimpleTestCase):
+    """Wave D QR-1: the QR base URL must match the tenant's public menu host."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        DummyTableLinkViewSet.test_rows = [
+            SimpleNamespace(id=1, label="Table 1", slug="table-1", is_active=True),
+        ]
+        DummyTableLinkViewSet.test_object = SimpleNamespace(
+            id=1, label="Table A", slug="table-a", is_active=True
+        )
+
+    def _tenant_with_primary(self, domain):
+        domains = MagicMock()
+        domains.filter.return_value.first.return_value = SimpleNamespace(domain=domain)
+        return SimpleNamespace(slug="demo", domains=domains)
+
+    def _export(self, tenant, query=""):
+        url = "/api/tables/qr-export/"
+        if query:
+            url = f"{url}?{query}"
+        req = self.factory.get(url)
+        req.tenant = tenant
+        return DummyTableLinkViewSet.as_view({"get": "qr_export"})(req)
+
+    def test_matching_primary_domain_passes(self):
+        tenant = self._tenant_with_primary("menu.demo.example")
+        resp = self._export(tenant, "menu_base_url=https://menu.demo.example")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_mismatched_base_is_refused(self):
+        tenant = self._tenant_with_primary("menu.demo.example")
+        resp = self._export(tenant, "menu_base_url=https://evil.example.com")
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["code"], "menu_base_url_mismatch")
+        self.assertIn("menu.demo.example", resp.data["expected_hosts"])
+
+    def test_unset_env_falls_back_to_request_host(self):
+        # Nothing authoritative configured (no primary domain, no env, no suffix):
+        # the export falls back to the request host, as before.
+        req = self.factory.get("/api/tables/qr-export/")
+        req.tenant = SimpleNamespace(slug="demo")
+        resp = DummyTableLinkViewSet.as_view({"get": "qr_export"})(req)
+        self.assertEqual(resp.status_code, 200)
+        archive = zipfile.ZipFile(BytesIO(resp.content))
+        manifest = archive.read("manifest.csv").decode("utf-8")
+        self.assertIn("http://testserver/t/table-1", manifest)
+
+    @override_settings(PUBLIC_MENU_BASE_URL="https://menu.example.com")
+    def test_configured_env_host_passes_and_other_host_refused(self):
+        tenant = self._tenant_with_primary("menu.demo.example")
+        ok = self._export(tenant, "menu_base_url=https://menu.example.com")
+        self.assertEqual(ok.status_code, 200)
+        bad = self._export(tenant, "menu_base_url=https://evil.example.com")
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.data["code"], "menu_base_url_mismatch")
+
+    @override_settings(TENANT_DOMAIN_SUFFIX="example.com")
+    def test_slug_suffix_host_passes(self):
+        tenant = self._tenant_with_primary("menu.demo.example")
+        ok = self._export(tenant, "menu_base_url=https://demo.example.com")
+        self.assertEqual(ok.status_code, 200)
+
+    def test_qr_image_refuses_mismatched_base(self):
+        tenant = self._tenant_with_primary("menu.demo.example")
+        req = self.factory.get("/api/tables/1/qr-image/?menu_base_url=https://evil.example.com")
+        req.tenant = tenant
+        resp = DummyTableLinkViewSet.as_view({"get": "qr_image"})(req, pk=1)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["code"], "menu_base_url_mismatch")

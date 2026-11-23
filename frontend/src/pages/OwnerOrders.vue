@@ -607,6 +607,14 @@
               >
                 {{ o.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}
               </span>
+              <!-- POS-UX-20: payment method from the list payload (no extra fetch) -->
+              <span
+                v-if="o.payment_methods && o.payment_methods.length"
+                class="rounded-full bg-slate-800/70 px-2 py-0.5 text-[10px] font-semibold text-slate-300"
+                :title="t('ownerOrders.paymentsLedger')"
+              >
+                {{ paymentMethodsLabel(o) }}
+              </span>
               <!-- Marketplace source badge -->
               <span
                 v-if="o.source === 'marketplace'"
@@ -1708,6 +1716,13 @@ const _PAYMENT_LABELS = { unpaid: "ownerOrders.paymentUnpaid", paid: "ownerOrder
 const fulfillmentFilterLabel = (v) => (_FULFILLMENT_LABELS[v] ? t(_FULFILLMENT_LABELS[v]) : v);
 const paymentLabel = (v) => (_PAYMENT_LABELS[v] ? t(_PAYMENT_LABELS[v]) : v);
 
+// POS-UX-20: method summary shipped in the list payload (cash/wallet labels,
+// joined with " + " when an order was split across methods). The full ledger
+// stays lazy-loaded behind "Load payment details".
+const paymentMethodsLabel = (o) => (o.payment_methods || [])
+  .map((m) => (m === "cash" ? t("ownerOrders.methodCash") : m === "wallet" ? t("ownerOrders.methodWallet") : m))
+  .join(" + ");
+
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
   const counts = {};
@@ -2316,7 +2331,8 @@ const deliveryAction = async (o, action) => {
 };
 
 // ── Payment ledger lazy-load ──────────────────────────────────────────────────
-// The list endpoint only returns totals; payments are fetched on demand from detail.
+// The list endpoint returns totals + a payment-method summary (POS-UX-20);
+// the full payment rows are still fetched on demand from detail.
 const paymentsMap = ref({}); // orderId → OrderPayment[]
 
 const loadPayments = async (orderId) => {

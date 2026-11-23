@@ -17,9 +17,11 @@ rather than by making Customer.objects.get raise DoesNotExist.
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from contextlib import contextmanager
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -719,6 +721,102 @@ class DriverJobAcceptViewTests(SimpleTestCase):
             resp = self._post(1, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+
+    def _wire_accept_job(self, mock_dj, mock_cust_objs, job):
+        """Wire the DeliveryJob/Customer mocks so the accept view reaches the job."""
+        mock_dj.Status.ASSIGNED = "assigned"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.objects.filter.return_value.exists.return_value = False  # no active job
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+
+    def _fresh_customer(self):
+        customer = _make_customer(is_driver_online=True)
+        customer.driver_position_updated_at = timezone.now()
+        customer.driver_lat = 33.5731
+        customer.driver_lng = -7.5898
+        return customer
+
+    def _stale_customer(self):
+        customer = _make_customer(is_driver_online=True)
+        customer.driver_position_updated_at = timezone.now() - timedelta(hours=2)
+        customer.driver_lat = 33.5731
+        customer.driver_lng = -7.5898
+        return customer
+
+    def _pool_job(self):
+        job = _make_job(status_val="searching")
+        job.is_open_pool = True
+        job.offered_to_id = None
+        job.offer_expires_at = None
+        return job
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_stale_gps_cannot_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver whose GPS is hours stale cannot grab a pool job."""
+        customer = self._stale_customer()
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "stale_gps")
+        self.assertIsNone(job.driver)
+        job.save.assert_not_called()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_fresh_gps_can_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver with a fresh GPS fix claims from the pool as before."""
+        customer = self._fresh_customer()
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(job.driver, customer)
+        self.assertEqual(job.status, "assigned")
+        job.save.assert_called_once()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_no_gps_cannot_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver who never shared a position cannot claim from the pool."""
+        customer = _make_customer(is_driver_online=True)  # no position fields set
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "stale_gps")
+        job.save.assert_not_called()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_live_offeree_exempt_from_gps_gate(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: the driver holding a live exclusive offer was ranked on a fresh
+        fix <=60s ago, so the pool gate must not block their claim even if the
+        principal's position has since gone stale."""
+        customer = self._stale_customer()
+        job = _make_job(status_val="searching")
+        job.is_open_pool = False
+        job.offered_to_id = customer.id
+        job.offer_expires_at = timezone.now() + timedelta(seconds=30)
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(job.driver, customer)
 
 # ── DriverJobStatusUpdateView ─────────────────────────────────────────────────
 

@@ -942,13 +942,17 @@ const todayStats = computed(() => {
   const currency = revenueSummary.value?.currency || "MAD";
   let revenueLabel;
   try {
-    revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
+    // POS-UX-10 (Wave D): exact figure, not compact — "MAD 1.2K" hid the real
+    // total from an owner counting the day's money. POS-UX-49 checked here too:
+    // the cashier-modal total was already exact (no compact notation there),
+    // so only this Home figure changes.
+    revenueLabel = formatNumber(revenue, { style: "currency", currency, maximumFractionDigits: 2 });
   } catch {
-    revenueLabel = `${currency} ${Math.floor(revenue)}`;
+    revenueLabel = `${currency} ${revenue.toFixed(2)}`;
   }
   // POS-UX-11 (Wave C): cash/wallet collected today, from the dashboard
   // aggregate's today_payment_split (PAID orders only, paid today). Exact
-  // figures — the compact total above stays as-is.
+  // figures — like the revenue total above since POS-UX-10 (Wave D).
   const split = revenueSummary.value?.today_payment_split || null;
   const fmtSplit = (val) => {
     const n = Number(val) || 0;

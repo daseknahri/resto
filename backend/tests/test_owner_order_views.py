@@ -295,6 +295,50 @@ class OwnerOrderListViewTests(SimpleTestCase):
         order_by_arg = objects_mock.select_related.return_value.prefetch_related.return_value.order_by.call_args[0][0]
         self.assertEqual(order_by_arg, "-created_at")
 
+    def _list_with_payments(self, objects_mock, order, payment_rows):
+        """Wire the mocked Order queryset + OrderPayment rows, then GET the list."""
+        qs_mock = MagicMock()
+        qs_mock.filter.return_value = qs_mock
+        qs_mock.__iter__ = lambda s: iter([order])
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = payment_rows
+            return self._get()
+
+    @patch("menu.views.Order.objects")
+    def test_list_includes_payment_methods_from_ledger(self, objects_mock):
+        """POS-UX-20: the list payload carries the payment methods, so the card
+        can show them without a lazy per-order fetch."""
+        resp = self._list_with_payments(objects_mock, _make_order(), [
+            {"order_id": 1, "method": "cash", "amount": "10.00"},
+            {"order_id": 1, "method": "wallet", "amount": "15.00"},
+        ])
+        result = resp.data["results"][0]
+        self.assertEqual(result["payment_methods"], ["cash", "wallet"])
+        self.assertEqual(result["amount_paid"], "25.00")
+
+    @patch("menu.views.Order.objects")
+    def test_list_payment_methods_legacy_wallet_settle(self, objects_mock):
+        """POS-UX-20: a legacy one-shot wallet settle (no ledger rows, but
+        wallet_amount_paid > 0) reports ["wallet"]."""
+        order = _make_order()
+        order.wallet_amount_paid = Decimal("25.00")
+        resp = self._list_with_payments(objects_mock, order, [])
+        self.assertEqual(resp.data["results"][0]["payment_methods"], ["wallet"])
+
+    @patch("menu.views.Order.objects")
+    def test_list_payment_methods_legacy_cash_settle(self, objects_mock):
+        """POS-UX-20: a paid order with no rows and no wallet money implies cash."""
+        resp = self._list_with_payments(objects_mock, _make_order(), [])
+        self.assertEqual(resp.data["results"][0]["payment_methods"], ["cash"])
+
+    @patch("menu.views.Order.objects")
+    def test_list_payment_methods_unpaid_no_payments(self, objects_mock):
+        """POS-UX-20: an unpaid order with no payments reports []."""
+        resp = self._list_with_payments(objects_mock, _make_order(payment_status="unpaid"), [])
+        self.assertEqual(resp.data["results"][0]["payment_methods"], [])
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # OwnerOrderDetailView — GET /api/owner/orders/<id>/
