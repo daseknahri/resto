@@ -1,4 +1,4 @@
-Django==6.1.2
+Django==6.1.3
 psycopg2==2.9.13
 djangorestframework==3.18.3
 # OpenAPI schema generation (RISK SCHEMA-1): replaces the legacy `manage.py
@@ -8,7 +8,7 @@ djangorestframework==3.18.3
 drf-spectacular==0.30.0
 inflection==0.5.1
 uritemplate==4.2.0
-django-tenants==4.0.0
+django-tenants==4.0.7
 python-dotenv==1.2.4
 dj-database-url==2.1.0
 django-cors-headers==4.9.0
@@ -17,9 +17,9 @@ qrcode==7.4.2
 reportlab==5.1.0
 gunicorn==26.2.0
 whitenoise==6.12.0
-sentry-sdk==2.74.0
+sentry-sdk==2.75.0
 django-storages==1.14.6
-boto3==1.43.125
+boto3==1.44.7
 django-redis==5.4.0
 redis==8.1.0
 # Durable task queue for outbound notifications + scheduled jobs (broker = REDIS_URL).
@@ -33,6 +33,6 @@ channels==4.3.2
 channels-redis==4.3.0
 daphne==4.2.3
 uvicorn[standard]==0.54.0
-pyotp==2.10.0
+pyotp==2.12.1
 # PSP top-up seam (dormant until PSP_TOPUP_ENABLED=1 is set in env).
 stripe>=10.0.0,<13.0.0
