@@ -139,16 +139,16 @@
         class="ui-press ui-touch-target w-full rounded-xl border border-emerald-500/50 bg-emerald-500/15 py-3 text-sm font-bold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
         :disabled="waiter.updatingOrderIds.has(order.id)"
         @click="emit('settle')"
-      ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
+      ><span aria-hidden="true">💵</span> {{ t('ownerOrders.markPaid') }}</button>
       <span v-else-if="canManage" class="block text-center text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
       <div class="flex items-center gap-1.5">
         <button
           v-if="canManage && waiter.nextStatus(order) && order.payment_status !== 'paid'"
           class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/40"
-          :aria-label="order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid')"
+          :aria-label="t('ownerOrders.markPaid')"
           :disabled="waiter.updatingOrderIds.has(order.id)"
           @click="emit('settle')"
-        ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
+        ><span aria-hidden="true">💵</span> {{ t('ownerOrders.markPaid') }}</button>
         <button
           v-if="canManage && order.fulfillment_type === 'table' && appendableTableStatuses.has(order.status) && order.payment_status !== 'paid'"
           class="ui-press ui-touch-target shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500/40"

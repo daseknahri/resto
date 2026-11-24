@@ -46,7 +46,7 @@
             @click="exportCsv"
           >
             <AppIcon name="download" class="h-3.5 w-3.5" aria-hidden="true" />
-            {{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}
+            <span class="hidden sm:inline">{{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}</span>
           </button>
           <button
             class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
@@ -55,7 +55,7 @@
             @click="refresh"
           >
             <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
-            {{ t("ownerOrders.refreshOrders") }}
+            <span class="hidden sm:inline">{{ t("ownerOrders.refreshOrders") }}</span>
           </button>
           <span v-if="polling && order.orders.length" class="text-[11px] text-slate-500 tabular-nums" role="status" aria-live="polite">{{ t('adminAnalytics.updating') }}</span>
         </div>
@@ -158,6 +158,26 @@
       <!-- Status filter tabs: horizontal scroll on mobile (keeps the order list in view),
            wraps on larger screens where there's room. -->
       <div class="ui-scroll-row gap-1.5 sm:flex-wrap sm:overflow-x-visible sm:pb-0">
+        <!-- POS-UX-22: Active/Past lives in the same filter row as the status
+             chips (one filter band, not two stacked tab systems) — the two
+             scope buttons sit first, separated from the status chips. -->
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'active'"
+          class="ui-state-chip ui-press shrink-0 whitespace-nowrap"
+          :data-active="activeTab === 'active' || undefined"
+          @click="activeTab = 'active'"
+        >{{ t("ownerOrders.tabActive") }}</button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'history'"
+          class="ui-state-chip ui-press shrink-0 whitespace-nowrap"
+          :data-active="activeTab === 'history' || undefined"
+          @click="switchToHistory"
+        >{{ t("ownerOrders.tabHistory") }}</button>
+        <span aria-hidden="true" class="mx-0.5 hidden w-px shrink-0 self-stretch bg-slate-700/70 sm:block"></span>
         <button
           v-for="tab in statusTabs"
           :key="tab.value"
@@ -207,25 +227,6 @@
         {{ t("ownerOrders.showingFiltered", { shown: filteredOrders.length, total: order.orders.length }) }}
       </p>
 
-      <!-- Tab bar: Active | Past orders -->
-      <div class="flex gap-1 rounded-xl border border-slate-800 bg-slate-950/50 p-1" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'active'"
-          class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-          :class="activeTab === 'active' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
-          @click="activeTab = 'active'"
-        >{{ t("ownerOrders.tabActive") }}</button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === 'history'"
-          class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-          :class="activeTab === 'history' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
-          @click="switchToHistory"
-        >{{ t("ownerOrders.tabHistory") }}</button>
-      </div>
 
       <!-- Batch action: confirm all pending (always visible while 2+ pending orders exist) -->
       <div v-if="pendingOrdersList.length > 1" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5" role="status">
@@ -469,11 +470,8 @@
                 <span class="font-mono text-base font-bold tracking-tight text-white">{{ o.order_number }}</span>
                 <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="statusClass(o.status)">{{ statusLabel(o.status) }}</span>
                 <span class="ui-data-strip font-medium">{{ fulfillmentLabel(o) }}</span>
-                <span v-if="o.source === 'marketplace'" class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
-                  <span aria-hidden="true">🛒</span> {{ t("ownerOrders.sourceMarketplace") }}
-                </span>
               </div>
-              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
+              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}<span v-if="o.source === 'marketplace'" class="text-slate-500"> · {{ t('ownerOrders.sourceMarketplace') }}</span></p>
             </div>
             <div class="shrink-0 text-end">
               <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ formatCurrency(o.total, o.currency) }}</p>
@@ -585,19 +583,17 @@
                 {{ statusLabel(o.status) }}
               </span>
               <span class="ui-data-strip font-medium">{{ fulfillmentLabel(o) }}</span>
-              <!-- Scheduled-for badge (advance orders) -->
+              <!-- Scheduled-for badge (advance orders) — POS-UX-18: turns amber
+                   and carries the due-soon text when the fire time is near/past,
+                   instead of a second badge stacking beside it. -->
               <span
                 v-if="o.scheduled_for"
-                class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
+                class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                :class="o.status !== 'completed' && o.status !== 'cancelled' && orderIsDueSoon(o)
+                  ? 'bg-amber-500/20 border-amber-500/40 font-bold text-amber-300'
+                  : 'bg-violet-500/15 border-violet-500/30 text-violet-300'"
               >
-                <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(o.scheduled_for) }}
-              </span>
-              <!-- Due-soon badge — near/past fire time while still in a live status -->
-              <span
-                v-if="o.scheduled_for && o.status !== 'completed' && o.status !== 'cancelled' && orderIsDueSoon(o)"
-                class="rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300"
-              >
-                <span aria-hidden="true">⏱</span> {{ t('ownerOrders.dueSoonBadge') }}
+                <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(o.scheduled_for) }}<span v-if="o.status !== 'completed' && o.status !== 'cancelled' && orderIsDueSoon(o)"> · {{ t('ownerOrders.dueSoonBadge') }}</span>
               </span>
               <!-- Payment badge -->
               <span
@@ -614,13 +610,6 @@
                 :title="t('ownerOrders.paymentsLedger')"
               >
                 {{ paymentMethodsLabel(o) }}
-              </span>
-              <!-- Marketplace source badge -->
-              <span
-                v-if="o.source === 'marketplace'"
-                class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
-              >
-                <span aria-hidden="true">🛒</span> {{ t('ownerOrders.sourceMarketplace') }}
               </span>
               <!-- Awaiting driver badge — ready delivery, no driver assigned yet -->
               <span
@@ -660,7 +649,7 @@
               </span>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
+              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}<span v-if="o.source === 'marketplace'" class="text-slate-500"> · {{ t('ownerOrders.sourceMarketplace') }}</span></p>
               <!-- Customer note indicator — visible on collapsed card so owner knows to check -->
               <span
                 v-if="o.customer_note"
@@ -763,17 +752,9 @@
             <span class="text-slate-500">{{ t("ownerOrders.deliveryFee") }}</span>
             <span class="ms-1.5 font-medium text-slate-200">{{ formatCurrency(o.delivery_fee, o.currency) }}</span>
           </div>
-          <div v-if="o.tip_amount && Number(o.tip_amount) > 0" class="sm:col-span-2">
-            <span class="text-slate-500">{{ t("ownerOrders.tip") }}</span>
-            <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.tip_amount, o.currency) }}</span>
-          </div>
-          <div v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="sm:col-span-2">
-            <span class="text-slate-500">💰 {{ t("ownerOrders.walletPaid") }}</span>
-            <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
-          </div>
-          <div v-if="Number(o.amount_paid) > 0 && o.payment_status !== 'paid'" class="sm:col-span-2">
-            <span class="text-slate-500">{{ t('waiterPage.paidSoFar', { paid: formatCurrency(o.amount_paid, o.currency), left: formatCurrency(o.outstanding, o.currency) }) }}</span>
-          </div>
+          <!-- POS-UX-19: tip / wallet-paid / paid-so-far are shown once, in the
+               header totals above — not repeated here. Only the delivery fee
+               (which has no header line) stays in this grid. -->
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <div class="flex flex-wrap items-start gap-x-2 gap-y-1">
               <span class="shrink-0 text-slate-500">{{ t("ownerOrders.delivery") }}</span>
@@ -1209,13 +1190,13 @@
           >
             <span v-if="settlingOrderId === o.id" class="inline-block animate-spin h-3 w-3 border border-emerald-300 border-t-transparent rounded-full" aria-hidden="true" />
             <span v-else aria-hidden="true">💵</span>
-            {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
+            {{ settlingOrderId === o.id ? t("common.saving") : t("ownerOrders.markPaid") }}
           </button>
         </div>
 
         <!-- Destructive actions row — separated visually to prevent fat-finger cancels -->
         <div
-          v-if="['scheduled','pending','confirmed'].includes(o.status)"
+          v-if="['scheduled','pending','confirmed','preparing','ready','out_for_delivery'].includes(o.status)"
           class="flex items-center gap-2 border-t border-slate-700/40 pt-2 mt-1"
         >
           <button

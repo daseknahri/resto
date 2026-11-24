@@ -2673,68 +2673,81 @@ class AdminWalletBonusView(APIView):
             )
 
         from django.db import transaction as _dbtx
-        with _dbtx.atomic():
-            ids = list(qs.values_list("id", flat=True))
-            if not ids:
-                return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
-            # Self-defending idempotency: bonus credits are REAL money, so a retry
-            # (double-click, network retry, proxy replay) must never double-credit —
-            # even from a client that sends no idempotency_key. Prefer the client key
-            # when present, but ALWAYS fall back to a deterministic server-side
-            # fingerprint of the actor + amount + the normalized target set, so the same
-            # logical bonus maps to the same idempotency namespace regardless of client.
-            # (Fail closed so the endpoint is self-defending — mirrors record_driver_payout
-            # in accounts/driver_service.py.) The fingerprint is short (46 chars) so the
-            # per-customer key f"{bonus_idem}:{cid}" stays well within DB max_length=120.
-            # NOTE: to intentionally issue a SECOND identical bonus (same actor+amount+
-            # targets), the caller must supply a distinct idempotency_key.
-            if bonus_idem is None:
-                _actor_id = getattr(getattr(request, "user", None), "id", None)
-                _fp_src = f"{_actor_id}|{amount}|{','.join(str(i) for i in sorted(ids))}"
-                _fp = hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
-                bonus_idem = f"adminbonus:fp:{_fp}"
-            # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
-            # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
-            # so two concurrent POSTs with the same key could both clear exists() and both
-            # inflate balances (the unique WalletTransaction.idempotency_key only blocks the
-            # 2nd ledger INSERT). cache.add() is atomic — only the first concurrent caller
-            # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
-            # holds the lock and a corrected retry isn't falsely deduped; NOT released on
-            # success — it expires, and the DB unique key is the permanent durable guard.
-            _lock_key = f"walletbonus:{bonus_idem}"
-            if not cache.add(_lock_key, "1", 60):
-                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
-            # Idempotency: a repeated submit with the same key (double-click, retry) must
-            # not credit real money twice. Per-customer keys are derived from the batch key.
-            if WalletTransaction.objects.filter(
-                idempotency_key__startswith=f"{bonus_idem}:"
-            ).exists():
-                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
-            # OPS-5b: populate balance_after for ledger reconcilability.
-            # Bulk-update the balances first (single SQL UPDATE — fast), then read the
-            # new per-customer balances back to record in the transaction log.
-            # The idempotency key format {idempotency_key}:{cid} is preserved.
-            Customer.objects.filter(pk__in=ids).update(
-                wallet_balance=F("wallet_balance") + amount
-            )
-            # Read new balances in a single query keyed by customer id.
-            new_balances = dict(
-                Customer.objects.filter(pk__in=ids).values_list("id", "wallet_balance")
-            )
-            WalletTransaction.objects.bulk_create([
-                WalletTransaction(
-                    customer_id=cid,
-                    type=WalletTransaction.Type.BONUS,
-                    amount=amount,
-                    balance_after=new_balances.get(cid),
-                    note=note,
-                    # bonus_idem is always set now (client key or server fingerprint),
-                    # so every ledger row is durably deduped on this per-customer key.
-                    idempotency_key=f"{bonus_idem}:{cid}",
+        # P2-11: a failed attempt must release the 60s mutex — the atomic
+        # block rolled everything back, so nothing was issued, and a retry
+        # within 60s would otherwise be misreported as a duplicate. The
+        # duplicate returns inside the block are NOT exceptions, so they
+        # keep the lock (deliberately — it expires, and the DB unique key
+        # is the permanent durable guard).
+        _lock_holder = {}
+        try:
+            with _dbtx.atomic():
+                ids = list(qs.values_list("id", flat=True))
+                if not ids:
+                    return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
+                # Self-defending idempotency: bonus credits are REAL money, so a retry
+                # (double-click, network retry, proxy replay) must never double-credit —
+                # even from a client that sends no idempotency_key. Prefer the client key
+                # when present, but ALWAYS fall back to a deterministic server-side
+                # fingerprint of the actor + amount + the normalized target set, so the same
+                # logical bonus maps to the same idempotency namespace regardless of client.
+                # (Fail closed so the endpoint is self-defending — mirrors record_driver_payout
+                # in accounts/driver_service.py.) The fingerprint is short (46 chars) so the
+                # per-customer key f"{bonus_idem}:{cid}" stays well within DB max_length=120.
+                # NOTE: to intentionally issue a SECOND identical bonus (same actor+amount+
+                # targets), the caller must supply a distinct idempotency_key.
+                if bonus_idem is None:
+                    _actor_id = getattr(getattr(request, "user", None), "id", None)
+                    _fp_src = f"{_actor_id}|{amount}|{','.join(str(i) for i in sorted(ids))}"
+                    _fp = hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+                    bonus_idem = f"adminbonus:fp:{_fp}"
+                # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
+                # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
+                # so two concurrent POSTs with the same key could both clear exists() and both
+                # inflate balances (the unique WalletTransaction.idempotency_key only blocks the
+                # 2nd ledger INSERT). cache.add() is atomic — only the first concurrent caller
+                # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
+                # holds the lock and a corrected retry isn't falsely deduped; NOT released on
+                # success — it expires, and the DB unique key is the permanent durable guard.
+                _lock_key = f"walletbonus:{bonus_idem}"
+                _lock_holder["key"] = _lock_key
+                if not cache.add(_lock_key, "1", 60):
+                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+                # Idempotency: a repeated submit with the same key (double-click, retry) must
+                # not credit real money twice. Per-customer keys are derived from the batch key.
+                if WalletTransaction.objects.filter(
+                    idempotency_key__startswith=f"{bonus_idem}:"
+                ).exists():
+                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+                # OPS-5b: populate balance_after for ledger reconcilability.
+                # Bulk-update the balances first (single SQL UPDATE — fast), then read the
+                # new per-customer balances back to record in the transaction log.
+                # The idempotency key format {idempotency_key}:{cid} is preserved.
+                Customer.objects.filter(pk__in=ids).update(
+                    wallet_balance=F("wallet_balance") + amount
                 )
-                for cid in ids
-            ])
+                # Read new balances in a single query keyed by customer id.
+                new_balances = dict(
+                    Customer.objects.filter(pk__in=ids).values_list("id", "wallet_balance")
+                )
+                WalletTransaction.objects.bulk_create([
+                    WalletTransaction(
+                        customer_id=cid,
+                        type=WalletTransaction.Type.BONUS,
+                        amount=amount,
+                        balance_after=new_balances.get(cid),
+                        note=note,
+                        # bonus_idem is always set now (client key or server fingerprint),
+                        # so every ledger row is durably deduped on this per-customer key.
+                        idempotency_key=f"{bonus_idem}:{cid}",
+                    )
+                    for cid in ids
+                ])
 
+        except Exception:
+            if _lock_holder.get("key"):
+                cache.delete(_lock_holder["key"])
+            raise
         log_admin_action(
             action=AdminAuditLog.Actions.WALLET_BONUS_ISSUED,
             request=request,

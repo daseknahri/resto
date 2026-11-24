@@ -12,6 +12,10 @@
               {{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}
             </span>
             <span class="ui-data-strip tabular-nums">{{ t("ownerTables.disabledTables") }}: {{ Math.max(tables.length - activeTablesCount, 0) }}</span>
+            <span v-if="totalOpenOrders > 0" class="ui-data-strip tabular-nums">
+              <span class="inline-block h-2 w-2 rounded-full bg-amber-400/80" aria-hidden="true"></span>
+              {{ t("ownerTables.openOrdersTotal", { count: totalOpenOrders }) }}
+            </span>
             <svg v-if="updating" class="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
             </svg>
@@ -240,6 +244,12 @@
           >
             <span class="inline-block h-1.5 w-1.5 rounded-full" :class="table.is_active ? 'bg-emerald-400' : 'bg-slate-600'" aria-hidden="true"></span>
             {{ table.is_active ? t("ownerTables.active") : t("ownerTables.disabledState") }}
+          </span>
+          <span
+            v-if="Number(table.open_orders) > 0"
+            class="ui-status-pill border-amber-500/30 bg-amber-500/15 text-[11px] text-amber-300"
+          >
+            {{ t("ownerTables.openOrders", { count: table.open_orders }) }}
           </span>
           <p class="print-only text-[10px] uppercase tracking-[0.15em] text-slate-600">{{ t("ownerTables.poweredBy", { name: tenantName }) }}</p>
         </div>
@@ -572,6 +582,9 @@ const generatedAt = computed(() =>
   new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "medium", timeStyle: "short" }).format(new Date())
 );
 const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
+// POS-UX-42: live open-order total across tables (per-table counts come from
+// the /tables/ list payload as open_orders).
+const totalOpenOrders = computed(() => tables.value.reduce((sum, table) => sum + (Number(table.open_orders) || 0), 0));
 const filteredTables = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return tables.value.filter((table) => {
@@ -768,11 +781,12 @@ const removeTable = async (table) => {
   if (deletingId.value === table.id) return;
   const ok = await confirm({
     title: t("ownerTables.deleteConfirm", { label: table.label }),
-    // B-30: the /tables/ list carries no live-order data (TableLinkSerializer
-    // has no active-order count, and this page never fetches orders), so the
-    // confirm warns rather than blocks — per-table live counts need a backend
-    // field first (see REPORT.md).
-    body: `${t("confirmModal.defaultBody")} ${t("ownerTables.deleteLiveOrdersWarning")}`,
+    // POS-UX-47: the /tables/ list now carries open_orders per table, so the
+    // confirm names the live count instead of warning generically. Deleting
+    // the table does not cancel its orders — they stay on the Orders board.
+    body: Number(table.open_orders) > 0
+      ? t("ownerTables.deleteLiveOrdersWarningWithCount", { count: table.open_orders })
+      : `${t("confirmModal.defaultBody")} ${t("ownerTables.deleteLiveOrdersWarning")}`,
     confirmLabel: t("ownerTables.delete"),
     danger: true,
   });

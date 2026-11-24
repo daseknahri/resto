@@ -34,7 +34,8 @@ from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
@@ -1125,13 +1126,43 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     serializer_class = TableLinkSerializer
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
+    # Statuses that count as an "open" order for a table — the non-terminal set
+    # the owner board treats as active (mirrors the hot-poll ACTIVE_STATUSES).
+    _OPEN_STATUSES = [
+        Order.Status.SCHEDULED,
+        Order.Status.PENDING,
+        Order.Status.CONFIRMED,
+        Order.Status.PREPARING,
+        Order.Status.READY,
+        Order.Status.OUT_FOR_DELIVERY,
+    ]
+
     def get_queryset(self):
         # Tables are restaurant-only; a shop tenant sees no table rows (and so cannot
         # retrieve/update/delete them either — perform_create is separately gated).
         from tenancy.capabilities import tenant_capability_enabled
         if not tenant_capability_enabled(getattr(self.request, "tenant", None), "tables"):
             return TableLink.objects.none()
-        return TableLink.objects.all().order_by("position", "label", "id")
+        # POS-UX-42/47: per-table open-order counts so the Tables page can show
+        # live occupancy and the delete confirm can name the count. Orders link
+        # to a table by slug (Order.table_slug, no FK), so the count is a
+        # correlated subquery on the slug; a table with no open orders gets 0.
+        open_orders = (
+            Order.objects.filter(
+                table_slug=OuterRef("slug"), status__in=self._OPEN_STATUSES
+            )
+            .values("table_slug")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+        return (
+            TableLink.objects.annotate(
+                open_orders=Coalesce(
+                    Subquery(open_orders, output_field=IntegerField()), 0,
+                    output_field=IntegerField(),
+                )
+            ).order_by("position", "label", "id")
+        )
 
     def perform_create(self, serializer):
         # Tables are a restaurant-only capability; shops (retail/grocery) don't

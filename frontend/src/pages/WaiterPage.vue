@@ -2,9 +2,11 @@
   <div class="space-y-4">
     <!-- First-run welcome (one-time, dismissible) (RISK FE-2) -->
     <WaiterFirstRunBanner v-if="!waiterFirstRunSeen" @dismiss="dismissWaiterFirstRun" />
-    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2) -->
+    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2).
+         POS-UX-8: waits until the first-run welcome is gone, so the two
+         banners never stack above the work area on first use. -->
     <WaiterInstallBanner
-      v-if="!isStandalone && !installDismissed"
+      v-if="!isStandalone && !installDismissed && waiterFirstRunSeen"
       :can-install="canInstall"
       @install="install"
       @dismiss="installDismissed = true"

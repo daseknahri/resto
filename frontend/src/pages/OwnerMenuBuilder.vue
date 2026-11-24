@@ -99,7 +99,18 @@
             <!-- Format guide + template download -->
             <div class="ui-section-band space-y-2 p-3">
               <p class="text-xs font-semibold text-slate-300">{{ t("ownerMenuBuilder.importFormatTitle") }}</p>
-              <p class="text-[11px] font-mono text-slate-400 break-all">category_name, dish_name, description, price, tags, allergens</p>
+              <!-- POS-UX-30: per-column guide instead of a bare mono column list —
+                   each column says what goes in it, so an owner can fill the
+                   template without guessing (the template download below carries
+                   example rows for the same columns). -->
+              <dl class="space-y-1 text-[11px] leading-relaxed">
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">category_name</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColCategory") }}</dd></div>
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">dish_name</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColDish") }}</dd></div>
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">description</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColDescription") }}</dd></div>
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">price</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColPrice") }}</dd></div>
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">tags</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColTags") }}</dd></div>
+                <div class="flex gap-1.5"><dt class="shrink-0 font-mono text-slate-300">allergens</dt><dd class="text-slate-500">{{ t("ownerMenuBuilder.importColAllergens") }}</dd></div>
+              </dl>
               <ul class="space-y-0.5 text-[11px] text-slate-500 list-disc list-inside">
                 <li>{{ t("ownerMenuBuilder.importHint1") }}</li>
                 <li>{{ t("ownerMenuBuilder.importHint2") }}</li>
