@@ -20,7 +20,8 @@ writer can commit in between. These tests lock that in on a real DB:
 
   Threaded (TransactionTestCase, Postgres only — skips without it, like the
   MFA B tests): a bonus racing a credit_wallet on the same customer still
-  lands both ledger rows with the two serial-ordering balance_after values,
+  lands both ledger rows with one of the two valid serial-ordering
+  balance_after sets ({150, 180} bonus-first, {130, 180} credit-first),
   never a stale one.
 """
 import itertools
@@ -198,8 +199,13 @@ class BonusRaceTests(TransactionTestCase):
     def test_bonus_racing_a_credit_keeps_ledger_consistent(self):
         """Bonus (+50) racing a wallet credit (+30) on the same customer:
         the final balance is 180 and the two ledger rows' balance_after
-        values are exactly the two serial orderings {150, 180} — never a
-        stale pre-race balance."""
+        values are exactly one of the two valid serial orderings — {150, 180}
+        when the bonus commits first, {130, 180} when the credit commits
+        first — never a stale pre-race balance (100). Both legs serialize on
+        the Customer row lock (bonus: F() UPDATE held to commit; credit:
+        select_for_update), so whichever commits second reads the first
+        leg's balance. The credit leg usually wins the race (direct call vs
+        the bonus's DRF round trip), so {130, 180} is the common outcome."""
         results, errors = _run_in_parallel(
             lambda i: self._bonus_post() if i == 0 else credit_wallet(
                 self.customer.id, "30", idempotency_key=f"wg-race-credit-{uuid.uuid4().hex[:12]}"
@@ -215,6 +221,13 @@ class BonusRaceTests(TransactionTestCase):
         topup_after = WalletTransaction.objects.get(
             customer=self.customer, type=WalletTransaction.Type.TOPUP
         ).balance_after
-        self.assertEqual(
-            {bonus_after, topup_after}, {Decimal("150.00"), Decimal("180.00")}
+        # Either serial ordering is a consistent ledger: exactly one leg
+        # commits first (150 for the bonus, 130 for the credit) and the
+        # second reads that balance and lands on 180.
+        self.assertIn(
+            {bonus_after, topup_after},
+            [
+                {Decimal("150.00"), Decimal("180.00")},
+                {Decimal("130.00"), Decimal("180.00")},
+            ],
         )
