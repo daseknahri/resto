@@ -48,6 +48,7 @@ from .throttles import (
     CustomerProfileUpdateThrottle,
     CustomerReservationsThrottle,
     CustomerTopUpIntentThrottle,
+    CustomerTopUpStatusThrottle,
     DeliveryRatingThrottle,
     DeliveryTrackingThrottle,
     EmailUnsubscribeThrottle,
@@ -10237,7 +10238,11 @@ class CustomerTopUpIntentView(APIView):
                     "quantity": 1,
                 }],
                 mode="payment",
-                success_url=f"{site_url}/account?topup=success",
+                # WALLET-2 follow-up: carry the Checkout Session id back so the
+                # returning page can ask the top-up-status endpoint about the
+                # session it just paid for ({CHECKOUT_SESSION_ID} is substituted
+                # by Stripe on redirect).
+                success_url=f"{site_url}/account?topup=success&session_id={{CHECKOUT_SESSION_ID}}",
                 cancel_url=f"{site_url}/account?topup=cancelled",
                 metadata={"customer_id": str(customer.pk), "amount": str(amount)},
                 client_reference_id=str(customer.pk),
@@ -10392,6 +10397,102 @@ class CustomerTopUpWebhookView(APIView):
             )
 
         return Response({"ok": True})
+
+class CustomerTopUpStatusView(APIView):
+    """GET /api/customer/topup/status/?session_id=<stripe_checkout_session_id>.
+
+    WALLET-2 follow-up: the durable server-side answer to "did my top-up
+    land?" The Wave H banner could only re-fetch the balance and hope the
+    webhook had landed; this endpoint says so from the ledger + Stripe:
+
+    * "confirmed" — a TOPUP WalletTransaction with reference
+      "stripe:<session_id>" exists for this customer (the webhook credited
+      it). The ledger is the truth; this answer needs no Stripe call.
+    * "pending" — no credit yet, but the Stripe session is still open (or
+      paid and the webhook hasn't landed). Keep waiting.
+    * "failed" — the Stripe session expired without payment.
+    * "unknown" — no such session, the session belongs to another customer,
+      the PSP is off / unreachable, or Stripe errored. Never a 500: a
+      mistyped id is not a server error, and the response never reveals
+      whether another customer's session exists.
+
+    Auth: customer session only (IsCustomer). The session id is checked
+    against the session's own metadata.customer_id / client_reference_id,
+    so one customer cannot probe another customer's top-ups.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+    throttle_classes = [CustomerTopUpStatusThrottle]
+
+    def get(self, request):
+        customer = request.user
+        session_id = (request.query_params.get("session_id") or "").strip()
+        if not session_id:
+            return Response(
+                {"detail": "session_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .models import WalletTransaction
+
+        # 1. The wallet ledger is the truth: the webhook credits with
+        # reference="stripe:<checkout_session_id>" and type TOPUP.
+        tx = (
+            WalletTransaction.objects.filter(
+                customer=customer,
+                type=WalletTransaction.Type.TOPUP,
+                reference=f"stripe:{session_id}",
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if tx is not None:
+            return Response({
+                "status": "confirmed",
+                "amount": str(tx.amount),
+                "currency": tx.currency or "MAD",
+                "balance": str(customer.wallet_balance),
+                "credited_at": tx.created_at.isoformat(),
+            })
+
+        # 2. No credit yet — ask Stripe what the session is doing. The ledger
+        # check above already answered every credited top-up, so this path
+        # only ever fires for genuinely unconfirmed returns.
+        if not settings.PSP_TOPUP_ENABLED:
+            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+        try:
+            import stripe as _stripe
+            _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
+        except ImportError:
+            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+        try:
+            session = _stripe.checkout.Session.retrieve(session_id)
+        except Exception:
+            payments_logger.warning(
+                "Top-up status: Stripe lookup failed session_id=%s", session_id
+            )
+            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+
+        # Ownership: the session must belong to this customer. Fail closed —
+        # an empty owner is also "unknown", never a leak.
+        meta = session.get("metadata") or {}
+        owner = str(meta.get("customer_id") or session.get("client_reference_id") or "")
+        if owner != str(customer.pk):
+            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+
+        payment_status = session.get("payment_status")
+        if session.get("status") == "expired":
+            return Response({
+                "status": "failed",
+                "payment_status": payment_status,
+                "balance": str(customer.wallet_balance),
+            })
+        return Response({
+            "status": "pending",
+            "payment_status": payment_status,
+            "balance": str(customer.wallet_balance),
+        })
 
 
 # ── C6: self-serve data export + PII erasure ──────────────────────────────────

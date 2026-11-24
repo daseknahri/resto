@@ -677,7 +677,7 @@
               role="status"
             >{{ topUpQueryMsg }}</p>
             <button
-              v-if="route.query.topup === 'success'"
+              v-if="route.query.topup === 'success' && !topUpConfirmed"
               type="button"
               class="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-50"
               :disabled="loadingWallet"
@@ -1394,10 +1394,18 @@ const { reorderFromOrder } = useReorder();
 const router = useRouter();
 const route = useRoute();
 
+// Wave I (WALLET-2 follow-up): set when the status poll confirms the credit
+// from the wallet ledger — the banner then shows the confirmed copy.
+const topUpConfirmed = ref(false);
+const topUpConfirmedAmount = ref('');
+
 // Show a one-time banner when Stripe redirects back with ?topup=success|cancelled
 const topUpQueryMsg = computed(() => {
   const q = route.query.topup;
-  if (q === 'success') return t('customerAccount.topUpSuccessMsg');
+  if (q === 'success') {
+    if (topUpConfirmed.value) return t('customerAccount.topUpConfirmedMsg', { amount: topUpConfirmedAmount.value });
+    return t('customerAccount.topUpSuccessMsg');
+  }
   if (q === 'cancelled') return t('customerAccount.topUpCancelledMsg');
   return '';
 });
@@ -2091,6 +2099,39 @@ const topUpLoading = ref(false);
 // WALLET-2: delayed balance re-check after a Stripe success return.
 const TOP_UP_RECHECK_MS = 6000;
 let topUpRecheckTimer = null;
+
+// Wave I (WALLET-2 follow-up): poll the server-side top-up-status endpoint
+// while the return carries a session_id. The endpoint answers from the wallet
+// ledger, so "confirmed" here means the money is really in the wallet — the
+// banner can say so instead of the "confirming" copy. Polls stop on confirmed
+// / failed / too many attempts; a failed poll never breaks the page (the 6s
+// balance re-check + the manual button stay as fallbacks).
+const TOP_UP_STATUS_POLL_MS = 5000;
+const TOP_UP_STATUS_MAX_POLLS = 12;
+let topUpStatusTimer = null;
+let topUpStatusPolls = 0;
+const checkTopUpStatus = async () => {
+  const sessionId = route.query.session_id;
+  if (!sessionId || topUpConfirmed.value) return;
+  try {
+    const { data } = await api.get(`/customer/topup/status/?session_id=${encodeURIComponent(sessionId)}`);
+    if (data.status === 'confirmed') {
+      topUpConfirmed.value = true;
+      topUpConfirmedAmount.value = data.amount || '';
+      await fetchWallet();
+      return;
+    }
+    if (data.status === 'failed') return;
+    topUpStatusPolls += 1;
+    if (topUpStatusPolls < TOP_UP_STATUS_MAX_POLLS) {
+      topUpStatusTimer = setTimeout(checkTopUpStatus, TOP_UP_STATUS_POLL_MS);
+    }
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
+    // Any other poll failure is silent — the balance re-check + manual
+    // button stay as fallbacks.
+  }
+};
 const topUpError = ref('');
 
 // Server gate is 10-2000 (CustomerTopUpIntentView); mirror it here so an
@@ -2793,11 +2834,15 @@ onMounted(async () => {
   // without the customer having to tap anything.
   if (route.query.topup === 'success') {
     topUpRecheckTimer = setTimeout(() => fetchWallet(), TOP_UP_RECHECK_MS);
+    // Wave I: when Stripe carried the session id back, poll the status
+    // endpoint so the banner can confirm the credit from the ledger.
+    if (route.query.session_id) checkTopUpStatus();
   }
 });
 
 onUnmounted(() => {
   if (topUpRecheckTimer) clearTimeout(topUpRecheckTimer);
+  if (topUpStatusTimer) clearTimeout(topUpStatusTimer);
 });
 </script>
 

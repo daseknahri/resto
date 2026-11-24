@@ -6476,6 +6476,7 @@ customerAccount: {
   topUpSuccessMsg: "Paiement recu — confirmation de votre rechargement en cours. Votre solde sera mis a jour une fois confirme.",
   topUpCancelledMsg: "Paiement annule.",
   topUpCheckNow: "Verifier mon solde",
+  topUpConfirmedMsg: "Rechargement confirme - {amount} MAD ajoutes a votre portefeuille.",
   topUpError: "Impossible de demarrer le paiement. Veuillez reessayer.",
   tierBronze: "Bronze",
   tierSilver: "Argent",

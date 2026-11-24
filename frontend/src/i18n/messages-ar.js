@@ -6415,6 +6415,7 @@ Object.assign(arabicMessages, {
     topUpSuccessMsg: "تم استلام الدفع — جار تأكيد الشحن، وسيظهر في رصيدك بعد التأكيد.",
     topUpCancelledMsg: "\u062a\u0645 \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u062f\u0641\u0639.",
     topUpCheckNow: "تحقق من رصيدك الآن",
+  topUpConfirmedMsg: "تم تأكيد الشحن - تمت إضافة {amount} درهم إلى محفظتك.",
     topUpError: "\u062a\u0639\u0630\u0651\u0631 \u0628\u062f\u0621 \u0627\u0644\u062f\u0641\u0639. \u064a\u064f\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u062c\u062f\u062f\u0627\u064b.",
     tierBronze: "\u0628\u0631\u0648\u0646\u0632\u064a",
     tierSilver: "\u0641\u0636\u064a",

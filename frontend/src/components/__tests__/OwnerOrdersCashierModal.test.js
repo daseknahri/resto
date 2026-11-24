@@ -70,10 +70,13 @@ describe("OwnerOrdersCashierModal", () => {
     expect(w.text()).not.toContain("ownerOrders.settleAndClose");
   });
 
-  it("labels the settle button 'settleAndClose' for a ready order", () => {
+  // Wave G POS-UX-50: one label everywhere — the settle button reads
+  // 'markPaid' for every order status; 'settleAndClose' was removed from all
+  // locales. (This case still expected the old label.)
+  it("labels the settle button 'markPaid' for a ready order", () => {
     const w = mountModal({ order: order({ status: "ready" }) });
-    expect(w.text()).toContain("ownerOrders.settleAndClose");
-    expect(w.text()).not.toContain("ownerOrders.markPaid");
+    expect(w.text()).toContain("ownerOrders.markPaid");
+    expect(w.text()).not.toContain("ownerOrders.settleAndClose");
   });
 
   it("emits close from the cancel button", async () => {

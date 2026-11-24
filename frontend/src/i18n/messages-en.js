@@ -6489,6 +6489,7 @@ customerAccount: {
   topUpSuccessMsg: "Payment received — confirming your top-up. Your balance updates once it's confirmed.",
   topUpCancelledMsg: "Payment cancelled.",
   topUpCheckNow: "Check balance now",
+  topUpConfirmedMsg: "Top-up confirmed - {amount} MAD added to your wallet.",
   topUpError: "Could not start payment. Please try again.",
   tierBronze: "Bronze",
   tierSilver: "Silver",

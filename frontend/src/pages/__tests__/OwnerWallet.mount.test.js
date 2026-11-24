@@ -23,10 +23,12 @@
  *     tenant currency (tenant.resolvedMeta?.plan?.currency, which is null in jsdom →
  *     falls back to 'MAD'). So the loaded assertions check DIGITS, never the
  *     currency-symbol string/placement.
- *   - It imports ONLY { useRoute } from vue-router (no RouterLink, no useRouter, and
- *     no <router-link> in the template). onMounted reads route.query.q, so the mock's
- *     useRoute exposes a mutable `routeState.query` a test can seed before mounting.
- *     useRouter is mocked defensively (unused by the page) for safety parity.
+ *   - It imports { RouterLink, useRoute } from vue-router: RouterLink is the
+ *     Z-report link added by Wave G POS-UX-37 (OwnerWallet.vue:31/:345), so the
+ *     mock exports a RouterLink stub or the SFC fails to evaluate. onMounted
+ *     reads route.query.q, so the mock's useRoute exposes a mutable
+ *     `routeState.query` a test can seed before mounting. useRouter is mocked
+ *     defensively (unused by the page) for safety parity.
  *   - onMounted fires fetchFloat() → GET /owner/wallet/float/, and — only when
  *     route.query.q has length >= 2 — runSearch(q) → GET /owner/customers/. Default
  *     (empty query): just the float GET. Everything resolves empty by default so the
@@ -91,6 +93,11 @@ const routeState = vi.hoisted(() => ({ query: {}, params: {} }));
 vi.mock("vue-router", () => ({
   useRoute: () => ({ params: routeState.params, query: routeState.query }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  // Wave G POS-UX-37: the page imports RouterLink (Z-report link,
+  // OwnerWallet.vue:31/:345) — the mock must export it or the SFC module
+  // fails to evaluate. Stub renders as an <a>; same shape as the repo's
+  // RouterLink stubs (CartEmptyState.test.js).
+  RouterLink: { name: "RouterLink", props: ["to"], template: "<a><slot /></a>" },
 }));
 
 import OwnerWallet from "../OwnerWallet.vue";

@@ -193,6 +193,16 @@ class CustomerTopUpIntentThrottle(_CustomerThrottle):
     scope = "customer_topup_intent"
 
 
+class CustomerTopUpStatusThrottle(_CustomerThrottle):
+    """Rate-limit PSP wallet top-up status polls, per customer (fallback: IP).
+
+    WALLET-2 follow-up: the status endpoint calls Stripe on every unconfirmed
+    poll, so an uncapped caller could burn Stripe API calls. 120/hour allows
+    the banner's poll loop (~12 calls per return) many times over.
+    """
+    scope = "customer_topup_status"
+
+
 class RideEstimateThrottle(_IPThrottle):
     """Rate-limit ride fare estimates — cheap but spammable."""
     scope = "ride_estimate"

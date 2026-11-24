@@ -61,6 +61,9 @@ REST_FRAMEWORK = {
         # P2-2: PSP wallet top-up intent — each call mints a Stripe Checkout
         # Session; cap per customer like wallet_transfer.
         "customer_topup_intent": "20/hour",
+        # WALLET-2 follow-up: status polls retrieve a Stripe Checkout Session
+        # while unconfirmed; 120/hour covers the banner poll loop (~12/return).
+        "customer_topup_status": "120/hour",
         "driver_position": "60/min",
         "driver_status": "30/min",
         "driver_accept": "30/min",
