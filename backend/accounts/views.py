@@ -47,6 +47,7 @@ from .throttles import (
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
     CustomerReservationsThrottle,
+    CustomerTopUpIntentThrottle,
     DeliveryRatingThrottle,
     DeliveryTrackingThrottle,
     EmailUnsubscribeThrottle,
@@ -10184,9 +10185,12 @@ class CustomerTopUpIntentView(APIView):
     # always" contract means the PSP_TOPUP_ENABLED probe below must answer {"enabled":
     # False} BEFORE auth. IsCustomer runs in initial(), ahead of post(), and would 401 an
     # anonymous/expired caller instead. (Same ordering rule as CustomerWalletTransferView.)
+    # P2-2: throttled per customer (IP fallback for anon) so an uncapped caller cannot
+    # mint Stripe Checkout sessions at will. The anonymous flag probe still answers
+    # {"enabled": False} — it is a cheap early return inside post().
     authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    throttle_classes = []
+    throttle_classes = [CustomerTopUpIntentThrottle]
 
     def post(self, request):
         if not settings.PSP_TOPUP_ENABLED:

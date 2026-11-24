@@ -183,6 +183,16 @@ class WalletTransferThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
+class CustomerTopUpIntentThrottle(_CustomerThrottle):
+    """Rate-limit PSP wallet top-up intent creation, per customer (fallback: IP).
+
+    P2-2: the intent endpoint minted a Stripe Checkout Session on every call
+    with no throttle — an uncapped caller could burn Stripe API calls and
+    flood a customer with checkout sessions. 20/hour matches wallet_transfer.
+    """
+    scope = "customer_topup_intent"
+
+
 class RideEstimateThrottle(_IPThrottle):
     """Rate-limit ride fare estimates — cheap but spammable."""
     scope = "ride_estimate"

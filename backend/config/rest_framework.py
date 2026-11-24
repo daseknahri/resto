@@ -58,6 +58,9 @@ REST_FRAMEWORK = {
         "translate": "30/hour",
         "waiter_call": "10/min",
         "wallet_transfer": "20/hour",
+        # P2-2: PSP wallet top-up intent — each call mints a Stripe Checkout
+        # Session; cap per customer like wallet_transfer.
+        "customer_topup_intent": "20/hour",
         "driver_position": "60/min",
         "driver_status": "30/min",
         "driver_accept": "30/min",

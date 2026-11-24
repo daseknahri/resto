@@ -676,6 +676,13 @@
               :class="route.query.topup === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
               role="status"
             >{{ topUpQueryMsg }}</p>
+            <button
+              v-if="route.query.topup === 'success'"
+              type="button"
+              class="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-50"
+              :disabled="loadingWallet"
+              @click="fetchWallet"
+            >{{ t('customerAccount.topUpCheckNow') }}</button>
             <!-- Quick preset amounts -->
             <div class="flex flex-wrap gap-1.5">
               <button
@@ -1352,7 +1359,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAccountOrders from '../components/CustomerAccountOrders.vue';
@@ -1402,7 +1409,11 @@ const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'reviews', '
 // rather than 404-ing a bookmarked/shared link into a blank pane.
 const LEGACY_TAB_REDIRECTS = { loyalty: 'wallet', referral: 'overview' };
 const _requestedTab = LEGACY_TAB_REDIRECTS[route.query.tab] || route.query.tab;
-const activeTab = ref(VALID_TABS.includes(_requestedTab) ? _requestedTab : 'overview');
+// WALLET-1: Stripe returns to /account?topup=success|cancelled with no tab= —
+// land on the Wallet tab so the return banner (which only renders inside the
+// wallet panel) is actually seen. An explicit ?tab= still wins.
+const _topupTab = (route.query.topup === 'success' || route.query.topup === 'cancelled') ? 'wallet' : null;
+const activeTab = ref(VALID_TABS.includes(_requestedTab) ? _requestedTab : (_topupTab || 'overview'));
 const TABS = computed(() => [
   { id: 'overview',      icon: 'home',     label: t('customerAccount.tabOverview')      },
   { id: 'orders',        icon: 'calendar', label: t('customerAccount.tabOrders')        },
@@ -2077,6 +2088,9 @@ const payCodeError = ref(false);
 // ── PSP top-up (Stripe Checkout, shown only when platform flag is on) ─────────
 const topUpAmount = ref(100);
 const topUpLoading = ref(false);
+// WALLET-2: delayed balance re-check after a Stripe success return.
+const TOP_UP_RECHECK_MS = 6000;
+let topUpRecheckTimer = null;
 const topUpError = ref('');
 
 // Server gate is 10-2000 (CustomerTopUpIntentView); mirror it here so an
@@ -2774,6 +2788,16 @@ onMounted(async () => {
     fetchLastRide();
     fetchServiceProfiles();
   }
+  // WALLET-2: Stripe's webhook can land after the first balance fetch — re-check
+  // once a few seconds after a success return so a slow webhook still shows up
+  // without the customer having to tap anything.
+  if (route.query.topup === 'success') {
+    topUpRecheckTimer = setTimeout(() => fetchWallet(), TOP_UP_RECHECK_MS);
+  }
+});
+
+onUnmounted(() => {
+  if (topUpRecheckTimer) clearTimeout(topUpRecheckTimer);
 });
 </script>
 
