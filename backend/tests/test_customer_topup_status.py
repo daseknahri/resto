@@ -575,3 +575,23 @@ class WebhookAttemptRowTests(TestCase):
         self.assertEqual(row.status, CustomerTopUpAttempt.Status.FAILED)
         self.assertFalse(WalletTransaction.objects.filter(
             customer=self.customer, reference="stripe:cs_test_abc").exists())
+
+    @override_settings(**_PSP_WEBHOOK)
+    def test_expired_event_marks_attempt_failed_and_never_credits(self):
+        self._attempt()
+        event = {"id": "evt_k3", "type": "checkout.session.expired",
+                 "data": {"object": {"id": "cs_test_abc", "payment_status": "unpaid",
+                                     "amount_total": 15000,
+                                     "metadata": {"customer_id": str(self.customer.id)}}}}
+        resp = self._post_webhook(event)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data.get("ok"))
+        from accounts.models import CustomerTopUpAttempt
+
+        row = CustomerTopUpAttempt.objects.get(session_id="cs_test_abc")
+        self.assertEqual(row.status, CustomerTopUpAttempt.Status.FAILED)
+        self.assertFalse(WalletTransaction.objects.filter(
+            customer=self.customer, reference="stripe:cs_test_abc").exists())
+        # The attempts list no longer shows it as pending.
+        rows = _get_attempts(self.customer).data["attempts"]
+        self.assertEqual([r["status"] for r in rows], ["failed"])

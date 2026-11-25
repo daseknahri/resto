@@ -4152,6 +4152,7 @@ Object.assign(arabicMessages, {
     itemsTitle: "عناصر الطلب",
     foodReady: "جاهز ~{time}",
     foodReadyIn: "خلال {minutes} د",
+    foodReadyUnknown: "وقت تجهيز الطعام غير محدد بعد",
     offeredToYou: "معروض عليك",
     decline: "تخطّي",
     collectCash: "حصّل النقود عند التسليم",

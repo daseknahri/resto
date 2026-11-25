@@ -58,6 +58,14 @@
         <span>{{ t('driver.foodReady', { time: readyEta.clock }) }}</span>
         <span v-if="readyEta.mins > 0" class="font-normal text-emerald-400/70">· {{ t('driver.foodReadyIn', { minutes: readyEta.mins }) }}</span>
       </div>
+      <div
+        v-else-if="job.status !== 'picked_up'"
+        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/30 bg-slate-800/40 px-2.5 py-1 text-xs font-medium text-slate-400"
+      >
+        <!-- Wave L L-03: no ready ETA yet -- say so visibly instead of silence. -->
+        <span aria-hidden="true">⏱</span>
+        <span>{{ t('driver.foodReadyUnknown') }}</span>
+      </div>
 
       <!-- Cash to collect (COD) vs already paid — the driver must know -->
       <div

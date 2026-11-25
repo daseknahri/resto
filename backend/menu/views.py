@@ -355,6 +355,32 @@ def _placement_eta_minutes(profile, *, auto_accept: bool = False):
     except (TypeError, ValueError):
         return None
 
+def _delivery_job_ready_minutes(order, tenant):
+    """Prep minutes to mirror onto the platform delivery job for an order.
+
+    Wave L L-03 (DEL-9): when the owner confirms without an ETA the driver
+    gets no timing signal at all. Prefer the order's explicit ETA; otherwise
+    fall back to the tenant's configured default prep time (the same value
+    the customer was quoted), then the platform default (20). Once the food
+    is ready the answer is 0 ("now") rather than a fresh prep window. Returns
+    None when no timing applies yet (the order hasn't entered the kitchen
+    flow), which clears the job's ready time exactly as before. Never raises.
+    """
+    minutes = getattr(order, "estimated_ready_minutes", None)
+    if minutes is not None:
+        return minutes
+    status = getattr(order, "status", None)
+    if status in (Order.Status.READY, Order.Status.OUT_FOR_DELIVERY,
+                  Order.Status.COMPLETED):
+        return 0
+    if status in (Order.Status.CONFIRMED, Order.Status.PREPARING):
+        try:
+            profile = getattr(tenant, "profile", None)
+            return getattr(profile, "default_prep_minutes", None) or 20
+        except Exception:
+            return 20
+    return None
+
 
 # ── Advance / scheduled orders ──────────────────────────────────────────────
 # A customer may place a pickup/delivery order now for a future time. It is paid
@@ -9018,7 +9044,8 @@ class OwnerOrderStatusUpdateView(APIView):
                 _ct = getattr(request, "tenant", None)
                 if _ct:
                     set_delivery_job_food_ready(
-                        _ct.id, order.order_number, order.estimated_ready_minutes
+                        _ct.id, order.order_number,
+                        _delivery_job_ready_minutes(order, _ct),
                     )
             except Exception:
                 pass

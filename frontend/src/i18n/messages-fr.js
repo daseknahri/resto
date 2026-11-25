@@ -1682,6 +1682,7 @@ driver: {
   itemsTitle: "Articles de la commande",
   foodReady: "Prete ~{time}",
   foodReadyIn: "dans {minutes} min",
+  foodReadyUnknown: "Heure de preparation non definie",
   offeredToYou: "Proposee en priorite",
   decline: "Passer",
   collectCash: "Encaisser a la livraison",

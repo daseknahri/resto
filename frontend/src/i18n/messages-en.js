@@ -1684,6 +1684,7 @@ driver: {
   itemsTitle: "Order items",
   foodReady: "Food ready ~{time}",
   foodReadyIn: "in {minutes} min",
+  foodReadyUnknown: "Food ready time not set yet",
   offeredToYou: "Offered to you",
   decline: "Pass",
   collectCash: "Collect cash on delivery",

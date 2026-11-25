@@ -19,7 +19,8 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
       window (D G1) is never refunded out from under — the deadline is measured from
       creation, so a freshly accepted cap-exhausted job is given its grace window.
   (c2) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver is still online but idle
-      past the pickup SLA (default 15 min from assignment, see PICKUP_SLA_DEFAULT_MINUTES)
+      past the pickup SLA (default 15 min from the later of assignment and the
+      food-ready time, see PICKUP_SLA_DEFAULT_MINUTES)
       → release back to the pool + re-offer + alert the restaurant. Rule (c) already
       released the stale/offline ones; this catches the online-but-idle driver.
   (f) FAILED jobs still awaiting an owner decision past 60 min → re-alert the restaurant
@@ -229,7 +230,10 @@ class Command(BaseCommand):
 
         Rule (c) already released the stale/offline drivers; this rule catches the
         ONLINE-but-idle driver (accepted, never moved, never picked up). The SLA is
-        measured from assigned_at (there is no at_restaurant_at timestamp, so an
+        measured from the later of assigned_at and food_ready_at (Wave L L-02),
+        so a driver waiting on food that isn't ready yet is never released as
+        idle; with no ready time set it measures from assigned_at as before.
+        There is no at_restaurant_at timestamp, so an
         AT_RESTAURANT job's whole assignment counts). Same redispatch cap as rule (c):
         past MAX_AUTO_REDISPATCH cycles, escalate once instead of looping forever.
         Returns the count released. Never touches a picked-up job.
@@ -258,7 +262,16 @@ class Command(BaseCommand):
                     continue  # advanced/picked up between the scan and the lock
                 # Re-check the SLA under the lock — the driver may have picked up or
                 # been released by rule (c) between the scan and now.
-                if j.assigned_at is None or j.assigned_at > now - sla:
+                # Wave L L-02: the SLA is food-aware. The clock starts at the later
+                # of assignment and the food-ready time, so a driver waiting on food
+                # that is still cooking is never released as "idle". When no ready
+                # time is set the SLA still measures from assignment, so genuinely
+                # idle drivers are still caught.
+                sla_start = j.assigned_at
+                ready_at = j.food_ready_at
+                if ready_at is not None and sla_start is not None and ready_at > sla_start:
+                    sla_start = ready_at
+                if sla_start is None or sla_start > now - sla:
                     continue
                 capped = (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
                 if capped:

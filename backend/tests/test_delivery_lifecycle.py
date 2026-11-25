@@ -156,6 +156,50 @@ class SetFoodReadyTests(SimpleTestCase):
         mock_dj.objects.select_for_update.assert_not_called()
 
 
+class MirrorReadyMinutesTests(SimpleTestCase):
+    """menu.views._delivery_job_ready_minutes (Wave L L-03)."""
+
+    def _order(self, *, eta=None, status="confirmed"):
+        return SimpleNamespace(estimated_ready_minutes=eta, status=status)
+
+    def _tenant(self, *, default_prep=None, profile=True):
+        if not profile:
+            return SimpleNamespace(profile=None)
+        return SimpleNamespace(profile=SimpleNamespace(default_prep_minutes=default_prep))
+
+    def test_explicit_eta_wins(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=25), self._tenant(default_prep=30)), 25)
+
+    def test_confirm_without_eta_uses_tenant_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(default_prep=30)), 30)
+
+    def test_confirm_without_eta_no_profile_uses_platform_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(profile=False)), 20)
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(default_prep=None)), 20)
+
+    def test_preparing_without_eta_uses_tenant_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None, status="preparing"), self._tenant(default_prep=45)), 45)
+
+    def test_ready_without_eta_is_now(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None, status="ready"), self._tenant()), 0)
+
+    def test_pending_without_eta_is_none(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertIsNone(_delivery_job_ready_minutes(
+            self._order(eta=None, status="pending"), self._tenant()))
+
+
 class OwnerDeliveryActionGuardTests(SimpleTestCase):
     def setUp(self):
         from menu.views import OwnerDeliveryJobActionView

@@ -25,7 +25,7 @@ def _noop_cm(*args, **kwargs):
 
 def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
          driver_id=99, redispatch_count=0, assigned_at=None, failed_at=None,
-         owner_alerted_at=None, failure_reason="customer_no_show"):
+         owner_alerted_at=None, failure_reason="customer_no_show", food_ready_at=None):
     j = MagicMock()
     j.id = job_id
     j.pk = job_id
@@ -36,6 +36,7 @@ def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
     j.redispatch_count = redispatch_count
     j.assigned_at = assigned_at
     j.failed_at = failed_at
+    j.food_ready_at = food_ready_at
     j.owner_alerted_at = owner_alerted_at
     j.failure_reason = failure_reason
     j.get_failure_reason_display.return_value = "Customer not reachable / no-show"
@@ -129,6 +130,41 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
 
 
 # ── D G4: FAILED re-alert ─────────────────────────────────────────────────────
+
+    # Wave L L-02: food-aware pickup SLA
+
+    def test_food_not_ready_holds_driver_past_assigned_sla(self):
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=20),
+                   food_ready_at=_NOW + timedelta(minutes=10))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+        alert_owner.assert_not_called()
+        self.assertEqual(locked.status, "assigned")
+
+    def test_food_ready_within_sla_is_not_released(self):
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40),
+                   food_ready_at=_NOW - timedelta(minutes=5))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+
+    def test_food_ready_past_sla_is_released(self):
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40),
+                   food_ready_at=_NOW - timedelta(minutes=20))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 1)
+        self.assertEqual(locked.status, "searching")
+        offer.assert_called_once_with(job.id)
+
+    def test_at_restaurant_driver_waiting_on_food_is_not_released(self):
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=20),
+                   food_ready_at=_NOW + timedelta(minutes=10))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+        self.assertEqual(locked.status, "at_restaurant")
+
 
 class RealertFailedJobsTests(SimpleTestCase):
     def _run(self, *, candidate, claimed=1):

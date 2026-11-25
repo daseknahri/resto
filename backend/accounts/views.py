@@ -10356,6 +10356,25 @@ class CustomerTopUpWebhookView(APIView):
                     _failed_cs.get("id", ""),
                 )
             return Response({"ok": True})
+        # Wave L L-01: an abandoned checkout fires checkout.session.expired and
+        # never fires a credit event, so without this the attempt row stays
+        # "created" (Pending) forever. Mark it failed, same as
+        # async_payment_failed above, so the attempts list stops showing it
+        # as a payment in flight. Intercepted before the generic event-type
+        # filter below.
+        if event_type == "checkout.session.expired":
+            _expired_cs = event.get("data", {}).get("object", {}) or {}
+            try:
+                from .models import CustomerTopUpAttempt
+                CustomerTopUpAttempt.objects.filter(
+                    session_id=_expired_cs.get("id", "")
+                ).update(status=CustomerTopUpAttempt.Status.FAILED)
+            except Exception:
+                payments_logger.warning(
+                    "Top-up attempt row not marked failed session_id=%s",
+                    _expired_cs.get("id", ""),
+                )
+            return Response({"ok": True})
         # Gap-hunt 2026-11-22 (W P1-1): async payment methods (e.g. bank transfer)
         # complete AFTER the session: Stripe fires checkout.session.async_payment_succeeded
         # when the money actually lands. The old code dropped every non-completed event

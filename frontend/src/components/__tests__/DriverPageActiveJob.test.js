@@ -86,6 +86,16 @@ describe("DriverPageActiveJob", () => {
     expect(w.text()).toContain('driver.foodReadyIn:{"minutes":12}');
   });
 
+  it("shows a 'no estimate yet' state when no ready ETA and not picked up", () => {
+    const w = mountHero({ readyEta: null });
+    expect(w.text()).toContain("driver.foodReadyUnknown");
+  });
+
+  it("hides the 'no estimate yet' state after pickup", () => {
+    const w = mountHero({ job: job({ status: "picked_up" }), readyEta: null });
+    expect(w.text()).not.toContain("driver.foodReadyUnknown");
+  });
+
   it("shows collect-cash for COD and prepaid otherwise", () => {
     expect(mountHero({ job: job({ collect_cash: true }) }).text()).toContain("driver.collectCash");
     expect(mountHero({ job: job({ collect_cash: false, order_total: "50.00" }) }).text()).toContain("driver.prepaid:{\"amount\":\"$50.00\"}");
