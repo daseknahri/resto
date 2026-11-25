@@ -16,7 +16,7 @@ All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -40,6 +40,8 @@ def _order(
         order_number=order_number,
         customer_id=customer_id,
         wallet_amount_paid=wallet_amount_paid,
+        # P2-3: the helper persists the zeroed wallet_amount_paid.
+        save=Mock(),
     )
 
 
@@ -137,7 +139,13 @@ class SyncChargedRequestBillsTests(SimpleTestCase):
     """Approved charge requests are applied to their Order bills exactly once."""
 
     def test_claims_and_applies_each_request_once(self):
-        with patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
+        # W P1-4: claim + apply now run inside transaction.atomic() — a real
+        # atomic block cannot commit in a SimpleTestCase (no DB), so neutralise
+        # it here; the atomicity itself is covered by the _RecordingAtomic
+        # tests in test_owner_wallet_charge.py.
+        import contextlib
+        with patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
+             patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
              patch("menu.views.Order.objects") as mock_order:
             mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
             mock_wcr.filter.return_value.update.return_value = 1  # claim succeeds
@@ -146,7 +154,10 @@ class SyncChargedRequestBillsTests(SimpleTestCase):
         mock_order.filter.return_value.update.assert_called_once()
 
     def test_skips_when_claim_lost_to_concurrent_caller(self):
-        with patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
+        # Same atomic neutralisation as the happy-path test above.
+        import contextlib
+        with patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
+             patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
              patch("menu.views.Order.objects") as mock_order:
             mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
             mock_wcr.filter.return_value.update.return_value = 0  # another caller already claimed it

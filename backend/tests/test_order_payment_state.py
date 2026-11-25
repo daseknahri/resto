@@ -7,6 +7,8 @@ Covers:
   - OwnerOrderMarkPaidView — permission gate, marks paid, optional complete
   - S1: the reconciliation guard — an order can't be marked PAID/COMPLETED
     for less than its total once there is a tracked payment to check against.
+  - POS-UX-2: owner "Mark paid" with no tracked payment records a CASH
+    OrderPayment row for the full total (and never a second row on replay).
 
 All unit-level (SimpleTestCase + mocks — no real DB).
 """
@@ -261,3 +263,61 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
         resp = self.view(req, order_id=5)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(order.status, Order.Status.READY)  # unchanged
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.Order.objects")
+    def test_mark_paid_with_no_tracked_payment_creates_cash_ledger_row(self, objects_mock, _gate):
+        """POS-UX-2: a plain cash 'Mark paid' (nothing tracked) records a CASH
+        OrderPayment row for the full total so the order shows in the Z-report
+        cash/wallet split, the per-order ledger, and the by-staff breakdown."""
+        order = self._order(total=Decimal("35.00"), wallet_amount_paid=Decimal("0"))
+        self._set_payment_rows([])
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value = order
+        req = self.factory.post("/api/owner/orders/5/mark-paid/")
+        user = MagicMock(id=9, username="owner1")
+        user.get_full_name.return_value = "Owner One"
+        user.is_authenticated = True
+        req.user = user
+        resp = self.view(req, order_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self._op_objects_mock.create.assert_called_once()
+        kwargs = self._op_objects_mock.create.call_args.kwargs
+        self.assertIs(kwargs["order"], order)
+        self.assertEqual(kwargs["amount"], Decimal("35.00"))
+        self.assertEqual(kwargs["method"], OrderPayment.Method.CASH)
+        self.assertEqual(kwargs["recorded_by_user_id"], 9)
+        self.assertEqual(kwargs["recorded_by_name"], "Owner One")
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.Order.objects")
+    def test_mark_paid_with_tracked_payments_creates_no_ledger_row(self, objects_mock, _gate):
+        """POS-UX-2: when the ledger already covers the bill (e.g. waiter
+        wallet-charge settle), mark-paid must NOT add a second row."""
+        order = self._order(total=Decimal("35.00"), wallet_amount_paid=Decimal("35.00"))
+        self._set_payment_rows([self._payment_row(Decimal("35.00"))])
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value = order
+        req = self.factory.post("/api/owner/orders/5/mark-paid/")
+        req.user = MagicMock(id=9)
+        resp = self.view(req, order_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self._op_objects_mock.create.assert_not_called()
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.Order.objects")
+    def test_mark_paid_twice_creates_only_one_ledger_row(self, objects_mock, _gate):
+        """POS-UX-2: a retried mark-paid (already PAID) returns early without
+        recording a second ledger row."""
+        order = self._order(total=Decimal("35.00"), wallet_amount_paid=Decimal("0"))
+        self._set_payment_rows([])
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value = order
+        req = self.factory.post("/api/owner/orders/5/mark-paid/")
+        req.user = MagicMock(id=9)
+        resp = self.view(req, order_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._op_objects_mock.create.call_count, 1)
+        req2 = self.factory.post("/api/owner/orders/5/mark-paid/")
+        req2.user = MagicMock(id=9)
+        resp2 = self.view(req2, order_id=5)
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp2.data["already_paid"])
+        self.assertEqual(self._op_objects_mock.create.call_count, 1)

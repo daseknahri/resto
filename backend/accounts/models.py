@@ -265,6 +265,43 @@ class WalletTransaction(models.Model):
         return f"{self.get_type_display()} {self.amount} — {self.customer}"
 
 
+class CustomerTopUpAttempt(models.Model):
+    """Local record of a Stripe Checkout Session created for a wallet top-up.
+
+    Wave K F-08: the only copy of the session id used to be the redirect URL,
+    so a closed tab / failed redirect left no trace of the top-up. The intent
+    view creates one row per session; the webhook marks it credited (or
+    failed, for async_payment_failed) and the status endpoint + Wallet tab
+    read it. The ledger stays the truth for money — this row is confirmation
+    UX state only, never a credit source.
+    """
+
+    class Status(models.TextChoices):
+        CREATED = "created", "Created"
+        CREDITED = "credited", "Credited"
+        FAILED = "failed", "Failed"
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="topup_attempts",
+    )
+    session_id = models.CharField(max_length=100, unique=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default="MAD")
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.CREATED
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"top-up {self.session_id} {self.amount} {self.status} — {self.customer}"
+
+
 class DriverPayout(models.Model):
     """Records a settlement paid by the platform to a delivery driver.
 
@@ -986,6 +1023,15 @@ class DeliveryJob(models.Model):
     # decimal_places=4 supports sub-percent rates such as 12.57% or 0.75%.
     delivery_commission_rate_applied = models.DecimalField(
         max_digits=7, decimal_places=4, default=0
+    )
+    # D G2 — COD cash ledger: cash collected by the driver on a cash-on-delivery
+    # handover. Set when the delivery completes (see _complete_delivered_order) to the
+    # order's outstanding at delivery time (total − already collected); 0 for prepaid
+    # orders. This field only RECORDS what was collected — the driver remittance policy
+    # (when/how the cash is handed in) is an owner decision, not built here.
+    cash_collected = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Cash collected by the driver on a cash-on-delivery handover (0 for prepaid orders). The COD ledger — see _complete_delivered_order.",
     )
     # Snapshot of the tenant's business_type at job creation. Avoids a cross-schema
     # Profile query every time a single-job endpoint serializes the job.

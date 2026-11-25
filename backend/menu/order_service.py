@@ -398,6 +398,31 @@ def deplete_ingredients(order_items_data, dishes_map):
         Ingredient.objects.filter(pk=_ing_pk).update(stock_quantity=F("stock_quantity") - _delta)
 
 
+def restock_ingredients(dish_qty_map):
+    """Return recipe-linked ingredient stock for cancelled/voided items (gap-hunt
+    2026-11-22, R P1-1). Mirror of deplete_ingredients with the sign flipped: for
+    every ``RecipeLine`` on the given dishes, increments ``Ingredient.stock_quantity``
+    by ``recipe_qty x ordered_qty`` via an ``F()`` update. MUST run inside the caller's
+    atomic block. Only TOP-LEVEL dishes belong here -- combo components' ingredients
+    were never depleted at placement (deplete_ingredients sees only order_items_data),
+    so component pks must NOT be passed in, or stock would be over-credited.
+    """
+    from django.db.models import F  # function-local
+    from menu.models import Ingredient, RecipeLine
+
+    if not dish_qty_map:
+        return
+    _recipe_lines = RecipeLine.objects.filter(
+        dish_id__in=list(dish_qty_map.keys())
+    ).only("dish_id", "ingredient_id", "quantity")
+    _ing_restock = {}
+    for _rl in _recipe_lines:
+        _delta = _rl.quantity * dish_qty_map[_rl.dish_id]
+        _ing_restock[_rl.ingredient_id] = _ing_restock.get(_rl.ingredient_id, Decimal("0")) + _delta
+    for _ing_pk, _delta in _ing_restock.items():
+        Ingredient.objects.filter(pk=_ing_pk).update(stock_quantity=F("stock_quantity") + _delta)
+
+
 def resolve_order_branch(*, table_slug=None, branch_slug=None):
     """Multi-branch (Phase 3): decide which Branch a new order belongs to.
 

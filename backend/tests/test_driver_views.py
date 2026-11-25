@@ -17,9 +17,11 @@ rather than by making Customer.objects.get raise DoesNotExist.
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
 from contextlib import contextmanager
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -110,6 +112,8 @@ def _make_job(pk=1, status_val="assigned", driver=None, tenant_id=1, order_numbe
     j.code_locked_until = None
     j.failure_reason = ""
     j.failure_note = ""
+    j.offered_to_id = None
+    j.offer_expires_at = None
     return j
 
 
@@ -303,12 +307,18 @@ class DriverJobListViewTests(SimpleTestCase):
             # active jobs query
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
-            # pending jobs query
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first, then the rest. No live exclusive offer for this driver here.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.select_related.return_value.__getitem__.return_value = [job_pending]
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
                 if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
                     return pending_qs
                 return active_qs
 
@@ -325,6 +335,49 @@ class DriverJobListViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("active", resp.data)
         self.assertIn("pending", resp.data)
+        self.assertEqual([d["id"] for d in resp.data["pending"]], [2])
+
+    def test_exclusive_offer_is_listed_first(self):
+        """D G13: a live exclusive offer to this driver is listed BEFORE the open-pool
+        jobs — it must never fall off the [:20] cap under default ordering."""
+        customer = _make_customer()
+        from datetime import timedelta as _td
+        from django.utils import timezone as _tz
+        job_exclusive = _make_job(pk=9, status_val="searching", driver=None)
+        job_exclusive.offered_to_id = customer.id
+        job_exclusive.offer_expires_at = _tz.now() + _td(minutes=1)
+        pool_jobs = [
+            _make_job(pk=100 + i, status_val="searching", driver=None) for i in range(3)
+        ]
+
+        with patch("accounts.models.DeliveryJob") as mock_dj:
+            active_qs = MagicMock()
+            active_qs.select_related.return_value = []
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = [job_exclusive]
+            rest_qs = MagicMock()
+            (rest_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = pool_jobs
+
+            def _filter(**kwargs):
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return rest_qs
+                return active_qs
+
+            mock_dj.objects.filter.side_effect = _filter
+            mock_dj.Status.ASSIGNED = "assigned"
+            mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+            mock_dj.Status.PICKED_UP = "picked_up"
+            mock_dj.Status.SEARCHING = "searching"
+
+            with patch("accounts.views._serialize_delivery_job", side_effect=lambda j, **kw: {"id": j.id}):
+                req = self._get(customer=customer)
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual([d["id"] for d in resp.data["pending"]], [9, 100, 101, 102])
 
 
 # ── DriverDeliveriesView ──────────────────────────────────────────────────────
@@ -669,6 +722,102 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
 
+    def _wire_accept_job(self, mock_dj, mock_cust_objs, job):
+        """Wire the DeliveryJob/Customer mocks so the accept view reaches the job."""
+        mock_dj.Status.ASSIGNED = "assigned"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.objects.filter.return_value.exists.return_value = False  # no active job
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+
+    def _fresh_customer(self):
+        customer = _make_customer(is_driver_online=True)
+        customer.driver_position_updated_at = timezone.now()
+        customer.driver_lat = 33.5731
+        customer.driver_lng = -7.5898
+        return customer
+
+    def _stale_customer(self):
+        customer = _make_customer(is_driver_online=True)
+        customer.driver_position_updated_at = timezone.now() - timedelta(hours=2)
+        customer.driver_lat = 33.5731
+        customer.driver_lng = -7.5898
+        return customer
+
+    def _pool_job(self):
+        job = _make_job(status_val="searching")
+        job.is_open_pool = True
+        job.offered_to_id = None
+        job.offer_expires_at = None
+        return job
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_stale_gps_cannot_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver whose GPS is hours stale cannot grab a pool job."""
+        customer = self._stale_customer()
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "stale_gps")
+        self.assertIsNone(job.driver)
+        job.save.assert_not_called()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_fresh_gps_can_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver with a fresh GPS fix claims from the pool as before."""
+        customer = self._fresh_customer()
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(job.driver, customer)
+        self.assertEqual(job.status, "assigned")
+        job.save.assert_called_once()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_no_gps_cannot_claim_from_open_pool(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: a driver who never shared a position cannot claim from the pool."""
+        customer = _make_customer(is_driver_online=True)  # no position fields set
+        job = self._pool_job()
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "stale_gps")
+        job.save.assert_not_called()
+
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_live_offeree_exempt_from_gps_gate(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser):
+        """DEL-7: the driver holding a live exclusive offer was ranked on a fresh
+        fix <=60s ago, so the pool gate must not block their claim even if the
+        principal's position has since gone stale."""
+        customer = self._stale_customer()
+        job = _make_job(status_val="searching")
+        job.is_open_pool = False
+        job.offered_to_id = customer.id
+        job.offer_expires_at = timezone.now() + timedelta(seconds=30)
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(1, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIs(job.driver, customer)
+
 # ── DriverJobStatusUpdateView ─────────────────────────────────────────────────
 
 class DriverJobStatusUpdateViewTests(SimpleTestCase):
@@ -1011,15 +1160,20 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
 
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first (none live here), then the rest.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
-                lambda s, sl: [job_pending]
-            )
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
-                if not kwargs.get("driver__isnull"):
-                    return active_qs
-                return pending_qs
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return pending_qs
+                return active_qs
 
             mock_dj.objects.filter.side_effect = _filter
             mock_dj.Status.ASSIGNED = "assigned"
@@ -1058,15 +1212,20 @@ class BusinessTypeInJobPayloadsTests(SimpleTestCase):
 
             active_qs = MagicMock()
             active_qs.select_related.return_value = [job_active]
+            # D G13: the pending fetch is now two queries — live exclusive offers
+            # first (none live here), then the rest.
+            exclusive_qs = MagicMock()
+            exclusive_qs.select_related.return_value.__getitem__.return_value = []
             pending_qs = MagicMock()
-            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
-                lambda s, sl: [job_pending]
-            )
+            (pending_qs.filter.return_value.exclude.return_value
+                .select_related.return_value.__getitem__.return_value) = [job_pending]
 
             def _filter(**kwargs):
-                if not kwargs.get("driver__isnull"):
-                    return active_qs
-                return pending_qs
+                if kwargs.get("driver__isnull"):
+                    if "offered_to" in kwargs:
+                        return exclusive_qs
+                    return pending_qs
+                return active_qs
 
             mock_dj.objects.filter.side_effect = _filter
             mock_dj.Status.ASSIGNED = "assigned"

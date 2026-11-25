@@ -28,6 +28,7 @@
           <span v-else>{{ fmtBalance(floatBalance) }}</span>
         </p>
         <p class="mt-1 text-xs text-slate-400">{{ t('ownerWallet.floatSubtitle') }}</p>
+        <RouterLink :to="{ name: 'owner-z-report' }" class="mt-1.5 inline-block text-xs font-semibold text-slate-300 underline hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400/40 rounded">{{ t('ownerWallet.takingsLink') }}</RouterLink>
       </div>
       <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10">
         <AppIcon name="wallet" class="h-6 w-6 text-emerald-400" aria-hidden="true" />
@@ -341,7 +342,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';

@@ -155,6 +155,11 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _patcher.start()
         self.addCleanup(_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None, user=None):
         body = body or {"items": [{"dish_slug": "burger", "qty": 1}]}
@@ -181,6 +186,24 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         req.tenant = _tenant()
         resp = self.view(req, order_id=10)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any work."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
+
+    @patch("menu.views.Order.objects")
+    def test_owner_is_exempt_from_clock_in(self, om):
+        """R P1-2: owners do not clock in — no open shift needed."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        om.prefetch_related.return_value.filter.return_value.first.return_value = None
+        resp = self._post(user=_user(role=User.Roles.TENANT_OWNER))
+        # Past the clock-in gate: the order lookup finds nothing.
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "not_found")
+        self._shift_mock.objects.filter.assert_not_called()
 
     # ── Guards ────────────────────────────────────────────────────────────────
 
@@ -461,6 +484,11 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         self._orderitem_mock = _oi_patcher.start()
         self.addCleanup(_oi_patcher.stop)
         self._orderitem_mock.objects.filter.return_value.update.return_value = 1
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, item_id=901, body=None, user=None):
         body = body or {}
@@ -481,6 +509,13 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         om.prefetch_related.return_value.filter.return_value.first.return_value = None
         resp = self._post()
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any work."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
 
     @patch("menu.views.Order.objects")
     def test_item_not_found_404(self, om):
@@ -785,6 +820,11 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
         self._orderitem_mock = _oi_patcher.start()
         self.addCleanup(_oi_patcher.stop)
         self._orderitem_mock.objects.filter.return_value.update.return_value = 1
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, item_id=901, body=None, user=None):
         body = body if body is not None else {"reason": "Manager goodwill"}
@@ -805,6 +845,14 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
         resp = self._post()
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "forbidden")
+
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any work."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
+
 
     # ── Guards ────────────────────────────────────────────────────────────────
 

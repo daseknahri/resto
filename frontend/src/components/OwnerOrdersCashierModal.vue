@@ -36,7 +36,7 @@
               @click="emit('settle', order)"
             >
               <span v-if="settling" class="inline-block animate-spin h-4 w-4 border-2 border-white/60 border-t-white rounded-full mr-2 align-middle" aria-hidden="true" />
-              {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}
+              {{ t('ownerOrders.markPaid') }}
             </button>
           </div>
         </div>

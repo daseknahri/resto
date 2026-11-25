@@ -106,12 +106,26 @@ class PayWalletTests(SimpleTestCase):
         # OPS-5g: idempotency key tied to the order AND tenant-schema-namespaced (the
         # shared-schema ledger makes the key a GLOBAL namespace, so a bare order_number
         # could collide cross-tenant). A double-tap still never double-charges.
+        # W P2-8: the key is ALSO bound to the outstanding amount (45.00 here).
         from django.db import connection as _c
         _key = debit.call_args.kwargs.get("idempotency_key")
-        self.assertEqual(_key, f"order-pay-{_c.schema_name}-ORD-1")
+        self.assertEqual(_key, f"order-pay-{_c.schema_name}-ORD-1-45.00")
         # Bill bumped and the order settled.
         self.assertEqual(order.wallet_amount_paid, Decimal("45.00"))
         order.mark_paid.assert_called_once()
+
+    @patch("accounts.wallet_service.debit_wallet")
+    @patch("menu.views.Order.objects")
+    def test_cancelled_order_is_409_and_never_debited(self, om, debit):
+        """Gap-hunt 2026-11-22 (W P1-6): a CANCELLED order cannot be paid from the
+        wallet -- the old code checked only payment_status and would flip it PAID.
+        """
+        om.filter.return_value.first.return_value = _order(order_status="cancelled")
+        om.select_for_update.return_value = om
+        resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data["code"], "order_cancelled")
+        debit.assert_not_called()
 
     @patch("accounts.models.Customer")
     @patch("accounts.wallet_service.debit_wallet")

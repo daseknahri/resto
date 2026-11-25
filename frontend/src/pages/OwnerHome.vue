@@ -41,6 +41,7 @@
             class="ui-chip ui-press inline-flex items-center gap-1 transition-colors"
             :class="focusMode ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             :aria-pressed="focusMode"
+            :title="t('ownerHome.focusHint')"
             @click="toggleFocusMode"
           >
             <span aria-hidden="true">🎯</span>
@@ -262,6 +263,7 @@
               :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
             >{{ todayStats.revenueRaw >= yesterdayStats.revenue ? '+' : '' }}{{ Math.round((todayStats.revenueRaw - yesterdayStats.revenue) / yesterdayStats.revenue * 100) }}%</span>
           </div>
+          <p v-if="todayStats.cashLabel !== null" class="text-[10px] tabular-nums text-slate-400">{{ t("ownerHome.todayCashCollected") }} {{ todayStats.cashLabel }} · {{ t("ownerHome.todayWalletCollected") }} {{ todayStats.walletLabel }}</p>
         </div>
 
         <!-- Avg ticket today -->
@@ -301,7 +303,7 @@
           <p class="ui-stat-label">{{ t('ownerHome.marketplaceTitle') }}</p>
           <span class="text-[11px] text-slate-500">{{ t('ownerHome.marketplacePeriod') }}</span>
         </div>
-        <div class="grid grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <p class="text-[11px] text-slate-500">{{ t('ownerHome.marketplaceOrders') }}</p>
             <p class="text-base font-semibold tabular-nums text-slate-100">{{ marketplaceStats.order_count }}</p>
@@ -488,9 +490,9 @@
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
         </button>
-        <!-- High-frequency daily destination kept here: Availability. Kitchen, Tables & QR,
-             and Z-Report are reachable via OwnerLayout nav/dock/settings, so they are not
-             duplicated in this quick-actions grid. -->
+        <!-- High-frequency daily destinations kept here: Availability, Kitchen,
+             Tables & QR, and Z-Report — the three taps an owner reaches for
+             every shift. -->
         <button
           class="ui-btn-outline ui-press col-span-2 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
           @click="openAvailabilityPanel"
@@ -498,6 +500,18 @@
           <AppIcon name="eye" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("ownerHome.dishAvailability") }}
         </button>
+        <RouterLink :to="{ name: 'owner-kitchen' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="food" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.kitchen") }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'owner-tables' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="table" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("ownerLayout.tablesQr") }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'owner-z-report' }" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
+          <AppIcon name="chart" class="owner-home-btn-icon" aria-hidden="true" />
+          {{ t("zReport.navLabel") }}
+        </RouterLink>
       </div>
     </article>
 
@@ -536,6 +550,7 @@
           </span>
           <p class="flex-1 text-sm font-semibold text-amber-200">{{ t('ownerHome.newOrderArrived') }}</p>
           <RouterLink :to="{ name: 'owner-orders' }" class="text-xs font-semibold text-amber-300 underline hover:no-underline">{{ t('ownerHome.viewAllOrders') }}</RouterLink>
+          <button type="button" class="shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold text-amber-300/80 hover:bg-amber-500/20 hover:text-amber-200" :aria-label="t('common.dismiss')" @click="newOrderFlash = false">✕</button>
         </div>
       </Transition>
 
@@ -941,14 +956,29 @@ const todayStats = computed(() => {
   const currency = revenueSummary.value?.currency || "MAD";
   let revenueLabel;
   try {
-    revenueLabel = formatNumber(revenue, { style: "currency", currency, notation: "compact", maximumFractionDigits: 0 });
+    // POS-UX-10 (Wave D): exact figure, not compact — "MAD 1.2K" hid the real
+    // total from an owner counting the day's money. POS-UX-49 checked here too:
+    // the cashier-modal total was already exact (no compact notation there),
+    // so only this Home figure changes.
+    revenueLabel = formatNumber(revenue, { style: "currency", currency, maximumFractionDigits: 2 });
   } catch {
-    revenueLabel = `${currency} ${Math.floor(revenue)}`;
+    revenueLabel = `${currency} ${revenue.toFixed(2)}`;
   }
+  // POS-UX-11 (Wave C): cash/wallet collected today, from the dashboard
+  // aggregate's today_payment_split (PAID orders only, paid today). Exact
+  // figures — like the revenue total above since POS-UX-10 (Wave D).
+  const split = revenueSummary.value?.today_payment_split || null;
+  const fmtSplit = (val) => {
+    const n = Number(val) || 0;
+    try { return formatNumber(n, { style: "currency", currency, maximumFractionDigits: 2 }); }
+    catch { return `${currency} ${n.toFixed(2)}`; }
+  };
   return {
     count,
     revenue: revenueLabel,
     revenueRaw: revenue,
+    cashLabel: split ? fmtSplit(split.cash) : null,
+    walletLabel: split ? fmtSplit(split.wallet) : null,
     pending: order.orders.filter((o) => o.status === "pending").length,
   };
 });
@@ -1010,7 +1040,7 @@ const watchHomeOrders = (orders) => {
   if (hasNew) {
     newOrderFlash.value = true;
     if (newOrderFlashTimer) clearTimeout(newOrderFlashTimer);
-    newOrderFlashTimer = setTimeout(() => { newOrderFlash.value = false; }, 6000);
+    newOrderFlashTimer = setTimeout(() => { newOrderFlash.value = false; }, 15000);
   }
 };
 watch(() => order.orders, watchHomeOrders, { deep: false });

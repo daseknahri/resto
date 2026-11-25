@@ -15,7 +15,21 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
       Profile.delivery_auto_refund_minutes deadline (never assigned, OR abandoned after the
       re-dispatch cap) → auto-refund & cancel, reusing the owner's manual idempotent
       "refund & cancel" path. 0 = disabled. Prepaid delivery money is otherwise stranded
-      indefinitely when no driver ever completes.
+      indefinitely when no driver ever completes. A driver assigned within the grace
+      window (D G1) is never refunded out from under — the deadline is measured from
+      creation, so a freshly accepted cap-exhausted job is given its grace window.
+  (c2) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver is still online but idle
+      past the pickup SLA (default 15 min from the later of assignment and the
+      food-ready time, see PICKUP_SLA_DEFAULT_MINUTES)
+      → release back to the pool + re-offer + alert the restaurant. Rule (c) already
+      released the stale/offline ones; this catches the online-but-idle driver.
+  (f) FAILED jobs still awaiting an owner decision past 60 min → re-alert the restaurant
+      (throttled to once per hour per job via owner_alerted_at). No money moves here and
+      no auto-refund: the failed-job auto-refund timeout is an owner decision, not yet set.
+  (g) Delivery orders (platform delivery on, not SCHEDULED/CANCELLED/COMPLETED) with no
+      DeliveryJob past a short grace (5 min) → create the missing job + start dispatch.
+      Covers orders whose job creation failed at checkout (those sites now log instead
+      of swallowing the error).
 Picked-up jobs are NEVER auto-touched or auto-refunded (the food is with the driver — that
 stays a `failed` case + owner decision).
 """
@@ -33,6 +47,25 @@ OWNER_ALERT_AFTER = timedelta(minutes=10)
 STALE_DRIVER_AFTER = timedelta(minutes=10)
 MAX_AUTO_REDISPATCH = 3  # match menu.views MAX_REDISPATCH — then escalate, don't loop forever
 _PUSH_THROTTLE_SECONDS = 170  # ~ one sweep interval, so re-push fires at most once per run
+# D G5 pickup SLA — CONFIGURABLE DEFAULT, 15 min proposed. The owner has NOT confirmed
+# this value yet: treat it as a proposal, not policy. Override with the
+# DELIVERY_PICKUP_SLA_MINUTES Django setting (minutes). See _pickup_sla().
+PICKUP_SLA_DEFAULT_MINUTES = 15
+# D G4: a FAILED job re-alerts the owner once per hour once it is this old.
+FAILED_REALERT_AFTER = timedelta(minutes=60)
+# D G3 backfill grace: a delivery order this old with no job is stranded, not just slow.
+JOB_BACKFILL_GRACE = timedelta(minutes=5)
+
+
+def _pickup_sla() -> timedelta:
+    """Pickup SLA (D G5) as a timedelta, from settings or the proposed default."""
+    from django.conf import settings
+    try:
+        minutes = int(getattr(settings, "DELIVERY_PICKUP_SLA_MINUTES", PICKUP_SLA_DEFAULT_MINUTES)
+                      or PICKUP_SLA_DEFAULT_MINUTES)
+    except (TypeError, ValueError):
+        minutes = PICKUP_SLA_DEFAULT_MINUTES
+    return timedelta(minutes=max(1, minutes))
 
 
 class Command(BaseCommand):
@@ -163,9 +196,20 @@ class Command(BaseCommand):
                         f"Order #{job.order_number}'s driver went offline; finding another.")
             released += 1
 
+        # (c2) Pickup SLA: release online-but-idle assigned drivers (D G5). Extracted
+        #     so the release logic is unit-testable.
+        sla_released = self._release_idle_assigned_jobs(now, alert_owner)
+
+        # (f) FAILED-job re-alert (D G4): escalate stuck failed jobs hourly. Extracted
+        #     so the throttle logic is unit-testable.
+        failed_realerted = self._realert_failed_jobs(now, alert_owner)
+
         # (d) Bounded auto-refund for stuck PRE-PICKUP jobs (money safety net). See
         #     _auto_refund_stuck_jobs — extracted so its money logic is unit-testable.
         refunded = self._auto_refund_stuck_jobs(now, tenant_info, alert_owner)
+
+        # (g) Backfill jobs for delivery orders whose checkout job creation failed (D G3).
+        jobs_backfilled = self._backfill_missing_jobs(now)
 
         # (e) Expire stale PENDING cash-out requests (lazily expired on confirm, but a code
         #     that's never shown would otherwise linger as 'pending').
@@ -176,8 +220,209 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"sweep_delivery_jobs: repushed={repushed} alerted={alerted} "
-            f"released={released} refunded={refunded} cashouts_expired={cashouts}"
+            f"released={released} sla_released={sla_released} "
+            f"failed_realerted={failed_realerted} refunded={refunded} "
+            f"jobs_backfilled={jobs_backfilled} cashouts_expired={cashouts}"
         ))
+
+    def _release_idle_assigned_jobs(self, now, alert_owner) -> int:
+        """Release ASSIGNED/AT_RESTAURANT jobs whose driver is idle past the pickup SLA.
+
+        Rule (c) already released the stale/offline drivers; this rule catches the
+        ONLINE-but-idle driver (accepted, never moved, never picked up). The SLA is
+        measured from the later of assigned_at and food_ready_at (Wave L L-02),
+        so a driver waiting on food that isn't ready yet is never released as
+        idle; with no ready time set it measures from assigned_at as before.
+        There is no at_restaurant_at timestamp, so an
+        AT_RESTAURANT job's whole assignment counts). Same redispatch cap as rule (c):
+        past MAX_AUTO_REDISPATCH cycles, escalate once instead of looping forever.
+        Returns the count released. Never touches a picked-up job.
+        """
+        from accounts.dispatch import offer_to_next_driver
+        from accounts.models import DeliveryJob
+
+        sla = _pickup_sla()
+        released = 0
+        candidates = DeliveryJob.objects.filter(
+            status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+            picked_up_at__isnull=True, assigned_at__lte=now - sla,
+        ).select_related("driver")
+        for job in candidates:
+            with transaction.atomic():
+                j = (
+                    DeliveryJob.objects.select_for_update()
+                    .filter(
+                        pk=job.id,
+                        status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+                        picked_up_at__isnull=True,
+                    )
+                    .first()
+                )
+                if j is None:
+                    continue  # advanced/picked up between the scan and the lock
+                # Re-check the SLA under the lock — the driver may have picked up or
+                # been released by rule (c) between the scan and now.
+                # Wave L L-02: the SLA is food-aware. The clock starts at the later
+                # of assignment and the food-ready time, so a driver waiting on food
+                # that is still cooking is never released as "idle". When no ready
+                # time is set the SLA still measures from assignment, so genuinely
+                # idle drivers are still caught.
+                sla_start = j.assigned_at
+                ready_at = j.food_ready_at
+                if ready_at is not None and sla_start is not None and ready_at > sla_start:
+                    sla_start = ready_at
+                if sla_start is None or sla_start > now - sla:
+                    continue
+                capped = (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
+                if capped:
+                    if j.owner_alerted_at is None:
+                        j.owner_alerted_at = now
+                        j.save(update_fields=["owner_alerted_at"])
+                        alert_owner(job.tenant_id, job.order_number,
+                                    "Delivery needs manual attention",
+                                    f"Order #{job.order_number}'s driver stayed idle past the pickup "
+                                    f"SLA after {MAX_AUTO_REDISPATCH} tries — please reassign or refund "
+                                    f"from Orders.")
+                    continue
+                j.driver = None
+                j.status = DeliveryJob.Status.SEARCHING
+                j.assigned_at = None
+                j.owner_alerted_at = None
+                j.redispatch_count = (j.redispatch_count or 0) + 1
+                # Fresh ranked-offer cascade for the re-opened job (any driver eligible again).
+                j.offered_to = None
+                j.offer_expires_at = None
+                j.declined_by = []
+                j.offer_round = 0
+                j.is_open_pool = False
+                j.save(update_fields=[
+                    "driver", "status", "assigned_at", "owner_alerted_at", "redispatch_count",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                ])
+            offer_to_next_driver(job.id)
+            alert_owner(job.tenant_id, job.order_number, "Driver idle — re-assigning",
+                        f"Order #{job.order_number}'s driver was idle past the pickup SLA; "
+                        f"finding another.")
+            released += 1
+        return released
+
+    def _realert_failed_jobs(self, now, alert_owner) -> int:
+        """Re-alert the owner for FAILED jobs still awaiting a decision (D G4).
+
+        _on_job_failed already alerted once at failure time; this is the hourly
+        escalation so a prepaid order's failure can't strand silently forever. Throttled
+        to once per FAILED_REALERT_AFTER per job via an atomic owner_alerted_at claim
+        (only the caller that flips the timestamp alerts). Jobs already refunded +
+        cancelled (resolution REFUNDED_CANCELLED) are done and never re-alerted. No money
+        moves and no auto-refund here — the failed-job auto-refund timeout is an owner
+        decision, not yet set. Returns the count re-alerted.
+        """
+        from django.db.models import Q
+        from accounts.models import DeliveryJob
+
+        realerted = 0
+        for job in DeliveryJob.objects.filter(
+            status=DeliveryJob.Status.FAILED,
+            failed_at__lte=now - FAILED_REALERT_AFTER,
+        ).exclude(resolution=DeliveryJob.Resolution.REFUNDED_CANCELLED):
+            claimed = DeliveryJob.objects.filter(
+                pk=job.id, status=DeliveryJob.Status.FAILED,
+            ).filter(
+                Q(owner_alerted_at__isnull=True)
+                | Q(owner_alerted_at__lte=now - FAILED_REALERT_AFTER)
+            ).update(owner_alerted_at=now)
+            if not claimed:
+                continue  # alerted within the last hour (or resolved) — skip
+            try:
+                _reason = job.get_failure_reason_display()
+            except Exception:
+                _reason = job.failure_reason or "failed"
+            alert_owner(job.tenant_id, job.order_number, "Delivery still failed",
+                        f"Order #{job.order_number} failed ({_reason}) and still needs a "
+                        f"decision — re-dispatch or refund from Orders.")
+            realerted += 1
+        return realerted
+
+    def _backfill_missing_jobs(self, now) -> int:
+        """Create DeliveryJobs for delivery orders whose job creation failed (D G3).
+
+        A delivery order (platform delivery on, live status) older than JOB_BACKFILL_GRACE
+        with no DeliveryJob is stranded: the customer paid, the kitchen sees the order,
+        but no driver is ever dispatched. The checkout creation sites now log their
+        failures instead of swallowing them; this pass recreates the job + starts
+        dispatch. Scheduled orders are excluded — release_scheduled_orders creates their
+        job at release time, and creating one here would duplicate it. Idempotent: the
+        unique (tenant_id, order_number) on DeliveryJob makes get_or_create safe against
+        a racing checkout or a re-run. Returns the count created.
+        """
+        from django_tenants.utils import schema_context
+        from accounts.dispatch import start_dispatch
+        from accounts.models import DeliveryJob
+        from tenancy.delivery_pricing import split_delivery_fee as _split_fee
+        from tenancy.models import Tenant
+
+        backfilled = 0
+        tenants = Tenant.objects.filter(
+            is_active=True,
+            lifecycle_status=Tenant.LifecycleStatus.ACTIVE,
+        ).exclude(schema_name="public").select_related("profile")
+        for tenant in tenants:
+            profile = getattr(tenant, "profile", None)
+            if profile is None or not getattr(profile, "platform_delivery_enabled", False):
+                continue
+            schema = getattr(tenant, "schema_name", "")
+            if not schema:
+                continue
+            try:
+                job_numbers = set(
+                    DeliveryJob.objects.filter(tenant_id=tenant.id)
+                    .values_list("order_number", flat=True)
+                )
+                with schema_context(schema):
+                    from menu.models import Order
+                    orders = list(
+                        Order.objects.filter(
+                            fulfillment_type=Order.FulfillmentType.DELIVERY,
+                            created_at__lte=now - JOB_BACKFILL_GRACE,
+                        ).exclude(status__in=[
+                            Order.Status.SCHEDULED,
+                            Order.Status.CANCELLED,
+                            Order.Status.COMPLETED,
+                        ]).exclude(order_number__in=job_numbers)
+                    )
+                    for order in orders:
+                        _dsplit = _split_fee(profile, order.delivery_fee)
+                        job, created = DeliveryJob.objects.get_or_create(
+                            tenant_id=tenant.id,
+                            order_number=order.order_number,
+                            defaults={
+                                "status": DeliveryJob.Status.SEARCHING,
+                                "pickup_address": (getattr(profile, "address", "") or "")[:200],
+                                "pickup_lat": getattr(profile, "lat", None),
+                                "pickup_lng": getattr(profile, "lng", None),
+                                "delivery_address": (order.delivery_address or "")[:200],
+                                "delivery_lat": order.delivery_lat,
+                                "delivery_lng": order.delivery_lng,
+                                "delivery_fee": order.delivery_fee,
+                                "driver_payout": _dsplit["driver_payout"],
+                                "platform_commission": _dsplit["platform_commission"],
+                                "delivery_commission_rate_applied": _dsplit["commission_pct"],
+                                "business_type": getattr(profile, "business_type", "restaurant") or "restaurant",
+                            },
+                        )
+                        if not created:
+                            continue  # a racing checkout created it first
+                        try:
+                            start_dispatch(job)
+                        except Exception:
+                            logger.exception(
+                                "backfill: dispatch failed for %s", order.order_number
+                            )
+                        backfilled += 1
+            except Exception:
+                logger.exception("backfill: failed for tenant %s", tenant.id)
+                continue
+        return backfilled
 
     def _auto_refund_stuck_jobs(self, now, tenant_info, alert_owner) -> int:
         """Auto-refund & cancel delivery jobs that are stuck PRE-PICKUP and provably
@@ -256,9 +501,26 @@ class Command(BaseCommand):
                     )
                     if j is None:
                         continue  # picked up / terminal / gone since the scan
+                    # D G1: a driver assigned within the grace window must not have
+                    # the order refunded out from under them. The deadline is measured
+                    # from job.created_at, so a cap-exhausted job that a driver JUST
+                    # accepted would otherwise be refunded minutes after assignment.
+                    # STALE_DRIVER_AFTER (10 min) is the grace: by then rule (c) has
+                    # already released a stale/offline driver, so an assigned driver
+                    # older than that is genuinely stuck. (An assigned_at of None with
+                    # a driver set predates the timestamp tracking — treat it as stale,
+                    # i.e. refundable, as before.)
+                    freshly_assigned = (
+                        j.driver_id is not None
+                        and j.assigned_at is not None
+                        and j.assigned_at > now - STALE_DRIVER_AFTER
+                    )
                     still_stuck = (
                         (j.status == DeliveryJob.Status.SEARCHING and j.driver_id is None)
-                        or (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
+                        or (
+                            (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
+                            and not freshly_assigned
+                        )
                     )
                     if not still_stuck:
                         continue  # a driver was just assigned — let dispatch play out

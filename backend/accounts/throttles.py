@@ -107,10 +107,13 @@ class _CustomerThrottle(SimpleRateThrottle):
     Keys on the Customer principal (``request.user``) where the view mounts
     ``CustomerSessionAuthentication``, else the raw session ``customer_id`` (the ride
     views), else the client IP — see ``_customer_throttle_ident`` (RISK IDENTITY-1).
+    The IP fallback is the trusted-proxy-aware ``get_request_ip`` (OPS-5d),
+    like ``_IPThrottle`` — never DRF's spoofable ``get_ident``.
     """
 
     def get_cache_key(self, request, view):
-        ident = _customer_throttle_ident(request) or self.get_ident(request)
+        from sales.audit import get_request_ip
+        ident = _customer_throttle_ident(request) or get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
@@ -179,8 +182,30 @@ class WalletTransferThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request, view):
         # Prefer the Customer principal, fall back to session then IP (RISK IDENTITY-1).
-        ident = _customer_throttle_ident(request) or self.get_ident(request)
+        # Wave K F-11: trusted-proxy-aware IP (OPS-5d), like _IPThrottle.
+        from sales.audit import get_request_ip
+        ident = _customer_throttle_ident(request) or get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class CustomerTopUpIntentThrottle(_CustomerThrottle):
+    """Rate-limit PSP wallet top-up intent creation, per customer (fallback: IP).
+
+    P2-2: the intent endpoint minted a Stripe Checkout Session on every call
+    with no throttle — an uncapped caller could burn Stripe API calls and
+    flood a customer with checkout sessions. 20/hour matches wallet_transfer.
+    """
+    scope = "customer_topup_intent"
+
+
+class CustomerTopUpStatusThrottle(_CustomerThrottle):
+    """Rate-limit PSP wallet top-up status polls, per customer (fallback: IP).
+
+    WALLET-2 follow-up: the status endpoint calls Stripe on every unconfirmed
+    poll, so an uncapped caller could burn Stripe API calls. 120/hour allows
+    the banner's poll loop (~12 calls per return) many times over.
+    """
+    scope = "customer_topup_status"
 
 
 class RideEstimateThrottle(_IPThrottle):

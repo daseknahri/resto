@@ -12,6 +12,10 @@
               {{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}
             </span>
             <span class="ui-data-strip tabular-nums">{{ t("ownerTables.disabledTables") }}: {{ Math.max(tables.length - activeTablesCount, 0) }}</span>
+            <span v-if="totalOpenOrders > 0" class="ui-data-strip tabular-nums">
+              <span class="inline-block h-2 w-2 rounded-full bg-amber-400/80" aria-hidden="true"></span>
+              {{ t("ownerTables.openOrdersTotal", { count: totalOpenOrders }) }}
+            </span>
             <svg v-if="updating" class="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
             </svg>
@@ -54,10 +58,7 @@
           </label>
         </div>
         <div class="hidden ui-scroll-row min-w-0 md:flex">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
-            <AppIcon name="refresh" class="owner-table-icon" aria-hidden="true" />
-            {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
-          </button>
+          <!-- POS-UX-45: the header already has a Refresh button — no duplicate here. -->
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">
             <AppIcon name="download" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.exportCsv") }}
@@ -244,6 +245,12 @@
             <span class="inline-block h-1.5 w-1.5 rounded-full" :class="table.is_active ? 'bg-emerald-400' : 'bg-slate-600'" aria-hidden="true"></span>
             {{ table.is_active ? t("ownerTables.active") : t("ownerTables.disabledState") }}
           </span>
+          <span
+            v-if="Number(table.open_orders) > 0"
+            class="ui-status-pill border-amber-500/30 bg-amber-500/15 text-[11px] text-amber-300"
+          >
+            {{ t("ownerTables.openOrders", { count: table.open_orders }) }}
+          </span>
           <p class="print-only text-[10px] uppercase tracking-[0.15em] text-slate-600">{{ t("ownerTables.poweredBy", { name: tenantName }) }}</p>
         </div>
 
@@ -278,7 +285,13 @@
               <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
               {{ t("ownerTables.printSingle") }}
             </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="openRename(table)">
+              {{ t("ownerTables.rename") }}
+            </button>
+          </div>
+          <!-- POS-UX-44: destructive action lives apart from the copy buttons. -->
+          <div class="mt-2.5 border-t border-slate-800/60 pt-2.5">
+            <button class="ui-btn-outline owner-table-btn w-full px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
               {{ t("ownerTables.delete") }}
             </button>
           </div>
@@ -306,9 +319,15 @@
             <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.printSingle") }}
           </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="openRename(table)">
+            {{ t("ownerTables.rename") }}
+          </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
             {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
+        </div>
+        <!-- POS-UX-44: destructive action lives apart from the copy buttons. -->
+        <div class="no-print mt-2 flex justify-end border-t border-slate-800/60 pt-2">
           <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
             {{ t("ownerTables.delete") }}
           </button>
@@ -329,7 +348,7 @@
             <div class="min-w-0 space-y-0.5">
               <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
               <h2 id="owner-tables-setup-dialog-title" class="text-lg font-semibold leading-snug text-white">
-                {{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}
+                {{ formMode === "create" ? t("ownerTables.createTable") : formMode === "bulk" ? t("ownerTables.bulkGenerate") : t("ownerTables.renameTable") }}
               </h2>
             </div>
             <button class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs" @click="closeSetup">
@@ -413,7 +432,7 @@
                 </div>
               </template>
 
-              <template v-else>
+              <template v-else-if="formMode === 'bulk'">
                 <div class="space-y-1 pb-4 border-b border-slate-800/60">
                   <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
                   <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
@@ -451,6 +470,33 @@
                   </label>
                   <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="generating" @click="generateTables">
                     {{ generating ? t("ownerTables.generating") : t("ownerTables.generate") }}
+                  </button>
+                </div>
+              </template>
+              <template v-else-if="formMode === 'rename'">
+                <div class="space-y-1 pb-4 border-b border-slate-800/60">
+                  <p class="ui-kicker">{{ t("ownerTables.rename") }}</p>
+                  <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.renameTable") }}</h3>
+                  <p class="text-sm text-slate-400 leading-relaxed">{{ t("ownerTables.renameHint") }}</p>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-[1.5fr,auto] sm:items-end">
+                  <label class="space-y-1.5 text-sm font-medium text-slate-300">
+                    <span>{{ t("ownerTables.tableLabel") }}</span>
+                    <input
+                      ref="renameInputRef"
+                      v-model.trim="renameLabel"
+                      type="text"
+                      maxlength="40"
+                      class="ui-input"
+                      :class="error ? 'border-red-400 focus:border-red-400 focus:ring-red-400/30' : ''"
+                      :aria-invalid="error ? 'true' : 'false'"
+                      :placeholder="t('ownerTables.tableLabelPlaceholder')"
+                      @input="error = ''"
+                      @keydown.enter="renameTable"
+                    />
+                  </label>
+                  <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="renaming" @click="renameTable">
+                    {{ renaming ? t("ownerTables.loading") : t("common.save") }}
                   </button>
                 </div>
               </template>
@@ -507,6 +553,10 @@ const statusFilter = ref("all");
 const { confirm } = useConfirmModal();
 const togglingId = ref(null);
 const deletingId = ref(null);
+const renameTarget = ref(null);
+const renameLabel = ref("");
+const renaming = ref(false);
+const renameInputRef = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -532,6 +582,9 @@ const generatedAt = computed(() =>
   new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "medium", timeStyle: "short" }).format(new Date())
 );
 const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
+// POS-UX-42: live open-order total across tables (per-table counts come from
+// the /tables/ list payload as open_orders).
+const totalOpenOrders = computed(() => tables.value.reduce((sum, table) => sum + (Number(table.open_orders) || 0), 0));
 const filteredTables = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return tables.value.filter((table) => {
@@ -728,11 +781,12 @@ const removeTable = async (table) => {
   if (deletingId.value === table.id) return;
   const ok = await confirm({
     title: t("ownerTables.deleteConfirm", { label: table.label }),
-    // B-30: the /tables/ list carries no live-order data (TableLinkSerializer
-    // has no active-order count, and this page never fetches orders), so the
-    // confirm warns rather than blocks — per-table live counts need a backend
-    // field first (see REPORT.md).
-    body: `${t("confirmModal.defaultBody")} ${t("ownerTables.deleteLiveOrdersWarning")}`,
+    // POS-UX-47: the /tables/ list now carries open_orders per table, so the
+    // confirm names the live count instead of warning generically. Deleting
+    // the table does not cancel its orders — they stay on the Orders board.
+    body: Number(table.open_orders) > 0
+      ? t("ownerTables.deleteLiveOrdersWarningWithCount", { count: table.open_orders })
+      : `${t("confirmModal.defaultBody")} ${t("ownerTables.deleteLiveOrdersWarning")}`,
     confirmLabel: t("ownerTables.delete"),
     danger: true,
   });
@@ -747,6 +801,51 @@ const removeTable = async (table) => {
     toast.show(parseError(err, t("ownerTables.deleteFailed")), "error");
   } finally {
     deletingId.value = null;
+  }
+};
+
+// POS-UX-41 (Wave D): rename a table in place. The backend keeps the slug
+// immutable (TableLinkSerializer.update pops it), so the printed QR code and
+// short link keep working — only the label changes.
+const openRename = (table) => {
+  _setupTriggerEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  error.value = "";
+  formMode.value = "rename";
+  renameTarget.value = table;
+  renameLabel.value = table?.label || "";
+  setupOpen.value = true;
+  nextTick(() => renameInputRef.value?.focus());
+};
+
+const renameTable = async () => {
+  if (!renameTarget.value) return;
+  const label = renameLabel.value.trim();
+  if (!label) {
+    error.value = t("ownerTables.labelRequired");
+    nextTick(() => renameInputRef.value?.focus());
+    return;
+  }
+  if (label === renameTarget.value.label) {
+    closeSetup();
+    return;
+  }
+  renaming.value = true;
+  error.value = "";
+  try {
+    await api.put(`/tables/${renameTarget.value.id}/`, {
+      ...renameTarget.value,
+      label,
+    });
+    renameTarget.value.label = label;
+    writeCache(TABLES_CACHE_KEY, tables.value);
+    toast.show(t("ownerTables.renamed"), "success");
+    setupOpen.value = false;
+    renameTarget.value = null;
+  } catch (err) {
+    error.value = parseError(err, t("ownerTables.renameFailed"));
+    toast.show(error.value, "error");
+  } finally {
+    renaming.value = false;
   }
 };
 
@@ -774,7 +873,17 @@ const copyQrUrl = async (table) => {
     toast.show(t("ownerTables.qrNotReady"), "error");
     return;
   }
-  copyText(src, t("ownerTables.qrCopied"));
+  // POS-UX-43: copy the QR as an image (pastes as a picture in WhatsApp),
+  // not the base64 data URL as text. Fall back to the text copy when the
+  // image write is unavailable (older browsers / non-secure contexts).
+  try {
+    if (typeof ClipboardItem === "undefined") throw new Error("no ClipboardItem");
+    const blob = await (await fetch(src)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    toast.show(t("ownerTables.qrCopied"), "success");
+  } catch {
+    copyText(src, t("ownerTables.qrCopied"));
+  }
 };
 
 const safeFileBase = (value) =>
@@ -1036,6 +1145,7 @@ const openSetup = (mode = "create") => {
 const closeSetup = () => {
   setupOpen.value = false;
   error.value = "";
+  renameTarget.value = null;
   // Restore focus to the element that triggered the dialog (keyboard a11y)
   nextTick(() => _setupTriggerEl?.focus());
 };

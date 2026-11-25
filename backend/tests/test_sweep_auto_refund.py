@@ -123,7 +123,7 @@ _NOW = datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc)
 
 
 def _job(*, job_id=1, tenant_id=1, order="ORD-1", age_min=40,
-         status="searching", driver_id=None, redispatch_count=0):
+         status="searching", driver_id=None, redispatch_count=0, assigned_at=None):
     j = MagicMock()
     j.id = job_id
     j.pk = job_id
@@ -133,6 +133,9 @@ def _job(*, job_id=1, tenant_id=1, order="ORD-1", age_min=40,
     j.status = status
     j.driver_id = driver_id
     j.redispatch_count = redispatch_count
+    # D G1: assigned_at is a REAL datetime (or None), never a MagicMock — the
+    # still_stuck grace check compares it against a timedelta.
+    j.assigned_at = assigned_at
     return j
 
 
@@ -184,8 +187,31 @@ class AutoRefundSweepPassTests(SimpleTestCase):
 
     def test_cap_exhausted_pre_pickup_job_is_refunded(self):
         """Case (b): a job abandoned after the re-dispatch cap (not merely SEARCHING)
-        is refunded once past the deadline."""
-        job = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=3)
+        is refunded once past the deadline. The assignment itself is stale (40 min
+        ago), so the D G1 fresh-assignment grace does not save it."""
+        job = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=3,
+                   assigned_at=_NOW - timedelta(minutes=40))
+        count, refund, alert_owner, order_obj = self._run(candidate=job, locked_job=job, deadline=30)
+        self.assertEqual(count, 1)
+        refund.assert_called_once_with(order_obj, 1)
+
+    def test_freshly_assigned_cap_exhausted_job_is_not_refunded(self):
+        """D G1: a cap-exhausted job whose driver JUST accepted (assigned 2 min ago)
+        must NOT be refunded out from under them — even though the deadline is measured
+        from created_at (40 min ago) and the cap is exhausted. The driver gets the
+        STALE_DRIVER_AFTER grace window before the job can be auto-refunded."""
+        job = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=3,
+                   assigned_at=_NOW - timedelta(minutes=2))
+        count, refund, alert_owner, order_obj = self._run(candidate=job, locked_job=job, deadline=30)
+        self.assertEqual(count, 0)
+        refund.assert_not_called()
+        alert_owner.assert_not_called()
+
+    def test_stale_assigned_cap_exhausted_job_is_refunded(self):
+        """D G1 boundary: an assigned driver OLDER than the grace window (11 min ago,
+        grace is 10) is genuinely stuck — the refund proceeds."""
+        job = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=3,
+                   assigned_at=_NOW - timedelta(minutes=11))
         count, refund, alert_owner, order_obj = self._run(candidate=job, locked_job=job, deadline=30)
         self.assertEqual(count, 1)
         refund.assert_called_once_with(order_obj, 1)
@@ -215,7 +241,8 @@ class AutoRefundSweepPassTests(SimpleTestCase):
         """A driver was assigned after the scan (job now ASSIGNED, has a driver, under the
         re-dispatch cap): still_stuck is False → let dispatch play out, no refund."""
         scan_job = _job(age_min=40, status="searching", driver_id=None)
-        locked = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=0)
+        locked = _job(age_min=40, status="assigned", driver_id=99, redispatch_count=0,
+                      assigned_at=_NOW - timedelta(minutes=2))
         count, refund, alert_owner, _ = self._run(candidate=scan_job, locked_job=locked, deadline=30)
         self.assertEqual(count, 0)
         refund.assert_not_called()

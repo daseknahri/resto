@@ -372,10 +372,12 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
             "total_revenue", "order_count", "avg_order_value", "daily", "days",
             "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
             "currency", "loyalty_promo", "wallet_revenue", "cash_revenue",
-            "payment_split", "top_items_by_revenue", "statement",
+            "payment_split", "today_payment_split", "top_items_by_revenue", "statement",
             "customer_return", "new_vs_returning", "food_cost",
         ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
+        for key in ("wallet", "cash"):
+            self.assertIn(key, rs["today_payment_split"], f"Missing today_payment_split key: {key}")
         for key in ("promo_discount_total", "promo_order_count", "loyalty_discount_total",
                     "loyalty_order_count", "points_earned_total", "points_redeemed_total"):
             self.assertIn(key, rs["loyalty_promo"], f"Missing loyalty_promo key: {key}")

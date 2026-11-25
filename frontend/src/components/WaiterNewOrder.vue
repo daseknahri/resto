@@ -200,8 +200,21 @@
           </div>
         </div>
 
+        <!-- Mobile mini-bar: total + review-cart jump (POS-UX-4). The right
+             panel's total + submit can sit below the fold on phones; this bar
+             stays visible at the bottom of the dish list and jumps to submit. -->
+        <div v-if="cartItems.length" class="flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 px-3 py-2.5 md:hidden">
+          <span class="text-sm font-semibold text-slate-200">
+            {{ t('waiterPage.newOrderTotal') }} · <span class="tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
+            <span class="ms-1 text-xs font-normal text-slate-400">({{ cartItems.length }})</span>
+          </span>
+          <button type="button" class="ui-btn-outline ui-press shrink-0 px-3 py-1.5 text-sm" @click="submitBtnRef?.focus()">
+            {{ t('waiterPage.newOrderReviewCart') }}
+          </button>
+        </div>
+
         <!-- ── Right panel: cart + submit ────────────────────────────── -->
-        <div class="flex w-full flex-col md:w-72 shrink-0">
+        <div class="flex w-full flex-col md:w-72 shrink-0 max-h-[46vh] md:max-h-none min-h-0">
           <p class="border-b border-slate-800 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {{ t('waiterPage.newOrderCart') }}
             <span v-if="cartItems.length" class="ms-1 tabular-nums font-bold text-slate-200">({{ cartItems.length }})</span>
@@ -334,6 +347,7 @@
               <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
             </div>
             <button
+              ref="submitBtnRef"
               class="ui-btn-primary w-full rounded-xl py-2.5 text-sm disabled:pointer-events-none disabled:opacity-50"
               :disabled="submitting || !cartItems.length"
               @click="submit"
@@ -1051,6 +1065,7 @@ const submit = async () => {
 
 // ── Focus trap ────────────────────────────────────────────────────────────────
 const dialogRef = ref(null);
+const submitBtnRef = ref(null);
 const FOCUSABLE_SEL = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
   'select:not([disabled])', 'textarea:not([disabled])',

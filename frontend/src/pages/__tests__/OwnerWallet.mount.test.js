@@ -23,10 +23,12 @@
  *     tenant currency (tenant.resolvedMeta?.plan?.currency, which is null in jsdom →
  *     falls back to 'MAD'). So the loaded assertions check DIGITS, never the
  *     currency-symbol string/placement.
- *   - It imports ONLY { useRoute } from vue-router (no RouterLink, no useRouter, and
- *     no <router-link> in the template). onMounted reads route.query.q, so the mock's
- *     useRoute exposes a mutable `routeState.query` a test can seed before mounting.
- *     useRouter is mocked defensively (unused by the page) for safety parity.
+ *   - It imports { RouterLink, useRoute } from vue-router: RouterLink is the
+ *     Z-report link added by Wave G POS-UX-37 (OwnerWallet.vue:31/:345), so the
+ *     mock exports a RouterLink stub or the SFC fails to evaluate. onMounted
+ *     reads route.query.q, so the mock's useRoute exposes a mutable
+ *     `routeState.query` a test can seed before mounting. useRouter is mocked
+ *     defensively (unused by the page) for safety parity.
  *   - onMounted fires fetchFloat() → GET /owner/wallet/float/, and — only when
  *     route.query.q has length >= 2 — runSearch(q) → GET /owner/customers/. Default
  *     (empty query): just the float GET. Everything resolves empty by default so the
@@ -91,6 +93,11 @@ const routeState = vi.hoisted(() => ({ query: {}, params: {} }));
 vi.mock("vue-router", () => ({
   useRoute: () => ({ params: routeState.params, query: routeState.query }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  // Wave G POS-UX-37: the page imports RouterLink (Z-report link,
+  // OwnerWallet.vue:31/:345) — the mock must export it or the SFC module
+  // fails to evaluate. Stub renders as an <a>; same shape as the repo's
+  // RouterLink stubs (CartEmptyState.test.js).
+  RouterLink: { name: "RouterLink", props: ["to"], template: "<a><slot /></a>" },
 }));
 
 import OwnerWallet from "../OwnerWallet.vue";
@@ -143,6 +150,20 @@ describe("OwnerWallet — mount smoke", () => {
     // Float card + customer-search headings are always rendered too.
     expect(wrapper.text()).toContain("ownerWallet.floatTitle");
     expect(wrapper.text()).toContain("ownerWallet.searchTitle");
+  });
+
+  // Wave K F-13: the Z-report link must point at the owner-z-report route —
+  // the RouterLink stub preserves the `to` prop, so a typo in the route name
+  // is caught here instead of in production. (Matched by props, not by stub
+  // name, so the assertion survives shallowMount's stub renaming.)
+  it("links the Z-report action to the owner-z-report route (F-13)", async () => {
+    wrapper = mountWallet();
+    await flushPromises();
+    const links = wrapper
+      .findAllComponents("*")
+      .filter((c) => c.props("to") !== undefined);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.some((c) => c.props("to")?.name === "owner-z-report")).toBe(true);
   });
 
   // ── (2) loaded money path: float + searched customer + wallet transactions ────

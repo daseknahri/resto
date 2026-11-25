@@ -156,6 +156,50 @@ class SetFoodReadyTests(SimpleTestCase):
         mock_dj.objects.select_for_update.assert_not_called()
 
 
+class MirrorReadyMinutesTests(SimpleTestCase):
+    """menu.views._delivery_job_ready_minutes (Wave L L-03)."""
+
+    def _order(self, *, eta=None, status="confirmed"):
+        return SimpleNamespace(estimated_ready_minutes=eta, status=status)
+
+    def _tenant(self, *, default_prep=None, profile=True):
+        if not profile:
+            return SimpleNamespace(profile=None)
+        return SimpleNamespace(profile=SimpleNamespace(default_prep_minutes=default_prep))
+
+    def test_explicit_eta_wins(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=25), self._tenant(default_prep=30)), 25)
+
+    def test_confirm_without_eta_uses_tenant_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(default_prep=30)), 30)
+
+    def test_confirm_without_eta_no_profile_uses_platform_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(profile=False)), 20)
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None), self._tenant(default_prep=None)), 20)
+
+    def test_preparing_without_eta_uses_tenant_default(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None, status="preparing"), self._tenant(default_prep=45)), 45)
+
+    def test_ready_without_eta_is_now(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=None, status="ready"), self._tenant()), 0)
+
+    def test_pending_without_eta_is_none(self):
+        from menu.views import _delivery_job_ready_minutes
+        self.assertIsNone(_delivery_job_ready_minutes(
+            self._order(eta=None, status="pending"), self._tenant()))
+
+
 class OwnerDeliveryActionGuardTests(SimpleTestCase):
     def setUp(self):
         from menu.views import OwnerDeliveryJobActionView
@@ -273,3 +317,70 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
         cw.assert_called_once()
         self.assertEqual(job.resolution, "noshow_paid")
         job.save.assert_called_once_with(update_fields=["resolution"])
+
+    # ── unassign: owner stands down an assigned-but-idle driver (D G5) ─────────
+
+    def _unassign(self, *, job_status="assigned", driver_id=7, redispatch_count=0):
+        """Drive an `unassign` action on a job with the DB collaborators mocked."""
+        import contextlib
+        order = SimpleNamespace(order_number="ORD-1", status="ready", pk=1)
+        job = MagicMock()
+        job.id = 55
+        job.status = job_status
+        job.driver_id = driver_id
+        job.redispatch_count = redispatch_count
+        req = self.factory.post("/api/owner/orders/1/delivery-action/", {"action": "unassign"}, format="json")
+        force_authenticate(req, user=MagicMock(is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1, name="R")
+        with patch("menu.views._can_edit_tenant_order", return_value=True), \
+             patch("menu.views.Order.objects") as om, \
+             patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
+             patch("accounts.models.DeliveryJob") as DJ, \
+             patch("accounts.dispatch.offer_to_next_driver") as offer:
+            om.filter.return_value.first.return_value = order
+            DJ.Status.ASSIGNED = "assigned"
+            DJ.Status.AT_RESTAURANT = "at_restaurant"
+            DJ.Status.SEARCHING = "searching"
+            DJ.Resolution.REDISPATCHED = "redispatched"
+            DJ.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+            resp = self.view(req, order_id=1)
+            return resp, offer, job
+
+    def test_unassign_assigned_job_reoffers(self):
+        """D G5: an ASSIGNED job's driver is stood down, the job re-enters the pool
+        (SEARCHING, fresh offer cascade) and the redispatch count increments."""
+        resp, offer, job = self._unassign(job_status="assigned", driver_id=7, redispatch_count=0)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data.get("resolution"), "unassigned")
+        self.assertIsNone(job.driver)
+        self.assertEqual(job.status, "searching")
+        self.assertEqual(job.redispatch_count, 1)
+        self.assertIsNone(job.assigned_at)
+        job.save.assert_called_once()
+        offer.assert_called_once_with(55)
+
+    def test_unassign_at_restaurant_job_reoffers(self):
+        resp, offer, job = self._unassign(job_status="at_restaurant", driver_id=7)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(job.status, "searching")
+        offer.assert_called_once_with(55)
+
+    def test_unassign_picked_up_job_is_rejected(self):
+        """Once the driver has the food, unassigning would strand the order."""
+        resp, offer, job = self._unassign(job_status="picked_up", driver_id=7)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "job_changed")
+        offer.assert_not_called()
+        job.save.assert_not_called()
+
+    def test_unassign_searching_job_is_rejected(self):
+        resp, offer, job = self._unassign(job_status="searching", driver_id=None)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "job_changed")
+        offer.assert_not_called()
+
+    def test_unassign_job_without_driver_is_rejected(self):
+        resp, offer, job = self._unassign(job_status="assigned", driver_id=None)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "no_driver")
+        offer.assert_not_called()

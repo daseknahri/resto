@@ -627,6 +627,22 @@
 
         <!-- ════════════ WALLET TAB ════════════ -->
         <template v-else-if="activeTab === 'wallet'">
+          <!-- Wave K F-06: the return banner lives at Wallet-tab level, gated
+          only on the return itself — NOT inside the PSP-gated panel below, so
+          it is visible even when the flag is off or the phone is unverified. -->
+          <p
+            v-if="topUpQueryMsg"
+            class="rounded-lg px-3 py-2 text-xs font-medium"
+            :class="topUpFailed ? 'bg-red-500/10 text-red-400' : (route.query.topup === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400')"
+            role="status"
+          >{{ topUpQueryMsg }}</p>
+          <button
+            v-if="route.query.topup === 'success' && !topUpConfirmed"
+            type="button"
+            class="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-50"
+            :disabled="loadingWallet"
+            @click="checkTopUpNow"
+          >{{ t('customerAccount.topUpCheckNow') }}</button>
 
           <!-- Verify-phone gate: no verified phone → no usable wallet -->
           <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4" role="status">
@@ -664,18 +680,26 @@
             </button>
           </div>
 
+          <!-- Wave K F-08: recent top-ups (intent-time attempt rows) — Wallet-tab
+          level, NOT inside the PSP panel: history must show even when the flag
+          is off or the phone is unverified. -->
+          <div v-if="topUpAttempts.length" class="ui-panel space-y-2 p-4">
+            <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.topUpRecentTitle') }}</p>
+            <ul class="space-y-1.5">
+              <li v-for="attempt in topUpAttempts" :key="attempt.session_id" class="flex items-center justify-between gap-3 text-xs">
+                <span class="font-semibold text-slate-200">{{ formatPrice(attempt.amount) }}</span>
+                <span class="text-slate-500">{{ formatDateTime(attempt.created_at) }}</span>
+                <span class="font-semibold" :class="attempt.status === 'failed' ? 'text-red-400' : (attempt.status === 'credited' ? 'text-emerald-400' : 'text-amber-400')">{{ topUpAttemptStatusLabel(attempt.status) }}</span>
+              </li>
+            </ul>
+          </div>
+
           <!-- PSP top-up (Stripe Checkout, visible only when platform flag is on) -->
           <div
             v-if="walletVerified && customerStore.platform?.psp_topup_enabled"
             class="ui-panel space-y-3 p-4"
           >
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.topUpTitle') }}</p>
-            <p
-              v-if="topUpQueryMsg"
-              class="rounded-lg px-3 py-2 text-xs font-medium"
-              :class="route.query.topup === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
-              role="status"
-            >{{ topUpQueryMsg }}</p>
             <!-- Quick preset amounts -->
             <div class="flex flex-wrap gap-1.5">
               <button
@@ -706,7 +730,7 @@
             <p v-if="topUpError" class="text-xs text-red-400" role="alert">{{ topUpError }}</p>
             <button
               class="w-full rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 py-2.5 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15 disabled:opacity-50"
-              :disabled="topUpLoading || !topUpAmount"
+              :disabled="topUpLoading || !topUpAmount || topUpCoolingDown"
               @click="initTopUp"
             >
               <span v-if="topUpLoading">{{ t('customerAccount.topUpLoading') }}</span>
@@ -1352,7 +1376,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAccountOrders from '../components/CustomerAccountOrders.vue';
@@ -1387,10 +1411,28 @@ const { reorderFromOrder } = useReorder();
 const router = useRouter();
 const route = useRoute();
 
-// Show a one-time banner when Stripe redirects back with ?topup=success|cancelled
+// Wave I (WALLET-2 follow-up): set when the status poll confirms the credit
+// from the wallet ledger — the banner then shows the confirmed copy.
+const topUpConfirmed = ref(false);
+const topUpConfirmedAmount = ref('');
+// Wave K: poll outcome state — failed payment (F-09), fast polls exhausted
+// and still waiting (F-04), pending-but-unpaid (F-05).
+const topUpFailed = ref(false);
+const topUpStillConfirming = ref(false);
+const topUpAwaitingPayment = ref(false);
+
+// Show a one-time banner when Stripe redirects back with ?topup=success|cancelled.
+// Wave K: the copy tracks the poll state — failed (F-09), exhausted/slow
+// (F-04), awaiting-payment (F-05, paid-but-uncredited vs unpaid), confirmed.
 const topUpQueryMsg = computed(() => {
   const q = route.query.topup;
-  if (q === 'success') return t('customerAccount.topUpSuccessMsg');
+  if (q === 'success') {
+    if (topUpConfirmed.value) return t('customerAccount.topUpConfirmedMsg', { amount: topUpConfirmedAmount.value });
+    if (topUpFailed.value) return t('customerAccount.topUpFailedMsg');
+    if (topUpStillConfirming.value) return t('customerAccount.topUpStillConfirmingMsg');
+    if (topUpAwaitingPayment.value) return t('customerAccount.topUpAwaitingPaymentMsg');
+    return t('customerAccount.topUpSuccessMsg');
+  }
   if (q === 'cancelled') return t('customerAccount.topUpCancelledMsg');
   return '';
 });
@@ -1402,7 +1444,11 @@ const VALID_TABS = ['overview', 'orders', 'reservations', 'wallet', 'reviews', '
 // rather than 404-ing a bookmarked/shared link into a blank pane.
 const LEGACY_TAB_REDIRECTS = { loyalty: 'wallet', referral: 'overview' };
 const _requestedTab = LEGACY_TAB_REDIRECTS[route.query.tab] || route.query.tab;
-const activeTab = ref(VALID_TABS.includes(_requestedTab) ? _requestedTab : 'overview');
+// WALLET-1: Stripe returns to /account?topup=success|cancelled with no tab= —
+// land on the Wallet tab so the return banner (which only renders inside the
+// wallet panel) is actually seen. An explicit ?tab= still wins.
+const _topupTab = (route.query.topup === 'success' || route.query.topup === 'cancelled') ? 'wallet' : null;
+const activeTab = ref(VALID_TABS.includes(_requestedTab) ? _requestedTab : (_topupTab || 'overview'));
 const TABS = computed(() => [
   { id: 'overview',      icon: 'home',     label: t('customerAccount.tabOverview')      },
   { id: 'orders',        icon: 'calendar', label: t('customerAccount.tabOrders')        },
@@ -2077,6 +2123,123 @@ const payCodeError = ref(false);
 // ── PSP top-up (Stripe Checkout, shown only when platform flag is on) ─────────
 const topUpAmount = ref(100);
 const topUpLoading = ref(false);
+// Wave K F-07: 60s submit cooldown after a 429 on the intent.
+const TOP_UP_COOLDOWN_MS = 60000;
+const topUpCoolingDown = ref(false);
+let topUpCooldownTimer = null;
+// WALLET-2: delayed balance re-check after a Stripe success return.
+const TOP_UP_RECHECK_MS = 6000;
+let topUpRecheckTimer = null;
+
+// Wave I (WALLET-2 follow-up) + Wave K: poll the server-side top-up-status
+// endpoint while the return carries a session_id. The endpoint answers from
+// the wallet ledger, so "confirmed" here means the money is really in the
+// wallet — the banner can say so instead of the "confirming" copy.
+// Wave K F-02: a transient poll failure no longer kills the loop — it backs
+// off and retries, giving up only after TOP_UP_STATUS_MAX_ERRORS consecutive
+// failures (429 gets the long backoff). F-03: a terminal "unknown"
+// (retryable === false) stops the loop. F-04: after 12 fast polls the loop
+// keeps a slow 30s background poll until the customer leaves.
+const TOP_UP_STATUS_POLL_MS = 5000;
+const TOP_UP_STATUS_MAX_POLLS = 12;
+const TOP_UP_STATUS_MAX_ERRORS = 3;
+const TOP_UP_STATUS_SLOW_POLL_MS = 30000;
+const TOP_UP_STATUS_ERROR_BACKOFF_MS = 5000;
+const TOP_UP_STATUS_429_BACKOFF_MS = 30000;
+let topUpStatusTimer = null;
+let topUpStatusPolls = 0;
+let topUpStatusErrors = 0;
+let topUpStatusAbort = null;
+
+const clearTopUpStatusTimer = () => {
+  if (topUpStatusTimer) { clearTimeout(topUpStatusTimer); topUpStatusTimer = null; }
+};
+
+const scheduleTopUpStatus = (ms) => {
+  clearTopUpStatusTimer();
+  topUpStatusTimer = setTimeout(() => checkTopUpStatus(), ms);
+};
+
+const checkTopUpStatus = async () => {
+  const sessionId = route.query.session_id;
+  if (!sessionId || topUpConfirmed.value) return;
+  // N-01: cancel any in-flight poll before starting a new one (a manual
+  // re-check while a poll is in flight, or a slow poll overlapping a fast
+  // one) — the cancelled request never counts as a failure.
+  if (topUpStatusAbort) topUpStatusAbort.abort();
+  topUpStatusAbort = new AbortController();
+  try {
+    const { data } = await api.get(
+      `/customer/topup/status/?session_id=${encodeURIComponent(sessionId)}`,
+      { signal: topUpStatusAbort.signal },
+    );
+    topUpStatusErrors = 0;
+    if (data.status === 'confirmed') {
+      topUpConfirmed.value = true;
+      topUpConfirmedAmount.value = data.amount || '';
+      topUpStillConfirming.value = false;
+      topUpAwaitingPayment.value = false;
+      // N-01: the poll already re-fetches the wallet — cancel the redundant
+      // 6s re-check timer.
+      if (topUpRecheckTimer) { clearTimeout(topUpRecheckTimer); topUpRecheckTimer = null; }
+      await fetchWallet();
+      return;
+    }
+    if (data.status === 'failed') {
+      topUpFailed.value = true;
+      topUpStillConfirming.value = false;
+      return;
+    }
+    if (data.status === 'unknown' && data.retryable === false) {
+      // F-03: terminal unknown (no such session / foreign session / PSP off)
+      // — the answer will never change, so stop polling and show the
+      // manual-check (exhausted) state.
+      topUpStillConfirming.value = true;
+      return;
+    }
+    // Pending or retryable unknown: keep waiting. F-05: surface the
+    // payment_status — unpaid means the money hasn't landed yet.
+    topUpAwaitingPayment.value = data.status === 'pending' && data.payment_status === 'unpaid';
+    topUpStatusPolls += 1;
+    if (topUpStatusPolls < TOP_UP_STATUS_MAX_POLLS) {
+      scheduleTopUpStatus(TOP_UP_STATUS_POLL_MS);
+    } else {
+      // F-04: fast polls exhausted — distinct banner state + a slow
+      // background poll until the customer leaves, so a slow webhook that
+      // lands at 90s still flips the banner.
+      topUpStillConfirming.value = true;
+      scheduleTopUpStatus(TOP_UP_STATUS_SLOW_POLL_MS);
+    }
+  } catch (err) {
+    if (handleAuthExpired(err)) return;
+    // N-01: a cancelled in-flight poll is not a failure — never reschedule.
+    if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
+    // F-02: transient failure — back off and retry; give up only after N
+    // consecutive failures. A 429 gets the long backoff: after F-01 a
+    // ledger-confirmed answer is never throttled, so a later retry can
+    // still confirm if the webhook landed meanwhile.
+    topUpStatusErrors += 1;
+    if (topUpStatusErrors >= TOP_UP_STATUS_MAX_ERRORS) {
+      topUpStillConfirming.value = true;
+      return;
+    }
+    const backoff = err?.response?.status === 429
+      ? TOP_UP_STATUS_429_BACKOFF_MS
+      : TOP_UP_STATUS_ERROR_BACKOFF_MS;
+    scheduleTopUpStatus(backoff);
+  }
+};
+
+// Wave K F-10: the banner's manual re-check now asks the status endpoint
+// (not just the wallet GET), so a slow webhook that landed after the poll
+// stopped still flips the banner to confirmed. Without a session id it is
+// just a balance re-fetch.
+const checkTopUpNow = async () => {
+  if (route.query.session_id && !topUpConfirmed.value) {
+    await checkTopUpStatus();
+  }
+  await fetchWallet();
+};
 const topUpError = ref('');
 
 // Server gate is 10-2000 (CustomerTopUpIntentView); mirror it here so an
@@ -2089,6 +2252,7 @@ const isValidTopUpAmount = (value) => {
 };
 
 const initTopUp = async () => {
+  if (topUpCoolingDown.value) return;
   if (!isValidTopUpAmount(topUpAmount.value)) {
     topUpError.value = t('customerAccount.topUpAmountError', { min: TOP_UP_MIN, max: TOP_UP_MAX });
     return;
@@ -2105,6 +2269,15 @@ const initTopUp = async () => {
     }
   } catch (err) {
     if (handleAuthExpired(err)) return;
+    if (err?.response?.status === 429) {
+      // F-07: the 20/hour intent cap — distinct copy + a 60s cooldown so
+      // mashing the button just re-429s.
+      topUpError.value = t('customerAccount.topUpTooManyAttemptsMsg');
+      topUpCoolingDown.value = true;
+      if (topUpCooldownTimer) clearTimeout(topUpCooldownTimer);
+      topUpCooldownTimer = setTimeout(() => { topUpCoolingDown.value = false; }, TOP_UP_COOLDOWN_MS);
+      return;
+    }
     topUpError.value = t('customerAccount.topUpError');
   } finally {
     topUpLoading.value = false;
@@ -2242,6 +2415,25 @@ const fetchWallet = async (page = 1) => {
 };
 
 const loadMoreWallet = () => fetchWallet(walletCurrentPage.value + 1);
+
+// Wave K F-08: recent top-ups — the intent-time attempt rows, so a customer
+// who closed the tab mid-payment can still see the top-up on a later visit.
+const topUpAttempts = ref([]);
+const topUpAttemptStatusLabel = (status) => {
+  if (status === 'credited') return t('customerAccount.topUpStatusCredited');
+  if (status === 'failed') return t('customerAccount.topUpStatusFailed');
+  return t('customerAccount.topUpStatusCreated');
+};
+const fetchTopUpAttempts = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const { data } = await api.get('/customer/topup/attempts/');
+    topUpAttempts.value = Array.isArray(data.attempts) ? data.attempts : [];
+  } catch {
+    // History is a nicety — a failed fetch must never break the wallet tab.
+    topUpAttempts.value = [];
+  }
+};
 
 const fetchOrders = async (page = 1) => {
   if (!customerStore.isAuthenticated) return;
@@ -2761,6 +2953,11 @@ watch(
   { immediate: true }
 );
 
+// Wave K F-08: load the recent-top-ups list when the Wallet tab becomes active.
+watch(activeTab, (tab) => {
+  if (tab === 'wallet') fetchTopUpAttempts();
+});
+
 onMounted(async () => {
   await customerStore.fetchCustomer();
   if (customerStore.isAuthenticated) {
@@ -2768,12 +2965,31 @@ onMounted(async () => {
     fetchMarketplaceOrders();
     fetchReservations();
     fetchWallet();
+    if (activeTab.value === 'wallet') fetchTopUpAttempts();
     fetchLoyaltyConfig();
     fetchAddresses();
     pushCheckEnabled();
     fetchLastRide();
     fetchServiceProfiles();
   }
+  // WALLET-2: Stripe's webhook can land after the first balance fetch — re-check
+  // once a few seconds after a success return so a slow webhook still shows up
+  // without the customer having to tap anything.
+  if (route.query.topup === 'success') {
+    topUpRecheckTimer = setTimeout(() => fetchWallet(), TOP_UP_RECHECK_MS);
+    // Wave I: when Stripe carried the session id back, poll the status
+    // endpoint so the banner can confirm the credit from the ledger.
+    if (route.query.session_id) checkTopUpStatus();
+  }
+});
+
+onUnmounted(() => {
+  if (topUpRecheckTimer) clearTimeout(topUpRecheckTimer);
+  if (topUpStatusTimer) clearTimeout(topUpStatusTimer);
+  if (topUpCooldownTimer) clearTimeout(topUpCooldownTimer);
+  // N-01: cancel an in-flight status poll so it cannot call fetchWallet()
+  // on an unmounted component.
+  if (topUpStatusAbort) topUpStatusAbort.abort();
 });
 </script>
 

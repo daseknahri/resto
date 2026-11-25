@@ -294,3 +294,89 @@ class WebhookFailsClosedWithoutSecretTests(SimpleTestCase):
                 resp = CustomerTopUpWebhookView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         mock_credit.assert_called_once()
+
+# ── Gap-hunt 2026-11-22: webhook hardening (W P1-1 / P1-2 / P1-7 / P2-5) ───────
+
+class WebhookGapHuntTests(SimpleTestCase):
+    """Webhook must require exactly "paid", credit async successes, fail clean on a
+    deleted customer, and never fall back to the metadata amount."""
+
+    def _make_event(self, event_id="evt_gap1", event_type="checkout.session.completed",
+                    payment_status="paid", amount_total=15000, customer_id="42"):
+        obj = {
+            "id": "cs_test_gap",
+            "payment_status": payment_status,
+            "amount_total": amount_total,
+            "metadata": {"customer_id": customer_id, "amount": "150.00"},
+        }
+        if payment_status is None:
+            del obj["payment_status"]
+        if amount_total is None:
+            del obj["amount_total"]
+        return {"id": event_id, "type": event_type, "data": {"object": obj}}
+
+    def _post(self, event):
+        from accounts.views import CustomerTopUpWebhookView
+        payload = json.dumps(event).encode()
+        factory = APIRequestFactory()
+        req = factory.post("/api/customer/topup/webhook/", data=payload, content_type="application/json")
+        return req
+
+    def _stripe_mock(self):
+        mock_stripe = MagicMock()
+        mock_stripe.api_key = ""
+        mock_stripe.error.SignatureVerificationError = Exception
+        return mock_stripe
+
+    @override_settings(**_PSP_ON)
+    def test_missing_payment_status_does_not_credit(self):
+        """W P1-2: a session with NO payment_status must not credit (old code accepted None)."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_event(payment_status=None)
+        req = self._post(event)
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            with patch.dict("sys.modules", {"stripe": self._stripe_mock()}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertTrue(resp.data.get("ok"))
+        mock_credit.assert_not_called()
+
+    @override_settings(**_PSP_ON)
+    def test_async_payment_succeeded_credits(self):
+        """W P1-1: checkout.session.async_payment_succeeded credits once (async methods)."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_event(event_id="evt_async1", event_type="checkout.session.async_payment_succeeded")
+        req = self._post(event)
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            mock_credit.return_value = MagicMock()
+            with patch.dict("sys.modules", {"stripe": self._stripe_mock()}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data.get("ok"))
+        mock_credit.assert_called_once()
+        self.assertEqual(mock_credit.call_args.kwargs["idempotency_key"], "stripe:evt_async1")
+        self.assertEqual(str(mock_credit.call_args.kwargs["amount"]), "150.00")
+
+    @override_settings(**_PSP_ON)
+    def test_deleted_customer_returns_422_not_500(self):
+        """W P1-7: credit_wallet raising Customer.DoesNotExist must fail clean (422), never 500."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_event()
+        req = self._post(event)
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            mock_credit.side_effect = Customer.DoesNotExist
+            with patch.dict("sys.modules", {"stripe": self._stripe_mock()}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 422)
+        self.assertFalse(resp.data.get("ok"))
+
+    @override_settings(**_PSP_ON)
+    def test_missing_amount_total_returns_400(self):
+        """W P2-5: no metadata-amount fallback — a paid session without amount_total is a 400."""
+        from accounts.views import CustomerTopUpWebhookView
+        event = self._make_event(amount_total=None)
+        req = self._post(event)
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            with patch.dict("sys.modules", {"stripe": self._stripe_mock()}):
+                resp = CustomerTopUpWebhookView.as_view()(req)
+        self.assertEqual(resp.status_code, 400)
+        mock_credit.assert_not_called()

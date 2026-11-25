@@ -47,6 +47,8 @@ from .throttles import (
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
     CustomerReservationsThrottle,
+    CustomerTopUpIntentThrottle,
+    CustomerTopUpStatusThrottle,
     DeliveryRatingThrottle,
     DeliveryTrackingThrottle,
     EmailUnsubscribeThrottle,
@@ -2673,68 +2675,81 @@ class AdminWalletBonusView(APIView):
             )
 
         from django.db import transaction as _dbtx
-        with _dbtx.atomic():
-            ids = list(qs.values_list("id", flat=True))
-            if not ids:
-                return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
-            # Self-defending idempotency: bonus credits are REAL money, so a retry
-            # (double-click, network retry, proxy replay) must never double-credit —
-            # even from a client that sends no idempotency_key. Prefer the client key
-            # when present, but ALWAYS fall back to a deterministic server-side
-            # fingerprint of the actor + amount + the normalized target set, so the same
-            # logical bonus maps to the same idempotency namespace regardless of client.
-            # (Fail closed so the endpoint is self-defending — mirrors record_driver_payout
-            # in accounts/driver_service.py.) The fingerprint is short (46 chars) so the
-            # per-customer key f"{bonus_idem}:{cid}" stays well within DB max_length=120.
-            # NOTE: to intentionally issue a SECOND identical bonus (same actor+amount+
-            # targets), the caller must supply a distinct idempotency_key.
-            if bonus_idem is None:
-                _actor_id = getattr(getattr(request, "user", None), "id", None)
-                _fp_src = f"{_actor_id}|{amount}|{','.join(str(i) for i in sorted(ids))}"
-                _fp = hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
-                bonus_idem = f"adminbonus:fp:{_fp}"
-            # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
-            # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
-            # so two concurrent POSTs with the same key could both clear exists() and both
-            # inflate balances (the unique WalletTransaction.idempotency_key only blocks the
-            # 2nd ledger INSERT). cache.add() is atomic — only the first concurrent caller
-            # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
-            # holds the lock and a corrected retry isn't falsely deduped; NOT released on
-            # success — it expires, and the DB unique key is the permanent durable guard.
-            _lock_key = f"walletbonus:{bonus_idem}"
-            if not cache.add(_lock_key, "1", 60):
-                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
-            # Idempotency: a repeated submit with the same key (double-click, retry) must
-            # not credit real money twice. Per-customer keys are derived from the batch key.
-            if WalletTransaction.objects.filter(
-                idempotency_key__startswith=f"{bonus_idem}:"
-            ).exists():
-                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
-            # OPS-5b: populate balance_after for ledger reconcilability.
-            # Bulk-update the balances first (single SQL UPDATE — fast), then read the
-            # new per-customer balances back to record in the transaction log.
-            # The idempotency key format {idempotency_key}:{cid} is preserved.
-            Customer.objects.filter(pk__in=ids).update(
-                wallet_balance=F("wallet_balance") + amount
-            )
-            # Read new balances in a single query keyed by customer id.
-            new_balances = dict(
-                Customer.objects.filter(pk__in=ids).values_list("id", "wallet_balance")
-            )
-            WalletTransaction.objects.bulk_create([
-                WalletTransaction(
-                    customer_id=cid,
-                    type=WalletTransaction.Type.BONUS,
-                    amount=amount,
-                    balance_after=new_balances.get(cid),
-                    note=note,
-                    # bonus_idem is always set now (client key or server fingerprint),
-                    # so every ledger row is durably deduped on this per-customer key.
-                    idempotency_key=f"{bonus_idem}:{cid}",
+        # P2-11: a failed attempt must release the 60s mutex — the atomic
+        # block rolled everything back, so nothing was issued, and a retry
+        # within 60s would otherwise be misreported as a duplicate. The
+        # duplicate returns inside the block are NOT exceptions, so they
+        # keep the lock (deliberately — it expires, and the DB unique key
+        # is the permanent durable guard).
+        _lock_holder = {}
+        try:
+            with _dbtx.atomic():
+                ids = list(qs.values_list("id", flat=True))
+                if not ids:
+                    return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
+                # Self-defending idempotency: bonus credits are REAL money, so a retry
+                # (double-click, network retry, proxy replay) must never double-credit —
+                # even from a client that sends no idempotency_key. Prefer the client key
+                # when present, but ALWAYS fall back to a deterministic server-side
+                # fingerprint of the actor + amount + the normalized target set, so the same
+                # logical bonus maps to the same idempotency namespace regardless of client.
+                # (Fail closed so the endpoint is self-defending — mirrors record_driver_payout
+                # in accounts/driver_service.py.) The fingerprint is short (46 chars) so the
+                # per-customer key f"{bonus_idem}:{cid}" stays well within DB max_length=120.
+                # NOTE: to intentionally issue a SECOND identical bonus (same actor+amount+
+                # targets), the caller must supply a distinct idempotency_key.
+                if bonus_idem is None:
+                    _actor_id = getattr(getattr(request, "user", None), "id", None)
+                    _fp_src = f"{_actor_id}|{amount}|{','.join(str(i) for i in sorted(ids))}"
+                    _fp = hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+                    bonus_idem = f"adminbonus:fp:{_fp}"
+                # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
+                # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
+                # so two concurrent POSTs with the same key could both clear exists() and both
+                # inflate balances (the unique WalletTransaction.idempotency_key only blocks the
+                # 2nd ledger INSERT). cache.add() is atomic — only the first concurrent caller
+                # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
+                # holds the lock and a corrected retry isn't falsely deduped; NOT released on
+                # success — it expires, and the DB unique key is the permanent durable guard.
+                _lock_key = f"walletbonus:{bonus_idem}"
+                _lock_holder["key"] = _lock_key
+                if not cache.add(_lock_key, "1", 60):
+                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+                # Idempotency: a repeated submit with the same key (double-click, retry) must
+                # not credit real money twice. Per-customer keys are derived from the batch key.
+                if WalletTransaction.objects.filter(
+                    idempotency_key__startswith=f"{bonus_idem}:"
+                ).exists():
+                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+                # OPS-5b: populate balance_after for ledger reconcilability.
+                # Bulk-update the balances first (single SQL UPDATE — fast), then read the
+                # new per-customer balances back to record in the transaction log.
+                # The idempotency key format {idempotency_key}:{cid} is preserved.
+                Customer.objects.filter(pk__in=ids).update(
+                    wallet_balance=F("wallet_balance") + amount
                 )
-                for cid in ids
-            ])
+                # Read new balances in a single query keyed by customer id.
+                new_balances = dict(
+                    Customer.objects.filter(pk__in=ids).values_list("id", "wallet_balance")
+                )
+                WalletTransaction.objects.bulk_create([
+                    WalletTransaction(
+                        customer_id=cid,
+                        type=WalletTransaction.Type.BONUS,
+                        amount=amount,
+                        balance_after=new_balances.get(cid),
+                        note=note,
+                        # bonus_idem is always set now (client key or server fingerprint),
+                        # so every ledger row is durably deduped on this per-customer key.
+                        idempotency_key=f"{bonus_idem}:{cid}",
+                    )
+                    for cid in ids
+                ])
 
+        except Exception:
+            if _lock_holder.get("key"):
+                cache.delete(_lock_holder["key"])
+            raise
         log_admin_action(
             action=AdminAuditLog.Actions.WALLET_BONUS_ISSUED,
             request=request,
@@ -5808,7 +5823,13 @@ class MarketplacePlaceOrderView(APIView):
                         from accounts.dispatch import start_dispatch
                         start_dispatch(_job)
                     except Exception:
-                        pass
+                        # D G3: log, don't swallow — a silent failure strands the order
+                        # (see _backfill_missing_jobs in sweep_delivery_jobs, which
+                        # recreates the job from this log's evidence).
+                        logger.exception(
+                            "Marketplace delivery job creation failed tenant=%s order=%s",
+                            getattr(tenant, "id", "?"), getattr(order, "order_number", "?"),
+                        )
 
         except Exception as exc:
             logger.exception("MarketplacePlaceOrderView error for tenant=%s: %s", restaurant_slug, exc)
@@ -5911,6 +5932,11 @@ class MarketplaceOrderStatusView(APIView):
                             "options": item.options,
                             "note": item.note,
                             "is_voided": item.is_voided,
+                            # R P2-1: expose comp state like the direct payload does
+                            # (menu/views.py) so the receipt can render a comped line
+                            # as contributing 0 — otherwise a comped item shows at
+                            # full price while being excluded from the total.
+                            "is_comped": item.is_comped,
                             "combo_components": item.combo_components,
                         }
                         for item in order.items.all()
@@ -7285,7 +7311,21 @@ class DriverJobListView(APIView):
         from django.db.models import Q
         from django.utils import timezone as _tz
         _now = _tz.now()
-        pending_jobs = list(
+        # D G13: an exclusive offer to THIS driver must never fall off the pending list
+        # under the [:20] cap. The old single query sliced the first 20 rows in default
+        # (-created_at) order, so a live exclusive offer could be pushed out by 20+
+        # open-pool jobs. Live exclusive offers are fetched first, then the rest fills
+        # the remaining slots — a driver with a live offer always sees it.
+        _exclusive = list(
+            DeliveryJob.objects.filter(
+                driver__isnull=True,
+                status=DeliveryJob.Status.SEARCHING,
+                offered_to=customer,
+                offer_expires_at__gt=_now,
+            ).select_related("driver")[:20]
+        )
+        _excl_ids = [j.id for j in _exclusive]
+        _rest = list(
             DeliveryJob.objects.filter(
                 driver__isnull=True,
                 status=DeliveryJob.Status.SEARCHING,
@@ -7294,8 +7334,9 @@ class DriverJobListView(APIView):
                 | Q(offered_to=customer)
                 | Q(offered_to__isnull=True)
                 | Q(offer_expires_at__lte=_now)
-            ).select_related("driver")[:20]
+            ).exclude(pk__in=_excl_ids).select_related("driver")[: max(0, 20 - len(_exclusive))]
         )
+        pending_jobs = _exclusive + _rest
 
         # Enrich jobs with the order summary, BATCHED by tenant — one schema switch
         # per tenant instead of one per job (a driver poll can carry ~20 pending jobs
@@ -7372,6 +7413,7 @@ class DriverJobAcceptView(APIView):
     throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
+        from datetime import timedelta as _td
         from django.utils import timezone as _tz
         from django.db import transaction as _tx
         from .models import DeliveryJob
@@ -7430,6 +7472,32 @@ class DriverJobAcceptView(APIView):
                     {"detail": "This delivery is currently offered to another driver.", "code": "offered_elsewhere"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # DEL-7: open-pool claims require a fresh GPS fix — the same <=300s
+            # rule the ranked exclusive offers use (dispatch.POSITION_FRESH_SECONDS).
+            # A driver whose position is hours stale must not grab a pool job they
+            # may not be able to reach. The live exclusive offeree is exempt: they
+            # were ranked on a fresh fix when the offer was made (<=60s ago).
+            _live_offeree = (
+                not job.is_open_pool
+                and job.offered_to_id == customer.id
+                and job.offer_expires_at is not None
+                and job.offer_expires_at > _now
+            )
+            if not _live_offeree:
+                from accounts.dispatch import POSITION_FRESH_SECONDS as _FRESH_SECONDS
+                _fresh_since = _now - _td(seconds=_FRESH_SECONDS)
+                _pos_at = getattr(customer, "driver_position_updated_at", None)
+                if (
+                    _pos_at is None
+                    or _pos_at < _fresh_since
+                    or getattr(customer, "driver_lat", None) is None
+                    or getattr(customer, "driver_lng", None) is None
+                ):
+                    return Response(
+                        {"detail": "Your location is too old to accept jobs from the open pool. Share your location again and try once more.", "code": "stale_gps"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
             job.driver = customer
             job.status = DeliveryJob.Status.ASSIGNED
@@ -7549,12 +7617,58 @@ def _credit_driver_earnings(job) -> None:
         )
 
 
+def _credit_driver_noshow(job) -> None:
+    """Credit the driver's wallet with this job's no-show payout exactly once
+    (idempotent on the job id). Best-effort — a hiccup here must never block the owner
+    flow; the payout can be reconciled. Only called for FAILED jobs the owner already
+    confirmed as a no-show (resolution NOSHOW_PAID via confirm_noshow) — the owner
+    already approved this payout, so this is just the reconcile backfill when that
+    credit failed transiently. Bypasses the verified-phone gate (the driver clearly
+    exists). Mirrors _credit_driver_earnings; see reconcile_driver_earnings (D G7)."""
+    try:
+        from decimal import Decimal as _D
+        from accounts.wallet_service import credit_wallet
+        from accounts.models import WalletTransaction as _WT
+        if not getattr(job, "driver_id", None):
+            return
+        payout = _D(str(job.driver_payout or "0"))
+        if payout <= 0:
+            return
+        from accounts.verticals import DRIVER as _DRIVER
+        credit_wallet(
+            job.driver_id, payout,
+            tx_type=_WT.Type.EARNING,
+            idempotency_key=f"noshow:{job.id}",
+            reference=f"noshow:{job.order_number}",
+            tenant_id=job.tenant_id,
+            note="No-show payout",
+            require_verified=False,
+            # C13: a delivery payout is the driver vertical, NOT the originating
+            # tenant's consumer vertical that tenant_id would auto-derive.
+            vertical=_DRIVER,
+        )
+    except Exception:
+        # Money failure: a driver's no-show payout was not credited. Swallowed so the
+        # owner flow still completes, but it MUST be alertable + reconcilable, so route
+        # it to the payments channel with the job/driver/tenant ids for triage.
+        payments_logger.exception(
+            "driver no-show credit failed job_id=%s driver_id=%s tenant_id=%s order=%s",
+            getattr(job, "id", "?"), getattr(job, "driver_id", "?"),
+            getattr(job, "tenant_id", "?"), getattr(job, "order_number", "?"),
+        )
+
+
 def _complete_delivered_order(job, proof_photo_url="") -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
-    prepaid by wallet or cash-collected on handover), store any proof photo, and
-    credit the driver's wallet. Best-effort — never blocks the driver.
+    prepaid by wallet or cash-collected on handover), store any proof photo, record
+    the COD cash collected (D G2), and credit the driver's wallet. Best-effort —
+    never blocks the driver.
     """
+    # D G2: the cash the driver collected on handover (0 for prepaid orders).
+    # Computed inside the tenant-schema block below (it needs the order + its
+    # payment ledger) and saved on the job afterwards.
+    _cash_collected = None
     try:
         from tenancy.models import Tenant as _T
         from django_tenants.utils import schema_context
@@ -7572,6 +7686,21 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
             # driver completion must not flip it back to completed/paid.
             if order.status == _O.Status.CANCELLED:
                 return
+            # D G2: capture the outstanding BEFORE flipping to PAID — the cash the
+            # driver collected is the order total minus everything already collected
+            # (wallet + any staff-collected cash/card partials, via the shared
+            # _order_collected measure). 0 for a prepaid order. The ledger read is
+            # best-effort: if it fails, fall back to the wallet counter, which is
+            # exact for the standard COD / prepaid cases.
+            from decimal import Decimal as _D
+            try:
+                from menu.views import _order_collected as _collected
+                _already = _collected(order)
+            except Exception:
+                _already = _D(str(order.wallet_amount_paid or "0"))
+            _cash_collected = max(
+                _D("0"), (_D(str(order.total or "0")) - _already)
+            )
             fields = []
             if order.status != _O.Status.COMPLETED:
                 order.status = _O.Status.COMPLETED
@@ -7592,6 +7721,16 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
                 _broadcast_order_change(order)
     except Exception:
         logger.exception("Failed to complete delivered order %s", getattr(job, "order_number", "?"))
+    # Record the COD cash on the job (public schema — outside the tenant context).
+    # Only when cash actually changed hands; a prepaid order leaves the field at 0.
+    if _cash_collected:
+        try:
+            job.cash_collected = _cash_collected
+            job.save(update_fields=["cash_collected"])
+        except Exception:
+            logger.exception(
+                "Failed to record cash collected for %s", getattr(job, "order_number", "?")
+            )
     # Driver earnings live in the public schema — credit outside the tenant context.
     _credit_driver_earnings(job)
 
@@ -10047,9 +10186,12 @@ class CustomerTopUpIntentView(APIView):
     # always" contract means the PSP_TOPUP_ENABLED probe below must answer {"enabled":
     # False} BEFORE auth. IsCustomer runs in initial(), ahead of post(), and would 401 an
     # anonymous/expired caller instead. (Same ordering rule as CustomerWalletTransferView.)
+    # P2-2: throttled per customer (IP fallback for anon) so an uncapped caller cannot
+    # mint Stripe Checkout sessions at will. The anonymous flag probe still answers
+    # {"enabled": False} — it is a cheap early return inside post().
     authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [AllowAny]
-    throttle_classes = []
+    throttle_classes = [CustomerTopUpIntentThrottle]
 
     def post(self, request):
         if not settings.PSP_TOPUP_ENABLED:
@@ -10096,7 +10238,11 @@ class CustomerTopUpIntentView(APIView):
                     "quantity": 1,
                 }],
                 mode="payment",
-                success_url=f"{site_url}/account?topup=success",
+                # WALLET-2 follow-up: carry the Checkout Session id back so the
+                # returning page can ask the top-up-status endpoint about the
+                # session it just paid for ({CHECKOUT_SESSION_ID} is substituted
+                # by Stripe on redirect).
+                success_url=f"{site_url}/account?topup=success&session_id={{CHECKOUT_SESSION_ID}}",
                 cancel_url=f"{site_url}/account?topup=cancelled",
                 metadata={"customer_id": str(customer.pk), "amount": str(amount)},
                 client_reference_id=str(customer.pk),
@@ -10107,13 +10253,35 @@ class CustomerTopUpIntentView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+        # Wave K F-08: persist a local attempt row so the top-up is visible
+        # on the Wallet tab even if the customer closes the tab mid-payment
+        # or Stripe never returns them. A row-creation failure must never
+        # fail the intent — the webhook credit + status Stripe fallback
+        # still work without it.
+        try:
+            from .models import CustomerTopUpAttempt
+            CustomerTopUpAttempt.objects.create(
+                customer=customer,
+                session_id=session.id,
+                amount=amount,
+                currency="MAD",
+            )
+        except Exception:
+            logger.warning(
+                "Top-up attempt row not recorded session_id=%s",
+                getattr(session, "id", ""),
+            )
+
         return Response({"enabled": True, "url": session.url})
 
 
 class CustomerTopUpWebhookView(APIView):
     """POST /api/customer/topup/webhook/ — receive Stripe events.
 
-    Handles ``checkout.session.completed`` by crediting the customer wallet.
+    Handles ``checkout.session.completed`` and
+    ``checkout.session.async_payment_succeeded`` by crediting the customer wallet.
+    ``checkout.session.async_payment_failed`` marks the local attempt row failed
+    (Wave K F-05) so the status endpoint can answer "failed" honestly.
     Idempotent: Stripe may deliver each event more than once; the wallet service
     deduplicates on ``idempotency_key="stripe:<event_id>"``.
 
@@ -10169,7 +10337,57 @@ class CustomerTopUpWebhookView(APIView):
             except Exception:
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
 
-        if event.get("type") != "checkout.session.completed":
+        event_type = event.get("type")
+        # Wave K F-05: a failed async payment (e.g. a bank transfer that
+        # bounced) never fires a credit event, so without this the status
+        # stays "pending" forever. Mark the local attempt row failed so the
+        # status endpoint can answer "failed" honestly. Intercepted before
+        # the generic event-type filter below.
+        if event_type == "checkout.session.async_payment_failed":
+            _failed_cs = event.get("data", {}).get("object", {}) or {}
+            try:
+                from .models import CustomerTopUpAttempt
+                CustomerTopUpAttempt.objects.filter(
+                    session_id=_failed_cs.get("id", "")
+                ).update(status=CustomerTopUpAttempt.Status.FAILED)
+            except Exception:
+                payments_logger.warning(
+                    "Top-up attempt row not marked failed session_id=%s",
+                    _failed_cs.get("id", ""),
+                )
+            return Response({"ok": True})
+        # Wave L L-01: an abandoned checkout fires checkout.session.expired and
+        # never fires a credit event, so without this the attempt row stays
+        # "created" (Pending) forever. Mark it failed, same as
+        # async_payment_failed above, so the attempts list stops showing it
+        # as a payment in flight. Intercepted before the generic event-type
+        # filter below.
+        if event_type == "checkout.session.expired":
+            _expired_cs = event.get("data", {}).get("object", {}) or {}
+            try:
+                from .models import CustomerTopUpAttempt
+                CustomerTopUpAttempt.objects.filter(
+                    session_id=_expired_cs.get("id", "")
+                ).update(status=CustomerTopUpAttempt.Status.FAILED)
+            except Exception:
+                payments_logger.warning(
+                    "Top-up attempt row not marked failed session_id=%s",
+                    _expired_cs.get("id", ""),
+                )
+            return Response({"ok": True})
+        # Gap-hunt 2026-11-22 (W P1-1): async payment methods (e.g. bank transfer)
+        # complete AFTER the session: Stripe fires checkout.session.async_payment_succeeded
+        # when the money actually lands. The old code dropped every non-completed event
+        # silently, so an async-paid top-up was paid-but-never-credited, invisibly.
+        # The completed event for such a session carries payment_status "unpaid" and is
+        # dropped by the paid-check below (no credit); the async event then credits once.
+        # A session never fires async_payment_succeeded after a paid completion for the
+        # same payment, so the stripe:{event_id} key cannot double-credit across the two.
+        if event_type not in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+            payments_logger.info(
+                "Stripe webhook ignored event type=%s event_id=%s",
+                event_type, event.get("id", ""),
+            )
             return Response({"ok": True})
 
         cs = event.get("data", {}).get("object", {})
@@ -10178,30 +10396,36 @@ class CustomerTopUpWebhookView(APIView):
         event_id = event.get("id", "")
 
         # MONEY-3: only credit a session that actually cleared, and credit the SETTLED
-        # amount Stripe reports (amount_total, in the currency's minor unit) — NOT the
+        # amount Stripe reports (amount_total, in the currency's minor unit) -- NOT the
         # client-echoed metadata amount, which is merely what we REQUESTED at intent time.
         # A partial/adjusted/tampered session would otherwise over- or under-credit.
-        if cs.get("payment_status") not in (None, "paid"):
-            return Response({"ok": True})  # session didn't clear → nothing to credit
-
+        # Gap-hunt 2026-11-22 (W P2-5): no metadata-amount fallback. A missing or
+        # unparseable amount_total is a 400, not a silent credit of the requested amount.
         amount_total = cs.get("amount_total")
+        amount_value = None
         if amount_total is not None:
             from decimal import Decimal as _D, InvalidOperation as _IO
             try:
                 amount_value = (_D(str(amount_total)) / _D("100")).quantize(_D("0.01"))
             except (_IO, ValueError, TypeError):
                 amount_value = None
-        else:
-            # Fallback for events without amount_total (older API / test fixtures): the
-            # server-set metadata amount. Trustworthy only because the signature is verified
-            # in production — always set PSP_STRIPE_WEBHOOK_SECRET before going live.
-            amount_value = meta.get("amount")
 
         if not customer_id or amount_value in (None, "") or not event_id:
             return Response(
                 {"ok": False, "detail": "Missing metadata."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Gap-hunt 2026-11-22 (W P1-2): payment_status must be EXACTLY "paid". The old
+        # code also accepted a missing (None) status, crediting sessions whose payment
+        # state Stripe never confirmed. Checked after the shape validation above so a
+        # malformed event still returns 400 rather than a silent drop.
+        if cs.get("payment_status") != "paid":
+            payments_logger.warning(
+                "Stripe webhook dropped uncleared session event_id=%s payment_status=%r",
+                event_id, cs.get("payment_status"),
+            )
+            return Response({"ok": True})  # session didn't clear -- nothing to credit
 
         from .wallet_service import credit_wallet, WalletError
         try:
@@ -10218,8 +10442,232 @@ class CustomerTopUpWebhookView(APIView):
                 {"ok": False, "detail": "Wallet credit failed."},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
+        except Customer.DoesNotExist:
+            # Gap-hunt 2026-11-22 (W P1-7): a deleted customer used to 500 here, so
+            # Stripe retried forever with no dead-letter. Fail clean instead.
+            payments_logger.warning(
+                "Stripe webhook customer gone event_id=%s customer_id=%s",
+                event_id, customer_id,
+            )
+            return Response(
+                {"ok": False, "detail": "Customer not found."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # Wave K F-08: the credit landed — mark the local attempt row so the
+        # Wallet tab's recent-top-ups list shows it as confirmed. Best
+        # effort only: the ledger row above is the truth, and a row-update
+        # failure must never fail a webhook Stripe will retry.
+        try:
+            from .models import CustomerTopUpAttempt
+            CustomerTopUpAttempt.objects.filter(
+                session_id=cs.get("id", "")
+            ).update(status=CustomerTopUpAttempt.Status.CREDITED)
+        except Exception:
+            payments_logger.warning(
+                "Top-up attempt row not marked credited session_id=%s",
+                cs.get("id", ""),
+            )
 
         return Response({"ok": True})
+
+def _stripe_no_such_session(exc, stripe_module=None):
+    """True when a Stripe lookup failure means "no such session" (terminal).
+
+    Wave K F-03: the status endpoint must tell the frontend which "unknown"
+    answers can never resolve. Prefer isinstance against the real
+    stripe.error.InvalidRequestError when it is a real class; fall back to
+    the exception class name + Stripe's own message text so tests can
+    simulate it with a mocked stripe module (whose error classes are
+    MagicMocks, not types).
+    """
+    err_cls = getattr(getattr(stripe_module, "error", None), "InvalidRequestError", None)
+    if isinstance(err_cls, type) and isinstance(exc, err_cls):
+        return True
+    return (
+        type(exc).__name__ == "InvalidRequestError"
+        and "No such checkout.session" in str(exc)
+    )
+
+
+class CustomerTopUpStatusView(APIView):
+    """GET /api/customer/topup/status/?session_id=<stripe_checkout_session_id>.
+
+    WALLET-2 follow-up: the durable server-side answer to "did my top-up
+    land?" The Wave H banner could only re-fetch the balance and hope the
+    webhook had landed; this endpoint says so from the ledger + Stripe:
+
+    * "confirmed" — a TOPUP WalletTransaction with reference
+      "stripe:<session_id>" exists for this customer (the webhook credited
+      it). The ledger is the truth; this answer needs no Stripe call.
+    * "pending" — no credit yet, but the Stripe session is still open (or
+      paid and the webhook hasn't landed). Keep waiting.
+    * "failed" — the Stripe session expired without payment.
+    * "unknown" — no such session, the session belongs to another customer,
+      the PSP is off / unreachable, or Stripe errored. Never a 500: a
+      mistyped id is not a server error, and the response never reveals
+      whether another customer's session exists. Every response carries a
+      "retryable" flag (Wave K F-03): false when the answer can never change
+      (no such session, foreign session, PSP off, Stripe SDK missing),
+      true for Stripe API errors and "pending".
+    * "failed" — the Stripe session expired without payment, or the webhook
+      marked the local attempt row failed after an async_payment_failed
+      event (Wave K F-05).
+
+    The 120/hour throttle caps Stripe Session.retrieve calls only (Wave K
+    F-01): it is checked inside get(), after the ledger lookup, so a
+    ledger-confirmed answer is never throttled.
+
+    Auth: customer session only (IsCustomer). The session id is checked
+    against the session's own metadata.customer_id / client_reference_id,
+    so one customer cannot probe another customer's top-ups.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+    # Wave K F-01: NO class-level throttle — DRF throttling runs in
+    # initial(), before get(), so it would count the cheap ledger answer
+    # too. The throttle is checked manually inside get(), after the ledger
+    # lookup and the PSP check, immediately before Stripe Session.retrieve,
+    # so only the expensive path counts against the 120/hour bucket.
+    throttle_classes = []
+
+    def get(self, request):
+        customer = request.user
+        session_id = (request.query_params.get("session_id") or "").strip()
+        if not session_id:
+            return Response(
+                {"detail": "session_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .models import CustomerTopUpAttempt, WalletTransaction
+
+        # 1. The wallet ledger is the truth: the webhook credits with
+        # reference="stripe:<checkout_session_id>" and type TOPUP.
+        tx = (
+            WalletTransaction.objects.filter(
+                customer=customer,
+                type=WalletTransaction.Type.TOPUP,
+                reference=f"stripe:{session_id}",
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if tx is not None:
+            return Response({
+                "status": "confirmed",
+                "retryable": False,
+                "amount": str(tx.amount),
+                "currency": tx.currency or "MAD",
+                "balance": str(customer.wallet_balance),
+                "credited_at": tx.created_at.isoformat(),
+            })
+
+        # 1b. Wave K F-05: a failed async payment leaves no ledger row, but
+        # the webhook marked the local attempt row failed — answer "failed"
+        # honestly instead of "pending" forever. Checked before the PSP flag
+        # so a flag flip after the failure cannot hide it, and without ever
+        # calling Stripe.
+        attempt = (
+            CustomerTopUpAttempt.objects.filter(customer=customer, session_id=session_id)
+            .order_by("-created_at")
+            .first()
+        )
+        if attempt is not None and attempt.status == CustomerTopUpAttempt.Status.FAILED:
+            return Response({
+                "status": "failed",
+                "retryable": False,
+                "payment_status": "unpaid",
+                "balance": str(customer.wallet_balance),
+            })
+
+        # 2. No credit yet — ask Stripe what the session is doing. The ledger
+        # check above already answered every credited top-up, so this path
+        # only ever fires for genuinely unconfirmed returns.
+        if not settings.PSP_TOPUP_ENABLED:
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
+        try:
+            import stripe as _stripe
+            _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
+        except ImportError:
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
+
+        # Wave K F-01: throttle only the Stripe path. DRF instantiates
+        # throttle classes fresh per request, so this manual check is
+        # equivalent to the class-level one — except it runs after the cheap
+        # answers above. request.user is set by auth in initial(), so the
+        # customer ident is available here.
+        _status_throttle = CustomerTopUpStatusThrottle()
+        if not _status_throttle.allow_request(request, self):
+            self.throttled(request, _status_throttle.wait())
+
+        try:
+            session = _stripe.checkout.Session.retrieve(session_id)
+        except Exception as exc:
+            payments_logger.warning(
+                "Top-up status: Stripe lookup failed session_id=%s", session_id
+            )
+            return Response({
+                "status": "unknown",
+                "retryable": not _stripe_no_such_session(exc, _stripe),
+                "balance": str(customer.wallet_balance),
+            })
+
+        # Ownership: the session must belong to this customer. Fail closed —
+        # an empty owner is also "unknown", never a leak.
+        meta = session.get("metadata") or {}
+        owner = str(meta.get("customer_id") or session.get("client_reference_id") or "")
+        if owner != str(customer.pk):
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
+
+        payment_status = session.get("payment_status")
+        if session.get("status") == "expired":
+            return Response({
+                "status": "failed",
+                "retryable": False,
+                "payment_status": payment_status,
+                "balance": str(customer.wallet_balance),
+            })
+        return Response({
+            "status": "pending",
+            "retryable": True,
+            "payment_status": payment_status,
+            "balance": str(customer.wallet_balance),
+        })
+
+
+class CustomerTopUpAttemptsView(APIView):
+    """GET /api/customer/topup/attempts/ — the customer's recent top-up attempts.
+
+    Wave K F-08: the intent persists a CustomerTopUpAttempt row per Checkout
+    Session; this lists the caller's own recent attempts (newest first) so
+    the Wallet tab can show top-up history even when the customer closed the
+    tab mid-payment. Works regardless of the PSP flag — history is local.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        from .models import CustomerTopUpAttempt
+
+        attempts = (
+            CustomerTopUpAttempt.objects.filter(customer=request.user)
+            .order_by("-created_at")[:10]
+        )
+        return Response({
+            "attempts": [
+                {
+                    "session_id": a.session_id,
+                    "amount": str(a.amount),
+                    "currency": a.currency or "MAD",
+                    "status": a.status,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in attempts
+            ],
+        })
 
 
 # ── C6: self-serve data export + PII erasure ──────────────────────────────────

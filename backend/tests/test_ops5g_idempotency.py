@@ -64,7 +64,7 @@ class _OrderPayWalletHelpers:
 
 
 class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
-    """(1) CustomerOrderPayWalletView debit key = f"order-pay-{schema}-{order_number}"."""
+    """(1) CustomerOrderPayWalletView debit key = f"order-pay-{schema}-{order_number}-{amount}" (W P2-8)."""
 
     def setUp(self):
         from menu.views import CustomerOrderPayWalletView
@@ -109,9 +109,37 @@ class CustomerOrderPayWalletKeyTests(SimpleTestCase, _OrderPayWalletHelpers):
         self.assertEqual(resp.status_code, 200)
         debit.assert_called_once()
         key = debit.call_args.kwargs.get("idempotency_key")
-        self.assertEqual(key, f"order-pay-{connection.schema_name}-ORD-1")
+        # W P2-8: the key binds the outstanding amount (45.00) as well as the schema.
+        self.assertEqual(key, f"order-pay-{connection.schema_name}-ORD-1-45.00")
         # The schema name must actually appear in the key (the whole point of the fix).
         self.assertIn(connection.schema_name, key)
+
+    @patch("accounts.wallet_service.debit_wallet")
+    @patch("menu.views.Order.objects")
+    def test_key_is_amount_bound(self, om, debit):
+        """W P2-8: the same order with a different outstanding must mint a DIFFERENT
+        key. Before this, the amount-blind key replayed the ORIGINAL tx while the view
+        still added the NEW outstanding and marked PAID — the extra amount was never
+        debited but the bill claimed it."""
+        order = self._order(total="45.00", paid="0.00")
+        om.filter.return_value.first.return_value = order
+        om.select_for_update.return_value = om  # locked re-read resolves to the same order
+        debit.return_value = SimpleNamespace(balance_after=Decimal("5.00"))
+
+        resp1 = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp1.status_code, 200)
+        key1 = debit.call_args.kwargs.get("idempotency_key")
+        self.assertEqual(key1, f"order-pay-{connection.schema_name}-ORD-1-45.00")
+
+        # Items appended after the first payment: total 60, 45 already wallet-paid,
+        # so the new outstanding is 15.00 — a different key, a real new debit.
+        order.total = Decimal("60.00")
+        resp2 = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
+        self.assertEqual(resp2.status_code, 200)
+        key2 = debit.call_args.kwargs.get("idempotency_key")
+        self.assertEqual(key2, f"order-pay-{connection.schema_name}-ORD-1-15.00")
+        self.assertNotEqual(key1, key2)
+        self.assertEqual(debit.call_count, 2)
 
     @patch("accounts.wallet_service.debit_wallet")
     @patch("menu.views.Order.objects")
@@ -202,6 +230,11 @@ class StaffOrderPaymentKeyTests(SimpleTestCase):
         from menu.views import StaffOrderPaymentView
         self.factory = APIRequestFactory()
         self.view = StaffOrderPaymentView.as_view()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift = patch("menu.models.Shift")
+        self._shift_mock = _shift.start()
+        self.addCleanup(_shift.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None):
         body = body or {"method": "wallet", "amount": "20.00"}
@@ -233,6 +266,13 @@ class StaffOrderPaymentKeyTests(SimpleTestCase):
         self.assertEqual(key, f"orderpay:{connection.schema_name}:99")
         self.assertIn(connection.schema_name, key)
 
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any debit."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
+
     @patch("menu.views.transaction")
     @patch("menu.views.Order.objects")
     def test_already_paid_guard_blocks_before_any_debit(self, order_om, tx_mock):
@@ -263,6 +303,11 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         self._orderitem_mock = _oi_patcher.start()
         self.addCleanup(_oi_patcher.stop)
         self._orderitem_mock.objects.filter.return_value.update.return_value = 1
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift = patch("menu.models.Shift")
+        self._shift_mock = _shift.start()
+        self.addCleanup(_shift.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _make_item(self, item_id=901, subtotal=Decimal("20.00"), is_voided=False):
         item = MagicMock()
@@ -324,6 +369,13 @@ class VoidItemRefundKeyTests(SimpleTestCase):
         force_authenticate(req, user=_user())
         req.tenant = SimpleNamespace(id=1)
         return self.view(req, order_id=10, item_id=item_id)
+
+    def test_not_clocked_in_409(self):
+        """R P1-2: a staff user with no open shift is refused before any void."""
+        self._shift_mock.objects.filter.return_value.exists.return_value = False
+        resp = self._post(item_id=901)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "not_clocked_in")
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.Dish.objects")
@@ -425,7 +477,8 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
-    def test_integrity_error_handler_replay_is_customer_scoped(self, mock_cust, mock_cfg, mock_wt):
+    @patch("accounts.wallet_service.credit_wallet")
+    def test_integrity_error_handler_replay_is_customer_scoped(self, mock_credit, mock_cust, mock_cfg, mock_wt):
         """The concurrent-duplicate (IntegrityError) handler must ALSO scope the replay
         lookup to the requesting customer."""
         from django.db import IntegrityError
@@ -442,8 +495,9 @@ class LoyaltyRedeemReplayScopingTests(SimpleTestCase):
         locked.loyalty_points = 500
         locked.wallet_balance = Decimal("42.00")
         mock_cust.select_for_update.return_value.get.return_value = locked
-        # … where the create() raises IntegrityError (concurrent winner took the key).
-        mock_wt.create.side_effect = IntegrityError("dupe key")
+        # … where the credit raises IntegrityError (concurrent winner took the key).
+        # W P2-7: the view now credits via wallet_service, not WalletTransaction.create.
+        mock_credit.side_effect = IntegrityError("dupe key")
 
         with patch("django.db.transaction.atomic"):
             resp = self._post({"points": 100, "idempotency_key": "abc"}, principal=customer)
@@ -510,12 +564,16 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
-    def test_create_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
+    @patch("accounts.wallet_service.credit_wallet")
+    def test_create_uses_namespaced_key(self, mock_credit, mock_cust, mock_cfg, mock_wt):
+        # W P2-7: the redemption credit now goes through wallet_service.credit_wallet,
+        # not a hand-rolled WalletTransaction.create — the namespaced key travels there.
+        from accounts.models import WalletTransaction
         customer = Customer(id=1, phone_verified=True, loyalty_points=500,
                             wallet_balance=Decimal("0.00"))
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
-        mock_wt.filter.return_value.first.return_value = None  # no prior → proceed to create
+        mock_wt.filter.return_value.first.return_value = None  # no prior → proceed to credit
 
         locked = MagicMock()
         locked.loyalty_points = 500
@@ -526,17 +584,19 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
             resp = self._post(principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_wt.create.assert_called_once()
-        create_kwargs = mock_wt.create.call_args.kwargs
-        self.assertEqual(create_kwargs.get("idempotency_key"), self.EXPECT)
-        self.assertIn(connection.schema_name, create_kwargs["idempotency_key"])
+        mock_credit.assert_called_once()
+        credit_kwargs = mock_credit.call_args.kwargs
+        self.assertEqual(credit_kwargs.get("idempotency_key"), self.EXPECT)
+        self.assertIn(connection.schema_name, credit_kwargs["idempotency_key"])
+        self.assertEqual(credit_kwargs.get("tx_type"), WalletTransaction.Type.LOYALTY)
         # The non-idempotency `reference` field is NOT namespaced (left as the points marker).
-        self.assertEqual(create_kwargs.get("reference"), "loyalty:100pts")
+        self.assertEqual(credit_kwargs.get("reference"), "loyalty:100pts")
 
     @patch("accounts.models.WalletTransaction.objects")
     @patch("menu.views.LoyaltyConfig.objects")
     @patch("accounts.models.Customer.objects")
-    def test_integrity_replay_refetch_uses_namespaced_key(self, mock_cust, mock_cfg, mock_wt):
+    @patch("accounts.wallet_service.credit_wallet")
+    def test_integrity_replay_refetch_uses_namespaced_key(self, mock_credit, mock_cust, mock_cfg, mock_wt):
         from django.db import IntegrityError
         customer = Customer(id=1, phone_verified=True, loyalty_points=500,
                             wallet_balance=Decimal("0.00"))
@@ -544,19 +604,25 @@ class LoyaltyRedeemKeySchemaNamespacingTests(SimpleTestCase):
         customer.refresh_from_db = MagicMock()
         mock_cfg.filter.return_value.first.return_value = MagicMock(
             redeem_threshold=100, points_value=Decimal("0.10"))
-        mock_wt.filter.return_value.first.return_value = None  # pre-flight: no prior
+        # Call order of WalletTransaction.objects.filter(...).first(): pre-flight ->
+        # None, in-block re-check -> None, IntegrityError-handler refetch -> the
+        # concurrent winner's row.
+        prior = MagicMock(amount=Decimal("10.00"), reference="loyalty:100pts")
+        mock_wt.filter.return_value.first.side_effect = [None, None, prior]
 
         locked = MagicMock()
         locked.loyalty_points = 500
         locked.wallet_balance = Decimal("0.00")
         mock_cust.select_for_update.return_value.get.return_value = locked
-        mock_wt.create.side_effect = IntegrityError("dupe key")  # concurrent winner took it
+        # W P2-7: the IntegrityError now comes from credit_wallet, not create.
+        mock_credit.side_effect = IntegrityError("dupe key")  # concurrent winner took it
 
         with patch("django.db.transaction.atomic"):
             resp = self._post(principal=customer)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["duplicate"])
+        self.assertEqual(resp.data["credit_amount"], "10.00")
         # The IntegrityError-handler refetch (the LAST .filter call) uses the namespaced key.
         refetch_kwargs = mock_wt.filter.call_args.kwargs
         self.assertEqual(refetch_kwargs.get("idempotency_key"), self.EXPECT)

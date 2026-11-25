@@ -4,7 +4,7 @@ import csv
 import hashlib
 from io import BytesIO, StringIO
 import re
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 import zipfile
 
 
@@ -34,7 +34,8 @@ from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
@@ -353,6 +354,32 @@ def _placement_eta_minutes(profile, *, auto_accept: bool = False):
         return int(base_prep) + busy_extra
     except (TypeError, ValueError):
         return None
+
+def _delivery_job_ready_minutes(order, tenant):
+    """Prep minutes to mirror onto the platform delivery job for an order.
+
+    Wave L L-03 (DEL-9): when the owner confirms without an ETA the driver
+    gets no timing signal at all. Prefer the order's explicit ETA; otherwise
+    fall back to the tenant's configured default prep time (the same value
+    the customer was quoted), then the platform default (20). Once the food
+    is ready the answer is 0 ("now") rather than a fresh prep window. Returns
+    None when no timing applies yet (the order hasn't entered the kitchen
+    flow), which clears the job's ready time exactly as before. Never raises.
+    """
+    minutes = getattr(order, "estimated_ready_minutes", None)
+    if minutes is not None:
+        return minutes
+    status = getattr(order, "status", None)
+    if status in (Order.Status.READY, Order.Status.OUT_FOR_DELIVERY,
+                  Order.Status.COMPLETED):
+        return 0
+    if status in (Order.Status.CONFIRMED, Order.Status.PREPARING):
+        try:
+            profile = getattr(tenant, "profile", None)
+            return getattr(profile, "default_prep_minutes", None) or 20
+        except Exception:
+            return 20
+    return None
 
 
 # ── Advance / scheduled orders ──────────────────────────────────────────────
@@ -1125,13 +1152,43 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     serializer_class = TableLinkSerializer
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
+    # Statuses that count as an "open" order for a table — the non-terminal set
+    # the owner board treats as active (mirrors the hot-poll ACTIVE_STATUSES).
+    _OPEN_STATUSES = [
+        Order.Status.SCHEDULED,
+        Order.Status.PENDING,
+        Order.Status.CONFIRMED,
+        Order.Status.PREPARING,
+        Order.Status.READY,
+        Order.Status.OUT_FOR_DELIVERY,
+    ]
+
     def get_queryset(self):
         # Tables are restaurant-only; a shop tenant sees no table rows (and so cannot
         # retrieve/update/delete them either — perform_create is separately gated).
         from tenancy.capabilities import tenant_capability_enabled
         if not tenant_capability_enabled(getattr(self.request, "tenant", None), "tables"):
             return TableLink.objects.none()
-        return TableLink.objects.all().order_by("position", "label", "id")
+        # POS-UX-42/47: per-table open-order counts so the Tables page can show
+        # live occupancy and the delete confirm can name the count. Orders link
+        # to a table by slug (Order.table_slug, no FK), so the count is a
+        # correlated subquery on the slug; a table with no open orders gets 0.
+        open_orders = (
+            Order.objects.filter(
+                table_slug=OuterRef("slug"), status__in=self._OPEN_STATUSES
+            )
+            .values("table_slug")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+        return (
+            TableLink.objects.annotate(
+                open_orders=Coalesce(
+                    Subquery(open_orders, output_field=IntegerField()), 0,
+                    output_field=IntegerField(),
+                )
+            ).order_by("position", "label", "id")
+        )
 
     def perform_create(self, serializer):
         # Tables are a restaurant-only capability; shops (retail/grocery) don't
@@ -1159,6 +1216,55 @@ class TableLinkViewSet(viewsets.ModelViewSet):
         if host.endswith(":8000") and (host.startswith("localhost") or host.endswith(".localhost:8000")):
             host = f"{host[:-5]}:5173"
         return f"{scheme}://{host}"
+
+    def _expected_menu_hosts(self, request):
+        """Hostnames the tenant's public menu is allowed to live on.
+
+        QR-1: printed QRs must point at the tenant's public menu host, never at
+        whatever host the export happened to be requested from. The expected set
+        is built from server-authoritative sources only: the tenant's primary
+        domain, {slug}.{TENANT_DOMAIN_SUFFIX}, and PUBLIC_MENU_BASE_URL. Empty
+        when nothing authoritative is configured (local dev / unit tests) — the
+        caller then falls back to the request host, as before.
+        """
+        hosts = set()
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            try:
+                primary = tenant.domains.filter(is_primary=True).first()
+                if primary is not None and getattr(primary, "domain", ""):
+                    hosts.add(str(primary.domain).strip().lower())
+            except Exception:
+                pass
+            suffix = str(getattr(settings, "TENANT_DOMAIN_SUFFIX", "") or "").strip().lower()
+            slug = str(getattr(tenant, "slug", "") or "").strip().lower()
+            if suffix and slug:
+                hosts.add(f"{slug}.{suffix}")
+        configured = str(getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
+        if configured:
+            host = urlparse(configured if "://" in configured else f"https://{configured}").hostname
+            if host:
+                hosts.add(host.lower())
+        return hosts
+
+    def _validate_menu_base_url(self, request, base_url):
+        """QR-1: refuse a QR export whose base URL is not the tenant's public
+        menu host. Returns a 400 Response, or None when the base is allowed
+        (matches an expected host, or nothing authoritative is configured)."""
+        expected = self._expected_menu_hosts(request)
+        if not expected:
+            return None
+        host = urlparse(base_url if "://" in base_url else f"https://{base_url}").hostname
+        if host and host.lower() in expected:
+            return None
+        return Response(
+            {
+                "detail": "The menu base URL does not match this restaurant's public menu host. Check PUBLIC_MENU_BASE_URL or pass ?menu_base_url= with the restaurant's public menu address.",
+                "code": "menu_base_url_mismatch",
+                "expected_hosts": sorted(expected),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     def _table_short_url(self, table, base_url):
         return f"{base_url}/t/{table.slug}"
@@ -1226,6 +1332,9 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     def qr_image(self, request, pk=None):
         table = self.get_object()
         base_url = self._public_menu_base_url(request)
+        refused = self._validate_menu_base_url(request, base_url)
+        if refused is not None:
+            return refused
         short_url = self._table_short_url(table, base_url)
         png_bytes = self._qr_png_bytes(short_url)
         filename = f"{self._safe_filename_token(table.label, fallback='table')}-qr.png"
@@ -1259,6 +1368,9 @@ class TableLinkViewSet(viewsets.ModelViewSet):
             )
 
         base_url = self._public_menu_base_url(request)
+        refused = self._validate_menu_base_url(request, base_url)
+        if refused is not None:
+            return refused
 
         tenant = getattr(request, "tenant", None)
         tenant_slug = self._safe_filename_token(getattr(tenant, "slug", ""), fallback="tenant")
@@ -3862,7 +3974,15 @@ class PlaceOrderView(APIView):
                 from accounts.dispatch import start_dispatch
                 start_dispatch(_job)
             except Exception:
-                pass  # never fail the order response if job creation hiccups
+                # D G3: never fail the order response if job creation hiccups — but
+                # LOG it. A silent `pass` stranded the order (paid, kitchen sees it,
+                # no driver ever dispatched) with nothing to triage. The sweep's
+                # _backfill_missing_jobs recreates the job from this log's evidence.
+                import logging as _logging
+                _logging.getLogger(__name__).exception(
+                    "Delivery job creation failed tenant=%s order=%s",
+                    getattr(tenant, "id", "?"), getattr(order, "order_number", "?"),
+                )
 
         # Send WhatsApp notification to the restaurant (truly non-blocking daemon thread).
         # The order is already committed — a slow/failed Twilio call must never delay
@@ -4357,7 +4477,7 @@ class CustomerOrdersByPhoneView(APIView):
                 "fulfillment_type": order.fulfillment_type,
                 "total": str(order.total),
                 "currency": order.currency,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "created_at": order.created_at.isoformat(),
                 "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
             })
@@ -4506,6 +4626,30 @@ def _can_edit_tenant_order(request) -> bool:
     from accounts.models import User
     return (user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
             and user.effective_perm_manage_orders())
+
+
+def _staff_clocked_in(request) -> bool:
+    """True when the actor may mutate orders under the clock-in rule (R P1-2).
+
+    The frontend (WaiterPage.vue) already hides mutation buttons until clock-in,
+    but that is not enforcement — any staff session could call the endpoints
+    directly. Owners, superusers and platform admins are exempt (they do not
+    clock in); every other staff actor needs an OPEN Shift (clock_out null).
+    The check is per-actor, so a hand-off works as long as the closer is
+    clocked in.
+    """
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
+        return True
+    from accounts.models import User
+    if getattr(user, "role", None) == User.Roles.TENANT_OWNER:
+        return True
+    from menu.models import Shift
+    return Shift.objects.filter(
+        user_id=getattr(user, "id", None), clock_out__isnull=True
+    ).exists()
 
 
 def _can_access_order(request, order, *, my_slugs=None, claimed_slugs=None) -> bool:
@@ -4738,7 +4882,7 @@ class StaffOrderListView(APIView):
                 "delivery_fee": str(order.delivery_fee),
                 "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 "currency": order.currency,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
@@ -4913,6 +5057,12 @@ class StaffOrderItemReadyView(APIView):
     def patch(self, request, item_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Kitchen item-readiness is a restaurant-only capability (shops have no
         # kitchen). Defaults to allowed for restaurants (non-breaking).
         from tenancy.capabilities import tenant_capability_enabled
@@ -5160,6 +5310,12 @@ class StaffAppendOrderItemsView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -5537,6 +5693,12 @@ class StaffVoidOrderItemView(APIView):
     def post(self, request, order_id, item_id, *args, **kwargs):
         if not _can_void_order_item(request):
             return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -5662,6 +5824,17 @@ class StaffVoidOrderItemView(APIView):
                             is_available=True,
                             stock_auto_zeroed=False,
                         )
+            # Gap-hunt 2026-11-22 (R P1-1): return this line's recipe ingredients
+            # too. Top-level dish only -- component ingredients were never depleted
+            # at placement.
+            from menu.order_service import restock_ingredients as _restock_ingredients
+            _void_ing_qty = {}
+            for _d in _all_locked:
+                _vq = next((q for s, q in _void_slugs_to_restock if s == _d.slug), 0)
+                if _vq > 0:
+                    _void_ing_qty[_d.pk] = _void_ing_qty.get(_d.pk, 0) + _vq
+            if _void_ing_qty:
+                _restock_ingredients(_void_ing_qty)
 
             # Recompute order totals from non-voided items.
             # select_for_update() locks the order row so concurrent void calls on
@@ -5894,6 +6067,12 @@ class StaffCompOrderItemView(APIView):
     def post(self, request, order_id, item_id, *args, **kwargs):
         if not _can_void_order_item(request):
             return Response({"detail": "Access denied.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
@@ -6104,6 +6283,12 @@ class StaffFireCourseView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Course firing is a kitchen capability (shops have no kitchen). Gate it
         # like the sibling ready endpoints; defaults to allowed for restaurants.
         from tenancy.capabilities import tenant_capability_enabled
@@ -6212,6 +6397,12 @@ class StaffBulkReadyView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Kitchen readiness is a restaurant-only capability (shops have no
         # kitchen). Mirror the single-item StaffOrderItemReadyView gate so the
         # bulk path can't bypass it for retail/grocery tenants.
@@ -6395,6 +6586,12 @@ class StaffTransferItemsView(APIView):
     def post(self, request, src_order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         item_ids = request.data.get("item_ids") or []
         dest_order_id = request.data.get("dest_order_id")
@@ -6541,6 +6738,12 @@ class StaffMergeOrdersView(APIView):
     def post(self, request, dest_order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         src_order_id = request.data.get("src_order_id")
         if not src_order_id:
@@ -6786,6 +6989,8 @@ class StaffOrderPaymentView(APIView):
     ledger and will therefore be "0.00" even though the order is PAID.  This is
     intentional: the split-bill endpoint is additive-only and is NOT meant to
     back-fill legacy settled orders.
+    Exception: OwnerOrderMarkPaidView writes a CASH row for the full total when
+    no payment is tracked at all (POS-UX-2).
     """
     permission_classes = [IsAuthenticated]
 
@@ -6795,6 +7000,12 @@ class StaffOrderPaymentView(APIView):
     def post(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not _staff_clocked_in(request):
+            return Response(
+                {"detail": "You are not clocked in. Clock in before handling orders.",
+                 "code": "not_clocked_in"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # ── Parse body ────────────────────────────────────────────────────────
         method = str(request.data.get("method") or "").strip().lower()
@@ -7082,6 +7293,8 @@ class StaffSeatSplitView(APIView):
     def get(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        # NOTE (R P1-2): this is a READ-only grouping, not a mutation — the
+        # clock-in gate deliberately does NOT apply here.
 
         order = (
             Order.objects
@@ -7233,6 +7446,9 @@ class OwnerDeliveryJobActionView(APIView):
       - "redispatch"      → re-offer the SAME job to the driver pool (reuses the row).
       - "refund_cancel"   → cancel the order + refund wallet + reverse loyalty + restock.
       - "confirm_noshow"  → pay the driver for a customer-no-show failure (owner-confirmed).
+      - "unassign"        → stand down the assigned driver (pre-pickup only) and re-offer
+                            the job to the pool. The manual counterpart of the pickup-SLA
+                            sweep release (D G5).
     Owner/manager of the tenant only. All actions are idempotent.
     """
     permission_classes = [IsAuthenticated]
@@ -7247,7 +7463,7 @@ class OwnerDeliveryJobActionView(APIView):
             return Response({"detail": "Restaurant context required.", "code": "no_tenant"}, status=status.HTTP_400_BAD_REQUEST)
 
         action = (request.data.get("action") or "").strip()
-        if action not in ("redispatch", "refund_cancel", "confirm_noshow"):
+        if action not in ("redispatch", "refund_cancel", "confirm_noshow", "unassign"):
             return Response({"detail": "Unknown action.", "code": "bad_action"}, status=status.HTTP_400_BAD_REQUEST)
 
         order = Order.objects.filter(pk=order_id).first()
@@ -7355,7 +7571,44 @@ class OwnerDeliveryJobActionView(APIView):
                 job.resolution = _DJob.Resolution.NOSHOW_PAID
                 job.save(update_fields=["resolution"])
 
-        if action == "redispatch":
+            elif action == "unassign":
+                # D G5: the owner stands down an assigned-but-idle driver by hand (the
+                # manual counterpart of the pickup-SLA sweep release). Pre-pickup only:
+                # once the driver has the food, unassigning would strand the order.
+                if job.status not in (_DJob.Status.ASSIGNED, _DJob.Status.AT_RESTAURANT):
+                    return Response({"detail": "Only an assigned (pre-pickup) job can be unassigned.",
+                                     "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
+                if job.driver_id is None:
+                    return Response({"detail": "This job has no driver to unassign.",
+                                     "code": "no_driver"}, status=status.HTTP_409_CONFLICT)
+                # Same reset as redispatch (re-enters the ranked-offer cascade) and the
+                # same redispatch_count increment — a manual unassign is a dispatch cycle
+                # too, so it counts toward the cap that bounds re-offer loops.
+                job.driver = None
+                job.status = _DJob.Status.SEARCHING
+                job.assigned_at = None
+                job.picked_up_at = None
+                job.failed_at = None
+                job.failure_reason = ""
+                job.failure_note = ""
+                job.owner_alerted_at = None
+                job.code_attempts = 0
+                job.code_locked_until = None
+                job.redispatch_count = (job.redispatch_count or 0) + 1
+                job.resolution = _DJob.Resolution.REDISPATCHED
+                job.offered_to = None
+                job.offer_expires_at = None
+                job.declined_by = []
+                job.offer_round = 0
+                job.is_open_pool = False
+                job.save(update_fields=[
+                    "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                    "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                    "code_locked_until", "redispatch_count", "resolution",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                ])
+
+        if action in ("redispatch", "unassign"):
             try:
                 # Re-enter the ranked-offer cascade (nearest driver first, then pool).
                 from accounts.dispatch import offer_to_next_driver
@@ -7371,7 +7624,8 @@ class OwnerDeliveryJobActionView(APIView):
                     _broadcast_order_change(order)
             except Exception:
                 pass
-            return Response({"ok": True, "resolution": "redispatched"})
+            return Response({"ok": True,
+                             "resolution": "redispatched" if action == "redispatch" else "unassigned"})
         return Response({"ok": True, "resolution": "noshow_paid"})
 
 
@@ -7442,6 +7696,26 @@ class OwnerNotificationsView(APIView):
                 for n in rows
             ],
         })
+
+
+def _order_payment_methods(order, methods_by_order):
+    """POS-UX-20: payment-method summary for one order-list row.
+
+    Ledger rows first (distinct methods, first-seen order). A legacy one-shot
+    wallet settle leaves no row but bumps wallet_amount_paid, so that implies
+    "wallet"; a paid order with neither implies a legacy cash settle. Unpaid
+    orders with no payments report [].
+    """
+    methods = list(methods_by_order.get(order.id, []))
+    try:
+        wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+    except Exception:
+        wallet_paid = Decimal("0")
+    if wallet_paid > 0 and "wallet" not in methods:
+        methods.append("wallet")
+    if not methods and str(getattr(order, "payment_status", "") or "").strip().lower() == "paid":
+        methods = ["cash"]
+    return methods
 
 
 class OwnerOrderListView(APIView):
@@ -7595,10 +7869,19 @@ class OwnerOrderListView(APIView):
         from menu.models import OrderPayment as _OP
         _order_ids_page = [o.id for o in all_orders]
         _payments_by_order: dict = {}
+        # POS-UX-20: distinct payment methods per order, so the card can show
+        # "how was this paid" without a lazy per-order fetch. Same per-page
+        # query as the totals above — no extra round-trip.
+        _payment_methods_by_order: dict = {}
         if _order_ids_page:
-            for _pay in _OP.objects.filter(order_id__in=_order_ids_page).values("order_id", "amount"):
+            for _pay in _OP.objects.filter(order_id__in=_order_ids_page).values("order_id", "method", "amount"):
                 _payments_by_order.setdefault(_pay["order_id"], Decimal("0"))
                 _payments_by_order[_pay["order_id"]] += Decimal(str(_pay["amount"] or 0))
+                _method = str(_pay.get("method") or "").strip().lower()
+                if _method:
+                    _methods_for_order = _payment_methods_by_order.setdefault(_pay["order_id"], [])
+                    if _method not in _methods_for_order:
+                        _methods_for_order.append(_method)
 
         def _safe_ledger(value):
             """Coerce to quantized Decimal; returns 0.00 for None/non-numeric."""
@@ -7758,7 +8041,7 @@ class OwnerOrderListView(APIView):
                 "cancel_note": order.cancel_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
-                "items_count": sum(i.qty for i in order.items.all()),
+                "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
                 "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
@@ -7794,6 +8077,9 @@ class OwnerOrderListView(APIView):
                         - _safe_ledger(_payments_by_order.get(order.id)),
                     ).quantize(Decimal("0.01"))
                 ),
+                # POS-UX-20: payment-method summary for the card (ledger + legacy
+                # inference). The full ledger stays lazy-loaded from detail.
+                "payment_methods": _order_payment_methods(order, _payment_methods_by_order),
                 # Order source, commission & promotion
                 "source": order.source,
                 "commission_amount": str(order.commission_amount),
@@ -8320,6 +8606,16 @@ def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
         require_verified=False,
     )
 
+    # P2-3 (Wave D): the wallet money has now left the order — zero the held
+    # amount so cancelled-order figures (order detail/list, CSV export) stop
+    # reporting money that was already refunded. The REFUND ledger row above is
+    # the permanent record; this field means "wallet money currently held
+    # against the order". Cash is untouched (no cash-refund ledger — D3/D4).
+    # Runs inside the caller's atomic block, so a later failure rolls the
+    # zeroing back with the status flip.
+    order.wallet_amount_paid = _Dec("0")
+    order.save(update_fields=["wallet_amount_paid"])
+
 
 def _reverse_loyalty_for_cancelled_order(order) -> None:
     """Undo this order's loyalty effects on cancellation: claw back the points EARNED at
@@ -8398,6 +8694,19 @@ def _restock_cancelled_order(order) -> None:
                     Dish.objects.filter(pk=d.pk).update(
                         stock_qty=_F("stock_qty") + total_qty, is_available=True, stock_auto_zeroed=False
                     )
+            # Gap-hunt 2026-11-22 (R P1-1): return the recipe ingredients too --
+            # placement depletes them (deplete_ingredients) but cancel only ever
+            # restored dish stock, so every cancellation silently shrank ingredient
+            # stock. Top-level dishes only: combo components' ingredients were
+            # never depleted at placement.
+            from menu.order_service import restock_ingredients as _restock_ingredients
+            _ing_qty = {}
+            for d in _all_locked:
+                _q = by_slug.get(d.slug, 0)
+                if _q > 0:
+                    _ing_qty[d.pk] = _ing_qty.get(d.pk, 0) + _q
+            if _ing_qty:
+                _restock_ingredients(_ing_qty)
     except Exception:
         # Best-effort — never block a cancellation — but log so a swallowed inventory
         # desync (e.g. a malformed combo_components snapshot raising in the loop) is
@@ -8735,7 +9044,8 @@ class OwnerOrderStatusUpdateView(APIView):
                 _ct = getattr(request, "tenant", None)
                 if _ct:
                     set_delivery_job_food_ready(
-                        _ct.id, order.order_number, order.estimated_ready_minutes
+                        _ct.id, order.order_number,
+                        _delivery_job_ready_minutes(order, _ct),
                     )
             except Exception:
                 pass
@@ -8984,6 +9294,10 @@ class OwnerOrderMarkPaidView(APIView):
     leaves. Idempotent. Pass {"complete": true} to also complete a READY order
     in the same call (the dine-in "settle & close" action).
 
+    When no payment is tracked at all for the order, the settle also records
+    a CASH OrderPayment row for the full total (POS-UX-2) so the order shows
+    up in the Z-report cash/wallet split and the by-staff breakdown.
+
     Requires: a tenant editor (owner or staff with manage-orders).
     """
 
@@ -9082,6 +9396,38 @@ class OwnerOrderMarkPaidView(APIView):
                         "total": str(_order_total),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # ── POS-UX-2 (Wave C): owner "Mark paid" ledger row ────
+            # With no tracked payment at all (no OrderPayment rows and
+            # wallet_amount_paid == 0) this call is staff's attestation that the
+            # bill was collected in full at the till, in cash. Record that
+            # attestation as an OrderPayment row — same shape the waiter settle
+            # sheet writes — so the order appears in the Z-report cash/wallet
+            # split, the per-order Payments ledger, and the by-staff breakdown.
+            # Only CASH is recorded here: a wallet settlement must go through
+            # the wallet-charge flow (which debits the wallet); recording a
+            # wallet row here would claim money that never moved. Card is not
+            # offered: there is no card tender (POS-UX-1, owner decision D2).
+            if not _has_tracked_payment:
+                _recorder_name = ""
+                _recorder_id = None
+                _user = getattr(request, "user", None)
+                if _user and _user.is_authenticated:
+                    _recorder_id = getattr(_user, "id", None)
+                    _recorder_name = (
+                        getattr(_user, "get_full_name", lambda: "")() or
+                        getattr(_user, "username", "") or
+                        getattr(_user, "email", "") or
+                        ""
+                    )[:80]
+                OrderPayment.objects.create(
+                    order=order,
+                    amount=_order_total,
+                    method=OrderPayment.Method.CASH,
+                    recorded_by_user_id=_recorder_id,
+                    recorded_by_name=_recorder_name,
+                    note="Marked paid by owner (cash at till)",
                 )
 
             order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
@@ -12074,6 +12420,22 @@ class CustomerLoyaltyRedeemView(APIView):
         # refetch all use _idem.
         _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
         _idem = f"loyalty:{_dbc.schema_name}:{_raw_idem}" if _raw_idem else None
+        if _idem is None:
+            # W P2-7: no client key — mint a deterministic server fingerprint so a
+            # double-tap (same customer, same requested points, same minute) replays
+            # instead of redeeming twice. The minute bucket bounds the dedup window:
+            # a genuinely new redemption of the same points amount a minute later
+            # mints a new key; to redeem the same amount twice within a minute, send
+            # a distinct idempotency_key. Mirrors OwnerWalletChargeView's fingerprint.
+            # (The fingerprint uses the REQUESTED points, not the redeemable amount —
+            # the redeemable depends on the balance, which the first redemption already
+            # changed, so a retry would mint a different key and never dedup.)
+            import hashlib as _hashlib
+            from django.utils import timezone as _tz2
+            _bucket = _tz2.now().strftime("%Y-%m-%dT%H:%M")
+            _fp_src = f"{_customer.id}|{_requested_pts}|{_bucket}"
+            _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+            _idem = f"loyalty:{_dbc.schema_name}:fp:{_fp}"
         if _idem:
             # OPS-5g IDOR: idempotency_key is a GLOBAL namespace on the shared-schema
             # WalletTransaction table and is CLIENT-supplied here. Scope the replay lookup
@@ -12120,20 +12482,44 @@ class CustomerLoyaltyRedeemView(APIView):
                     )
                 if _locked.loyalty_points < _redeemable:
                     return Response({"detail": "Insufficient points.", "code": "insufficient_points"}, status=status.HTTP_400_BAD_REQUEST)
+                # W P2-7: in-block replay re-check. The pre-flight read above ran
+                # outside the row lock, so a concurrent same-key redemption may have
+                # committed between it and this lock. The customer row lock serializes
+                # same-customer redemptions, so a key that exists now is a committed
+                # duplicate — return it WITHOUT deducting points a second time.
+                if _idem:
+                    _prior_in_block = _WTM.objects.filter(
+                        idempotency_key=_idem, type=_WTM.Type.LOYALTY, customer_id=_locked.pk
+                    ).first()
+                    if _prior_in_block is not None:
+                        _prior_pts = 0
+                        try:
+                            _prior_pts = int(str(_prior_in_block.reference or "").split(":")[1].replace("pts", ""))
+                        except (IndexError, ValueError):
+                            _prior_pts = 0
+                        _locked.refresh_from_db()
+                        return Response({
+                            "redeemed_points": _prior_pts,
+                            "credit_amount": str(_prior_in_block.amount),
+                            "new_points_balance": _locked.loyalty_points,
+                            "new_wallet_balance": str(_locked.wallet_balance),
+                            "duplicate": True,
+                        })
                 _locked.loyalty_points -= _redeemable
-                _locked.wallet_balance = _Dec(str(_locked.wallet_balance or "0")) + _credit_amount
-                _locked.save(update_fields=["loyalty_points", "wallet_balance", "updated_at"])
-                tenant_id = getattr(_dbc.tenant, "id", None)
-                _WTM.objects.create(
-                    customer=_locked,
-                    type=_WTM.Type.LOYALTY,
-                    amount=_credit_amount,
-                    reference=f"loyalty:{_redeemable}pts",
-                    tenant_id=tenant_id,
+                _locked.save(update_fields=["loyalty_points", "updated_at"])
+                # W P2-7: credit through wallet_service, not a hand-rolled balance
+                # write + WalletTransaction. The service brings its own idempotency
+                # re-check under the row lock, the verified-phone gate, and the
+                # vertical tagging — and the points deduction above + this credit
+                # commit together in this atomic block.
+                from accounts.wallet_service import credit_wallet as _credit_wallet
+                _credit_wallet(
+                    _locked.pk, _credit_amount, tx_type=_WTM.Type.LOYALTY,
+                    idempotency_key=_idem, reference=f"loyalty:{_redeemable}pts",
+                    tenant_id=getattr(_dbc.tenant, "id", None),
                     note=f"Redeemed {_redeemable} loyalty points",
-                    balance_after=_locked.wallet_balance,
-                    idempotency_key=_idem,
                 )
+                _locked.refresh_from_db()
         except IntegrityError:
             # Concurrent duplicate with the same idempotency_key — the other request
             # won the unique constraint. Treat this as an idempotent replay.
@@ -12768,10 +13154,13 @@ def _settle_order_if_wallet_covers(order_number):
         return
     try:
         o = Order.objects.filter(order_number=order_number).only(
-            "id", "total", "wallet_amount_paid", "payment_status", "paid_at"
+            "id", "total", "wallet_amount_paid", "payment_status", "paid_at", "status"
         ).first()
         if (
             o is not None
+            # Gap-hunt 2026-11-22 (W P1-6): never settle a CANCELLED order -- a dead
+            # order must not flip to PAID even if its payments cover the total.
+            and o.status != Order.Status.CANCELLED
             and o.payment_status != Order.PaymentStatus.PAID
             and o.total > Decimal("0")
             # Ledger-aware: a cash/card partial (OrderPayment rows) + wallet together can
@@ -12810,6 +13199,15 @@ class CustomerOrderPayWalletView(APIView):
         if not IsOrderOwner().has_object_permission(request, self, order):
             return Response({"detail": "Sign in to pay this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
 
+        # Gap-hunt 2026-11-22 (W P1-6): a CANCELLED order is not payable -- paying it
+        # would flip a dead order to PAID and take the customer's money for food that
+        # will never be served.
+        if order.status == Order.Status.CANCELLED:
+            return Response(
+                {"detail": "Order is cancelled.", "code": "order_cancelled"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         if order.payment_status == Order.PaymentStatus.PAID:
             return Response({"status": "paid", "payment_status": order.payment_status})
 
@@ -12829,6 +13227,14 @@ class CustomerOrderPayWalletView(APIView):
             locked = Order.objects.select_for_update().filter(pk=order.pk).first() or order
             if locked.payment_status == Order.PaymentStatus.PAID:
                 return Response({"status": "paid", "payment_status": locked.payment_status})
+            # Gap-hunt 2026-11-22 (W P1-6): re-check under the lock -- the order may
+            # have been cancelled between the read above and the lock.
+            if locked.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "Order is cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
 
             # LEDGER-AWARE outstanding: count cash/card OrderPayment rows already collected, not
             # just wallet_amount_paid. Before this, a tab with a 60 cash split-bill row
@@ -12845,11 +13251,18 @@ class CustomerOrderPayWalletView(APIView):
             # f"order-pay-{order_number}" could collide with another tenant's order of the same
             # number — the OPS-5f customer-match guard would PASS (same customer can hold orders in
             # two tenants) and silently replay. Namespace the key with the tenant schema.
+            # W P2-8: the key is ALSO bound to the amount. The old key was amount-blind:
+            # a replay returned the ORIGINAL tx (original amount) while the view still
+            # added the NEW outstanding and marked PAID — e.g. after items were appended
+            # to a paid order, the extra amount was never debited but the bill claimed
+            # it. A different outstanding now mints a different key (a real new debit);
+            # the same outstanding replays the same tx (a true idempotent retry).
             try:
                 tx = debit_wallet(
                     locked.customer_id, outstanding,
                     reference=order_number, tenant_id=(tenant.id if tenant else None),
-                    note="Order payment", idempotency_key=f"order-pay-{_schema}-{order_number}",
+                    note="Order payment",
+                    idempotency_key=f"order-pay-{_schema}-{order_number}-{outstanding.quantize(Decimal('0.01'))}",
                 )
             except InsufficientFunds:
                 cust = _Cust.objects.filter(pk=locked.customer_id).first()
@@ -12961,23 +13374,44 @@ class OwnerWalletChargeView(APIView):
         if amount > _threshold:
             from accounts.models import WalletChargeRequest
             from django.utils import timezone as _tz
-            from django.utils.crypto import get_random_string
             from datetime import timedelta as _td
             _ttl = int(getattr(_settings, "WALLET_CHARGE_REQUEST_TTL", 300))
+            # Gap-hunt 2026-11-22 (W P1-3): self-defending idempotency. A retry
+            # (double-tap, network retry, proxy replay) with no client key used to
+            # mint a NEW charge request on every attempt (f"cr-{random}"), so each
+            # copy could be approved and the customer charged twice. Fall back to a
+            # deterministic server-side fingerprint of actor + customer + amount +
+            # order, mirroring AdminWalletBonusView. To issue a SECOND identical
+            # charge, the caller must supply a distinct idempotency_key.
+            if idem is None:
+                import hashlib as _hashlib
+                _actor_id = getattr(request.user, "id", None)
+                _fp_src = f"{_actor_id}|{customer_id}|{amount}|{order_number}"
+                _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+                idem = f"ownercharge:{getattr(tenant, 'schema_name', '')}:fp:{_fp}"
+            _cr_defaults = {
+                "customer_id": customer_id,
+                "tenant_id": tenant.id,
+                "restaurant_name": getattr(tenant, "name", "") or "",
+                "amount": amount,
+                "order_number": order_number,
+                "note": note,
+                "status": WalletChargeRequest.Status.PENDING,
+                "actor_user_id": getattr(request.user, "id", None),
+                "expires_at": _tz.now() + _td(seconds=_ttl),
+            }
             cr, _created = WalletChargeRequest.objects.get_or_create(
-                idempotency_key=(idem or f"cr-{get_random_string(24)}"),
-                defaults={
-                    "customer_id": customer_id,
-                    "tenant_id": tenant.id,
-                    "restaurant_name": getattr(tenant, "name", "") or "",
-                    "amount": amount,
-                    "order_number": order_number,
-                    "note": note,
-                    "status": WalletChargeRequest.Status.PENDING,
-                    "actor_user_id": getattr(request.user, "id", None),
-                    "expires_at": _tz.now() + _td(seconds=_ttl),
-                },
+                idempotency_key=idem, defaults=_cr_defaults,
             )
+            if not _created and cr.status == WalletChargeRequest.Status.PENDING \
+                    and cr.expires_at is not None and cr.expires_at <= _tz.now():
+                # Stale fingerprint hit: the first request expired before the customer
+                # approved, so a retry would otherwise be stuck on a dead request_id.
+                # No money moved while PENDING, so retire it and mint a fresh one.
+                cr.delete()
+                cr, _created = WalletChargeRequest.objects.get_or_create(
+                    idempotency_key=idem, defaults=_cr_defaults,
+                )
             if _created:
                 # Best-effort push nudge so the customer sees the approval prompt even if
                 # their app is backgrounded. The in-app modal + polling is the fallback.
@@ -13020,6 +13454,21 @@ class OwnerWalletChargeView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
+        # W P2-9: the instant path had no durable dedup when the client sent no key
+        # (idem=None) — only the cache-backed velocity cap (5 charges / 100 MAD per
+        # pay-token) bounded a double-tap, and a replay debited twice. Mint the same
+        # deterministic server fingerprint the above-threshold path uses (actor +
+        # customer + amount + order), PLUS the pay-token digest: the token IS the
+        # consent here, so a fresh scan (new token) with the same amount is a NEW
+        # charge, while a double-tap under the same scan replays the same key and
+        # debit_wallet returns the original tx instead of debiting twice.
+        if idem is None:
+            _fp_src = (
+                f"{getattr(request.user, 'id', None)}|{customer_id}|{amount}|"
+                f"{order_number}|{_tok_digest}"
+            )
+            _fp = _hashlib.sha256(_fp_src.encode("utf-8")).hexdigest()[:32]
+            idem = f"ownercharge:{getattr(tenant, 'schema_name', '')}:fp:{_fp}"
         try:
             tx = debit_wallet(
                 customer_id, amount,
@@ -13121,9 +13570,12 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
 
     A customer approves an above-threshold charge in the PUBLIC schema, which can't reach
     the tenant-schema Order. This runs in tenant context to keep the bill in sync. Each
-    request is claimed atomically (flip bill_synced) before its amount is applied, so two
-    concurrent callers (the owner's status poll and the order list) can never double-apply
-    the same charge. Returns {order_number: amount_applied}.
+    request is claimed (flip bill_synced) AND its amount applied in ONE atomic block, so
+    two concurrent callers (the owner's status poll and the order list) can never
+    double-apply the same charge — and a crash between claim and apply can never lose the
+    amount (before this the two UPDATEs were separate and outside a transaction, so a
+    crash left the request marked synced while the amount was never applied, with nothing
+    to re-apply it). Returns {order_number: amount_applied}.
     """
     from accounts.models import WalletChargeRequest as _WCR
     from django.db.models import F as _F
@@ -13135,35 +13587,39 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
         tenant_id=tenant_id, status=_WCR.Status.CHARGED, bill_synced=False, order_number__in=nums
     ).values_list("id", "order_number", "amount"))
     for cr_id, onum, amount in pending:
-        # Atomic claim: only the caller that flips bill_synced False->True applies the bill.
-        if not _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True):
-            continue
         try:
-            Order.objects.filter(order_number=onum).update(
-                wallet_amount_paid=_F("wallet_amount_paid") + amount
-            )
-            # S1 fix: same OrderPayment tie-in as the instant-charge path above —
-            # this is the above-threshold (customer-approved) charge landing on the
-            # bill, so it needs the same reconciliation-guard visibility. Kept in
-            # its own try so a failure here (e.g. order looked up mid-delete)
-            # can never swallow the `applied` bookkeeping or the settle-check
-            # below — those must run whenever the wallet_amount_paid update above
-            # succeeded, exactly as before this ledger tie-in was added.
-            try:
-                _synced_order = Order.objects.filter(order_number=onum).only("id").first()
-                if _synced_order is not None:
-                    OrderPayment.objects.create(
-                        order=_synced_order,
-                        amount=amount,
-                        method=OrderPayment.Method.WALLET,
-                        note="Wallet charge (pay code, approved)",
-                    )
-            except Exception:
-                pass  # ledger row is best-effort; the wallet bill update above already landed
-            _settle_order_if_wallet_covers(onum)
-            applied[onum] = applied.get(onum, Decimal("0")) + amount
+            # W P1-4: claim + apply in ONE atomic block (see the docstring). A failure
+            # rolls the claim back, so the request stays unsynced and is retried on
+            # the next poll instead of being lost.
+            with transaction.atomic():
+                # Atomic claim: only the caller that flips bill_synced False->True applies the bill.
+                if not _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True):
+                    continue
+                Order.objects.filter(order_number=onum).update(
+                    wallet_amount_paid=_F("wallet_amount_paid") + amount
+                )
         except Exception:
-            pass  # best-effort; the payment is recorded in the wallet ledger regardless
+            continue  # claim or bill update failed — stays unsynced, retried next poll
+        # S1 fix: same OrderPayment tie-in as the instant-charge path above —
+        # this is the above-threshold (customer-approved) charge landing on the
+        # bill, so it needs the same reconciliation-guard visibility. Kept in
+        # its own try so a failure here (e.g. order looked up mid-delete)
+        # can never swallow the `applied` bookkeeping or the settle-check
+        # below — those must run whenever the wallet_amount_paid update above
+        # succeeded, exactly as before this ledger tie-in was added.
+        try:
+            _synced_order = Order.objects.filter(order_number=onum).only("id").first()
+            if _synced_order is not None:
+                OrderPayment.objects.create(
+                    order=_synced_order,
+                    amount=amount,
+                    method=OrderPayment.Method.WALLET,
+                    note="Wallet charge (pay code, approved)",
+                )
+        except Exception:
+            pass  # ledger row is best-effort; the wallet bill update above already landed
+        _settle_order_if_wallet_covers(onum)
+        applied[onum] = applied.get(onum, Decimal("0")) + amount
     return applied
 
 
@@ -14184,9 +14640,11 @@ class DrawerTransactionView(APIView):
 class DrawerCloseView(APIView):
     """POST /api/owner/drawer/close/
 
-    Blind-count close: submit the physical count WITHOUT knowing the expected
-    amount first. The view computes expected = opening_float + cash_collected
-    since session open + pay-ins − pay-outs, then records over/short.
+    Count close: the owner counts the physical cash against the live expected
+    total shown on the Z-report close card (POS-UX-33 — the count is no
+    longer blind). The view still computes expected independently as
+    opening_float + cash_collected since session open + pay-ins − pay-outs,
+    then records over/short, so the reconciliation check itself is unchanged.
 
     Body: { "counted_total": "345.00", "note": "" }
     """
@@ -14292,8 +14750,24 @@ class DrawerHistoryView(APIView):
         result = []
         for sess in sessions:
             txs = DrawerTransaction.objects.filter(session=sess).order_by("at", "id")
+            sess_dict = _drawer_session_dict(sess)
+            if sess.status == DrawerSession.Status.OPEN:
+                # POS-UX-33 (Wave C): an open session has no stored
+                # expected_total (it is only computed at close) — show the live
+                # expected total so the owner counts against a known figure
+                # instead of blind. Same formula as DrawerCloseView: opening
+                # float + cash collected since open + pay-ins − pay-outs.
+                _now = timezone.now()
+                _collected_qs = Order.objects.filter(
+                    status=Order.Status.COMPLETED,
+                    payment_status=Order.PaymentStatus.PAID,
+                    paid_at__gte=sess.opened_at,
+                    paid_at__lte=_now,
+                )
+                _cash = split_revenue_for_orders(_collected_qs)["cash"]
+                sess_dict["expected_total"] = str(_compute_expected_total(sess, _cash))
             result.append({
-                **_drawer_session_dict(sess),
+                **sess_dict,
                 "transactions": [_drawer_transaction_dict(t) for t in txs],
             })
 

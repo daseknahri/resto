@@ -705,6 +705,11 @@ class OrderPaymentDbBackstopTests(SimpleTestCase):
         _access_patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _access_patcher.start()
         self.addCleanup(_access_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None, user=None):
         body = body or {}

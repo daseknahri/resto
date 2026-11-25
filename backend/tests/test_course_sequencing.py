@@ -180,6 +180,11 @@ class StaffFireCourseViewTests(SimpleTestCase):
         self._tx_mock = _tx_patcher.start()
         self._tx_mock.atomic.return_value = _FakeAtomic()
         self.addCleanup(_tx_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None, user=None):
         body = body if body is not None else {"course": 2}
@@ -546,6 +551,11 @@ class AppendCourseSnapshotTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _patcher.start()
         self.addCleanup(_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _post(self, order_id=10, body=None, user=None):
         body = body or {"items": [{"dish_slug": "steak", "qty": 1}]}
@@ -841,6 +851,11 @@ class AppendCourseOverrideTests(SimpleTestCase):
         _patcher = patch("menu.views._can_access_order", return_value=True)
         self._access_mock = _patcher.start()
         self.addCleanup(_patcher.stop)
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _run_append(self, body, first_order=None):
         """Drive the append view to OrderItem.bulk_create. Returns (resp, item_bulk_create, order)."""

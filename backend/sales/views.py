@@ -3138,6 +3138,27 @@ class OwnerDashboardView(APIView):
             "cash": str(_split["cash"]),
         }
 
+        # —─ Today payment split (POS-UX-11, Wave C) —─
+        # Cash/wallet collected TODAY for the Home snapshot. Same PAID-only
+        # Contract C rule as payment_split above (unpaid orders would inflate
+        # cash via the legacy path), bucketed by paid_at on the tenant's
+        # current calendar day — the same "today" the daily entries use.
+        if _tenant_tz is not None:
+            _today = timezone.now().astimezone(_tenant_tz).date()
+        else:
+            _today = timezone.now().date()
+        _today_paid_qs = Order.objects.annotate(
+            _paid_day=TruncDate("paid_at", tzinfo=_tenant_tz)
+        ).filter(
+            _paid_day=_today,
+            payment_status=_OrderForSplit.PaymentStatus.PAID,
+        )
+        _today_split = _split_revenue(_today_paid_qs)
+        today_payment_split = {
+            "wallet": str(_today_split["wallet"]),
+            "cash": str(_today_split["cash"]),
+        }
+
         # ── Top 5 items by revenue (non-voided OrderItem subtotals) ───────────
         _top_item_rows = (
             OrderItem.objects.filter(order__in=revenue_qs, is_voided=False)
@@ -3309,6 +3330,7 @@ class OwnerDashboardView(APIView):
                     "fulfillment_breakdown": fulfillment_breakdown,
                     "loyalty_promo": loyalty_promo,
                     "payment_split": payment_split,
+                    "today_payment_split": today_payment_split,
                     "top_items_by_revenue": top_items_by_revenue,
                     "food_cost": food_cost,
                     "statement": statement,

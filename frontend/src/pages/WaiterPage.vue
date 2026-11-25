@@ -2,9 +2,11 @@
   <div class="space-y-4">
     <!-- First-run welcome (one-time, dismissible) (RISK FE-2) -->
     <WaiterFirstRunBanner v-if="!waiterFirstRunSeen" @dismiss="dismissWaiterFirstRun" />
-    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2) -->
+    <!-- Install-the-app banner — waiters work from the installed app (RISK FE-2).
+         POS-UX-8: waits until the first-run welcome is gone, so the two
+         banners never stack above the work area on first use. -->
     <WaiterInstallBanner
-      v-if="!isStandalone && !installDismissed"
+      v-if="!isStandalone && !installDismissed && waiterFirstRunSeen"
       :can-install="canInstall"
       @install="install"
       @dismiss="installDismissed = true"
@@ -1650,6 +1652,11 @@ const ensureShiftForAction = async () => {
   if (shiftLoadError.value) await loadMyShift();
   if (currentShift.value) return true;
   toast.show(t('waiterPage.mustClockInFirst'), 'warning');
+  // Point at the control: scroll the tab bar to the Clock in button and
+  // focus it so the waiter lands on the action, not just the message.
+  const clockInBtn = document.getElementById('waiter-clock-in-btn');
+  clockInBtn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  clockInBtn?.focus({ preventScroll: true });
   return false;
 };
 

@@ -20,6 +20,7 @@ from menu.order_service import (
     compute_order_delivery_fee,
     compute_order_tip,
     deplete_ingredients,
+    restock_ingredients,
     deplete_stock,
     price_line_options,
     resolve_available_dishes,
@@ -559,3 +560,43 @@ class ScheduleWindowTests(SimpleTestCase):
         # Sat 01:00 after-midnight tail belongs to YESTERDAY (Fri): fri allowed, sat not.
         self.assertTrue(day_time_window_open(["fri"], "22:00", "02:00", now_local=self._SAT_1H))
         self.assertFalse(day_time_window_open(["sat"], "22:00", "02:00", now_local=self._SAT_1H))
+
+class RestockIngredientsTests(SimpleTestCase):
+    """Gap-hunt 2026-11-22 (R P1-1): cancel/void must return the recipe ingredients
+    placement depleted, or ingredient stock silently shrinks on every cancellation."""
+
+    def _lines(self):
+        def _rl(dish_id, ing_id, qty):
+            return SimpleNamespace(dish_id=dish_id, ingredient_id=ing_id, quantity=Decimal(qty))
+        return [
+            _rl(1, 10, "2"),     # dish 1 needs 2 of ingredient 10 per unit
+            _rl(1, 11, "0.5"),   # dish 1 needs 0.5 of ingredient 11 per unit
+            _rl(2, 10, "1"),     # dish 2 needs 1 of ingredient 10 per unit
+        ]
+
+    @patch("menu.models.Ingredient")
+    @patch("menu.models.RecipeLine")
+    def test_restock_increments_by_recipe_qty_times_ordered_qty(self, MockRL, MockIng):
+        MockRL.objects.filter.return_value.only.return_value = self._lines()
+        restock_ingredients({1: 3, 2: 2})
+        # ingredient 10: 2*3 + 1*2 = 8 ; ingredient 11: 0.5*3 = 1.5
+        # Pair each filter(pk=<ing>) call with its update() call, in order, and read
+        # the delta off the F() + delta expression (CombinedExpression.rhs).
+        filter_pks = [c.kwargs.get("pk") for c in MockIng.objects.filter.call_args_list]
+        self.assertEqual(sorted(filter_pks), [10, 11])
+        def _unwrap(expr):
+            # F() + Decimal builds CombinedExpression(rhs=Value(Decimal)); unwrap it.
+            return getattr(expr.rhs, "value", expr.rhs)
+        rhs = {
+            pk: _unwrap(call.kwargs["stock_quantity"])
+            for pk, call in zip(filter_pks, MockIng.objects.filter.return_value.update.call_args_list)
+        }
+        self.assertEqual(rhs[10], Decimal("8"))
+        self.assertEqual(rhs[11], Decimal("1.5"))
+
+    @patch("menu.models.Ingredient")
+    @patch("menu.models.RecipeLine")
+    def test_empty_map_queries_nothing(self, MockRL, MockIng):
+        restock_ingredients({})
+        MockRL.objects.filter.assert_not_called()
+        MockIng.objects.filter.assert_not_called()

@@ -700,6 +700,11 @@ class StaffAppendOrderItemsHappyHourTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffAppendOrderItemsView.as_view()
+        # R P1-2: the staff user is clocked in by default (an open Shift exists).
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
 
     def _make_open_table_order(self):
         """Return a mock table order in an editable state with all Decimal fields set."""

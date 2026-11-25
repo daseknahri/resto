@@ -831,6 +831,11 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
 
 
 class TableLinkSerializer(serializers.ModelSerializer):
+    # POS-UX-42/47: open-order count per table, annotated by
+    # TableLinkViewSet.get_queryset. Read-only; default 0 so a fresh
+    # (unannotated) instance — e.g. a create response — still serializes.
+    open_orders = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = TableLink
         fields = [
@@ -839,6 +844,7 @@ class TableLinkSerializer(serializers.ModelSerializer):
             "slug",
             "position",
             "is_active",
+            "open_orders",
             "created_at",
             "updated_at",
         ]

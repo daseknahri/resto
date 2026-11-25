@@ -885,6 +885,9 @@ class OrderPayment(models.Model):
     derives from wallet_amount_paid alone and the payments list is empty.  The
     split-bill endpoint (StaffOrderPaymentView) always writes a row here AND
     keeps wallet_amount_paid consistent, so both read paths remain accurate.
+    Exception: OwnerOrderMarkPaidView DOES write a CASH row for the full total
+    when the order has no tracked payment at all (POS-UX-2) — the owner's
+    "Mark paid" click is the attestation that the cash was collected.
     """
 
     class Method(models.TextChoices):

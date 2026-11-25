@@ -12,12 +12,18 @@ from django.core.management import call_command
 from django.test import SimpleTestCase
 
 
-def _job(job_id, driver_id=10, payout="15.00", order="A1"):
+def _job(job_id, driver_id=10, payout="15.00", order="A1",
+         status="delivered", resolution=""):
     j = MagicMock()
     j.id = job_id
     j.driver_id = driver_id
     j.driver_payout = Decimal(payout)
     j.order_number = order
+    # D G7: the reconcile classifies by status + resolution — a FAILED job with
+    # resolution NOSHOW_PAID carries the noshow:{id} credit, anything else the
+    # earning:{id} credit.
+    j.status = status
+    j.resolution = resolution
     return j
 
 
@@ -98,3 +104,94 @@ class ReconcileDriverEarningsTests(SimpleTestCase):
             plog.error.assert_not_called()
         # First failure recorded, but below the alert threshold.
         self.assertEqual(cache.get("earning_reconcile_fail:2"), 1)
+
+
+# ── D G7: no-show payout backfill ─────────────────────────────────────────────
+
+class ReconcileNoshowTests(SimpleTestCase):
+    """FAILED + resolution=NOSHOW_PAID jobs missing their noshow:{id} credit are
+    backfilled through _credit_driver_noshow, mirroring the earning path."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def _run(self, *args, candidates=None, have=None, now_have=None):
+        """Like ReconcileDriverEarningsTests._run, but patches both credit helpers
+        and wires the FAILED / NOSHOW_PAID enum values the classifier reads."""
+        candidates = candidates or []
+        values_list_returns = [list(have or [])]
+        if now_have is not None:
+            values_list_returns.append(list(now_have))
+
+        with patch("accounts.models.DeliveryJob") as DJ, \
+                patch("accounts.models.WalletTransaction") as WT, \
+                patch("accounts.views._credit_driver_earnings") as credit, \
+                patch("accounts.views._credit_driver_noshow") as noshow_credit:
+            DJ.Status.DELIVERED = "delivered"
+            DJ.Status.FAILED = "failed"
+            DJ.Resolution.NOSHOW_PAID = "noshow_paid"
+            DJ.objects.filter.return_value.order_by.return_value.__getitem__.return_value = candidates
+            WT.objects.filter.return_value.values_list.side_effect = values_list_returns
+            out = StringIO()
+            call_command("reconcile_driver_earnings", *args, stdout=out)
+        return out.getvalue(), credit, noshow_credit
+
+    def _noshow_job(self, job_id, **kwargs):
+        kwargs.setdefault("status", "failed")
+        kwargs.setdefault("resolution", "noshow_paid")
+        return _job(job_id, **kwargs)
+
+    def test_noshow_missing_is_credited(self):
+        job = self._noshow_job(5, order="N1")
+        out, credit, noshow_credit = self._run(
+            candidates=[job], have=[], now_have=["noshow:5"],
+        )
+        noshow_credit.assert_called_once()
+        self.assertEqual(noshow_credit.call_args[0][0].id, 5)
+        credit.assert_not_called()  # the earning path must not touch a noshow job
+        self.assertIn("credited=1", out)
+        self.assertIn("still_failing=0", out)
+
+    def test_noshow_already_credited_is_skipped(self):
+        job = self._noshow_job(5, order="N1")
+        out, credit, noshow_credit = self._run(
+            candidates=[job], have=["noshow:5"],
+        )
+        credit.assert_not_called()
+        noshow_credit.assert_not_called()
+        self.assertIn("all credited", out)
+
+    def test_noshow_and_earning_mixed(self):
+        """One scan covers both kinds: each job is credited through its own helper
+        and counted once."""
+        earned = _job(1, order="A1")  # delivered → earning:1
+        noshow = self._noshow_job(2, order="N1")  # failed + noshow_paid → noshow:2
+        out, credit, noshow_credit = self._run(
+            candidates=[earned, noshow], have=[],
+            now_have=["earning:1", "noshow:2"],
+        )
+        credit.assert_called_once()
+        self.assertEqual(credit.call_args[0][0].id, 1)
+        noshow_credit.assert_called_once()
+        self.assertEqual(noshow_credit.call_args[0][0].id, 2)
+        self.assertIn("credited=2", out)
+        self.assertIn("still_failing=0", out)
+
+    def test_noshow_failure_uses_its_own_streak(self):
+        """A persistently failing noshow credit escalates on its own
+        noshow_reconcile_fail:{id} streak — it must not share or reset the earning
+        streak for the same job id."""
+        job = self._noshow_job(5, order="N1")
+        cache.set("noshow_reconcile_fail:5", 2, 60)
+        with patch("accounts.management.commands.reconcile_driver_earnings.payments_logger") as plog:
+            out, credit, noshow_credit = self._run(
+                "--alert-after", "3", candidates=[job], have=[], now_have=[],
+            )
+            self.assertTrue(plog.error.called)
+            # The alert names the no-show kind, not the earning one.
+            self.assertIn("noshow", str(plog.error.call_args[0][0]))
+        noshow_credit.assert_called_once()
+        self.assertIn("still_failing=1", out)
+        self.assertEqual(cache.get("noshow_reconcile_fail:5"), 3)
+        self.assertIsNone(cache.get("earning_reconcile_fail:5"))

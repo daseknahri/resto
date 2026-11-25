@@ -145,6 +145,26 @@
       </button>
     </div>
 
+    <!-- ══ QR-3: sign-in moment — link this order to the account now ══ -->
+    <p
+      v-if="tableContextBanner && !customerStore.isAuthenticated"
+      class="mx-3 mt-2 text-[11px] leading-relaxed text-slate-400 sm:mx-4"
+    >
+      {{ t('menu.tableSignInHint') }}
+      <RouterLink :to="{ name: 'customer-account' }" class="font-semibold text-slate-200 underline hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400/40 rounded">{{ t('menu.tableSignInLink') }}</RouterLink>
+    </p>
+
+    <!-- ══ QR-2: dead table code — persistent, plain-language state ══ -->
+    <div
+      v-if="tableContextDead"
+      class="mx-3 mt-3 space-y-1 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 shadow-sm shadow-black/20 sm:mx-4"
+      role="alert"
+    >
+      <p class="text-sm font-semibold text-red-200">{{ t('menu.tableDeadTitle') }}</p>
+      <p class="text-xs leading-relaxed text-red-300/90">{{ t('menu.tableDeadBody') }}</p>
+      <p class="text-[11px] leading-relaxed text-slate-400">{{ t('menu.tableDeadHint') }}</p>
+    </div>
+
     <!-- ══ Order-again quick chip ══ -->
     <!-- Shown when there's a recent order with items, not in browse-only mode, restaurant not showing its own active-order strip for the SAME order -->
     <Transition name="ui-fade">
@@ -620,6 +640,9 @@ const props = defineProps({
 
 // ── Table QR context ─────────────────────────────────────────────────────────
 const tableContextBanner = ref('')
+// QR-2: persistent dead-QR state — the scanned table code no longer works
+// (unknown slug or disabled table). A toast alone is too easy to miss.
+const tableContextDead = ref(false)
 // ── Call waiter (dine-in, table context only) ────────────────────────────────
 const callingWaiter       = ref(false)
 const waiterCooldown      = ref(0)   // seconds remaining; >0 means "just notified, please wait"
@@ -657,7 +680,10 @@ const resolveTableContext = async () => {
       tableContextBanner.value = t('menu.tableContextSet', { table: data.label })
     }
   } catch (err) {
-    if (err?.response?.status === 404) toast.show(t('menu.tableNotFound'), 'error')
+    if (err?.response?.status === 404) {
+      tableContextDead.value = true
+      toast.show(t('menu.tableNotFound'), 'error')
+    }
   }
 }
 

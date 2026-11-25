@@ -7,7 +7,7 @@ Verifies that tenant STAFF (waiters) are confined to their granted capabilities:
   - serialize_user_session emits the correct effective permissions
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
@@ -18,6 +18,7 @@ from menu.views import (
     _can_view_revenue,
     _can_edit_menu,
     _can_void_order_item,
+    _staff_clocked_in,
 )
 from menu.permissions import user_can_edit_menu
 from accounts.views import serialize_user_session
@@ -142,3 +143,54 @@ class SessionSerialization(SimpleTestCase):
     def test_staff_void_false_reflected(self):
         data = serialize_user_session(self._user(owner=False, manage=True, revenue=False, menu=False, void=False))
         self.assertFalse(data["permissions"]["void_orders"])
+
+
+class ClockedInGateTests(SimpleTestCase):
+    """R P1-2: _staff_clocked_in — owners/superusers/admins exempt, staff need an
+    open Shift (clock_out null). The frontend hides the buttons, but the server
+    must enforce it."""
+
+    def _req(self, user):
+        return SimpleNamespace(user=user, tenant=SimpleNamespace(id=1))
+
+    @patch("menu.models.Shift")
+    def test_staff_with_open_shift_is_clocked_in(self, shift_mock):
+        u = _staff()
+        u.id = 5
+        shift_mock.objects.filter.return_value.exists.return_value = True
+        self.assertTrue(_staff_clocked_in(self._req(u)))
+        shift_mock.objects.filter.assert_called_once_with(
+            user_id=5, clock_out__isnull=True)
+
+    @patch("menu.models.Shift")
+    def test_staff_without_open_shift_is_not_clocked_in(self, shift_mock):
+        u = _staff()
+        u.id = 5
+        shift_mock.objects.filter.return_value.exists.return_value = False
+        self.assertFalse(_staff_clocked_in(self._req(u)))
+
+    @patch("menu.models.Shift")
+    def test_owner_is_exempt(self, shift_mock):
+        u = _staff()
+        u.role = User.Roles.TENANT_OWNER
+        self.assertTrue(_staff_clocked_in(self._req(u)))
+        shift_mock.objects.filter.assert_not_called()
+
+    @patch("menu.models.Shift")
+    def test_superuser_is_exempt(self, shift_mock):
+        u = _staff()
+        u.is_superuser = True
+        self.assertTrue(_staff_clocked_in(self._req(u)))
+        shift_mock.objects.filter.assert_not_called()
+
+    @patch("menu.models.Shift")
+    def test_platform_admin_is_exempt(self, shift_mock):
+        u = _staff()
+        u.is_platform_admin = True
+        self.assertTrue(_staff_clocked_in(self._req(u)))
+        shift_mock.objects.filter.assert_not_called()
+
+    def test_unauthenticated_is_not_clocked_in(self):
+        anon = MagicMock()
+        anon.is_authenticated = False
+        self.assertFalse(_staff_clocked_in(self._req(anon)))

@@ -204,3 +204,43 @@ class CancelOrderTests(SimpleTestCase):
         resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
         self.assertEqual(resp.status_code, 200)
         self.m["refund"].assert_called_once_with(order, tenant_id=7)
+class RefundWalletForCancelledOrderTests(SimpleTestCase):
+    """P2-3 (Wave D): cancelling a wallet-paid order refunds the wallet AND
+    zeroes wallet_amount_paid — the field must not keep reporting refunded money."""
+
+    def _order(self, wallet_amount="45.00"):
+        order = MagicMock()
+        order.customer_id = 42
+        order.id = 7
+        order.order_number = "ORD-1"
+        order.wallet_amount_paid = Decimal(wallet_amount)
+        return order
+
+    def test_refund_zeroes_wallet_amount_paid(self):
+        order = self._order()
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            from menu.views import _refund_wallet_for_cancelled_order
+            _refund_wallet_for_cancelled_order(order, tenant_id=5)
+        mock_credit.assert_called_once()
+        self.assertEqual(mock_credit.call_args.args[1], Decimal("45.00"))
+        self.assertEqual(order.wallet_amount_paid, Decimal("0"))
+        order.save.assert_called_once_with(update_fields=["wallet_amount_paid"])
+
+    def test_zero_wallet_amount_is_noop(self):
+        order = self._order("0")
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            from menu.views import _refund_wallet_for_cancelled_order
+            _refund_wallet_for_cancelled_order(order, tenant_id=5)
+        mock_credit.assert_not_called()
+        order.save.assert_not_called()
+
+    def test_replay_after_zeroing_is_noop(self):
+        """Idempotency: a second call (e.g. sweep racing the customer cancel)
+        sees the zeroed field and does not credit again."""
+        order = self._order()
+        with patch("accounts.wallet_service.credit_wallet") as mock_credit:
+            from menu.views import _refund_wallet_for_cancelled_order
+            _refund_wallet_for_cancelled_order(order, tenant_id=5)
+            _refund_wallet_for_cancelled_order(order, tenant_id=5)
+        mock_credit.assert_called_once()
+        self.assertEqual(order.wallet_amount_paid, Decimal("0"))
