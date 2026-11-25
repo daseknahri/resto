@@ -107,10 +107,13 @@ class _CustomerThrottle(SimpleRateThrottle):
     Keys on the Customer principal (``request.user``) where the view mounts
     ``CustomerSessionAuthentication``, else the raw session ``customer_id`` (the ride
     views), else the client IP — see ``_customer_throttle_ident`` (RISK IDENTITY-1).
+    The IP fallback is the trusted-proxy-aware ``get_request_ip`` (OPS-5d),
+    like ``_IPThrottle`` — never DRF's spoofable ``get_ident``.
     """
 
     def get_cache_key(self, request, view):
-        ident = _customer_throttle_ident(request) or self.get_ident(request)
+        from sales.audit import get_request_ip
+        ident = _customer_throttle_ident(request) or get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
@@ -179,7 +182,9 @@ class WalletTransferThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request, view):
         # Prefer the Customer principal, fall back to session then IP (RISK IDENTITY-1).
-        ident = _customer_throttle_ident(request) or self.get_ident(request)
+        # Wave K F-11: trusted-proxy-aware IP (OPS-5d), like _IPThrottle.
+        from sales.audit import get_request_ip
+        ident = _customer_throttle_ident(request) or get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 

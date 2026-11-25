@@ -30,6 +30,7 @@ from accounts.mfa_views import (
 )
 from accounts.views import (
     ActivationView,
+    CustomerTopUpAttemptsView,
     CustomerTopUpIntentView,
     CustomerTopUpStatusView,
     CustomerTopUpWebhookView,
@@ -170,6 +171,7 @@ shared_api_urlpatterns = [
     path("api/customer/topup/intent/", CustomerTopUpIntentView.as_view(), name="customer-topup-intent"),
     path("api/customer/topup/webhook/", CustomerTopUpWebhookView.as_view(), name="customer-topup-webhook"),
     path("api/customer/topup/status/", CustomerTopUpStatusView.as_view(), name="customer-topup-status"),
+    path("api/customer/topup/attempts/", CustomerTopUpAttemptsView.as_view(), name="customer-topup-attempts"),
     path("api/customer/auth/phone/request/", CustomerPhoneRequestView.as_view(), name="customer-phone-request"),
     path("api/customer/auth/phone/verify/", CustomerPhoneVerifyView.as_view(), name="customer-phone-verify"),
     path("api/customer/auth/google/", CustomerGoogleAuthView.as_view(), name="customer-google-auth"),

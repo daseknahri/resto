@@ -64,19 +64,15 @@ describe("OwnerOrdersCashierModal", () => {
     expect(wTable.text()).toContain('ownerOrders.fulfillmentTable:{"table":"T3"}');
   });
 
-  it("labels the settle button 'markPaid' for a non-ready order", () => {
-    const w = mountModal({ order: order({ status: "pending" }) });
-    expect(w.text()).toContain("ownerOrders.markPaid");
-    expect(w.text()).not.toContain("ownerOrders.settleAndClose");
-  });
-
-  // Wave G POS-UX-50: one label everywhere — the settle button reads
-  // 'markPaid' for every order status; 'settleAndClose' was removed from all
-  // locales. (This case still expected the old label.)
-  it("labels the settle button 'markPaid' for a ready order", () => {
-    const w = mountModal({ order: order({ status: "ready" }) });
-    expect(w.text()).toContain("ownerOrders.markPaid");
-    expect(w.text()).not.toContain("ownerOrders.settleAndClose");
+  // Wave K N-02: one label everywhere (Wave G POS-UX-50) — the settle
+  // button reads 'markPaid' for every order status, so a single test
+  // documents the one-label rule for both ready and non-ready orders.
+  it("labels the settle button 'markPaid' for ready and non-ready orders (one-label rule)", () => {
+    for (const status of ["pending", "ready"]) {
+      const w = mountModal({ order: order({ status }) });
+      expect(w.text()).toContain("ownerOrders.markPaid");
+      expect(w.text()).not.toContain("ownerOrders.settleAndClose");
+    }
   });
 
   it("emits close from the cancel button", async () => {

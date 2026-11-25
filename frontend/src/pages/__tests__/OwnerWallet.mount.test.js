@@ -152,6 +152,20 @@ describe("OwnerWallet — mount smoke", () => {
     expect(wrapper.text()).toContain("ownerWallet.searchTitle");
   });
 
+  // Wave K F-13: the Z-report link must point at the owner-z-report route —
+  // the RouterLink stub preserves the `to` prop, so a typo in the route name
+  // is caught here instead of in production. (Matched by props, not by stub
+  // name, so the assertion survives shallowMount's stub renaming.)
+  it("links the Z-report action to the owner-z-report route (F-13)", async () => {
+    wrapper = mountWallet();
+    await flushPromises();
+    const links = wrapper
+      .findAllComponents("*")
+      .filter((c) => c.props("to") !== undefined);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.some((c) => c.props("to")?.name === "owner-z-report")).toBe(true);
+  });
+
   // ── (2) loaded money path: float + searched customer + wallet transactions ────
   // Drives the page's own money template on real records:
   //   - fetchFloat → the float amount (fmtBalance)

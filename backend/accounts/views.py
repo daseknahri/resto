@@ -10253,6 +10253,25 @@ class CustomerTopUpIntentView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+        # Wave K F-08: persist a local attempt row so the top-up is visible
+        # on the Wallet tab even if the customer closes the tab mid-payment
+        # or Stripe never returns them. A row-creation failure must never
+        # fail the intent — the webhook credit + status Stripe fallback
+        # still work without it.
+        try:
+            from .models import CustomerTopUpAttempt
+            CustomerTopUpAttempt.objects.create(
+                customer=customer,
+                session_id=session.id,
+                amount=amount,
+                currency="MAD",
+            )
+        except Exception:
+            logger.warning(
+                "Top-up attempt row not recorded session_id=%s",
+                getattr(session, "id", ""),
+            )
+
         return Response({"enabled": True, "url": session.url})
 
 
@@ -10261,6 +10280,8 @@ class CustomerTopUpWebhookView(APIView):
 
     Handles ``checkout.session.completed`` and
     ``checkout.session.async_payment_succeeded`` by crediting the customer wallet.
+    ``checkout.session.async_payment_failed`` marks the local attempt row failed
+    (Wave K F-05) so the status endpoint can answer "failed" honestly.
     Idempotent: Stripe may deliver each event more than once; the wallet service
     deduplicates on ``idempotency_key="stripe:<event_id>"``.
 
@@ -10317,6 +10338,24 @@ class CustomerTopUpWebhookView(APIView):
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
 
         event_type = event.get("type")
+        # Wave K F-05: a failed async payment (e.g. a bank transfer that
+        # bounced) never fires a credit event, so without this the status
+        # stays "pending" forever. Mark the local attempt row failed so the
+        # status endpoint can answer "failed" honestly. Intercepted before
+        # the generic event-type filter below.
+        if event_type == "checkout.session.async_payment_failed":
+            _failed_cs = event.get("data", {}).get("object", {}) or {}
+            try:
+                from .models import CustomerTopUpAttempt
+                CustomerTopUpAttempt.objects.filter(
+                    session_id=_failed_cs.get("id", "")
+                ).update(status=CustomerTopUpAttempt.Status.FAILED)
+            except Exception:
+                payments_logger.warning(
+                    "Top-up attempt row not marked failed session_id=%s",
+                    _failed_cs.get("id", ""),
+                )
+            return Response({"ok": True})
         # Gap-hunt 2026-11-22 (W P1-1): async payment methods (e.g. bank transfer)
         # complete AFTER the session: Stripe fires checkout.session.async_payment_succeeded
         # when the money actually lands. The old code dropped every non-completed event
@@ -10396,7 +10435,41 @@ class CustomerTopUpWebhookView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
+        # Wave K F-08: the credit landed — mark the local attempt row so the
+        # Wallet tab's recent-top-ups list shows it as confirmed. Best
+        # effort only: the ledger row above is the truth, and a row-update
+        # failure must never fail a webhook Stripe will retry.
+        try:
+            from .models import CustomerTopUpAttempt
+            CustomerTopUpAttempt.objects.filter(
+                session_id=cs.get("id", "")
+            ).update(status=CustomerTopUpAttempt.Status.CREDITED)
+        except Exception:
+            payments_logger.warning(
+                "Top-up attempt row not marked credited session_id=%s",
+                cs.get("id", ""),
+            )
+
         return Response({"ok": True})
+
+def _stripe_no_such_session(exc, stripe_module=None):
+    """True when a Stripe lookup failure means "no such session" (terminal).
+
+    Wave K F-03: the status endpoint must tell the frontend which "unknown"
+    answers can never resolve. Prefer isinstance against the real
+    stripe.error.InvalidRequestError when it is a real class; fall back to
+    the exception class name + Stripe's own message text so tests can
+    simulate it with a mocked stripe module (whose error classes are
+    MagicMocks, not types).
+    """
+    err_cls = getattr(getattr(stripe_module, "error", None), "InvalidRequestError", None)
+    if isinstance(err_cls, type) and isinstance(exc, err_cls):
+        return True
+    return (
+        type(exc).__name__ == "InvalidRequestError"
+        and "No such checkout.session" in str(exc)
+    )
+
 
 class CustomerTopUpStatusView(APIView):
     """GET /api/customer/topup/status/?session_id=<stripe_checkout_session_id>.
@@ -10414,7 +10487,17 @@ class CustomerTopUpStatusView(APIView):
     * "unknown" — no such session, the session belongs to another customer,
       the PSP is off / unreachable, or Stripe errored. Never a 500: a
       mistyped id is not a server error, and the response never reveals
-      whether another customer's session exists.
+      whether another customer's session exists. Every response carries a
+      "retryable" flag (Wave K F-03): false when the answer can never change
+      (no such session, foreign session, PSP off, Stripe SDK missing),
+      true for Stripe API errors and "pending".
+    * "failed" — the Stripe session expired without payment, or the webhook
+      marked the local attempt row failed after an async_payment_failed
+      event (Wave K F-05).
+
+    The 120/hour throttle caps Stripe Session.retrieve calls only (Wave K
+    F-01): it is checked inside get(), after the ledger lookup, so a
+    ledger-confirmed answer is never throttled.
 
     Auth: customer session only (IsCustomer). The session id is checked
     against the session's own metadata.customer_id / client_reference_id,
@@ -10423,7 +10506,12 @@ class CustomerTopUpStatusView(APIView):
 
     authentication_classes = [CustomerSessionAuthentication]
     permission_classes = [IsCustomer]
-    throttle_classes = [CustomerTopUpStatusThrottle]
+    # Wave K F-01: NO class-level throttle — DRF throttling runs in
+    # initial(), before get(), so it would count the cheap ledger answer
+    # too. The throttle is checked manually inside get(), after the ledger
+    # lookup and the PSP check, immediately before Stripe Session.retrieve,
+    # so only the expensive path counts against the 120/hour bucket.
+    throttle_classes = []
 
     def get(self, request):
         customer = request.user
@@ -10434,7 +10522,7 @@ class CustomerTopUpStatusView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from .models import WalletTransaction
+        from .models import CustomerTopUpAttempt, WalletTransaction
 
         # 1. The wallet ledger is the truth: the webhook credits with
         # reference="stripe:<checkout_session_id>" and type TOPUP.
@@ -10450,48 +10538,116 @@ class CustomerTopUpStatusView(APIView):
         if tx is not None:
             return Response({
                 "status": "confirmed",
+                "retryable": False,
                 "amount": str(tx.amount),
                 "currency": tx.currency or "MAD",
                 "balance": str(customer.wallet_balance),
                 "credited_at": tx.created_at.isoformat(),
             })
 
+        # 1b. Wave K F-05: a failed async payment leaves no ledger row, but
+        # the webhook marked the local attempt row failed — answer "failed"
+        # honestly instead of "pending" forever. Checked before the PSP flag
+        # so a flag flip after the failure cannot hide it, and without ever
+        # calling Stripe.
+        attempt = (
+            CustomerTopUpAttempt.objects.filter(customer=customer, session_id=session_id)
+            .order_by("-created_at")
+            .first()
+        )
+        if attempt is not None and attempt.status == CustomerTopUpAttempt.Status.FAILED:
+            return Response({
+                "status": "failed",
+                "retryable": False,
+                "payment_status": "unpaid",
+                "balance": str(customer.wallet_balance),
+            })
+
         # 2. No credit yet — ask Stripe what the session is doing. The ledger
         # check above already answered every credited top-up, so this path
         # only ever fires for genuinely unconfirmed returns.
         if not settings.PSP_TOPUP_ENABLED:
-            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
         try:
             import stripe as _stripe
             _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
         except ImportError:
-            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
+
+        # Wave K F-01: throttle only the Stripe path. DRF instantiates
+        # throttle classes fresh per request, so this manual check is
+        # equivalent to the class-level one — except it runs after the cheap
+        # answers above. request.user is set by auth in initial(), so the
+        # customer ident is available here.
+        _status_throttle = CustomerTopUpStatusThrottle()
+        if not _status_throttle.allow_request(request, self):
+            self.throttled(request, _status_throttle.wait())
+
         try:
             session = _stripe.checkout.Session.retrieve(session_id)
-        except Exception:
+        except Exception as exc:
             payments_logger.warning(
                 "Top-up status: Stripe lookup failed session_id=%s", session_id
             )
-            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+            return Response({
+                "status": "unknown",
+                "retryable": not _stripe_no_such_session(exc, _stripe),
+                "balance": str(customer.wallet_balance),
+            })
 
         # Ownership: the session must belong to this customer. Fail closed —
         # an empty owner is also "unknown", never a leak.
         meta = session.get("metadata") or {}
         owner = str(meta.get("customer_id") or session.get("client_reference_id") or "")
         if owner != str(customer.pk):
-            return Response({"status": "unknown", "balance": str(customer.wallet_balance)})
+            return Response({"status": "unknown", "retryable": False, "balance": str(customer.wallet_balance)})
 
         payment_status = session.get("payment_status")
         if session.get("status") == "expired":
             return Response({
                 "status": "failed",
+                "retryable": False,
                 "payment_status": payment_status,
                 "balance": str(customer.wallet_balance),
             })
         return Response({
             "status": "pending",
+            "retryable": True,
             "payment_status": payment_status,
             "balance": str(customer.wallet_balance),
+        })
+
+
+class CustomerTopUpAttemptsView(APIView):
+    """GET /api/customer/topup/attempts/ — the customer's recent top-up attempts.
+
+    Wave K F-08: the intent persists a CustomerTopUpAttempt row per Checkout
+    Session; this lists the caller's own recent attempts (newest first) so
+    the Wallet tab can show top-up history even when the customer closed the
+    tab mid-payment. Works regardless of the PSP flag — history is local.
+    """
+
+    authentication_classes = [CustomerSessionAuthentication]
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        from .models import CustomerTopUpAttempt
+
+        attempts = (
+            CustomerTopUpAttempt.objects.filter(customer=request.user)
+            .order_by("-created_at")[:10]
+        )
+        return Response({
+            "attempts": [
+                {
+                    "session_id": a.session_id,
+                    "amount": str(a.amount),
+                    "currency": a.currency or "MAD",
+                    "status": a.status,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in attempts
+            ],
         })
 
 

@@ -114,10 +114,10 @@ describe("Wave I — i18n values", () => {
   // locale. It is the only copy the banner shows after the ledger confirms.
   it("says the top-up is confirmed with the amount, in every locale", () => {
     expect(en.customerAccount.topUpConfirmedMsg).toBe(
-      "Top-up confirmed - {amount} MAD added to your wallet."
+      "Top-up confirmed — {amount} MAD added to your wallet."
     );
     expect(fr.customerAccount.topUpConfirmedMsg).toBe(
-      "Rechargement confirme - {amount} MAD ajoutes a votre portefeuille."
+      "Rechargement confirme — {amount} MAD ajoutes a votre portefeuille."
     );
     expect(ar.customerAccount.topUpConfirmedMsg).toBeTruthy();
     expect(ar.customerAccount.topUpConfirmedMsg).toContain("{amount}");
@@ -183,8 +183,8 @@ describe("Wave I — CustomerAccount top-up status poll", () => {
     expect(statusGetCount()).toBe(1);
     expect(api.get.mock.calls.find((c) => String(c[0]).includes("/customer/topup/status/"))[0])
       .toContain("session_id=cs_test_1");
-    // Still confirming — the banner keeps the "confirming" copy.
-    expect(wrapper.text()).toContain("customerAccount.topUpSuccessMsg");
+    // Pending + unpaid: the banner shows the awaiting-payment copy (Wave K F-05).
+    expect(wrapper.text()).toContain("customerAccount.topUpAwaitingPaymentMsg");
     expect(wrapper.text()).not.toContain("customerAccount.topUpConfirmedMsg");
   });
 
@@ -221,7 +221,8 @@ describe("Wave I — CustomerAccount top-up status poll", () => {
     setTimeoutSpy.mockRestore();
   });
 
-  it("stops polling on failed and keeps the confirming copy", async () => {
+  // Wave K F-09: on "failed" the banner switches to the payment-didn't-go-through copy.
+  it("stops polling on failed and shows the failed copy", async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
     setStatus({ status: "failed", payment_status: "unpaid", balance: "150.00" });
     _query.topup = "success";
@@ -229,7 +230,8 @@ describe("Wave I — CustomerAccount top-up status poll", () => {
     await mountAccount();
     expect(statusGetCount()).toBe(1);
     expect(statusPollTimers(setTimeoutSpy)).toHaveLength(0);
-    expect(wrapper.text()).toContain("customerAccount.topUpSuccessMsg");
+    expect(wrapper.text()).toContain("customerAccount.topUpFailedMsg");
+    expect(wrapper.text()).not.toContain("customerAccount.topUpSuccessMsg");
     expect(wrapper.text()).not.toContain("customerAccount.topUpConfirmedMsg");
     setTimeoutSpy.mockRestore();
   });
