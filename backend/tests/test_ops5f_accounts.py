@@ -271,7 +271,7 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
         with patch.object(am.DeliveryJob.objects, "select_for_update", return_value=sfu), \
              patch("accounts.views.Customer", cust_mgr_owner := MagicMock()), \
              patch("django.db.transaction.atomic", _atomic), \
-             patch("accounts.views._order_delivery_code", return_value="") as _odc, \
+             patch("accounts.views._order_delivery_code", return_value=("legacy", None)) as _odc, \
              patch("accounts.views._complete_delivered_order") as _cdo, \
              patch("accounts.views._notify_customer_milestone"), \
              patch("accounts.views._batch_business_types", return_value={1: "restaurant"}), \
@@ -298,7 +298,7 @@ class DriverEarningsApprovalGateTests(SimpleTestCase):
         """Still-approved driver passes the approval gate (reaches the code check)."""
         resp, complete_mock, odc_mock = self._drive(still_approved=True)
         # Approval gate passed → delivery-code check ran (no bad-code lockout since
-        # _order_delivery_code returned "" → check skipped → completes).
+        # _order_delivery_code returned ("legacy", None) → check skipped → completes).
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         odc_mock.assert_called()
         complete_mock.assert_called_once()

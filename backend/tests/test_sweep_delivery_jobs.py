@@ -25,7 +25,8 @@ def _noop_cm(*args, **kwargs):
 
 def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
          driver_id=99, redispatch_count=0, assigned_at=None, failed_at=None,
-         owner_alerted_at=None, failure_reason="customer_no_show", food_ready_at=None):
+         owner_alerted_at=None, failure_reason="customer_no_show", food_ready_at=None,
+         created_at=None):
     j = MagicMock()
     j.id = job_id
     j.pk = job_id
@@ -35,6 +36,7 @@ def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
     j.driver_id = driver_id
     j.redispatch_count = redispatch_count
     j.assigned_at = assigned_at
+    j.created_at = created_at
     j.failed_at = failed_at
     j.food_ready_at = food_ready_at
     j.owner_alerted_at = owner_alerted_at
@@ -129,6 +131,8 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         offer.assert_not_called()
 
 
+# ── Wave M M-11/M-15: pre-pickup release gate ─────────────────────────────────
+
 # ── D G4: FAILED re-alert ─────────────────────────────────────────────────────
 
     # Wave L L-02: food-aware pickup SLA
@@ -164,6 +168,77 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         self.assertEqual(count, 0)
         offer.assert_not_called()
         self.assertEqual(locked.status, "at_restaurant")
+
+
+    def test_null_assigned_at_with_old_created_at_is_released(self):
+        """Wave M M-15: (c2) falls back to created_at — a job assigned_at=None
+        but created 20 min ago is past the 15-min SLA."""
+        job = _job(status="assigned", assigned_at=None,
+                   created_at=_NOW - timedelta(minutes=20))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 1)
+        self.assertEqual(locked.status, "searching")
+        offer.assert_called_once_with(job.id)
+
+    def test_null_assigned_at_with_fresh_created_at_is_held(self):
+        """Wave M M-15: (c2) created 5 min ago is within the SLA."""
+        job = _job(status="assigned", assigned_at=None,
+                   created_at=_NOW - timedelta(minutes=5))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+
+
+class PrePickupReleaseDueTests(SimpleTestCase):
+    """_pre_pickup_release_due: the split gate for rule (c)."""
+
+    def _drv(self, *, online, pos_at):
+        from types import SimpleNamespace
+        return SimpleNamespace(is_driver_online=online, driver_position_updated_at=pos_at)
+
+    def _due(self, *, assigned_at, created_at=None, online=True, pos_at=None):
+        from accounts.management.commands.sweep_delivery_jobs import _pre_pickup_release_due
+        drv = self._drv(online=online, pos_at=pos_at)
+        return _pre_pickup_release_due(
+            assigned_at=assigned_at, created_at=created_at,
+            driver_online=drv.is_driver_online,
+            driver_position_updated_at=drv.driver_position_updated_at, now=_NOW,
+        )
+
+    def test_offline_driver_releases_after_two_minutes(self):
+        """Wave M M-11: assigned 3 min ago + explicitly offline → release."""
+        self.assertTrue(self._due(assigned_at=_NOW - timedelta(minutes=3), online=False))
+
+    def test_online_driver_with_stale_gps_three_minutes_is_held(self):
+        """Wave M M-11: assigned 3 min ago + online + GPS 3 min stale → hold."""
+        self.assertFalse(self._due(
+            assigned_at=_NOW - timedelta(minutes=3), online=True,
+            pos_at=_NOW - timedelta(minutes=3)))
+
+    def test_online_driver_with_stale_gps_eleven_minutes_is_released(self):
+        self.assertTrue(self._due(
+            assigned_at=_NOW - timedelta(minutes=11), online=True,
+            pos_at=_NOW - timedelta(minutes=11)))
+
+    def test_online_driver_with_fresh_gps_is_held(self):
+        self.assertFalse(self._due(
+            assigned_at=_NOW - timedelta(minutes=11), online=True,
+            pos_at=_NOW - timedelta(minutes=1)))
+
+    def test_null_assigned_at_falls_back_to_created_at(self):
+        """Wave M M-15: no stamp + created 20 min ago + offline → release."""
+        self.assertTrue(self._due(
+            assigned_at=None, created_at=_NOW - timedelta(minutes=20), online=False))
+
+    def test_null_assigned_at_created_one_minute_ago_is_held(self):
+        """Wave M M-15: no stamp + created 1 min ago + offline → hold."""
+        self.assertFalse(self._due(
+            assigned_at=None, created_at=_NOW - timedelta(minutes=1), online=False))
+
+    def test_null_assigned_at_online_fresh_gps_is_held(self):
+        self.assertFalse(self._due(
+            assigned_at=None, created_at=_NOW - timedelta(minutes=20), online=True,
+            pos_at=_NOW - timedelta(minutes=1)))
 
 
 class RealertFailedJobsTests(SimpleTestCase):
@@ -206,6 +281,48 @@ class RealertFailedJobsTests(SimpleTestCase):
         alert_owner.assert_not_called()
 
     def test_no_failed_jobs_is_noop(self):
+        count, alert_owner = self._run(candidate=None)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+
+# ── Wave M M-12: long-unclaimed SEARCHING re-alert ──────────────────────────
+
+class RealertUnclaimedSearchingTests(SimpleTestCase):
+    def _run(self, *, candidate, claimed=1):
+        """Drive Command._realert_unclaimed_searching_jobs.
+
+        candidate: the SEARCHING job the scan yields (or None). claimed: what the
+        atomic owner_alerted_at claim returns. Returns (count, alert_owner_mock).
+        """
+        alert_owner = MagicMock()
+        with patch("accounts.models.DeliveryJob") as DJ:
+            DJ.Status.SEARCHING = "searching"
+            scan = MagicMock()
+            scan.__iter__.return_value = iter([candidate] if candidate else [])
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._realert_unclaimed_searching_jobs(_NOW, alert_owner)
+        return count, alert_owner
+
+    def test_unclaimed_past_an_hour_realerts(self):
+        job = _job(status="searching", created_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=_NOW - timedelta(minutes=120))
+        count, alert_owner = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+        _args, _kwargs = alert_owner.call_args
+        self.assertEqual(_args[1], "ORD-1")
+        self.assertIn("Still no driver", _args[2])
+
+    def test_alert_within_the_hour_is_throttled(self):
+        job = _job(status="searching", created_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=_NOW - timedelta(minutes=10))
+        count, alert_owner = self._run(candidate=job, claimed=0)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_no_unclaimed_jobs_is_noop(self):
         count, alert_owner = self._run(candidate=None)
         self.assertEqual(count, 0)
         alert_owner.assert_not_called()
@@ -283,6 +400,18 @@ class BackfillMissingJobsTests(SimpleTestCase):
         self.assertEqual(kwargs["order_number"], "ORD-9")
         self.assertEqual(kwargs["defaults"]["status"], "searching")
         dispatch.assert_called_once()
+
+    def test_backfilled_job_stamps_food_ready(self):
+        """Wave M M-04: a backfilled job gets its food_ready_at stamped from
+        the order's ETA (patched helper returns 25 here)."""
+        with patch("menu.views._delivery_job_ready_minutes", return_value=25), \
+                patch("accounts.delivery_service.set_delivery_job_food_ready") as mirror:
+            count, dispatch, DJ = self._run(
+                tenant=self._tenant(enabled=True), orders=[self._order()], job_numbers=[]
+            )
+        self.assertEqual(count, 1)
+        mirror.assert_called_once_with(7, "ORD-9", 25)
+
 
     def test_platform_delivery_off_is_skipped(self):
         count, dispatch, DJ = self._run(

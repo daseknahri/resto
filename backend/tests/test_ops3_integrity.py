@@ -500,6 +500,63 @@ class StatusAdvanceIdempotencyTests(SimpleTestCase):
         # No save called — pure no-op
         order.save.assert_not_called()
 
+    # ── Same-status ETA edit sticks (Wave M M-14(a)) ─────────────────────────
+
+    @patch("menu.views.Order.objects")
+    def test_same_status_eta_edit_is_saved_and_mirrored(self, mock_order_qs):
+        """PATCH status=confirmed on a CONFIRMED delivery order with a new ETA:
+        the ETA lands on the order (it used to be dropped) and the driver job
+        is re-mirrored anchor-aware (previous=20, new=30)."""
+        order = _make_order(status_val=Order.Status.CONFIRMED,
+                            fulfillment_type=Order.FulfillmentType.DELIVERY)
+        order.estimated_ready_minutes = 20
+        order.estimated_ready_at = None
+        om = MagicMock()
+        om.select_for_update.return_value = om
+        om.select_related.return_value = om
+        om.filter.return_value = om
+        om.first.return_value = order
+        mock_order_qs.select_for_update.return_value = om
+        mock_order_qs.select_related.return_value = om
+        mock_order_qs.filter.return_value = om
+        mock_order_qs.first.return_value = order
+
+        with patch("accounts.delivery_service.set_delivery_job_food_ready") as mirror:
+            req = self._patch(body={"status": "confirmed", "estimated_ready_minutes": 30})
+            resp = self.view(req, order_id=10)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data.get("code"), "already_at_target")
+        self.assertEqual(resp.data.get("estimated_ready_minutes"), 30)
+        order.save.assert_called_once()
+        mirror.assert_called_once_with(1, "ORD-AAA", 30, previous_minutes=20)
+
+    @patch("menu.views.Order.objects")
+    def test_same_status_note_edit_mirrors_without_reanchoring(self, mock_order_qs):
+        """A note-only edit on a same-status order still mirrors, but with
+        previous == new minutes — the setter then keeps the existing anchor."""
+        order = _make_order(status_val=Order.Status.CONFIRMED,
+                            fulfillment_type=Order.FulfillmentType.DELIVERY)
+        order.estimated_ready_minutes = 20
+        order.estimated_ready_at = None
+        om = MagicMock()
+        om.select_for_update.return_value = om
+        om.select_related.return_value = om
+        om.filter.return_value = om
+        om.first.return_value = order
+        mock_order_qs.select_for_update.return_value = om
+        mock_order_qs.select_related.return_value = om
+        mock_order_qs.filter.return_value = om
+        mock_order_qs.first.return_value = order
+
+        with patch("accounts.delivery_service.set_delivery_job_food_ready") as mirror:
+            req = self._patch(body={"status": "confirmed", "owner_note": "No nuts"})
+            resp = self.view(req, order_id=10)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.owner_note, "No nuts")
+        mirror.assert_called_once_with(1, "ORD-AAA", 20, previous_minutes=20)
+
     # ── Advance to already-past target → no regression ────────────────────────
 
     @patch("menu.views.Order.objects")
@@ -812,6 +869,161 @@ class OrderPaymentDbBackstopTests(SimpleTestCase):
         # Verify that create was called with idempotency_key
         create_kwargs = mock_op_qs.create.call_args[1]
         self.assertEqual(create_kwargs.get("idempotency_key"), "cash-idem-key")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Wave M M-01 — Split-bill settle reconciles non-ledger wallet money
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class StaffOrderPaymentWalletReconcileTests(SimpleTestCase):
+    """StaffOrderPaymentView must measure outstanding / PAID / overpay against
+    _order_collected (ledger + wallet_amount_paid), not the ledger alone.
+
+    A dine-in tab partly paid from the wallet (wallet_amount_paid=30, no ledger
+    row — the place-order / pay-wallet shape) must close on the remaining cash,
+    and the overpay guard must not accept the wallet-paid part a second time.
+    """
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = StaffOrderPaymentView.as_view()
+
+        # Make transaction.atomic a passthrough
+        class _Atomic:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        _tx_patcher = patch("menu.views.transaction")
+        self._tx_mock = _tx_patcher.start()
+        self.addCleanup(_tx_patcher.stop)
+        self._tx_mock.atomic.return_value = _Atomic()
+
+        _edit_patcher = patch("menu.views._can_edit_tenant_order", return_value=True)
+        self._edit_mock = _edit_patcher.start()
+        self.addCleanup(_edit_patcher.stop)
+
+        _access_patcher = patch("menu.views._can_access_order", return_value=True)
+        self._access_mock = _access_patcher.start()
+        self.addCleanup(_access_patcher.stop)
+
+        _shift_patcher = patch("menu.models.Shift")
+        self._shift_mock = _shift_patcher.start()
+        self.addCleanup(_shift_patcher.stop)
+        self._shift_mock.objects.filter.return_value.exists.return_value = True
+
+    def _post(self, order_id=10, body=None, user=None):
+        body = body or {}
+        req = self.factory.post(
+            f"/api/staff/orders/{order_id}/payments/",
+            body,
+            format="json",
+        )
+        force_authenticate(req, user=user or _staff())
+        req.tenant = _tenant()
+        return req
+
+    def _wire_order(self, mock_order_qs, order):
+        om = MagicMock()
+        om.select_for_update.return_value = om
+        om.prefetch_related.return_value = om
+        om.filter.return_value = om
+        om.first.return_value = order
+        om.get.return_value = order
+        mock_order_qs.select_for_update.return_value = om
+        mock_order_qs.prefetch_related.return_value = om
+        mock_order_qs.filter.return_value = om
+        mock_order_qs.first.return_value = order
+        mock_order_qs.get.return_value = order
+
+    @patch("menu.views.cache")
+    @patch("menu.views._broadcast_order_change", return_value=None)
+    @patch("menu.models.OrderPayment")
+    @patch("menu.views.OrderPayment.objects")
+    @patch("menu.views.Order.objects")
+    def test_cash_remainder_closes_wallet_partpaid_tab(
+        self, mock_order_qs, mock_op_qs, mock_models_op, mock_broadcast, mock_cache
+    ):
+        """Total 100, wallet_amount_paid=30, no ledger rows → cash 70 closes (201, PAID)."""
+        order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            total=Decimal("100.00"),
+            wallet_amount_paid=Decimal("30.00"),
+        )
+        order.payments.all.return_value = []
+        self._wire_order(mock_order_qs, order)
+        mock_cache.get.return_value = None
+        # _order_collected reads the ledger via menu.models.OrderPayment.
+        mock_models_op.objects.filter.return_value = []
+        payment_mock = MagicMock()
+        payment_mock.id = 55
+        mock_models_op.objects.create.return_value = payment_mock
+
+        req = self._post(body={"method": "cash", "amount": "70.00"})
+        resp = self.view(req, order_id=10)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        create_kwargs = mock_models_op.objects.create.call_args[1]
+        self.assertEqual(create_kwargs.get("amount"), Decimal("70.00"))
+        # The PAID flip must fire on the reconciled total (30 wallet + 70 cash).
+        order.mark_paid.assert_called_once()
+
+    @patch("menu.views.cache")
+    @patch("menu.views._broadcast_order_change", return_value=None)
+    @patch("menu.models.OrderPayment")
+    @patch("menu.views.OrderPayment.objects")
+    @patch("menu.views.Order.objects")
+    def test_overpay_guard_uses_reconciled_outstanding(
+        self, mock_order_qs, mock_op_qs, mock_models_op, mock_broadcast, mock_cache
+    ):
+        """Total 100, wallet 30 already paid → cash 80 exceeds the 70 owed (409 overpay)."""
+        order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            total=Decimal("100.00"),
+            wallet_amount_paid=Decimal("30.00"),
+        )
+        order.payments.all.return_value = []
+        self._wire_order(mock_order_qs, order)
+        mock_cache.get.return_value = None
+        mock_models_op.objects.filter.return_value = []
+
+        req = self._post(body={"method": "cash", "amount": "80.00"})
+        resp = self.view(req, order_id=10)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT, resp.data)
+        self.assertEqual(resp.data.get("code"), "overpay")
+        mock_models_op.objects.create.assert_not_called()
+
+    @patch("menu.views.cache")
+    @patch("menu.views._broadcast_order_change", return_value=None)
+    @patch("menu.models.OrderPayment")
+    @patch("menu.views.OrderPayment.objects")
+    @patch("menu.views.Order.objects")
+    def test_further_cash_after_full_settle_is_rejected(
+        self, mock_order_qs, mock_op_qs, mock_models_op, mock_broadcast, mock_cache
+    ):
+        """Once the tab is PAID (30 wallet + 70 cash), a further cash payment is
+        refused with 409 — the customer is never charged the wallet part twice.
+        (The pack sketch says "overpay"; the view's already-paid guard fires
+        first, so the code is already_paid — same refusal, earlier guard.)"""
+        order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            total=Decimal("100.00"),
+            wallet_amount_paid=Decimal("30.00"),
+        )
+        order.payments.all.return_value = []
+        self._wire_order(mock_order_qs, order)
+        mock_cache.get.return_value = None
+        mock_models_op.objects.filter.return_value = []
+
+        req = self._post(body={"method": "cash", "amount": "30.00"})
+        resp = self.view(req, order_id=10)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT, resp.data)
+        self.assertEqual(resp.data.get("code"), "already_paid")
+        mock_models_op.objects.create.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

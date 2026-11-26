@@ -361,6 +361,17 @@ class DriverCashoutRequest(models.Model):
     class Meta:
         ordering = ("-created_at",)
         indexes = [models.Index(fields=("status", "expires_at"))]
+        # Wave M M-09: at most ONE live (PENDING) request per code. Two drivers
+        # (or one driver twice) must never hold the same 6-digit code — a
+        # confirm would otherwise pay the wrong request. Expired/paid rows may
+        # reuse a code, so the constraint is partial on PENDING only.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=models.Q(status="pending"),
+                name="uniq_pending_cashout_code",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Cashout {self.amount} ({self.status}) driver {self.driver_id}"

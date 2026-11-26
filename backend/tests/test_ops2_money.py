@@ -9,7 +9,7 @@ Contracts covered:
   A – service_day_window() math + Profile.service_day_cutover_hour field
   B – OwnerZReportView shape (collected/refunds/voids/by_staff predicates)
   C – Revenue-truth fix: payment_split uses payment_status=PAID only
-  D – StaffPaymentMethodCorrectionView: audit fields, no money movement
+  D – StaffPaymentMethodCorrectionView: audit fields; wallet→cash reverses the debit (M-03), cash→wallet rejected
   E – TruncDate tzinfo bucketing (confirmed in sales/views.py code review)
   F – OwnerOrderDetailView payments list + void fields (in test_owner_*.py)
   G – StaffShiftSummaryView single-query avg-prep + cash/wallet (test_staff_*.py)
@@ -1069,22 +1069,42 @@ class RevenueTruthPaymentSplitTests(SimpleTestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONTRACT D — Payment method correction
+# CONTRACT D — Payment method correction (Wave M M-03)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class PaymentMethodCorrectionTests(SimpleTestCase):
-    """StaffPaymentMethodCorrectionView — relabels method, writes audit fields,
-    does NOT touch wallet balance, WalletTransaction, or wallet_amount_paid."""
+    """StaffPaymentMethodCorrectionView — Wave M M-03 contract.
+
+    wallet → cash: reverses the wallet debit (credit_wallet REFUND) and
+    decrements Order.wallet_amount_paid under the order lock, so
+    _order_collected stays exact (one 30 payment counts once, not twice).
+    cash → wallet: rejected 400 — no wallet money moved, so relabelling would
+    fabricate a wallet payment.
+    """
 
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffPaymentMethodCorrectionView.as_view()
 
-    def _make_payment(self, method="cash", original_method="", order_tenant_id=1):
+        # Make transaction.atomic a passthrough (SimpleTestCase, no DB).
+        class _Atomic:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        _tx_patcher = patch("menu.views.transaction")
+        self._tx_mock = _tx_patcher.start()
+        self.addCleanup(_tx_patcher.stop)
+        self._tx_mock.atomic.return_value = _Atomic()
+
+    def _make_payment(self, method="wallet", original_method="", order_tenant_id=1,
+                      wallet_amount_paid="30.00", customer_id=7):
         payment = MagicMock()
         payment.id = 99
         payment.order_id = 10
-        payment.amount = Decimal("50.00")
+        payment.amount = Decimal("30.00")
         payment.method = method
         payment.original_method = original_method
         payment.recorded_by_name = "Alice"
@@ -1093,8 +1113,11 @@ class PaymentMethodCorrectionTests(SimpleTestCase):
         payment.corrected_at = None
         payment.corrected_by_name = ""
         order = MagicMock()
+        order.id = 10
         order.order_number = "ORD-010"
         order.tenant_id = order_tenant_id
+        order.wallet_amount_paid = Decimal(wallet_amount_paid)
+        order.customer_id = customer_id
         payment.order = order
         return payment
 
@@ -1108,33 +1131,76 @@ class PaymentMethodCorrectionTests(SimpleTestCase):
         req.tenant = tenant or _tenant()
         return req
 
-    def _patch_payment_lookup(self, payment):
-        """Patch OrderPayment.objects so the view finds our mock payment."""
+    def _lookups(self, payment):
+        """(OrderPayment.objects mock, Order.objects mock) for the early fetch,
+        the locked re-fetch, and the locked order row."""
         mock_objs = MagicMock()
         mock_objs.select_related.return_value.filter.return_value.first.return_value = payment
-        return patch("menu.views.OrderPayment.objects", mock_objs)
+        mock_objs.select_for_update.return_value.filter.return_value.first.return_value = payment
+        mock_order_qs = MagicMock()
+        mock_order_qs.select_for_update.return_value.filter.return_value.first.return_value = payment.order
+        return mock_objs, mock_order_qs
 
-    def test_method_updated_on_success(self):
-        """POST with valid new_method updates the payment.method field."""
-        payment = self._make_payment(method="cash")
-        with self._patch_payment_lookup(payment):
-            req = self._req({"method": "wallet"})
+    def test_wallet_to_cash_reverses_wallet_and_decrements_counter(self):
+        """WALLET row 30 → cash: wallet credited back 30, counter 30 → 0."""
+        payment = self._make_payment(method="wallet")
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet") as mock_credit,
+        ):
+            req = self._req({"method": "cash"})
             resp = self.view(req, order_id=10, payment_id=99)
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
-        self.assertEqual(payment.method, "wallet")
+        self.assertEqual(payment.method, "cash")
+        mock_credit.assert_called_once()
+        args, kwargs = mock_credit.call_args
+        self.assertEqual(args[1], Decimal("30.00"))
+        self.assertIn("correct:", kwargs["idempotency_key"])
+        self.assertIn(":99:wallet-reversal", kwargs["idempotency_key"])
+        self.assertEqual(payment.order.wallet_amount_paid, Decimal("0.00"))
+        payment.order.save.assert_called_once()
+
+    def test_cash_to_wallet_rejected(self):
+        """A cash row cannot become a wallet row (400) — no wallet money moved."""
+        payment = self._make_payment(method="cash")
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet") as mock_credit,
+        ):
+            req = self._req({"method": "wallet"})
+            resp = self.view(req, order_id=10, payment_id=99)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, resp.data)
+        self.assertEqual(resp.data.get("code"), "cash_to_wallet_not_allowed")
+        self.assertEqual(payment.method, "cash")
+        mock_credit.assert_not_called()
+        payment.save.assert_not_called()
 
     def test_original_method_captured_on_first_correction(self):
         """original_method must be set to the old method on first correction only."""
-        payment = self._make_payment(method="cash", original_method="")
-        with self._patch_payment_lookup(payment):
-            req = self._req({"method": "wallet"})
+        payment = self._make_payment(method="wallet", original_method="")
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet"),
+        ):
+            req = self._req({"method": "cash"})
             self.view(req, order_id=10, payment_id=99)
-        self.assertEqual(payment.original_method, "cash")
+        self.assertEqual(payment.original_method, "wallet")
 
     def test_original_method_not_overwritten_on_second_correction(self):
         """If original_method is already set, it must not be changed again."""
         payment = self._make_payment(method="wallet", original_method="cash")
-        with self._patch_payment_lookup(payment):
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet"),
+        ):
             req = self._req({"method": "cash"})
             self.view(req, order_id=10, payment_id=99)
         # original_method must still be "cash", not "wallet"
@@ -1142,31 +1208,45 @@ class PaymentMethodCorrectionTests(SimpleTestCase):
 
     def test_corrected_at_and_by_name_written(self):
         """corrected_at and corrected_by_name must be written."""
-        payment = self._make_payment(method="cash")
+        payment = self._make_payment(method="wallet")
         user = _staff_user()
         user.get_full_name.return_value = "Bob Smith"
-        with self._patch_payment_lookup(payment):
-            req = self._req({"method": "wallet"}, user=user)
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet"),
+        ):
+            req = self._req({"method": "cash"}, user=user)
             self.view(req, order_id=10, payment_id=99)
         self.assertIsNotNone(payment.corrected_at)
         self.assertIn("Bob", payment.corrected_by_name)
 
-    def test_wallet_balance_not_touched(self):
-        """WalletTransaction must never be called from this endpoint."""
-        payment = self._make_payment(method="cash")
+    def test_no_double_credit_when_counter_already_zero(self):
+        """Row whose wallet money was already refunded (counter 0): the
+        correction still relabels, but no second credit is issued."""
+        payment = self._make_payment(method="wallet", wallet_amount_paid="0.00")
+        mock_objs, mock_order_qs = self._lookups(payment)
         with (
-            self._patch_payment_lookup(payment),
-            patch("accounts.models.WalletTransaction") as mock_wt,
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet") as mock_credit,
         ):
-            req = self._req({"method": "wallet"})
-            self.view(req, order_id=10, payment_id=99)
-        mock_wt.objects.create.assert_not_called()
-        mock_wt.objects.filter.assert_not_called()
+            req = self._req({"method": "cash"})
+            resp = self.view(req, order_id=10, payment_id=99)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(payment.method, "cash")
+        mock_credit.assert_not_called()
+        self.assertEqual(payment.order.wallet_amount_paid, Decimal("0.00"))
 
     def test_invalid_method_returns_400(self):
         """A method value other than cash/wallet returns 400."""
         payment = self._make_payment(method="cash")
-        with self._patch_payment_lookup(payment):
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+        ):
             req = self._req({"method": "bitcoin"})
             resp = self.view(req, order_id=10, payment_id=99)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -1174,7 +1254,11 @@ class PaymentMethodCorrectionTests(SimpleTestCase):
     def test_same_method_returns_409(self):
         """Correcting to the same method as currently recorded returns 409 Conflict."""
         payment = self._make_payment(method="cash")
-        with self._patch_payment_lookup(payment):
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+        ):
             req = self._req({"method": "cash"})
             resp = self.view(req, order_id=10, payment_id=99)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -1186,18 +1270,27 @@ class PaymentMethodCorrectionTests(SimpleTestCase):
         outsider.is_superuser = False
         outsider.is_staff = False
         outsider.is_platform_admin = False
-        with self._patch_payment_lookup(payment):
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+        ):
             req = self._req({"method": "wallet"}, user=outsider)
             resp = self.view(req, order_id=10, payment_id=99)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_response_includes_audit_fields(self):
         """Response payload must include original_method, corrected_at, corrected_by_name."""
-        payment = self._make_payment(method="cash", original_method="")
+        payment = self._make_payment(method="wallet", original_method="")
         user = _staff_user()
         user.get_full_name.return_value = "Alice"
-        with self._patch_payment_lookup(payment):
-            req = self._req({"method": "wallet"}, user=user)
+        mock_objs, mock_order_qs = self._lookups(payment)
+        with (
+            patch("menu.views.OrderPayment.objects", mock_objs),
+            patch("menu.views.Order.objects", mock_order_qs),
+            patch("accounts.wallet_service.credit_wallet"),
+        ):
+            req = self._req({"method": "cash"}, user=user)
             resp = self.view(req, order_id=10, payment_id=99)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         for field in ("original_method", "corrected_at", "corrected_by_name"):

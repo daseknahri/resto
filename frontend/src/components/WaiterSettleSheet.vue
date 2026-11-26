@@ -86,10 +86,14 @@
         </span>
       </div>
     </div>
-    <!-- Primary CTA: Cash full amount — one tap -->
+    <!-- Primary CTA: Cash full amount — one tap.
+         Wave M M-21: emits 'full' explicitly — the parent must ignore any stale
+         splitAmount typed earlier (the split accordion may have been opened and
+         closed without clearing it). The split-section Cash button below passes
+         nothing and keeps the typed partial. -->
     <button
       class="ui-press ui-touch-target w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-4 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-      @click="emit('payCash')"
+      @click="emit('payCash', 'full')"
     >
       <span class="text-xl" aria-hidden="true">💵</span>
       <span class="text-base font-bold">{{ t('waiterPage.cashFull', { amount: fmtOrderPrice(settleOutstanding(order), order.currency) }) }}</span>

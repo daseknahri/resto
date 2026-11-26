@@ -297,6 +297,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "accounts.tasks.write_beat_heartbeat",
         "schedule": 60.0,
     },
+    "write-worker-heartbeat": {
+        "task": "cron.write_worker_heartbeat",
+        # Wave M M-19: every 60s — proves a worker consumes the cron queue
+        # (health requires this stamp fresh <120s; see config/api.py).
+        "schedule": 60.0,
+    },
     "release-scheduled-orders": {
         "task": "cron.release_scheduled_orders",
         "schedule": 300.0,  # every 5 min
@@ -339,6 +345,14 @@ CELERY_BEAT_SCHEDULE = {
         # every 15 min — backfill any delivery earnings whose wallet credit failed after
         # DELIVERED (idempotent; light scan, so a lower cadence than the 60s job sweep).
         "schedule": 900.0,
+    },
+    "reconcile-profile-denorms": {
+        "task": "cron.reconcile_profile_denorms",
+        # Wave M M-17: hourly — recompute the denormalized Profile mirrors
+        # (rating_avg/count, marketplace_promos, closure_dates; RISK DATA-5).
+        # Fix-only and idempotent: a missed signal can never leave the public
+        # mirror silently drifted for more than an hour.
+        "schedule": 3600.0,
     },
     "reconcile-wallet-balances": {
         "task": "cron.reconcile_wallet_balances",

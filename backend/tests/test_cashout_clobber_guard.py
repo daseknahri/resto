@@ -144,7 +144,7 @@ class ConcurrentExpiryClobberTests(SimpleTestCase):
     def test_expired_write_is_guarded_update_not_blind_save(self):
         req = self._expired_req()
         (self.m["dcr"].objects.select_for_update
-            .return_value.filter.return_value.first.return_value) = req
+            .return_value.filter.return_value.order_by.return_value.first.return_value) = req
         # Model the concurrent case: a racing confirm already PAID the row, so the guarded
         # UPDATE matches 0 rows (WHERE status=PENDING no longer holds) and no row is touched.
         self.m["dcr"].objects.filter.return_value.update.return_value = 0

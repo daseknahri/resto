@@ -77,6 +77,20 @@ describe("WaiterSettleSheet", () => {
     expect(w.emitted("payWallet")).toBeTruthy();
   });
 
+  it("emits payCash with 'full' from the big Cash-full button (Wave M M-21)", async () => {
+    const w = mountIt();
+    await byText(w, "waiterPage.cashFull")[0].trigger("click");
+    expect(w.emitted("payCash")[0]).toEqual(["full"]);
+  });
+
+  it("emits payCash with no payload from the split-section Cash button (Wave M M-21)", async () => {
+    // A stale typed amount must reach the parent as "no mode" (partial), never
+    // as a full settle — the parent only treats the explicit 'full' as full.
+    const w = mountIt({ splitSectionOpen: true, splitAmount: "20.00" });
+    await byText(w, "waiterPage.payCash")[0].trigger("click");
+    expect(w.emitted("payCash")[0]).toEqual([]);
+  });
+
   it("toggles seat-split mode and requests a seat-group load when turning it on", async () => {
     const w = mountIt({ splitBySeatMode: false });
     await byText(w, "waiterPage.splitBySeat")[0].trigger("click");

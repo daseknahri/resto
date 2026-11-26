@@ -31,6 +31,14 @@ class Command(BaseCommand):
             default="Reversed: phone not verified",
             help="Note recorded on each adjustment transaction.",
         )
+        parser.add_argument(
+            "--include-card-paid",
+            action="store_true",
+            help="Also sweep customers who topped up by card (a TOPUP WalletTransaction "
+                 "on file). By default those are skipped: their money arrived via a "
+                 "verified payment instrument, so zeroing it is a support decision, "
+                 "not a cleanup.",
+        )
 
     def handle(self, *args, **options):
         from accounts.models import Customer, WalletTransaction
@@ -39,17 +47,40 @@ class Command(BaseCommand):
         note = (options["note"] or "")[:200]
 
         qs = Customer.objects.filter(phone_verified=False, wallet_balance__gt=0)
+        # Wave M M-08: a customer who paid by card has a TOPUP row on the
+        # ledger — their balance is real card money, not a pre-rule artefact.
+        # Skip them unless the operator explicitly opts in.
+        skipped_card_paid = 0
+        if not options["include_card_paid"]:
+            before = qs.count()
+            qs = qs.exclude(
+                id__in=WalletTransaction.objects.filter(
+                    type=WalletTransaction.Type.TOPUP
+                ).values("customer_id")
+            )
+            skipped_card_paid = before - qs.count()
         count = qs.count()
         total = qs.aggregate(s=Sum("wallet_balance"))["s"] or Decimal("0")
 
         if count == 0:
-            self.stdout.write(self.style.SUCCESS("No unverified customers hold a wallet balance. Nothing to do."))
+            msg = "No unverified customers hold a wallet balance. Nothing to do."
+            if skipped_card_paid:
+                msg += (
+                    f" ({skipped_card_paid} card-paid customer(s) skipped — "
+                    "pass --include-card-paid to include them.)"
+                )
+            self.stdout.write(self.style.SUCCESS(msg))
             return
 
         if not apply:
             self.stdout.write(
                 f"[dry-run] {count} unverified customer(s) hold a total of {total} in wallet balance."
             )
+            if skipped_card_paid:
+                self.stdout.write(
+                    f"Skipped {skipped_card_paid} customer(s) who topped up by card "
+                    "(TOPUP on file) — pass --include-card-paid to include them."
+                )
             self.stdout.write("Re-run with --apply to zero these balances (an adjustment record is written for each).")
             return
 
@@ -85,3 +116,7 @@ class Command(BaseCommand):
                 swept_total += tx.amount if tx is not None else amount
 
         self.stdout.write(self.style.SUCCESS(f"Swept {swept} wallet(s), removing {swept_total} in unverified balance."))
+        if skipped_card_paid:
+            self.stdout.write(
+                f"Skipped {skipped_card_paid} card-paid customer(s) (TOPUP on file)."
+            )

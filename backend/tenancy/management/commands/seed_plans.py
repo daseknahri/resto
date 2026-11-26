@@ -5,7 +5,15 @@ from tenancy.models import Domain, Plan, Tenant
 
 
 class Command(BaseCommand):
-    help = "Seed default plans and an optional demo tenant/superadmin"
+    help = (
+        "Seed default plans (create-only) and an optional demo tenant/superadmin. "
+        "Plans are created with the seeded defaults ONLY when missing — an existing "
+        "plan is never overwritten, so owner edits (prices, limits, is_active) "
+        "survive every deploy. To change a seeded default, edit the plan in the "
+        "admin / a data migration instead. "
+        "NOTE: tenancy/migrations/0008 calls seed_plans the source of truth — "
+        "that comment describes the SEED values, not a rewrite-on-deploy policy."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--with-demo", action="store_true", help="Create a demo tenant and superadmin user")
@@ -15,7 +23,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write("Seeding plans...")
-        starter, _ = Plan.objects.update_or_create(
+        starter, _ = Plan.objects.get_or_create(
             code="starter",
             defaults={
                 "name": "Basic",
@@ -26,7 +34,7 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
-        growth, _ = Plan.objects.update_or_create(
+        growth, _ = Plan.objects.get_or_create(
             code="growth",
             defaults={
                 "name": "Growth",
@@ -37,7 +45,7 @@ class Command(BaseCommand):
                 "is_active": False,
             },
         )
-        pro, _ = Plan.objects.update_or_create(
+        pro, _ = Plan.objects.get_or_create(
             code="pro",
             defaults={
                 "name": "Pro",

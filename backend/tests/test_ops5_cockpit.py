@@ -309,6 +309,82 @@ class CeleryCheckTests(SimpleTestCase):
         self.assertTrue(result["ok"])
         self.assertIn("per-process cache", result["detail"])
 
+    def test_worker_heartbeat_stale_past_grace_is_degraded(self):
+        """Wave M M-19: a fresh beat heartbeat proves Beat runs — a STALE worker
+        heartbeat past the grace still degrades (the worker is dead, the queue
+        is backing up, and the beat stamp alone used to hide it)."""
+        import time as _t
+        from datetime import timedelta
+        from django.utils.timezone import now as _now
+        fresh = _now().isoformat()
+        stale = (_now() - timedelta(seconds=600)).isoformat()
+
+        def _get(key):
+            return {"celery_beat_heartbeat": fresh, "celery_worker_heartbeat": stale}[key]
+
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.side_effect = _get
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertFalse(result["ok"])
+        self.assertIn("worker_stale", result["detail"])
+
+    def test_worker_heartbeat_absent_past_grace_is_degraded(self):
+        """Wave M M-19: beat fresh, worker stamp never written, past grace."""
+        import time as _t
+        from django.utils.timezone import now as _now
+        fresh = _now().isoformat()
+
+        def _get(key):
+            return {"celery_beat_heartbeat": fresh, "celery_worker_heartbeat": None}[key]
+
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.side_effect = _get
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertFalse(result["ok"])
+        self.assertIn("worker_down", result["detail"])
+
+    def test_worker_heartbeat_fresh_past_grace_is_ok(self):
+        """Wave M M-19: beat fresh + worker fresh past grace → ok."""
+        import time as _t
+        from django.utils.timezone import now as _now
+        fresh = _now().isoformat()
+
+        def _get(key):
+            return fresh
+
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.side_effect = _get
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = "redis://localhost:6379/0"
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertTrue(result["ok"])
+        self.assertIn("worker_ok", result["detail"])
+
+    def test_no_broker_in_production_is_degraded(self):
+        """Wave M M-19: broker unset + DEBUG False (production) → not ok.
+        (DEBUG True keeps the old 'off by design' ok — see the DEBUG-on test.)"""
+        import time as _t
+        with patch("config.api.cache") as mock_cache, \
+                patch("config.api._PROCESS_START_MONOTONIC", _t.monotonic() - 99999):
+            mock_cache.get.return_value = None
+            with patch("django.conf.settings") as mock_settings:
+                mock_settings.CELERY_BROKER_URL = ""
+                mock_settings.DEBUG = False
+                from config.api import _check_celery
+                result = _check_celery()
+        self.assertFalse(result["ok"])
+        self.assertIn("broker_missing", result["detail"])
+
     def test_no_broker_never_degrades_even_past_grace(self):
         """CRITICAL contract: dev / no-broker prod-fallback must stay ok regardless of the
         heartbeat or how long the process has been up."""
@@ -344,6 +420,28 @@ class WriteBeatHeartbeatTaskTests(SimpleTestCase):
         entry = settings.CELERY_BEAT_SCHEDULE.get("write-beat-heartbeat")
         self.assertIsNotNone(entry, "write-beat-heartbeat must be in CELERY_BEAT_SCHEDULE")
         self.assertEqual(entry["task"], "accounts.tasks.write_beat_heartbeat")
+        self.assertAlmostEqual(entry["schedule"], 60.0, delta=1)
+
+
+class WriteWorkerHeartbeatTaskTests(SimpleTestCase):
+    """Wave M M-19: cron.write_worker_heartbeat writes the worker key the
+    health probe reads, and is on the beat schedule every ~60s."""
+
+    def test_task_writes_the_worker_heartbeat_key(self):
+        with patch("django.core.cache.cache") as mock_cache:
+            from accounts.tasks import write_worker_heartbeat
+            write_worker_heartbeat.run()
+        mock_cache.set.assert_called_once()
+        args, kwargs = mock_cache.set.call_args
+        self.assertEqual(args[0], "celery_worker_heartbeat")
+        self.assertEqual(kwargs.get("timeout"), 300)
+        self.assertTrue(args[1])
+
+    def test_worker_heartbeat_task_is_on_the_beat_schedule_every_minute(self):
+        from django.conf import settings
+        entry = settings.CELERY_BEAT_SCHEDULE.get("write-worker-heartbeat")
+        self.assertIsNotNone(entry, "write-worker-heartbeat must be in CELERY_BEAT_SCHEDULE")
+        self.assertEqual(entry["task"], "cron.write_worker_heartbeat")
         self.assertAlmostEqual(entry["schedule"], 60.0, delta=1)
 
 
@@ -412,6 +510,64 @@ class MediaCheckTests(SimpleTestCase):
             from config.api import _check_media
             result = _check_media()
         self.assertFalse(result["ok"])
+
+    def test_returns_degraded_when_media_root_not_writable(self):
+        """Wave M M-19: local branch also checks writability."""
+        import os
+        import stat
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chmod(tmpdir, stat.S_IRUSR | stat.S_IXUSR)  # read+execute, no write
+            try:
+                with patch("django.conf.settings") as mock_settings:
+                    mock_settings.MEDIA_ROOT = tmpdir
+                    mock_settings.STORAGES = {
+                        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+                    }
+                    from config.api import _check_media
+                    result = _check_media()
+                # Root can still write (tests may run as root) — only assert when
+                # the chmod actually removed write permission.
+                if not os.access(tmpdir, os.W_OK):
+                    self.assertFalse(result["ok"])
+                    self.assertIn("not writable", result["detail"])
+            finally:
+                os.chmod(tmpdir, stat.S_IRWXU)
+
+
+class MediaCheckS3Tests(SimpleTestCase):
+    """Wave M M-19: under S3 the probe HEADs the bucket instead of MEDIA_ROOT."""
+
+    def _s3_settings(self, mock_settings):
+        mock_settings.STORAGES = {
+            "default": {"BACKEND": "storages.backends.s3.S3Storage"}
+        }
+        mock_settings.MEDIA_ROOT = "/nonexistent/ignored-under-s3"
+
+    def test_s3_bucket_reachable_returns_ok(self):
+        storage = MagicMock()
+        storage.bucket_name = "mybucket"
+        storage.connection.meta.client.head_bucket.return_value = {}
+        with patch("django.conf.settings") as mock_settings, \
+                patch("django.core.files.storage.storages", {"default": storage}):
+            self._s3_settings(mock_settings)
+            from config.api import _check_media
+            result = _check_media()
+        self.assertTrue(result["ok"])
+        self.assertIn("s3_ok", result["detail"])
+        storage.connection.meta.client.head_bucket.assert_called_once_with(Bucket="mybucket")
+
+    def test_s3_bucket_unreachable_returns_degraded(self):
+        storage = MagicMock()
+        storage.bucket_name = "mybucket"
+        storage.connection.meta.client.head_bucket.side_effect = Exception("403 Forbidden")
+        with patch("django.conf.settings") as mock_settings, \
+                patch("django.core.files.storage.storages", {"default": storage}):
+            self._s3_settings(mock_settings)
+            from config.api import _check_media
+            result = _check_media()
+        self.assertFalse(result["ok"])
+        self.assertIn("s3_unreachable", result["detail"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

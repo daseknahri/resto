@@ -9,8 +9,12 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
   (0) Exclusive offer window lapsed → cascade to the next-nearest driver / open pool.
   (a) Unclaimed OPEN-POOL SEARCHING > 3 min  → re-broadcast to online drivers (throttled).
   (b) Unclaimed SEARCHING > 10 min → alert the restaurant ONCE (owner_alerted_at).
-  (c) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver went offline / stale > 10 min
-      → release back to the pool + re-offer + alert the restaurant.
+  (c) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver went offline / stale
+      → release back to the pool + re-offer + alert the restaurant. Wave M M-11:
+      an EXPLICITLY OFFLINE driver releases after 2 min (they told us they are
+      gone — waiting 10 min wastes the customer's dinner); a merely stale GPS
+      still waits the full 10 min. Wave M M-15: a NULL assigned_at (legacy /
+      missed stamp) falls back to created_at as the clock, under the lock.
   (d) Still PRE-PICKUP and provably unfulfillable past the tenant's
       Profile.delivery_auto_refund_minutes deadline (never assigned, OR abandoned after the
       re-dispatch cap) → auto-refund & cancel, reusing the owner's manual idempotent
@@ -26,6 +30,9 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
   (f) FAILED jobs still awaiting an owner decision past 60 min → re-alert the restaurant
       (throttled to once per hour per job via owner_alerted_at). No money moves here and
       no auto-refund: the failed-job auto-refund timeout is an owner decision, not yet set.
+      (f2) Wave M M-12: the same hourly re-alert for long-UNCLAIMED SEARCHING jobs
+      (no driver ever accepted) — rule (b) alerts once at 10 min, then the job went
+      silent; past 60 min unclaimed it re-alerts hourly, same throttle.
   (g) Delivery orders (platform delivery on, not SCHEDULED/CANCELLED/COMPLETED) with no
       DeliveryJob past a short grace (5 min) → create the missing job + start dispatch.
       Covers orders whose job creation failed at checkout (those sites now log instead
@@ -45,6 +52,8 @@ logger = logging.getLogger(__name__)
 REDISPATCH_AFTER = timedelta(minutes=3)
 OWNER_ALERT_AFTER = timedelta(minutes=10)
 STALE_DRIVER_AFTER = timedelta(minutes=10)
+# Wave M M-11: an explicitly-offline driver releases after 2 min, not 10.
+OFFLINE_RELEASE_AFTER = timedelta(minutes=2)
 MAX_AUTO_REDISPATCH = 3  # match menu.views MAX_REDISPATCH — then escalate, don't loop forever
 _PUSH_THROTTLE_SECONDS = 170  # ~ one sweep interval, so re-push fires at most once per run
 # D G5 pickup SLA — CONFIGURABLE DEFAULT, 15 min proposed. The owner has NOT confirmed
@@ -55,6 +64,29 @@ PICKUP_SLA_DEFAULT_MINUTES = 15
 FAILED_REALERT_AFTER = timedelta(minutes=60)
 # D G3 backfill grace: a delivery order this old with no job is stranded, not just slow.
 JOB_BACKFILL_GRACE = timedelta(minutes=5)
+
+
+def _pre_pickup_release_due(*, assigned_at, created_at, driver_online,
+                          driver_position_updated_at, now) -> bool:
+    """Wave M M-11/M-15: is this pre-pickup job due for release under rule (c)?
+
+    Split gate: an EXPLICITLY OFFLINE driver releases after OFFLINE_RELEASE_AFTER
+    (2 min) — they told us they are gone. An ONLINE driver only releases after
+    STALE_DRIVER_AFTER (10 min) AND a stale GPS fix (a fresh fix means they are
+    alive, just slow). A NULL assigned_at falls back to created_at as the clock
+    (M-15); with no clock at all the job is releasable (nothing says it is fresh).
+    A driverless job counts as offline.
+    """
+    clock = assigned_at if assigned_at is not None else created_at
+    if clock is None:
+        return True
+    gps_stale = (
+        driver_position_updated_at is None
+        or driver_position_updated_at <= now - STALE_DRIVER_AFTER
+    )
+    if not driver_online:
+        return clock <= now - OFFLINE_RELEASE_AFTER
+    return clock <= now - STALE_DRIVER_AFTER and gps_stale
 
 
 def _pickup_sla() -> timedelta:
@@ -132,19 +164,25 @@ class Command(BaseCommand):
                 alerted += 1
 
         # (c) Release abandoned pre-pickup jobs back to the pool.
+        # Wave M M-11/M-15 scan: (assigned 2+ min ago AND driver offline) OR
+        # (assigned 10+ min ago) OR (no assigned_at stamp at all — the clock
+        # falls back to created_at under the lock).
+        from django.db.models import Q as _Q
         candidates = DeliveryJob.objects.filter(
+            _Q(assigned_at__isnull=True)
+            | _Q(assigned_at__lte=now - OFFLINE_RELEASE_AFTER, driver__is_driver_online=False)
+            | _Q(assigned_at__lte=now - STALE_DRIVER_AFTER),
             status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
-            picked_up_at__isnull=True, assigned_at__lte=now - STALE_DRIVER_AFTER,
+            picked_up_at__isnull=True,
         ).select_related("driver")
         for job in candidates:
             drv = job.driver
-            stale = (
-                drv is None
-                or not drv.is_driver_online
-                or drv.driver_position_updated_at is None
-                or drv.driver_position_updated_at <= now - STALE_DRIVER_AFTER
-            )
-            if not stale:
+            if not _pre_pickup_release_due(
+                assigned_at=job.assigned_at, created_at=job.created_at,
+                driver_online=bool(drv and drv.is_driver_online),
+                driver_position_updated_at=getattr(drv, "driver_position_updated_at", None),
+                now=now,
+            ):
                 continue
             with transaction.atomic():
                 j = (
@@ -158,6 +196,18 @@ class Command(BaseCommand):
                 )
                 if j is None:
                     continue  # someone advanced/accepted it between the scan and the lock
+                # M-15: re-check the age gate under the lock with the locked
+                # row's own clock — the scanned row may be minutes old, and a
+                # job created seconds ago must not be released by a stale scan.
+                # (The driver online flag still comes from the scanned row;
+                # it is seconds old and only gates the 2-min fast path.)
+                if not _pre_pickup_release_due(
+                    assigned_at=j.assigned_at, created_at=j.created_at,
+                    driver_online=bool(drv and drv.is_driver_online),
+                    driver_position_updated_at=getattr(drv, "driver_position_updated_at", None),
+                    now=now,
+                ):
+                    continue
                 # Cap auto-redispatch: after MAX_AUTO_REDISPATCH cycles, stop re-offering
                 # forever (driver-push spam + churn) and escalate to the owner ONCE for a
                 # manual reassign/refund instead.
@@ -204,6 +254,9 @@ class Command(BaseCommand):
         #     so the throttle logic is unit-testable.
         failed_realerted = self._realert_failed_jobs(now, alert_owner)
 
+        # (f2) Wave M M-12: same hourly re-alert for long-unclaimed SEARCHING jobs.
+        searching_realerted = self._realert_unclaimed_searching_jobs(now, alert_owner)
+
         # (d) Bounded auto-refund for stuck PRE-PICKUP jobs (money safety net). See
         #     _auto_refund_stuck_jobs — extracted so its money logic is unit-testable.
         refunded = self._auto_refund_stuck_jobs(now, tenant_info, alert_owner)
@@ -221,7 +274,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"sweep_delivery_jobs: repushed={repushed} alerted={alerted} "
             f"released={released} sla_released={sla_released} "
-            f"failed_realerted={failed_realerted} refunded={refunded} "
+            f"failed_realerted={failed_realerted} "
+            f"searching_realerted={searching_realerted} refunded={refunded} "
             f"jobs_backfilled={jobs_backfilled} cashouts_expired={cashouts}"
         ))
 
@@ -241,11 +295,15 @@ class Command(BaseCommand):
         from accounts.dispatch import offer_to_next_driver
         from accounts.models import DeliveryJob
 
+        from django.db.models import Q as _Q
         sla = _pickup_sla()
         released = 0
+        # Wave M M-15: a NULL assigned_at is releasable too — the clock falls
+        # back to created_at under the lock below.
         candidates = DeliveryJob.objects.filter(
+            _Q(assigned_at__isnull=True) | _Q(assigned_at__lte=now - sla),
             status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
-            picked_up_at__isnull=True, assigned_at__lte=now - sla,
+            picked_up_at__isnull=True,
         ).select_related("driver")
         for job in candidates:
             with transaction.atomic():
@@ -267,7 +325,8 @@ class Command(BaseCommand):
                 # that is still cooking is never released as "idle". When no ready
                 # time is set the SLA still measures from assignment, so genuinely
                 # idle drivers are still caught.
-                sla_start = j.assigned_at
+                # Wave M M-15: NULL assigned_at → created_at is the clock.
+                sla_start = j.assigned_at if j.assigned_at is not None else j.created_at
                 ready_at = j.food_ready_at
                 if ready_at is not None and sla_start is not None and ready_at > sla_start:
                     sla_start = ready_at
@@ -340,6 +399,39 @@ class Command(BaseCommand):
             alert_owner(job.tenant_id, job.order_number, "Delivery still failed",
                         f"Order #{job.order_number} failed ({_reason}) and still needs a "
                         f"decision — re-dispatch or refund from Orders.")
+            realerted += 1
+        return realerted
+
+    def _realert_unclaimed_searching_jobs(self, now, alert_owner) -> int:
+        """Wave M M-12: re-alert the owner for SEARCHING jobs nobody claimed.
+
+        Rule (b) alerts once at 10 min unclaimed; after that the job went silent
+        even though no driver ever accepted. Past FAILED_REALERT_AFTER (60 min)
+        unclaimed it re-alerts hourly, throttled exactly like the FAILED
+        re-alert: an atomic owner_alerted_at claim (only the caller that flips
+        the timestamp alerts). Jobs with a driver are not SEARCHING-unclaimed
+        by definition. Returns the count re-alerted.
+        """
+        from django.db.models import Q
+        from accounts.models import DeliveryJob
+
+        realerted = 0
+        for job in DeliveryJob.objects.filter(
+            status=DeliveryJob.Status.SEARCHING,
+            driver__isnull=True,
+            created_at__lte=now - FAILED_REALERT_AFTER,
+        ):
+            claimed = DeliveryJob.objects.filter(
+                pk=job.id, status=DeliveryJob.Status.SEARCHING, driver__isnull=True,
+            ).filter(
+                Q(owner_alerted_at__isnull=True)
+                | Q(owner_alerted_at__lte=now - FAILED_REALERT_AFTER)
+            ).update(owner_alerted_at=now)
+            if not claimed:
+                continue  # alerted within the last hour — skip
+            alert_owner(job.tenant_id, job.order_number, "Still no driver",
+                        f"Order #{job.order_number} still has no driver after an hour — "
+                        "you may need to deliver it yourself.")
             realerted += 1
         return realerted
 
@@ -418,6 +510,18 @@ class Command(BaseCommand):
                             logger.exception(
                                 "backfill: dispatch failed for %s", order.order_number
                             )
+                        # Wave M M-04: stamp the food-ready time on the
+                        # recreated job — a backfilled CONFIRMED order already
+                        # carries an ETA the driver would otherwise never see.
+                        try:
+                            from accounts.delivery_service import set_delivery_job_food_ready
+                            from menu.views import _delivery_job_ready_minutes as _djrm
+                            set_delivery_job_food_ready(
+                                tenant.id, order.order_number,
+                                _djrm(order, tenant),
+                            )
+                        except Exception:
+                            pass
                         backfilled += 1
             except Exception:
                 logger.exception("backfill: failed for tenant %s", tenant.id)

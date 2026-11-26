@@ -776,3 +776,78 @@ describe("WaiterPage — S3-B", () => {
     expect(postsTo("/void/")[0][1]).toEqual({ reason: "Guest is allergic" });
   });
 });
+
+// ── Wave M M-21: Cash-full ignores a stale splitAmount ───────────────────────
+// Appended, not rewritten. Own isolation (same pattern as the S3-A appends):
+// the settle sheet is stubbed by shallowMount, so the flow is driven by
+// emitting on the stubs — card emits "settle", sheet emits "pay-cash".
+describe("WaiterPage M-21 — Cash-full ignores a stale splitAmount", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    _routes = {};
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    _routes = {};
+  });
+
+  const mountSettleOrder = async () => {
+    _routes = {
+      "/staff/orders/": {
+        data: {
+          count: 1,
+          results: [tableOrder({ id: 1, order_number: "A100", status: "pending", total: "120.00" })],
+        },
+      },
+      // A live shift, or payCash refuses at the clock-in guard.
+      "/staff/my-shift/": { data: { id: 9, clock_in: new Date().toISOString() } },
+    };
+    wrapper = mountPage();
+    await flushPromises();
+    const card = wrapper.findComponent({ name: "WaiterOrderCard" });
+    expect(card.exists()).toBe(true);
+    await card.vm.$emit("settle");
+    await flushPromises();
+    const sheet = wrapper.findComponent({ name: "WaiterSettleSheet" });
+    expect(sheet.exists()).toBe(true);
+    return sheet;
+  };
+
+  const spyPostPayment = async () => {
+    const { useWaiterStore } = await import("../../stores/waiter");
+    const waiter = useWaiterStore();
+    return vi.spyOn(waiter, "postPayment").mockResolvedValue({ data: { completed: true }, errorCode: null });
+  };
+
+  it("posts a FULL cash payment (null amount) on pay-cash 'full' despite a typed splitAmount", async () => {
+    const sheet = await mountSettleOrder();
+    // Type a partial amount, then close the accordion (the stale value stays).
+    await sheet.vm.$emit("update:splitAmount", "20.00");
+    await sheet.vm.$emit("update:splitSectionOpen", false);
+    await flushPromises();
+    const postPayment = await spyPostPayment();
+    await sheet.vm.$emit("pay-cash", "full");
+    await flushPromises();
+    expect(postPayment).toHaveBeenCalledTimes(1);
+    expect(postPayment.mock.calls[0][0]).toBe(1); // order id
+    expect(postPayment.mock.calls[0][1]).toBe("cash");
+    expect(postPayment.mock.calls[0][2]).toBeNull(); // FULL — the stale "20.00" was ignored
+  });
+
+  it("posts the typed partial on pay-cash with no payload", async () => {
+    const sheet = await mountSettleOrder();
+    await sheet.vm.$emit("update:splitAmount", "20.00");
+    await flushPromises();
+    const postPayment = await spyPostPayment();
+    await sheet.vm.$emit("pay-cash");
+    await flushPromises();
+    expect(postPayment).toHaveBeenCalledTimes(1);
+    expect(postPayment.mock.calls[0][2]).toBe(20);
+  });
+});

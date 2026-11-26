@@ -3,9 +3,12 @@ Management command: auto_reset_availability
 
 Runs hourly (via Celery Beat). For each ACTIVE tenant that has
 ``Profile.auto_reset_availability = True``, checks whether the tenant's current
-local hour is 5 (i.e. ~05:00) and, if a per-(tenant, date) cache marker is not
-yet set, runs the morning reset: all published sold-out dishes are re-enabled,
-and auto-zeroed stock counts are cleared.
+local hour is 5 or later and, if a per-(tenant, date) cache marker is not yet
+set, runs the morning reset: all published sold-out dishes are re-enabled,
+and auto-zeroed stock counts are cleared. Wave M M-18: the trigger used to be
+exactly 05:00, so a missed 05:00 tick (deploy, worker restart, slow tick) left
+the dishes sold out all day; now any hourly tick from 05:00 on catches up, and
+the marker — not the clock — is the once-per-day guard.
 
 Idempotent: uses cache.add with a 2-day TTL so re-running the same UTC hour
 never double-resets.
@@ -93,7 +96,7 @@ def reset_dishes_for_schema() -> dict:
 
 class Command(BaseCommand):
     help = (
-        "Hourly: re-enable all sold-out dishes at ~05:00 local time for tenants "
+        "Hourly: re-enable all sold-out dishes from ~05:00 local time for tenants "
         "that have Profile.auto_reset_availability enabled."
     )
 
@@ -131,7 +134,12 @@ class Command(BaseCommand):
                     continue
 
                 local_hour, day_str = _tenant_local_hour(tenant)
-                if local_hour != _RESET_HOUR:
+                # Wave M M-18: trigger is "local hour >= 5 AND no marker for
+                # today", not "exactly 05:00". A missed 05:00 tick (deploy,
+                # restart) is caught by the 06:00/07:00 tick instead of
+                # leaving dishes sold out all day. _RESET_HOUR keeps its
+                # meaning (the 05:00 run); the marker below is the guard.
+                if local_hour < _RESET_HOUR:
                     total_skipped_hour += 1
                     continue
 
@@ -168,7 +176,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nDone. {total_reset} tenant(s) {label}, "
-                f"{total_skipped_hour} not at hour {_RESET_HOUR}, "
+                f"{total_skipped_hour} before hour {_RESET_HOUR}, "
                 f"{total_skipped_flag} flag-off, "
                 f"{total_skipped_marker} already-reset (idempotent) skips."
             )

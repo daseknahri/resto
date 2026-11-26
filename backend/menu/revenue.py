@@ -85,7 +85,49 @@ def split_revenue_for_orders(order_qs) -> dict:
     legacy_total = Decimal(str(legacy_agg["legacy_total"] or 0))
     legacy_cash = legacy_total - legacy_wallet
 
-    _raw_wallet = ledger_wallet + legacy_wallet
+    # Wave M M-02: a MIXED order — wallet_amount_paid from a place-order /
+    # pay-wallet debit (no ledger row) PLUS ledger rows (e.g. a cash split-bill
+    # payment) — was counted on the ledger path only, so the non-ledger wallet
+    # money vanished from the wallet column. Add it back PER ORDER, clamped at
+    # zero per order (a per-order Greatest() expression, not a global difference
+    # of aggregates — one over-counted order must not eat another order's
+    # wallet money). Cash is untouched: cash rows are counted exactly.
+    extra_wallet = Decimal("0")
+    if has_ledger:
+        from django.db.models import DecimalField, ExpressionWrapper, F, OuterRef, Subquery
+        from django.db.models.functions import Coalesce, Greatest
+
+        _ledger_wallet_sq = (
+            OrderPayment.objects.filter(
+                order_id=OuterRef("pk"), method=OrderPayment.Method.WALLET
+            )
+            .values("order_id")
+            .annotate(_s=Sum("amount"))
+            .values("_s")
+        )
+        _extra = (
+            order_qs.filter(id__in=ledger_order_ids_sq)
+            .annotate(
+                _lw=Coalesce(
+                    Subquery(_ledger_wallet_sq, output_field=DecimalField(max_digits=12, decimal_places=2)),
+                    Decimal("0"),
+                )
+            )
+            .annotate(
+                _nlw=Greatest(
+                    ExpressionWrapper(
+                        Coalesce(F("wallet_amount_paid"), Decimal("0")) - F("_lw"),
+                        output_field=DecimalField(max_digits=12, decimal_places=2),
+                    ),
+                    Decimal("0"),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+            .aggregate(_s=Sum("_nlw"))["_s"]
+        )
+        extra_wallet = Decimal(str(_extra or 0))
+
+    _raw_wallet = ledger_wallet + legacy_wallet + extra_wallet
     _raw_cash = ledger_cash + legacy_cash
 
     if _raw_cash < 0:

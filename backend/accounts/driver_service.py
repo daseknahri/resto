@@ -260,6 +260,7 @@ def create_cashout_request(driver_id, amount, *, ttl_seconds=CASHOUT_TTL_SECONDS
     """Driver requests a cash-out: validates wallet ≥ CASHOUT_MIN and amount ≤ balance,
     then creates a PENDING request with a short code. Returns the DriverCashoutRequest."""
     from datetime import timedelta
+    from django.db import IntegrityError
     from django.utils import timezone
     from django.utils.crypto import get_random_string
     from .models import Customer, DriverCashoutRequest
@@ -290,23 +291,26 @@ def create_cashout_request(driver_id, amount, *, ttl_seconds=CASHOUT_TTL_SECONDS
             raise CashoutError("You already have a pending cash-out — show or cancel it first",
                                code="already_pending")
 
-        code = ""
+        # Wave M M-09: the exists() check above is only a fast path — two
+        # concurrent creates can both pass it, and the partial unique
+        # constraint then rejects the loser's INSERT with IntegrityError.
+        # Catch it and retry with a fresh code instead of 500ing.
         for _ in range(12):
             candidate = get_random_string(6, allowed_chars="0123456789")
-            if not DriverCashoutRequest.objects.filter(
+            if DriverCashoutRequest.objects.filter(
                 code=candidate, status=DriverCashoutRequest.Status.PENDING
             ).exists():
-                code = candidate
-                break
-        if not code:
-            raise CashoutError("could not allocate a code, try again", code="retry")
-
-        return DriverCashoutRequest.objects.create(
-            driver_id=driver_id,
-            amount=amount,
-            code=code,
-            expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
-        )
+                continue
+            try:
+                return DriverCashoutRequest.objects.create(
+                    driver_id=driver_id,
+                    amount=amount,
+                    code=candidate,
+                    expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
+                )
+            except IntegrityError:
+                continue
+        raise CashoutError("could not allocate a code, try again", code="retry")
 
 
 def confirm_cashout(code, *, tenant_id, actor_user_id=None):
@@ -344,6 +348,11 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
         req = (
             DriverCashoutRequest.objects.select_for_update()
             .filter(code=code, status=DriverCashoutRequest.Status.PENDING)
+            # Wave M M-09: earliest first — with the partial unique constraint
+            # there is at most one PENDING row per code, but pre-migration
+            # duplicates (or a code reused after expiry) must resolve to the
+            # oldest live request, never an arbitrary one.
+            .order_by("created_at")
             .first()
         )
         if req is None:

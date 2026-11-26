@@ -127,6 +127,12 @@ class ConfirmCashoutFloatLegLoggingTests(SimpleTestCase):
     emit on 'payments' — reusing _ref_kind so the raw cash-out CODE never reaches a log."""
 
     def setUp(self):
+        # The cash-out fail counter is process-global cache and the lockout
+        # tests leave it at MAX for this actor — clear it so this test measures
+        # the float-credit leg, not a stale lockout (cf. clobber tests).
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)
         self._p = {
             "atomic": patch("django.db.transaction.atomic", return_value=_noop_atomic()),
             "dcr": patch("accounts.models.DriverCashoutRequest"),
@@ -152,7 +158,7 @@ class ConfirmCashoutFloatLegLoggingTests(SimpleTestCase):
         from accounts.driver_service import confirm_cashout
 
         req = self._pending()
-        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.first.return_value = req
+        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = req
         self.m["debit"].return_value = SimpleNamespace(id=99)  # debit leg succeeds
         # The float-credit leg blows up (e.g. InactiveTenant/WalletError).
         self.m["credit"].side_effect = RuntimeError("float credit failed")

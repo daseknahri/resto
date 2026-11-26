@@ -402,7 +402,7 @@ class IntentSuccessUrlTests(SimpleTestCase):
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "100"}, format="json")
         req.session = {}
-        force_authenticate(req, user=Customer(id=1))
+        force_authenticate(req, user=Customer(id=1, phone_verified=True))
         with patch.dict("sys.modules", {"stripe": mock_stripe}):
             resp = CustomerTopUpIntentView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
@@ -411,6 +411,37 @@ class IntentSuccessUrlTests(SimpleTestCase):
         self.assertIn("session_id={CHECKOUT_SESSION_ID}", kwargs["success_url"])
         self.assertTrue(kwargs["success_url"].startswith("https://example.com/account?topup=success"))
         self.assertEqual(kwargs["cancel_url"], "https://example.com/account?topup=cancelled")
+
+
+class IntentPhoneGateTests(SimpleTestCase):
+    """Wave M M-08: an unverified phone cannot mint a top-up session."""
+
+    @override_settings(**_PSP_ON)
+    def test_unverified_phone_gets_403_phone_unverified(self):
+        from accounts.views import CustomerTopUpIntentView
+        factory = APIRequestFactory()
+        req = factory.post("/api/customer/topup/intent/", {"amount": "100"}, format="json")
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1, phone_verified=False))
+        resp = CustomerTopUpIntentView.as_view()(req)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data.get("code"), "phone_unverified")
+
+    @override_settings(**_PSP_ON)
+    def test_verified_phone_reaches_stripe(self):
+        from accounts.views import CustomerTopUpIntentView
+        mock_session = MagicMock()
+        mock_session.url = "https://checkout.stripe.com/pay/cs_test"
+        mock_stripe = MagicMock()
+        mock_stripe.checkout.Session.create.return_value = mock_session
+        factory = APIRequestFactory()
+        req = factory.post("/api/customer/topup/intent/", {"amount": "100"}, format="json")
+        req.session = {}
+        force_authenticate(req, user=Customer(id=1, phone_verified=True))
+        with patch.dict("sys.modules", {"stripe": mock_stripe}):
+            resp = CustomerTopUpIntentView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data.get("enabled"))
 
 
 def _get_attempts(customer, view=None):
@@ -432,6 +463,10 @@ class TopUpAttemptsTests(TestCase):
     def setUp(self):
         cache.clear()
         self.customer = _customer(balance="150.00")
+        # Wave M M-08: the intent gate requires a verified phone — the fixture
+        # customer must be verified or every intent 403s.
+        self.customer.phone_verified = True
+        self.customer.save(update_fields=["phone_verified"])
 
     def _post_intent(self, customer, amount="100"):
         from accounts.views import CustomerTopUpIntentView

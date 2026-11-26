@@ -78,7 +78,7 @@ class IntentUnauthenticatedTests(SimpleTestCase):
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "abc"}, format="json")
         req.session = {}
-        force_authenticate(req, user=Customer(id=1))
+        force_authenticate(req, user=Customer(id=1, phone_verified=True))
         resp = CustomerTopUpIntentView.as_view()(req)
         self.assertEqual(resp.status_code, 400)
 
@@ -88,7 +88,7 @@ class IntentUnauthenticatedTests(SimpleTestCase):
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "5"}, format="json")
         req.session = {}
-        force_authenticate(req, user=Customer(id=1))
+        force_authenticate(req, user=Customer(id=1, phone_verified=True))
         resp = CustomerTopUpIntentView.as_view()(req)
         self.assertEqual(resp.status_code, 400)
 

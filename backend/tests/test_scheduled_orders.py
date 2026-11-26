@@ -12,7 +12,13 @@ All unit-level (SimpleTestCase + lightweight stand-ins).
 """
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+
+def _sc_cm():
+    """No-op schema_context for command tests."""
+    import contextlib
+    return contextlib.nullcontext()
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -155,6 +161,71 @@ class CustomerCanCancelScheduledTests(SimpleTestCase):
     def test_scheduled_dine_in_is_not_cancellable(self):
         o = Order(status=Order.Status.SCHEDULED, fulfillment_type=TABLE)
         self.assertFalse(_customer_can_cancel(o))
+
+
+class ReleaseScheduledMirrorTests(SimpleTestCase):
+    """Wave M M-04: scheduled release stamps food_ready_at on the job it
+    creates for a released delivery order."""
+
+    def test_release_delivery_stamps_food_ready(self):
+        from decimal import Decimal
+        from django.utils import timezone
+        from menu.management.commands.release_scheduled_orders import Command
+        import contextlib
+
+        tenant = MagicMock()
+        tenant.id = 7
+        tenant.schema_name = "resto7"
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.profile = MagicMock()
+        tenant.profile.whatsapp = ""
+        tenant.profile.phone = ""
+
+        order = MagicMock()
+        order.pk = 11
+        order.order_number = "ORD-S1"
+        order.scheduled_for = timezone.now()
+        order.status = "scheduled"
+        order.fulfillment_type = "delivery"
+        order.customer_name = "A"
+        order.total = Decimal("50")
+        order.currency = "MAD"
+        order.delivery_address = "2 Ave"
+        order.delivery_lat = 35.71
+        order.delivery_lng = -5.81
+        order.delivery_fee = Decimal("15")
+
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=None)
+        cm.__exit__ = MagicMock(return_value=False)
+
+        with patch("menu.management.commands.release_scheduled_orders.Tenant") as TenantM, \
+                patch("menu.models.Order") as OrderM, \
+                patch("menu.management.commands.release_scheduled_orders.schema_context", side_effect=lambda *a, **k: _sc_cm()), \
+                patch("menu.views._placement_eta_minutes", return_value=25), \
+                patch("menu.views._delivery_job_ready_minutes", return_value=25), \
+                patch("menu.views._broadcast_order_change"), \
+                patch("menu.push.push_new_order"), \
+                patch("accounts.models.DeliveryJob") as DJ, \
+                patch("tenancy.delivery_pricing.split_delivery_fee", return_value={
+                    "driver_payout": Decimal("10"), "platform_commission": Decimal("0"),
+                    "commission_pct": Decimal("0")}), \
+                patch("accounts.dispatch.start_dispatch"), \
+                patch("accounts.delivery_service.set_delivery_job_food_ready") as mirror:
+            TenantM.LifecycleStatus.ACTIVE = "active"
+            (TenantM.objects.filter.return_value.exclude.return_value
+                .select_related.return_value) = [tenant]
+            OrderM.Status.SCHEDULED = "scheduled"
+            OrderM.FulfillmentType.DELIVERY = "delivery"
+            OrderM.objects.filter.return_value.order_by.return_value.__getitem__.return_value = [order]
+            OrderM.objects.filter.return_value.update.return_value = 1
+            DJ.Status.SEARCHING = "searching"
+            cmd = Command()
+            cmd.stdout = MagicMock()
+            cmd.style = MagicMock()
+            cmd.handle(dry_run=False)
+        mirror.assert_called_once_with(7, "ORD-S1", 25)
 
 
 class ScheduledTransitionTests(SimpleTestCase):

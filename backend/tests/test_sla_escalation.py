@@ -58,13 +58,15 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
         return out.getvalue()
 
     def _make_tenant(self, slug="test", name="Test Restaurant", schema_name="test",
-                     pending_sla_minutes=None):
+                     pending_sla_minutes=None, pending_auto_cancel_minutes=0):
         t = MagicMock()
         t.slug = slug
         t.name = name
         t.schema_name = schema_name
+        t.id = 5
         t.profile = MagicMock()
         t.profile.pending_sla_minutes = pending_sla_minutes
+        t.profile.pending_auto_cancel_minutes = pending_auto_cancel_minutes
         return t
 
     def _make_order(self, order_number="ORD-1", minutes_ago=30):
@@ -73,13 +75,16 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
         o.created_at = timezone.now() - timedelta(minutes=minutes_ago)
         return o
 
-    def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders, claim=1):
+    def _wire(self, mock_t, mock_ctx, mock_order_cls, tenant, orders, claim=1, to_cancel=None):
         mock_t.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
         mock_ctx.return_value.__enter__ = lambda s: s
         mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
         mock_order_cls.Status.PENDING = "pending"
         (mock_order_cls.objects.filter.return_value
          .only.return_value.order_by.return_value) = orders
+        # Wave M M-22 cancel pass: filter().order_by()[:200] (no .only()).
+        (mock_order_cls.objects.filter.return_value.order_by.return_value
+         .__getitem__.return_value) = list(to_cancel or [])
         # The atomic claim: Order.objects.filter(pk=..., sla_notified_at__isnull=True).update(...)
         # returns the number of rows it won (1 = we own the escalation, 0 = lost the race).
         mock_order_cls.objects.filter.return_value.update.return_value = claim
@@ -278,6 +283,80 @@ class TestEscalateStalePendingOrdersCommand(SimpleTestCase):
         self.assertLessEqual(waited, 43)
 
 
+# ── Wave M M-22: auto-cancel ─────────────────────────────────────────────────
+
+class TestAutoCancelStalePendingOrders(SimpleTestCase):
+    """The cancel pass runs after the escalation push, only for already-escalated
+    orders past Profile.pending_auto_cancel_minutes (0 = OFF)."""
+
+    def _run(self, *, tenant, orders, to_cancel, claim=1):
+        with patch(f"{CMD}.Tenant") as mock_t, \
+             patch(f"{CMD}.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("menu.push.push_sla_escalation") as mock_push, \
+             patch("menu.views.refund_and_cancel_delivery_order") as mock_cancel:
+            cmd = TestEscalateStalePendingOrdersCommand()
+            cmd._wire(mock_t, mock_ctx, mock_order_cls, tenant, orders,
+                      claim=claim, to_cancel=to_cancel)
+            mock_cancel.return_value = True
+            out = cmd._run_command()
+        return out, mock_push, mock_cancel, mock_order_cls
+
+    def test_off_by_default_nothing_cancelled(self):
+        tenant = TestEscalateStalePendingOrdersCommand()._make_tenant(
+            pending_auto_cancel_minutes=0)
+        order = TestEscalateStalePendingOrdersCommand()._make_order(minutes_ago=61)
+        out, mock_push, mock_cancel, mock_order_cls = self._run(
+            tenant=tenant, orders=[order], to_cancel=[order])
+        mock_push.assert_called_once()  # escalation still fires
+        mock_cancel.assert_not_called()
+        # The cancel query (sla_notified_at__isnull=False) was never issued.
+        for call in mock_order_cls.objects.filter.call_args_list:
+            self.assertNotEqual(
+                call.kwargs.get("sla_notified_at__isnull"), False)
+
+    def test_escalated_order_past_cancel_threshold_is_cancelled(self):
+        """61-min-old order, cancel=60: push fires first, then refund+cancel."""
+        cmd = TestEscalateStalePendingOrdersCommand()
+        tenant = cmd._make_tenant(pending_auto_cancel_minutes=60)
+        order = cmd._make_order(minutes_ago=61)
+        out, mock_push, mock_cancel, _ = self._run(
+            tenant=tenant, orders=[order], to_cancel=[order])
+        mock_push.assert_called_once()
+        mock_cancel.assert_called_once_with(order, tenant.id)
+        self.assertIn("auto-cancelled", out)
+
+    def test_cancel_query_uses_the_configured_threshold(self):
+        """The cancel pass filters created_at <= now - 60 min (not the 10-min SLA)."""
+        from datetime import datetime as _dt
+        cmd = TestEscalateStalePendingOrdersCommand()
+        tenant = cmd._make_tenant(pending_auto_cancel_minutes=60)
+        order = cmd._make_order(minutes_ago=61)
+        _, _, _, mock_order_cls = self._run(
+            tenant=tenant, orders=[order], to_cancel=[])
+        cancel_calls = [
+            c for c in mock_order_cls.objects.filter.call_args_list
+            if c.kwargs.get("sla_notified_at__isnull") is False
+        ]
+        self.assertEqual(len(cancel_calls), 1)
+        cutoff = cancel_calls[0].kwargs["created_at__lte"]
+        expected = timezone.now() - timedelta(minutes=60)
+        self.assertLess(abs((cutoff - expected).total_seconds()), 10)
+
+    def test_dry_run_cancels_nothing(self):
+        cmd = TestEscalateStalePendingOrdersCommand()
+        tenant = cmd._make_tenant(pending_auto_cancel_minutes=60)
+        order = cmd._make_order(minutes_ago=61)
+        with patch(f"{CMD}.Tenant") as mock_t, \
+             patch(f"{CMD}.schema_context") as mock_ctx, \
+             patch("menu.models.Order") as mock_order_cls, \
+             patch("menu.push.push_sla_escalation"), \
+             patch("menu.views.refund_and_cancel_delivery_order") as mock_cancel:
+            cmd._wire(mock_t, mock_ctx, mock_order_cls, tenant, [order], to_cancel=[order])
+            cmd._run_command(dry_run=True)
+        mock_cancel.assert_not_called()
+
+
 # ── allowlist guard ──────────────────────────────────────────────────────────
 
 class TestSlaEscalationScheduled(SimpleTestCase):
@@ -286,3 +365,25 @@ class TestSlaEscalationScheduled(SimpleTestCase):
         from django.conf import settings
         tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
         self.assertIn("cron.escalate_stale_pending_orders", tasks)
+
+
+class TestReconcileProfileDenormsScheduled(SimpleTestCase):
+    """Wave M M-17: reconcile_profile_denorms is wired to Beat hourly via its
+    dedicated cron.* task (same ASYNC-2 pattern as the SLA escalation)."""
+
+    def test_command_scheduled_as_cron_task(self):
+        from django.conf import settings
+        tasks = {e["task"] for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.reconcile_profile_denorms", tasks)
+
+    def test_beat_entry_is_hourly(self):
+        from django.conf import settings
+        entry = settings.CELERY_BEAT_SCHEDULE["reconcile-profile-denorms"]
+        self.assertEqual(entry["task"], "cron.reconcile_profile_denorms")
+        self.assertEqual(entry["schedule"], 3600.0)
+
+    def test_task_runs_the_command(self):
+        from accounts import tasks
+        with patch("accounts.tasks._run_command") as run:
+            tasks.reconcile_profile_denorms.run()
+        run.assert_called_once_with("reconcile_profile_denorms")

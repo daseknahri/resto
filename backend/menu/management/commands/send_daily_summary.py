@@ -9,7 +9,13 @@ to the owner via:
   - record_notification for audit trail
 
 Idempotent: uses cache.add with a 2-day TTL keyed on (schema_name, date) so
-re-running the same UTC day does not double-send.
+re-running the same UTC day does not double-send. Wave M M-23: if a tenant's
+run FAILS after claiming the key, the key is cleared in the except path so the
+next run re-sends — a failed run used to leave the key set and the digest was
+silently skipped forever. Trade-off (accepted): a crash between the send and
+the claim could double-send one digest; a duplicate digest is far less
+harmful than a silently missing one. cache.add is deliberately NOT moved to
+after delivery: claim-before-send is what makes overlapping runs safe.
 
 Cron (Coolify / crontab) — once per day at 23:30 UTC:
     30 23 * * * cd /app && python manage.py send_daily_summary >> /var/log/daily_summary.log 2>&1
@@ -241,6 +247,7 @@ class Command(BaseCommand):
         total_skipped_duplicate = 0
 
         for tenant in tenants:
+            cache_key = None
             try:
                 day_start_utc, day_end_utc, local_date = _tenant_yesterday(tenant)
                 cache_key = _cache_key(tenant.schema_name, local_date)
@@ -286,6 +293,15 @@ class Command(BaseCommand):
                 total_sent += 1
 
             except Exception:
+                # Wave M M-23: clear the claimed key so the next run re-sends
+                # this tenant's digest instead of skipping it forever (the key
+                # was claimed before compute/send). Same one-liner as the
+                # zero-orders branch above.
+                if not dry_run and cache_key:
+                    try:
+                        cache.delete(cache_key)
+                    except Exception:
+                        pass
                 logger.exception("send_daily_summary: error processing tenant %s", tenant.slug)
 
         label = "would send" if dry_run else "sent"

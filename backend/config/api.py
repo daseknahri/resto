@@ -43,12 +43,18 @@ HTTP status policy
 Celery probe
   A real broker ping requires a live worker, which is not available in dev/CI.
   Instead we check:
-    1. Whether CELERY_BROKER_URL is configured (Celery is opt-in; empty = off
-       by design, not a fault — always ok).
+    1. Whether CELERY_BROKER_URL is configured. Empty = off by design ONLY
+       outside production (DEBUG on): in production (DEBUG off) Celery is
+       required — kepoli.E002 already hard-fails the deploy — so a missing
+       broker at runtime is a fault -> ok=False (Wave M M-19).
     2. When configured, whether the cache-backed beat heartbeat key written by
        accounts.tasks.write_beat_heartbeat (every ~60s) is fresh. A MISSING or
        STALE heartbeat (older than ~180s) once the process is past its startup
        grace means beat/worker is down -> ok=False (degraded, non-critical).
+    3. Wave M M-19: whether the WORKER heartbeat key written by
+       cron.write_worker_heartbeat (every ~60s, cron queue) is fresh (<120s).
+       A fresh beat heartbeat proves Beat runs; only the worker stamp proves a
+       worker consumes the queue. Missing/stale past the grace -> ok=False.
   A missing heartbeat during the post-boot startup grace is tolerated (the first
   beat may not have landed yet) so a fresh deploy never produces a false alarm.
 
@@ -58,9 +64,12 @@ Channel-layer probe
   it is RedisChannelLayer a connection failure raises an exception.
 
 Media probe
-  Check that settings.MEDIA_ROOT exists and is a directory.  A write/delete
-  round-trip is intentionally avoided: the health endpoint must be fast, safe
-  to call repeatedly, and not leave artefacts on the filesystem.
+  Backend-aware (Wave M M-19). Local filesystem storage: MEDIA_ROOT must exist,
+  be a directory, and be writable (os.access W_OK — no write/delete round-trip,
+  so the probe stays fast and artefact-free). S3 storage (STORAGES default
+  backend contains "s3"): HEAD the configured bucket via the storage backend
+  (head_bucket) — the old local MEDIA_ROOT check was meaningless there because
+  MEDIA_ROOT is not where files live under S3.
 """
 
 import time
@@ -83,6 +92,9 @@ _PROCESS_START_MONOTONIC = time.monotonic()
 # A heartbeat older than this (or absent past the grace window) means beat/worker is dead.
 # Beat writes every 60s, so 180s tolerates two missed beats before flagging.
 _CELERY_HEARTBEAT_STALE_SECONDS = 180
+# Wave M M-19: the worker heartbeat (cron.write_worker_heartbeat, every 60s)
+# must be fresher — 120s tolerates one missed run before flagging a dead worker.
+_WORKER_HEARTBEAT_STALE_SECONDS = 120
 # Grace after process boot before a missing/stale heartbeat is treated as a fault. Kept
 # above the staleness threshold so the first beat (within 60s) always lands before the
 # grace expires — a fresh deploy can never produce a false "degraded".
@@ -157,7 +169,12 @@ def _check_celery() -> dict:
         from django.conf import settings
         broker_url = (getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
         if not broker_url:
-            return {"ok": True, "detail": "celery_off: CELERY_BROKER_URL not set (by design)"}
+            # Wave M M-19: "off by design" holds only outside production. In
+            # production Celery is required (kepoli.E002 hard-fails the deploy
+            # without it), so a missing broker at runtime is a fault.
+            if getattr(settings, "DEBUG", False):
+                return {"ok": True, "detail": "celery_off: CELERY_BROKER_URL not set (by design)"}
+            return {"ok": False, "detail": "broker_missing: CELERY_BROKER_URL not set in production"}
 
         # The heartbeat is a CROSS-PROCESS signal: beat writes it, this web process reads it.
         # That only works through a SHARED cache (Redis). If the cache is a per-process
@@ -198,7 +215,26 @@ def _check_celery() -> dict:
                 "ok": False,
                 "detail": f"beat_stale: last_heartbeat={heartbeat} age={round(age)}s (beat/worker down?)",
             }
-        return {"ok": True, "detail": f"beat_ok: last_heartbeat={heartbeat}"}
+        # Wave M M-19: a fresh beat heartbeat proves Beat runs, not that a
+        # worker consumes the queue. Require the worker stamp too (fresh <120s).
+        worker_heartbeat = cache.get("celery_worker_heartbeat")
+        if worker_heartbeat is None:
+            if in_grace:
+                return {
+                    "ok": True,
+                    "detail": f"beat_ok: last_heartbeat={heartbeat} (worker heartbeat not yet written — within startup grace)",
+                }
+            return {
+                "ok": False,
+                "detail": "worker_down: worker heartbeat key absent past startup grace (celery worker not running)",
+            }
+        worker_age = _heartbeat_age_seconds(worker_heartbeat)
+        if worker_age is not None and worker_age > _WORKER_HEARTBEAT_STALE_SECONDS and not in_grace:
+            return {
+                "ok": False,
+                "detail": f"worker_stale: last_worker_heartbeat={worker_heartbeat} age={round(worker_age)}s (celery worker down?)",
+            }
+        return {"ok": True, "detail": f"beat_ok: last_heartbeat={heartbeat}; worker_ok: last_worker_heartbeat={worker_heartbeat}"}
     except Exception as exc:
         return {"ok": False, "detail": f"error: {type(exc).__name__}"}
 
@@ -233,24 +269,56 @@ def _check_channel_layer() -> dict:
         return {"ok": False, "detail": f"error: {type(exc).__name__}"}
 
 
+def _check_media_s3() -> dict:
+    """Wave M M-19: HEAD the configured S3 bucket via the default storage backend.
+
+    The local MEDIA_ROOT check is meaningless under S3 (files live in the
+    bucket, not on disk), so probe the bucket itself instead.
+    """
+    try:
+        from django.core.files.storage import storages
+        storage = storages["default"]
+        bucket = getattr(storage, "bucket_name", None)
+        connection = getattr(storage, "connection", None)
+        if not bucket or connection is None:
+            return {"ok": False, "detail": "s3_unreachable: storage has no bucket/connection"}
+        connection.meta.client.head_bucket(Bucket=bucket)
+        return {"ok": True, "detail": "s3_ok: bucket reachable"}
+    except Exception as exc:
+        return {"ok": False, "detail": f"s3_unreachable: {type(exc).__name__}"}
+
+
 def _check_media() -> dict:
     """
-    Verify that MEDIA_ROOT is a directory that Django can write to.
+    Verify media storage is reachable — backend-aware (Wave M M-19).
 
-    We check existence and is_dir() only — no write/delete round-trip so there
-    are no artefacts and the probe is instantaneous.
+    S3 (STORAGES default backend contains "s3"): HEAD the bucket via the
+    configured storage. Local filesystem: MEDIA_ROOT must exist, be a
+    directory, and be writable (os.access — no write/delete round-trip, so
+    there are no artefacts and the probe is instantaneous).
     """
     try:
         from django.conf import settings
+        # Backend detection must be a real string comparison: settings may be a
+        # MagicMock in unit tests, whose attributes are truthy mocks — hence the
+        # isinstance guards (a mock backend never matches "s3").
+        storages_cfg = getattr(settings, "STORAGES", None) or {}
+        default_cfg = storages_cfg.get("default", {}) if isinstance(storages_cfg, dict) else {}
+        backend = default_cfg.get("BACKEND", "") if isinstance(default_cfg, dict) else ""
+        if isinstance(backend, str) and "s3" in backend.lower():
+            return _check_media_s3()
         media_root = getattr(settings, "MEDIA_ROOT", None)
         if not media_root:
             return {"ok": False, "detail": "MEDIA_ROOT not configured"}
         from pathlib import Path
+        import os
         p = Path(media_root)
         if not p.exists():
             return {"ok": False, "detail": "MEDIA_ROOT does not exist"}
         if not p.is_dir():
             return {"ok": False, "detail": "MEDIA_ROOT is not a directory"}
+        if not os.access(p, os.W_OK):
+            return {"ok": False, "detail": "MEDIA_ROOT is not writable"}
         # Do NOT return the absolute path — it leaks server filesystem layout
         # to unauthenticated callers. Return a plain boolean instead.
         return {"ok": True, "detail": True}
