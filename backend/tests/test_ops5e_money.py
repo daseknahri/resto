@@ -85,11 +85,11 @@ class CashoutLockoutTests(SimpleTestCase):
 
     def _no_match(self):
         (self.m["dcr"].objects.select_for_update
-            .return_value.filter.return_value.first.return_value) = None
+            .return_value.filter.return_value.order_by.return_value.first.return_value) = None
 
     def _match(self, req):
         (self.m["dcr"].objects.select_for_update
-            .return_value.filter.return_value.first.return_value) = req
+            .return_value.filter.return_value.order_by.return_value.first.return_value) = req
 
     def test_locks_out_after_max_failures(self):
         """The (N+1)th confirm with wrong codes is rejected with code 'locked'."""

@@ -57,6 +57,9 @@
         <span aria-hidden="true">⏱</span>
         <span>{{ t('driver.foodReady', { time: readyEta.clock }) }}</span>
         <span v-if="readyEta.mins > 0" class="font-normal text-emerald-400/70">· {{ t('driver.foodReadyIn', { minutes: readyEta.mins }) }}</span>
+        <!-- Wave M M-05: a past ready time means the food is ready NOW — show that
+             instead of a stale-looking past clock time. -->
+        <span v-else class="font-normal text-emerald-400/70">· {{ t('driver.foodReadyNow') }}</span>
       </div>
       <div
         v-else-if="job.status !== 'picked_up'"

@@ -1,7 +1,7 @@
 """
 Management command: send_review_prompts
 
-Designed to run on a cron schedule (every ~10 minutes). Finds orders that were
+Designed to run every 15 minutes (Beat: send-review-prompts, 900s). Finds orders that were
 completed roughly 30 minutes ago, have a linked customer, have NOT yet been
 rated, and have NOT yet been nudged, then sends each customer a Web Push
 inviting them to rate the order — and stamps ``review_prompt_sent_at`` so a
@@ -11,8 +11,9 @@ Why ~30 min after completion: the customer has had time to eat / get home, so
 the review reflects the real experience rather than firing the instant the
 kitchen marks the order done.
 
-Cron (Coolify / crontab) — every 10 minutes:
-    */10 * * * * cd /app && python manage.py send_review_prompts >> /var/log/review_prompts.log 2>&1
+Beat schedule (config/settings.py) — every 15 minutes (900s). Do NOT run a
+separate crontab entry alongside Beat: two overlapping runs used to double-nudge
+customers until the claim-then-send below landed.
 
 Usage:
     python manage.py send_review_prompts
@@ -95,6 +96,22 @@ class Command(BaseCommand):
                         if dry_run:
                             continue
 
+                        # Claim the order atomically BEFORE pushing: a conditional
+                        # UPDATE ... WHERE review_prompt_sent_at IS NULL succeeds
+                        # for exactly one of any overlapping runs, so the customer
+                        # is never double-nudged. The stamp is kept regardless of
+                        # delivery (at-most-once). Copied from
+                        # send_predispatch_reminders — same pattern. .update()
+                        # skips auto_now, so updated_at is bumped explicitly
+                        # (staff delta-poll keys on it).
+                        claimed_at = timezone.now()
+                        claimed = Order.objects.filter(
+                            pk=order.pk, review_prompt_sent_at__isnull=True,
+                        ).update(review_prompt_sent_at=claimed_at, updated_at=claimed_at)
+                        if not claimed:
+                            self.stdout.write("    skipped — already nudged by another run")
+                            continue
+
                         try:
                             sent = send_review_request_sync(
                                 order.customer_id,
@@ -107,11 +124,6 @@ class Command(BaseCommand):
                                 "review push failed for order %s (tenant %s)",
                                 order.order_number, tenant.slug,
                             )
-
-                        # Stamp regardless of delivery so we never double-nudge
-                        # this order on the next run.
-                        order.review_prompt_sent_at = timezone.now()
-                        order.save(update_fields=["review_prompt_sent_at", "updated_at"])
                         total_processed += 1
             except Exception:
                 logger.exception("send_review_prompts: error processing tenant %s", tenant.slug)

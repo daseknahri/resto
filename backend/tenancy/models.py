@@ -601,6 +601,23 @@ class Profile(models.Model):
         ),
     )
 
+    # ── Pending auto-cancel (Wave M M-22) ──────────────────────────────────
+    # After this many minutes, a still-'pending' order that was ALREADY escalated
+    # (the owner was pushed first) is auto-refunded & cancelled by
+    # escalate_stale_pending_orders, reusing the same idempotent path as the
+    # owner's manual "refund & cancel". 0 = never (OFF, the default — today's
+    # behaviour). Must exceed pending_sla_minutes to take effect: an order is
+    # only auto-cancelled after it has been escalated, so the owner is always
+    # warned before money moves.
+    pending_auto_cancel_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Minutes a 'pending' order may wait after being escalated before the "
+            "platform auto-refunds & cancels it. 0 = never auto-cancel (OFF, the "
+            "default). Must exceed pending_sla_minutes to take effect."
+        ),
+    )
+
     # ── Stuck-delivery auto-refund (bounded money safety net) ─────────────────
     # Prepaid delivery money is otherwise stranded indefinitely when no driver ever
     # completes a job. After this many minutes, a delivery job that is STILL

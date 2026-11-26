@@ -193,7 +193,12 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
     def test_overpay_409(self, order_om, tx_mock):
         order = _make_order(total=Decimal("20.00"), payments=[])
         _setup_atomic_and_lock(tx_mock, order_om, order)
-        resp = self._post(body={"method": "cash", "amount": "25.00"})
+        # Wave M M-01: the view reads the ledger via _order_collected (fresh
+        # OrderPayment query) — stub that read: no rows.
+        with patch("menu.models.OrderPayment") as mock_op:
+            mock_op.objects.filter.return_value = []
+            mock_op.Method.WALLET = "wallet"
+            resp = self._post(body={"method": "cash", "amount": "25.00"})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "overpay")
 
@@ -202,7 +207,11 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
     def test_wallet_no_customer_409(self, order_om, tx_mock):
         order = _make_order(customer_id=None, total=Decimal("20.00"))
         _setup_atomic_and_lock(tx_mock, order_om, order)
-        resp = self._post(body={"method": "wallet", "amount": "10.00"})
+        # Wave M M-01: stub the _order_collected ledger read (no rows).
+        with patch("menu.models.OrderPayment") as mock_op:
+            mock_op.objects.filter.return_value = []
+            mock_op.Method.WALLET = "wallet"
+            resp = self._post(body={"method": "wallet", "amount": "10.00"})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "no_customer")
 
@@ -297,6 +306,8 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
             created_payment = _make_payment_row(amount=Decimal("20.00"), method="wallet")
             created_payment.id = 99
             op_om.create.return_value = created_payment
+            # Wave M M-01: _order_collected reads the ledger here — the 10 cash row.
+            op_om.filter.return_value = [existing_payment]
 
             resp = self._post(body={"method": "wallet", "amount": "20.00"})
 
@@ -601,7 +612,11 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         _setup_atomic_and_lock(tx_mock, order_om, order)
         order_om.prefetch_related.return_value.get.return_value = reload_order
 
-        resp = self._post(body={"method": "cash", "amount": "5.00"})
+        # Wave M M-01: stub the _order_collected ledger read (10 + 10 = total).
+        with patch("menu.models.OrderPayment") as mock_op:
+            mock_op.objects.filter.return_value = [existing_p1, existing_p2]
+            mock_op.Method.WALLET = "wallet"
+            resp = self._post(body={"method": "cash", "amount": "5.00"})
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data.get("code"), "reconciled")
@@ -634,6 +649,8 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         order_om.prefetch_related.return_value.get.return_value = reload_order
 
         with patch("menu.models.OrderPayment.objects") as op_om:
+            # Wave M M-01: _order_collected reads the ledger here — the 30 row.
+            op_om.filter.return_value = [existing_p]
             resp = self._post(body={"method": "cash", "amount": "5.00"})
             # No new OrderPayment row created
             op_om.create.assert_not_called()

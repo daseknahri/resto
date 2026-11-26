@@ -680,6 +680,42 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         resp = self._post(1, customer=customer)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
 
+    @patch("accounts.views._serialize_driver_active_job", return_value={})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.views.Customer")
+    def test_accept_clears_owner_alert(self, mock_cust, mock_dj, mock_notify, mock_ser):
+        """Wave M M-10: accepting a job that was already escalated (owner_alerted_at
+        set, redispatch_count=3) clears the alert latch so a later idle stretch
+        past the SLA can alert the owner again."""
+        from django.utils import timezone as _tz
+        customer = _make_customer(is_driver_online=True)
+        customer.driver_position_updated_at = _tz.now()
+        customer.driver_lat = 35.7
+        customer.driver_lng = -5.8
+        job = MagicMock()
+        job.id = 9
+        job.is_open_pool = True
+        job.offered_to_id = None
+        job.offer_expires_at = None
+        job.business_type = "restaurant"
+        job.owner_alerted_at = _tz.now() - timedelta(minutes=30)
+        job.redispatch_count = 3
+        job.save = MagicMock()
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.Status.ASSIGNED = "assigned"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.objects.filter.return_value.exists.return_value = False
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust.objects.select_for_update.return_value.filter.return_value.first.return_value = customer
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(9, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNone(job.owner_alerted_at)
+        _args, kwargs = job.save.call_args
+        self.assertIn("owner_alerted_at", kwargs["update_fields"])
+
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
     def test_active_ride_blocks_delivery_accept_409(self, mock_cust_objs, mock_dj):
@@ -897,7 +933,7 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
 
-        with patch("accounts.views._order_delivery_code", return_value=""):
+        with patch("accounts.views._order_delivery_code", return_value=("legacy", None)):
             with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
                 with patch("accounts.views._batch_business_types", return_value={}):
                     with patch("django.utils.timezone.now", return_value=MagicMock()):
@@ -1039,7 +1075,7 @@ class DriverProofPhotoOutsideLockTests(SimpleTestCase):
 
         # A REAL delivery code is issued but the driver supplies NONE — only the photo can
         # let this through, proving the anti-fraud photo-bypasses-code gate is intact.
-        with patch("accounts.views._order_delivery_code", return_value="SECRET7"), \
+        with patch("accounts.views._order_delivery_code", return_value=("code", "SECRET7")), \
              patch("accounts.views._serialize_delivery_job",
                    return_value={"id": 1, "status": "delivered"}), \
              patch("accounts.views._batch_business_types", return_value={}), \
@@ -1073,7 +1109,7 @@ class DriverProofPhotoOutsideLockTests(SimpleTestCase):
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         mock_cust_objs.filter.return_value.exists.return_value = True
 
-        with patch("accounts.views._order_delivery_code", return_value="CODE99"), \
+        with patch("accounts.views._order_delivery_code", return_value=("code", "CODE99")), \
              patch("accounts.views._serialize_delivery_job",
                    return_value={"id": 1, "status": "delivered"}), \
              patch("accounts.views._batch_business_types", return_value={}), \
@@ -1085,6 +1121,73 @@ class DriverProofPhotoOutsideLockTests(SimpleTestCase):
         mock_save.assert_not_called()  # no file -> no transcode/upload
         mock_complete.assert_called_once()
         self.assertEqual(mock_complete.call_args.kwargs.get("proof_photo_url"), "")
+
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_code_lookup_error_fails_closed(self, mock_dj, mock_cust_objs, mock_complete):
+        """Wave M M-13: the code cannot be read (lookup error) → 500, no settle.
+        The old "" return would have skipped the check and completed."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust_objs.filter.return_value.exists.return_value = True
+
+        with patch("accounts.views._order_delivery_code", return_value=("error", None)), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(1, {"status": "delivered", "code": "ANY123"}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(resp.data.get("code"), "delivery_code_unavailable")
+        mock_complete.assert_not_called()
+
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_legacy_order_completes_without_code(self, mock_dj, mock_cust_objs, mock_complete):
+        """Wave M M-13: a positively-identified legacy order (no code was ever
+        issued) still completes with no code supplied."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust_objs.filter.return_value.exists.return_value = True
+
+        with patch("accounts.views._order_delivery_code", return_value=("legacy", None)), \
+             patch("accounts.views._serialize_delivery_job",
+                   return_value={"id": 1, "status": "delivered"}), \
+             patch("accounts.views._batch_business_types", return_value={}), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(1, {"status": "delivered"}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_complete.assert_called_once()
+
+    @patch("accounts.ride_views._save_driver_doc_image")
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.models.DeliveryJob")
+    def test_delivered_correct_code_completes_despite_bad_photo(self, mock_dj, mock_cust_objs, mock_complete, mock_save):
+        """Wave M M-13: a correct code completes the delivery even when the
+        photo upload failed (bad-photo 400 now sits after the code check)."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        self._wire_status(mock_dj)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        mock_cust_objs.filter.return_value.exists.return_value = True
+        mock_save.side_effect = ValueError("Could not decode image.")
+
+        with patch("accounts.views._order_delivery_code", return_value=("code", "RIGHT1")), \
+             patch("accounts.views._serialize_delivery_job",
+                   return_value={"id": 1, "status": "delivered"}), \
+             patch("accounts.views._batch_business_types", return_value={}), \
+             patch("django.utils.timezone.now", return_value=MagicMock()):
+            resp = self._patch_multipart(
+                1, {"status": "delivered", "code": "RIGHT1", "proof_photo": self._photo()}, customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_complete.assert_called_once()
 
     @patch("accounts.ride_views._save_driver_doc_image")
     @patch("accounts.views._complete_delivered_order")
@@ -1101,7 +1204,7 @@ class DriverProofPhotoOutsideLockTests(SimpleTestCase):
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         mock_cust_objs.filter.return_value.exists.return_value = True
 
-        with patch("accounts.views._order_delivery_code", return_value="RIGHT1"), \
+        with patch("accounts.views._order_delivery_code", return_value=("code", "RIGHT1")), \
              patch("django.utils.timezone.now", return_value=MagicMock()):
             resp = self._patch_multipart(
                 1, {"status": "delivered", "code": "WRONG9"}, customer)
@@ -1133,6 +1236,67 @@ class DriverProofPhotoOutsideLockTests(SimpleTestCase):
         self.assertEqual(resp.data.get("code"), "bad_transition")
         mock_save.assert_called_once()     # upload was attempted pre-lock (outside the lock)
         mock_complete.assert_not_called()  # nothing settled on a rejected transition
+
+
+# ── Wave M M-13: _order_delivery_code helper ─────────────────────────────────
+
+class OrderDeliveryCodeHelperTests(SimpleTestCase):
+    """The helper fails closed except for positively-identified legacy orders."""
+
+    def _run(self, *, tenant=None, order=None, exc=None):
+        from types import SimpleNamespace
+        from django_tenants.utils import schema_context as _real_sc
+        import contextlib
+        job = SimpleNamespace(tenant_id=7, order_number="ORD-1")
+        with patch("tenancy.models.Tenant") as TM, \
+                patch("menu.models.Order") as OM, \
+                patch("django_tenants.utils.schema_context", return_value=contextlib.nullcontext()):
+            if exc is not None:
+                TM.objects.filter.side_effect = exc
+            else:
+                TM.objects.filter.return_value.first.return_value = tenant
+            OM.objects.filter.return_value.only.return_value.first.return_value = order
+            from accounts.views import _order_delivery_code
+            return _order_delivery_code(job)
+
+    def test_code_present_returns_code(self):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace
+        order = SimpleNamespace(
+            delivery_code="AB12CD", created_at=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        self.assertEqual(
+            self._run(tenant=SimpleNamespace(schema_name="resto7"), order=order),
+            ("code", "AB12CD"))
+
+    def test_legacy_order_returns_legacy(self):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace
+        order = SimpleNamespace(
+            delivery_code="", created_at=datetime(2026, 6, 1, tzinfo=timezone.utc))
+        self.assertEqual(
+            self._run(tenant=SimpleNamespace(schema_name="resto7"), order=order),
+            ("legacy", None))
+
+    def test_post_feature_order_without_code_is_error(self):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace
+        order = SimpleNamespace(
+            delivery_code="", created_at=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        self.assertEqual(
+            self._run(tenant=SimpleNamespace(schema_name="resto7"), order=order),
+            ("error", None))
+
+    def test_missing_order_is_error(self):
+        from types import SimpleNamespace
+        self.assertEqual(
+            self._run(tenant=SimpleNamespace(schema_name="resto7"), order=None),
+            ("error", None))
+
+    def test_missing_tenant_is_error(self):
+        self.assertEqual(self._run(tenant=None, order=None), ("error", None))
+
+    def test_lookup_exception_is_error(self):
+        self.assertEqual(self._run(exc=RuntimeError("db down")), ("error", None))
 
 
 # ── Part A: business_type in delivery job payloads ────────────────────────────

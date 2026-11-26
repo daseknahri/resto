@@ -70,6 +70,23 @@ class CreateCashoutTests(SimpleTestCase):
     def test_min_is_100(self):
         self.assertEqual(CASHOUT_MIN, Decimal("100"))
 
+    @patch("accounts.models.DriverCashoutRequest")
+    @patch("accounts.models.Customer")
+    @patch("django.utils.crypto.get_random_string", side_effect=["111111", "222222"])
+    def test_create_retries_after_integrity_error(self, mock_rand, Cust, DCR):
+        """Wave M M-09: a lost code race (IntegrityError from the partial unique
+        constraint) retries with a fresh code instead of 500ing."""
+        from django.db import IntegrityError
+        Cust.objects.select_for_update.return_value.filter.return_value.first.return_value = SimpleNamespace(
+            wallet_balance=Decimal("150"), driver_approved=True)
+        DCR.objects.filter.return_value.exists.return_value = False  # pre-check passes both times
+        created = SimpleNamespace(id=2, amount=Decimal("120.00"), code="222222")
+        DCR.objects.create.side_effect = [IntegrityError("duplicate"), created]
+        out = create_cashout_request(1, "120")
+        self.assertEqual(out, created)
+        self.assertEqual(DCR.objects.create.call_count, 2)
+        self.assertEqual(DCR.objects.create.call_args.kwargs["code"], "222222")
+
 
 class ConfirmCashoutTests(SimpleTestCase):
     def setUp(self):
@@ -95,14 +112,30 @@ class ConfirmCashoutTests(SimpleTestCase):
         )
 
     def test_not_found(self):
-        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.first.return_value = None
+        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = None
         with self.assertRaises(CashoutError) as ctx:
             confirm_cashout("000000", tenant_id=3)
         self.assertEqual(ctx.exception.code, "not_found")
 
+    def test_confirm_orders_by_created_at_earliest_first(self):
+        """Wave M M-09: the confirm lookup orders by created_at so the oldest
+        live request wins if duplicate PENDING rows for one code exist."""
+        from django.utils import timezone
+        from datetime import timedelta
+        early = self._pending(amount="120.00")
+        early.created_at = timezone.now() - timedelta(minutes=9)
+        late = self._pending(amount="120.00")
+        late.created_at = timezone.now() - timedelta(minutes=1)
+        chain = self.m["dcr"].objects.select_for_update.return_value.filter.return_value
+        chain.order_by.return_value.first.return_value = early
+        self.m["debit"].return_value = SimpleNamespace(id=99)
+        out = confirm_cashout("123456", tenant_id=3, actor_user_id=8)
+        chain.order_by.assert_called_once_with("created_at")
+        self.assertEqual(out, early)
+
     def test_confirm_debits_driver_and_credits_float(self):
         req = self._pending()
-        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.first.return_value = req
+        self.m["dcr"].objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = req
         self.m["debit"].return_value = SimpleNamespace(id=99)
         out = confirm_cashout("123456", tenant_id=3, actor_user_id=8)
         # driver wallet debited for the amount...
@@ -197,7 +230,7 @@ class ConfirmCashoutExpiryTests(SimpleTestCase):
     def test_expired_code_persists_expired_and_does_not_record_failure(self):
         req = self._expired_req()
         (self.m["dcr"].objects.select_for_update
-            .return_value.filter.return_value.first.return_value) = req
+            .return_value.filter.return_value.order_by.return_value.first.return_value) = req
 
         with self.assertRaises(CashoutError) as ctx:
             confirm_cashout("123456", tenant_id=3, actor_user_id=8)
@@ -226,7 +259,7 @@ class ConfirmCashoutExpiryTests(SimpleTestCase):
     def test_wrong_code_still_records_failure(self):
         """Control: a genuinely wrong code (no pending match) DOES count as a failure."""
         (self.m["dcr"].objects.select_for_update
-            .return_value.filter.return_value.first.return_value) = None
+            .return_value.filter.return_value.order_by.return_value.first.return_value) = None
 
         with self.assertRaises(CashoutError) as ctx:
             confirm_cashout("000000", tenant_id=3, actor_user_id=8)

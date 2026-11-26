@@ -96,6 +96,39 @@ def celery_broker_configured_for_durability(app_configs, **kwargs):
 
 
 @register(deploy=True)
+def psp_site_url_configured(app_configs, **kwargs):
+    """Wave M M-07: when PSP top-ups are enabled, PSP_SITE_URL is the Stripe
+    redirect base URL — a relative / non-https value means the success/cancel
+    redirects break (or leak), and the operator only finds out from a customer
+    complaint. Hard-fail the deploy instead.
+
+    Reads settings.PSP_SITE_URL (which defaults to PUBLIC_MENU_BASE_URL, so a
+    misconfigured base URL is caught here too). DEBUG skips, like the other
+    checks in this file.
+    """
+    if settings.DEBUG:
+        return []
+
+    if not getattr(settings, "PSP_TOPUP_ENABLED", False):
+        return []
+
+    site_url = str(getattr(settings, "PSP_SITE_URL", "") or "").strip()
+    parsed = urlparse(site_url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        return [Error(
+            "PSP_SITE_URL must be an absolute https URL when PSP_TOPUP_ENABLED=1.",
+            hint=(
+                f"Got PSP_SITE_URL={site_url!r}. Set PSP_SITE_URL to the public "
+                "https origin customers are redirected to after Stripe Checkout "
+                "(e.g. https://menu.example.com). Bypass only in an emergency "
+                "with SKIP_DEPLOY_CHECK=1 on the entrypoint."
+            ),
+            id="kepoli.E003",
+        )]
+    return []
+
+
+@register(deploy=True)
 def redis_has_auth_credentials(app_configs, **kwargs):
     """A6: in production the REDIS_URL must carry authentication credentials.
 

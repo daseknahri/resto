@@ -359,20 +359,23 @@ def _delivery_job_ready_minutes(order, tenant):
     """Prep minutes to mirror onto the platform delivery job for an order.
 
     Wave L L-03 (DEL-9): when the owner confirms without an ETA the driver
-    gets no timing signal at all. Prefer the order's explicit ETA; otherwise
-    fall back to the tenant's configured default prep time (the same value
-    the customer was quoted), then the platform default (20). Once the food
-    is ready the answer is 0 ("now") rather than a fresh prep window. Returns
-    None when no timing applies yet (the order hasn't entered the kitchen
-    flow), which clears the job's ready time exactly as before. Never raises.
+    gets no timing signal at all. Wave M M-05: check the status FIRST — once
+    the food is ready (or the order is out / completed) the answer is 0
+    ("now") regardless of a stale explicit ETA; the old order let a stale ETA
+    win and re-stamped a FUTURE ready time on a READY order. Otherwise prefer
+    the order's explicit ETA; else fall back to the tenant's configured
+    default prep time (the same value the customer was quoted), then the
+    platform default (20). Returns None when no timing applies yet (the order
+    hasn't entered the kitchen flow), which clears the job's ready time
+    exactly as before. Never raises.
     """
-    minutes = getattr(order, "estimated_ready_minutes", None)
-    if minutes is not None:
-        return minutes
     status = getattr(order, "status", None)
     if status in (Order.Status.READY, Order.Status.OUT_FOR_DELIVERY,
                   Order.Status.COMPLETED):
         return 0
+    minutes = getattr(order, "estimated_ready_minutes", None)
+    if minutes is not None:
+        return minutes
     if status in (Order.Status.CONFIRMED, Order.Status.PREPARING):
         try:
             profile = getattr(tenant, "profile", None)
@@ -3973,6 +3976,20 @@ class PlaceOrderView(APIView):
                 # to the next on decline/timeout, falling back to the open pool.
                 from accounts.dispatch import start_dispatch
                 start_dispatch(_job)
+                # Wave M M-04: stamp the food-ready time at job creation — the
+                # owner status-view mirror never runs for an auto-accepted order
+                # (no confirm tap), so without this the driver gets no ready time
+                # and the food-aware SLA hold never engages. The helper returns
+                # the right answer per state (explicit ETA, else CONFIRMED →
+                # tenant default / 20, else PENDING → None).
+                try:
+                    from accounts.delivery_service import set_delivery_job_food_ready
+                    set_delivery_job_food_ready(
+                        tenant.id, order.order_number,
+                        _delivery_job_ready_minutes(order, tenant),
+                    )
+                except Exception:
+                    pass
             except Exception:
                 # D G3: never fail the order response if job creation hiccups — but
                 # LOG it. A silent `pass` stranded the order (paid, kitchen sees it,
@@ -7082,12 +7099,16 @@ class StaffOrderPaymentView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
 
-                # Compute outstanding under the lock
+                # Compute outstanding under the lock — reconciled across BOTH
+                # payment signals (Wave M M-01): the OrderPayment ledger AND
+                # order.wallet_amount_paid. Place-order checkout and pay-wallet
+                # debits bump wallet_amount_paid with NO ledger row, so a
+                # ledger-only sum left a tab partly paid from the wallet
+                # unclosable (and the overpay guard would take the remainder
+                # twice). _order_collected is the helper the payload, Mark
+                # Paid, pay-wallet and void paths already use.
                 order_total = Decimal(str(order.total or "0")).quantize(self._CENT)
-                existing_paid = sum(
-                    (Decimal(str(p.amount)) for p in order.payments.all()),
-                    Decimal("0"),
-                ).quantize(self._CENT)
+                existing_paid = _order_collected(order).quantize(self._CENT)
                 outstanding = max(Decimal("0"), order_total - existing_paid).quantize(self._CENT)
 
                 # ── Reconcile guard ───────────────────────────────────────────
@@ -7615,6 +7636,24 @@ class OwnerDeliveryJobActionView(APIView):
                 offer_to_next_driver(job.id)
             except Exception:
                 pass
+            # Wave M M-14(b): while the job was FAILED the mirror no-op'd
+            # (terminal), so an ETA edit made while the job awaited a decision
+            # never reached the job. Now the job is SEARCHING again — re-mirror,
+            # but only when the ETA actually changed (or there is no ready time
+            # yet); a redispatch with no intervening ETA edit keeps its anchor.
+            if action == "redispatch":
+                try:
+                    from accounts.delivery_service import (
+                        set_delivery_job_food_ready,
+                        should_restamp_food_ready_on_redispatch,
+                    )
+                    if should_restamp_food_ready_on_redispatch(order, job):
+                        set_delivery_job_food_ready(
+                            tenant.id, order.order_number,
+                            _delivery_job_ready_minutes(order, tenant),
+                        )
+                except Exception:
+                    pass
             # Keep the customer timeline coherent: a re-dispatched order isn't "out for delivery".
             try:
                 if order.status == Order.Status.OUT_FOR_DELIVERY:
@@ -8873,9 +8912,59 @@ class OwnerOrderStatusUpdateView(APIView):
             if order is None:
                 return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
+            # M-05 anchor baseline: the mirror's answer BEFORE this PATCH mutates
+            # the order, so a status-only tap / note edit (same answer) doesn't
+            # re-anchor food_ready_at.
+            _ct_pre = getattr(request, "tenant", None)
+            _old_minutes = _delivery_job_ready_minutes(order, _ct_pre)
+
+            update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
+
+            # M-14(a): the note/ETA write lands BEFORE the already_at_target
+            # early return, so a same-status PATCH carrying a new ETA actually
+            # sticks (it used to 200 with the OLD ETA in the response).
+            if owner_note is not None:
+                order.owner_note = str(owner_note).strip()[:500]
+
+            if estimated_ready_minutes is not None:
+                try:
+                    mins = int(estimated_ready_minutes)
+                    order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
+                except (TypeError, ValueError):
+                    order.estimated_ready_minutes = None
+                # Stamp the absolute "ready by" anchor = now + minutes (the owner's from-now
+                # intent), so the consumer countdown is right even for an ETA set/edited long
+                # after placement. Cleared to None when the ETA is cleared.
+                from datetime import timedelta as _eta_timedelta
+                from django.utils import timezone as _eta_tz
+                order.estimated_ready_at = (
+                    _eta_tz.now() + _eta_timedelta(minutes=order.estimated_ready_minutes)
+                    if order.estimated_ready_minutes else None
+                )
+                if "estimated_ready_at" not in update_fields:
+                    update_fields.append("estimated_ready_at")
+
             if new_status:
                 # Idempotent-by-target: already at the requested status → 200 no-op.
                 if order.status == new_status:
+                    # M-14(a): the note/ETA write above already landed on the
+                    # in-memory order — persist it (it used to be dropped) and
+                    # re-mirror anchor-aware so an ETA edit on a same-status
+                    # PATCH still reaches the driver job. A status-only PATCH
+                    # stays a pure no-op (no save), as before.
+                    if owner_note is not None or estimated_ready_minutes is not None:
+                        order.save(update_fields=update_fields)
+                        if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+                            try:
+                                from accounts.delivery_service import set_delivery_job_food_ready
+                                if _ct_pre:
+                                    set_delivery_job_food_ready(
+                                        _ct_pre.id, order.order_number,
+                                        _delivery_job_ready_minutes(order, _ct_pre),
+                                        previous_minutes=_old_minutes,
+                                    )
+                            except Exception:
+                                pass
                     return Response({
                         "id": order.id,
                         "order_number": order.order_number,
@@ -8969,8 +9058,6 @@ class OwnerOrderStatusUpdateView(APIView):
                 order.status = new_status
                 order.status_updated_at = timezone.now()
 
-            update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
-
             # Attribute the order for per-staff work stats. The waiter who TOOK the order keeps
             # the credit, so we only fill this when it isn't already set (e.g. a customer-placed
             # order that a staff member is now handling).
@@ -8979,27 +9066,6 @@ class OwnerOrderStatusUpdateView(APIView):
                 if _uid:
                     order.handled_by_user_id = _uid
                     update_fields.append("handled_by_user_id")
-
-            if owner_note is not None:
-                order.owner_note = str(owner_note).strip()[:500]
-
-            if estimated_ready_minutes is not None:
-                try:
-                    mins = int(estimated_ready_minutes)
-                    order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
-                except (TypeError, ValueError):
-                    order.estimated_ready_minutes = None
-                # Stamp the absolute "ready by" anchor = now + minutes (the owner's from-now
-                # intent), so the consumer countdown is right even for an ETA set/edited long
-                # after placement. Cleared to None when the ETA is cleared.
-                from datetime import timedelta as _eta_timedelta
-                from django.utils import timezone as _eta_tz
-                order.estimated_ready_at = (
-                    _eta_tz.now() + _eta_timedelta(minutes=order.estimated_ready_minutes)
-                    if order.estimated_ready_minutes else None
-                )
-                if "estimated_ready_at" not in update_fields:
-                    update_fields.append("estimated_ready_at")
 
             # K-8: stamp the canned cancel reason (+ optional note) on the same save
             # as the status change — covers both the decline-new-order and
@@ -9038,6 +9104,8 @@ class OwnerOrderStatusUpdateView(APIView):
 
         # Mirror the prep ETA onto the platform delivery job so the assigned/searching
         # driver knows when the food will be ready (pre-dispatch timing). Best-effort.
+        # M-05: anchor-aware — the setter skips the stamp when the ETA value is
+        # unchanged and the job already has a ready time.
         if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
             try:
                 from accounts.delivery_service import set_delivery_job_food_ready
@@ -9046,6 +9114,7 @@ class OwnerOrderStatusUpdateView(APIView):
                     set_delivery_job_food_ready(
                         _ct.id, order.order_number,
                         _delivery_job_ready_minutes(order, _ct),
+                        previous_minutes=_old_minutes,
                     )
             except Exception:
                 pass
@@ -9256,6 +9325,18 @@ class OwnerOrderBulkStatusView(APIView):
                     enqueue(order_status_email, order.order_number, tenant.id, Order.Status.CONFIRMED)
             except Exception:
                 pass
+            # Wave M M-04: bulk confirm never ran the status-view mirror, so
+            # every bulk-confirmed delivery order lost its ready time. Stamp it
+            # here (CONFIRMED → tenant default / 20, or the explicit ETA).
+            if tenant and order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+                try:
+                    from accounts.delivery_service import set_delivery_job_food_ready
+                    set_delivery_job_food_ready(
+                        tenant.id, order.order_number,
+                        _delivery_job_ready_minutes(order, tenant),
+                    )
+                except Exception:
+                    pass
 
         skipped = len(order_ids) - updated_count
         return Response({"updated": updated_count, "skipped": skipped})
@@ -10087,17 +10168,29 @@ class OwnerZReportView(APIView):
 class StaffPaymentMethodCorrectionView(APIView):
     """POST /api/staff/orders/<order_id>/payments/<payment_id>/correct-method/
 
-    Corrects the recorded tender method (cash ↔ wallet) on an OrderPayment row.
-    This is a RELABELLING operation only — it does NOT move money.
+    Corrects the recorded tender method on an OrderPayment row.
 
-    Boundary (documented and must not be crossed):
-      * OrderPayment.method is updated to the corrected value.
+    Wave M M-03: this is NOT a pure relabelling. A WALLET ledger row is always
+    paired with a real wallet debit AND a wallet_amount_paid bump (staff
+    payment / instant wallet-charge), so flipping the row to cash without
+    moving the money broke the _order_collected invariant (the payment was
+    counted twice: once as the cash row, once as the un-decremented counter)
+    and left the customer out the wallet amount AND the cash.
+
+    Boundary:
+      * wallet → cash: the wallet debit is REVERSED (credit_wallet REFUND,
+        idempotency key correct:{schema}:{payment_id}:wallet-reversal) and
+        Order.wallet_amount_paid is decremented by the same amount, under the
+        order row lock. The reversal is clamped to the counter's current value
+        (min(amount, max(0, wallet_amount_paid))) so a row whose money was
+        already refunded (e.g. a void) is never credited twice; in the normal
+        case the clamp is a no-op and the full row amount is reversed.
+      * cash → wallet: REJECTED with 400. No wallet money moved for a cash
+        row, so relabelling it would fabricate a wallet payment (and move the
+        cash into the wallet column of the Z-report). The waiter records a new
+        wallet payment and voids the cash row instead.
       * The three correction audit fields are written: original_method (first
         correction only), corrected_at, corrected_by_name.
-      * WalletTransaction rows, Customer.wallet_balance, and
-        Order.wallet_amount_paid are NEVER touched. The wallet ledger reflects
-        what actually moved in/out of the wallet; this endpoint only fixes a
-        mis-label in the cash-register record.
       * The Z-report reads the (possibly corrected) method field, so the
         drawer split will reflect the correction immediately.
 
@@ -10141,9 +10234,22 @@ class StaffPaymentMethodCorrectionView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # M-03: cash → wallet would fabricate a wallet payment (no wallet money
+        # ever moved for a cash row). Reject; the waiter records a new wallet
+        # payment and voids the cash row instead.
+        if payment.method == "cash" and new_method == "wallet":
+            return Response(
+                {
+                    "detail": "A cash payment cannot be corrected to wallet — no wallet money moved. "
+                              "Record a new wallet payment and void the cash row instead.",
+                    "code": "cash_to_wallet_not_allowed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Write the correction with full audit trail.
         # original_method is only captured on the FIRST correction so the chain
-        # "wallet → cash" then "cash → wallet" doesn't overwrite the original.
+        # doesn't overwrite the original.
         corrector_name = ""
         user = request.user
         if hasattr(user, "get_full_name"):
@@ -10151,16 +10257,70 @@ class StaffPaymentMethodCorrectionView(APIView):
         if not corrector_name:
             corrector_name = getattr(user, "username", "") or getattr(user, "email", "") or "staff"
 
-        update_fields = ["method", "corrected_at", "corrected_by_name"]
-        if not payment.original_method:
-            # First correction — snapshot the original method.
-            payment.original_method = payment.method
-            update_fields.append("original_method")
+        # wallet → cash: reverse the wallet debit and decrement the counter
+        # under the order row lock (same lock StaffOrderPaymentView uses), so a
+        # concurrent staff payment cannot interleave with the counter write.
+        # The payment row is re-fetched under its own lock: a concurrent
+        # correction of the same row must not double-reverse.
+        with transaction.atomic():
+            locked_payment = (
+                OrderPayment.objects
+                .select_for_update()
+                .filter(pk=payment_id, order_id=order_id)
+                .first()
+            )
+            if locked_payment is None:
+                return Response({"detail": "Payment not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+            if locked_payment.method != "wallet":
+                return Response(
+                    {"detail": "Payment method is already recorded as that value.", "code": "no_change"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            locked_order = (
+                Order.objects
+                .select_for_update()
+                .filter(pk=order_id)
+                .first()
+            )
+            if locked_order is None:
+                return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+            _counter = Decimal(str(locked_order.wallet_amount_paid or "0"))
+            _reversal = min(
+                Decimal(str(locked_payment.amount)),
+                max(Decimal("0"), _counter),
+            ).quantize(Decimal("0.01"))
+            if _reversal > 0:
+                if locked_order.customer_id:
+                    from accounts.wallet_service import credit_wallet
+                    from accounts.models import WalletTransaction as _WTx
+                    from django.db import connection as _corr_conn
+                    _corr_tenant = getattr(request, "tenant", None)
+                    credit_wallet(
+                        locked_order.customer_id,
+                        _reversal,
+                        tx_type=_WTx.Type.REFUND,
+                        idempotency_key=f"correct:{_corr_conn.schema_name}:{payment_id}:wallet-reversal",
+                        reference=locked_order.order_number,
+                        note="Wallet reversal: payment corrected to cash",
+                        # Returning the customer's own money must not be gated
+                        # on phone verification (same as void/comp refunds).
+                        require_verified=False,
+                        tenant_id=getattr(_corr_tenant, "id", None) if _corr_tenant else None,
+                    )
+                locked_order.wallet_amount_paid = (_counter - _reversal).quantize(Decimal("0.01"))
+                locked_order.save(update_fields=["wallet_amount_paid", "updated_at"])
 
-        payment.method = new_method
-        payment.corrected_at = timezone.now()
-        payment.corrected_by_name = corrector_name[:80]
-        payment.save(update_fields=update_fields)
+            update_fields = ["method", "corrected_at", "corrected_by_name"]
+            if not locked_payment.original_method:
+                # First correction — snapshot the original method.
+                locked_payment.original_method = locked_payment.method
+                update_fields.append("original_method")
+
+            locked_payment.method = new_method
+            locked_payment.corrected_at = timezone.now()
+            locked_payment.corrected_by_name = corrector_name[:80]
+            locked_payment.save(update_fields=update_fields)
+            payment = locked_payment
 
         return Response({
             "id": payment.id,

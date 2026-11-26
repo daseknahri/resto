@@ -21,7 +21,8 @@ from django.test import SimpleTestCase
 # inside its body, so we patch at "menu.models.OrderPayment".
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total):
+def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total,
+                       extra_wallet=0):
     """Return (order_qs_mock, MockPayment_ctx) for use in patch.
 
     Models the OPS-4 D subquery path in revenue.py:
@@ -66,6 +67,11 @@ def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, 
     order_qs.exclude.return_value.aggregate.return_value = legacy_agg
     # aggregate(...) called directly when there are no ledger orders
     order_qs.aggregate.return_value = legacy_agg
+    # Wave M M-02: the per-order non-ledger wallet expression —
+    # order_qs.filter(id__in=...).annotate().annotate().aggregate(_s=Sum(...)).
+    order_qs.filter.return_value.annotate.return_value.annotate.return_value.aggregate.return_value = {
+        "_s": Decimal(str(extra_wallet)),
+    }
 
     return order_qs, MockPayment
 
@@ -73,9 +79,11 @@ def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, 
 class SplitRevenueHelperTests(SimpleTestCase):
     """Unit tests for menu.revenue.split_revenue_for_orders."""
 
-    def _run(self, order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total):
+    def _run(self, order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total,
+               extra_wallet=0):
         order_qs, MockPayment = _build_split_mocks(
-            order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total
+            order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total,
+            extra_wallet=extra_wallet,
         )
         with patch("menu.models.OrderPayment", MockPayment):
             from menu.revenue import split_revenue_for_orders
@@ -118,6 +126,22 @@ class SplitRevenueHelperTests(SimpleTestCase):
             legacy_total=50,
         )
         # ledger: wallet=20, cash=30; legacy: wallet=10, cash=40
+        self.assertEqual(result["wallet"], Decimal("30.00"))
+        self.assertEqual(result["cash"], Decimal("70.00"))
+
+    def test_mixed_order_non_ledger_wallet_counted(self):
+        """Wave M M-02: one order with wallet_amount_paid=30 (no ledger row for
+        it) PLUS a cash 70 ledger row → wallet 30 / cash 70. Before the fix the
+        30 vanished from the wallet column."""
+        result = self._run(
+            order_ids=[1],
+            ledger_order_ids=[1],
+            ledger_wallet=0,   # no WALLET ledger rows — the 30 never had one
+            ledger_cash=70,    # the cash split-bill row
+            legacy_wallet=0,   # the order is on the ledger path, not the legacy path
+            legacy_total=0,
+            extra_wallet=30,   # per-order max(0, wallet_amount_paid - ledger_wallet)
+        )
         self.assertEqual(result["wallet"], Decimal("30.00"))
         self.assertEqual(result["cash"], Decimal("70.00"))
 
@@ -335,10 +359,40 @@ class AutoResetAvailabilityCommandTests(SimpleTestCase):
         mock_cache.add.assert_not_called()
 
     def test_wrong_hour_is_skipped(self):
-        """Tenant at local hour != 5 must not trigger any cache write."""
+        """Tenant at local hour < 5 must not trigger any cache write."""
         tenant = self._make_tenant("wronghour", flag_on=True)
-        _, mock_cache = self._call([tenant], local_hour=10, day_str="2026-06-11")
+        _, mock_cache = self._call([tenant], local_hour=3, day_str="2026-06-11")
         mock_cache.add.assert_not_called()
+
+    def test_missed_05_tick_resets_at_06(self):
+        """Wave M M-18: the 05:00 tick was missed (deploy/restart) — the 06:00
+        tick still resets because the marker for today is absent."""
+        tenant = self._make_tenant("missedfive", flag_on=True)
+        out, mock_cache = self._call([tenant], local_hour=6, day_str="2026-06-11", cache_add_returns=True)
+        mock_cache.add.assert_called_once()
+        self.assertIn("missedfive", out)
+
+    def test_marker_present_at_06_no_second_reset(self):
+        """Wave M M-18: the marker — not the clock — is the once-per-day guard:
+        reset already ran today, so the 06:00 tick does nothing."""
+        import menu.management.commands.auto_reset_availability as cmd_mod
+        from django.core.management import call_command
+
+        tenant = self._make_tenant("alreadyreset", flag_on=True)
+        with (
+            patch.object(cmd_mod, "Tenant") as MockTenant,
+            patch.object(cmd_mod, "cache") as mock_cache,
+            patch.object(cmd_mod, "_tenant_local_hour", return_value=(6, "2026-06-11")),
+            patch.object(cmd_mod, "reset_dishes_for_schema") as mock_reset,
+        ):
+            MockTenant.LifecycleStatus.ACTIVE = "active"
+            qs_mock = MagicMock()
+            qs_mock.__iter__ = MagicMock(return_value=iter([tenant]))
+            MockTenant.objects.filter.return_value.exclude.return_value.select_related.return_value = qs_mock
+            mock_cache.add.return_value = False  # marker already present
+            call_command("auto_reset_availability", stdout=io.StringIO())
+
+        mock_reset.assert_not_called()
 
     def test_at_hour_5_with_flag_on_resets(self):
         """Tenant at local hour 5 with flag enabled → cache written + mentioned in output."""

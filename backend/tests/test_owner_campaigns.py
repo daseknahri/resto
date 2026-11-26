@@ -411,6 +411,11 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             # New subquery path: exists() signals non-empty queryset;
             # values("id") returns a mock queryset used as DB subquery.
             qs.exists.return_value = True
+            # Wave M M-02: the per-order mixed-wallet chain
+            # filter().annotate().annotate().aggregate(_s=...) — these scenarios
+            # have no mixed order, so the extra is 0.
+            (qs.annotate.return_value.annotate.return_value
+             .aggregate.return_value) = {"_s": Decimal("0")}
             # Contract C: qs.filter(payment_status=PAID) must return qs so that
             # split_revenue_for_orders sees the correctly configured queryset mock.
             qs.filter.return_value = qs

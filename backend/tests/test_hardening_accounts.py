@@ -209,7 +209,7 @@ class DriverProofPhotoBypassTests(SimpleTestCase):
             {"status": "delivered", "proof_photo_url": "https://evil.example/x.jpg"},
             format="json",
         )
-        with patch("accounts.views._order_delivery_code", return_value="1234"), \
+        with patch("accounts.views._order_delivery_code", return_value=("code", "1234")), \
              patch("django.utils.timezone.now", return_value=MagicMock()):
             resp = self.view(self._authed(req, customer), job_id=1)
 
@@ -236,7 +236,7 @@ class DriverProofPhotoBypassTests(SimpleTestCase):
             format="multipart",
         )
         with patch("accounts.ride_views._save_driver_doc_image", return_value="https://app/media/proof.jpg"), \
-             patch("accounts.views._order_delivery_code", return_value="1234"), \
+             patch("accounts.views._order_delivery_code", return_value=("code", "1234")), \
              patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}), \
              patch("accounts.views._batch_business_types", return_value={}), \
              patch("django.utils.timezone.now", return_value=MagicMock()):

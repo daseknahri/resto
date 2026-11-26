@@ -664,6 +664,11 @@ def _build_subquery_mocks(has_ledger, ledger_wallet, ledger_cash, legacy_wallet,
     order_qs.values.return_value = MagicMock()  # orders_values_qs
     order_qs.exclude.return_value.aggregate.return_value = legacy_agg
     order_qs.aggregate.return_value = legacy_agg
+    # Wave M M-02: the per-order mixed-wallet chain
+    # filter().annotate().annotate().aggregate(_s=...) — these scenarios have
+    # no mixed order, so the extra is 0.
+    (order_qs.filter.return_value.annotate.return_value.annotate.return_value
+     .aggregate.return_value) = {"_s": Decimal("0")}
 
     return order_qs, MockPayment
 

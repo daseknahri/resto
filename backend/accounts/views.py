@@ -4,6 +4,7 @@ import logging
 import math
 import secrets
 import time
+from datetime import datetime, timezone
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -5822,6 +5823,19 @@ class MarketplacePlaceOrderView(APIView):
                         # then fall back to the open pool.
                         from accounts.dispatch import start_dispatch
                         start_dispatch(_job)
+                        # Wave M M-04: stamp the food-ready time at job creation
+                        # (same reason as the storefront checkout — the owner
+                        # status-view mirror never runs for an auto-accepted
+                        # order, so without this the driver gets no ready time).
+                        try:
+                            from accounts.delivery_service import set_delivery_job_food_ready
+                            from menu.views import _delivery_job_ready_minutes as _djrm
+                            set_delivery_job_food_ready(
+                                tenant.id, order.order_number,
+                                _djrm(order, tenant),
+                            )
+                        except Exception:
+                            pass
                     except Exception:
                         # D G3: log, don't swallow — a silent failure strands the order
                         # (see _backfill_missing_jobs in sweep_delivery_jobs, which
@@ -7504,7 +7518,12 @@ class DriverJobAcceptView(APIView):
             job.assigned_at = _now
             job.offered_to = None
             job.offer_expires_at = None
-            job.save(update_fields=["driver", "status", "assigned_at", "offered_to", "offer_expires_at"])
+            # Wave M M-10: a fresh accept resets the owner-alert latch. The
+            # (c) escalation only fires when owner_alerted_at is None, so
+            # without this a job that was already escalated once could idle
+            # past the SLA after a re-accept and never alert the owner again.
+            job.owner_alerted_at = None
+            job.save(update_fields=["driver", "status", "assigned_at", "offered_to", "offer_expires_at", "owner_alerted_at"])
 
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
@@ -7563,21 +7582,43 @@ def _mark_order_out_for_delivery(job) -> None:
         pass
 
 
-def _order_delivery_code(job) -> str:
+# Wave M M-13: the delivery-code feature landed with menu migration 0041
+# (generated 2026-06-05). Orders created before that date never got a code.
+_LEGACY_DELIVERY_CODE_CUTOFF = datetime(2026, 6, 5, tzinfo=timezone.utc)
+
+
+def _order_delivery_code(job):
     """Read the proof-of-delivery code from the job's underlying order (tenant schema).
-    Returns "" if none was issued (legacy orders) — caller then skips the code check."""
+
+    Returns ("code", code) when a code was issued, ("legacy", None) ONLY for a
+    positively-identified legacy order (found, no code, created before the
+    feature landed 2026-06-05), and ("error", None) for everything else —
+    missing tenant/order, a post-feature order with no code, or any lookup
+    failure. The caller FAILS CLOSED on ("error", None): a lookup error must
+    never silently skip the anti-fraud code check (the old "" return did).
+    """
     try:
         from tenancy.models import Tenant as _T
         from django_tenants.utils import schema_context
         from menu.models import Order as _O
         tenant = _T.objects.filter(id=job.tenant_id).first()
         if not tenant:
-            return ""
+            return ("error", None)
         with schema_context(tenant.schema_name):
-            o = _O.objects.filter(order_number=job.order_number).only("delivery_code").first()
-            return (o.delivery_code or "") if o else ""
+            o = _O.objects.filter(order_number=job.order_number).only(
+                "delivery_code", "created_at"
+            ).first()
+            if o is None:
+                return ("error", None)
+            code = o.delivery_code or ""
+            if code:
+                return ("code", code)
+            created_at = getattr(o, "created_at", None)
+            if created_at is not None and created_at < _LEGACY_DELIVERY_CODE_CUTOFF:
+                return ("legacy", None)
+            return ("error", None)
     except Exception:
-        return ""
+        return ("error", None)
 
 
 def _credit_driver_earnings(job) -> None:
@@ -7878,16 +7919,13 @@ class DriverJobStatusUpdateView(APIView):
                     )
                 # Photo proof (Pillow-validated + saved BEFORE the lock — see the pre-lock
                 # block): a driver who can't get the customer code can leave-at-door with a
-                # photo, and its presence bypasses the code requirement. Surface a bad-photo
-                # 400 at exactly the position the upload occupied today (after the transition
-                # + approval checks, before the code check) so response ordering is unchanged.
+                # photo, and its presence bypasses the code requirement.
                 # _has_photo is set SOLELY from a saved FILE (never a client-supplied URL).
-                if _proof_photo_error is not None:
-                    return Response(
-                        {"detail": _proof_photo_error, "code": "bad_proof_photo"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                # Wave M M-13: the bad-photo 400 moved AFTER the code check — a correct
+                # code completes the delivery despite an invalid photo upload; the photo
+                # error only blocks when no code verified the delivery.
                 _has_photo = bool(_proof_photo_url)
+                _code_verified = False
 
                 # Proof-of-delivery code, with a brute-force lockout.
                 # Skip the code check when the driver provides a photo instead.
@@ -7897,23 +7935,45 @@ class DriverJobStatusUpdateView(APIView):
                             {"detail": "Too many incorrect codes — try again shortly.", "code": "code_locked"},
                             status=status.HTTP_429_TOO_MANY_REQUESTS,
                         )
-                    _expected_code = _order_delivery_code(job)
-                    _provided_code = str(request.data.get("code") or "").strip()
-                    if _expected_code and _provided_code != _expected_code:
-                        job.code_attempts = (job.code_attempts or 0) + 1
-                        _f = ["code_attempts"]
-                        if job.code_attempts >= 5:
-                            # Lock for 5 min but DON'T reset the counter — resetting lets an
-                            # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
-                            # only on a correct code (the DELIVERED branch below).
-                            job.code_locked_until = now + _td(minutes=5)
-                            _f.append("code_locked_until")
-                        job.save(update_fields=_f)
-                        return Response(
-                            {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
-                             "code": "bad_delivery_code"},
-                            status=status.HTTP_400_BAD_REQUEST,
+                    _code_status, _expected_code = _order_delivery_code(job)
+                    if _code_status == "error":
+                        # Fail CLOSED: the code could not be read (lookup error,
+                        # missing order, or a post-feature order with no code).
+                        # Completing without a code would bypass the anti-fraud gate.
+                        logger.error(
+                            "delivery code unavailable job_id=%s order_number=%s",
+                            job.id, job.order_number,
                         )
+                        return Response(
+                            {"detail": "Could not verify the delivery code. Try again shortly.",
+                             "code": "delivery_code_unavailable"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        )
+                    if _code_status == "code":
+                        _provided_code = str(request.data.get("code") or "").strip()
+                        if _provided_code != _expected_code:
+                            job.code_attempts = (job.code_attempts or 0) + 1
+                            _f = ["code_attempts"]
+                            if job.code_attempts >= 5:
+                                # Lock for 5 min but DON'T reset the counter — resetting lets an
+                                # attacker cycle 4-guesses-per-lock indefinitely. It's cleared
+                                # only on a correct code (the DELIVERED branch below).
+                                job.code_locked_until = now + _td(minutes=5)
+                                _f.append("code_locked_until")
+                            job.save(update_fields=_f)
+                            return Response(
+                                {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
+                                 "code": "bad_delivery_code"},
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                        _code_verified = True
+                    # ("legacy", None): no code was ever issued — skip the check.
+
+                if _proof_photo_error is not None and not _code_verified:
+                    return Response(
+                        {"detail": _proof_photo_error, "code": "bad_proof_photo"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             if new_status == DeliveryJob.Status.FAILED:
                 _reason = str(request.data.get("failure_reason") or "").strip()
@@ -10204,6 +10264,18 @@ class CustomerTopUpIntentView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         customer_id = customer.id
 
+        # Wave M M-08: "no verified phone -> no wallet" applies at intent time
+        # too — an unverified customer must not mint a Stripe Checkout session
+        # for a top-up that the service layer would then refuse to credit.
+        # Same 403 + code as the loyalty redeem gate (menu/views.py).
+        # The webhook keeps require_verified=False: it only ever credits money
+        # Stripe already took, so it must not refuse a paid session.
+        if not getattr(customer, "phone_verified", False):
+            return Response(
+                {"detail": "Verify your phone number to use your wallet.", "code": "phone_unverified"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from decimal import Decimal as _D, InvalidOperation as _IO
         raw = str(request.data.get("amount") or "").strip()
         try:
@@ -10310,7 +10382,8 @@ class CustomerTopUpWebhookView(APIView):
         # isn't installed.
         if not webhook_secret and not settings.DEBUG:
             logger.error(
-                "Stripe webhook rejected: PSP_TOPUP_ENABLED but PSP_STRIPE_WEBHOOK_SECRET is unset"
+                "TOPUP_WEBHOOK_FAILED status=503: PSP_TOPUP_ENABLED but "
+                "PSP_STRIPE_WEBHOOK_SECRET is unset"
             )
             return Response(
                 {"ok": False, "detail": "Webhook signing secret not configured."},
@@ -10321,12 +10394,14 @@ class CustomerTopUpWebhookView(APIView):
             import stripe as _stripe
             _stripe.api_key = settings.PSP_STRIPE_SECRET_KEY
         except ImportError:
+            payments_logger.error("TOPUP_WEBHOOK_FAILED status=503: stripe SDK not installed")
             return Response({"ok": False}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         if webhook_secret:
             try:
                 event = _stripe.Webhook.construct_event(payload, sig, webhook_secret)
             except (_stripe.error.SignatureVerificationError, ValueError):
+                payments_logger.error("TOPUP_WEBHOOK_FAILED status=400: signature verification failed")
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # DEBUG-only local-testing path: no signing secret configured, so accept raw JSON.
@@ -10335,6 +10410,7 @@ class CustomerTopUpWebhookView(APIView):
             try:
                 event = _json.loads(payload)
             except Exception:
+                payments_logger.error("TOPUP_WEBHOOK_FAILED status=400: unsigned payload is not valid JSON")
                 return Response({"ok": False}, status=status.HTTP_400_BAD_REQUEST)
 
         event_type = event.get("type")
@@ -10411,6 +10487,9 @@ class CustomerTopUpWebhookView(APIView):
                 amount_value = None
 
         if not customer_id or amount_value in (None, "") or not event_id:
+            payments_logger.error(
+                "TOPUP_WEBHOOK_FAILED status=400: missing metadata event_id=%s", event_id
+            )
             return Response(
                 {"ok": False, "detail": "Missing metadata."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -10438,6 +10517,10 @@ class CustomerTopUpWebhookView(APIView):
                 require_verified=False,
             )
         except WalletError:
+            payments_logger.error(
+                "TOPUP_WEBHOOK_FAILED status=422: wallet credit failed event_id=%s customer_id=%s",
+                event_id, customer_id,
+            )
             return Response(
                 {"ok": False, "detail": "Wallet credit failed."},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -10445,8 +10528,8 @@ class CustomerTopUpWebhookView(APIView):
         except Customer.DoesNotExist:
             # Gap-hunt 2026-11-22 (W P1-7): a deleted customer used to 500 here, so
             # Stripe retried forever with no dead-letter. Fail clean instead.
-            payments_logger.warning(
-                "Stripe webhook customer gone event_id=%s customer_id=%s",
+            payments_logger.error(
+                "TOPUP_WEBHOOK_FAILED status=422: customer gone event_id=%s customer_id=%s",
                 event_id, customer_id,
             )
             return Response(

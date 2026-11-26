@@ -10,6 +10,13 @@ default applies when unset) and sends an escalation Web Push to the subscribed
 owner/manager devices — "Order #N has been waiting X min — confirm it" —
 deep-linking to OwnerOrders filtered to that order (``?q=order_number``).
 
+Wave M M-22: a second pass auto-cancels PENDING orders that were ALREADY
+escalated and are still unconfirmed past ``Profile.pending_auto_cancel_minutes``
+(0 = OFF, the default). The push always fires first — an order is only
+cancelled after it has been escalated — and the cancel reuses the idempotent
+``refund_and_cancel_delivery_order`` path (refund + loyalty reverse + restock).
+
+
 Idempotency: each order is stamped with ``Order.sla_notified_at`` on first
 escalation and the query excludes already-stamped rows, so every stale order
 escalates at most once. A missed run simply widens the lookback; a duplicate run
@@ -48,7 +55,9 @@ MIN_PENDING_SLA_MINUTES = 1
 class Command(BaseCommand):
     help = (
         "Escalate stale PENDING orders: push the owner when an order has waited "
-        "longer than Profile.pending_sla_minutes without being confirmed."
+        "longer than Profile.pending_sla_minutes without being confirmed; then "
+        "auto-refund & cancel already-escalated orders past "
+        "Profile.pending_auto_cancel_minutes (0 = OFF)."
     )
 
     def add_arguments(self, parser):
@@ -78,6 +87,7 @@ class Command(BaseCommand):
         ).exclude(schema_name="public").select_related("profile")
 
         total_escalated = 0
+        total_cancelled = 0
 
         for tenant in tenants:
             try:
@@ -137,6 +147,40 @@ class Command(BaseCommand):
                                 order.order_number, tenant.slug,
                             )
                         total_escalated += 1
+
+                # Wave M M-22: auto-cancel pass — only orders that were ALREADY
+                # escalated (sla_notified_at set, by this run or an earlier one),
+                # so the owner was pushed before money moves. The escalation
+                # query above excludes stamped rows, so this is a separate pass.
+                # refund_and_cancel_delivery_order is idempotent: a replay (or
+                # an overlapping run) replays instead of double-refunding.
+                auto_cancel = getattr(profile, "pending_auto_cancel_minutes", None) or 0
+                if not dry_run and auto_cancel:
+                    cancel_cutoff = now - timedelta(minutes=auto_cancel)
+                    with schema_context(tenant.schema_name):
+                        to_cancel = list(
+                            Order.objects
+                            .filter(
+                                status=Order.Status.PENDING,
+                                sla_notified_at__isnull=False,
+                                created_at__lte=cancel_cutoff,
+                            )
+                            .order_by("created_at")[:200]
+                        )
+                        for order in to_cancel:
+                            try:
+                                from menu.views import refund_and_cancel_delivery_order
+                                if refund_and_cancel_delivery_order(order, tenant.id):
+                                    total_cancelled += 1
+                                    self.stdout.write(
+                                        f"  ✕ {tenant.slug} | {order.order_number} "
+                                        f"(auto-cancelled after {auto_cancel} min unconfirmed)"
+                                    )
+                            except Exception:
+                                logger.exception(
+                                    "sla auto-cancel failed for order %s (tenant %s)",
+                                    order.order_number, tenant.slug,
+                                )
             except Exception:
                 logger.exception(
                     "escalate_stale_pending_orders: error processing tenant %s", tenant.slug
@@ -144,5 +188,8 @@ class Command(BaseCommand):
 
         label = "would escalate" if dry_run else "escalated"
         self.stdout.write(
-            self.style.SUCCESS(f"\nDone. {total_escalated} order(s) {label}.")
+            self.style.SUCCESS(
+                f"\nDone. {total_escalated} order(s) {label}, "
+                f"{total_cancelled} auto-cancelled."
+            )
         )

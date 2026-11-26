@@ -209,6 +209,49 @@ class SendDailySummaryZeroOrdersTests(SimpleTestCase):
         self.assertIn("500.00", out)
 
 
+class SendDailySummaryFailureTests(SimpleTestCase):
+    """Wave M M-23: a failed run clears the claimed key so the next run re-sends."""
+
+    def _run(self, tenant, summary, *, push_side_effect=None):
+        stdout = io.StringIO()
+        with (
+            patch("menu.management.commands.send_daily_summary.Tenant") as MockTenant,
+            patch("menu.management.commands.send_daily_summary.cache") as mock_cache,
+            patch("menu.management.commands.send_daily_summary.schema_context") as mock_ctx,
+            patch("menu.management.commands.send_daily_summary._compute_summary", return_value=summary),
+            patch("menu.management.commands.send_daily_summary._tenant_yesterday",
+                  return_value=(MagicMock(), MagicMock(), MagicMock())),
+            patch("menu.management.commands.send_daily_summary._send_owner_push") as mock_push,
+            patch("menu.management.commands.send_daily_summary._send_owner_email"),
+        ):
+            MockTenant.objects.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
+            mock_cache.add.return_value = True
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+            if push_side_effect is not None:
+                mock_push.side_effect = push_side_effect
+
+            from django.core.management import call_command
+            call_command("send_daily_summary", stdout=stdout)
+        return stdout.getvalue(), mock_cache, mock_push
+
+    def test_send_failure_clears_cache_key_and_next_run_resends(self):
+        tenant = MagicMock()
+        tenant.slug = "cafe-flaky"
+        tenant.schema_name = "cafe_flaky"
+        summary = {
+            "order_count": 4, "total_revenue": 120.0,
+            "wallet_revenue": 20.0, "cash_revenue": 100.0, "top_dishes": [],
+        }
+        # Run 1: the push raises mid-delivery → key cleared.
+        _, mock_cache, mock_push = self._run(
+            tenant, summary, push_side_effect=Exception("push down"))
+        mock_cache.delete.assert_called_once()
+        # Run 2: the push works → the digest is sent (not skipped as a duplicate).
+        _, _, mock_push2 = self._run(tenant, summary)
+        mock_push2.assert_called_once()
+
+
 class SendDailySummaryIdempotencyTests(SimpleTestCase):
     """Re-running the command the same day must not double-send."""
 

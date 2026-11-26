@@ -364,6 +364,22 @@ def write_beat_heartbeat():
     cache.set("celery_beat_heartbeat", _now().isoformat(), timeout=300)
 
 
+@shared_task(name="cron.write_worker_heartbeat", acks_late=True, **_CRON_RETRY)
+def write_worker_heartbeat():
+    """Wave M M-19: prove a WORKER consumes the cron queue, not just that Beat
+    runs. Beat dispatches this task every 60s; the worker executes it and stamps
+    ``celery_worker_heartbeat``. /api/health/ requires the stamp fresh (<120s):
+    a dead worker (Beat alive, queue backing up) used to be invisible because
+    the beat heartbeat alone said ok. Same cache + timeout as the beat
+    heartbeat (300s, well above the 60s cadence and the 120s staleness
+    threshold). Routes to the cron queue via the CELERY_TASK_ROUTES cron.*
+    rule, like every other cron.* task.
+    """
+    from django.core.cache import cache
+    from django.utils.timezone import now as _now
+    cache.set("celery_worker_heartbeat", _now().isoformat(), timeout=300)
+
+
 # ── Scheduled cron / sweep tasks (RISK ASYNC-2) ──────────────────────────────────
 # Each Celery Beat entry dispatches a DEDICATED named "cron.<command>" task rather than
 # one generic run_management_command guarded by a parallel allowlist. Consequences:
@@ -434,6 +450,14 @@ def sweep_delivery_jobs():
 @shared_task(name="cron.reconcile_driver_earnings", acks_late=True, **_CRON_RETRY)
 def reconcile_driver_earnings():
     _run_command("reconcile_driver_earnings")
+
+
+@shared_task(name="cron.reconcile_profile_denorms", acks_late=True, **_CRON_RETRY)
+def reconcile_profile_denorms():
+    # Wave M M-17: hourly recompute of the denormalized Profile mirrors
+    # (rating badge, promo badge, closure dates — RISK DATA-5). Fix-only by
+    # design: the recomputes are idempotent, so re-running is the safe check.
+    _run_command("reconcile_profile_denorms")
 
 
 @shared_task(name="cron.reconcile_wallet_balances", acks_late=True, **_CRON_RETRY)

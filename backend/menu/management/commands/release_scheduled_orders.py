@@ -52,6 +52,7 @@ class Command(BaseCommand):
         from menu.views import (
             _SCHEDULE_RELEASE_LEAD_MINUTES,
             _broadcast_order_change,
+            _delivery_job_ready_minutes,
             _notify_restaurant_new_order,
             _placement_eta_minutes,
         )
@@ -179,6 +180,17 @@ class Command(BaseCommand):
                                 )
                                 from accounts.dispatch import start_dispatch
                                 start_dispatch(_job)
+                                # Wave M M-04: stamp the food-ready time at job
+                                # creation — the release ETA was just stamped on
+                                # the order, so the driver gets it from the start.
+                                try:
+                                    from accounts.delivery_service import set_delivery_job_food_ready
+                                    set_delivery_job_food_ready(
+                                        tenant.id, order.order_number,
+                                        _delivery_job_ready_minutes(order, tenant),
+                                    )
+                                except Exception:
+                                    pass
                             except Exception:
                                 logger.exception("release: delivery job failed for %s", order.order_number)
 

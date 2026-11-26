@@ -156,6 +156,136 @@ class SetFoodReadyTests(SimpleTestCase):
         mock_dj.objects.select_for_update.assert_not_called()
 
 
+class SetFoodReadyAnchorTests(SimpleTestCase):
+    """Wave M M-05: set_delivery_job_food_ready must not re-anchor the ready
+    clock on a routine status tap / note edit (previous == new)."""
+
+    def _job(self, *, ready_at):
+        job = SimpleNamespace(is_terminal=False, food_ready_at=ready_at, save=MagicMock())
+        return job
+
+    def _run(self, job, minutes, previous):
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()), \
+                patch("accounts.models.DeliveryJob") as mock_dj:
+            mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+            from accounts.delivery_service import set_delivery_job_food_ready
+            return set_delivery_job_food_ready(1, "ORD-1", minutes, previous_minutes=previous)
+
+    def test_same_minutes_keeps_anchor(self):
+        from django.utils import timezone
+        stamp = timezone.now()
+        job = self._job(ready_at=stamp)
+        self._run(job, 20, previous=20)
+        job.save.assert_not_called()
+        self.assertEqual(job.food_ready_at, stamp)
+
+    def test_changed_minutes_restamps(self):
+        from django.utils import timezone
+        stamp = timezone.now() - timezone.timedelta(minutes=10)
+        job = self._job(ready_at=stamp)
+        self._run(job, 30, previous=20)
+        job.save.assert_called_once()
+        self.assertNotEqual(job.food_ready_at, stamp)
+
+    def test_no_anchor_stamps_even_when_minutes_unchanged(self):
+        job = self._job(ready_at=None)
+        self._run(job, 20, previous=20)
+        job.save.assert_called_once()
+        self.assertIsNotNone(job.food_ready_at)
+
+    def test_none_to_none_with_anchor_keeps_anchor(self):
+        from django.utils import timezone
+        stamp = timezone.now()
+        job = self._job(ready_at=stamp)
+        self._run(job, None, previous=None)
+        job.save.assert_not_called()
+        self.assertEqual(job.food_ready_at, stamp)
+
+
+class ShouldRestampOnRedispatchTests(SimpleTestCase):
+    """Wave M M-14(b): redispatch re-stamps the ready clock only when the ETA
+    actually changed (or no ready time exists yet)."""
+
+    def _order(self, *, eta=None, anchor=None):
+        return SimpleNamespace(estimated_ready_minutes=eta, estimated_ready_at=anchor)
+
+    def _job(self, *, ready_at):
+        return SimpleNamespace(food_ready_at=ready_at)
+
+    def test_no_ready_time_restamps(self):
+        from accounts.delivery_service import should_restamp_food_ready_on_redispatch
+        self.assertTrue(should_restamp_food_ready_on_redispatch(
+            self._order(eta=20), self._job(ready_at=None)))
+
+    def test_matching_anchors_do_not_restamp(self):
+        from django.utils import timezone
+        from accounts.delivery_service import should_restamp_food_ready_on_redispatch
+        stamp = timezone.now()
+        self.assertFalse(should_restamp_food_ready_on_redispatch(
+            self._order(eta=20, anchor=stamp),
+            self._job(ready_at=stamp + timezone.timedelta(seconds=5))))
+
+    def test_edited_eta_restamps(self):
+        from django.utils import timezone
+        from accounts.delivery_service import should_restamp_food_ready_on_redispatch
+        stamp = timezone.now()
+        self.assertTrue(should_restamp_food_ready_on_redispatch(
+            self._order(eta=45, anchor=stamp + timezone.timedelta(minutes=25)),
+            self._job(ready_at=stamp)))
+
+    def test_eta_set_but_no_order_anchor_restamps(self):
+        from django.utils import timezone
+        from accounts.delivery_service import should_restamp_food_ready_on_redispatch
+        self.assertTrue(should_restamp_food_ready_on_redispatch(
+            self._order(eta=20, anchor=None),
+            self._job(ready_at=timezone.now())))
+
+    def test_no_explicit_eta_does_not_restamp(self):
+        from django.utils import timezone
+        from accounts.delivery_service import should_restamp_food_ready_on_redispatch
+        self.assertFalse(should_restamp_food_ready_on_redispatch(
+            self._order(eta=None, anchor=None),
+            self._job(ready_at=timezone.now())))
+
+
+class BulkConfirmMirrorTests(SimpleTestCase):
+    """Wave M M-04: bulk confirm stamps food_ready_at on the new delivery job."""
+
+    def setUp(self):
+        from menu.views import OwnerOrderBulkStatusView
+        self.factory = APIRequestFactory()
+        self.view = OwnerOrderBulkStatusView.as_view()
+
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    def test_bulk_confirm_delivery_mirrors_ready_minutes(self, _mock_atomic):
+        import contextlib
+        from decimal import Decimal
+        order = SimpleNamespace(
+            order_number="ORD-B1", status="confirmed", fulfillment_type="delivery",
+            estimated_ready_minutes=None, customer=None, customer_name="A",
+            total=Decimal("50"), currency="MAD", wallet_amount_paid=Decimal("0"),
+            handled_by_user_id=None,
+            save=MagicMock(), refresh_from_db=MagicMock(),
+        )
+        req = self.factory.post("/api/owner/orders/bulk-status/",
+                                {"order_ids": [1], "status": "confirmed"}, format="json")
+        force_authenticate(req, user=MagicMock(is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1, name="R")
+        with patch("menu.views._can_edit_tenant_order", return_value=True), \
+                patch("menu.views.Order.objects") as om, \
+                patch("menu.views._broadcast_order_change") as bc, \
+                patch("accounts.tasks.enqueue"), \
+                patch("accounts.tasks.order_status_email"), \
+                patch("accounts.delivery_service.set_delivery_job_food_ready") as mirror:
+            om.select_for_update.return_value = om
+            om.filter.return_value = om
+            om.select_related.return_value = om
+            om.__getitem__.return_value = [order]
+            resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mirror.assert_called_once_with(1, "ORD-B1", 20)
+
+
 class MirrorReadyMinutesTests(SimpleTestCase):
     """menu.views._delivery_job_ready_minutes (Wave L L-03)."""
 
@@ -198,6 +328,20 @@ class MirrorReadyMinutesTests(SimpleTestCase):
         from menu.views import _delivery_job_ready_minutes
         self.assertIsNone(_delivery_job_ready_minutes(
             self._order(eta=None, status="pending"), self._tenant()))
+
+    def test_ready_with_eta_is_now(self):
+        """Wave M M-05(a): READY with a stale explicit ETA is 0, not the ETA —
+        the status beats the stale number."""
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=25, status="ready"), self._tenant()), 0)
+
+    def test_out_for_delivery_with_eta_is_now(self):
+        """Wave M M-05(a): same for OUT_FOR_DELIVERY."""
+        from menu.views import _delivery_job_ready_minutes
+        self.assertEqual(_delivery_job_ready_minutes(
+            self._order(eta=40, status="out_for_delivery"), self._tenant()), 0)
+
 
 
 class OwnerDeliveryActionGuardTests(SimpleTestCase):

@@ -99,7 +99,43 @@ def complete_delivery_job_for_order(tenant_id, order_number):
     return job
 
 
-def set_delivery_job_food_ready(tenant_id, order_number, minutes):
+# Sentinel: "no previous-minutes value was supplied" (distinct from None, which
+# is a real answer — "no timing applies"). Creation sites pass no previous value
+# and always stamp; the owner status-view mirror passes the pre-PATCH answer so a
+# status-only tap / note edit can't re-anchor the ready time (Wave M M-05).
+_UNSET = object()
+
+
+def should_restamp_food_ready_on_redispatch(order, job) -> bool:
+    """Wave M M-14(b): after a FAILED job is re-dispatched, should the mirror
+    re-stamp ``food_ready_at``?
+
+    While the job was FAILED the mirror no-op'd (terminal), so an ETA edit made
+    while the job awaited a decision never reached the job. Re-stamp when:
+      * the job has no ready time yet, or
+      * the order carries an explicit ETA whose absolute anchor
+        (``order.estimated_ready_at``, re-anchored on every ETA write) no longer
+        matches the job's anchor — the ETA was edited while FAILED — or the
+        order never had an absolute anchor to compare against.
+    Otherwise (same ETA, anchors agree within 30s — they are stamped seconds
+    apart at confirm) the original anchor stands: a redispatch with no
+    intervening ETA edit must not push the ready time forward.
+    """
+    if getattr(job, "food_ready_at", None) is None:
+        return True
+    if getattr(order, "estimated_ready_minutes", None) is None:
+        return False
+    order_anchor = getattr(order, "estimated_ready_at", None)
+    if order_anchor is None:
+        return True
+    try:
+        gap = abs((order_anchor - job.food_ready_at).total_seconds())
+    except Exception:
+        return True
+    return gap > 30
+
+
+def set_delivery_job_food_ready(tenant_id, order_number, minutes, previous_minutes=_UNSET):
     """Record when the food will be ready on the order's active delivery job.
 
     Called when the owner confirms a delivery order and enters a prep ETA, so the
@@ -107,6 +143,12 @@ def set_delivery_job_food_ready(tenant_id, order_number, minutes):
     timing). Stores an absolute ``food_ready_at`` = now + ``minutes``; a ``minutes``
     of None/blank clears it. Race-safe; a no-op on a terminal job. Returns the job
     (or None). Best-effort — callers wrap in try/except.
+
+    Anchor-aware (Wave M M-05): when ``previous_minutes`` is given (the owner
+    status-view mirror passes the pre-PATCH answer), the stamp is SKIPPED when
+    the ETA value is unchanged AND the job already has a ``food_ready_at`` — a
+    status-only tap or a note edit must not move an existing anchor. Creation
+    sites pass no previous value and always stamp (the job is fresh).
     """
     from datetime import timedelta
     from django.utils import timezone
@@ -127,6 +169,15 @@ def set_delivery_job_food_ready(tenant_id, order_number, minutes):
             .first()
         )
         if job is None or job.is_terminal:
+            return job
+        # M-05: unchanged ETA + an existing anchor → keep the anchor. The
+        # mirror's input is a duration ("20 min from when the owner said so");
+        # re-stamping it on every PATCH would rebase the ready time on every tap.
+        if (
+            previous_minutes is not _UNSET
+            and previous_minutes == minutes
+            and job.food_ready_at is not None
+        ):
             return job
         job.food_ready_at = ready_at
         job.save(update_fields=["food_ready_at"])

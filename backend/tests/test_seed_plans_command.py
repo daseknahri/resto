@@ -2,7 +2,8 @@
 Unit tests for tenancy.management.commands.seed_plans.
 
 The command:
-  1. Upserts starter / growth / pro plans via Plan.objects.update_or_create
+  1. Creates starter / growth / pro plans via Plan.objects.get_or_create
+     (create-only — existing plans are never overwritten, Wave M M-06)
   2. If --with-demo: also creates/gets a superadmin user, a tenant, and a domain
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
@@ -23,9 +24,9 @@ def _plan(code):
 
 
 def _plan_mgr():
-    """Mock Plan.objects whose update_or_create returns (plan, True)."""
+    """Mock Plan.objects whose get_or_create returns (plan, True)."""
     mgr = MagicMock()
-    mgr.update_or_create.side_effect = lambda code, defaults: (_plan(code), True)
+    mgr.get_or_create.side_effect = lambda code, defaults: (_plan(code), True)
     return mgr
 
 
@@ -53,26 +54,42 @@ class SeedPlansWithoutDemoTests(SimpleTestCase):
 
     def test_upserts_starter_plan(self):
         mock_plan, _ = self._run()
-        codes = [c.kwargs["code"] for c in mock_plan.objects.update_or_create.call_args_list]
+        codes = [c.kwargs["code"] for c in mock_plan.objects.get_or_create.call_args_list]
         self.assertIn("starter", codes)
 
     def test_upserts_growth_plan(self):
         mock_plan, _ = self._run()
-        codes = [c.kwargs["code"] for c in mock_plan.objects.update_or_create.call_args_list]
+        codes = [c.kwargs["code"] for c in mock_plan.objects.get_or_create.call_args_list]
         self.assertIn("growth", codes)
 
     def test_upserts_pro_plan(self):
         mock_plan, _ = self._run()
-        codes = [c.kwargs["code"] for c in mock_plan.objects.update_or_create.call_args_list]
+        codes = [c.kwargs["code"] for c in mock_plan.objects.get_or_create.call_args_list]
         self.assertIn("pro", codes)
 
     def test_exactly_three_plans_upserted(self):
         mock_plan, _ = self._run()
-        self.assertEqual(mock_plan.objects.update_or_create.call_count, 3)
+        self.assertEqual(mock_plan.objects.get_or_create.call_count, 3)
 
     def test_output_mentions_seeding_complete(self):
         _, out = self._run()
         self.assertIn("complete", out.lower())
+
+    def test_existing_plan_is_never_overwritten(self):
+        """Wave M M-06: get_or_create reports created=False for an existing
+        plan and the command does not call update_or_create / save on it — an
+        owner edit (e.g. Growth activated) survives a re-run."""
+        existing = _plan("growth")
+        mgr = MagicMock()
+        mgr.get_or_create.side_effect = lambda code, defaults: (
+            (existing, False) if code == "growth" else (_plan(code), True)
+        )
+        with patch("tenancy.management.commands.seed_plans.Plan") as mock_plan:
+            mock_plan.objects = mgr
+            call_command("seed_plans")
+        self.assertEqual(mgr.get_or_create.call_count, 3)
+        mgr.update_or_create.assert_not_called()
+        existing.save.assert_not_called()
 
     def test_output_mentions_plans_ensured(self):
         _, out = self._run()
@@ -135,7 +152,7 @@ class SeedPlansWithDemoTests(SimpleTestCase):
 
     def test_plans_still_upserted(self):
         ctx = self._run()
-        self.assertEqual(ctx["mock_plan"].objects.update_or_create.call_count, 3)
+        self.assertEqual(ctx["mock_plan"].objects.get_or_create.call_count, 3)
 
     def test_get_user_model_called(self):
         ctx = self._run()

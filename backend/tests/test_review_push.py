@@ -3,11 +3,19 @@ Tests for accounts.push.send_review_request_sync — the post-order review nudge
 
 Unit-level (SimpleTestCase + mocks — no real DB, no real Web Push).
 """
+from contextlib import contextmanager
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
+from django.core.management import call_command
 from django.test import SimpleTestCase
 
 from accounts.push import send_review_request_sync
+
+
+@contextmanager
+def _noop_cm(*args, **kwargs):
+    yield
 
 
 def _sub(sid=1):
@@ -65,3 +73,54 @@ class SendReviewRequestSyncTests(SimpleTestCase):
         n = send_review_request_sync(42, "Resto", "ORD-4")
         self.assertEqual(n, 0)  # "gone" is not counted as delivered
         qs.delete.assert_called_once()  # the dead subscription was deleted
+
+
+# ── Wave M M-16: the command claims before sending ───────────────────────────
+
+class SendReviewPromptsCommandTests(SimpleTestCase):
+    """Two overlapping runs must nudge each order exactly once."""
+
+    def _run(self, *, orders, claim_results=(1,), dry_run=False):
+        from tenancy.models import Tenant as _T  # noqa: F401  (imported for patch target)
+        tenant = MagicMock()
+        tenant.id = 1
+        tenant.schema_name = "resto1"
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        with patch("menu.management.commands.send_review_prompts.Tenant") as TM, \
+                patch("menu.management.commands.send_review_prompts.schema_context", _noop_cm), \
+                patch("menu.models.Order") as OM, \
+                patch("accounts.push.send_review_request_sync") as send:
+            TM.LifecycleStatus.ACTIVE = "active"
+            TM.objects.filter.return_value.exclude.return_value = [tenant]
+            OM.Status.COMPLETED = "completed"
+            OM.objects.filter.return_value.only.return_value.__getitem__.return_value = orders
+            OM.objects.filter.return_value.update.side_effect = list(claim_results)
+            send.return_value = 1
+            out = StringIO()
+            args = ["send_review_prompts"]
+            if dry_run:
+                args.append("--dry-run")
+            call_command(*args, stdout=out)
+        return out.getvalue(), send, OM
+
+    def _order(self):
+        o = MagicMock()
+        o.pk = 11
+        o.order_number = "ORD-1"
+        o.customer_id = 42
+        return o
+
+    def test_overlapping_runs_send_exactly_once(self):
+        """Run 1 claims (1) and sends; run 2 loses the claim (0) and sends nothing."""
+        out1, send, OM = self._run(orders=[self._order()], claim_results=(1,))
+        self.assertEqual(send.call_count, 1)
+        out2, send2, _ = self._run(orders=[self._order()], claim_results=(0,))
+        self.assertEqual(send2.call_count, 0)
+        self.assertIn("already nudged by another run", out2)
+
+    def test_dry_run_claims_nothing_and_sends_nothing(self):
+        out, send, OM = self._run(orders=[self._order()], dry_run=True)
+        send.assert_not_called()
+        OM.objects.filter.return_value.update.assert_not_called()
+        self.assertIn("would notify", out)

@@ -86,6 +86,17 @@ describe("DriverPageActiveJob", () => {
     expect(w.text()).toContain('driver.foodReadyIn:{"minutes":12}');
   });
 
+  it("shows 'ready now' when the ready time has already passed (Wave M M-05)", () => {
+    const w = mountHero({ readyEta: { clock: "18:10", mins: 0 } });
+    expect(w.text()).toContain("driver.foodReadyNow");
+    expect(w.text()).not.toContain("driver.foodReadyIn");
+  });
+
+  it("shows 'ready now' for a negative ready ETA too (Wave M M-05)", () => {
+    const w = mountHero({ readyEta: { clock: "18:05", mins: -4 } });
+    expect(w.text()).toContain("driver.foodReadyNow");
+  });
+
   it("shows a 'no estimate yet' state when no ready ETA and not picked up", () => {
     const w = mountHero({ readyEta: null });
     expect(w.text()).toContain("driver.foodReadyUnknown");

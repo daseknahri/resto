@@ -63,7 +63,7 @@ class TopUpIntentThrottleTests(SimpleTestCase):
         factory = APIRequestFactory()
         req = factory.post("/api/customer/topup/intent/", {"amount": "100"}, format="json")
         req.session = {}
-        force_authenticate(req, user=Customer(id=customer_id))
+        force_authenticate(req, user=Customer(id=customer_id, phone_verified=True))
         return view(req)
 
     @override_settings(**_PSP_ON)

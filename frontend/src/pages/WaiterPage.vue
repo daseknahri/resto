@@ -642,7 +642,7 @@
             :seat-group-label="seatGroupLabel"
             @close="settleChooser = null"
             @load-seat-groups="loadSeatGroups(settleChooser)"
-            @pay-cash="payCash(settleChooser)"
+            @pay-cash="payCash(settleChooser, $event)"
             @pay-wallet="payWallet(settleChooser)"
             @pay-cash-for-seat="payCashForSeat(settleChooser, $event)"
             @pay-wallet-for-seat="payWalletForSeat(settleChooser, $event)"
@@ -2588,7 +2588,7 @@ const _resolvedSplitAmount = (order) => {
 };
 
 // Cash: POST to payments endpoint; partial stays open, full settles.
-const payCash = async (order) => {
+const payCash = async (order, mode) => {
   // Same clock-in guard as the new-order entry points (onNewOrderClick /
   // openNewOrderForTable): a not-clocked-in waiter must not take payments
   // either (owner decision). A clocked-in waiter is unaffected.
@@ -2596,7 +2596,11 @@ const payCash = async (order) => {
   if (!(await ensureShiftForAction())) return;
   const intentKey = settleIntentKey.value;
   settleChooser.value = null;
-  const amount = _resolvedSplitAmount(order);
+  // Wave M M-21: mode 'full' (big Cash-full button) posts a FULL settle
+  // (amount null) even if a stale splitAmount is still typed from an earlier
+  // split attempt. No mode (split-section Cash) keeps the typed partial.
+  // _resolvedSplitAmount (incl. its rounding) is untouched.
+  const amount = mode === 'full' ? null : _resolvedSplitAmount(order);
   const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount, intentKey);
   if (!data) {
     if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
