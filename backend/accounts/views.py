@@ -5603,11 +5603,19 @@ class MarketplacePlaceOrderView(APIView):
 
                         # Multi-branch (Phase 3): stamp the restaurant's
                         # branch — payload slug (hub picker) or its default.
-                        # Failure must never block checkout: unstamped.
+                        # Failure must never block checkout: unstamped —
+                        # except an explicit slug naming no active branch
+                        # (R6-17), which is a 400 like the storefront path.
                         try:
                             from menu.order_service import resolve_order_branch as _mkt_resolve_branch
+                            from menu.order_service import BranchUnavailableError as _MktBranchUnavailable
                             _mkt_order_branch = _mkt_resolve_branch(
                                 branch_slug=(request.data.get("branch") or "")
+                            )
+                        except _MktBranchUnavailable:
+                            return Response(
+                                {"detail": "The selected branch is unavailable.", "code": "branch_unavailable"},
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
                         except Exception:
                             _mkt_order_branch = None

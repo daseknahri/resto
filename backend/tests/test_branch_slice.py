@@ -23,10 +23,10 @@ import os
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest import skipUnless
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.db import connection
-from django.test import TransactionTestCase
+from django.test import SimpleTestCase, TransactionTestCase
 from django_tenants.utils import schema_context
 from rest_framework.test import APIRequestFactory
 
@@ -210,10 +210,12 @@ class BranchSliceTests(TransactionTestCase):
                 ).id,
                 default.id,
             )
-            # Unknown slug falls back to default rather than failing.
-            self.assertEqual(
-                resolve_order_branch(branch_slug="nope").id, default.id
-            )
+            # R6-17: unknown slug raises instead of silently falling back
+            # to the default — the order must not land at a location the
+            # customer did not choose.
+            from menu.order_service import BranchUnavailableError
+            with self.assertRaises(BranchUnavailableError):
+                resolve_order_branch(branch_slug="nope")
 
     # ── owner CRUD ────────────────────────────────────────────────────────
 
@@ -315,3 +317,44 @@ class BranchSliceTests(TransactionTestCase):
         self.assertEqual(resp.status_code, 200, getattr(resp, "data", None))
         numbers = [row["order_number"] for row in resp.data["results"]]
         self.assertEqual(numbers, ["BR-LIST-ANNEX"])
+
+# ── R6-17: explicit slug with no active branch raises ──────────────────────────
+# (Mock-level: the decision point is the resolver. The DB precedence test above
+# is updated to expect the raise too.)
+
+
+class ResolveOrderBranchUnavailableTests(SimpleTestCase):
+    """R6-17: an explicit branch slug that matches no ACTIVE branch raises
+    BranchUnavailableError instead of silently falling back to the default.
+    Only a MISSING slug falls through to the table/default chain."""
+
+    def _branch_mock(self, mock_branch, found):
+        mock_branch.objects.filter.return_value.first.return_value = found
+
+    @patch("menu.models.Branch")
+    def test_unknown_slug_raises(self, mock_branch):
+        from menu.order_service import BranchUnavailableError, resolve_order_branch
+        self._branch_mock(mock_branch, None)
+        with self.assertRaises(BranchUnavailableError):
+            resolve_order_branch(branch_slug="nope")
+
+    @patch("menu.models.Branch")
+    def test_inactive_slug_raises(self, mock_branch):
+        # An inactive branch is invisible to the is_active=True filter, so the
+        # resolver sees the same miss as an unknown slug.
+        from menu.order_service import BranchUnavailableError, resolve_order_branch
+        self._branch_mock(mock_branch, None)
+        with self.assertRaises(BranchUnavailableError):
+            resolve_order_branch(branch_slug="closed-branch")
+
+    @patch("menu.models.Branch")
+    def test_no_slug_falls_back_to_default(self, mock_branch):
+        from menu.order_service import resolve_order_branch
+        default = SimpleNamespace(id=1, slug="main")
+        self._branch_mock(mock_branch, default)
+        self.assertEqual(resolve_order_branch().id, 1)
+        # No slug was supplied, so the explicit-slug filter never ran.
+        mock_branch.objects.filter.assert_called_once()
+        self.assertEqual(
+            mock_branch.objects.filter.call_args[1], {"is_default": True}
+        )

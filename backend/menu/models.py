@@ -1636,7 +1636,7 @@ class CommissionStatement(models.Model):
     issued_at = models.DateTimeField(auto_now_add=True)
     # Platform-level user id (accounts.User lives in the public schema) —
     # stored as a bare int, service-layer resolved, per the codebase's
-    # cross-schema reference pattern (cf. StaffBranch / CustomerOrderRef).
+    # cross-schema reference pattern (cf. CustomerOrderRef).
     issued_by = models.BigIntegerField(null=True, blank=True)
     # Required when revision > 1 (enforced by the issue flow): why the
     # month was reissued.
@@ -1705,13 +1705,11 @@ class CommissionStatementLine(models.Model):
         return f"CommissionStatementLine({self.order_number} {self.total} {self.currency})"
 
 
-# ── Phase 3: multi-branch — one owner, several locations, ONE account ─────
-# DESIGN-PHASE3.md §1 (Option B): the Branch entity lives INSIDE the tenant
-# schema. The account (Tenant, owner user, plan, float, commission
-# statement) stays tenant-level; a branch is one physical location of that
-# account. Menus stay a shared catalogue in v1 — per-branch divergence is
-# availability only (DishBranchState, decision D1). Staff stay tenant users;
-# branch is an assignment (StaffBranch, decision D4), not an identity.
+# R6-07: the per-branch availability and staff-assignment models were
+# deleted as dead — no code read them and the multi-branch wiring they
+# implied was never built. Branch itself stays: one
+# physical location of a tenant account (DESIGN-PHASE3.md §1, Option B).
+# Wiring multi-branch is a separate future phase, not this one.
 
 
 class Branch(models.Model):
@@ -1748,65 +1746,3 @@ class Branch(models.Model):
 
     def __str__(self) -> str:
         return self.name
-
-
-class DishBranchState(models.Model):
-    """Per-branch dish availability (decision D1: availability only — the
-    catalogue and prices stay shared across branches in v1). Absence of a
-    row means the dish follows its catalogue state at that branch."""
-
-    dish = models.ForeignKey(
-        Dish,
-        on_delete=models.CASCADE,
-        related_name="branch_states",
-    )
-    branch = models.ForeignKey(
-        Branch,
-        on_delete=models.CASCADE,
-        related_name="dish_states",
-    )
-    is_available = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("branch", "dish")
-        constraints = [
-            models.UniqueConstraint(
-                fields=("dish", "branch"),
-                name="unique_dish_branch_state",
-            )
-        ]
-
-    def __str__(self) -> str:
-        return f"DishBranchState({self.dish_id} @ {self.branch_id}: {self.is_available})"
-
-
-class StaffBranch(models.Model):
-    """Assignment of a tenant staff member to a branch (decision D4:
-    multi-branch assignment). ``user_id`` is a loose reference to
-    accounts.User (public schema), matching SectionServer.user_id — avoids
-    a tenant→public cross-app FK. Absence of rows = works everywhere
-    (owner + legacy staff unaffected)."""
-
-    user_id = models.IntegerField(db_index=True)
-    branch = models.ForeignKey(
-        Branch,
-        on_delete=models.CASCADE,
-        related_name="staff_assignments",
-    )
-    is_primary = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("branch", "user_id")
-        constraints = [
-            models.UniqueConstraint(
-                fields=("user_id", "branch"),
-                name="unique_staff_branch",
-            )
-        ]
-
-    def __str__(self) -> str:
-        return f"StaffBranch(user {self.user_id} @ {self.branch_id})"

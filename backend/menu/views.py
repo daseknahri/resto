@@ -3671,12 +3671,21 @@ class PlaceOrderView(APIView):
                 # Multi-branch (Phase 3): stamp the order's branch — the
                 # payload's branch slug (picker selection) wins, then the
                 # dine-in table's section's branch, then the tenant default.
-                # Resolution failure must never block checkout: unstamped.
+                # Resolution failure must never block checkout: unstamped —
+                # except an explicit slug naming no active branch (R6-17),
+                # which is a 400: the order must not land at a location the
+                # customer did not choose.
                 try:
                     from .order_service import resolve_order_branch as _resolve_branch
+                    from .order_service import BranchUnavailableError as _BranchUnavailable
                     _order_branch = _resolve_branch(
                         table_slug=table_slug,
                         branch_slug=(request.data.get("branch") or ""),
+                    )
+                except _BranchUnavailable:
+                    return Response(
+                        {"detail": "The selected branch is unavailable.", "code": "branch_unavailable"},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
                 except Exception:
                     _order_branch = None
@@ -6619,6 +6628,7 @@ class StaffTransferItemsView(APIView):
       already_paid     — source order is already marked PAID
       no_items         — item_ids is empty
       items_not_found  — one or more item_ids don't exist in src order (non-voided)
+      cross_branch     — source and destination orders belong to different branches
 
     Guards (400):
       dest_already_paid — destination order is already marked PAID (moving items
@@ -6716,6 +6726,16 @@ class StaffTransferItemsView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # R6-18: items must not move between physical locations — the
+            # destination branch's kitchen would gain items the source branch
+            # may already be cooking. Both orders unstamped (None) is fine.
+            if (
+                src.branch_id is not None
+                and dest.branch_id is not None
+                and src.branch_id != dest.branch_id
+            ):
+                return Response({"detail": "Source and destination orders belong to different branches.", "code": "cross_branch"}, status=status.HTTP_409_CONFLICT)
 
             # Validate items belong to src and are non-voided
             src_item_ids = {i.id for i in src.items.all() if not i.is_voided}
@@ -6845,6 +6865,15 @@ class StaffMergeOrdersView(APIView):
                      "code": "source_has_payment"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # R6-18: same as transfer — a merge across branches moves food
+            # between kitchens. Both orders unstamped (None) is fine.
+            if (
+                src.branch_id is not None
+                and dest.branch_id is not None
+                and src.branch_id != dest.branch_id
+            ):
+                return Response({"detail": "Source and destination orders belong to different branches.", "code": "cross_branch"}, status=status.HTTP_409_CONFLICT)
 
             # Move all non-voided items from src → dest
             active_src_item_ids = [i.id for i in src.items.all() if not i.is_voided]
