@@ -165,13 +165,16 @@ class CustomerCanCancelScheduledTests(SimpleTestCase):
 
 class ReleaseScheduledMirrorTests(SimpleTestCase):
     """Wave M M-04: scheduled release stamps food_ready_at on the job it
-    creates for a released delivery order."""
+    creates for a released delivery order. R6-13: release honours the
+    restaurant's auto-accept flag."""
 
-    def test_release_delivery_stamps_food_ready(self):
+    def _run(self, auto_accept):
+        """Run the release command over one due delivery order; return the
+        claim update kwargs, the ETA call kwargs, the food-ready mirror mock
+        and the order mock."""
         from decimal import Decimal
         from django.utils import timezone
         from menu.management.commands.release_scheduled_orders import Command
-        import contextlib
 
         tenant = MagicMock()
         tenant.id = 7
@@ -179,6 +182,7 @@ class ReleaseScheduledMirrorTests(SimpleTestCase):
         tenant.slug = "bistro"
         tenant.name = "Bistro"
         tenant.profile = MagicMock()
+        tenant.profile.auto_accept_orders = auto_accept
         tenant.profile.whatsapp = ""
         tenant.profile.phone = ""
 
@@ -196,14 +200,10 @@ class ReleaseScheduledMirrorTests(SimpleTestCase):
         order.delivery_lng = -5.81
         order.delivery_fee = Decimal("15")
 
-        cm = MagicMock()
-        cm.__enter__ = MagicMock(return_value=None)
-        cm.__exit__ = MagicMock(return_value=False)
-
         with patch("menu.management.commands.release_scheduled_orders.Tenant") as TenantM, \
                 patch("menu.models.Order") as OrderM, \
                 patch("menu.management.commands.release_scheduled_orders.schema_context", side_effect=lambda *a, **k: _sc_cm()), \
-                patch("menu.views._placement_eta_minutes", return_value=25), \
+                patch("menu.views._placement_eta_minutes", return_value=25) as eta_mock, \
                 patch("menu.views._delivery_job_ready_minutes", return_value=25), \
                 patch("menu.views._broadcast_order_change"), \
                 patch("menu.push.push_new_order"), \
@@ -217,6 +217,8 @@ class ReleaseScheduledMirrorTests(SimpleTestCase):
             (TenantM.objects.filter.return_value.exclude.return_value
                 .select_related.return_value) = [tenant]
             OrderM.Status.SCHEDULED = "scheduled"
+            OrderM.Status.PENDING = "pending"
+            OrderM.Status.CONFIRMED = "confirmed"
             OrderM.FulfillmentType.DELIVERY = "delivery"
             OrderM.objects.filter.return_value.order_by.return_value.__getitem__.return_value = [order]
             OrderM.objects.filter.return_value.update.return_value = 1
@@ -225,7 +227,33 @@ class ReleaseScheduledMirrorTests(SimpleTestCase):
             cmd.stdout = MagicMock()
             cmd.style = MagicMock()
             cmd.handle(dry_run=False)
-        mirror.assert_called_once_with(7, "ORD-S1", 25)
+            return {
+                "update_kwargs": OrderM.objects.filter.return_value.update.call_args[1],
+                "eta_kwargs": eta_mock.call_args[1],
+                "mirror": mirror,
+                "order": order,
+            }
+
+    def test_release_delivery_stamps_food_ready(self):
+        out = self._run(auto_accept=False)
+        out["mirror"].assert_called_once_with(7, "ORD-S1", 25)
+
+    def test_release_auto_accepts_when_flag_on(self):
+        """R6-13: auto-accept restaurant → SCHEDULED releases straight to
+        CONFIRMED with the ETA quoted up front (default_prep_minutes)."""
+        out = self._run(auto_accept=True)
+        self.assertEqual(out["update_kwargs"]["status"], "confirmed")
+        self.assertEqual(out["update_kwargs"]["estimated_ready_minutes"], 25)
+        self.assertEqual(out["eta_kwargs"], {"auto_accept": True})
+        self.assertEqual(out["order"].status, "confirmed")
+
+    def test_release_stays_pending_when_flag_off(self):
+        """R6-13: flag off → exact current behaviour: PENDING, ETA quoted the
+        placement way (no auto-accept bump)."""
+        out = self._run(auto_accept=False)
+        self.assertEqual(out["update_kwargs"]["status"], "pending")
+        self.assertEqual(out["eta_kwargs"], {"auto_accept": False})
+        self.assertEqual(out["order"].status, "pending")
 
 
 class ScheduledTransitionTests(SimpleTestCase):

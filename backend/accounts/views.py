@@ -7613,6 +7613,38 @@ class DriverJobAcceptView(APIView):
             job.owner_alerted_at = None
             job.save(update_fields=["driver", "status", "assigned_at", "offered_to", "offer_expires_at", "owner_alerted_at"])
 
+            # R6-12: clear any OTHER live exclusive offers held by this driver
+            # (SEARCHING jobs offered to them, still inside their window) so
+            # their cascades advance immediately instead of stalling until the
+            # 60-s TTL lapses. Collected under the same driver-row lock, so a
+            # concurrent accept can't interleave; the re-roll itself happens
+            # after commit, below.
+            _other_offer_ids = list(
+                DeliveryJob.objects.filter(
+                    driver__isnull=True,
+                    status=DeliveryJob.Status.SEARCHING,
+                    offered_to=customer,
+                    offer_expires_at__gt=_now,
+                ).exclude(pk=job.pk).values_list("id", flat=True)
+            )
+            if _other_offer_ids:
+                DeliveryJob.objects.filter(pk__in=_other_offer_ids).update(
+                    offered_to=None, offer_expires_at=None
+                )
+
+        # R6-12: advance the cleared jobs' cascades now (best-effort, after
+        # commit — each re-roll takes its own row lock and sends its push).
+        if _other_offer_ids:
+            try:
+                from accounts.dispatch import offer_to_next_driver as _offer_next
+                for _other_id in _other_offer_ids:
+                    try:
+                        _offer_next(_other_id)
+                    except Exception:
+                        logger.exception("accept: cascade advance failed for job %s", _other_id)
+            except Exception:
+                logger.exception("accept: cascade advance failed")
+
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
         _bt = job.business_type or "restaurant"

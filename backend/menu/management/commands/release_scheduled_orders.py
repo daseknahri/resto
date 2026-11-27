@@ -3,13 +3,17 @@ Management command: release_scheduled_orders
 
 Designed to run on a cron schedule (every ~5 minutes). Finds advance/scheduled
 orders (status=SCHEDULED) whose requested fulfilment time is now within the
-release lead window, and moves them into the live kitchen flow as PENDING —
-firing the same "new order" notifications a fresh order would (web push to
-owner/staff, a realtime ping, a platform delivery job for delivery orders, and
-a best-effort WhatsApp to the restaurant).
+release lead window, and moves them into the live kitchen flow as PENDING — or
+CONFIRMED when the restaurant has auto-accept on (R6-13: an auto-accept
+restaurant opted out of the manual-confirm tap, so release applies the flag
+instead of leaving the order PENDING while its 45-min lead burns) — firing the
+same "new order" notifications a fresh order would (web push to owner/staff, a
+realtime ping, a platform delivery job for delivery orders, and a best-effort
+WhatsApp to the restaurant).
 
-Because the transition is SCHEDULED → PENDING, an order can only be released
-once: the next run won't match it again, so this is naturally idempotent.
+Because the transition is SCHEDULED → PENDING/CONFIRMED, an order can only be
+released once: the next run won't match it again, so this is naturally
+idempotent.
 
 Cron (Coolify / crontab) — every 5 minutes:
     */5 * * * * cd /app && python manage.py release_scheduled_orders >> /var/log/release_scheduled_orders.log 2>&1
@@ -33,7 +37,8 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Release advance/scheduled orders into the live kitchen flow as their time approaches."
+    help = ("Release advance/scheduled orders into the live kitchen flow as their time "
+            "approaches (PENDING, or CONFIRMED when the restaurant auto-accepts).")
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -95,15 +100,16 @@ class Command(BaseCommand):
                         if dry_run:
                             continue
 
-                        # Atomic claim: only the run that actually flips SCHEDULED→PENDING proceeds
-                        # to the side effects below. A blind save() let two overlapping runs (two
-                        # schedulers, a Beat entry + a Coolify cron, a manual run alongside the
-                        # scheduled one, or a slow run overrunning its ~5-min tick — the WhatsApp
-                        # notify is synchronous) both read SCHEDULED and each fire the broadcast/push/
-                        # WhatsApp and attempt DeliveryJob.create (the 2nd raising a spurious
-                        # unique_together IntegrityError logged as "delivery job failed"). Mirrors the
-                        # conditional-update rowcount claim in sweep_delivery_jobs. NOTE: .update() does
-                        # NOT fire auto_now, so updated_at is stamped explicitly.
+                        # Atomic claim: only the run that actually flips SCHEDULED→PENDING/
+                        # CONFIRMED proceeds to the side effects below. A blind save() let two
+                        # overlapping runs (two schedulers, a Beat entry + a Coolify cron, a
+                        # manual run alongside the scheduled one, or a slow run overrunning its
+                        # ~5-min tick — the WhatsApp notify is synchronous) both read SCHEDULED
+                        # and each fire the broadcast/push/WhatsApp and attempt DeliveryJob.create
+                        # (the 2nd raising a spurious unique_together IntegrityError logged as
+                        # "delivery job failed"). Mirrors the conditional-update rowcount claim in
+                        # sweep_delivery_jobs. NOTE: .update() does NOT fire auto_now, so
+                        # updated_at is stamped explicitly.
                         #
                         # L7: the same claim stamps the ETA the way a FRESH placement would
                         # (_placement_eta_minutes — the busy-mode quote, else none until the owner
@@ -111,13 +117,23 @@ class Command(BaseCommand):
                         # it the customer countdown fell back to created_at (placed days ago) and
                         # the just-released order read "Ready any moment now". It also clears a stale
                         # ETA stamped at placement by older code / the marketplace checkout.
+                        #
+                        # R6-13: honour the restaurant's auto-accept flag at release — a
+                        # SCHEDULED order becomes live at release, which is exactly when the
+                        # placement-time auto-accept would have fired for an ASAP order
+                        # (_auto_accept_now returns False for scheduled orders at placement, by
+                        # design; nothing re-applied it at release, so the order sat PENDING
+                        # burning its lead while its driver was already dispatched). The ETA
+                        # is quoted up front for auto-accepted orders, as at placement.
                         _now = timezone.now()
-                        _eta_minutes = _placement_eta_minutes(profile)
+                        _auto_accept = bool(getattr(profile, "auto_accept_orders", False))
+                        _eta_minutes = _placement_eta_minutes(profile, auto_accept=_auto_accept)
                         _eta_at = _now + timedelta(minutes=_eta_minutes) if _eta_minutes else None
+                        _new_status = Order.Status.CONFIRMED if _auto_accept else Order.Status.PENDING
                         _claimed = Order.objects.filter(
                             pk=order.pk, status=Order.Status.SCHEDULED
                         ).update(
-                            status=Order.Status.PENDING,
+                            status=_new_status,
                             status_updated_at=_now,
                             updated_at=_now,
                             estimated_ready_minutes=_eta_minutes,
@@ -126,7 +142,7 @@ class Command(BaseCommand):
                         if not _claimed:
                             continue  # another run already released this order — skip its side effects
                         # Reflect the win on the in-memory instance for the broadcasts below.
-                        order.status = Order.Status.PENDING
+                        order.status = _new_status
                         order.status_updated_at = _now
                         order.estimated_ready_minutes = _eta_minutes
                         order.estimated_ready_at = _eta_at

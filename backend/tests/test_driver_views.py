@@ -854,6 +854,29 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIs(job.driver, customer)
 
+    @patch("accounts.dispatch.offer_to_next_driver")
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_accept_clears_other_live_offers_and_advances_them(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser, mock_offer):
+        """R6-12: the driver holds a live exclusive offer on another SEARCHING
+        job (id 42) and accepts this one → the other offer is cleared
+        (offered_to/offer_expires_at → None) and its cascade re-rolls at once,
+        without waiting out the 60-s TTL."""
+        customer = self._fresh_customer()
+        job = self._pool_job()
+        job.id = 9
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        mock_dj.objects.filter.return_value.exclude.return_value.values_list.return_value = [42]
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(9, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_dj.objects.filter.return_value.update.assert_called_once_with(
+            offered_to=None, offer_expires_at=None
+        )
+        mock_offer.assert_called_once_with(42)
+
 # ── DriverJobStatusUpdateView ─────────────────────────────────────────────────
 
 class DriverJobStatusUpdateViewTests(SimpleTestCase):

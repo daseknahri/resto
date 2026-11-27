@@ -119,6 +119,51 @@ class OfferToNextDriverTests(SimpleTestCase):
         mock_push.assert_not_called()
 
 
+class PickNearestDriverReservationTests(SimpleTestCase):
+    """R6-12: a live exclusive offer reserves the driver — pick_nearest_driver
+    must not hand the same driver to a second cascade while the first offer is
+    still inside its window."""
+
+    def _wire(self, mock_cust, mock_dj, busy_ids, offered_ids):
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.ACTIVE_STATUSES = ("assigned", "at_restaurant", "picked_up")
+        driver = SimpleNamespace(id=7, driver_lat=35.70, driver_lng=-5.81)
+        mock_cust.objects.filter.return_value.exclude.return_value.only.return_value = [driver]
+        mock_dj.objects.filter.return_value.values_list.side_effect = [busy_ids, offered_ids]
+        return driver
+
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer")
+    def test_free_driver_is_picked(self, mock_cust, mock_dj):
+        driver = self._wire(mock_cust, mock_dj, [], [])
+        from accounts.dispatch import pick_nearest_driver
+        out = pick_nearest_driver(SimpleNamespace(pickup_lat=35.71, pickup_lng=-5.80), [])
+        self.assertIs(out, driver)
+
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer")
+    def test_driver_with_live_offer_elsewhere_is_reserved(self, mock_cust, mock_dj):
+        self._wire(mock_cust, mock_dj, [], [7])
+        from accounts.dispatch import pick_nearest_driver
+        out = pick_nearest_driver(SimpleNamespace(pickup_lat=35.71, pickup_lng=-5.80), [])
+        self.assertIsNone(out)
+        # The reservation query only matches live offers on SEARCHING jobs.
+        _kwargs = mock_dj.objects.filter.call_args_list[1][1]
+        self.assertEqual(_kwargs["status"], "searching")
+        self.assertFalse(_kwargs["is_open_pool"])
+        self.assertEqual(_kwargs["offered_to_id__in"], [7])
+        self.assertIn("offer_expires_at__gt", _kwargs)
+
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer")
+    def test_busy_driver_still_excluded(self, mock_cust, mock_dj):
+        # Control: the active-job exclusion is unchanged by the reservation.
+        self._wire(mock_cust, mock_dj, [7], [])
+        from accounts.dispatch import pick_nearest_driver
+        out = pick_nearest_driver(SimpleNamespace(pickup_lat=35.71, pickup_lng=-5.80), [])
+        self.assertIsNone(out)
+
+
 class DeclineOfferTests(SimpleTestCase):
     @patch("accounts.dispatch.offer_to_next_driver")
     @patch("django.db.transaction.atomic", return_value=_noop_atomic())
