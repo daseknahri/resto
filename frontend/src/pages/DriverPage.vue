@@ -1070,6 +1070,9 @@
     v-model:code-input="codeInput"
     v-model:code-error="codeError"
     v-model:proof-photo-file="proofPhotoFile"
+    v-model:cash-collected="cashCollectedInput"
+    :collect-cash="Boolean(activeJob?.collect_cash)"
+    :order-total="activeJob?.order_total || ''"
     :open="codeModalOpen"
     :submitting="codeSubmitting"
     @close="closeCodeModal"
@@ -1490,6 +1493,7 @@ const codeSubmitting = ref(false);
 // DriverDeliveryCodeModal; the parent keeps the code / error / selected-file state
 // (read by submitDeliveryCode) and the open / return-focus handling.
 const proofPhotoFile = ref(null);   // File object selected by the camera (set by the modal)
+const cashCollectedInput = ref(''); // R6-10: cash actually collected on handover (prefilled with the order total)
 let _codeReturnFocus = null;
 
 const closeCodeModal = () => {
@@ -1516,7 +1520,11 @@ const _syncOnlineAfterTerminal = async () => {
 const _afterDelivered = async (data, job) => {
   closeCodeModal();
   if (data.is_terminal) {
-    if (job?.collect_cash && job?.order_total) lastCollectedCash.value = job.order_total;
+    if (job?.collect_cash && job?.order_total) {
+      // R6-10: show what the driver actually collected, not the order total —
+      // a short payment must stay visible (the order stays UNPAID).
+      lastCollectedCash.value = cashCollectedInput.value.trim() || job.order_total;
+    }
     activeJob.value = null;
     await _syncOnlineAfterTerminal();
     toast.show(t('driver.deliveredToast'), 'success');
@@ -1544,6 +1552,10 @@ const submitDeliveryCode = async () => {
   codeError.value = '';
   codeSubmitting.value = true;
   const job = activeJob.value;
+  // R6-10: the cash actually collected (empty = the backend defaults to the full
+  // outstanding, today's behaviour — a cleared field is more likely accidental
+  // than a deliberate 0, which the driver types explicitly).
+  const _cash = cashCollectedInput.value.trim();
   try {
     let data;
     if (proofPhotoFile.value) {
@@ -1551,11 +1563,14 @@ const submitDeliveryCode = async () => {
       const fd = new FormData();
       fd.append('status', 'delivered');
       fd.append('proof_photo', proofPhotoFile.value);
+      if (_cash) fd.append('cash_collected', _cash);
       ({ data } = await api.patch(`/driver/jobs/${job.id}/status/`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }));
     } else {
-      ({ data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: 'delivered', code }));
+      const _body = { status: 'delivered', code };
+      if (_cash) _body.cash_collected = _cash;
+      ({ data } = await api.patch(`/driver/jobs/${job.id}/status/`, _body));
     }
     await _afterDelivered(data, job);
   } catch (err) {
@@ -2073,6 +2088,11 @@ const advance = async (toStatus, extra = {}) => {
     _codeReturnFocus = document.activeElement;
     codeInput.value = '';
     codeError.value = '';
+    // R6-10: prefill the cash field with the order total (COD only); the driver
+    // lowers it when the customer short-pays.
+    cashCollectedInput.value = activeJob.value?.collect_cash && activeJob.value?.order_total
+      ? String(activeJob.value.order_total)
+      : '';
     codeModalOpen.value = true;
     return;
   }

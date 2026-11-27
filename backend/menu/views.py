@@ -8022,6 +8022,7 @@ class OwnerOrderListView(APIView):
                     my_rating_map[cr["order_number"]] = {"score": cr["score"], "note": cr["note"]}
 
         # ── Batch-load delivery job data (public schema — shared model) ─────────
+        from accounts.delivery_service import is_job_driver_silent as _is_job_driver_silent
         from accounts.models import DeliveryJob as _DJ
         delivery_job_map: dict = {}  # order_number → serialised job dict
         if tenant_id:
@@ -8062,6 +8063,10 @@ class OwnerOrderListView(APIView):
                         "resolution": _dj.resolution,
                         "restaurant_driver_rating": _dj.restaurant_driver_rating,
                         "restaurant_driver_note": _dj.restaurant_driver_note,
+                        # R6-11: picked up + driver silent (no position fix for 15
+                        # min or pickup over 60 min old) — the owner orders list
+                        # shows this as a distinct state, not just "picked up".
+                        "driver_silent": _is_job_driver_silent(_dj, timezone.now()),
                     }
 
         # VAT settings (read once) — prices are VAT-inclusive; we only break out

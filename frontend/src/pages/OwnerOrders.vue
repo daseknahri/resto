@@ -798,6 +798,7 @@
                 }"
               >{{ t(`ownerOrders.djStatus_${o.delivery_job.status}`) }}</span>
             </div>
+            <p v-if="o.delivery_job.driver_silent" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200">{{ t('ownerOrders.djDriverSilent') }}</p>
             <div v-if="o.delivery_job.driver" class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2">
                 <span>{{ o.delivery_job.driver.name || t('ownerOrders.djDriverUnnamed') }}</span>

@@ -7787,12 +7787,20 @@ def _credit_driver_noshow(job) -> None:
         )
 
 
-def _complete_delivered_order(job, proof_photo_url="") -> None:
+def _complete_delivered_order(job, proof_photo_url="", cash_collected=None) -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
     prepaid by wallet or cash-collected on handover), store any proof photo, record
     the COD cash collected (D G2), and credit the driver's wallet. Best-effort —
     never blocks the driver.
+
+    R6-10: `cash_collected` is the amount the driver actually took on handover
+    (driver-entered, defaulting to the full outstanding when the client doesn't
+    send one). The order flips to PAID only when collected >= total; a short
+    payment leaves it UNPAID with the recorded partial (visible outstanding for
+    the owner to chase) — the Z-report/drawer only count PAID orders, so the
+    shortfall is never booked as cash. The job records exactly the entered
+    amount. The code/photo gate is unchanged.
     """
     # D G2: the cash the driver collected on handover (0 for prepaid orders).
     # Computed inside the tenant-schema block below (it needs the order + its
@@ -7827,15 +7835,28 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
                 _already = _collected(order)
             except Exception:
                 _already = _D(str(order.wallet_amount_paid or "0"))
-            _cash_collected = max(
-                _D("0"), (_D(str(order.total or "0")) - _already)
-            )
+            _total = _D(str(order.total or "0"))
+            _outstanding = max(_D("0"), (_total - _already))
+            # R6-10: the driver-entered amount wins; None (old clients) defaults to
+            # the full outstanding, today's behaviour. A prepaid order (nothing
+            # outstanding) collects nothing — a stray entered amount is ignored
+            # rather than booking phantom cash.
+            if cash_collected is None:
+                _cash_collected = _outstanding
+            else:
+                _cash_collected = max(_D("0"), _D(str(cash_collected)))
+                if _already >= _total:
+                    _cash_collected = _D("0")
             fields = []
             if order.status != _O.Status.COMPLETED:
                 order.status = _O.Status.COMPLETED
                 order.status_updated_at = _tz.now()
                 fields += ["status", "status_updated_at"]
-            if order.payment_status != _O.PaymentStatus.PAID:
+            # R6-10: PAID only when the collection covers the total. A short
+            # payment leaves the order UNPAID — the outstanding stays visible for
+            # the owner to chase, and the Z-report/drawer never count it as cash.
+            _fully_collected = (_already + _cash_collected) >= _total
+            if order.payment_status != _O.PaymentStatus.PAID and _fully_collected:
                 order.payment_status = _O.PaymentStatus.PAID
                 order.paid_at = _tz.now()
                 fields += ["payment_status", "paid_at"]
@@ -7941,6 +7962,28 @@ class DriverJobStatusUpdateView(APIView):
         now = _tz.now()
         _proof_photo_url = ""
         _proof_photo_error = None
+
+        # R6-10: the cash the driver actually collected on handover (COD). Parsed
+        # + validated BEFORE the lock so a bad amount 400s without flipping the
+        # job. None = the client didn't send one (old app versions) → the helper
+        # defaults to the full outstanding, today's behaviour.
+        _cash_collected_input = None
+        if new_status == DeliveryJob.Status.DELIVERED:
+            _raw_cash = request.data.get("cash_collected")
+            if _raw_cash is not None and str(_raw_cash).strip() != "":
+                try:
+                    from decimal import Decimal as _D
+                    _cash_collected_input = _D(str(_raw_cash).strip())
+                except Exception:
+                    return Response(
+                        {"detail": "cash_collected must be a number.", "code": "bad_cash_collected"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if _cash_collected_input < 0:
+                    return Response(
+                        {"detail": "cash_collected can't be negative.", "code": "bad_cash_collected"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         # PERF (connection-pool): a proof photo is a Pillow transcode of up to 8 MB + a
         # (possibly S3) storage write — 200 ms-2 s of pure I/O. Do it BEFORE taking the
@@ -8076,6 +8119,11 @@ class DriverJobStatusUpdateView(APIView):
 
             job.status = new_status
             update_fields = ["status"]
+            if new_status == DeliveryJob.Status.AT_RESTAURANT:
+                # R6-06: stamp the arrival — the (c2) pickup-SLA wait is measured
+                # from here, not from assignment.
+                job.at_restaurant_at = now
+                update_fields.append("at_restaurant_at")
             if new_status == DeliveryJob.Status.PICKED_UP:
                 job.picked_up_at = now
                 update_fields.append("picked_up_at")
@@ -8101,7 +8149,8 @@ class DriverJobStatusUpdateView(APIView):
             # without a manual re-toggle. (Previously this forced is_driver_online=False,
             # benching the driver after every drop — the offer model already lets them
             # decline, so staying online never forces work on them.)
-            _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
+            _complete_delivered_order(job, proof_photo_url=_proof_photo_url,
+                                      cash_collected=_cash_collected_input)
             _notify_customer_milestone(job, "delivered")
         elif new_status == DeliveryJob.Status.FAILED:
             # Same as DELIVERED: a FAILED job leaves ACTIVE_STATUSES, so the driver is freed

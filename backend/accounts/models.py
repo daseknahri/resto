@@ -1059,6 +1059,13 @@ class DeliveryJob(models.Model):
 
     # Timestamps
     assigned_at = models.DateTimeField(null=True, blank=True)
+    # R6-06: when the driver arrived at the restaurant (ASSIGNED → AT_RESTAURANT).
+    # The (c2) pickup-SLA wait is measured from here; null on legacy rows, which
+    # fall back to the assignment clock.
+    at_restaurant_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the driver arrived at the restaurant (ASSIGNED → AT_RESTAURANT). The (c2) pickup-SLA wait is measured from here; null on legacy rows, which fall back to the assignment clock.",
+    )
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     failed_at = models.DateTimeField(null=True, blank=True)

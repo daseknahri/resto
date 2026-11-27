@@ -69,6 +69,7 @@ class CompleteDeliveryJobTests(SimpleTestCase):
     def test_picked_up_job_delivered_and_driver_credited(self, mock_dj, mock_customer, _atomic, mock_credit):
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.PICKED_UP = "picked_up"  # R6-25: the gate compares against this
         mock_customer.objects.filter.return_value.exists.return_value = True  # OPS-5f: still approved
         job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
                               delivered_at=None, save=MagicMock())
@@ -96,19 +97,41 @@ class CompleteDeliveryJobTests(SimpleTestCase):
     @patch("django.db.transaction.atomic", return_value=_noop_atomic())
     @patch("accounts.models.DeliveryJob")
     def test_driverless_searching_job_is_cancelled(self, mock_dj, _atomic, mock_credit):
-        # R6-04: a driverless (still-searching) job on a completed order is CANCELLED
-        # so the sweep can't re-dispatch or auto-refund it — but never marked
-        # delivered/credited (nobody to pay).
+        # R6-04/R6-25: a driverless (still-searching) job on a completed order is
+        # CANCELLED so the sweep can't re-dispatch or auto-refund it — but never
+        # marked delivered/credited (nobody to pay). The cancel now goes through
+        # the shared cancel_delivery_job_for_order (same outcome, one path).
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.SEARCHING = "searching"
         mock_dj.Status.CANCELLED = "cancelled"
+        mock_dj.Status.PICKED_UP = "picked_up"
         job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching",
-                              cancelled_at=None, save=MagicMock())
+                              cancelled_at=None, platform_commission=None, save=MagicMock())
         mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
         complete_delivery_job_for_order(1, "ORD-1")
         self.assertEqual(job.status, "cancelled")
         self.assertIsNotNone(job.cancelled_at)
-        job.save.assert_called_once_with(update_fields=["status", "cancelled_at"])
+        job.save.assert_called_once_with(
+            update_fields=["status", "cancelled_at", "platform_commission"])
+        mock_credit.assert_not_called()
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_assigned_job_is_cancelled_not_credited(self, mock_dj, _atomic, mock_credit):
+        # R6-25 (pack sketch): the owner completes an order whose driver is merely
+        # ASSIGNED (never picked up) → the job is CANCELLED (stand down, no payout),
+        # never DELIVERED + credited for a delivery never made.
+        from accounts.delivery_service import complete_delivery_job_for_order
+        mock_dj.Status.CANCELLED = "cancelled"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        job = SimpleNamespace(is_terminal=False, driver_id=5, status="assigned",
+                              cancelled_at=None, platform_commission=None, save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        with patch("accounts.tasks.enqueue"):
+            complete_delivery_job_for_order(1, "ORD-1")
+        self.assertEqual(job.status, "cancelled")
+        self.assertIsNotNone(job.cancelled_at)
         mock_credit.assert_not_called()
 
     @patch("accounts.views._credit_driver_earnings")
