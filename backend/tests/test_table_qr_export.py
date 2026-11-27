@@ -56,7 +56,11 @@ class TableQrExportTests(SimpleTestCase):
 
         manifest = archive.read("manifest.csv").decode("utf-8")
         self.assertIn("https://demo.example.com/t/table-1", manifest)
-        self.assertIn("https://demo.example.com/menu?table=Table+1", manifest)
+        # R6-30: the manifest carries only the working short URL now — the
+        # full_menu_url column (a /menu?table=<label> link no page honoured)
+        # is gone.
+        self.assertNotIn("full_menu_url", manifest)
+        self.assertNotIn("menu?table=", manifest)
 
     def test_qr_export_rejects_when_no_rows(self):
         req = self.factory.get("/api/tables/qr-export/")

@@ -224,3 +224,66 @@ class DishBulkPriceUpdateViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["updated"], 0)
         self.assertEqual(resp.data["items"], [])
+
+# ── R6-27: bulk-price busts the cache + flags truncation ───────────────────
+# The 500 cap was silent (updated=N, no hint dishes were left behind); the
+# price write itself never busted the 60 s menu cache either.
+
+class DishBulkPriceUpdateR627Tests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DishBulkPriceUpdateView.as_view()
+
+    def _patch(self, body=None, user=None, tenant=None):
+        req = self.factory.patch(
+            "/api/owner/dishes/bulk-price/",
+            body or {},
+            format="json",
+        )
+        req.user = user or _owner()
+        req.tenant = tenant or _tenant()
+        return self.view(req)
+
+    def _qs_with(self, mock_qs, dishes, count=None):
+        qs = mock_qs.filter.return_value.select_related.return_value
+        qs.__getitem__ = MagicMock(return_value=dishes)
+        if count is not None:
+            qs.count.return_value = count
+        return qs
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_apply_busts_menu_cache(self, mock_qs, mock_bust):
+        self._qs_with(mock_qs, [_make_dish(price="100.00")])
+        resp = self._patch(body={"action": "increase_percent", "value": 10, "dry_run": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_qs.bulk_update.assert_called_once()
+        mock_bust.assert_called_once_with("demo")
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_dry_run_does_not_bust(self, mock_qs, mock_bust):
+        self._qs_with(mock_qs, [_make_dish(price="100.00")])
+        resp = self._patch(body={"action": "increase_percent", "value": 10, "dry_run": True})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_qs.bulk_update.assert_not_called()
+        mock_bust.assert_not_called()
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_truncation_flagged_at_600_matching(self, mock_qs, mock_bust):
+        dishes = [_make_dish(pk=i, price="10.00") for i in range(1, 501)]
+        self._qs_with(mock_qs, dishes, count=600)
+        resp = self._patch(body={"action": "increase_percent", "value": 10, "dry_run": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["updated"], 500)
+        self.assertTrue(resp.data["truncated"])
+        self.assertEqual(resp.data["total_matching"], 600)
+
+    @patch("menu.views.Dish.objects")
+    def test_no_truncation_keys_under_cap(self, mock_qs):
+        self._qs_with(mock_qs, [_make_dish(price="10.00"), _make_dish(pk=2, price="20.00")])
+        resp = self._patch(body={"action": "increase_percent", "value": 10, "dry_run": False})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertNotIn("truncated", resp.data)
+        self.assertNotIn("total_matching", resp.data)

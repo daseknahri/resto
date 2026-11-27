@@ -1272,9 +1272,12 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     def _table_short_url(self, table, base_url):
         return f"{base_url}/t/{table.slug}"
 
-    def _table_full_url(self, table, base_url):
-        return f"{base_url}/menu?table={quote_plus(table.label)}"
-
+    # R6-30: _table_full_url is gone — it built {base}/menu?table=<label>, a
+    # URL no page ever honoured (nothing reads a ?table= query param, and the
+    # label is unvalidated human text, not the slug the backend resolves), so
+    # a customer ordering from it placed a non-table order the waiter never
+    # saw as a dine-in tab. One URL per table now: the short /t/<slug> link,
+    # which carries the table context. The QR PNGs already encode it.
     def _qr_png_bytes(self, value):
         qr = qrcode.QRCode(
             version=None,
@@ -1389,14 +1392,13 @@ class TableLinkViewSet(viewsets.ModelViewSet):
 
         csv_buffer = StringIO()
         csv_writer = csv.writer(csv_buffer)
-        csv_writer.writerow(["label", "slug", "short_url", "full_menu_url", "is_active"])
+        csv_writer.writerow(["label", "slug", "short_url", "is_active"])
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
             for table in rows:
                 short_url = self._table_short_url(table, base_url)
-                full_url = self._table_full_url(table, base_url)
-                csv_writer.writerow([_csv_safe(table.label), table.slug, short_url, full_url, "true" if table.is_active else "false"])
+                csv_writer.writerow([_csv_safe(table.label), table.slug, short_url, "true" if table.is_active else "false"])
                 qr_name = f"qr/{self._safe_filename_token(table.slug, fallback='table')}.png"
                 archive.writestr(qr_name, self._qr_png_bytes(short_url))
 
@@ -10595,6 +10597,12 @@ class DishBulkAvailabilityResetView(APIView):
                 is_published=True, stock_qty=0
             ).update(stock_qty=None)
 
+        # R6-27: the public menu caches availability for 60 s — bust so the
+        # reset shows immediately, like the single-dish paths do.
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
         return Response({
             "restored": restored_count,
             "stock_cleared": stock_cleared_count,
@@ -10651,6 +10659,11 @@ class DishBulkResetAvailabilityView(APIView):
             id__in=dish_ids, is_published=True, stock_qty=0
         ).update(stock_qty=None)
 
+        # R6-27: bust so the re-enabled dishes show immediately (see above).
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
         return Response({
             "restored": restored_count,
             "stock_cleared": stock_cleared_count,
@@ -10674,6 +10687,13 @@ class DishBulkMarkUnavailableView(APIView):
         marked_count = Dish.objects.filter(
             is_published=True, is_available=True
         ).update(is_available=False)
+
+        # R6-27: bust so the 86'd dishes disappear from the public menu at
+        # once — a stale menu would let a customer order a dish that checkout
+        # then rejects as unavailable.
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
         return Response({"marked": marked_count}, status=status.HTTP_200_OK)
 
@@ -10751,6 +10771,16 @@ class DishBulkPriceUpdateView(APIView):
         if category_id is not None:
             qs = qs.filter(category_id=category_id)
         dishes = list(qs[:500])  # safety cap — 500 dishes per call
+        # R6-27: the 500 cap was silent — the response reported updated=N with
+        # no hint that dishes were left behind. Count only when the cap may
+        # have bitten (a short page proves the queryset is exhausted, so the
+        # common case costs no extra query).
+        if len(dishes) < 500:
+            total_matching = len(dishes)
+            truncated = False
+        else:
+            total_matching = qs.count()
+            truncated = total_matching > 500
 
         if not dishes:
             return Response({"updated": 0, "dry_run": dry_run, "items": []})
@@ -10793,12 +10823,20 @@ class DishBulkPriceUpdateView(APIView):
                 dish.price = new_price
                 dish.updated_at = now
             Dish.objects.bulk_update(dishes, ["price", "updated_at"])
+            # R6-27: bust so the new prices show immediately (see above).
+            tenant = getattr(request, "tenant", None)
+            if tenant is not None:
+                _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
-        return Response({
+        response_data = {
             "updated": len(dishes) if not dry_run else 0,
             "dry_run": dry_run,
             "items": preview,
-        })
+        }
+        if truncated:
+            response_data["truncated"] = True
+            response_data["total_matching"] = total_matching
+        return Response(response_data)
 
 
 # ── Ratings ───────────────────────────────────────────────────────────────────
@@ -13120,6 +13158,91 @@ _CSV_EXAMPLE_ROWS = [
 ]
 
 
+def _import_menu_rows(reader, default_super_cat):
+    """Process CSV rows into categories + dishes.
+
+    Extracted from OwnerMenuImportView.post (R6-29) so the whole loop can
+    run inside one transaction.atomic() block. Per-row skips (bad prices,
+    duplicate dish names) are handled inside the loop and do NOT raise;
+    any other exception propagates to the caller, which rolls the import
+    back entirely and answers with the distinct `failed` response.
+
+    Returns (created_categories, created_dishes, skipped, errors).
+    """
+    from decimal import Decimal as _Dec, InvalidOperation
+
+    created_categories = 0
+    created_dishes = 0
+    skipped = 0
+    errors = []
+    category_cache = {}  # name.lower() → Category instance
+
+    for row_num, row in enumerate(reader, start=2):  # row 1 = header
+        cat_name = str(row.get("category_name") or "").strip()[:150]
+        dish_name = str(row.get("dish_name") or "").strip()[:200]
+        price_raw = str(row.get("price") or "").strip()
+
+        if not cat_name or not dish_name:
+            skipped += 1
+            continue
+
+        try:
+            price = _Dec(price_raw).quantize(_Dec("0.01"))
+            if price < _Dec("0"):
+                raise ValueError("negative price")
+        except (InvalidOperation, ValueError):
+            errors.append(f"Row {row_num}: invalid price '{price_raw}' for '{dish_name}' — skipped.")
+            skipped += 1
+            continue
+
+        # Get or create category
+        cat_key = cat_name.lower()
+        if cat_key not in category_cache:
+            existing = Category.objects.filter(name__iexact=cat_name).first()
+            if existing:
+                category_cache[cat_key] = existing
+            else:
+                cat_slug = _make_unique_slug(cat_name, Category)
+                new_cat = Category.objects.create(
+                    super_category=default_super_cat,
+                    name=cat_name,
+                    slug=cat_slug,
+                    position=Category.objects.count(),
+                )
+                category_cache[cat_key] = new_cat
+                created_categories += 1
+
+        category = category_cache[cat_key]
+
+        # Skip duplicate dish names in the same category
+        if Dish.objects.filter(category=category, name__iexact=dish_name).exists():
+            skipped += 1
+            errors.append(f"Row {row_num}: '{dish_name}' already exists in '{cat_name}' — skipped.")
+            continue
+
+        description = str(row.get("description") or "").strip()
+        # tags: comma-separated, e.g. "vegetarian,spicy"
+        raw_tags = str(row.get("tags") or "").strip()
+        tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+        # allergens: same format
+        raw_allergens = str(row.get("allergens") or "").strip()
+        allergens = [a.strip().lower() for a in raw_allergens.split(",") if a.strip()]
+
+        dish_slug = _make_unique_slug(dish_name, Dish)
+        Dish.objects.create(
+            category=category,
+            name=dish_name,
+            slug=dish_slug,
+            description=description,
+            price=price,
+            tags=tags,
+            allergens=allergens,
+            position=Dish.objects.filter(category=category).count(),
+        )
+        created_dishes += 1
+    return created_categories, created_dishes, skipped, errors
+
+
 class OwnerMenuImportView(APIView):
     """POST /api/owner/menu/import/   — import dishes from a CSV upload.
        GET  /api/owner/menu/import/   — download a CSV template."""
@@ -13172,81 +13295,27 @@ class OwnerMenuImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created_categories = 0
-        created_dishes = 0
-        skipped = 0
-        errors = []
-        category_cache = {}  # name.lower() → Category instance
-
         # Fetch the default super-category (position=0 / first) or create one for imports
         try:
             default_super_cat = get_or_create_default_super_category()
         except Exception as _e:
             return Response({"detail": f"Could not access menu structure: {_e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        for row_num, row in enumerate(reader, start=2):  # row 1 = header
-            cat_name = str(row.get("category_name") or "").strip()[:150]
-            dish_name = str(row.get("dish_name") or "").strip()[:200]
-            price_raw = str(row.get("price") or "").strip()
-
-            if not cat_name or not dish_name:
-                skipped += 1
-                continue
-
-            try:
-                price = _Dec(price_raw).quantize(_Dec("0.01"))
-                if price < _Dec("0"):
-                    raise ValueError("negative price")
-            except (InvalidOperation, ValueError):
-                errors.append(f"Row {row_num}: invalid price '{price_raw}' for '{dish_name}' — skipped.")
-                skipped += 1
-                continue
-
-            # Get or create category
-            cat_key = cat_name.lower()
-            if cat_key not in category_cache:
-                existing = Category.objects.filter(name__iexact=cat_name).first()
-                if existing:
-                    category_cache[cat_key] = existing
-                else:
-                    cat_slug = _make_unique_slug(cat_name, Category)
-                    new_cat = Category.objects.create(
-                        super_category=default_super_cat,
-                        name=cat_name,
-                        slug=cat_slug,
-                        position=Category.objects.count(),
-                    )
-                    category_cache[cat_key] = new_cat
-                    created_categories += 1
-
-            category = category_cache[cat_key]
-
-            # Skip duplicate dish names in the same category
-            if Dish.objects.filter(category=category, name__iexact=dish_name).exists():
-                skipped += 1
-                errors.append(f"Row {row_num}: '{dish_name}' already exists in '{cat_name}' — skipped.")
-                continue
-
-            description = str(row.get("description") or "").strip()
-            # tags: comma-separated, e.g. "vegetarian,spicy"
-            raw_tags = str(row.get("tags") or "").strip()
-            tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
-            # allergens: same format
-            raw_allergens = str(row.get("allergens") or "").strip()
-            allergens = [a.strip().lower() for a in raw_allergens.split(",") if a.strip()]
-
-            dish_slug = _make_unique_slug(dish_name, Dish)
-            Dish.objects.create(
-                category=category,
-                name=dish_name,
-                slug=dish_slug,
-                description=description,
-                price=price,
-                tags=tags,
-                allergens=allergens,
-                position=Dish.objects.filter(category=category).count(),
+        # R6-29: the whole row loop runs in one transaction (see
+        # _import_menu_rows) — any unexpected exception rolls the import
+        # back entirely, so a failure halfway through never leaves a
+        # half-imported menu. Per-row skips (bad prices, duplicates) are
+        # handled inside the loop and do NOT raise.
+        try:
+            with transaction.atomic():
+                created_categories, created_dishes, skipped, errors = _import_menu_rows(
+                    reader, default_super_cat
+                )
+        except Exception as exc:
+            return Response(
+                {"detail": f"Import failed — nothing was saved: {exc}", "code": "failed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-            created_dishes += 1
 
         # B2 fix: this view creates categories/dishes directly (Category.objects.create /
         # Dish.objects.create) with no ViewSet involved, so PublishAccessMixin's

@@ -11,8 +11,9 @@ loop. For the schema being migrated:
 The Profile lives in the PUBLIC schema (tenancy app), so its fields are
 read with schema-qualified SQL; the writes use the historical (schema-
 local) models. Idempotent: if a default branch already exists it is
-reused and only still-null FKs are filled. Reversible: FKs are nulled and
-the backfilled branch (is_default + slug "main") is removed.
+reused and only still-null FKs are filled. Reversible (R6-28): only the FKs
+pointing at the backfilled branch are nulled and that branch removed; rows
+assigned to any other branch keep theirs.
 """
 import json
 
@@ -72,9 +73,17 @@ def backwards(apps, schema_editor):
     Branch = apps.get_model("menu", "Branch")
     Order = apps.get_model("menu", "Order")
     TableSection = apps.get_model("menu", "TableSection")
-    Order.objects.all().update(branch=None)
-    TableSection.objects.all().update(branch=None)
-    Branch.objects.filter(slug="main", is_default=True).delete()
+    # R6-28: reverse ONLY what forwards did — null only the FKs pointing at
+    # the backfilled default branch (slug "main", is_default). Rows assigned
+    # to any other branch (by real use after the migration) keep theirs; the
+    # old code nulled EVERY order and section, destroying branch attribution
+    # the migration never created.
+    default_branch = Branch.objects.filter(slug="main", is_default=True).first()
+    if default_branch is None:
+        return
+    Order.objects.filter(branch=default_branch).update(branch=None)
+    TableSection.objects.filter(branch=default_branch).update(branch=None)
+    default_branch.delete()
 
 
 class Migration(migrations.Migration):

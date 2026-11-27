@@ -85,13 +85,23 @@ class OwnerMenuImportViewTests(SimpleTestCase):
         return self.view(req)
 
     def _post(self, file=None, user=None, tenant=None):
+        # R6-29: the view wraps the import in transaction.atomic(), whose
+        # __enter__ calls ensure_connection() — in the no-PG env that raises
+        # OperationalError (dead 127.0.0.1:59999) on every post. Patch the
+        # transaction module so atomic() is a pass-through context manager;
+        # production keeps the real atomic (a real DB is present there).
+        # The R6-29 failure test still gets its 500: the mid-loop exception
+        # propagates through the mocked atomic's __exit__ into the view's
+        # except. True DB rollback is Django-atomic semantics, not observable
+        # with mocked models.
         data = {}
         if file is not None:
             data["file"] = file
         req = self.factory.post("/api/owner/menu/import/", data, format="multipart")
         req.user = user or _owner()
         req.tenant = tenant or _tenant()
-        return self.view(req)
+        with patch("menu.views.transaction"):
+            return self.view(req)
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -245,6 +255,38 @@ class OwnerMenuImportViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["created_dishes"], 0)
+        mock_bust.assert_not_called()
+
+    # ── R6-29: the import is atomic ───────────────────────────────────────
+    def test_post_failure_mid_loop_returns_failed_and_busts_nothing(self):
+        """Row 1 valid + row 2 raising mid-loop -> 500/failed, nothing saved
+        (the transaction rolls back). True DB rollback is Django-atomic
+        semantics — not observable with mocked models, so this pins the
+        wiring: the failed response + no cache bust (nothing was created)."""
+        csv_content = (
+            "category_name,dish_name,price\n"
+            "Main,Burger,12.50\n"
+            "Main,Pizza,9.99\n"
+        )
+        f = _csv_file(csv_content)
+        with patch("menu.views._bust_menu_cache") as mock_bust:
+            with patch("menu.views.SuperCategory") as mock_sc:
+                mock_sc.objects.order_by.return_value.first.return_value = MagicMock(id=1)
+                with patch("menu.views.Category") as mock_cat:
+                    mock_cat.objects.filter.return_value.first.return_value = None
+                    mock_cat.objects.filter.return_value.exists.return_value = False
+                    mock_cat.objects.count.return_value = 0
+                    mock_cat.objects.create.return_value = MagicMock()
+                    with patch("menu.views.Dish") as mock_dish:
+                        mock_dish.objects.filter.return_value.exists.return_value = False
+                        mock_dish.objects.create.side_effect = [
+                            MagicMock(),  # row 1: Burger created
+                            Exception("boom"),  # row 2: Pizza raises mid-loop
+                        ]
+                        resp = self._post(file=f)
+
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(resp.data["code"], "failed")
         mock_bust.assert_not_called()
 
 

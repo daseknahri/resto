@@ -231,9 +231,6 @@
           <a :href="tableShortUrl(table)" target="_blank" rel="noopener noreferrer" class="block break-all font-medium text-[var(--color-secondary)] hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
             {{ tableShortUrl(table) }}
           </a>
-          <a :href="tableFullMenuUrl(table)" target="_blank" rel="noopener noreferrer" class="no-print block break-all text-slate-500 hover:text-slate-300 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
-            <span class="text-slate-600">{{ t("ownerTables.fullLinkPrefix") }}:</span> {{ tableFullMenuUrl(table) }}
-          </a>
         </div>
 
         <!-- Status + print credit -->
@@ -270,10 +267,6 @@
         <details class="no-print rounded-xl border border-slate-800/80 bg-slate-950/45 p-2.5 sm:hidden">
           <summary class="cursor-pointer select-none text-xs font-semibold text-slate-300">{{ t("common.more") }}<span class="sr-only"> – {{ table.label }}</span></summary>
           <div class="mt-2.5 grid grid-cols-2 gap-2">
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
-              <AppIcon name="copy" class="owner-table-icon" aria-hidden="true" />
-              {{ t("ownerTables.copyFull") }}
-            </button>
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
               <AppIcon name="copy" class="owner-table-icon" aria-hidden="true" />
               {{ t("ownerTables.copyQr") }}
@@ -302,10 +295,6 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">
             <AppIcon name="link" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.copyShort") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
-            <AppIcon name="copy" class="owner-table-icon" aria-hidden="true" />
-            {{ t("ownerTables.copyFull") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
             <AppIcon name="copy" class="owner-table-icon" aria-hidden="true" />
@@ -599,11 +588,11 @@ const filteredTables = computed(() => {
 // Thin wrapper preserving OwnerTables' default fallback; delegates to the shared extractor.
 const parseError = (err, fallback = t("ownerTables.requestFailed")) => extractApiErrorMessage(err, fallback);
 
-const tableFullMenuUrl = (table) => {
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const tableLabel = encodeURIComponent(table.label || "");
-  return `${origin}/browse?table=${tableLabel}`;
-};
+// R6-30: there is only one URL per table now (the short /t/<slug> link). The
+// old "full" URL (/browse?table=<label>) set no table context anywhere —
+// nothing reads a ?table= query param, and the label is unvalidated human text,
+// not the slug the backend resolves — so it was dropped from the card, the copy
+// buttons, the CSV export, the printable pack and the backend manifest.
 const tableShortUrl = (table) => `${typeof window === "undefined" ? "" : window.location.origin}/t/${encodeURIComponent(table.slug)}`;
 const tableQrSrc = (table) => qrDataUrls.value[table.id] || "";
 
@@ -859,7 +848,6 @@ const copyText = async (value, successText) => {
 };
 
 const copyShortUrl = (table) => copyText(tableShortUrl(table), t("ownerTables.shortCopied"));
-const copyTableUrl = (table) => copyText(tableFullMenuUrl(table), t("ownerTables.fullCopied"));
 const copyQrUrl = async (table) => {
   if (!tableQrSrc(table)) {
     const ok = await generateQrForTable(table);
@@ -980,12 +968,11 @@ const downloadFile = (filename, content, mimeType) => {
 const exportCsv = () => {
   if (!tables.value.length) return;
   const rows = [
-    ["label", "slug", "short_url", "full_menu_url", "is_active"],
+    ["label", "slug", "short_url", "is_active"],
     ...tables.value.map((table) => [
       table.label,
       table.slug,
       tableShortUrl(table),
-      tableFullMenuUrl(table),
       table.is_active ? "true" : "false",
     ]),
   ];
@@ -1004,7 +991,6 @@ const buildHtmlPack = () => {
   const cards = tables.value
     .map((table) => {
       const short = tableShortUrl(table);
-      const full = tableFullMenuUrl(table);
       const qrSrc = tableQrSrc(table);
       return `
         <article class="card">
@@ -1020,7 +1006,6 @@ const buildHtmlPack = () => {
           </div>
           <p class="hint">${escapeHtml(t("ownerTables.scanHintPlain"))}</p>
           <p class="url">${escapeHtml(short)}</p>
-          <p class="full">${escapeHtml(t("ownerTables.fullLinkPrefix"))}: ${escapeHtml(full)}</p>
           <p class="state">${escapeHtml(table.is_active ? t("ownerTables.active") : t("ownerTables.disabledState"))}</p>
         </article>
       `;
@@ -1050,7 +1035,6 @@ const buildHtmlPack = () => {
     .qr-missing { width: 200px; height: 200px; border: 1px dashed #94a3b8; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; }
     .hint { margin: 8px 0 0; font-size: 12px; color: #334155; }
     .url { margin: 4px 0 0; font-size: 11px; color: #0f172a; word-break: break-all; }
-    .full { margin: 4px 0 0; font-size: 10px; color: #64748b; word-break: break-all; }
     .state { margin: 8px 0 0; font-size: 10px; color: #334155; text-transform: uppercase; letter-spacing: .12em; }
     @media print {
       @page { size: A4; margin: 10mm; }

@@ -232,3 +232,30 @@ class ProfileSerializerSlaTests(SimpleTestCase):
             instance=profile, data={"tagline": "New"}, partial=True
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+# ── R6-26: Profile.timezone defaults to Africa/Casablanca ─────────────────
+# The model default covers every Profile creation path (lead provisioning,
+# get_or_create on the profile endpoint, admin). Blank stays legal (explicit
+# clear) — the UTC fallback covers it on both sides.
+
+class ProfileTimezoneDefaultTests(SimpleTestCase):
+    def _profile(self, **kwargs):
+        tenant = Tenant(name="Demo", slug="demo", plan=Plan(code="basic", name="Basic"))
+        return Profile(tenant=tenant, **kwargs)
+
+    def test_new_profile_defaults_to_casablanca(self):
+        self.assertEqual(self._profile().timezone, "Africa/Casablanca")
+
+    def test_explicit_timezone_is_kept(self):
+        self.assertEqual(
+            self._profile(timezone="Europe/Paris").timezone, "Europe/Paris"
+        )
+
+    def test_serializer_accepts_timezone(self):
+        serializer = ProfileSerializer(data={"timezone": "Africa/Casablanca"})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["timezone"], "Africa/Casablanca")
+
+    def test_serializer_accepts_blank_timezone(self):
+        serializer = ProfileSerializer(data={"timezone": ""})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
